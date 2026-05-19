@@ -880,6 +880,7 @@ function DeviceCard({
   onPortClick: (port: VisualizerPort) => void;
 }) {
   const stripe = nodeStripeColor(node, healthOverlay);
+  const compactRackNode = Boolean(node.rackId && node.height < 34);
   return (
     <div
       data-visualizer-interactive="true"
@@ -889,7 +890,9 @@ function DeviceCard({
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") onSelect();
       }}
-      className={`absolute z-50 overflow-hidden rounded-[var(--radius-md)] border bg-[var(--surface-2)] px-2.5 py-2 pr-12 text-left shadow-[0_10px_24px_rgb(0_0_0_/_0.18)] transition-[opacity,background-color,border-color,box-shadow,transform] duration-150 ${
+      className={`absolute z-50 overflow-hidden rounded-[var(--radius-md)] border bg-[var(--surface-2)] text-left shadow-[0_10px_24px_rgb(0_0_0_/_0.18)] transition-[opacity,background-color,border-color,box-shadow,transform] duration-150 ${
+        compactRackNode ? "px-2 py-1 pr-10" : "px-2.5 py-2 pr-12"
+      } ${
         selected
           ? "border-[var(--accent-primary-border)] shadow-[var(--shadow-selected)]"
           : "border-[var(--border-default)] hover:-translate-y-px hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
@@ -912,9 +915,11 @@ function DeviceCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-semibold text-[var(--text-primary)]">{node.device.hostname}</div>
-          <div className="truncate font-mono text-[9px] text-[var(--text-tertiary)]">
-            {node.device.managementIp ?? typeLabel(node.device.deviceType)}
-          </div>
+          {!compactRackNode && (
+            <div className="truncate font-mono text-[9px] text-[var(--text-tertiary)]">
+              {node.device.managementIp ?? typeLabel(node.device.deviceType)}
+            </div>
+          )}
         </div>
         <span
           className={`size-2 rounded-full ${node.health === "offline" ? "animate-pulse-slow" : ""}`}

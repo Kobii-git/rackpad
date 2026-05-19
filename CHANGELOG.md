@@ -6,6 +6,13 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.0-beta.4] - 2026-05-20
+
+### Fixed
+
+- Stabilized Visualizer rack elevations so 1U devices, shelves, brush panels,
+  and blanking panels no longer compress into overlapping rows.
+
 ## [1.2.0-beta.3] - 2026-05-20
 
 ### Added

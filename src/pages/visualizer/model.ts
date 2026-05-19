@@ -41,7 +41,8 @@ const ZONE_GAP = 44;
 const ZONE_HEADER = 76;
 const RACK_PANEL_WIDTH = 324;
 const RACK_PANEL_GAP = 22;
-const RACK_UNIT_HEIGHT = 14;
+const RACK_UNIT_HEIGHT = 26;
+const RACK_NODE_MIN_HEIGHT = 24;
 const RACK_NODE_WIDTH = 218;
 const NODE_HEIGHT = 40;
 const ROOM_ZONE_WIDTH = 430;
@@ -343,7 +344,7 @@ function buildRackPanel(input: {
       x: bodyX + 32,
       y: top + 2,
       width: RACK_NODE_WIDTH,
-      height: Math.max(NODE_HEIGHT, bottom - top - 4),
+      height: Math.max(RACK_NODE_MIN_HEIGHT, bottom - top - 4),
       zoneId: input.rack.id,
       rackId: input.rack.id,
       ports: input.portsByDeviceId[device.id] ?? [],
