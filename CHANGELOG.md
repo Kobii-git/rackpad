@@ -6,14 +6,29 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.0-beta.1] - 2026-05-19
+
 ### Added
 
+- First-class Rooms for grouping racks and loose devices by physical location,
+  including room create/edit/delete workflows, room assignment from rack/device
+  editors, Devices placement awareness, and room columns in the Visualizer.
 - Hyper-V import host staging now lets you edit the host record before import
   and choose whether VMs should be attached to an auto-matched host, a newly
   created host, or a manually selected existing Rackpad device.
 - GHCR publishing now explicitly maintains a `latest` image tag for stable
   `main` and release-tag builds, while documentation still shows pinned version
   tags for controlled production upgrades.
+- Beta branch Docker publishing now builds a `beta` image tag, and prerelease
+  builds show a visible beta marker beside the app version.
+
+### Fixed
+
+- Monitoring status filters now use target health rollups, so devices with a
+  failing ICMP/TCP/HTTP target appear under Offline even if their inventory
+  status is still Online or Maintenance.
+- Visualizer, Discovery, Monitoring, Reports, and Devices usability fixes from
+  the beta stabilization pass are included in this beta.
 
 ## [1.1.2] - 2026-05-12
 

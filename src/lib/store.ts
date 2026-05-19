@@ -16,6 +16,7 @@ import type {
   PortTemplate,
   Rack,
   RackFace,
+  Room,
   Subnet,
   UserRole,
   Vlan,
@@ -36,6 +37,7 @@ import type {
   PortPatch,
   PortTemplatePatch,
   RackPatch,
+  RoomPatch,
   SubnetPatch,
   UserPatch,
   VlanRangePatch,
@@ -74,6 +76,7 @@ interface State {
   error: string | null;
   labs: Lab[];
   lab: Lab;
+  rooms: Room[];
   racks: Rack[];
   devices: Device[];
   ports: Port[];
@@ -99,6 +102,7 @@ interface State {
 
 const EMPTY_DATA = {
   labs: [] as Lab[],
+  rooms: [] as Room[],
   racks: [] as Rack[],
   devices: [] as Device[],
   ports: [] as Port[],
@@ -221,6 +225,10 @@ function sortByName<T extends { name: string }>(items: T[]) {
 
 function sortLabs(labs: Lab[]) {
   return sortByName(labs);
+}
+
+function sortRooms(rooms: Room[]) {
+  return sortByName(rooms);
 }
 
 function sortDevices(devices: Device[]) {
@@ -392,6 +400,7 @@ function filterAuditForLab(
   context: {
     labId: string;
     rackIds: Set<string>;
+    roomIds: Set<string>;
     deviceIds: Set<string>;
     portIds: Set<string>;
     portLinkIds: Set<string>;
@@ -418,6 +427,8 @@ function filterAuditForLab(
           return entry.entityId === context.labId;
         case "Rack":
           return context.rackIds.has(entry.entityId);
+        case "Room":
+          return context.roomIds.has(entry.entityId);
         case "Device":
           return context.deviceIds.has(entry.entityId);
         case "Port":
@@ -465,6 +476,7 @@ function normalizeDeviceChanges(
   const patch: DevicePatch = {};
   const nullableKeys = [
     "rackId",
+    "roomId",
     "displayName",
     "manufacturer",
     "model",
@@ -861,6 +873,7 @@ export async function loadAll(
       storeLabId(activeLab.id);
 
       const requests = {
+        rooms: api.getRooms(),
         racks: api.getRacks(),
         devices: api.getDevices(),
         virtualSwitches: api.getVirtualSwitches(),
@@ -919,6 +932,11 @@ export async function loadAll(
         (resolved.get("racks") as Rack[] | undefined) ?? [],
       ).filter((rack) => rack.labId === activeLab.id);
       const rackIds = new Set(allRacks.map((rack) => rack.id));
+
+      const allRooms = sortRooms(
+        (resolved.get("rooms") as Room[] | undefined) ?? [],
+      ).filter((room) => room.labId === activeLab.id);
+      const roomIds = new Set(allRooms.map((room) => room.id));
 
       const allDevices = sortDevices(
         (resolved.get("devices") as Device[] | undefined) ?? [],
@@ -1062,6 +1080,7 @@ export async function loadAll(
         {
           labId: activeLab.id,
           rackIds,
+          roomIds,
           deviceIds,
           portIds,
           portLinkIds,
@@ -1092,6 +1111,7 @@ export async function loadAll(
           failures.length > 0
             ? `Some data failed to load: ${failures.join(", ")}. Showing the data that did load.`
             : null,
+        rooms: allRooms,
         racks: allRacks,
         devices: allDevices,
         virtualSwitches: allVirtualSwitches,
@@ -1316,6 +1336,43 @@ export async function createRackRecord(input: Omit<Rack, "id">): Promise<Rack> {
     `Added rack ${created.name}`,
   );
   return created;
+}
+
+export async function createRoomRecord(input: Omit<Room, "id">): Promise<Room> {
+  const created = await api.createRoom(input);
+  setState((prev) => ({
+    ...prev,
+    rooms: sortRooms([...prev.rooms, created]),
+  }));
+  void recordAudit(
+    "room.create",
+    "Room",
+    created.id,
+    `Added room ${created.name}`,
+  );
+  return created;
+}
+
+export async function updateRoomRecord(
+  id: string,
+  changes: RoomPatch,
+): Promise<Room> {
+  const updated = await api.updateRoom(id, changes);
+  setState((prev) => ({
+    ...prev,
+    rooms: replaceById(prev.rooms, updated, sortRooms),
+  }));
+  void recordAudit("room.update", "Room", id, `Updated room ${updated.name}`);
+  return updated;
+}
+
+export async function deleteRoomRecord(id: string): Promise<void> {
+  const room = state.rooms.find((entry) => entry.id === id);
+  await api.deleteRoom(id);
+  await loadAll(true);
+  if (room) {
+    void recordAudit("room.delete", "Room", id, `Deleted room ${room.name}`);
+  }
 }
 
 export async function updateRackRecord(
@@ -1714,6 +1771,7 @@ export interface CreateDeviceInput {
   storageGb?: number;
   specs?: string;
   rackId?: string;
+  roomId?: string;
   startU?: number;
   heightU?: number;
   face?: RackFace;
@@ -1745,6 +1803,7 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
     storageGb: input.storageGb,
     specs: input.specs,
     rackId: input.rackId,
+    roomId: input.roomId,
     startU: input.startU,
     heightU: input.heightU ?? 1,
     face: input.face ?? "front",

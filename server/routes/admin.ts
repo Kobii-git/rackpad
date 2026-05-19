@@ -60,6 +60,7 @@ const exportBackupSnapshot = db.transaction((exportedAt: string, exportedBy: str
     secretsRedacted: true,
     data: {
       labs: db.prepare('SELECT * FROM labs ORDER BY name, id').all(),
+      rooms: db.prepare('SELECT * FROM rooms ORDER BY labId, name, id').all(),
       racks: db.prepare('SELECT * FROM racks ORDER BY name, id').all(),
       devices: (db.prepare('SELECT * FROM devices ORDER BY hostname, id').all() as Record<string, unknown>[])
         .map((row) => parseRow(row, ['tags'])),
@@ -126,6 +127,7 @@ const restoreBackupSnapshot = db.transaction((snapshot: Record<string, unknown>,
 
   const data = asObject(snapshot.data)
   const labs = normalizeArrayRecordArray(data.labs, 'data.labs')
+  const rooms = normalizeArrayRecordArray(data.rooms ?? [], 'data.rooms')
   const racks = normalizeArrayRecordArray(data.racks, 'data.racks')
   const devices = normalizeArrayRecordArray(data.devices, 'data.devices')
   const virtualSwitches = normalizeArrayRecordArray(data.virtualSwitches ?? [], 'data.virtualSwitches')
@@ -178,16 +180,18 @@ const restoreBackupSnapshot = db.transaction((snapshot: Record<string, unknown>,
     DELETE FROM portTemplates;
     DELETE FROM devices;
     DELETE FROM racks;
+    DELETE FROM rooms;
     DELETE FROM users;
     DELETE FROM labs;
   `)
 
   const insertLab = db.prepare('INSERT INTO labs (id, name, description, location) VALUES (?, ?, ?, ?)')
-  const insertRack = db.prepare('INSERT INTO racks (id, labId, name, totalU, description, location, notes) VALUES (?, ?, ?, ?, ?, ?, ?)')
+  const insertRoom = db.prepare('INSERT INTO rooms (id, labId, name, description, location, notes) VALUES (?, ?, ?, ?, ?, ?)')
+  const insertRack = db.prepare('INSERT INTO racks (id, labId, name, totalU, description, location, notes, roomId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
   const insertDevice = db.prepare(`
     INSERT INTO devices
-      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, status, placement, parentDeviceId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, tags, notes, lastSeen)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, tags, notes, lastSeen)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const updateDeviceParent = db.prepare(`
     UPDATE devices
@@ -275,8 +279,11 @@ const restoreBackupSnapshot = db.transaction((snapshot: Record<string, unknown>,
       row.lastLoginAt ?? null,
     )
   }
+  for (const row of rooms) {
+    insertRoom.run(row.id, row.labId, row.name, row.description ?? null, row.location ?? null, row.notes ?? null)
+  }
   for (const row of racks) {
-    insertRack.run(row.id, row.labId, row.name, row.totalU, row.description ?? null, row.location ?? null, row.notes ?? null)
+    insertRack.run(row.id, row.labId, row.name, row.totalU, row.description ?? null, row.location ?? null, row.notes ?? null, row.roomId ?? null)
   }
   for (const row of devices) {
     insertDevice.run(
@@ -293,6 +300,7 @@ const restoreBackupSnapshot = db.transaction((snapshot: Record<string, unknown>,
       row.status,
       row.placement ?? null,
       null,
+      row.roomId ?? null,
       row.cpuCores ?? null,
       row.memoryGb ?? null,
       row.storageGb ?? null,
@@ -528,6 +536,7 @@ const restoreBackupSnapshot = db.transaction((snapshot: Record<string, unknown>,
     requiresLogin: true,
     counts: {
       labs: labs.length,
+      rooms: rooms.length,
       racks: racks.length,
       devices: devices.length,
       virtualSwitches: virtualSwitches.length,

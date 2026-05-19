@@ -53,6 +53,7 @@ interface FormState {
   status: DeviceStatus;
   placement: NonNullable<Device["placement"]>;
   parentDeviceId: string;
+  roomId: string;
   cpuCores: string;
   memoryGb: string;
   storageGb: string;
@@ -86,6 +87,7 @@ function blankForm(defaults?: Partial<FormState>): FormState {
     status: "unknown",
     placement: defaults?.rackId ? "rack" : "room",
     parentDeviceId: "",
+    roomId: "",
     cpuCores: "",
     memoryGb: "",
     storageGb: "",
@@ -123,6 +125,7 @@ function deviceToForm(device: Device): FormState {
     status: device.status,
     placement: device.placement ?? (device.rackId ? "rack" : "room"),
     parentDeviceId: device.parentDeviceId ?? "",
+    roomId: device.roomId ?? "",
     cpuCores: device.cpuCores != null ? String(device.cpuCores) : "",
     memoryGb: device.memoryGb != null ? String(device.memoryGb) : "",
     storageGb: device.storageGb != null ? String(device.storageGb) : "",
@@ -155,6 +158,7 @@ export function DeviceDrawer({
   onSaved,
 }: DeviceDrawerProps) {
   const racks = useStore((s) => s.racks);
+  const rooms = useStore((s) => s.rooms);
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
   const portTemplates = useStore((s) => s.portTemplates);
@@ -363,6 +367,7 @@ export function DeviceDrawer({
           : undefined,
         specs: form.specs.trim() || undefined,
         rackId: hasRackPlacement ? form.rackId : undefined,
+        roomId: !hasRackPlacement && form.roomId ? form.roomId : undefined,
         startU:
           hasRackPlacement && form.startU
             ? Number.parseInt(form.startU, 10)
@@ -727,6 +732,28 @@ export function DeviceDrawer({
                         </div>
                       )}
                     </>
+                  )}
+
+                  {!hasRackPlacement && (
+                    <Field label="Room">
+                      <Select
+                        value={form.roomId}
+                        onChange={(value) => set("roomId", value)}
+                      >
+                        <option value="">-- no room selected --</option>
+                        {rooms.map((room) => (
+                          <option key={room.id} value={room.id}>
+                            {room.name}
+                          </option>
+                        ))}
+                      </Select>
+                      {rooms.length === 0 && (
+                        <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+                          Create rooms from the Racks workspace to group loose,
+                          wireless, and shelf-adjacent gear.
+                        </p>
+                      )}
+                    </Field>
                   )}
                 </Section>
 

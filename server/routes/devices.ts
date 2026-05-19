@@ -151,6 +151,18 @@ function resolveParentDevice(parentDeviceId: string | null | undefined, labId: s
   return parent
 }
 
+function validateRoom(roomId: string | null | undefined, labId: string) {
+  if (!roomId) return null
+  const room = db.prepare('SELECT labId FROM rooms WHERE id = ?').get(roomId) as { labId: string } | undefined
+  if (!room) {
+    throw new ValidationError('Selected room does not exist.')
+  }
+  if (room.labId !== labId) {
+    throw new ValidationError('Selected room must belong to the same lab.')
+  }
+  return roomId
+}
+
 export const devicesRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { rackId?: string; labId?: string } }>('/', async (req) => {
     let sql = 'SELECT * FROM devices WHERE 1=1'
@@ -181,6 +193,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const status = optionalEnum(body, 'status', DEVICE_STATUSES) ?? 'unknown'
     const placement = optionalEnum(body, 'placement', DEVICE_PLACEMENTS)
     const parentDeviceId = optionalString(body, 'parentDeviceId', { maxLength: 80 })
+    const roomId = validateRoom(optionalString(body, 'roomId', { maxLength: 80 }), labId)
     const cpuCores = optionalInteger(body, 'cpuCores', { min: 1, max: 4096 })
     const memoryGb = optionalNumber(body, 'memoryGb', { min: 0.1, max: 1024 * 1024 })
     const storageGb = optionalNumber(body, 'storageGb', { min: 0, max: 1024 * 1024 * 10 })
@@ -218,9 +231,9 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const insertDevice = db.prepare(`
       INSERT INTO devices
         (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model,
-         serial, managementIp, status, placement, parentDeviceId, cpuCores, memoryGb, storageGb, specs,
+         serial, managementIp, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs,
          startU, heightU, face, tags, notes, lastSeen)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `)
     const insertPort = db.prepare(`
       INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId)
@@ -242,6 +255,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         status,
         normalizedPlacement.placement,
         normalizedParentDeviceId,
+        roomId,
         cpuCores ?? null,
         memoryGb ?? null,
         storageGb ?? null,
@@ -282,6 +296,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const face = optionalEnum(body, 'face', DEVICE_FACES)
     const placement = optionalEnum(body, 'placement', DEVICE_PLACEMENTS)
     const parentDeviceId = optionalString(body, 'parentDeviceId', { maxLength: 80 })
+    const roomId = optionalString(body, 'roomId', { maxLength: 80 })
 
     if (
       rackId !== undefined ||
@@ -322,6 +337,11 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         normalizedPlacement.heightU,
         normalizedPlacement.face,
       )
+    }
+
+    if (roomId !== undefined) {
+      updates.push('roomId = ?')
+      values.push(validateRoom(roomId, String(existing.labId)))
     }
 
     const simpleStringKeys = [

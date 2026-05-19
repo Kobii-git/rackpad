@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { selectLab, useStore } from "@/lib/store";
-import { APP_VERSION_TAG } from "@/lib/version";
+import { APP_IS_BETA, APP_VERSION_TAG } from "@/lib/version";
 
 const baseNavItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -84,9 +84,16 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
             infra control
           </div>
         </div>
-        <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
-          {APP_VERSION_TAG}
-        </span>
+        <div className="ml-auto flex flex-col items-end gap-1">
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
+            {APP_VERSION_TAG}
+          </span>
+          {APP_IS_BETA && (
+            <span className="rounded-full border border-[var(--color-warn)]/35 bg-[var(--color-warn)]/10 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.16em] text-[var(--color-warn)]">
+              beta
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mx-3 mb-4">

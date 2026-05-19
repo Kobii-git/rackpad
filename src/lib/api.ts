@@ -14,6 +14,7 @@ import type {
   PortLink,
   PortTemplate,
   Rack,
+  Room,
   Subnet,
   UserRole,
   Vlan,
@@ -46,6 +47,7 @@ export class ApiError extends Error {
 
 export type DevicePatch = Nullable<Omit<Device, "id" | "labId">>;
 export type LabPatch = Nullable<Omit<Lab, "id">>;
+export type RoomPatch = Nullable<Omit<Room, "id" | "labId">>;
 export type RackPatch = Nullable<Omit<Rack, "id" | "labId">>;
 export type SubnetPatch = Nullable<Omit<Subnet, "id" | "labId">>;
 export type DhcpScopePatch = Nullable<Omit<DhcpScope, "id" | "subnetId">>;
@@ -366,6 +368,30 @@ export const api = {
       channels: Array<{ channel: string; delivered: boolean }>;
     }>("/admin/alert-settings/test", {
       method: "POST",
+    });
+  },
+
+  getRooms(params?: { labId?: string }) {
+    return request<Room[]>("/rooms", undefined, params);
+  },
+
+  createRoom(body: Omit<Room, "id"> & { id?: string }) {
+    return request<Room>("/rooms", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateRoom(id: string, body: RoomPatch) {
+    return request<Room>(`/rooms/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteRoom(id: string) {
+    return request<void>(`/rooms/${id}`, {
+      method: "DELETE",
     });
   },
 

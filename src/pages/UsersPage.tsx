@@ -22,7 +22,7 @@ import {
   useStore,
 } from "@/lib/store";
 import type { AlertSettings, AuditEntry, AppUser, UserRole } from "@/lib/types";
-import { APP_VERSION_TAG } from "@/lib/version";
+import { APP_VERSION_LABEL } from "@/lib/version";
 import {
   Download,
   Plus,
@@ -621,7 +621,7 @@ export default function UsersPage() {
                   <CardLabel>Operations</CardLabel>
                   <CardHeading>Backup and release state</CardHeading>
                 </CardTitle>
-                <Badge tone="accent">{APP_VERSION_TAG}</Badge>
+                <Badge tone="accent">{APP_VERSION_LABEL}</Badge>
               </CardHeader>
               <CardBody className="space-y-4">
                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">

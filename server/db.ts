@@ -6,7 +6,7 @@ import { createId } from './lib/ids.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const DB_PATH = process.env.DATABASE_PATH ?? path.resolve(__dirname, '../rackpad.db')
-const CURRENT_SCHEMA_VERSION = 11
+const CURRENT_SCHEMA_VERSION = 12
 
 export const db = new Database(DB_PATH)
 
@@ -497,6 +497,34 @@ const SCHEMA_MIGRATIONS = [
     version: 11,
     sql: `
       ALTER TABLE virtualSwitches ADD COLUMN kind TEXT NOT NULL DEFAULT 'external';
+    `,
+  },
+  {
+    version: 12,
+    sql: `
+      CREATE TABLE IF NOT EXISTS rooms (
+        id          TEXT PRIMARY KEY,
+        labId       TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        description TEXT,
+        location    TEXT,
+        notes       TEXT
+      );
+
+      ALTER TABLE racks ADD COLUMN roomId TEXT REFERENCES rooms(id) ON DELETE SET NULL;
+      ALTER TABLE devices ADD COLUMN roomId TEXT REFERENCES rooms(id) ON DELETE SET NULL;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_rooms_lab_name
+        ON rooms (labId, name);
+
+      CREATE INDEX IF NOT EXISTS idx_rooms_lab_id
+        ON rooms (labId);
+
+      CREATE INDEX IF NOT EXISTS idx_racks_room_id
+        ON racks (roomId);
+
+      CREATE INDEX IF NOT EXISTS idx_devices_room_id
+        ON devices (roomId);
     `,
   },
 ] as const

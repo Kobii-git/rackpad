@@ -83,6 +83,15 @@ export interface Lab {
   location?: string;
 }
 
+export interface Room {
+  id: ID;
+  labId: ID;
+  name: string;
+  description?: string;
+  location?: string;
+  notes?: string;
+}
+
 export interface Rack {
   id: ID;
   labId: ID;
@@ -91,12 +100,14 @@ export interface Rack {
   description?: string;
   location?: string;
   notes?: string;
+  roomId?: ID | null;
 }
 
 export interface Device {
   id: ID;
   labId: ID;
   rackId?: ID;
+  roomId?: ID | null;
   hostname: string;
   displayName?: string;
   deviceType: DeviceType;

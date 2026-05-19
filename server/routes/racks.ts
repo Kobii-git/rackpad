@@ -1,7 +1,19 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import { createId } from '../lib/ids.js'
-import { asObject, optionalInteger, optionalString, requiredString } from '../lib/validation.js'
+import { asObject, optionalInteger, optionalString, requiredString, ValidationError } from '../lib/validation.js'
+
+function validateRoom(roomId: string | null | undefined, labId: string) {
+  if (!roomId) return null
+  const room = db.prepare('SELECT labId FROM rooms WHERE id = ?').get(roomId) as { labId: string } | undefined
+  if (!room) {
+    throw new ValidationError('Selected room does not exist.')
+  }
+  if (room.labId !== labId) {
+    throw new ValidationError('Selected room must belong to the same lab.')
+  }
+  return roomId
+}
 
 export const racksRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { labId?: string } }>('/', async (req) => {
@@ -26,10 +38,11 @@ export const racksRoutes: FastifyPluginAsync = async (app) => {
     const description = optionalString(body, 'description', { maxLength: 500 })
     const location = optionalString(body, 'location', { maxLength: 200 })
     const notes = optionalString(body, 'notes', { maxLength: 2000 })
+    const roomId = validateRoom(optionalString(body, 'roomId', { maxLength: 80 }), labId)
 
     db.prepare(
-      'INSERT INTO racks (id, labId, name, totalU, description, location, notes) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(rackId, labId, name, totalU, description ?? null, location ?? null, notes ?? null)
+      'INSERT INTO racks (id, labId, name, totalU, description, location, notes, roomId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(rackId, labId, name, totalU, description ?? null, location ?? null, notes ?? null, roomId)
     return reply.status(201).send(db.prepare('SELECT * FROM racks WHERE id = ?').get(rackId))
   })
 
@@ -46,12 +59,14 @@ export const racksRoutes: FastifyPluginAsync = async (app) => {
     const description = optionalString(body, 'description', { maxLength: 500 })
     const location = optionalString(body, 'location', { maxLength: 200 })
     const notes = optionalString(body, 'notes', { maxLength: 2000 })
+    const roomId = optionalString(body, 'roomId', { maxLength: 80 })
 
     if (name !== undefined) { updates.push('name = ?'); values.push(name) }
     if (totalU !== undefined) { updates.push('totalU = ?'); values.push(totalU) }
     if (description !== undefined) { updates.push('description = ?'); values.push(description) }
     if (location !== undefined) { updates.push('location = ?'); values.push(location) }
     if (notes !== undefined) { updates.push('notes = ?'); values.push(notes) }
+    if (roomId !== undefined) { updates.push('roomId = ?'); values.push(validateRoom(roomId, String(existing.labId))) }
 
     if (updates.length === 0) return reply.status(400).send({ error: 'No valid fields to update' })
 

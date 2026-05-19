@@ -23,14 +23,14 @@ import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { Mono } from "@/components/shared/Mono";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { useStore } from "@/lib/store";
-import type { Device, Port, PortLink, Rack } from "@/lib/types";
+import type { Device, Port, PortLink, Rack, Room } from "@/lib/types";
 import {
   formatPortEndpointLabel,
   normalizeColorToCss,
   statusLabel,
 } from "@/lib/utils";
 
-type ColumnKind = "rack" | "loose";
+type ColumnKind = "rack" | "room" | "loose";
 
 interface VisualColumn {
   id: string;
@@ -38,6 +38,7 @@ interface VisualColumn {
   name: string;
   subtitle: string;
   rack?: Rack;
+  room?: Room;
   devices: Device[];
   x: number;
   y: number;
@@ -72,9 +73,11 @@ const NODE_HEIGHT = 42;
 const NODE_WIDTH = 248;
 const RACK_NODE_WIDTH = 220;
 const LOOSE_ROW_HEIGHT = 58;
+const ROOM_COLUMN_PREFIX = "room:";
 
 export default function VisualizerView() {
   const lab = useStore((s) => s.lab);
+  const rooms = useStore((s) => s.rooms);
   const racks = useStore((s) => s.racks);
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
@@ -87,6 +90,7 @@ export default function VisualizerView() {
     const deviceById = indexById(devices);
     const portById = indexById(ports);
     const portsByDeviceId = groupBy(ports, (port) => port.deviceId);
+    const roomById = indexById(rooms);
     const rackColumns = racks.map((rack, index) => {
       const rackDevices = devices
         .filter((device) => device.rackId === rack.id)
@@ -100,7 +104,10 @@ export default function VisualizerView() {
         id: rack.id,
         kind: "rack" as const,
         name: rack.name,
-        subtitle: rack.location ?? `${rack.totalU}U rack`,
+        subtitle:
+          (rack.roomId ? roomById[rack.roomId]?.name : undefined) ??
+          rack.location ??
+          `${rack.totalU}U rack`,
         rack,
         devices: rackDevices,
         x: COLUMN_LEFT + index * (COLUMN_WIDTH + COLUMN_GAP),
@@ -113,21 +120,54 @@ export default function VisualizerView() {
     const looseDevices = devices
       .filter((device) => !device.rackId || !rackIds.has(device.rackId))
       .sort((a, b) => a.hostname.localeCompare(b.hostname));
+    const looseDevicesByRoom = groupBy(
+      looseDevices.filter((device) => device.roomId && roomById[device.roomId]),
+      (device) => device.roomId!,
+    );
+    const roomColumns = rooms.map((room, index) => {
+      const roomDevices = (looseDevicesByRoom[room.id] ?? []).sort((a, b) =>
+        a.hostname.localeCompare(b.hostname),
+      );
+      return {
+        id: `${ROOM_COLUMN_PREFIX}${room.id}`,
+        kind: "room" as const,
+        name: room.name,
+        subtitle: room.location ?? room.description ?? "Room context",
+        room,
+        devices: roomDevices,
+        x:
+          COLUMN_LEFT +
+          (rackColumns.length + index) * (COLUMN_WIDTH + COLUMN_GAP),
+        y: COLUMN_TOP,
+        height: Math.max(360, roomDevices.length * LOOSE_ROW_HEIGHT + 112),
+      };
+    });
+    const unassignedLooseDevices = looseDevices.filter(
+      (device) => !device.roomId || !roomById[device.roomId],
+    );
     const looseColumn: VisualColumn | null =
-      looseDevices.length > 0
+      unassignedLooseDevices.length > 0
         ? {
             id: "__loose__",
             kind: "loose",
-            name: "Loose / room",
-            subtitle: "Unracked, wireless, shelf, and virtual context",
-            devices: looseDevices,
-            x: COLUMN_LEFT + rackColumns.length * (COLUMN_WIDTH + COLUMN_GAP),
+            name: "Loose / unassigned",
+            subtitle: "Unracked gear without a room",
+            devices: unassignedLooseDevices,
+            x:
+              COLUMN_LEFT +
+              (rackColumns.length + roomColumns.length) *
+                (COLUMN_WIDTH + COLUMN_GAP),
             y: COLUMN_TOP,
-            height: Math.max(460, looseDevices.length * LOOSE_ROW_HEIGHT + 112),
+            height: Math.max(
+              360,
+              unassignedLooseDevices.length * LOOSE_ROW_HEIGHT + 112,
+            ),
           }
         : null;
 
-    const columns = looseColumn ? [...rackColumns, looseColumn] : rackColumns;
+    const columns = looseColumn
+      ? [...rackColumns, ...roomColumns, looseColumn]
+      : [...rackColumns, ...roomColumns];
     const nodes = buildNodes(columns);
     const nodeByDeviceId = nodes.reduce<Record<string, VisualNode>>(
       (acc, node) => {
@@ -189,7 +229,7 @@ export default function VisualizerView() {
         new Set(portLinks.map((link) => link.cableType ?? "Unknown")),
       ).sort((a, b) => a.localeCompare(b)),
     };
-  }, [devices, portLinks, ports, racks]);
+  }, [devices, portLinks, ports, racks, rooms]);
 
   const visibleLinks = useMemo(() => {
     return model.links.filter((entry) => {
@@ -484,7 +524,11 @@ function RackColumn({
     >
       <div className="border-b border-[var(--border-subtle)] px-3 py-3">
         <div className="rk-kicker">
-          {column.kind === "rack" ? "Rack" : "Zone"}
+          {column.kind === "rack"
+            ? "Rack"
+            : column.kind === "room"
+              ? "Room"
+              : "Zone"}
         </div>
         <div className="mt-1 truncate text-sm font-semibold text-[var(--text-primary)]">
           {column.name}

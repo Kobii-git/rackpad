@@ -2,7 +2,7 @@ name: docker-publish
 
 on:
   push:
-    branches: [main]
+    branches: [main, beta]
     tags: ["v*.*.*"]
   pull_request:
     branches: [main]

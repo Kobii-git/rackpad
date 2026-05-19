@@ -9,7 +9,7 @@ import { Mono } from "@/components/shared/Mono";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { canEditInventory, useStore } from "@/lib/store";
-import type { Device, DeviceType, Port, Rack } from "@/lib/types";
+import type { Device, DeviceType, Port, Rack, Room } from "@/lib/types";
 import { ChevronRight, Filter, Plus } from "lucide-react";
 import { statusLabel } from "@/lib/utils";
 
@@ -41,6 +41,7 @@ interface DeviceSort {
 export default function DevicesList() {
   const currentUser = useStore((s) => s.currentUser);
   const devices = useStore((s) => s.devices);
+  const rooms = useStore((s) => s.rooms);
   const racks = useStore((s) => s.racks);
   const ports = useStore((s) => s.ports);
   const canEdit = canEditInventory(currentUser);
@@ -58,6 +59,13 @@ export default function DevicesList() {
       return acc;
     }, {});
   }, [racks]);
+
+  const roomById = useMemo(() => {
+    return rooms.reduce<Record<string, Room>>((acc, room) => {
+      acc[room.id] = room;
+      return acc;
+    }, {});
+  }, [rooms]);
 
   const deviceById = useMemo(() => {
     return devices.reduce<Record<string, Device>>((acc, device) => {
@@ -92,8 +100,10 @@ export default function DevicesList() {
           .toLowerCase();
         return haystack.includes(query.toLowerCase());
       })
-      .sort((a, b) => compareDevices(a, b, sort, rackById, deviceById));
-  }, [deviceById, devices, query, rackById, sort, type]);
+      .sort((a, b) =>
+        compareDevices(a, b, sort, rackById, roomById, deviceById),
+      );
+  }, [deviceById, devices, query, rackById, roomById, sort, type]);
 
   function handleSort(key: SortKey) {
     setSort((current) =>
@@ -237,6 +247,7 @@ export default function DevicesList() {
                   const parentDevice = device.parentDeviceId
                     ? deviceById[device.parentDeviceId]
                     : undefined;
+                  const room = device.roomId ? roomById[device.roomId] : undefined;
                   return (
                     <tr
                       key={device.id}
@@ -351,7 +362,9 @@ export default function DevicesList() {
                           <span className="text-[var(--color-fg-faint)]">
                             {device.placement === "rack"
                               ? "Pending placement"
-                              : "Loose / room"}
+                              : room
+                                ? `Room | ${room.name}`
+                                : "Loose / room"}
                           </span>
                         )}
                       </Td>
@@ -458,6 +471,7 @@ function compareDevices(
   b: Device,
   sort: DeviceSort,
   rackById: Record<string, Rack>,
+  roomById: Record<string, Room>,
   deviceById: Record<string, Device>,
 ) {
   let result = 0;
@@ -468,8 +482,8 @@ function compareDevices(
     result = compareIp(a.managementIp, b.managementIp);
   } else if (sort.key === "placement") {
     result = compareText(
-      devicePlacementSortValue(a, rackById, deviceById),
-      devicePlacementSortValue(b, rackById, deviceById),
+      devicePlacementSortValue(a, rackById, roomById, deviceById),
+      devicePlacementSortValue(b, rackById, roomById, deviceById),
     );
   } else {
     result = compareText(statusLabel[a.status], statusLabel[b.status]);
@@ -523,9 +537,11 @@ function parseIpv4(value?: string | null) {
 function devicePlacementSortValue(
   device: Device,
   rackById: Record<string, Rack>,
+  roomById: Record<string, Room>,
   deviceById: Record<string, Device>,
 ) {
   const rack = device.rackId ? rackById[device.rackId] : undefined;
+  const room = device.roomId ? roomById[device.roomId] : undefined;
   const parentDevice = device.parentDeviceId
     ? deviceById[device.parentDeviceId]
     : undefined;
@@ -553,5 +569,6 @@ function devicePlacementSortValue(
     return `${rack.name} | U${device.startU}`;
   }
 
-  return device.placement === "rack" ? "Pending placement" : "Loose / room";
+  if (device.placement === "rack") return "Pending placement";
+  return room ? `Room | ${room.name}` : "Loose / room";
 }

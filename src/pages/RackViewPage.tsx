@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ExternalLink, Pencil, Plus, Save, Server, Trash2 } from "lucide-react";
+import { ExternalLink, MapPin, Pencil, Plus, Save, Server, Trash2 } from "lucide-react";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { TopBar } from "@/components/layout/TopBar";
 import { RackView } from "@/components/rack/RackView";
@@ -23,14 +23,18 @@ import {
 import {
   canEditInventory,
   createRackRecord,
+  createRoomRecord,
   deleteRackRecord,
+  deleteRoomRecord,
   updateRackRecord,
+  updateRoomRecord,
   useStore,
 } from "@/lib/store";
-import type { Device, Port, RackFace } from "@/lib/types";
+import type { Device, Port, RackFace, Room } from "@/lib/types";
 import { statusLabel } from "@/lib/utils";
 
 const UNRACKED_VIEW_ID = "__unracked__";
+const ROOM_VIEW_PREFIX = "__room__:";
 
 type RackForm = {
   name: string;
@@ -38,13 +42,30 @@ type RackForm = {
   description: string;
   location: string;
   notes: string;
+  roomId: string;
 };
 
 type RackEditorMode = "closed" | "create" | "edit";
+type RoomEditorMode = "closed" | "create" | "edit";
+
+type RoomForm = {
+  name: string;
+  description: string;
+  location: string;
+  notes: string;
+};
 
 const EMPTY_FORM: RackForm = {
   name: "",
   totalU: "42",
+  description: "",
+  location: "",
+  notes: "",
+  roomId: "",
+};
+
+const EMPTY_ROOM_FORM: RoomForm = {
+  name: "",
   description: "",
   location: "",
   notes: "",
@@ -55,6 +76,7 @@ const RACK_SHELF_TYPE = "rack_shelf";
 export default function RackViewPage() {
   const currentUser = useStore((s) => s.currentUser);
   const activeLab = useStore((s) => s.lab);
+  const rooms = useStore((s) => s.rooms);
   const racks = useStore((s) => s.racks);
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
@@ -66,20 +88,56 @@ export default function RackViewPage() {
   >();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<RackEditorMode>("closed");
+  const [roomEditorMode, setRoomEditorMode] =
+    useState<RoomEditorMode>("closed");
   const [savingRack, setSavingRack] = useState(false);
   const [deletingRack, setDeletingRack] = useState(false);
   const [rackError, setRackError] = useState("");
   const [rackForm, setRackForm] = useState<RackForm>(EMPTY_FORM);
+  const [savingRoom, setSavingRoom] = useState(false);
+  const [deletingRoom, setDeletingRoom] = useState(false);
+  const [roomError, setRoomError] = useState("");
+  const [roomForm, setRoomForm] = useState<RoomForm>(EMPTY_ROOM_FORM);
+
+  const roomById = useMemo(() => {
+    return rooms.reduce<Record<string, Room>>((acc, room) => {
+      acc[room.id] = room;
+      return acc;
+    }, {});
+  }, [rooms]);
 
   const unrackedDevices = useMemo(
+    () => devices.filter((device) => !device.rackId && !device.roomId),
+    [devices],
+  );
+  const allLooseDevices = useMemo(
     () => devices.filter((device) => !device.rackId),
     [devices],
   );
 
   useEffect(() => {
-    if (selectedViewId === UNRACKED_VIEW_ID) return;
+    if (selectedViewId === UNRACKED_VIEW_ID) {
+      return;
+    }
+
+    if (selectedViewId.startsWith(ROOM_VIEW_PREFIX)) {
+      const roomId = selectedViewId.slice(ROOM_VIEW_PREFIX.length);
+      if (rooms.some((room) => room.id === roomId)) return;
+      setSelectedViewId(
+        rooms[0]
+          ? `${ROOM_VIEW_PREFIX}${rooms[0].id}`
+          : unrackedDevices.length > 0
+            ? UNRACKED_VIEW_ID
+            : "",
+      );
+      return;
+    }
 
     if (!racks.length) {
+      if (rooms.length > 0) {
+        setSelectedViewId(`${ROOM_VIEW_PREFIX}${rooms[0].id}`);
+        return;
+      }
       if (unrackedDevices.length > 0) {
         setSelectedViewId(UNRACKED_VIEW_ID);
       }
@@ -89,12 +147,18 @@ export default function RackViewPage() {
     if (!selectedViewId || !racks.some((rack) => rack.id === selectedViewId)) {
       setSelectedViewId(racks[0].id);
     }
-  }, [racks, selectedViewId, unrackedDevices.length]);
+  }, [racks, rooms, selectedViewId, unrackedDevices.length]);
 
   const viewingUnracked = selectedViewId === UNRACKED_VIEW_ID;
+  const selectedRoomId = selectedViewId.startsWith(ROOM_VIEW_PREFIX)
+    ? selectedViewId.slice(ROOM_VIEW_PREFIX.length)
+    : "";
+  const viewingRoom = selectedRoomId ? roomById[selectedRoomId] : undefined;
   const rack = viewingUnracked
     ? undefined
-    : (racks.find((entry) => entry.id === selectedViewId) ?? racks[0]);
+    : viewingRoom
+      ? undefined
+      : (racks.find((entry) => entry.id === selectedViewId) ?? racks[0]);
 
   useEffect(() => {
     if (editorMode !== "edit" || !rack) return;
@@ -104,8 +168,19 @@ export default function RackViewPage() {
       description: rack.description ?? "",
       location: rack.location ?? "",
       notes: rack.notes ?? "",
+      roomId: rack.roomId ?? "",
     });
   }, [editorMode, rack]);
+
+  useEffect(() => {
+    if (roomEditorMode !== "edit" || !viewingRoom) return;
+    setRoomForm({
+      name: viewingRoom.name,
+      description: viewingRoom.description ?? "",
+      location: viewingRoom.location ?? "",
+      notes: viewingRoom.notes ?? "",
+    });
+  }, [roomEditorMode, viewingRoom]);
 
   const portsByDeviceId = useMemo(() => {
     return ports.reduce<Record<string, Port[]>>((acc, port) => {
@@ -120,6 +195,12 @@ export default function RackViewPage() {
   const selectedDevice = selectedDeviceId
     ? devices.find((device) => device.id === selectedDeviceId)
     : undefined;
+  const selectedRoomRacks = viewingRoom
+    ? racks.filter((entry) => entry.roomId === viewingRoom.id)
+    : [];
+  const selectedRoomDevices = viewingRoom
+    ? allLooseDevices.filter((device) => device.roomId === viewingRoom.id)
+    : [];
 
   async function handleSaveRack() {
     setSavingRack(true);
@@ -133,6 +214,7 @@ export default function RackViewPage() {
           description: rackForm.description.trim() || undefined,
           location: rackForm.location.trim() || undefined,
           notes: rackForm.notes.trim() || undefined,
+          roomId: rackForm.roomId || undefined,
         });
         setSelectedViewId(created.id);
         setEditorMode("closed");
@@ -146,12 +228,70 @@ export default function RackViewPage() {
         description: rackForm.description.trim() || null,
         location: rackForm.location.trim() || null,
         notes: rackForm.notes.trim() || null,
+        roomId: rackForm.roomId || null,
       });
       setEditorMode("closed");
     } catch (err) {
       setRackError(err instanceof Error ? err.message : "Failed to save rack.");
     } finally {
       setSavingRack(false);
+    }
+  }
+
+  async function handleSaveRoom() {
+    setSavingRoom(true);
+    setRoomError("");
+    try {
+      if (roomEditorMode === "create") {
+        const created = await createRoomRecord({
+          labId: activeLab.id,
+          name: roomForm.name.trim(),
+          description: roomForm.description.trim() || undefined,
+          location: roomForm.location.trim() || undefined,
+          notes: roomForm.notes.trim() || undefined,
+        });
+        setSelectedViewId(`${ROOM_VIEW_PREFIX}${created.id}`);
+        setRoomEditorMode("closed");
+        return;
+      }
+
+      if (!viewingRoom) return;
+      const updated = await updateRoomRecord(viewingRoom.id, {
+        name: roomForm.name.trim(),
+        description: roomForm.description.trim() || null,
+        location: roomForm.location.trim() || null,
+        notes: roomForm.notes.trim() || null,
+      });
+      setSelectedViewId(`${ROOM_VIEW_PREFIX}${updated.id}`);
+      setRoomEditorMode("closed");
+    } catch (err) {
+      setRoomError(err instanceof Error ? err.message : "Failed to save room.");
+    } finally {
+      setSavingRoom(false);
+    }
+  }
+
+  async function handleDeleteRoom() {
+    if (!viewingRoom) return;
+    if (
+      !window.confirm(
+        `Delete room ${viewingRoom.name}? Racks and devices will become unassigned from this room.`,
+      )
+    )
+      return;
+
+    setDeletingRoom(true);
+    setRoomError("");
+    try {
+      await deleteRoomRecord(viewingRoom.id);
+      setSelectedViewId(unrackedDevices.length > 0 ? UNRACKED_VIEW_ID : "");
+      setRoomEditorMode("closed");
+    } catch (err) {
+      setRoomError(
+        err instanceof Error ? err.message : "Failed to delete room.",
+      );
+    } finally {
+      setDeletingRoom(false);
     }
   }
 
@@ -177,7 +317,8 @@ export default function RackViewPage() {
     }
   }
 
-  const showEmptyState = racks.length === 0 && unrackedDevices.length === 0;
+  const showEmptyState =
+    rooms.length === 0 && racks.length === 0 && allLooseDevices.length === 0;
 
   return (
     <>
@@ -191,7 +332,22 @@ export default function RackViewPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setRackForm(EMPTY_FORM);
+                  setRoomForm(EMPTY_ROOM_FORM);
+                  setRoomError("");
+                  setRoomEditorMode("create");
+                }}
+              >
+                <Plus className="size-3.5" />
+                Add room
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setRackForm({
+                    ...EMPTY_FORM,
+                    roomId: viewingRoom?.id ?? "",
+                  });
                   setRackError("");
                   setEditorMode("create");
                 }}
@@ -210,6 +366,19 @@ export default function RackViewPage() {
                 >
                   <Pencil className="size-3.5" />
                   Edit rack
+                </Button>
+              )}
+              {viewingRoom && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setRoomError("");
+                    setRoomEditorMode("edit");
+                  }}
+                >
+                  <Pencil className="size-3.5" />
+                  Edit room
                 </Button>
               )}
               <Button
@@ -271,7 +440,8 @@ export default function RackViewPage() {
           <div className="flex w-72 shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-bg-2)]/40">
             <div className="border-b border-[var(--color-line)] px-4 py-3">
               <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                {racks.length} racks | {unrackedDevices.length} unracked
+                {rooms.length} rooms | {racks.length} racks |{" "}
+                {allLooseDevices.length} loose
               </span>
             </div>
             <div className="flex-1 overflow-y-auto py-2">
@@ -298,6 +468,49 @@ export default function RackViewPage() {
                   Devices not mounted in a physical rack
                 </div>
               </button>
+
+              {rooms.length > 0 && (
+                <div className="my-2 border-y border-[var(--color-line)] py-2">
+                  <div className="px-4 pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
+                    Rooms
+                  </div>
+                  {rooms.map((room) => {
+                    const roomRackCount = racks.filter(
+                      (entry) => entry.roomId === room.id,
+                    ).length;
+                    const roomDeviceCount = allLooseDevices.filter(
+                      (device) => device.roomId === room.id,
+                    ).length;
+                    const isActive = viewingRoom?.id === room.id;
+                    return (
+                      <button
+                        key={room.id}
+                        onClick={() => {
+                          setSelectedViewId(`${ROOM_VIEW_PREFIX}${room.id}`);
+                          setSelectedDeviceId(undefined);
+                        }}
+                        className={`w-full border-l-2 px-4 py-2.5 text-left transition-colors ${
+                          isActive
+                            ? "border-[var(--color-accent)] bg-[var(--color-surface)]"
+                            : "border-transparent hover:bg-[var(--color-surface)]/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-xs font-medium text-[var(--color-fg)]">
+                            {room.name}
+                          </span>
+                          <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
+                            {roomRackCount}R / {roomDeviceCount}D
+                          </Mono>
+                        </div>
+                        <div className="mt-0.5 truncate text-[11px] text-[var(--color-fg-subtle)]">
+                          {room.location || room.description || "Room context"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {racks.map((entry) => {
                 const inRack = devices.filter(
@@ -353,6 +566,13 @@ export default function RackViewPage() {
                 devices={unrackedDevices}
                 portsByDeviceId={portsByDeviceId}
               />
+            ) : viewingRoom ? (
+              <RoomPanel
+                room={viewingRoom}
+                racks={selectedRoomRacks}
+                devices={selectedRoomDevices}
+                portsByDeviceId={portsByDeviceId}
+              />
             ) : rack ? (
               <>
                 <div className="mb-4 flex items-center justify-between gap-4">
@@ -364,7 +584,9 @@ export default function RackViewPage() {
                       {rack.name}
                     </h2>
                     <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
-                      {rack.location}
+                      {rack.roomId && roomById[rack.roomId]
+                        ? `${roomById[rack.roomId].name}${rack.location ? ` | ${rack.location}` : ""}`
+                        : rack.location}
                     </div>
                   </div>
 
@@ -433,6 +655,7 @@ export default function RackViewPage() {
         <RackEditorCard
           creatingRack={editorMode === "create"}
           rackForm={rackForm}
+          rooms={rooms}
           setRackForm={setRackForm}
           rackError={rackError}
           savingRack={savingRack}
@@ -447,6 +670,24 @@ export default function RackViewPage() {
         />
       </RackEditorModal>
 
+      <RackEditorModal open={roomEditorMode !== "closed"}>
+        <RoomEditorCard
+          creatingRoom={roomEditorMode === "create"}
+          roomForm={roomForm}
+          setRoomForm={setRoomForm}
+          roomError={roomError}
+          savingRoom={savingRoom}
+          deletingRoom={deletingRoom}
+          canDelete={roomEditorMode === "edit"}
+          onSave={() => void handleSaveRoom()}
+          onDelete={() => void handleDeleteRoom()}
+          onCancel={() => {
+            setRoomEditorMode("closed");
+            setRoomError("");
+          }}
+        />
+      </RackEditorModal>
+
       <DeviceDrawer
         open={drawerOpen}
         defaultRackId={viewingUnracked ? undefined : rack?.id}
@@ -456,6 +697,11 @@ export default function RackViewPage() {
                 placement: "shelf",
                 parentDeviceId: selectedDevice.id,
               }
+            : viewingRoom
+              ? {
+                  placement: "room",
+                  roomId: viewingRoom.id,
+                }
             : undefined
         }
         onClose={() => setDrawerOpen(false)}
@@ -544,6 +790,156 @@ function UnrackedPanel({
         </div>
       )}
     </div>
+  );
+}
+
+function RoomPanel({
+  room,
+  racks,
+  devices,
+  portsByDeviceId,
+}: {
+  room: Room;
+  racks: Array<{ id: string; name: string; totalU: number; description?: string; location?: string }>;
+  devices: Device[];
+  portsByDeviceId: Record<string, Port[]>;
+}) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
+          Room
+        </div>
+        <h2 className="text-lg font-semibold tracking-tight text-[var(--color-fg)]">
+          {room.name}
+        </h2>
+        <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
+          {room.location || room.description || "Physical room grouping"}
+        </div>
+      </div>
+
+      {(room.description || room.notes) && (
+        <Card>
+          <CardBody className="space-y-2 text-sm text-[var(--color-fg-subtle)]">
+            {room.description && <p>{room.description}</p>}
+            {room.notes && (
+              <p className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-xs">
+                {room.notes}
+              </p>
+            )}
+          </CardBody>
+        </Card>
+      )}
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <CardLabel>Racks</CardLabel>
+              <CardHeading>{racks.length} in this room</CardHeading>
+            </CardTitle>
+            <Badge tone="info">
+              <Server className="size-3" />
+              Mounted
+            </Badge>
+          </CardHeader>
+          <CardBody className="space-y-2">
+            {racks.length === 0 ? (
+              <div className="rk-empty">
+                <div className="rk-empty-title">No racks assigned</div>
+                <div className="rk-empty-copy">
+                  Assign a rack to this room from the rack editor.
+                </div>
+              </div>
+            ) : (
+              racks.map((rack) => (
+                <div
+                  key={rack.id}
+                  className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-mono text-xs font-medium text-[var(--color-fg)]">
+                      {rack.name}
+                    </span>
+                    <Mono className="text-[10px] text-[var(--color-fg-muted)]">
+                      {rack.totalU}U
+                    </Mono>
+                  </div>
+                  {(rack.description || rack.location) && (
+                    <div className="mt-1 truncate text-xs text-[var(--color-fg-subtle)]">
+                      {rack.description || rack.location}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <CardLabel>Loose gear</CardLabel>
+              <CardHeading>{devices.length} devices</CardHeading>
+            </CardTitle>
+            <Badge tone="cyan">
+              <MapPin className="size-3" />
+              Room
+            </Badge>
+          </CardHeader>
+          <CardBody className="space-y-2">
+            {devices.length === 0 ? (
+              <div className="rk-empty">
+                <div className="rk-empty-title">No loose devices assigned</div>
+                <div className="rk-empty-copy">
+                  Add or edit a device and choose this room in Placement.
+                </div>
+              </div>
+            ) : (
+              devices.map((device) => (
+                <DeviceRoomRow
+                  key={device.id}
+                  device={device}
+                  portCount={portsByDeviceId[device.id]?.length ?? 0}
+                />
+              ))
+            )}
+          </CardBody>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function DeviceRoomRow({
+  device,
+  portCount,
+}: {
+  device: Device;
+  portCount: number;
+}) {
+  return (
+    <Link
+      to={`/devices/${device.id}`}
+      className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 transition-colors hover:border-[var(--color-line-strong)] hover:bg-[var(--color-surface)]"
+    >
+      <DeviceTypeIcon
+        type={device.deviceType}
+        className="size-4 text-[var(--color-accent)]"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-xs font-medium text-[var(--color-fg)]">
+          {device.hostname}
+        </div>
+        <div className="truncate text-[11px] text-[var(--color-fg-subtle)]">
+          {device.managementIp ?? device.deviceType.replace("_", " ")}
+        </div>
+      </div>
+      <Mono className="text-[10px] text-[var(--color-fg-muted)]">
+        {portCount} ports
+      </Mono>
+      <StatusDot status={device.status} />
+    </Link>
   );
 }
 
@@ -659,6 +1055,7 @@ function DeviceSummaryCard({
 function RackEditorCard({
   creatingRack,
   rackForm,
+  rooms,
   setRackForm,
   rackError,
   savingRack,
@@ -670,6 +1067,7 @@ function RackEditorCard({
 }: {
   creatingRack: boolean;
   rackForm: RackForm;
+  rooms: Room[];
   setRackForm: React.Dispatch<React.SetStateAction<RackForm>>;
   rackError: string;
   savingRack: boolean;
@@ -717,6 +1115,25 @@ function RackEditorCard({
           </Field>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Room">
+            <select
+              value={rackForm.roomId}
+              onChange={(event) =>
+                setRackForm((prev) => ({
+                  ...prev,
+                  roomId: event.target.value,
+                }))
+              }
+              className="rk-control w-full text-sm"
+            >
+              <option value="">-- no room selected --</option>
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="Location">
             <Input
               value={rackForm.location}
@@ -783,6 +1200,128 @@ function RackEditorCard({
                 : creatingRack
                   ? "Create rack"
                   : "Save rack"}
+            </Button>
+          </div>
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
+function RoomEditorCard({
+  creatingRoom,
+  roomForm,
+  setRoomForm,
+  roomError,
+  savingRoom,
+  deletingRoom,
+  canDelete,
+  onSave,
+  onDelete,
+  onCancel,
+}: {
+  creatingRoom: boolean;
+  roomForm: RoomForm;
+  setRoomForm: React.Dispatch<React.SetStateAction<RoomForm>>;
+  roomError: string;
+  savingRoom: boolean;
+  deletingRoom: boolean;
+  canDelete: boolean;
+  onSave: () => void;
+  onDelete: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <CardLabel>{creatingRoom ? "New room" : "Room editor"}</CardLabel>
+          <CardHeading>
+            {creatingRoom ? "Create room" : "Update room context"}
+          </CardHeading>
+        </CardTitle>
+        <Badge tone="cyan">
+          <MapPin className="size-3" />
+          Physical zone
+        </Badge>
+      </CardHeader>
+      <CardBody className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Room name">
+            <Input
+              value={roomForm.name}
+              onChange={(event) =>
+                setRoomForm((prev) => ({ ...prev, name: event.target.value }))
+              }
+              placeholder="Server room, garage, office"
+            />
+          </Field>
+          <Field label="Location">
+            <Input
+              value={roomForm.location}
+              onChange={(event) =>
+                setRoomForm((prev) => ({
+                  ...prev,
+                  location: event.target.value,
+                }))
+              }
+              placeholder="House, office, outbuilding"
+            />
+          </Field>
+        </div>
+        <Field label="Description">
+          <Input
+            value={roomForm.description}
+            onChange={(event) =>
+              setRoomForm((prev) => ({
+                ...prev,
+                description: event.target.value,
+              }))
+            }
+            placeholder="What lives here?"
+          />
+        </Field>
+        <Field label="Notes">
+          <textarea
+            rows={3}
+            value={roomForm.notes}
+            onChange={(event) =>
+              setRoomForm((prev) => ({ ...prev, notes: event.target.value }))
+            }
+            className="w-full resize-none rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-2.5 py-2 text-sm text-[var(--color-fg)] focus-visible:border-[var(--color-accent-soft)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-accent-soft)]"
+            placeholder="Cooling, power, WiFi coverage, access notes..."
+          />
+        </Field>
+
+        {roomError && (
+          <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-sm text-[var(--color-err)]">
+            {roomError}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-3">
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+          <div className="flex items-center gap-2">
+            {canDelete && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={onDelete}
+                disabled={deletingRoom}
+              >
+                <Trash2 className="size-3.5" />
+                {deletingRoom ? "Deleting..." : "Delete room"}
+              </Button>
+            )}
+            <Button size="sm" onClick={onSave} disabled={savingRoom}>
+              <Save className="size-3.5" />
+              {savingRoom
+                ? "Saving..."
+                : creatingRoom
+                  ? "Create room"
+                  : "Save room"}
             </Button>
           </div>
         </div>

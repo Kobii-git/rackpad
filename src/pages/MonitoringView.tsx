@@ -25,6 +25,7 @@ import type { Device, DeviceMonitor } from "@/lib/types";
 import { relativeTime, statusLabel } from "@/lib/utils";
 
 type MonitorFilter = "all" | "offline" | "warning" | "unknown" | "online";
+type MonitorRollupStatus = Exclude<MonitorFilter, "all">;
 
 export default function MonitoringView() {
   const currentUser = useStore((s) => s.currentUser);
@@ -57,22 +58,30 @@ export default function MonitoringView() {
         monitors: [...(deviceMonitorMap[device.id] ?? [])].sort(
           (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
         ),
+      }))
+      .map((entry) => ({
+        ...entry,
+        rollupStatus: getMonitorRollupStatus(entry.device, entry.monitors),
       }));
   }, [deviceMonitorMap, devices]);
 
   const filteredDevices = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return monitoredDevices.filter(({ device, monitors }) => {
-      if (filter !== "all" && device.status !== filter) return false;
+    return monitoredDevices.filter(({ device, monitors, rollupStatus }) => {
+      if (filter !== "all" && rollupStatus !== filter) return false;
       if (!normalizedQuery) return true;
 
       const haystack = [
         device.hostname,
         device.displayName,
         device.managementIp,
+        rollupStatus,
+        statusLabel[rollupStatus],
         ...monitors.flatMap((monitor) => [
           monitor.name,
           monitor.target,
+          monitor.type,
+          monitor.lastResult,
           monitor.lastMessage,
         ]),
       ]
@@ -92,16 +101,16 @@ export default function MonitoringView() {
         0,
       ),
       offline: monitoredDevices.filter(
-        (entry) => entry.device.status === "offline",
+        (entry) => entry.rollupStatus === "offline",
       ).length,
       warning: monitoredDevices.filter(
-        (entry) => entry.device.status === "warning",
+        (entry) => entry.rollupStatus === "warning",
       ).length,
       unknown: monitoredDevices.filter(
-        (entry) => entry.device.status === "unknown",
+        (entry) => entry.rollupStatus === "unknown",
       ).length,
       online: monitoredDevices.filter(
-        (entry) => entry.device.status === "online",
+        (entry) => entry.rollupStatus === "online",
       ).length,
     }),
     [monitoredDevices],
@@ -271,11 +280,12 @@ export default function MonitoringView() {
                 </div>
               </div>
             ) : (
-              filteredDevices.map(({ device, monitors }) => (
+              filteredDevices.map(({ device, monitors, rollupStatus }) => (
                 <DeviceMonitorCard
                   key={device.id}
                   device={device}
                   monitors={monitors}
+                  rollupStatus={rollupStatus}
                   running={runningDeviceId === device.id}
                   onRun={() => void handleRunDevice(device.id)}
                   canManageMonitoring={canManageMonitoring}
@@ -292,12 +302,14 @@ export default function MonitoringView() {
 function DeviceMonitorCard({
   device,
   monitors,
+  rollupStatus,
   running,
   onRun,
   canManageMonitoring,
 }: {
   device: Device;
   monitors: DeviceMonitor[];
+  rollupStatus: MonitorRollupStatus;
   running: boolean;
   onRun: () => void;
   canManageMonitoring: boolean;
@@ -332,20 +344,23 @@ function DeviceMonitorCard({
             </Link>
             <Badge
               tone={
-                device.status === "online"
+                rollupStatus === "online"
                   ? "ok"
-                  : device.status === "offline"
+                  : rollupStatus === "offline"
                     ? "err"
                     : "neutral"
               }
             >
-              <StatusDot status={device.status} />
-              {statusLabel[device.status]}
+              <StatusDot status={rollupStatus} />
+              {statusLabel[rollupStatus]}
             </Badge>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-tertiary)]">
             {device.displayName && <span>{device.displayName}</span>}
             {device.managementIp && <Mono>{device.managementIp}</Mono>}
+            {device.status !== rollupStatus && (
+              <span>inventory {statusLabel[device.status].toLowerCase()}</span>
+            )}
             <span>
               {monitors.length} target{monitors.length === 1 ? "" : "s"}
             </span>
@@ -434,6 +449,36 @@ function formatMonitorTarget(monitor: DeviceMonitor) {
     return `${monitor.target}:${monitor.port ?? 22}`;
   }
   return monitor.target;
+}
+
+function getMonitorRollupStatus(
+  device: Device,
+  monitors: DeviceMonitor[],
+): MonitorRollupStatus {
+  if (
+    device.status === "offline" ||
+    monitors.some((monitor) => monitor.lastResult === "offline")
+  ) {
+    return "offline";
+  }
+
+  if (
+    monitors.some(
+      (monitor) => monitor.lastResult === "unknown" || !monitor.lastResult,
+    )
+  ) {
+    return "unknown";
+  }
+
+  if (device.status === "warning" || device.status === "maintenance") {
+    return "warning";
+  }
+
+  if (device.status === "unknown") {
+    return "unknown";
+  }
+
+  return "online";
 }
 
 function MonitorStat({
