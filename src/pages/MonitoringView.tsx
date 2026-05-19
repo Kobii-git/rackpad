@@ -174,7 +174,7 @@ export default function MonitoringView() {
         }
       />
 
-      <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden px-6 py-5">
         <div className="grid gap-3 md:grid-cols-5">
           <MonitorStat
             label="Devices"
@@ -245,7 +245,7 @@ export default function MonitoringView() {
           </div>
         )}
 
-        <Card>
+        <Card className="min-h-0 flex flex-1 flex-col">
           <CardHeader>
             <CardTitle>
               <CardLabel>Overview</CardLabel>
@@ -256,7 +256,7 @@ export default function MonitoringView() {
               Filter by host, target, or latest monitor message
             </div>
           </CardHeader>
-          <CardBody className="space-y-3">
+          <CardBody className="min-h-0 flex-1 space-y-3 overflow-y-auto">
             {filteredDevices.length === 0 ? (
               <div className="rk-empty">
                 <div className="rk-empty-title">

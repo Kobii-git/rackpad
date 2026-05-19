@@ -30,6 +30,14 @@ const TYPES: DeviceType[] = [
   "ups",
 ];
 
+type SortKey = "hostname" | "managementIp" | "placement" | "status";
+type SortDirection = "asc" | "desc";
+
+interface DeviceSort {
+  key: SortKey;
+  direction: SortDirection;
+}
+
 export default function DevicesList() {
   const currentUser = useStore((s) => s.currentUser);
   const devices = useStore((s) => s.devices);
@@ -38,6 +46,10 @@ export default function DevicesList() {
   const canEdit = canEditInventory(currentUser);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<DeviceType | null>(null);
+  const [sort, setSort] = useState<DeviceSort>({
+    key: "hostname",
+    direction: "asc",
+  });
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const rackById = useMemo(() => {
@@ -80,8 +92,19 @@ export default function DevicesList() {
           .toLowerCase();
         return haystack.includes(query.toLowerCase());
       })
-      .sort((a, b) => a.hostname.localeCompare(b.hostname));
-  }, [devices, query, type]);
+      .sort((a, b) => compareDevices(a, b, sort, rackById, deviceById));
+  }, [deviceById, devices, query, rackById, sort, type]);
+
+  function handleSort(key: SortKey) {
+    setSort((current) =>
+      current.key === key
+        ? {
+            key,
+            direction: current.direction === "asc" ? "desc" : "asc",
+          }
+        : { key, direction: "asc" },
+    );
+  }
 
   const typeCounts = useMemo(() => {
     return devices.reduce<Record<string, number>>((acc, device) => {
@@ -168,13 +191,37 @@ export default function DevicesList() {
               <thead>
                 <tr className="border-b border-[var(--color-line)] bg-[var(--color-bg-2)]">
                   <Th />
-                  <Th>Hostname</Th>
+                  <SortableTh
+                    sortKey="hostname"
+                    sort={sort}
+                    onSort={handleSort}
+                  >
+                    Hostname
+                  </SortableTh>
                   <Th>Type</Th>
                   <Th>Model</Th>
-                  <Th>Mgmt IP</Th>
-                  <Th>Placement</Th>
+                  <SortableTh
+                    sortKey="managementIp"
+                    sort={sort}
+                    onSort={handleSort}
+                  >
+                    Mgmt IP
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="placement"
+                    sort={sort}
+                    onSort={handleSort}
+                  >
+                    Placement
+                  </SortableTh>
                   <Th>Ports</Th>
-                  <Th>Status</Th>
+                  <SortableTh
+                    sortKey="status"
+                    sort={sort}
+                    onSort={handleSort}
+                  >
+                    Status
+                  </SortableTh>
                   <Th />
                 </tr>
               </thead>
@@ -359,6 +406,41 @@ function Th({ children }: { children?: ReactNode }) {
   );
 }
 
+function SortableTh({
+  children,
+  sortKey,
+  sort,
+  onSort,
+}: {
+  children: ReactNode;
+  sortKey: SortKey;
+  sort: DeviceSort;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <th
+      aria-sort={
+        active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"
+      }
+      className="px-3 py-1.5 text-left font-mono text-[10px] font-normal uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]"
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={`inline-flex items-center gap-1.5 transition-colors hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/50 ${
+          active ? "text-[var(--color-accent)]" : ""
+        }`}
+      >
+        <span>{children}</span>
+        <span className="text-[9px]" aria-hidden>
+          {active ? (sort.direction === "asc" ? "^" : "v") : ""}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 function Td({
   children,
   className,
@@ -369,4 +451,107 @@ function Td({
   return (
     <td className={`px-3 py-2 align-middle ${className ?? ""}`}>{children}</td>
   );
+}
+
+function compareDevices(
+  a: Device,
+  b: Device,
+  sort: DeviceSort,
+  rackById: Record<string, Rack>,
+  deviceById: Record<string, Device>,
+) {
+  let result = 0;
+
+  if (sort.key === "hostname") {
+    result = compareText(a.hostname, b.hostname);
+  } else if (sort.key === "managementIp") {
+    result = compareIp(a.managementIp, b.managementIp);
+  } else if (sort.key === "placement") {
+    result = compareText(
+      devicePlacementSortValue(a, rackById, deviceById),
+      devicePlacementSortValue(b, rackById, deviceById),
+    );
+  } else {
+    result = compareText(statusLabel[a.status], statusLabel[b.status]);
+  }
+
+  if (result === 0) {
+    result = compareText(a.hostname, b.hostname);
+  }
+
+  return sort.direction === "asc" ? result : -result;
+}
+
+function compareText(a?: string | null, b?: string | null) {
+  const left = a?.trim();
+  const right = b?.trim();
+  if (!left && !right) return 0;
+  if (!left) return 1;
+  if (!right) return -1;
+  return left.localeCompare(right, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function compareIp(a?: string | null, b?: string | null) {
+  const left = parseIpv4(a);
+  const right = parseIpv4(b);
+  if (!left && !right) return compareText(a, b);
+  if (!left) return 1;
+  if (!right) return -1;
+
+  for (let index = 0; index < left.length; index += 1) {
+    const delta = (left[index] ?? 0) - (right[index] ?? 0);
+    if (delta !== 0) return delta;
+  }
+  return 0;
+}
+
+function parseIpv4(value?: string | null) {
+  const parts = value?.trim().split(".").map(Number);
+  if (
+    !parts ||
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
+    return null;
+  }
+  return parts;
+}
+
+function devicePlacementSortValue(
+  device: Device,
+  rackById: Record<string, Rack>,
+  deviceById: Record<string, Device>,
+) {
+  const rack = device.rackId ? rackById[device.rackId] : undefined;
+  const parentDevice = device.parentDeviceId
+    ? deviceById[device.parentDeviceId]
+    : undefined;
+
+  if (device.placement === "virtual") {
+    return parentDevice ? `Virtual | ${parentDevice.hostname}` : "Virtual";
+  }
+
+  if (device.placement === "wireless") {
+    return parentDevice ? `WiFi | ${parentDevice.hostname}` : "WiFi";
+  }
+
+  if (device.placement === "shelf") {
+    return [
+      "Shelf",
+      parentDevice?.hostname,
+      rack?.name,
+      device.startU ? `U${device.startU}` : undefined,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+  }
+
+  if (rack && device.startU) {
+    return `${rack.name} | U${device.startU}`;
+  }
+
+  return device.placement === "rack" ? "Pending placement" : "Loose / room";
 }

@@ -509,7 +509,7 @@ export default function ReportsView() {
                 />
               }
             >
-              <div className="space-y-3">
+              <div className="max-h-[34rem] space-y-3 overflow-y-auto pr-1">
                 {model.monitorTargets.length === 0 ? (
                   <div className="rk-empty">
                     <div className="rk-empty-title">
@@ -526,7 +526,6 @@ export default function ReportsView() {
                       (device) =>
                         (model.monitorsByDeviceId[device.id] ?? []).length > 0,
                     )
-                    .slice(0, 8)
                     .map((device) => (
                       <div
                         key={device.id}

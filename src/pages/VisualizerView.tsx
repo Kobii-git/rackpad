@@ -91,6 +91,11 @@ export default function VisualizerView() {
       const rackDevices = devices
         .filter((device) => device.rackId === rack.id)
         .sort(compareRackDevices);
+      const rackHeight = Math.max(
+        rack.totalU * RACK_UNIT_HEIGHT + 96,
+        rackDevices.length * (NODE_HEIGHT + 8) + 112,
+        320,
+      );
       return {
         id: rack.id,
         kind: "rack" as const,
@@ -100,7 +105,7 @@ export default function VisualizerView() {
         devices: rackDevices,
         x: COLUMN_LEFT + index * (COLUMN_WIDTH + COLUMN_GAP),
         y: COLUMN_TOP,
-        height: rack.totalU * RACK_UNIT_HEIGHT + 96,
+        height: rackHeight,
       };
     });
 
@@ -285,7 +290,7 @@ export default function VisualizerView() {
             />
           </div>
 
-          <Card className="min-h-0 flex-1">
+          <Card className="min-h-0 flex flex-1 flex-col">
             <CardHeader>
               <CardTitle>
                 <CardLabel>Rack cable map</CardLabel>
@@ -296,14 +301,14 @@ export default function VisualizerView() {
                 Existing inventory data
               </Badge>
             </CardHeader>
-            <CardBody className="h-full p-0">
+            <CardBody className="min-h-0 flex-1 p-0">
               <div className="h-full overflow-auto">
                 <div
-                  className="relative"
+                  className="relative mx-auto"
                   style={{ width: model.width, height: model.height }}
                 >
                   <svg
-                    className="pointer-events-none absolute inset-0 z-10"
+                    className="pointer-events-none absolute inset-0 z-[35]"
                     width={model.width}
                     height={model.height}
                     role="img"
@@ -335,7 +340,7 @@ export default function VisualizerView() {
                   </svg>
 
                   <svg
-                    className="absolute inset-0 z-20"
+                    className="absolute inset-0 z-[38]"
                     width={model.width}
                     height={model.height}
                     aria-hidden
@@ -371,10 +376,18 @@ export default function VisualizerView() {
                         nodes={model.nodes.filter(
                           (node) => node.columnId === column.id,
                         )}
-                        selectedDeviceId={selectedDeviceId}
-                        onSelectDevice={(deviceId) => {
+                      />
+                    ))}
+                  </div>
+                  <div className="absolute inset-0 z-40">
+                    {model.nodes.map((node) => (
+                      <DeviceNode
+                        key={node.device.id}
+                        node={node}
+                        selected={selectedDeviceId === node.device.id}
+                        onClick={() => {
                           setSelectedDeviceId((current) =>
-                            current === deviceId ? null : deviceId,
+                            current === node.device.id ? null : node.device.id,
                           );
                           setSelectedLinkId(null);
                         }}
@@ -387,7 +400,7 @@ export default function VisualizerView() {
           </Card>
         </div>
 
-        <aside className="hidden w-96 shrink-0 flex-col gap-4 overflow-y-auto xl:flex">
+        <aside className="hidden h-full min-h-0 w-96 shrink-0 flex-col gap-4 overflow-hidden xl:flex">
           <Inspector
             selectedLink={selectedLink}
             selectedDevice={selectedDevice}
@@ -422,7 +435,7 @@ function buildNodes(columns: VisualColumn[]) {
     let lastBottom = column.y + 76;
     for (const entry of planned) {
       const nodeWidth = column.kind === "rack" ? RACK_NODE_WIDTH : NODE_WIDTH;
-      const nodeX = column.x + (column.kind === "rack" ? 62 : 26);
+      const nodeX = column.x + (COLUMN_WIDTH - nodeWidth) / 2;
       const minY = column.y + 78;
       const maxY = column.y + column.height - NODE_HEIGHT - 14;
       const nodeY = clamp(Math.max(entry.y, lastBottom + 6), minY, maxY);
@@ -455,13 +468,9 @@ function clamp(value: number, min: number, max: number) {
 function RackColumn({
   column,
   nodes,
-  selectedDeviceId,
-  onSelectDevice,
 }: {
   column: VisualColumn;
   nodes: VisualNode[];
-  selectedDeviceId: string | null;
-  onSelectDevice: (deviceId: string) => void;
 }) {
   return (
     <div
@@ -518,15 +527,6 @@ function RackColumn({
           </div>
         </>
       )}
-
-      {nodes.map((node) => (
-        <DeviceNode
-          key={node.device.id}
-          node={node}
-          selected={selectedDeviceId === node.device.id}
-          onClick={() => onSelectDevice(node.device.id)}
-        />
-      ))}
 
       {nodes.length === 0 && (
         <div className="absolute inset-x-4 top-24 rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] bg-[rgb(255_255_255_/_0.014)] p-4 text-xs text-[var(--text-tertiary)]">
@@ -669,7 +669,7 @@ function Inspector({
 }) {
   return (
     <>
-      <Card>
+      <Card className="shrink-0">
         <CardHeader>
           <CardTitle>
             <CardLabel>Inspector</CardLabel>
@@ -720,7 +720,7 @@ function Inspector({
         </CardBody>
       </Card>
 
-      <Card>
+      <Card className="shrink-0">
         <CardHeader>
           <CardTitle>
             <CardLabel>Device context</CardLabel>
@@ -788,14 +788,14 @@ function Inspector({
         </CardBody>
       </Card>
 
-      <Card>
+      <Card className="flex min-h-0 flex-1 flex-col">
         <CardHeader>
           <CardTitle>
             <CardLabel>Visible links</CardLabel>
             <CardHeading>{visibleLinks.length} cables</CardHeading>
           </CardTitle>
         </CardHeader>
-        <CardBody className="max-h-80 space-y-2 overflow-y-auto">
+        <CardBody className="min-h-0 flex-1 space-y-2 overflow-y-auto">
           {visibleLinks.map((entry) => (
             <button
               key={entry.link.id}

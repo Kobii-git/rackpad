@@ -397,8 +397,8 @@ export default function DiscoveryView() {
                   <CardHeading>Discovered hosts</CardHeading>
                 </CardTitle>
               </CardHeader>
-              <CardBody className="p-0">
-                <table className="rk-table">
+              <CardBody className="overflow-x-auto p-0">
+                <table className="rk-table min-w-[980px]">
                   <thead>
                     <tr>
                       <Th>IP</Th>
