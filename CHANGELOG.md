@@ -6,6 +6,14 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.0-beta.6] - 2026-05-20
+
+### Changed
+
+- Visualizer rack elevations now always render the full rack height, including
+  empty U positions, and dynamically increase per-U spacing for dense 1U
+  devices with many ports.
+
 ## [1.2.0-beta.5] - 2026-05-20
 
 ### Changed

@@ -45,8 +45,10 @@ const RACK_PANEL_GAP = 22;
 const RACK_SECTION_GAP = 28;
 const RACK_SECTION_PADDING = 18;
 const RACK_SECTION_HEADER = 56;
-const RACK_UNIT_HEIGHT = 26;
-const RACK_NODE_MIN_HEIGHT = 24;
+const RACK_UNIT_BASE_HEIGHT = 28;
+const RACK_UNIT_MEDIUM_HEIGHT = 36;
+const RACK_UNIT_DENSE_HEIGHT = 44;
+const RACK_UNIT_ULTRA_DENSE_HEIGHT = 52;
 const RACK_NODE_WIDTH = 218;
 const NODE_HEIGHT = 40;
 const ROOM_ZONE_WIDTH = 430;
@@ -54,7 +56,6 @@ const ROOM_NODE_WIDTH = 332;
 const ROOM_ROW_HEIGHT = 54;
 const GROUP_HEADER_HEIGHT = 48;
 const GROUP_GAP = 14;
-const EMPTY_RUN_HEIGHT = 22;
 const CABLE_FALLBACK_COLOR = "rgb(151 167 183 / 0.5)";
 
 const DEVICE_TYPE_ORDER: DeviceType[] = [
@@ -187,7 +188,6 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
         subnetRanges,
         vlansById: vlanById,
         monitorsByDeviceId,
-        expandedRackRuns: input.expandedRackRuns,
       });
       nodes.push(...panel.nodes);
       return panel;
@@ -355,11 +355,14 @@ function buildRackPanel(input: {
   subnetRanges: Array<SubnetRange | null>;
   vlansById: Record<string, Vlan>;
   monitorsByDeviceId: Record<string, DeviceMonitor[]>;
-  expandedRackRuns: Set<string>;
 }): RackPanel {
   const bodyX = input.x + 46;
   const bodyY = input.y + 78;
   const bodyWidth = RACK_PANEL_WIDTH - 58;
+  const rackUnitHeight = rackUnitHeightForDevices(
+    input.devices,
+    input.portsByDeviceId,
+  );
   const occupiedUnits = new Set<number>();
   for (const device of input.devices) {
     const start = device.startU ?? 1;
@@ -368,7 +371,7 @@ function buildRackPanel(input: {
       occupiedUnits.add(u);
     }
   }
-  const bands = buildRackBands(input.rack, occupiedUnits, input.expandedRackRuns);
+  const bands = buildRackBands(input.rack, occupiedUnits, rackUnitHeight);
   const bodyHeight = bands.reduce((sum, band) => sum + band.height, 0);
   const yByUnit = new Map<number, { y: number; height: number }>();
   for (const band of bands) {
@@ -391,7 +394,7 @@ function buildRackPanel(input: {
       x: bodyX + 32,
       y: top + 2,
       width: RACK_NODE_WIDTH,
-      height: Math.max(RACK_NODE_MIN_HEIGHT, bottom - top - 4),
+      height: Math.max(Math.max(24, rackUnitHeight - 4), bottom - top - 4),
       zoneId: input.room ? `room:${input.room.id}:rack:${input.rack.id}` : `rack:${input.rack.id}`,
       rackId: input.rack.id,
       rackName: input.rack.name,
@@ -433,66 +436,41 @@ function buildRackPanel(input: {
 function buildRackBands(
   rack: Rack,
   occupiedUnits: Set<number>,
-  expandedRackRuns: Set<string>,
+  unitHeight: number,
 ): RackBand[] {
   const bands: RackBand[] = [];
   let y = 0;
   let u = rack.totalU;
   while (u >= 1) {
-    if (occupiedUnits.has(u)) {
-      bands.push({
-        id: `${rack.id}:${u}`,
-        startU: u,
-        endU: u,
-        y,
-        height: RACK_UNIT_HEIGHT,
-        collapsed: false,
-        occupied: true,
-        label: `${u}`,
-      });
-      y += RACK_UNIT_HEIGHT;
-      u -= 1;
-      continue;
-    }
-
-    const start = u;
-    while (u >= 1 && !occupiedUnits.has(u)) {
-      u -= 1;
-    }
-    const end = u + 1;
-    const count = start - end + 1;
-    const expandKey = `${rack.id}:${end}-${start}`;
-    const collapsed = count >= 4 && !expandedRackRuns.has(expandKey);
-    if (collapsed) {
-      bands.push({
-        id: expandKey,
-        startU: end,
-        endU: start,
-        y,
-        height: EMPTY_RUN_HEIGHT,
-        collapsed: true,
-        occupied: false,
-        label: `${count}U free`,
-        expandKey,
-      });
-      y += EMPTY_RUN_HEIGHT;
-    } else {
-      for (let emptyU = start; emptyU >= end; emptyU -= 1) {
-        bands.push({
-          id: `${rack.id}:${emptyU}`,
-          startU: emptyU,
-          endU: emptyU,
-          y,
-          height: RACK_UNIT_HEIGHT,
-          collapsed: false,
-          occupied: false,
-          label: `${emptyU}`,
-        });
-        y += RACK_UNIT_HEIGHT;
-      }
-    }
+    bands.push({
+      id: `${rack.id}:${u}`,
+      startU: u,
+      endU: u,
+      y,
+      height: unitHeight,
+      collapsed: false,
+      occupied: occupiedUnits.has(u),
+      label: `${u}`,
+    });
+    y += unitHeight;
+    u -= 1;
   }
   return bands;
+}
+
+function rackUnitHeightForDevices(
+  devices: Device[],
+  portsByDeviceId: Record<string, Port[]>,
+) {
+  const maxOneUPorts = devices.reduce((max, device) => {
+    const heightU = device.heightU ?? 1;
+    if (heightU > 1) return max;
+    return Math.max(max, portsByDeviceId[device.id]?.length ?? 0);
+  }, 0);
+  if (maxOneUPorts >= 36) return RACK_UNIT_ULTRA_DENSE_HEIGHT;
+  if (maxOneUPorts >= 18) return RACK_UNIT_DENSE_HEIGHT;
+  if (maxOneUPorts >= 8) return RACK_UNIT_MEDIUM_HEIGHT;
+  return RACK_UNIT_BASE_HEIGHT;
 }
 
 function buildRackRoomInputs(racks: Rack[], roomsById: Record<string, Room>) {

@@ -18,6 +18,8 @@ Open Rackpad -> `Visualizer`.
 - Device health from inventory status and enabled monitor targets.
 - Port strips on device cards using the real port order from each device template.
 - Direct neighbors, port context, and trace paths in the inspector.
+- Full-height rack elevations that always show every U position, even when the
+  rack is mostly empty.
 
 The visualizer does not infer hidden links. Add devices, ports, rack placement,
 rooms, IPAM subnets, monitor targets, and cables first for the richest view.
@@ -50,6 +52,14 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
 - Scroll the canvas background to zoom between 50% and 200%.
 - Click-drag an empty canvas area to pan.
 - Scrollable inspector panes keep normal vertical scrolling.
+
+## Rack Elevations
+
+- Rack panels honor the configured rack size, so a 42U rack renders as 42 U rows
+  even if most of the rack is empty.
+- Rack U spacing increases automatically when dense 1U devices have many ports,
+  keeping switch and patch-panel cards readable instead of squeezing them into a
+  tiny row.
 
 ## Cable Rendering
 
