@@ -8,9 +8,12 @@ Open Rackpad -> `Visualizer`.
 
 ## What It Shows
 
-- Rack-mounted equipment grouped in the left rack-elevation zone.
-- Loose, room, shelf, WiFi, and virtual-context devices grouped in the right zone.
-- Room/loose groups by matching IPAM subnet when subnets exist, otherwise by device type.
+- Rack-mounted equipment grouped in the left rack-elevation zone, with racks
+  separated into their assigned Rooms.
+- Loose, room, shelf, WiFi, hosted VM, and virtual-context devices grouped in
+  the right zone with room context.
+- Room/loose groups by Room first, then matching IPAM subnet when subnets exist,
+  otherwise by device type or virtual host.
 - Cable paths from existing `Cables` records, including cable color, type, and length.
 - Device health from inventory status and enabled monitor targets.
 - Port strips on device cards using the real port order from each device template.
@@ -69,9 +72,12 @@ Each device card shows a compact port strip on the right edge:
 
 ## Trace Mode
 
-Trace mode follows documented `PortLink` records. Patch panels also bridge
-matching front/rear ports with the same port name and kind. This is read-only:
-it does not create cables or modify port records.
+Trace mode follows documented `PortLink` records across rooms, racks, loose
+devices, and hosted VMs. You can trace from `Room A -> Rack 1 -> Switch port 1`
+to a port in another room as long as each hop is documented as a cable or
+patch-panel handoff. Patch panels also bridge matching front/rear ports with
+the same port name and kind. This is read-only: it does not create cables or
+modify port records.
 
 If no path exists, Rackpad shows that no documented path was found. Usually this
 means one or more cable links or patch-panel pass-through records are missing.

@@ -46,6 +46,7 @@ import {
 import type {
   RackBand,
   RackPanel,
+  RackRoomSection,
   RoomGroup,
   SearchResult,
   TraceModeState,
@@ -668,15 +669,25 @@ function ZonePanels({
             Add racks to place rack-mounted equipment in this zone.
           </div>
         ) : (
-          model.rackZone.racks.map((rack) => (
-            <RackPanelView
-              key={rack.id}
-              panel={rack}
-              zoneX={model.rackZone.x}
-              zoneY={model.rackZone.y}
-              onToggleRackRun={onToggleRackRun}
-            />
-          ))
+          <>
+            {model.rackZone.sections.map((section) => (
+              <RackRoomSectionView
+                key={section.id}
+                section={section}
+                zoneX={model.rackZone.x}
+                zoneY={model.rackZone.y}
+              />
+            ))}
+            {model.rackZone.racks.map((rack) => (
+              <RackPanelView
+                key={rack.id}
+                panel={rack}
+                zoneX={model.rackZone.x}
+                zoneY={model.rackZone.y}
+                onToggleRackRun={onToggleRackRun}
+              />
+            ))}
+          </>
         )}
       </div>
       <div
@@ -726,6 +737,45 @@ function ZoneHeader({
   );
 }
 
+function RackRoomSectionView({
+  section,
+  zoneX,
+  zoneY,
+}: {
+  section: RackRoomSection;
+  zoneX: number;
+  zoneY: number;
+}) {
+  return (
+    <div
+      className="absolute rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[rgb(0_0_0_/_0.10)]"
+      style={{
+        left: section.x - zoneX,
+        top: section.y - zoneY,
+        width: section.width,
+        height: section.height,
+      }}
+    >
+      <div className="border-b border-[var(--border-subtle)] px-4 py-3">
+        <div className="rk-kicker">Room</div>
+        <div className="mt-1 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-[var(--text-primary)]">
+              {section.name}
+            </div>
+            <div className="mt-0.5 truncate text-[10px] text-[var(--text-tertiary)]">
+              {section.subtitle}
+            </div>
+          </div>
+          <Mono className="shrink-0 text-[9px] text-[var(--text-tertiary)]">
+            {section.stats.racks} racks | {section.stats.devices} devices | {section.stats.cables} links
+          </Mono>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RackPanelView({
   panel,
   zoneX,
@@ -748,7 +798,7 @@ function RackPanelView({
       }}
     >
       <div className="border-b border-[var(--border-subtle)] px-3 py-3">
-        <div className="rk-kicker">{panel.room?.name ?? "Rack"}</div>
+        <div className="rk-kicker">{panel.rack.location ?? "Rack"}</div>
         <div className="mt-1 truncate text-sm font-semibold text-[var(--text-primary)]">{panel.rack.name}</div>
         <Mono className="text-[10px] text-[var(--text-tertiary)]">
           {panel.stats.totalU}U | {panel.stats.mounted} mounted | {panel.stats.freeU}U free
@@ -1501,10 +1551,13 @@ function healthBadgeTone(health: VisualizerNode["health"]) {
 
 function placementLabel(node: VisualizerNode) {
   if (node.rackId) {
-    return `${node.device.startU ? `U${node.device.startU}` : "Rack"}${
+    const rack = node.rackName ?? "Rack";
+    const prefix = node.roomName ? `${node.roomName} | ${rack}` : rack;
+    return `${prefix} | ${node.device.startU ? `U${node.device.startU}` : "rack"}${
       node.device.heightU ? ` / ${node.device.heightU}U` : ""
     }`;
   }
+  if (node.roomName) return node.device.placement ? `${node.roomName} | ${node.device.placement}` : node.roomName;
   if (node.device.placement) return node.device.placement;
   return "Room / loose";
 }

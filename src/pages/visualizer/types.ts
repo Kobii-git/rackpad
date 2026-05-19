@@ -42,7 +42,9 @@ export interface VisualizerNode {
   stripeColor: string;
   zoneId: string;
   rackId?: string;
+  rackName?: string;
   roomId?: string | null;
+  roomName?: string | null;
   ports: VisualizerPort[];
   portSummary: {
     linked: number;
@@ -63,6 +65,23 @@ export interface RackBand {
   occupied: boolean;
   label: string;
   expandKey?: string;
+}
+
+export interface RackRoomSection {
+  id: string;
+  name: string;
+  subtitle: string;
+  room?: Room;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  racks: RackPanel[];
+  stats: {
+    racks: number;
+    devices: number;
+    cables: number;
+  };
 }
 
 export interface RackPanel {
@@ -167,6 +186,7 @@ export interface VisualizerModel {
     y: number;
     width: number;
     height: number;
+    sections: RackRoomSection[];
     racks: RackPanel[];
   };
   roomZone: RoomZone;

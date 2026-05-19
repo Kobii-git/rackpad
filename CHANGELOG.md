@@ -6,6 +6,14 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.0-beta.5] - 2026-05-20
+
+### Changed
+
+- Visualizer now treats Rooms as first-class topology sections: rack elevations
+  are grouped by room, room/loose inventory groups include room context, and
+  cross-room cable tracing remains available through the existing port graph.
+
 ## [1.2.0-beta.4] - 2026-05-20
 
 ### Fixed
