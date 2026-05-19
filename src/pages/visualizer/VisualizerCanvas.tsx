@@ -207,6 +207,17 @@ export function VisualizerCanvas({
       return;
     }
     event.preventDefault();
+    if (event.shiftKey) {
+      const horizontalDelta =
+        Math.abs(event.deltaX) > Math.abs(event.deltaY)
+          ? event.deltaX
+          : event.deltaY;
+      setTransform((current) => ({
+        ...current,
+        x: current.x - horizontalDelta,
+      }));
+      return;
+    }
     const rect = viewportRef.current?.getBoundingClientRect();
     if (!rect) return;
     const nextScale = clamp(
@@ -679,7 +690,7 @@ function ZonePanels({
       >
         <ZoneHeader
           eyebrow="Room / loose zone"
-          title="Loose and room inventory"
+          title="Hosted, rooms, and loose inventory"
           stats={`${model.roomZone.stats.total} devices | ${model.roomZone.stats.online} online | ${model.roomZone.stats.down} down`}
         />
         {model.roomZone.groups.map((group) => (

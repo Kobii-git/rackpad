@@ -23,9 +23,18 @@ import {
 } from "@/lib/store";
 import type { Device, DeviceMonitor } from "@/lib/types";
 import { relativeTime, statusLabel } from "@/lib/utils";
+import {
+  applySortDirection,
+  compareDate,
+  compareNumber,
+  compareText,
+  toggleSort,
+  type SortState,
+} from "@/lib/sort";
 
 type MonitorFilter = "all" | "offline" | "warning" | "unknown" | "online";
 type MonitorRollupStatus = Exclude<MonitorFilter, "all">;
+type MonitorSortKey = "hostname" | "status" | "targets" | "lastCheck";
 
 export default function MonitoringView() {
   const currentUser = useStore((s) => s.currentUser);
@@ -35,6 +44,10 @@ export default function MonitoringView() {
   const canManageMonitoring = currentUser?.role === "admin";
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<MonitorFilter>("all");
+  const [sort, setSort] = useState<SortState<MonitorSortKey>>({
+    key: "hostname",
+    direction: "asc",
+  });
   const [runningAll, setRunningAll] = useState(false);
   const [runningDeviceId, setRunningDeviceId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -67,31 +80,33 @@ export default function MonitoringView() {
 
   const filteredDevices = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return monitoredDevices.filter(({ device, monitors, rollupStatus }) => {
-      if (filter !== "all" && rollupStatus !== filter) return false;
-      if (!normalizedQuery) return true;
+    return monitoredDevices
+      .filter(({ device, monitors, rollupStatus }) => {
+        if (filter !== "all" && rollupStatus !== filter) return false;
+        if (!normalizedQuery) return true;
 
-      const haystack = [
-        device.hostname,
-        device.displayName,
-        device.managementIp,
-        rollupStatus,
-        statusLabel[rollupStatus],
-        ...monitors.flatMap((monitor) => [
-          monitor.name,
-          monitor.target,
-          monitor.type,
-          monitor.lastResult,
-          monitor.lastMessage,
-        ]),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+        const haystack = [
+          device.hostname,
+          device.displayName,
+          device.managementIp,
+          rollupStatus,
+          statusLabel[rollupStatus],
+          ...monitors.flatMap((monitor) => [
+            monitor.name,
+            monitor.target,
+            monitor.type,
+            monitor.lastResult,
+            monitor.lastMessage,
+          ]),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
 
-      return haystack.includes(normalizedQuery);
-    });
-  }, [filter, monitoredDevices, query]);
+        return haystack.includes(normalizedQuery);
+      })
+      .sort((a, b) => compareMonitorEntries(a, b, sort));
+  }, [filter, monitoredDevices, query, sort]);
 
   const stats = useMemo(
     () => ({
@@ -148,6 +163,10 @@ export default function MonitoringView() {
     }
   }
 
+  function handleSort(key: MonitorSortKey) {
+    setSort((current) => toggleSort(current, key));
+  }
+
   return (
     <>
       <TopBar
@@ -160,12 +179,6 @@ export default function MonitoringView() {
         }
         actions={
           <div className="flex items-center gap-2">
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search device, target, or message..."
-              className="w-64"
-            />
             <Button
               variant="outline"
               size="sm"
@@ -213,6 +226,49 @@ export default function MonitoringView() {
             hint="Configured but not yet confirmed"
             tone="neutral"
           />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="relative min-w-[16rem] max-w-xl flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search device, target, or message..."
+              className="pl-8"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rk-kicker">Sort</span>
+            <SortButton
+              active={sort.key === "hostname"}
+              direction={sort.direction}
+              onClick={() => handleSort("hostname")}
+            >
+              Host
+            </SortButton>
+            <SortButton
+              active={sort.key === "status"}
+              direction={sort.direction}
+              onClick={() => handleSort("status")}
+            >
+              Status
+            </SortButton>
+            <SortButton
+              active={sort.key === "targets"}
+              direction={sort.direction}
+              onClick={() => handleSort("targets")}
+            >
+              Targets
+            </SortButton>
+            <SortButton
+              active={sort.key === "lastCheck"}
+              direction={sort.direction}
+              onClick={() => handleSort("lastCheck")}
+            >
+              Last check
+            </SortButton>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -530,4 +586,68 @@ function FilterButton({
       {children}
     </Button>
   );
+}
+
+function SortButton({
+  active,
+  direction,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  direction: SortState<MonitorSortKey>["direction"];
+  onClick: () => void;
+  children: string;
+}) {
+  return (
+    <Button
+      variant={active ? "secondary" : "outline"}
+      size="sm"
+      onClick={onClick}
+      className="h-8"
+    >
+      {children}
+      {active && (
+        <span className="font-mono text-[9px]" aria-hidden>
+          {direction === "asc" ? "^" : "v"}
+        </span>
+      )}
+    </Button>
+  );
+}
+
+function compareMonitorEntries(
+  a: {
+    device: Device;
+    monitors: DeviceMonitor[];
+    rollupStatus: MonitorRollupStatus;
+  },
+  b: {
+    device: Device;
+    monitors: DeviceMonitor[];
+    rollupStatus: MonitorRollupStatus;
+  },
+  sort: SortState<MonitorSortKey>,
+) {
+  let result = 0;
+  if (sort.key === "hostname") {
+    result = compareText(a.device.hostname, b.device.hostname);
+  } else if (sort.key === "status") {
+    result = compareText(a.rollupStatus, b.rollupStatus);
+  } else if (sort.key === "targets") {
+    result = compareNumber(a.monitors.length, b.monitors.length);
+  } else {
+    result = compareDate(latestMonitorCheck(a.monitors), latestMonitorCheck(b.monitors));
+  }
+
+  if (result === 0) result = compareText(a.device.hostname, b.device.hostname);
+  return applySortDirection(result, sort.direction);
+}
+
+function latestMonitorCheck(monitors: DeviceMonitor[]) {
+  return monitors
+    .map((monitor) => monitor.lastCheckAt)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
 }

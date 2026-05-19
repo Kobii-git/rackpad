@@ -191,6 +191,7 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
   );
   const roomGroups = buildRoomGroups({
     devices: looseDevices,
+    deviceById,
     roomsById,
     portsByDeviceId,
     portLinkByPortId,
@@ -445,6 +446,7 @@ function buildRackBands(
 
 function buildRoomGroups(input: {
   devices: Device[];
+  deviceById: Record<string, Device>;
   roomsById: Record<string, Room>;
   portsByDeviceId: Record<string, Port[]>;
   portLinkByPortId: Record<string, PortLink>;
@@ -465,13 +467,35 @@ function buildRoomGroups(input: {
       name: string;
       subtitle: string;
       color: string;
-      groupType: "subnet" | "device-type";
+      groupType: "subnet" | "device-type" | "virtual-host";
       subnet?: Subnet;
       devices: Device[];
     }
   >();
   const hasSubnets = input.subnets.length > 0;
   for (const device of input.devices) {
+    if (isVirtualInventoryDevice(device)) {
+      const parent = device.parentDeviceId
+        ? input.deviceById[device.parentDeviceId]
+        : undefined;
+      const key = parent ? `virtual-host:${parent.id}` : "virtual-host:unassigned";
+      const existing = groups.get(key);
+      if (existing) {
+        existing.devices.push(device);
+      } else {
+        groups.set(key, {
+          name: parent ? `VMs on ${parent.hostname}` : "Unassigned VMs",
+          subtitle: parent
+            ? `Hosted virtual inventory${parent.managementIp ? ` | ${parent.managementIp}` : ""}`
+            : "Virtual devices missing a host link",
+          color: typeColor("vm"),
+          groupType: "virtual-host",
+          devices: [device],
+        });
+      }
+      continue;
+    }
+
     const subnet = hasSubnets
       ? findSubnet(device.managementIp, input.subnetRanges)
       : null;
@@ -557,6 +581,10 @@ function buildRoomGroups(input: {
         subnet: group.subnet,
       };
     });
+}
+
+function isVirtualInventoryDevice(device: Device) {
+  return device.placement === "virtual" || device.deviceType === "vm";
 }
 
 function createNode(input: {

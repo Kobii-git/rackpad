@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Mono } from "@/components/shared/Mono";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
+import { SortableHeader } from "@/components/shared/SortableHeader";
 import {
   canEditInventory,
   deleteDiscoveredDeviceRecord,
@@ -24,6 +25,15 @@ import {
   useStore,
 } from "@/lib/store";
 import type { Device, DiscoveredDevice } from "@/lib/types";
+import {
+  applySortDirection,
+  compareDate,
+  compareIp,
+  compareNumber,
+  compareText,
+  toggleSort,
+  type SortState,
+} from "@/lib/sort";
 
 type DiscoveryDraft = {
   hostname: string;
@@ -35,6 +45,15 @@ type DiscoveryDraft = {
 };
 
 type DiscoveryFilter = "all" | "new" | "imported" | "dismissed" | "duplicates";
+type DiscoverySortKey =
+  | "ip"
+  | "hostname"
+  | "type"
+  | "placement"
+  | "vendor"
+  | "match"
+  | "status"
+  | "lastSeen";
 
 export default function DiscoveryView() {
   const currentUser = useStore((s) => s.currentUser);
@@ -54,6 +73,10 @@ export default function DiscoveryView() {
   const [error, setError] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filter, setFilter] = useState<DiscoveryFilter>("all");
+  const [sort, setSort] = useState<SortState<DiscoverySortKey>>({
+    key: "ip",
+    direction: "asc",
+  });
 
   const deviceById = useMemo(() => {
     return devices.reduce<Record<string, Device>>((acc, device) => {
@@ -129,13 +152,17 @@ export default function DiscoveryView() {
   );
 
   const filteredDevices = useMemo(() => {
-    return discoveredDevices.filter((device) => {
-      if (filter === "all") return true;
-      if (filter === "duplicates")
-        return (duplicateMatchesById[device.id] ?? []).length > 0;
-      return device.status === filter;
-    });
-  }, [discoveredDevices, duplicateMatchesById, filter]);
+    return discoveredDevices
+      .filter((device) => {
+        if (filter === "all") return true;
+        if (filter === "duplicates")
+          return (duplicateMatchesById[device.id] ?? []).length > 0;
+        return device.status === filter;
+      })
+      .sort((a, b) =>
+        compareDiscoveredDevices(a, b, sort, duplicateMatchesById),
+      );
+  }, [discoveredDevices, duplicateMatchesById, filter, sort]);
 
   const selected = selectedId
     ? discoveredDevices.find((device) => device.id === selectedId)
@@ -282,6 +309,10 @@ export default function DiscoveryView() {
     setDrawerOpen(false);
   }
 
+  function handleSort(key: DiscoverySortKey) {
+    setSort((current) => toggleSort(current, key));
+  }
+
   const newCount = discoveredDevices.filter(
     (device) => device.status === "new",
   ).length;
@@ -401,14 +432,58 @@ export default function DiscoveryView() {
                 <table className="rk-table min-w-[980px]">
                   <thead>
                     <tr>
-                      <Th>IP</Th>
-                      <Th>Hostname</Th>
-                      <Th>Type</Th>
-                      <Th>Placement</Th>
-                      <Th>Vendor / MAC</Th>
-                      <Th>Match</Th>
-                      <Th>Status</Th>
-                      <Th>Last seen</Th>
+                      <SortableHeader sortKey="ip" sort={sort} onSort={handleSort}>
+                        IP
+                      </SortableHeader>
+                      <SortableHeader
+                        sortKey="hostname"
+                        sort={sort}
+                        onSort={handleSort}
+                      >
+                        Hostname
+                      </SortableHeader>
+                      <SortableHeader
+                        sortKey="type"
+                        sort={sort}
+                        onSort={handleSort}
+                      >
+                        Type
+                      </SortableHeader>
+                      <SortableHeader
+                        sortKey="placement"
+                        sort={sort}
+                        onSort={handleSort}
+                      >
+                        Placement
+                      </SortableHeader>
+                      <SortableHeader
+                        sortKey="vendor"
+                        sort={sort}
+                        onSort={handleSort}
+                      >
+                        Vendor / MAC
+                      </SortableHeader>
+                      <SortableHeader
+                        sortKey="match"
+                        sort={sort}
+                        onSort={handleSort}
+                      >
+                        Match
+                      </SortableHeader>
+                      <SortableHeader
+                        sortKey="status"
+                        sort={sort}
+                        onSort={handleSort}
+                      >
+                        Status
+                      </SortableHeader>
+                      <SortableHeader
+                        sortKey="lastSeen"
+                        sort={sort}
+                        onSort={handleSort}
+                      >
+                        Last seen
+                      </SortableHeader>
                     </tr>
                   </thead>
                   <tbody>
@@ -857,10 +932,6 @@ function Select({
   );
 }
 
-function Th({ children }: { children: ReactNode }) {
-  return <th>{children}</th>;
-}
-
 function Td({
   children,
   className,
@@ -869,4 +940,43 @@ function Td({
   className?: string;
 }) {
   return <td className={className}>{children}</td>;
+}
+
+function compareDiscoveredDevices(
+  a: DiscoveredDevice,
+  b: DiscoveredDevice,
+  sort: SortState<DiscoverySortKey>,
+  duplicateMatchesById: Record<string, Device[]>,
+) {
+  let result = 0;
+  if (sort.key === "ip") {
+    result = compareIp(a.ipAddress, b.ipAddress);
+  } else if (sort.key === "hostname") {
+    result = compareText(
+      a.hostname ?? a.displayName ?? "",
+      b.hostname ?? b.displayName ?? "",
+    );
+  } else if (sort.key === "type") {
+    result = compareText(a.deviceType ?? "endpoint", b.deviceType ?? "endpoint");
+  } else if (sort.key === "placement") {
+    result = compareText(a.placement ?? "room", b.placement ?? "room");
+  } else if (sort.key === "vendor") {
+    result =
+      compareText(a.vendor, b.vendor) || compareText(a.macAddress, b.macAddress);
+  } else if (sort.key === "match") {
+    result = compareNumber(
+      duplicateMatchesById[a.id]?.length ?? 0,
+      duplicateMatchesById[b.id]?.length ?? 0,
+    );
+  } else if (sort.key === "status") {
+    result = compareText(a.status, b.status);
+  } else {
+    result = compareDate(
+      a.lastSeen ?? a.lastScannedAt,
+      b.lastSeen ?? b.lastScannedAt,
+    );
+  }
+
+  if (result === 0) result = compareIp(a.ipAddress, b.ipAddress);
+  return applySortDirection(result, sort.direction);
 }

@@ -6,6 +6,20 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.0-beta.3] - 2026-05-20
+
+### Added
+
+- Shared sortable table headers and sort helpers for denser inventory tables.
+- Ports workspace device and interface filters for type, link status, port
+  names, VLANs, bridge membership, peers, and cable metadata.
+- VLAN workspace search and sorting for ranges and documented VLAN records.
+
+### Changed
+
+- Visualizer now groups hosted VMs under their parent host instead of treating
+  them as generic loose room inventory, and supports shift-wheel horizontal pan.
+
 ## [1.2.0-beta.2] - 2026-05-19
 
 ### Added

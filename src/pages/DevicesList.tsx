@@ -6,12 +6,21 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Mono } from "@/components/shared/Mono";
+import { SortableHeader } from "@/components/shared/SortableHeader";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { canEditInventory, useStore } from "@/lib/store";
 import type { Device, DeviceType, Port, Rack, Room } from "@/lib/types";
 import { ChevronRight, Filter, Plus } from "lucide-react";
 import { statusLabel } from "@/lib/utils";
+import {
+  applySortDirection,
+  compareIp,
+  compareNumber,
+  compareText,
+  toggleSort,
+  type SortState,
+} from "@/lib/sort";
 
 const TYPES: DeviceType[] = [
   "switch",
@@ -30,13 +39,14 @@ const TYPES: DeviceType[] = [
   "ups",
 ];
 
-type SortKey = "hostname" | "managementIp" | "placement" | "status";
-type SortDirection = "asc" | "desc";
-
-interface DeviceSort {
-  key: SortKey;
-  direction: SortDirection;
-}
+type SortKey =
+  | "hostname"
+  | "type"
+  | "model"
+  | "managementIp"
+  | "placement"
+  | "ports"
+  | "status";
 
 export default function DevicesList() {
   const currentUser = useStore((s) => s.currentUser);
@@ -47,7 +57,7 @@ export default function DevicesList() {
   const canEdit = canEditInventory(currentUser);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<DeviceType | null>(null);
-  const [sort, setSort] = useState<DeviceSort>({
+  const [sort, setSort] = useState<SortState<SortKey>>({
     key: "hostname",
     direction: "asc",
   });
@@ -101,19 +111,29 @@ export default function DevicesList() {
         return haystack.includes(query.toLowerCase());
       })
       .sort((a, b) =>
-        compareDevices(a, b, sort, rackById, roomById, deviceById),
+        compareDevices(
+          a,
+          b,
+          sort,
+          rackById,
+          roomById,
+          deviceById,
+          portsByDeviceId,
+        ),
       );
-  }, [deviceById, devices, query, rackById, roomById, sort, type]);
+  }, [
+    deviceById,
+    devices,
+    portsByDeviceId,
+    query,
+    rackById,
+    roomById,
+    sort,
+    type,
+  ]);
 
   function handleSort(key: SortKey) {
-    setSort((current) =>
-      current.key === key
-        ? {
-            key,
-            direction: current.direction === "asc" ? "desc" : "asc",
-          }
-        : { key, direction: "asc" },
-    );
+    setSort((current) => toggleSort(current, key));
   }
 
   const typeCounts = useMemo(() => {
@@ -201,37 +221,55 @@ export default function DevicesList() {
               <thead>
                 <tr className="border-b border-[var(--color-line)] bg-[var(--color-bg-2)]">
                   <Th />
-                  <SortableTh
+                  <SortableHeader
                     sortKey="hostname"
                     sort={sort}
                     onSort={handleSort}
                   >
                     Hostname
-                  </SortableTh>
-                  <Th>Type</Th>
-                  <Th>Model</Th>
-                  <SortableTh
+                  </SortableHeader>
+                  <SortableHeader
+                    sortKey="type"
+                    sort={sort}
+                    onSort={handleSort}
+                  >
+                    Type
+                  </SortableHeader>
+                  <SortableHeader
+                    sortKey="model"
+                    sort={sort}
+                    onSort={handleSort}
+                  >
+                    Model
+                  </SortableHeader>
+                  <SortableHeader
                     sortKey="managementIp"
                     sort={sort}
                     onSort={handleSort}
                   >
                     Mgmt IP
-                  </SortableTh>
-                  <SortableTh
+                  </SortableHeader>
+                  <SortableHeader
                     sortKey="placement"
                     sort={sort}
                     onSort={handleSort}
                   >
                     Placement
-                  </SortableTh>
-                  <Th>Ports</Th>
-                  <SortableTh
+                  </SortableHeader>
+                  <SortableHeader
+                    sortKey="ports"
+                    sort={sort}
+                    onSort={handleSort}
+                  >
+                    Ports
+                  </SortableHeader>
+                  <SortableHeader
                     sortKey="status"
                     sort={sort}
                     onSort={handleSort}
                   >
                     Status
-                  </SortableTh>
+                  </SortableHeader>
                   <Th />
                 </tr>
               </thead>
@@ -419,41 +457,6 @@ function Th({ children }: { children?: ReactNode }) {
   );
 }
 
-function SortableTh({
-  children,
-  sortKey,
-  sort,
-  onSort,
-}: {
-  children: ReactNode;
-  sortKey: SortKey;
-  sort: DeviceSort;
-  onSort: (key: SortKey) => void;
-}) {
-  const active = sort.key === sortKey;
-  return (
-    <th
-      aria-sort={
-        active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"
-      }
-      className="px-3 py-1.5 text-left font-mono text-[10px] font-normal uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]"
-    >
-      <button
-        type="button"
-        onClick={() => onSort(sortKey)}
-        className={`inline-flex items-center gap-1.5 transition-colors hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/50 ${
-          active ? "text-[var(--color-accent)]" : ""
-        }`}
-      >
-        <span>{children}</span>
-        <span className="text-[9px]" aria-hidden>
-          {active ? (sort.direction === "asc" ? "^" : "v") : ""}
-        </span>
-      </button>
-    </th>
-  );
-}
-
 function Td({
   children,
   className,
@@ -469,15 +472,20 @@ function Td({
 function compareDevices(
   a: Device,
   b: Device,
-  sort: DeviceSort,
+  sort: SortState<SortKey>,
   rackById: Record<string, Rack>,
   roomById: Record<string, Room>,
   deviceById: Record<string, Device>,
+  portsByDeviceId: Record<string, Port[]>,
 ) {
   let result = 0;
 
   if (sort.key === "hostname") {
     result = compareText(a.hostname, b.hostname);
+  } else if (sort.key === "type") {
+    result = compareText(a.deviceType, b.deviceType);
+  } else if (sort.key === "model") {
+    result = compareText(deviceModelSortValue(a), deviceModelSortValue(b));
   } else if (sort.key === "managementIp") {
     result = compareIp(a.managementIp, b.managementIp);
   } else if (sort.key === "placement") {
@@ -485,6 +493,15 @@ function compareDevices(
       devicePlacementSortValue(a, rackById, roomById, deviceById),
       devicePlacementSortValue(b, rackById, roomById, deviceById),
     );
+  } else if (sort.key === "ports") {
+    const aPorts = portsByDeviceId[a.id] ?? [];
+    const bPorts = portsByDeviceId[b.id] ?? [];
+    result =
+      compareNumber(aPorts.length, bPorts.length) ||
+      compareNumber(
+        aPorts.filter((port) => port.linkState === "up").length,
+        bPorts.filter((port) => port.linkState === "up").length,
+      );
   } else {
     result = compareText(statusLabel[a.status], statusLabel[b.status]);
   }
@@ -493,45 +510,11 @@ function compareDevices(
     result = compareText(a.hostname, b.hostname);
   }
 
-  return sort.direction === "asc" ? result : -result;
+  return applySortDirection(result, sort.direction);
 }
 
-function compareText(a?: string | null, b?: string | null) {
-  const left = a?.trim();
-  const right = b?.trim();
-  if (!left && !right) return 0;
-  if (!left) return 1;
-  if (!right) return -1;
-  return left.localeCompare(right, undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
-}
-
-function compareIp(a?: string | null, b?: string | null) {
-  const left = parseIpv4(a);
-  const right = parseIpv4(b);
-  if (!left && !right) return compareText(a, b);
-  if (!left) return 1;
-  if (!right) return -1;
-
-  for (let index = 0; index < left.length; index += 1) {
-    const delta = (left[index] ?? 0) - (right[index] ?? 0);
-    if (delta !== 0) return delta;
-  }
-  return 0;
-}
-
-function parseIpv4(value?: string | null) {
-  const parts = value?.trim().split(".").map(Number);
-  if (
-    !parts ||
-    parts.length !== 4 ||
-    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
-  ) {
-    return null;
-  }
-  return parts;
+function deviceModelSortValue(device: Device) {
+  return [device.manufacturer, device.model].filter(Boolean).join(" ");
 }
 
 function devicePlacementSortValue(

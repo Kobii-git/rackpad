@@ -13,6 +13,7 @@ import { ColorInput } from "@/components/shared/ColorInput";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { SortableHeader } from "@/components/shared/SortableHeader";
 import {
   canEditInventory,
   createCable,
@@ -34,6 +35,13 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
+import {
+  applySortDirection,
+  compareLength,
+  compareText,
+  toggleSort,
+  type SortState,
+} from "@/lib/sort";
 
 interface CableFormState {
   fromPortId: string;
@@ -43,6 +51,8 @@ interface CableFormState {
   color: string;
   notes: string;
 }
+
+type CableSortKey = "from" | "to" | "type" | "length" | "color";
 
 const EMPTY_FORM: CableFormState = {
   fromPortId: "",
@@ -61,6 +71,10 @@ export default function CableView() {
   const canEdit = canEditInventory(currentUser);
   const [query, setQuery] = useState("");
   const [cableType, setCableType] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortState<CableSortKey>>({
+    key: "from",
+    direction: "asc",
+  });
   const [createForm, setCreateForm] = useState<CableFormState>(EMPTY_FORM);
   const [selectedLinkId, setSelectedLinkId] = useState<string>();
   const [editForm, setEditForm] = useState({
@@ -112,12 +126,8 @@ export default function CableView() {
           .toLowerCase();
         return haystack.includes(query.toLowerCase());
       })
-      .sort((a, b) =>
-        cableSortLabel(a, portById, deviceById).localeCompare(
-          cableSortLabel(b, portById, deviceById),
-        ),
-      );
-  }, [cableType, deviceById, portById, portLinks, query]);
+      .sort((a, b) => compareCables(a, b, sort, portById, deviceById));
+  }, [cableType, deviceById, portById, portLinks, query, sort]);
 
   const byType = useMemo(() => {
     return portLinks.reduce<Record<string, number>>((acc, link) => {
@@ -234,6 +244,10 @@ export default function CableView() {
     } finally {
       setDeletingId(null);
     }
+  }
+
+  function handleSort(key: CableSortKey) {
+    setSort((current) => toggleSort(current, key));
   }
 
   return (
@@ -543,12 +557,30 @@ export default function CableView() {
               <table className="rk-table">
                 <thead>
                   <tr>
-                    <Th>From</Th>
+                    <SortableHeader sortKey="from" sort={sort} onSort={handleSort}>
+                      From
+                    </SortableHeader>
                     <Th />
-                    <Th>To</Th>
-                    <Th>Type</Th>
-                    <Th>Length</Th>
-                    <Th>Color</Th>
+                    <SortableHeader sortKey="to" sort={sort} onSort={handleSort}>
+                      To
+                    </SortableHeader>
+                    <SortableHeader sortKey="type" sort={sort} onSort={handleSort}>
+                      Type
+                    </SortableHeader>
+                    <SortableHeader
+                      sortKey="length"
+                      sort={sort}
+                      onSort={handleSort}
+                    >
+                      Length
+                    </SortableHeader>
+                    <SortableHeader
+                      sortKey="color"
+                      sort={sort}
+                      onSort={handleSort}
+                    >
+                      Color
+                    </SortableHeader>
                   </tr>
                 </thead>
                 <tbody>
@@ -723,12 +755,47 @@ function portOptionLabel(port: Port, deviceById: Record<string, Device>) {
   });
 }
 
-function cableSortLabel(
-  link: PortLink,
+function compareCables(
+  a: PortLink,
+  b: PortLink,
+  sort: SortState<CableSortKey>,
   portById: Record<string, Port>,
   deviceById: Record<string, Device>,
 ) {
-  const fromPort = portById[link.fromPortId];
-  const fromDevice = fromPort ? deviceById[fromPort.deviceId] : undefined;
-  return `${fromDevice?.hostname ?? ""}:${fromPort?.name ?? ""}`;
+  let result = 0;
+  if (sort.key === "from") {
+    result = compareText(
+      cableEndpointLabel(a.fromPortId, portById, deviceById),
+      cableEndpointLabel(b.fromPortId, portById, deviceById),
+    );
+  } else if (sort.key === "to") {
+    result = compareText(
+      cableEndpointLabel(a.toPortId, portById, deviceById),
+      cableEndpointLabel(b.toPortId, portById, deviceById),
+    );
+  } else if (sort.key === "type") {
+    result = compareText(a.cableType ?? "Unknown", b.cableType ?? "Unknown");
+  } else if (sort.key === "length") {
+    result = compareLength(a.cableLength, b.cableLength);
+  } else {
+    result = compareText(a.color, b.color);
+  }
+
+  if (result === 0) {
+    result = compareText(
+      cableEndpointLabel(a.fromPortId, portById, deviceById),
+      cableEndpointLabel(b.fromPortId, portById, deviceById),
+    );
+  }
+  return applySortDirection(result, sort.direction);
+}
+
+function cableEndpointLabel(
+  portId: string,
+  portById: Record<string, Port>,
+  deviceById: Record<string, Device>,
+) {
+  const port = portById[portId];
+  const device = port ? deviceById[port.deviceId] : undefined;
+  return `${device?.hostname ?? ""}:${port?.name ?? ""}`;
 }

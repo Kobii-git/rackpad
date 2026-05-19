@@ -32,9 +32,11 @@ import type {
   Port,
   PortLink,
   PortTemplate,
+  Vlan,
+  VirtualSwitch,
 } from "@/lib/types";
 import { formatPortLabel } from "@/lib/utils";
-import { ArrowRight, Network, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowRight, Filter, Network, Plus, Save, Trash2 } from "lucide-react";
 
 const PORT_BEARING: Device["deviceType"][] = [
   "switch",
@@ -81,6 +83,7 @@ const PORT_KINDS: Port["kind"][] = [
   "virtual",
 ];
 const PORT_MODES: NonNullable<Port["mode"]>[] = ["access", "trunk"];
+type PortLinkFilter = "all" | "linked" | "unlinked" | "up" | "down";
 
 interface PortFormState {
   name: string;
@@ -257,8 +260,10 @@ export default function PortView() {
   const virtualSwitches = useStore((s) => s.virtualSwitches);
   const vlans = useStore((s) => s.vlans);
   const canEdit = canEditInventory(currentUser);
-  const portBearingDevices = devices.filter((device) =>
-    PORT_BEARING.includes(device.deviceType),
+  const portBearingDevices = useMemo(
+    () =>
+      devices.filter((device) => PORT_BEARING.includes(device.deviceType)),
+    [devices],
   );
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [selectedPortId, setSelectedPortId] = useState<string | undefined>();
@@ -267,6 +272,13 @@ export default function PortView() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const [deviceQuery, setDeviceQuery] = useState("");
+  const [deviceTypeFilter, setDeviceTypeFilter] = useState<DeviceType | "all">(
+    "all",
+  );
+  const [portLinkFilter, setPortLinkFilter] =
+    useState<PortLinkFilter>("all");
+  const [portQuery, setPortQuery] = useState("");
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<
     string | undefined
@@ -277,17 +289,6 @@ export default function PortView() {
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateDeleting, setTemplateDeleting] = useState(false);
   const [templateError, setTemplateError] = useState("");
-
-  useEffect(() => {
-    if (!portBearingDevices.length) return;
-    if (
-      !selectedDeviceId ||
-      !portBearingDevices.some((device) => device.id === selectedDeviceId)
-    ) {
-      setSelectedDeviceId(portBearingDevices[0].id);
-      setSelectedPortId(undefined);
-    }
-  }, [portBearingDevices, selectedDeviceId]);
 
   const deviceById = useMemo(() => {
     return devices.reduce<Record<string, Device>>((acc, device) => {
@@ -337,8 +338,106 @@ export default function PortView() {
     }, {});
   }, [portLinks]);
 
+  const filteredPortBearingDevices = useMemo(() => {
+    const query = deviceQuery.trim().toLowerCase();
+    return portBearingDevices.filter((entry) => {
+      if (deviceTypeFilter !== "all" && entry.deviceType !== deviceTypeFilter) {
+        return false;
+      }
+
+      const entryPorts = portsByDeviceId[entry.id] ?? [];
+      if (
+        portLinkFilter !== "all" &&
+        !entryPorts.some((port) =>
+          portMatchesLinkFilter(port, portLinkFilter, linkByPortId),
+        )
+      ) {
+        return false;
+      }
+
+      if (!query) return true;
+      const haystack = [
+        entry.hostname,
+        entry.displayName,
+        entry.deviceType,
+        entry.manufacturer,
+        entry.model,
+        entry.managementIp,
+        entry.placement,
+        entry.status,
+        ...(entry.tags ?? []),
+        ...entryPorts.map((port) =>
+          portSearchHaystack(port, {
+            deviceById,
+            linkByPortId,
+            portById,
+            virtualSwitchById,
+            vlanById,
+          }),
+        ),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [
+    deviceById,
+    deviceQuery,
+    deviceTypeFilter,
+    linkByPortId,
+    portBearingDevices,
+    portById,
+    portLinkFilter,
+    portsByDeviceId,
+    virtualSwitchById,
+    vlanById,
+  ]);
+
+  useEffect(() => {
+    if (!filteredPortBearingDevices.length) {
+      setSelectedDeviceId("");
+      setSelectedPortId(undefined);
+      return;
+    }
+    if (
+      !selectedDeviceId ||
+      !filteredPortBearingDevices.some(
+        (deviceEntry) => deviceEntry.id === selectedDeviceId,
+      )
+    ) {
+      setSelectedDeviceId(filteredPortBearingDevices[0].id);
+      setSelectedPortId(undefined);
+    }
+  }, [filteredPortBearingDevices, selectedDeviceId]);
+
   const device = deviceById[selectedDeviceId];
   const devicePorts = portsByDeviceId[selectedDeviceId] ?? [];
+  const visibleDevicePorts = useMemo(() => {
+    const query = portQuery.trim().toLowerCase();
+    return devicePorts.filter((port) => {
+      if (!portMatchesLinkFilter(port, portLinkFilter, linkByPortId)) {
+        return false;
+      }
+      if (!query) return true;
+      return portSearchHaystack(port, {
+        deviceById,
+        linkByPortId,
+        portById,
+        virtualSwitchById,
+        vlanById,
+      }).includes(query);
+    });
+  }, [
+    deviceById,
+    devicePorts,
+    linkByPortId,
+    portById,
+    portLinkFilter,
+    portQuery,
+    virtualSwitchById,
+    vlanById,
+  ]);
   const candidateVirtualSwitches = useMemo(() => {
     if (!device) return [];
     const hostDeviceId = device.parentDeviceId ?? device.id;
@@ -348,17 +447,17 @@ export default function PortView() {
   }, [device, virtualSwitches]);
 
   useEffect(() => {
-    if (!devicePorts.length) {
+    if (!visibleDevicePorts.length) {
       setSelectedPortId(undefined);
       return;
     }
     if (
       !selectedPortId ||
-      !devicePorts.some((port) => port.id === selectedPortId)
+      !visibleDevicePorts.some((port) => port.id === selectedPortId)
     ) {
-      setSelectedPortId(devicePorts[0].id);
+      setSelectedPortId(visibleDevicePorts[0].id);
     }
-  }, [devicePorts, selectedPortId]);
+  }, [selectedPortId, visibleDevicePorts]);
 
   useEffect(() => {
     if (!portTemplates.length) {
@@ -640,11 +739,49 @@ export default function PortView() {
         <div className="flex w-64 shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-bg-2)]/40">
           <div className="border-b border-[var(--color-line)] px-4 py-3">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-              {portBearingDevices.length} devices
+              {filteredPortBearingDevices.length} / {portBearingDevices.length} devices
             </span>
+            <div className="mt-3 space-y-2">
+              <div className="relative">
+                <Filter className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
+                <Input
+                  value={deviceQuery}
+                  onChange={(event) => setDeviceQuery(event.target.value)}
+                  placeholder="Filter devices..."
+                  className="h-8 pl-8 text-xs"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Select
+                  value={deviceTypeFilter}
+                  onChange={(value) =>
+                    setDeviceTypeFilter(value as DeviceType | "all")
+                  }
+                >
+                  <option value="all">All types</option>
+                  {PORT_BEARING.map((deviceType) => (
+                    <option key={deviceType} value={deviceType}>
+                      {deviceType.replace("_", " ")}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  value={portLinkFilter}
+                  onChange={(value) =>
+                    setPortLinkFilter(value as PortLinkFilter)
+                  }
+                >
+                  <option value="all">All ports</option>
+                  <option value="linked">Linked</option>
+                  <option value="unlinked">Unlinked</option>
+                  <option value="up">Up</option>
+                  <option value="down">Down</option>
+                </Select>
+              </div>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto py-1">
-            {portBearingDevices.map((entry) => {
+            {filteredPortBearingDevices.map((entry) => {
               const entryPorts = portsByDeviceId[entry.id] ?? [];
               const linked = entryPorts.filter(
                 (port) => port.linkState === "up",
@@ -680,6 +817,11 @@ export default function PortView() {
                 </button>
               );
             })}
+            {filteredPortBearingDevices.length === 0 && (
+              <div className="px-4 py-6 text-xs text-[var(--color-fg-subtle)]">
+                No devices match the current filters.
+              </div>
+            )}
           </div>
         </div>
 
@@ -715,10 +857,25 @@ export default function PortView() {
                   </div>
                 </div>
 
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-1)] px-3 py-3">
+                  <div className="relative min-w-[16rem] max-w-md flex-1">
+                    <Filter className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
+                    <Input
+                      value={portQuery}
+                      onChange={(event) => setPortQuery(event.target.value)}
+                      placeholder="Filter ports, VLANs, peers, bridges..."
+                      className="h-8 pl-8 text-xs"
+                    />
+                  </div>
+                  <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
+                    {visibleDevicePorts.length} / {devicePorts.length} shown
+                  </Mono>
+                </div>
+
                 {isVisualGrid ? (
                   <PortGrid
                     device={device}
-                    ports={devicePorts}
+                    ports={visibleDevicePorts}
                     links={linkByPortId}
                     portsById={portById}
                     devicesById={deviceById}
@@ -732,12 +889,14 @@ export default function PortView() {
                     <CardHeader>
                       <CardTitle>
                         <CardLabel>Interfaces</CardLabel>
-                        <CardHeading>{devicePorts.length} ports</CardHeading>
+                        <CardHeading>
+                          {visibleDevicePorts.length} ports
+                        </CardHeading>
                       </CardTitle>
                     </CardHeader>
                     <CardBody className="p-0">
                       <PortList
-                        ports={devicePorts}
+                        ports={visibleDevicePorts}
                         links={linkByPortId}
                         portsById={portById}
                         devicesById={deviceById}
@@ -1567,6 +1726,73 @@ function Select({
       {children}
     </select>
   );
+}
+
+function portMatchesLinkFilter(
+  port: Port,
+  filter: PortLinkFilter,
+  linksByPortId: Record<string, PortLink>,
+) {
+  if (filter === "all") return true;
+  const linked = Boolean(linksByPortId[port.id]);
+  if (filter === "linked") return linked;
+  if (filter === "unlinked") return !linked;
+  if (filter === "up") return port.linkState === "up";
+  return port.linkState !== "up";
+}
+
+function portSearchHaystack(
+  port: Port,
+  context: {
+    vlanById: Record<string, Vlan>;
+    virtualSwitchById: Record<string, VirtualSwitch>;
+    linkByPortId: Record<string, PortLink>;
+    portById: Record<string, Port>;
+    deviceById: Record<string, Device>;
+  },
+) {
+  const link = context.linkByPortId[port.id];
+  const peerPortId = link
+    ? link.fromPortId === port.id
+      ? link.toPortId
+      : link.fromPortId
+    : undefined;
+  const peerPort = peerPortId ? context.portById[peerPortId] : undefined;
+  const peerDevice = peerPort ? context.deviceById[peerPort.deviceId] : undefined;
+  const accessVlan = port.vlanId ? context.vlanById[port.vlanId] : undefined;
+  const taggedVlans = (port.allowedVlanIds ?? [])
+    .map((vlanId) => context.vlanById[vlanId])
+    .filter(Boolean);
+  const virtualSwitch = port.virtualSwitchId
+    ? context.virtualSwitchById[port.virtualSwitchId]
+    : undefined;
+
+  return [
+    formatPortLabel(port, { includeFace: true }),
+    port.name,
+    port.kind,
+    port.speed,
+    port.linkState,
+    port.mode,
+    port.face,
+    port.description,
+    accessVlan?.name,
+    accessVlan?.vlanId,
+    ...taggedVlans.flatMap((vlan) => [vlan.name, vlan.vlanId]),
+    virtualSwitch?.name,
+    virtualSwitch?.kind,
+    peerDevice?.hostname,
+    peerDevice?.managementIp,
+    peerDevice?.deviceType,
+    peerPort?.name,
+    link?.cableType,
+    link?.cableLength,
+    link?.color,
+    link?.notes,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
 function EmptyDevice() {

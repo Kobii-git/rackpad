@@ -581,6 +581,32 @@
     text-transform: uppercase;
   }
 
+  .rk-sort-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: inherit;
+    transition: color 150ms ease;
+  }
+
+  .rk-sort-button:hover,
+  .rk-sort-button:focus-visible,
+  .rk-sort-button-active {
+    color: var(--accent-primary);
+  }
+
+  .rk-sort-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 34%, transparent);
+    border-radius: var(--radius-xs);
+  }
+
+  .rk-sort-indicator {
+    min-width: 0.55rem;
+    font-size: 9px;
+    line-height: 1;
+  }
+
   .rk-table td {
     padding: 0.7rem 0.75rem;
     vertical-align: middle;

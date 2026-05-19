@@ -97,7 +97,7 @@ export interface RoomGroup {
   online: number;
   down: number;
   collapsed: boolean;
-  groupType: "subnet" | "device-type";
+  groupType: "subnet" | "device-type" | "virtual-host";
   subnet?: Subnet;
 }
 

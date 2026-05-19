@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Mono } from "@/components/shared/Mono";
+import { SortableHeader } from "@/components/shared/SortableHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { VlanRangeBar } from "@/components/vlan/VlanRangeBar";
@@ -26,7 +27,15 @@ import {
   updateVlanRangeRecord,
   useStore,
 } from "@/lib/store";
-import { ChevronRight, Hash, Plus, Save, Trash2 } from "lucide-react";
+import { ChevronRight, Filter, Hash, Plus, Save, Trash2 } from "lucide-react";
+import {
+  applySortDirection,
+  compareNumber,
+  compareText,
+  toggleSort,
+  type SortState,
+} from "@/lib/sort";
+import type { Subnet, Vlan, VlanRange } from "@/lib/types";
 
 type RangeForm = {
   name: string;
@@ -41,6 +50,9 @@ type SubnetForm = {
   name: string;
   description: string;
 };
+
+type RangeSortKey = "name" | "ids" | "used" | "free" | "purpose";
+type VlanSortKey = "vlanId" | "name" | "subnets";
 
 const EMPTY_RANGE_FORM: RangeForm = {
   name: "",
@@ -80,6 +92,15 @@ export default function VlansView() {
   const [subnetForm, setSubnetForm] = useState<SubnetForm>(EMPTY_SUBNET_FORM);
   const [subnetSaving, setSubnetSaving] = useState(false);
   const [subnetError, setSubnetError] = useState("");
+  const [query, setQuery] = useState("");
+  const [rangeSort, setRangeSort] = useState<SortState<RangeSortKey>>({
+    key: "name",
+    direction: "asc",
+  });
+  const [vlanSort, setVlanSort] = useState<SortState<VlanSortKey>>({
+    key: "vlanId",
+    direction: "asc",
+  });
 
   useEffect(() => {
     if (!ranges.length) return;
@@ -118,14 +139,62 @@ export default function VlansView() {
     0,
   );
 
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const filteredRanges = useMemo(() => {
+    return ranges
+      .filter((range) => {
+        if (!normalizedQuery) return true;
+        return [
+          range.name,
+          range.purpose,
+          `${range.startVlan}-${range.endVlan}`,
+          range.color,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery);
+      })
+      .sort((a, b) => compareRanges(a, b, rangeSort, vlans));
+  }, [normalizedQuery, rangeSort, ranges, vlans]);
+
   const filteredVlans = useMemo(() => {
-    if (!selectedRangeId) return vlans;
-    const range = ranges.find((entry) => entry.id === selectedRangeId);
-    if (!range) return vlans;
-    return vlans.filter(
-      (vlan) => vlan.vlanId >= range.startVlan && vlan.vlanId <= range.endVlan,
-    );
-  }, [vlans, ranges, selectedRangeId]);
+    let next = vlans;
+    if (!selectedRangeId) {
+      next = vlans;
+    } else {
+      const range = ranges.find((entry) => entry.id === selectedRangeId);
+      if (range) {
+        next = vlans.filter(
+          (vlan) =>
+            vlan.vlanId >= range.startVlan && vlan.vlanId <= range.endVlan,
+        );
+      }
+    }
+
+    return next
+      .filter((vlan) => {
+        if (!normalizedQuery) return true;
+        const linkedSubnets = subnets.filter((entry) => entry.vlanId === vlan.id);
+        const haystack = [
+          vlan.vlanId,
+          vlan.name,
+          vlan.description,
+          vlan.color,
+          ...linkedSubnets.flatMap((subnet) => [
+            subnet.cidr,
+            subnet.name,
+            subnet.description,
+          ]),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(normalizedQuery);
+      })
+      .sort((a, b) => compareVlans(a, b, vlanSort, subnets));
+  }, [normalizedQuery, ranges, selectedRangeId, subnets, vlanSort, vlans]);
 
   async function handleDeleteVlan(id: string, name: string, vlanId: number) {
     if (
@@ -222,6 +291,14 @@ export default function VlansView() {
     }
   }
 
+  function handleRangeSort(key: RangeSortKey) {
+    setRangeSort((current) => toggleSort(current, key));
+  }
+
+  function handleVlanSort(key: VlanSortKey) {
+    setVlanSort((current) => toggleSort(current, key));
+  }
+
   return (
     <>
       <TopBar
@@ -284,22 +361,52 @@ export default function VlansView() {
           <CardHeader>
             <CardTitle>
               <CardLabel>Documented VLAN ID ranges</CardLabel>
-              <CardHeading>{ranges.length} ranges</CardHeading>
+              <CardHeading>{filteredRanges.length} ranges</CardHeading>
             </CardTitle>
           </CardHeader>
           <CardBody className="p-0">
             <table className="rk-table">
               <thead>
                 <tr>
-                  <Th>Range</Th>
-                  <Th>IDs</Th>
-                  <Th>Used</Th>
-                  <Th>Free</Th>
-                  <Th>Purpose</Th>
+                  <SortableHeader
+                    sortKey="name"
+                    sort={rangeSort}
+                    onSort={handleRangeSort}
+                  >
+                    Range
+                  </SortableHeader>
+                  <SortableHeader
+                    sortKey="ids"
+                    sort={rangeSort}
+                    onSort={handleRangeSort}
+                  >
+                    IDs
+                  </SortableHeader>
+                  <SortableHeader
+                    sortKey="used"
+                    sort={rangeSort}
+                    onSort={handleRangeSort}
+                  >
+                    Used
+                  </SortableHeader>
+                  <SortableHeader
+                    sortKey="free"
+                    sort={rangeSort}
+                    onSort={handleRangeSort}
+                  >
+                    Free
+                  </SortableHeader>
+                  <SortableHeader
+                    sortKey="purpose"
+                    sort={rangeSort}
+                    onSort={handleRangeSort}
+                  >
+                    Purpose
+                  </SortableHeader>
                 </tr>
               </thead>
               <tbody>
-                {ranges.map((range) => {
+                {filteredRanges.map((range) => {
                   const used = vlans.filter(
                     (vlan) =>
                       vlan.vlanId >= range.startVlan &&
@@ -519,10 +626,46 @@ export default function VlansView() {
               </button>
             )}
           </CardHeader>
+          <CardBody className="border-b border-[var(--border-subtle)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="relative min-w-[16rem] max-w-xl flex-1">
+                <Filter className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search VLAN, range, CIDR, purpose..."
+                  className="pl-8"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rk-kicker">Sort VLANs</span>
+                <SortButton
+                  active={vlanSort.key === "vlanId"}
+                  direction={vlanSort.direction}
+                  onClick={() => handleVlanSort("vlanId")}
+                >
+                  ID
+                </SortButton>
+                <SortButton
+                  active={vlanSort.key === "name"}
+                  direction={vlanSort.direction}
+                  onClick={() => handleVlanSort("name")}
+                >
+                  Name
+                </SortButton>
+                <SortButton
+                  active={vlanSort.key === "subnets"}
+                  direction={vlanSort.direction}
+                  onClick={() => handleVlanSort("subnets")}
+                >
+                  IP ranges
+                </SortButton>
+              </div>
+            </div>
+          </CardBody>
           <CardBody className="p-0">
             <div className="divide-y divide-[var(--color-line)]">
               {filteredVlans
-                .sort((a, b) => a.vlanId - b.vlanId)
                 .map((vlan) => {
                   const linkedSubnets = subnets
                     .filter((entry) => entry.vlanId === vlan.id)
@@ -807,10 +950,86 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Th({ children }: { children: ReactNode }) {
-  return <th>{children}</th>;
-}
-
 function Td({ children }: { children: ReactNode }) {
   return <td>{children}</td>;
+}
+
+function SortButton({
+  active,
+  direction,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  direction: "asc" | "desc";
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rk-filter-pill ${active ? "rk-filter-pill-active" : ""}`}
+    >
+      {children}
+      {active && (
+        <span className="font-mono text-[9px]">
+          {direction === "asc" ? "↑" : "↓"}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function compareRanges(
+  a: VlanRange,
+  b: VlanRange,
+  sort: SortState<RangeSortKey>,
+  vlans: Vlan[],
+) {
+  const aTotal = a.endVlan - a.startVlan + 1;
+  const bTotal = b.endVlan - b.startVlan + 1;
+  const aUsed = countVlansInRange(a, vlans);
+  const bUsed = countVlansInRange(b, vlans);
+  const result =
+    sort.key === "ids"
+      ? compareNumber(a.startVlan, b.startVlan) ||
+        compareNumber(a.endVlan, b.endVlan)
+      : sort.key === "used"
+        ? compareNumber(aUsed, bUsed)
+        : sort.key === "free"
+          ? compareNumber(aTotal - aUsed, bTotal - bUsed)
+          : sort.key === "purpose"
+            ? compareText(a.purpose, b.purpose)
+            : compareText(a.name, b.name);
+
+  return applySortDirection(
+    result || compareNumber(a.startVlan, b.startVlan),
+    sort.direction,
+  );
+}
+
+function compareVlans(
+  a: Vlan,
+  b: Vlan,
+  sort: SortState<VlanSortKey>,
+  subnets: Subnet[],
+) {
+  const result =
+    sort.key === "name"
+      ? compareText(a.name, b.name)
+      : sort.key === "subnets"
+        ? compareNumber(
+            subnets.filter((subnet) => subnet.vlanId === a.id).length,
+            subnets.filter((subnet) => subnet.vlanId === b.id).length,
+          )
+        : compareNumber(a.vlanId, b.vlanId);
+
+  return applySortDirection(result || compareNumber(a.vlanId, b.vlanId), sort.direction);
+}
+
+function countVlansInRange(range: VlanRange, vlans: Vlan[]) {
+  return vlans.filter(
+    (vlan) => vlan.vlanId >= range.startVlan && vlan.vlanId <= range.endVlan,
+  ).length;
 }
