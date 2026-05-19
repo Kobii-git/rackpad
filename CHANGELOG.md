@@ -6,6 +6,22 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.0-beta.2] - 2026-05-19
+
+### Added
+
+- Visualizer 1.2 beta upgrade with grouped rack and room zones, documented cable
+  colors, endpoint dots, hover/selection dimming, online cable pulse, port
+  strips, type filters, search/jump, health overlay, trace mode, pan/zoom,
+  legend, rack free-U bands, empty states, and a richer topology inspector.
+
+### Changed
+
+- Visualizer now derives its canvas from a scoped model layer that indexes
+  devices, ports, cables, racks, rooms, monitor rollups, IPAM subnets, VLANs,
+  virtual switches, and discovery MAC/vendor metadata without changing backend
+  APIs or schema.
+
 ## [1.2.0-beta.1] - 2026-05-19
 
 ### Added

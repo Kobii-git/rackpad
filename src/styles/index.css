@@ -131,6 +131,23 @@
     --color-port-console: #f29d38;
     --color-port-usb: #59c36a;
     --color-port-virtual: #7f92ff;
+
+    --type-switch: var(--accent-secondary);
+    --type-router: var(--accent-secondary);
+    --type-server: var(--accent-primary);
+    --type-patch-panel: #a78bfa;
+    --type-brush-panel: #a78bfa;
+    --type-blanking-panel: var(--neutral);
+    --type-ap: var(--success);
+    --type-firewall: var(--danger);
+    --type-vm: var(--accent-primary);
+    --type-endpoint: var(--neutral);
+    --type-rack-shelf: var(--warning);
+    --type-storage: var(--info);
+    --type-pdu: var(--warning);
+    --type-ups: var(--warning);
+    --type-kvm: var(--neutral);
+    --type-other: var(--neutral);
   }
 
   html.light {
@@ -204,6 +221,23 @@
     --shadow-selected:
       0 1px 0 0 rgb(255 255 255 / 0.95) inset, 0 22px 42px rgb(15 23 42 / 0.1),
       0 0 0 1px var(--border-selected);
+
+    --type-switch: var(--accent-secondary);
+    --type-router: var(--accent-secondary);
+    --type-server: var(--accent-primary);
+    --type-patch-panel: #7c3aed;
+    --type-brush-panel: #7c3aed;
+    --type-blanking-panel: var(--neutral);
+    --type-ap: var(--success);
+    --type-firewall: var(--danger);
+    --type-vm: var(--accent-primary);
+    --type-endpoint: var(--neutral);
+    --type-rack-shelf: var(--warning);
+    --type-storage: var(--info);
+    --type-pdu: var(--warning);
+    --type-ups: var(--warning);
+    --type-kvm: var(--neutral);
+    --type-other: var(--neutral);
   }
 
   * {
@@ -611,6 +645,59 @@
 
 .animate-pulse-slow {
   animation: pulse-slow 2.4s ease-in-out infinite;
+}
+
+@keyframes cable-dash-pulse {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+@keyframes visualizer-pulse-ring {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(242 157 56 / 0);
+  }
+
+  42% {
+    box-shadow:
+      0 0 0 1px var(--border-selected),
+      0 0 0 7px rgb(242 157 56 / 0.16);
+  }
+}
+
+@keyframes rackpad-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.visualizer-cable-online {
+  animation: cable-dash-pulse 4s linear infinite;
+}
+
+.visualizer-pulse {
+  animation: visualizer-pulse-ring 900ms ease-out 2;
+}
+
+.rk-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.035);
+}
+
+.rk-skeleton::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.055),
+    transparent
+  );
+  animation: rackpad-shimmer 1.4s ease-in-out infinite;
 }
 
 @media print {
