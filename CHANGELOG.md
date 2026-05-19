@@ -6,6 +6,37 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-20
+
+### Added
+
+- First-class Rooms for racks and devices, including room-aware rack views,
+  device placement, and Visualizer topology sections.
+- Visualizer 1.2 topology workspace with room/rack zones, documented cable
+  colors, endpoint dots, port strips, search, health overlay, trace mode,
+  pan/zoom, type filters, and richer inspectors.
+- Hyper-V import workflow with a downloadable collector, editable host staging,
+  VM selection, CPU/RAM/disk/OS/IP/VLAN import controls, and host matching or
+  creation.
+- Reports workspace with printable/PDF-friendly output plus Excel and CSV
+  exports for inventory, IPAM, monitoring, cabling, WiFi, and summary data.
+
+### Changed
+
+- Visualizer rack elevations now render full configured rack height and scale
+  U spacing for dense 1U switch or patch-panel layouts.
+- Devices, Discovery, Monitoring, Cables, and VLANs gained broader sorting,
+  filtering, and scroll usability improvements.
+- GHCR publishing now supports stable `latest` and beta image tags for simpler
+  Docker-only installs.
+
+### Fixed
+
+- Stabilized Visualizer rack layout, room grouping, and dense rack rendering.
+- Fixed Hyper-V importer edge cases with older collector exports and normal
+  browser collector downloads.
+- Improved direct-route refresh behavior for deployed Rackpad pages.
+
 ## [1.2.0-beta.6] - 2026-05-20
 
 ### Changed
