@@ -26,10 +26,19 @@ const IpamView = lazy(() => import("@/pages/IpamView"));
 const ReportsView = lazy(() => import("@/pages/ReportsView"));
 const VisualizerView = lazy(() => import("@/pages/VisualizerView"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
+const OidcCallback = lazy(() => import("@/pages/OidcCallback"));
 
 export default function App() {
   return (
     <Routes>
+      <Route
+        path="/auth/oidc/callback"
+        element={
+          <RouteFrame>
+            <OidcCallback />
+          </RouteFrame>
+        }
+      />
       <Route element={<AppShell />}>
         <Route
           index

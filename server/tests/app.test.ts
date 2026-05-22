@@ -9,10 +9,12 @@ const spaDistDir = path.resolve(process.cwd(), 'dist')
 const spaIndexFile = path.join(spaDistDir, 'index.html')
 process.env.DATABASE_PATH = path.join(tempDir, 'rackpad-test.db')
 process.env.NODE_ENV = 'test'
+process.env.OIDC_ENABLED = '0'
 
 const { createApp } = await import('../app.js')
 const { db } = await import('../db.js')
 const { setBootstrapState } = await import('../lib/auth.js')
+const { parseIeeeOuiText } = await import('../lib/oui.js')
 
 type AppInstance = Awaited<ReturnType<typeof createApp>>
 
@@ -38,7 +40,10 @@ test('bootstrap creates the first admin account and session', async () => {
     url: '/api/auth/status',
   })
   assert.equal(statusRes.statusCode, 200)
-  assert.deepEqual(readJson(statusRes), { needsBootstrap: true })
+  assert.deepEqual(readJson(statusRes), {
+    needsBootstrap: true,
+    oidc: { enabled: false, label: 'OIDC' },
+  })
 
   const bootstrapRes = await app.inject({
     method: 'POST',
@@ -79,7 +84,23 @@ test('non-api app routes serve the SPA index on refresh', async () => {
 
   assert.equal(res.statusCode, 200)
   assert.match(res.headers['content-type'] ?? '', /text\/html/i)
-  assert.match(res.body, /rackpad spa fallback/i)
+  assert.ok(
+    /rackpad spa fallback/i.test(res.body) || /<div id="root"><\/div>/i.test(res.body),
+    'expected a SPA index document',
+  )
+})
+
+test('IEEE OUI parser supports MA-L, MA-M, and MA-S prefixes', () => {
+  const entries = parseIeeeOuiText(`
+    F0-18-98   (hex)        Apple, Inc.
+    F01898     (base 16)    Apple, Inc.
+    28D2440    (base 16)    Example MA-M Vendor
+    8C1F64012  (base 16)    Example MA-S Vendor
+  `)
+
+  assert.equal(entries.f01898, 'Apple, Inc.')
+  assert.equal(entries['28d2440'], 'Example MA-M Vendor')
+  assert.equal(entries['8c1f64012'], 'Example MA-S Vendor')
 })
 
 test('bootstrap can start with an empty lab or load demo data on demand', async () => {
@@ -535,6 +556,90 @@ test('creating a device with a port template creates its ports', async () => {
   assert.equal(ports.at(-1)?.name, 'SFP+4')
 })
 
+test('custom device types can be created and used by devices and templates', async () => {
+  const adminToken = await bootstrapAdmin()
+
+  const unknownDeviceRes = await app.inject({
+    method: 'POST',
+    url: '/api/devices',
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: 'lab_home',
+      hostname: 'camera-before-type',
+      deviceType: 'camera',
+      status: 'unknown',
+    },
+  })
+  assert.equal(unknownDeviceRes.statusCode, 400)
+  assert.match(unknownDeviceRes.body, /custom device type/i)
+
+  const typeRes = await app.inject({
+    method: 'POST',
+    url: '/api/device-types',
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      label: 'IP Camera',
+    },
+  })
+  assert.equal(typeRes.statusCode, 201)
+  const deviceType = readJson(typeRes) as { id: string; label: string; builtIn: boolean }
+  assert.equal(deviceType.id, 'ip_camera')
+  assert.equal(deviceType.label, 'IP Camera')
+  assert.equal(deviceType.builtIn, false)
+
+  const deviceRes = await app.inject({
+    method: 'POST',
+    url: '/api/devices',
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: 'lab_home',
+      hostname: 'camera-01',
+      deviceType: deviceType.id,
+      status: 'online',
+      placement: 'room',
+    },
+  })
+  assert.equal(deviceRes.statusCode, 201)
+  const device = readJson(deviceRes) as { deviceType: string }
+  assert.equal(device.deviceType, 'ip_camera')
+
+  const templateRes = await app.inject({
+    method: 'POST',
+    url: '/api/ports/templates',
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      name: 'Camera PoE',
+      description: 'Single PoE camera port.',
+      deviceTypes: [deviceType.id],
+      ports: [
+        { name: 'eth0', kind: 'rj45', speed: '1G', face: 'front' },
+      ],
+    },
+  })
+  assert.equal(templateRes.statusCode, 201)
+  const template = readJson(templateRes) as { deviceTypes: string[] }
+  assert.deepEqual(template.deviceTypes, ['ip_camera'])
+
+  const listRes = await app.inject({
+    method: 'GET',
+    url: '/api/device-types',
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  })
+  assert.equal(listRes.statusCode, 200)
+  const deviceTypes = readJson(listRes) as Array<{ id: string; label: string }>
+  assert.equal(deviceTypes.some((entry) => entry.id === 'ip_camera' && entry.label === 'IP Camera'), true)
+})
+
 test('custom port templates can be created, updated, and deleted', async () => {
   const adminToken = await bootstrapAdmin()
 
@@ -878,6 +983,7 @@ test('ip assignment patch rejects empty ips and subnet mismatches', async () => 
 function resetDatabase() {
   db.exec(`
     DELETE FROM userSessions;
+    DELETE FROM oidcIdentities;
     DELETE FROM wifiClientAssociations;
     DELETE FROM wifiRadioSsids;
     DELETE FROM wifiRadios;

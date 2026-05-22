@@ -19,6 +19,10 @@ import {
   normalizeColorToCss,
   portTypeLabel,
 } from "@/lib/utils";
+import {
+  defaultDeviceTypeLabel,
+  normalizeDeviceTypeId,
+} from "@/lib/device-types";
 import type {
   RackBand,
   RackPanel,
@@ -42,6 +46,7 @@ const ZONE_GAP = 44;
 const ZONE_HEADER = 76;
 const RACK_PANEL_WIDTH = 324;
 const RACK_PANEL_GAP = 22;
+const RACK_LOOSE_GROUP_WIDTH = 360;
 const RACK_SECTION_GAP = 28;
 const RACK_SECTION_PADDING = 18;
 const RACK_SECTION_HEADER = 56;
@@ -77,7 +82,7 @@ const DEVICE_TYPE_ORDER: DeviceType[] = [
   "other",
 ];
 
-const DEVICE_TYPE_LABEL: Record<DeviceType, string> = {
+const DEVICE_TYPE_LABEL: Record<string, string> = {
   switch: "Switch",
   router: "Router",
   firewall: "Firewall",
@@ -153,17 +158,54 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
 
   const rackIds = new Set(racks.map((rack) => rack.id));
   const racksById = indexById(racks);
+  const looseDevices = input.devices.filter(
+    (device) => !device.rackId || !rackIds.has(device.rackId),
+  );
+  const roomIdsWithRacks = new Set(
+    racks
+      .map((rack) => rack.roomId)
+      .filter((roomId): roomId is string => Boolean(roomId)),
+  );
+  const looseDeviceRoomById = new Map(
+    looseDevices.map((device) => [
+      device.id,
+      roomForDevice(device, deviceById, racksById, roomsById),
+    ]),
+  );
+  const rackSectionLooseDeviceIds = new Set(
+    looseDevices
+      .filter((device) => {
+        const room = looseDeviceRoomById.get(device.id);
+        return Boolean(room && roomIdsWithRacks.has(room.id));
+      })
+      .map((device) => device.id),
+  );
   const nodes: VisualizerNode[] = [];
   const rackSections: RackRoomSection[] = [];
   const rackPanels: RackPanel[] = [];
   let rackSectionX = RACK_ZONE_X + ZONE_PADDING;
   const rackSectionY = ZONE_Y + ZONE_HEADER;
   for (const sectionInput of buildRackRoomInputs(racks, roomsById)) {
+    const sectionLooseDevices = sectionInput.room
+      ? looseDevices.filter(
+          (device) =>
+            rackSectionLooseDeviceIds.has(device.id) &&
+            looseDeviceRoomById.get(device.id)?.id === sectionInput.room?.id,
+        )
+      : [];
+    const rackColumnsWidth =
+      sectionInput.racks.length * RACK_PANEL_WIDTH +
+      Math.max(0, sectionInput.racks.length - 1) * RACK_PANEL_GAP;
+    const looseGroupWidth =
+      sectionLooseDevices.length > 0 ? RACK_LOOSE_GROUP_WIDTH : 0;
+    const looseGroupGap =
+      rackColumnsWidth > 0 && looseGroupWidth > 0 ? RACK_PANEL_GAP : 0;
     const sectionWidth = Math.max(
       RACK_PANEL_WIDTH + RACK_SECTION_PADDING * 2,
       RACK_SECTION_PADDING * 2 +
-        sectionInput.racks.length * RACK_PANEL_WIDTH +
-        Math.max(0, sectionInput.racks.length - 1) * RACK_PANEL_GAP,
+        rackColumnsWidth +
+        looseGroupGap +
+        looseGroupWidth,
     );
     const rackPanelY = rackSectionY + RACK_SECTION_HEADER;
     const sectionPanels = sectionInput.racks.map((rack, rackIndex) => {
@@ -193,13 +235,52 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
       return panel;
     });
     rackPanels.push(...sectionPanels);
+    const looseGroupX =
+      rackSectionX +
+      RACK_SECTION_PADDING +
+      rackColumnsWidth +
+      looseGroupGap;
+    const sectionLooseGroups =
+      sectionLooseDevices.length > 0
+        ? buildRoomGroups({
+            devices: sectionLooseDevices,
+            deviceById,
+            racksById,
+            roomsById,
+            portsByDeviceId,
+            portLinkByPortId,
+            virtualSwitchById,
+            discoveredByDeviceId,
+            discoveredByIp,
+            subnetRanges,
+            subnets: input.subnets,
+            vlansById: vlanById,
+            monitorsByDeviceId,
+            collapsedGroups: input.collapsedGroups,
+            x: looseGroupX,
+            y: rackPanelY,
+            width: RACK_LOOSE_GROUP_WIDTH,
+          })
+        : [];
+    for (const group of sectionLooseGroups) {
+      nodes.push(...group.nodes);
+    }
     const sectionDeviceIds = new Set(
-      sectionPanels.flatMap((panel) => panel.nodes.map((node) => node.device.id)),
+      [
+        ...sectionPanels.flatMap((panel) =>
+          panel.nodes.map((node) => node.device.id),
+        ),
+        ...sectionLooseDevices.map((device) => device.id),
+      ],
     );
+    const looseGroupHeight = roomGroupsHeight(sectionLooseGroups, rackPanelY);
     const sectionHeight =
       RACK_SECTION_HEADER +
       ZONE_PADDING +
-      maxOf(sectionPanels, (panel) => panel.height, 300);
+      Math.max(
+        maxOf(sectionPanels, (panel) => panel.height, 300),
+        looseGroupHeight,
+      );
     rackSections.push({
       id: sectionInput.id,
       name: sectionInput.name,
@@ -210,6 +291,7 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
       width: sectionWidth,
       height: sectionHeight,
       racks: sectionPanels,
+      looseGroups: sectionLooseGroups,
       stats: {
         racks: sectionPanels.length,
         devices: sectionDeviceIds.size,
@@ -232,11 +314,11 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
   );
 
   const roomZoneX = RACK_ZONE_X + rackZoneWidth + ZONE_GAP;
-  const looseDevices = input.devices.filter(
-    (device) => !device.rackId || !rackIds.has(device.rackId),
+  const roomZoneLooseDevices = looseDevices.filter(
+    (device) => !rackSectionLooseDeviceIds.has(device.id),
   );
   const roomGroups = buildRoomGroups({
-    devices: looseDevices,
+    devices: roomZoneLooseDevices,
     deviceById,
     racksById,
     roomsById,
@@ -252,6 +334,7 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
     collapsedGroups: input.collapsedGroups,
     x: roomZoneX + ZONE_PADDING,
     y: ZONE_Y + ZONE_HEADER,
+    width: ROOM_ZONE_WIDTH - ZONE_PADDING * 2,
   });
   for (const group of roomGroups) {
     nodes.push(...group.nodes);
@@ -309,7 +392,7 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
       height,
       groups: roomGroups,
       stats: {
-        total: looseDevices.length,
+        total: roomZoneLooseDevices.length,
         online: roomGroups.reduce((sum, group) => sum + group.online, 0),
         down: roomGroups.reduce((sum, group) => sum + group.down, 0),
       },
@@ -522,6 +605,7 @@ function buildRoomGroups(input: {
   collapsedGroups: Set<string>;
   x: number;
   y: number;
+  width: number;
 }): RoomGroup[] {
   const groups = new Map<
     string,
@@ -638,7 +722,9 @@ function buildRoomGroups(input: {
         name: group.name,
         subtitle: group.subtitle,
         color: group.color,
+        x: input.x,
         y: groupTop,
+        width: input.width,
         nodes,
         total: group.devices.length,
         online: group.devices.filter(
@@ -1030,8 +1116,15 @@ export function buildSearchResults(
 
 function cablePath(from: { x: number; y: number }, to: { x: number; y: number }, index: number) {
   const dx = Math.abs(to.x - from.x);
+  const laneOffset = ((index % 9) - 4) * 5;
+  if (dx < 72) {
+    const busX = Math.max(from.x, to.x) + 54 + Math.abs(laneOffset);
+    return `M ${from.x} ${from.y} L ${busX} ${from.y} C ${busX + laneOffset} ${from.y}, ${
+      busX + laneOffset
+    } ${to.y}, ${busX} ${to.y} L ${to.x} ${to.y}`;
+  }
   const curve = Math.max(64, dx * 0.36);
-  const offset = ((index % 9) - 4) * 4;
+  const offset = laneOffset;
   return `M ${from.x} ${from.y + offset} C ${from.x + curve} ${from.y + offset}, ${
     to.x - curve
   } ${to.y - offset}, ${to.x} ${to.y - offset}`;
@@ -1098,11 +1191,11 @@ export function nodeStripeColor(node: VisualizerNode, healthOverlay: boolean) {
 }
 
 export function typeColor(type: DeviceType) {
-  return `var(--type-${type.replaceAll("_", "-")})`;
+  return `var(--type-${normalizeDeviceTypeId(type).replaceAll("_", "-")}, var(--type-other))`;
 }
 
 export function typeLabel(type: DeviceType) {
-  return DEVICE_TYPE_LABEL[type] ?? "Other";
+  return DEVICE_TYPE_LABEL[type] ?? (defaultDeviceTypeLabel(type) || "Other");
 }
 
 export function typeOrder(type: DeviceType) {
@@ -1115,9 +1208,14 @@ function buildDeviceTypeCounts(devices: Device[]) {
   for (const device of devices) {
     counts.set(device.deviceType, (counts.get(device.deviceType) ?? 0) + 1);
   }
-  return DEVICE_TYPE_ORDER.filter((type) => counts.has(type)).map((type) => ({
+  const ordered = DEVICE_TYPE_ORDER.filter((type) => counts.has(type));
+  const custom = [...counts.keys()]
+    .filter((type) => !DEVICE_TYPE_ORDER.includes(type))
+    .sort((a, b) => typeLabel(a).localeCompare(typeLabel(b)));
+
+  return [...ordered, ...custom].map((type) => ({
     type,
-    label: DEVICE_TYPE_LABEL[type],
+    label: typeLabel(type),
     count: counts.get(type) ?? 0,
   }));
 }
@@ -1204,6 +1302,21 @@ function maxOf<T>(items: T[], getValue: (item: T) => number, fallback: number) {
   return items.length === 0
     ? fallback
     : Math.max(...items.map((item) => getValue(item)));
+}
+
+function roomGroupsHeight(groups: RoomGroup[], startY: number) {
+  if (groups.length === 0) return 0;
+  return (
+    maxOf(
+      groups,
+      (group) =>
+        group.y -
+        startY +
+        GROUP_HEADER_HEIGHT +
+        (group.collapsed ? 0 : group.nodes.length * ROOM_ROW_HEIGHT),
+      0,
+    ) + GROUP_GAP
+  );
 }
 
 function summarizeCableLengths(segments: TraceSegment[]) {

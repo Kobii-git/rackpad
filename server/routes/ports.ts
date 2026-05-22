@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { db, parseRow } from '../db.js'
 import { BUILT_IN_PORT_TEMPLATES, listPortTemplates } from '../lib/port-templates.js'
 import { ensurePortVirtualSwitchMembership } from './virtual-switches.js'
+import { requiredDeviceType } from '../lib/device-types.js'
 import { createId } from '../lib/ids.js'
 import {
   asObject,
@@ -18,21 +19,6 @@ const PORT_KINDS = ['rj45', 'sfp', 'sfp_plus', 'qsfp', 'fiber', 'power', 'consol
 const LINK_STATES = ['up', 'down', 'disabled', 'unknown'] as const
 const PORT_FACES = ['front', 'rear'] as const
 const PORT_MODES = ['access', 'trunk'] as const
-const DEVICE_TYPES = [
-  'switch',
-  'router',
-  'firewall',
-  'server',
-  'ap',
-  'endpoint',
-  'vm',
-  'patch_panel',
-  'storage',
-  'pdu',
-  'ups',
-  'kvm',
-  'other',
-] as const
 
 function parseTemplatePorts(value: unknown) {
   if (!Array.isArray(value) || value.length === 0) {
@@ -69,6 +55,14 @@ function normalizeAllowedVlanIds(value: string[] | null | undefined) {
   return [...new Set(value.map((entry) => entry.trim()).filter(Boolean))]
 }
 
+function parseTemplateDeviceTypes(body: Record<string, unknown>) {
+  const deviceTypes = optionalStringArray(body, 'deviceTypes', { maxItems: 64 })
+  if (!deviceTypes || deviceTypes.length === 0) {
+    throw new ValidationError('deviceTypes must contain at least one device type.')
+  }
+  return [...new Set(deviceTypes.map((deviceType) => requiredDeviceType({ deviceType })))]
+}
+
 export const portsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/templates', async () => {
     return listPortTemplates()
@@ -79,13 +73,7 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     const id = optionalString(body, 'id', { maxLength: 80 }) ?? createId('pt')
     const name = requiredString(body, 'name', { maxLength: 120 })
     const description = requiredString(body, 'description', { maxLength: 500 })
-    const deviceTypes = optionalStringArray(body, 'deviceTypes', { maxItems: DEVICE_TYPES.length })
-    if (!deviceTypes || deviceTypes.length === 0) {
-      return reply.status(400).send({ error: 'deviceTypes must contain at least one device type.' })
-    }
-    for (const deviceType of deviceTypes) {
-      requiredEnum({ deviceType }, 'deviceType', DEVICE_TYPES)
-    }
+    const deviceTypes = parseTemplateDeviceTypes(body)
 
     const ports = parseTemplatePorts(body.ports)
     const now = new Date().toISOString()
@@ -114,7 +102,7 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
 
     const name = optionalString(body, 'name', { maxLength: 120 })
     const description = optionalString(body, 'description', { maxLength: 500 })
-    const deviceTypes = optionalStringArray(body, 'deviceTypes', { maxItems: DEVICE_TYPES.length })
+    const deviceTypes = 'deviceTypes' in body ? parseTemplateDeviceTypes(body) : undefined
 
     if (name !== undefined) {
       if (!name) return reply.status(400).send({ error: 'name cannot be empty.' })
@@ -127,12 +115,6 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
       values.push(description)
     }
     if (deviceTypes !== undefined) {
-      if (!deviceTypes || deviceTypes.length === 0) {
-        return reply.status(400).send({ error: 'deviceTypes must contain at least one device type.' })
-      }
-      for (const deviceType of deviceTypes) {
-        requiredEnum({ deviceType }, 'deviceType', DEVICE_TYPES)
-      }
       updates.push('deviceTypes = ?')
       values.push(JSON.stringify(deviceTypes))
     }

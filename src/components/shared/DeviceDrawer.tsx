@@ -12,27 +12,14 @@ import { Input } from "@/components/ui/Input";
 import { Separator } from "@/components/ui/Separator";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
-import { createDevice, updateDevice, useStore } from "@/lib/store";
+import {
+  createDevice,
+  createDeviceTypeRecord,
+  updateDevice,
+  useStore,
+} from "@/lib/store";
+import { deviceTypeLabel } from "@/lib/device-types";
 import type { Device, DeviceStatus, DeviceType, RackFace } from "@/lib/types";
-
-const DEVICE_TYPES: DeviceType[] = [
-  "switch",
-  "router",
-  "firewall",
-  "server",
-  "rack_shelf",
-  "ap",
-  "endpoint",
-  "vm",
-  "storage",
-  "patch_panel",
-  "brush_panel",
-  "blanking_panel",
-  "pdu",
-  "ups",
-  "kvm",
-  "other",
-];
 
 const STATUS_OPTIONS: DeviceStatus[] = [
   "online",
@@ -160,6 +147,7 @@ export function DeviceDrawer({
   const racks = useStore((s) => s.racks);
   const rooms = useStore((s) => s.rooms);
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const ports = useStore((s) => s.ports);
   const portTemplates = useStore((s) => s.portTemplates);
   const isEdit = !!device;
@@ -172,6 +160,9 @@ export function DeviceDrawer({
   const [shelfError, setShelfError] = useState("");
   const [saving, setSaving] = useState(false);
   const [creatingShelf, setCreatingShelf] = useState(false);
+  const [addingType, setAddingType] = useState(false);
+  const [creatingType, setCreatingType] = useState(false);
+  const [customTypeLabel, setCustomTypeLabel] = useState("");
   const [shelfForm, setShelfForm] = useState<ShelfFormState>(() =>
     blankShelfForm(defaultRackId),
   );
@@ -185,9 +176,26 @@ export function DeviceDrawer({
       );
       setError("");
       setShelfError("");
+      setAddingType(false);
+      setCreatingType(false);
+      setCustomTypeLabel("");
       setShelfForm(blankShelfForm(defaultRackId));
     }
   }, [defaultRackId, defaults, device, open]);
+
+  const availableDeviceTypes = useMemo(() => {
+    if (deviceTypes.some((entry) => entry.id === form.deviceType)) {
+      return deviceTypes;
+    }
+    return [
+      ...deviceTypes,
+      {
+        id: form.deviceType,
+        label: deviceTypeLabel(form.deviceType, deviceTypes),
+        builtIn: false,
+      },
+    ];
+  }, [deviceTypes, form.deviceType]);
 
   const devicePortCount = useMemo(
     () =>
@@ -323,6 +331,29 @@ export function DeviceDrawer({
       );
     } finally {
       setCreatingShelf(false);
+    }
+  }
+
+  async function handleCreateDeviceType() {
+    setError("");
+    const label = customTypeLabel.trim();
+    if (!label) {
+      setError("Device type name is required.");
+      return;
+    }
+
+    setCreatingType(true);
+    try {
+      const created = await createDeviceTypeRecord({ label });
+      set("deviceType", created.id);
+      setCustomTypeLabel("");
+      setAddingType(false);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to create device type.",
+      );
+    } finally {
+      setCreatingType(false);
     }
   }
 
@@ -473,20 +504,51 @@ export function DeviceDrawer({
                       placeholder="e.g. Core Switch"
                     />
                   </Field>
-                  <Field label="Device type">
-                    <Select
-                      value={form.deviceType}
-                      onChange={(value) =>
-                        set("deviceType", value as DeviceType)
-                      }
-                    >
-                      {DEVICE_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                          {type.replace("_", " ")}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
+                  <div className="block">
+                    <span className="rk-field-label">Device type</span>
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                      <Select
+                        value={form.deviceType}
+                        onChange={(value) =>
+                          set("deviceType", value as DeviceType)
+                        }
+                      >
+                        {availableDeviceTypes.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAddingType((value) => !value)}
+                      >
+                        <Plus className="size-3.5" />
+                        Type
+                      </Button>
+                    </div>
+                    {addingType && (
+                      <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+                        <Input
+                          value={customTypeLabel}
+                          onChange={(event) =>
+                            setCustomTypeLabel(event.target.value)
+                          }
+                          placeholder="e.g. Camera"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void handleCreateDeviceType()}
+                          disabled={creatingType}
+                        >
+                          {creatingType ? "Adding..." : "Add"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   <Field label="Status">
                     <div className="flex flex-wrap gap-1.5">
                       {STATUS_OPTIONS.map((status) => (

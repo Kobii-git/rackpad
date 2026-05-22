@@ -13,6 +13,12 @@ import {
   verifyPassword,
 } from '../lib/auth.js'
 import { createId } from '../lib/ids.js'
+import {
+  consumeOidcSession,
+  createOidcAuthorizationUrl,
+  getOidcPublicConfig,
+  handleOidcCallback,
+} from '../lib/oidc.js'
 import { asObject, optionalBoolean, optionalString, requiredString, ValidationError } from '../lib/validation.js'
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
@@ -75,6 +81,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.get('/status', async () => {
     return {
       needsBootstrap: needsBootstrap(),
+      oidc: getOidcPublicConfig(),
     }
   })
 
@@ -185,6 +192,53 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       expiresAt: session.expiresAt,
       user,
     }
+  })
+
+  app.get<{ Querystring: { returnTo?: string } }>('/oidc/start', async (req, reply) => {
+    const url = await createOidcAuthorizationUrl(req, req.query.returnTo)
+    return reply.redirect(url)
+  })
+
+  app.get<{
+    Querystring: {
+      code?: string
+      state?: string
+      error?: string
+      error_description?: string
+    }
+  }>('/oidc/callback', async (req, reply) => {
+    try {
+      const result = await handleOidcCallback({
+        code: req.query.code,
+        state: req.query.state,
+        error: req.query.error,
+        errorDescription: req.query.error_description,
+      })
+      const redirect = new URL('/auth/oidc/callback', 'http://rackpad.local')
+      redirect.searchParams.set('session', result.sessionCode)
+      redirect.searchParams.set('returnTo', result.returnTo)
+      return reply.redirect(`${redirect.pathname}${redirect.search}`)
+    } catch (error) {
+      const redirect = new URL('/auth/oidc/callback', 'http://rackpad.local')
+      redirect.searchParams.set(
+        'error',
+        error instanceof Error ? error.message : 'OIDC sign-in failed.',
+      )
+      return reply.redirect(`${redirect.pathname}${redirect.search}`)
+    }
+  })
+
+  app.post('/oidc/session', async (req, reply) => {
+    const body = asObject(req.body)
+    const sessionCode = requiredString(body, 'session', { maxLength: 200 })
+    const session = consumeOidcSession(sessionCode)
+    writeAuthAudit('auth.oidc.login', session.user.username, session.user.id, 'Signed in to Rackpad with OIDC.')
+    return reply.send({
+      token: session.token,
+      expiresAt: session.expiresAt,
+      user: session.user,
+      returnTo: session.returnTo,
+    })
   })
 
   app.get('/me', async (req, reply) => {

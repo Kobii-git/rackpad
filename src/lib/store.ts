@@ -4,6 +4,7 @@ import type {
   AppUser,
   AuditEntry,
   Device,
+  DeviceTypeDefinition,
   DeviceMonitor,
   DiscoveredDevice,
   DhcpScope,
@@ -11,6 +12,7 @@ import type {
   IpAssignmentType,
   IpZone,
   Lab,
+  OidcPublicConfig,
   Port,
   PortLink,
   PortTemplate,
@@ -48,6 +50,7 @@ import type {
   WifiRadioPatch,
   WifiSsidPatch,
 } from "./api";
+import { mergeDeviceTypeDefinitions } from "./device-types";
 import {
   cidrSize,
   intToIp,
@@ -69,6 +72,7 @@ interface State {
   authLoading: boolean;
   authError: string | null;
   needsBootstrap: boolean;
+  oidc: OidcPublicConfig;
   currentUser: AppUser | null;
   authExpiresAt: string | null;
   loading: boolean;
@@ -79,6 +83,7 @@ interface State {
   rooms: Room[];
   racks: Rack[];
   devices: Device[];
+  deviceTypes: DeviceTypeDefinition[];
   ports: Port[];
   portLinks: PortLink[];
   virtualSwitches: VirtualSwitch[];
@@ -105,6 +110,7 @@ const EMPTY_DATA = {
   rooms: [] as Room[],
   racks: [] as Rack[],
   devices: [] as Device[],
+  deviceTypes: [] as DeviceTypeDefinition[],
   ports: [] as Port[],
   portLinks: [] as PortLink[],
   virtualSwitches: [] as VirtualSwitch[],
@@ -131,6 +137,7 @@ let state: State = {
   authLoading: false,
   authError: null,
   needsBootstrap: false,
+  oidc: { enabled: false, label: "OIDC" },
   currentUser: null,
   authExpiresAt: null,
   loading: false,
@@ -233,6 +240,13 @@ function sortRooms(rooms: Room[]) {
 
 function sortDevices(devices: Device[]) {
   return [...devices].sort((a, b) => a.hostname.localeCompare(b.hostname));
+}
+
+function sortDeviceTypes(deviceTypes: DeviceTypeDefinition[]) {
+  return [...deviceTypes].sort((a, b) => {
+    if (a.builtIn !== b.builtIn) return a.builtIn ? -1 : 1;
+    return a.label.localeCompare(b.label) || a.id.localeCompare(b.id);
+  });
 }
 
 function sortPorts(ports: Port[]) {
@@ -709,6 +723,7 @@ export async function initializeApp(force = false): Promise<void> {
           authLoading: false,
           authError: null,
           needsBootstrap: true,
+          oidc: status.oidc,
           currentUser: null,
           authExpiresAt: null,
           ...resetData(),
@@ -724,6 +739,7 @@ export async function initializeApp(force = false): Promise<void> {
           authLoading: false,
           authError: null,
           needsBootstrap: false,
+          oidc: status.oidc,
           currentUser: null,
           authExpiresAt: null,
           ...resetData(),
@@ -738,6 +754,7 @@ export async function initializeApp(force = false): Promise<void> {
         authLoading: false,
         authError: null,
         needsBootstrap: false,
+        oidc: status.oidc,
         currentUser: session.user,
         authExpiresAt: session.expiresAt,
       }));
@@ -840,6 +857,34 @@ export async function login(input: {
   }
 }
 
+export function startOidcLogin(returnTo = window.location.pathname + window.location.search) {
+  const target = returnTo && returnTo !== "/auth/oidc/callback" ? returnTo : "/";
+  window.location.assign(`/api/auth/oidc/start?returnTo=${encodeURIComponent(target)}`);
+}
+
+export async function completeOidcLogin(session: string): Promise<string> {
+  setState((prev) => ({
+    ...prev,
+    authLoading: true,
+    authError: null,
+  }));
+
+  try {
+    const authSession = await api.completeOidcLogin({ session });
+    await applyAuthSession(authSession);
+    return authSession.returnTo || "/";
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to complete OIDC sign-in.";
+    setState((prev) => ({
+      ...prev,
+      authLoading: false,
+      authError: message,
+    }));
+    throw error;
+  }
+}
+
 export async function logout(): Promise<void> {
   try {
     await api.logout();
@@ -876,6 +921,7 @@ export async function loadAll(
         rooms: api.getRooms(),
         racks: api.getRacks(),
         devices: api.getDevices(),
+        deviceTypes: api.getDeviceTypes(),
         virtualSwitches: api.getVirtualSwitches(),
         ports: api.getPorts(),
         portLinks: api.getPortLinks(),
@@ -1011,6 +1057,20 @@ export async function loadAll(
       );
       const monitorIds = new Set(allMonitors.map((monitor) => monitor.id));
 
+      const allPortTemplates = sortPortTemplates(
+        (resolved.get("portTemplates") as PortTemplate[] | undefined) ?? [],
+      );
+      const allDeviceTypes = sortDeviceTypes(
+        mergeDeviceTypeDefinitions(
+          (resolved.get("deviceTypes") as DeviceTypeDefinition[] | undefined) ??
+            [],
+          {
+            devices: allDevices,
+            portTemplates: allPortTemplates,
+          },
+        ),
+      );
+
       const allDiscoveredDevices = sortDiscoveredDevices(
         (
           (resolved.get("discoveredDevices") as
@@ -1114,6 +1174,7 @@ export async function loadAll(
         rooms: allRooms,
         racks: allRacks,
         devices: allDevices,
+        deviceTypes: allDeviceTypes,
         virtualSwitches: allVirtualSwitches,
         ports: allPorts,
         portLinks: allPortLinks,
@@ -1125,9 +1186,7 @@ export async function loadAll(
         ipAssignments: allIpAssignments,
         auditLog: filteredAudit,
         deviceMonitors: allMonitors,
-        portTemplates: sortPortTemplates(
-          (resolved.get("portTemplates") as PortTemplate[] | undefined) ?? [],
-        ),
+        portTemplates: allPortTemplates,
         discoveredDevices: allDiscoveredDevices,
         wifiControllers: allWifiControllers,
         wifiSsids: allWifiSsids,
@@ -1562,6 +1621,12 @@ export async function createPortTemplateRecord(
   setState((prev) => ({
     ...prev,
     portTemplates: sortPortTemplates([...prev.portTemplates, created]),
+    deviceTypes: sortDeviceTypes(
+      mergeDeviceTypeDefinitions(prev.deviceTypes, {
+        devices: prev.devices,
+        portTemplates: [...prev.portTemplates, created],
+      }),
+    ),
   }));
   void recordAudit(
     "port.template.create",
@@ -1580,6 +1645,16 @@ export async function updatePortTemplateRecord(
   setState((prev) => ({
     ...prev,
     portTemplates: replaceById(prev.portTemplates, updated, sortPortTemplates),
+    deviceTypes: sortDeviceTypes(
+      mergeDeviceTypeDefinitions(prev.deviceTypes, {
+        devices: prev.devices,
+        portTemplates: replaceById(
+          prev.portTemplates,
+          updated,
+          sortPortTemplates,
+        ),
+      }),
+    ),
   }));
   void recordAudit(
     "port.template.update",
@@ -1605,6 +1680,23 @@ export async function deletePortTemplateRecord(id: string): Promise<void> {
       `Deleted port template ${existing.name}`,
     );
   }
+}
+
+export async function createDeviceTypeRecord(input: {
+  id?: string;
+  label: string;
+}): Promise<DeviceTypeDefinition> {
+  const created = await api.createDeviceType(input);
+  setState((prev) => ({
+    ...prev,
+    deviceTypes: sortDeviceTypes(
+      mergeDeviceTypeDefinitions([...prev.deviceTypes, created], {
+        devices: prev.devices,
+        portTemplates: prev.portTemplates,
+      }),
+    ),
+  }));
+  return created;
 }
 
 export interface CreateCableInput {
@@ -1827,6 +1919,12 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
   setState((prev) => ({
     ...prev,
     devices: sortDevices([...prev.devices, created]),
+    deviceTypes: sortDeviceTypes(
+      mergeDeviceTypeDefinitions(prev.deviceTypes, {
+        devices: [...prev.devices, created],
+        portTemplates: prev.portTemplates,
+      }),
+    ),
     ports: sortPorts([...prev.ports, ...createdPorts]),
     ipAssignments: applyAssignmentSync(prev.ipAssignments, syncResult),
   }));
@@ -1887,6 +1985,12 @@ export async function updateDevice(
   setState((prev) => ({
     ...prev,
     devices: replaceById(prev.devices, updated, sortDevices),
+    deviceTypes: sortDeviceTypes(
+      mergeDeviceTypeDefinitions(prev.deviceTypes, {
+        devices: replaceById(prev.devices, updated, sortDevices),
+        portTemplates: prev.portTemplates,
+      }),
+    ),
     ports: nextPorts,
     ipAssignments: applyAssignmentSync(prev.ipAssignments, syncResult),
   }));

@@ -84,6 +84,7 @@ const exportBackupSnapshot = db.transaction((exportedAt: string, exportedBy: str
         FROM users
         ORDER BY username, id
       `).all(),
+      oidcIdentities: db.prepare('SELECT * FROM oidcIdentities ORDER BY issuer, subject').all(),
       deviceMonitors: db.prepare('SELECT * FROM deviceMonitors ORDER BY deviceId, id').all(),
       wifiControllers: db.prepare('SELECT * FROM wifiControllers ORDER BY name, id').all(),
       wifiSsids: db.prepare('SELECT * FROM wifiSsids ORDER BY name, id').all(),
@@ -143,6 +144,7 @@ const restoreBackupSnapshot = db.transaction((snapshot: Record<string, unknown>,
   const discoveredDevices = normalizeArrayRecordArray(data.discoveredDevices ?? [], 'data.discoveredDevices')
   const auditLog = normalizeArrayRecordArray(data.auditLog, 'data.auditLog')
   const users = normalizeArrayRecordArray(data.users, 'data.users')
+  const oidcIdentities = normalizeArrayRecordArray(data.oidcIdentities ?? [], 'data.oidcIdentities')
   const deviceMonitors = normalizeArrayRecordArray(data.deviceMonitors, 'data.deviceMonitors')
   const wifiControllers = normalizeArrayRecordArray(data.wifiControllers ?? [], 'data.wifiControllers')
   const wifiSsids = normalizeArrayRecordArray(data.wifiSsids ?? [], 'data.wifiSsids')
@@ -158,6 +160,7 @@ const restoreBackupSnapshot = db.transaction((snapshot: Record<string, unknown>,
 
   db.exec(`
     DELETE FROM userSessions;
+    DELETE FROM oidcIdentities;
     DELETE FROM wifiClientAssociations;
     DELETE FROM wifiRadioSsids;
     DELETE FROM wifiRadios;
@@ -230,6 +233,10 @@ const restoreBackupSnapshot = db.transaction((snapshot: Record<string, unknown>,
     INSERT INTO users (id, username, displayName, passwordHash, role, disabled, createdAt, lastLoginAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `)
+  const insertOidcIdentity = db.prepare(`
+    INSERT INTO oidcIdentities (issuer, subject, userId, email, displayName, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `)
   const insertDeviceMonitor = db.prepare(`
     INSERT INTO deviceMonitors (id, deviceId, name, type, target, port, path, intervalMs, enabled, sortOrder, lastCheckAt, lastAlertAt, lastResult, lastMessage)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -277,6 +284,17 @@ const restoreBackupSnapshot = db.transaction((snapshot: Record<string, unknown>,
       Number(row.disabled ?? 0),
       row.createdAt,
       row.lastLoginAt ?? null,
+    )
+  }
+  for (const row of oidcIdentities) {
+    insertOidcIdentity.run(
+      row.issuer,
+      row.subject,
+      row.userId,
+      row.email ?? null,
+      row.displayName ?? null,
+      row.createdAt,
+      row.updatedAt,
     )
   }
   for (const row of rooms) {

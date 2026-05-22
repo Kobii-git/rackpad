@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
-    "@fastify/static": "^8.0.3",
+    "@fastify/static": "^9.1.3",
     "@radix-ui/react-dialog": "^1.1.6",
     "@radix-ui/react-popover": "^1.1.6",
     "@radix-ui/react-separator": "^1.1.2",

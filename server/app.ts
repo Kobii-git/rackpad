@@ -10,6 +10,7 @@ import { labsRoutes } from './routes/labs.js'
 import { roomsRoutes } from './routes/rooms.js'
 import { racksRoutes } from './routes/racks.js'
 import { devicesRoutes } from './routes/devices.js'
+import { deviceTypesRoutes } from './routes/device-types.js'
 import { portsRoutes } from './routes/ports.js'
 import { cablesRoutes } from './routes/cables.js'
 import { vlansRoutes } from './routes/vlans.js'
@@ -207,6 +208,9 @@ export async function createApp() {
     '/api/auth/status',
     '/api/auth/bootstrap',
     '/api/auth/login',
+    '/api/auth/oidc/start',
+    '/api/auth/oidc/callback',
+    '/api/auth/oidc/session',
   ])
   const readOnlyMethods = new Set(['GET', 'HEAD', 'OPTIONS'])
   const writeWhitelist = new Set(['/api/auth/logout'])
@@ -260,6 +264,7 @@ export async function createApp() {
   await app.register(roomsRoutes, { prefix: '/api/rooms' })
   await app.register(racksRoutes, { prefix: '/api/racks' })
   await app.register(devicesRoutes, { prefix: '/api/devices' })
+  await app.register(deviceTypesRoutes, { prefix: '/api/device-types' })
   await app.register(portsRoutes, { prefix: '/api/ports' })
   await app.register(cablesRoutes, { prefix: '/api/port-links' })
   await app.register(vlansRoutes, { prefix: '/api/vlans' })

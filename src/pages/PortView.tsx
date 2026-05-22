@@ -35,40 +35,15 @@ import type {
   Vlan,
   VirtualSwitch,
 } from "@/lib/types";
+import { deviceTypeLabel } from "@/lib/device-types";
 import { formatPortLabel } from "@/lib/utils";
 import { ArrowRight, Filter, Network, Plus, Save, Trash2 } from "lucide-react";
 
-const PORT_BEARING: Device["deviceType"][] = [
-  "switch",
-  "router",
-  "firewall",
-  "ap",
-  "endpoint",
-  "vm",
-  "patch_panel",
-  "server",
-  "storage",
-  "pdu",
-  "ups",
-  "kvm",
-  "other",
-];
-
-const TEMPLATE_DEVICE_TYPES: DeviceType[] = [
-  "switch",
-  "router",
-  "firewall",
-  "ap",
-  "endpoint",
-  "vm",
-  "server",
-  "storage",
-  "patch_panel",
-  "pdu",
-  "ups",
-  "kvm",
-  "other",
-];
+const NON_PORT_BEARING_TYPES = new Set<Device["deviceType"]>([
+  "brush_panel",
+  "blanking_panel",
+  "rack_shelf",
+]);
 
 const LINK_STATES: Port["linkState"][] = ["up", "down", "disabled", "unknown"];
 const PORT_KINDS: Port["kind"][] = [
@@ -257,13 +232,23 @@ export default function PortView() {
   const ports = useStore((s) => s.ports);
   const portLinks = useStore((s) => s.portLinks);
   const portTemplates = useStore((s) => s.portTemplates);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const virtualSwitches = useStore((s) => s.virtualSwitches);
   const vlans = useStore((s) => s.vlans);
   const canEdit = canEditInventory(currentUser);
   const portBearingDevices = useMemo(
     () =>
-      devices.filter((device) => PORT_BEARING.includes(device.deviceType)),
+      devices.filter(
+        (device) => !NON_PORT_BEARING_TYPES.has(device.deviceType),
+      ),
     [devices],
+  );
+  const portDeviceTypeOptions = useMemo(
+    () =>
+      deviceTypes.filter(
+        (deviceType) => !NON_PORT_BEARING_TYPES.has(deviceType.id),
+      ),
+    [deviceTypes],
   );
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [selectedPortId, setSelectedPortId] = useState<string | undefined>();
@@ -759,9 +744,9 @@ export default function PortView() {
                   }
                 >
                   <option value="all">All types</option>
-                  {PORT_BEARING.map((deviceType) => (
-                    <option key={deviceType} value={deviceType}>
-                      {deviceType.replace("_", " ")}
+                  {portDeviceTypeOptions.map((deviceType) => (
+                    <option key={deviceType.id} value={deviceType.id}>
+                      {deviceType.label}
                     </option>
                   ))}
                 </Select>
@@ -838,7 +823,7 @@ export default function PortView() {
                       className="size-4 text-[var(--color-accent)]"
                     />
                     <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                      {device.deviceType.replace("_", " ")}
+                      {deviceTypeLabel(device.deviceType, deviceTypes)}
                     </span>
                   </div>
                   <h2 className="text-lg font-semibold tracking-tight">
@@ -1402,12 +1387,14 @@ export default function PortView() {
 
                         <Field label="Applies to">
                           <div className="flex flex-wrap gap-2">
-                            {TEMPLATE_DEVICE_TYPES.map((deviceType) => {
+                            {portDeviceTypeOptions.map((deviceType) => {
                               const selected =
-                                templateForm.deviceTypes.includes(deviceType);
+                                templateForm.deviceTypes.includes(
+                                  deviceType.id,
+                                );
                               return (
                                 <button
-                                  key={deviceType}
+                                  key={deviceType.id}
                                   type="button"
                                   disabled={Boolean(selectedTemplate?.builtIn)}
                                   onClick={() =>
@@ -1415,9 +1402,9 @@ export default function PortView() {
                                       ...prev,
                                       deviceTypes: selected
                                         ? prev.deviceTypes.filter(
-                                            (entry) => entry !== deviceType,
+                                            (entry) => entry !== deviceType.id,
                                           )
-                                        : [...prev.deviceTypes, deviceType],
+                                        : [...prev.deviceTypes, deviceType.id],
                                     }))
                                   }
                                   className={`rounded-[var(--radius-xs)] border px-2 py-1 text-xs capitalize transition-colors ${
@@ -1426,7 +1413,7 @@ export default function PortView() {
                                       : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
                                   } disabled:cursor-default disabled:opacity-70`}
                                 >
-                                  {deviceType.replace("_", " ")}
+                                  {deviceType.label}
                                 </button>
                               );
                             })}

@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { DeviceType } from "@/lib/types";
 
-const map = {
+const map: Record<string, typeof Server> = {
   switch: Network,
   router: Network,
   firewall: Shield,
@@ -30,7 +30,7 @@ const map = {
   ups: Battery,
   kvm: Monitor,
   other: Boxes,
-} satisfies Record<DeviceType, typeof Server>;
+};
 
 interface Props {
   type: DeviceType;

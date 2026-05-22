@@ -77,6 +77,7 @@ export interface RackRoomSection {
   width: number;
   height: number;
   racks: RackPanel[];
+  looseGroups: RoomGroup[];
   stats: {
     racks: number;
     devices: number;
@@ -110,7 +111,9 @@ export interface RoomGroup {
   name: string;
   subtitle: string;
   color: string;
+  x: number;
   y: number;
+  width: number;
   nodes: VisualizerNode[];
   total: number;
   online: number;

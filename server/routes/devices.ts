@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db, parseRow } from '../db.js'
+import { requiredDeviceType } from '../lib/device-types.js'
 import { createId } from '../lib/ids.js'
 import { createPortsFromTemplate, getPortTemplate } from '../lib/port-templates.js'
 import { validateRackPlacement } from '../lib/rack-placement.js'
@@ -17,25 +18,6 @@ import {
   ValidationError,
 } from '../lib/validation.js'
 
-const DEVICE_TYPES = [
-  'switch',
-  'router',
-  'firewall',
-  'server',
-  'rack_shelf',
-  'ap',
-  'endpoint',
-  'vm',
-  'patch_panel',
-  'brush_panel',
-  'blanking_panel',
-  'storage',
-  'pdu',
-  'ups',
-  'kvm',
-  'other',
-] as const
-
 const DEVICE_STATUSES = ['online', 'offline', 'warning', 'unknown', 'maintenance'] as const
 const DEVICE_PLACEMENTS = ['rack', 'room', 'wireless', 'virtual', 'shelf'] as const
 const DEVICE_FACES = ['front', 'rear'] as const
@@ -46,7 +28,7 @@ function parseDevice(row: Record<string, unknown>) {
 }
 
 function derivePlacement(input: {
-  deviceType: (typeof DEVICE_TYPES)[number]
+  deviceType: string
   placement?: (typeof DEVICE_PLACEMENTS)[number] | null
   rackId?: string | null
   startU?: number | null
@@ -64,14 +46,14 @@ type ParentDeviceRow = {
   id: string
   labId: string
   hostname: string
-  deviceType: (typeof DEVICE_TYPES)[number]
+  deviceType: string
   rackId: string | null
   face: (typeof DEVICE_FACES)[number] | null
 }
 
 function normalizePlacement(input: {
   deviceId?: string
-  deviceType: (typeof DEVICE_TYPES)[number]
+  deviceType: string
   placement?: (typeof DEVICE_PLACEMENTS)[number] | null
   rackId?: string | null
   startU?: number | null
@@ -184,7 +166,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const body = asObject(req.body)
     const labId = requiredString(body, 'labId', { maxLength: 80 })
     const hostname = requiredString(body, 'hostname', { maxLength: 120 })
-    const deviceType = requiredEnum(body, 'deviceType', DEVICE_TYPES)
+    const deviceType = requiredDeviceType(body)
     const displayName = optionalString(body, 'displayName', { maxLength: 120 })
     const manufacturer = optionalString(body, 'manufacturer', { maxLength: 120 })
     const model = optionalString(body, 'model', { maxLength: 120 })
@@ -288,8 +270,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const values: unknown[] = []
 
     const nextDeviceType = 'deviceType' in body
-      ? requiredEnum(body, 'deviceType', DEVICE_TYPES)
-      : (String(existing.deviceType) as (typeof DEVICE_TYPES)[number])
+      ? requiredDeviceType(body)
+      : String(existing.deviceType)
     const rackId = optionalString(body, 'rackId', { maxLength: 80 })
     const startU = optionalInteger(body, 'startU', { min: 1, max: 100 })
     const heightU = optionalInteger(body, 'heightU', { min: 1, max: 20 })

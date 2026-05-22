@@ -687,6 +687,17 @@ function ZonePanels({
                 onToggleRackRun={onToggleRackRun}
               />
             ))}
+            {model.rackZone.sections.flatMap((section) =>
+              section.looseGroups.map((group) => (
+                <RoomGroupView
+                  key={group.id}
+                  group={group}
+                  zoneX={model.rackZone.x}
+                  zoneY={model.rackZone.y}
+                  onToggleGroup={onToggleGroup}
+                />
+              )),
+            )}
           </>
         )}
       </div>
@@ -708,6 +719,7 @@ function ZonePanels({
           <RoomGroupView
             key={group.id}
             group={group}
+            zoneX={model.roomZone.x}
             zoneY={model.roomZone.y}
             onToggleGroup={onToggleGroup}
           />
@@ -874,10 +886,12 @@ function RackBandView({
 
 function RoomGroupView({
   group,
+  zoneX,
   zoneY,
   onToggleGroup,
 }: {
   group: RoomGroup;
+  zoneX: number;
   zoneY: number;
   onToggleGroup: (key: string) => void;
 }) {
@@ -886,9 +900,11 @@ function RoomGroupView({
       type="button"
       data-visualizer-interactive="true"
       onClick={() => onToggleGroup(group.id)}
-      className="absolute left-6 right-6 z-[45] rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-2)_82%,black)] px-3 py-2 text-left shadow-[0_8px_18px_rgb(0_0_0_/_0.16)] transition-colors hover:border-[var(--border-strong)]"
+      className="absolute z-[45] rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-2)_82%,black)] px-3 py-2 text-left shadow-[0_8px_18px_rgb(0_0_0_/_0.16)] transition-colors hover:border-[var(--border-strong)]"
       style={{
+        left: group.x - zoneX,
         top: group.y - zoneY,
+        width: group.width,
         borderLeftColor: group.color,
         borderLeftWidth: 3,
       }}
@@ -1081,10 +1097,21 @@ function CableSvg({
     cable.fromNode?.health === "offline" &&
     cable.toNode?.health === "offline";
   const color = downPair ? "var(--danger)" : traceActive ? "var(--accent-primary)" : cable.color;
-  const opacity = traceActive ? 1 : dimmed ? 0.15 : active ? 1 : 0.58;
-  const strokeWidth = traceActive ? 3.5 : active ? 3.5 : cable.up ? 3 : 2;
+  const opacity = traceActive ? 1 : dimmed ? 0.06 : active ? 1 : 0.5;
+  const strokeWidth = traceActive ? 5.5 : active ? 5 : cable.up ? 2.6 : 2;
   return (
     <g>
+      {(active || traceActive) && (
+        <path
+          d={cable.path}
+          fill="none"
+          stroke="var(--bg-page)"
+          strokeWidth={strokeWidth + 6}
+          strokeOpacity={0.82}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
       <path
         d={cable.path}
         fill="none"
@@ -1103,7 +1130,7 @@ function CableSvg({
           key={index}
           cx={point.x}
           cy={point.y}
-          r={active || traceActive ? 5.5 : 5}
+          r={active || traceActive ? 6.5 : 5}
           fill={color}
           fillOpacity={opacity}
           stroke="var(--bg-page)"

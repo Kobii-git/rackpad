@@ -4,6 +4,7 @@ import type {
   AuditEntry,
   AuthSession,
   Device,
+  DeviceTypeDefinition,
   DeviceMonitor,
   DiscoveredDevice,
   DhcpScope,
@@ -13,6 +14,7 @@ import type {
   Port,
   PortLink,
   PortTemplate,
+  OidcPublicConfig,
   Rack,
   Room,
   Subnet,
@@ -136,6 +138,7 @@ export type MonitorPatch = Nullable<
 
 export interface AuthStatus {
   needsBootstrap: boolean;
+  oidc: OidcPublicConfig;
 }
 
 let authToken = readStoredToken();
@@ -267,6 +270,13 @@ export const api = {
 
   login(body: { username: string; password: string }) {
     return request<AuthSession>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  completeOidcLogin(body: { session: string }) {
+    return request<AuthSession & { returnTo?: string }>("/auth/oidc/session", {
       method: "POST",
       body: JSON.stringify(body),
     });
@@ -421,6 +431,17 @@ export const api = {
 
   getDevices(params?: { rackId?: string; labId?: string }) {
     return request<Device[]>("/devices", undefined, params);
+  },
+
+  getDeviceTypes() {
+    return request<DeviceTypeDefinition[]>("/device-types");
+  },
+
+  createDeviceType(body: { id?: string; label: string }) {
+    return request<DeviceTypeDefinition>("/device-types", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   },
 
   getVirtualSwitches(params?: { labId?: string; hostDeviceId?: string }) {

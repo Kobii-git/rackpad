@@ -10,7 +10,13 @@ import {
 } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { bootstrapAdmin, initializeApp, login, useStore } from "@/lib/store";
+import {
+  bootstrapAdmin,
+  initializeApp,
+  login,
+  startOidcLogin,
+  useStore,
+} from "@/lib/store";
 
 type Mode = "login" | "bootstrap";
 
@@ -19,6 +25,7 @@ export function AuthScreen() {
   const needsBootstrap = useStore((s) => s.needsBootstrap);
   const authLoading = useStore((s) => s.authLoading);
   const authError = useStore((s) => s.authError);
+  const oidc = useStore((s) => s.oidc);
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [bootstrapForm, setBootstrapForm] = useState({
     username: "",
@@ -160,9 +167,43 @@ export function AuthScreen() {
                     </button>
                   </div>
                 </Field>
+                {oidc.enabled && (
+                  <>
+                    <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-faint)]">
+                      <div className="h-px flex-1 bg-[var(--color-line)]" />
+                      <span>or</span>
+                      <div className="h-px flex-1 bg-[var(--color-line)]" />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full"
+                      onClick={() => startOidcLogin("/")}
+                    >
+                      Continue with {oidc.label}
+                    </Button>
+                  </>
+                )}
               </>
             ) : (
               <>
+                {oidc.enabled && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full"
+                      onClick={() => startOidcLogin("/")}
+                    >
+                      Continue with {oidc.label}
+                    </Button>
+                    <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-faint)]">
+                      <div className="h-px flex-1 bg-[var(--color-line)]" />
+                      <span>or</span>
+                      <div className="h-px flex-1 bg-[var(--color-line)]" />
+                    </div>
+                  </>
+                )}
                 <Field label="Username">
                   <Input
                     autoFocus

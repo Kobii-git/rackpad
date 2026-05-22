@@ -59,6 +59,7 @@ export default function DiscoveryView() {
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const subnets = useStore((s) => s.subnets);
   const discoveredDevices = useStore((s) => s.discoveredDevices);
   const canEdit = canEditInventory(currentUser);
@@ -692,20 +693,11 @@ export default function DiscoveryView() {
                             )
                           }
                         >
-                          <option value="endpoint">endpoint</option>
-                          <option value="ap">ap</option>
-                          <option value="server">server</option>
-                          <option value="switch">switch</option>
-                          <option value="router">router</option>
-                          <option value="firewall">firewall</option>
-                          <option value="storage">storage</option>
-                          <option value="vm">vm</option>
-                          <option value="patch_panel">patch panel</option>
-                          <option value="brush_panel">brush panel</option>
-                          <option value="blanking_panel">
-                            blanking panel
-                          </option>
-                          <option value="other">other</option>
+                          {deviceTypes.map((deviceType) => (
+                            <option key={deviceType.id} value={deviceType.id}>
+                              {deviceType.label}
+                            </option>
+                          ))}
                         </Select>
                       </Field>
                       <Field label="Placement">

@@ -13,6 +13,7 @@ import { canEditInventory, useStore } from "@/lib/store";
 import type { Device, DeviceType, Port, Rack, Room } from "@/lib/types";
 import { ChevronRight, Filter, Plus } from "lucide-react";
 import { statusLabel } from "@/lib/utils";
+import { deviceTypeLabel } from "@/lib/device-types";
 import {
   applySortDirection,
   compareIp,
@@ -21,23 +22,6 @@ import {
   toggleSort,
   type SortState,
 } from "@/lib/sort";
-
-const TYPES: DeviceType[] = [
-  "switch",
-  "router",
-  "firewall",
-  "server",
-  "rack_shelf",
-  "ap",
-  "endpoint",
-  "vm",
-  "storage",
-  "patch_panel",
-  "brush_panel",
-  "blanking_panel",
-  "pdu",
-  "ups",
-];
 
 type SortKey =
   | "hostname"
@@ -51,6 +35,7 @@ type SortKey =
 export default function DevicesList() {
   const currentUser = useStore((s) => s.currentUser);
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const rooms = useStore((s) => s.rooms);
   const racks = useStore((s) => s.racks);
   const ports = useStore((s) => s.ports);
@@ -182,22 +167,22 @@ export default function DevicesList() {
             </span>
             <Mono className="ml-2 text-[10px]">{devices.length}</Mono>
           </button>
-          {TYPES.map((entry) => {
-            const count = typeCounts[entry] ?? 0;
+          {deviceTypes.map((entry) => {
+            const count = typeCounts[entry.id] ?? 0;
             if (count === 0) return null;
             return (
               <button
-                key={entry}
-                onClick={() => setType(entry)}
+                key={entry.id}
+                onClick={() => setType(entry.id)}
                 className={`inline-flex items-center gap-1.5 rounded-[var(--radius-xs)] border px-2.5 py-1 transition-colors ${
-                  type === entry
+                  type === entry.id
                     ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"
                     : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
                 }`}
               >
-                <DeviceTypeIcon type={entry} className="size-3" />
+                <DeviceTypeIcon type={entry.id} className="size-3" />
                 <span className="font-mono text-[10px] uppercase tracking-wider capitalize">
-                  {entry.replace("_", " ")}
+                  {entry.label}
                 </span>
                 <Mono className="text-[10px]">{count}</Mono>
               </button>
@@ -307,7 +292,7 @@ export default function DevicesList() {
                       </Td>
                       <Td>
                         <span className="text-xs capitalize text-[var(--color-fg-muted)]">
-                          {device.deviceType.replace("_", " ")}
+                          {deviceTypeLabel(device.deviceType, deviceTypes)}
                         </span>
                       </Td>
                       <Td>

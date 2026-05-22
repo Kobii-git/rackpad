@@ -1,22 +1,14 @@
 export type ID = string;
 
-export type DeviceType =
-  | "switch"
-  | "router"
-  | "firewall"
-  | "server"
-  | "rack_shelf"
-  | "ap"
-  | "endpoint"
-  | "vm"
-  | "patch_panel"
-  | "brush_panel"
-  | "blanking_panel"
-  | "storage"
-  | "pdu"
-  | "ups"
-  | "kvm"
-  | "other";
+export type DeviceType = string;
+
+export interface DeviceTypeDefinition {
+  id: DeviceType;
+  label: string;
+  builtIn: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export type PortKind =
   | "rj45"
@@ -249,6 +241,11 @@ export interface AuthSession {
   token: string;
   expiresAt: string;
   user: AppUser;
+}
+
+export interface OidcPublicConfig {
+  enabled: boolean;
+  label: string;
 }
 
 export interface DeviceMonitor {

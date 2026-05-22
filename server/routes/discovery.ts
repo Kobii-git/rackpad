@@ -5,8 +5,10 @@ import { promisify } from 'node:util'
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import { requireAdmin } from '../lib/auth.js'
+import { optionalDeviceType } from '../lib/device-types.js'
 import { createId } from '../lib/ids.js'
 import { runIcmpProbe } from '../lib/monitoring.js'
+import { lookupOuiVendor } from '../lib/oui.js'
 import {
   asObject,
   ensureCidr,
@@ -16,46 +18,9 @@ import {
   ValidationError,
 } from '../lib/validation.js'
 
-const DEVICE_TYPES = [
-  'switch',
-  'router',
-  'firewall',
-  'server',
-  'rack_shelf',
-  'ap',
-  'endpoint',
-  'vm',
-  'patch_panel',
-  'brush_panel',
-  'blanking_panel',
-  'storage',
-  'pdu',
-  'ups',
-  'kvm',
-  'other',
-] as const
-
 const DEVICE_PLACEMENTS = ['rack', 'room', 'wireless', 'virtual', 'shelf'] as const
 const DISCOVERY_STATUSES = ['new', 'imported', 'dismissed'] as const
 const execFileAsync = promisify(execFile)
-const OUI_VENDOR_MAP: Record<string, string> = {
-  '24:a4:3c': 'Ubiquiti',
-  '74:83:c2': 'Ubiquiti',
-  'f4:92:bf': 'Ubiquiti',
-  '00:1b:54': 'Cisco',
-  '00:25:45': 'Cisco',
-  '3c:ce:73': 'Cisco',
-  'b8:27:eb': 'Raspberry Pi',
-  'dc:a6:32': 'Raspberry Pi',
-  'e4:5f:01': 'Raspberry Pi',
-  '3c:fd:fe': 'Intel',
-  'b0:08:75': 'Intel',
-  'f0:18:98': 'Apple',
-  '3c:22:fb': 'Apple',
-  'd8:3a:dd': 'TP-Link',
-  'f4:f2:6d': 'Aruba',
-  '00:30:48': 'Supermicro',
-}
 
 function parseDiscoveredDevice(row: Record<string, unknown>) {
   return {
@@ -115,7 +80,7 @@ function inferDeviceType(hostname: string | null) {
   return 'endpoint' as const
 }
 
-function inferPlacement(deviceType: (typeof DEVICE_TYPES)[number]) {
+function inferPlacement(deviceType: string) {
   if (deviceType === 'ap') return 'wireless' as const
   if (deviceType === 'vm') return 'virtual' as const
   return 'room' as const
@@ -169,11 +134,6 @@ function normalizeMacAddress(value: string | null | undefined) {
   if (!/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(normalized)) return null
   if (normalized === '00:00:00:00:00:00') return null
   return normalized
-}
-
-function vendorFromMac(macAddress: string | null) {
-  if (!macAddress) return null
-  return OUI_VENDOR_MAP[macAddress.slice(0, 8)] ?? null
 }
 
 async function lookupMacAddress(ipAddress: string) {
@@ -240,6 +200,7 @@ async function scanHost(ipAddress: string) {
   const [hostname, macAddress] = await Promise.all([resolveHostname(ipAddress), lookupMacAddress(ipAddress)])
   const deviceType = inferDeviceType(hostname)
   const displayName = hostname ? hostname.split('.')[0] : null
+  const vendor = await lookupOuiVendor(macAddress)
 
   return {
     ipAddress,
@@ -248,7 +209,7 @@ async function scanHost(ipAddress: string) {
     deviceType,
     placement: inferPlacement(deviceType),
     macAddress,
-    vendor: vendorFromMac(macAddress),
+    vendor,
     source: 'icmp-scan',
     lastSeen: new Date().toISOString(),
   }
@@ -384,7 +345,7 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     const hostname = optionalString(body, 'hostname', { maxLength: 200 })
     const displayName = optionalString(body, 'displayName', { maxLength: 200 })
     const notes = optionalString(body, 'notes', { maxLength: 2000 })
-    const deviceType = optionalEnum(body, 'deviceType', DEVICE_TYPES)
+    const deviceType = optionalDeviceType(body)
     const placement = optionalEnum(body, 'placement', DEVICE_PLACEMENTS)
     const status = optionalEnum(body, 'status', DISCOVERY_STATUSES)
     const importedDeviceId = optionalString(body, 'importedDeviceId', { maxLength: 80 })

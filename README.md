@@ -216,7 +216,25 @@ NODE_ENV=production
 TRUST_PROXY=0
 TRUSTED_HOSTS=
 TRUSTED_ORIGINS=
+APP_URL=
+OIDC_ENABLED=0
+OIDC_ISSUER_URL=
+OIDC_CLIENT_ID=
+OIDC_CLIENT_SECRET=
+OIDC_LABEL=OIDC
+OIDC_DEFAULT_ROLE=viewer
+OIDC_ADMIN_USERS=
+OIDC_EDITOR_USERS=
+OIDC_VIEWER_USERS=
+OIDC_ADMIN_GROUPS=
+OIDC_EDITOR_GROUPS=
+OIDC_VIEWER_GROUPS=
+OUI_AUTO_UPDATE=1
 ```
+
+OIDC uses the authorization-code flow with PKCE. Configure the provider
+redirect URI as `APP_URL/api/auth/oidc/callback`, or set `OIDC_REDIRECT_URI`
+explicitly when Rackpad is behind a proxy with a non-standard public URL.
 
 ## First run
 
