@@ -230,11 +230,19 @@ OIDC_ADMIN_GROUPS=
 OIDC_EDITOR_GROUPS=
 OIDC_VIEWER_GROUPS=
 OUI_AUTO_UPDATE=1
+DISCOVERY_MAC_SCAN_MODE=auto
 ```
 
 OIDC uses the authorization-code flow with PKCE. Configure the provider
 redirect URI as `APP_URL/api/auth/oidc/callback`, or set `OIDC_REDIRECT_URI`
 explicitly when Rackpad is behind a proxy with a non-standard public URL.
+
+Discovery MAC/vendor enrichment needs layer-2 visibility from the Rackpad
+runtime. `DISCOVERY_MAC_SCAN_MODE=auto` tries `arp-scan` and `nmap` when the
+runtime can use them, then falls back to the OS neighbor/ARP cache. In Docker,
+MACs may remain unavailable on bridge networking, Docker Desktop, routed VLANs,
+VPNs, or containers without raw-socket capability; Rackpad will show scan
+diagnostics when that happens.
 
 ## First run
 

@@ -15,6 +15,7 @@ const { createApp } = await import('../app.js')
 const { db } = await import('../db.js')
 const { setBootstrapState } = await import('../lib/auth.js')
 const { parseIeeeOuiText } = await import('../lib/oui.js')
+const { parseArpScanOutput, parseNmapPingScanOutput } = await import('../routes/discovery.js')
 
 type AppInstance = Awaited<ReturnType<typeof createApp>>
 
@@ -101,6 +102,27 @@ test('IEEE OUI parser supports MA-L, MA-M, and MA-S prefixes', () => {
   assert.equal(entries.f01898, 'Apple, Inc.')
   assert.equal(entries['28d2440'], 'Example MA-M Vendor')
   assert.equal(entries['8c1f64012'], 'Example MA-S Vendor')
+})
+
+test('discovery MAC parsers support arp-scan and nmap output', () => {
+  const arpScanEntries = parseArpScanOutput(`
+    Interface: eth0, type: EN10MB, MAC: 02:42:ac:11:00:02, IPv4: 192.168.1.10
+    192.168.1.1     f0:18:98:44:55:66       Apple, Inc.
+    192.168.1.20    d8-3a-dd-ab-cd-ef       TP-Link Corporation Limited
+  `)
+  assert.equal(arpScanEntries.get('192.168.1.1'), 'f0:18:98:44:55:66')
+  assert.equal(arpScanEntries.get('192.168.1.20'), 'd8:3a:dd:ab:cd:ef')
+
+  const nmapEntries = parseNmapPingScanOutput(`
+    Nmap scan report for 192.168.1.1
+    Host is up (0.0030s latency).
+    MAC Address: F0:18:98:44:55:66 (Apple)
+    Nmap scan report for printer.local (192.168.1.20)
+    Host is up.
+    MAC Address: D8:3A:DD:AB:CD:EF (TP-Link)
+  `)
+  assert.equal(nmapEntries.get('192.168.1.1'), 'f0:18:98:44:55:66')
+  assert.equal(nmapEntries.get('192.168.1.20'), 'd8:3a:dd:ab:cd:ef')
 })
 
 test('bootstrap can start with an empty lab or load demo data on demand', async () => {

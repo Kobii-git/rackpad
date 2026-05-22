@@ -6,6 +6,41 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.1-beta.2] - 2026-05-22
+
+### Added
+
+- Discovery scan diagnostics now explain when MAC addresses are unavailable
+  because Rackpad lacks layer-2 visibility from the current runtime.
+- Optional stronger MAC discovery using `arp-scan` or `nmap` when those tools
+  are available and the deployment has the needed network capabilities.
+
+### Changed
+
+- Docker images now include common network discovery helpers used by Rackpad's
+  MAC enrichment path.
+
+## [1.2.1-beta.1] - 2026-05-22
+
+### Added
+
+- OIDC login support with PKCE, role mapping, bootstrap handling, and frontend
+  sign-in/callback flow.
+- Custom device types for device records, discovery review, icons, filters, and
+  port templates.
+- IEEE OUI vendor enrichment for discovered MAC addresses with cached MA-L,
+  MA-M, and MA-S prefix data.
+
+### Changed
+
+- Visualizer cable highlighting and same-rack cable routing are easier to read.
+- Room-assigned loose devices render with their room/rack section in the
+  Visualizer.
+
+### Fixed
+
+- Updated vulnerable transitive packages through the Fastify static-file stack.
+
 ## [1.2.0] - 2026-05-20
 
 ### Added

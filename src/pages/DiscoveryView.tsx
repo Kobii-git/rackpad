@@ -24,7 +24,7 @@ import {
   updateDiscoveredDeviceRecord,
   useStore,
 } from "@/lib/store";
-import type { Device, DiscoveredDevice } from "@/lib/types";
+import type { Device, DiscoveredDevice, DiscoveryScanResult } from "@/lib/types";
 import {
   applySortDirection,
   compareDate,
@@ -68,6 +68,8 @@ export default function DiscoveryView() {
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [draft, setDraft] = useState<DiscoveryDraft | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [lastScanResult, setLastScanResult] =
+    useState<DiscoveryScanResult | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [linkingId, setLinkingId] = useState<string | null>(null);
@@ -229,7 +231,8 @@ export default function DiscoveryView() {
     setScanning(true);
     setError("");
     try {
-      await scanDiscoveredSubnet(scanCidr.trim());
+      const result = await scanDiscoveredSubnet(scanCidr.trim());
+      setLastScanResult(result);
       setFilter("all");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to scan subnet.");
@@ -387,6 +390,8 @@ export default function DiscoveryView() {
           />
         </div>
 
+        {lastScanResult && <ScanSummary result={lastScanResult} />}
+
         <div className="flex flex-wrap gap-2">
           <FilterButton
             active={filter === "all"}
@@ -521,7 +526,7 @@ export default function DiscoveryView() {
                             <div className="space-y-0.5 text-[11px] text-[var(--color-fg-subtle)]">
                               <div>{device.vendor ?? "-"}</div>
                               <Mono className="text-[10px] text-[var(--color-fg-faint)]">
-                                {device.macAddress ?? "no MAC"}
+                                {device.macAddress ?? "MAC unavailable"}
                               </Mono>
                             </div>
                           </Td>
@@ -838,6 +843,47 @@ export default function DiscoveryView() {
         />
       )}
     </>
+  );
+}
+
+function ScanSummary({ result }: { result: DiscoveryScanResult }) {
+  const hasWarning = result.diagnostics.some(
+    (diagnostic) => diagnostic.severity === "warning",
+  );
+  return (
+    <div
+      className={`rounded-[var(--radius-sm)] border px-3 py-3 ${
+        hasWarning
+          ? "border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10"
+          : "border-[var(--color-line)] bg-[var(--color-bg-2)]"
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--color-fg)]">
+        {hasWarning && (
+          <AlertTriangle className="size-4 shrink-0 text-[var(--color-warn)]" />
+        )}
+        <span>
+          Last scan checked{" "}
+          <Mono className="text-xs">{result.scannedHostCount}</Mono> hosts,
+          found <Mono className="text-xs">{result.discoveredCount}</Mono>{" "}
+          reachable, saw{" "}
+          <Mono className="text-xs">{result.macAddressCount}</Mono> MACs and{" "}
+          <Mono className="text-xs">{result.vendorCount}</Mono> vendors.
+        </span>
+      </div>
+      {result.diagnostics.length > 0 && (
+        <div className="mt-2 space-y-1 text-xs text-[var(--color-fg-subtle)]">
+          {result.diagnostics.map((diagnostic) => (
+            <div key={diagnostic.code}>
+              <span className="font-medium text-[var(--color-fg)]">
+                {diagnostic.message}
+              </span>
+              {diagnostic.detail ? ` ${diagnostic.detail}` : ""}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

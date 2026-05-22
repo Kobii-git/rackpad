@@ -7,6 +7,7 @@ import type {
   DeviceTypeDefinition,
   DeviceMonitor,
   DiscoveredDevice,
+  DiscoveryScanResult,
   DhcpScope,
   IpAssignment,
   IpAssignmentType,
@@ -2655,7 +2656,7 @@ export async function runAllDeviceMonitorChecks(): Promise<void> {
 
 export async function scanDiscoveredSubnet(
   cidr: string,
-): Promise<DiscoveredDevice[]> {
+): Promise<DiscoveryScanResult> {
   const result = await api.scanDiscoveredDevices({
     labId: state.lab.id,
     cidr,
@@ -2684,7 +2685,7 @@ export async function scanDiscoveredSubnet(
     `Scanned ${cidr} and found ${result.discoveredCount} reachable devices`,
   );
 
-  return result.rows;
+  return result;
 }
 
 export async function updateDiscoveredDeviceRecord(

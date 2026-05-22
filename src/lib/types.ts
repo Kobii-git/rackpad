@@ -283,6 +283,22 @@ export interface DiscoveredDevice {
   lastScannedAt: string;
 }
 
+export interface DiscoveryScanDiagnostic {
+  code: string;
+  severity: "info" | "warning";
+  message: string;
+  detail?: string;
+}
+
+export interface DiscoveryScanResult {
+  scannedHostCount: number;
+  discoveredCount: number;
+  macAddressCount: number;
+  vendorCount: number;
+  diagnostics: DiscoveryScanDiagnostic[];
+  rows: DiscoveredDevice[];
+}
+
 export interface WifiController {
   id: ID;
   labId: ID;

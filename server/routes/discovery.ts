@@ -20,7 +20,21 @@ import {
 
 const DEVICE_PLACEMENTS = ['rack', 'room', 'wireless', 'virtual', 'shelf'] as const
 const DISCOVERY_STATUSES = ['new', 'imported', 'dismissed'] as const
+const DISCOVERY_MAC_SCAN_MODES = ['auto', 'neighbor', 'arp-scan', 'nmap', 'off'] as const
 const execFileAsync = promisify(execFile)
+
+type DiscoveryMacScanMode = (typeof DISCOVERY_MAC_SCAN_MODES)[number]
+type DiscoveryScanDiagnostic = {
+  code: string
+  severity: 'info' | 'warning'
+  message: string
+  detail?: string
+}
+
+type MacScanContext = {
+  macByIp: Map<string, string>
+  diagnostics: DiscoveryScanDiagnostic[]
+}
 
 function parseDiscoveredDevice(row: Record<string, unknown>) {
   return {
@@ -193,11 +207,159 @@ function parseArpOutput(output: string, ipAddress: string) {
   return null
 }
 
-async function scanHost(ipAddress: string) {
+async function collectSubnetMacAddresses(cidr: string): Promise<MacScanContext> {
+  const mode = discoveryMacScanMode()
+  const diagnostics: DiscoveryScanDiagnostic[] = []
+  const macByIp = new Map<string, string>()
+
+  if (mode === 'off' || mode === 'neighbor') {
+    return { macByIp, diagnostics }
+  }
+
+  if (mode === 'auto' || mode === 'arp-scan') {
+    const result = await runArpScan(cidr)
+    for (const [ipAddress, macAddress] of result.macByIp) {
+      macByIp.set(ipAddress, macAddress)
+    }
+    if (result.macByIp.size > 0) {
+      diagnostics.push({
+        code: 'mac-scan-arp-scan',
+        severity: 'info',
+        message: `arp-scan found ${result.macByIp.size} MAC address${result.macByIp.size === 1 ? '' : 'es'}.`,
+      })
+    } else if (mode === 'arp-scan') {
+      diagnostics.push(result.diagnostic)
+    }
+  }
+
+  if ((mode === 'auto' && macByIp.size === 0) || mode === 'nmap') {
+    const result = await runNmapPingScan(cidr)
+    for (const [ipAddress, macAddress] of result.macByIp) {
+      macByIp.set(ipAddress, macAddress)
+    }
+    if (result.macByIp.size > 0) {
+      diagnostics.push({
+        code: 'mac-scan-nmap',
+        severity: 'info',
+        message: `nmap found ${result.macByIp.size} MAC address${result.macByIp.size === 1 ? '' : 'es'}.`,
+      })
+    } else if (mode === 'nmap') {
+      diagnostics.push(result.diagnostic)
+    }
+  }
+
+  return { macByIp, diagnostics }
+}
+
+async function runArpScan(cidr: string) {
+  try {
+    const { stdout } = await execFileAsync(
+      'arp-scan',
+      ['--retry=1', '--timeout=500', cidr],
+      { timeout: 30_000, maxBuffer: 1024 * 1024 },
+    )
+    return {
+      macByIp: parseArpScanOutput(String(stdout)),
+      diagnostic: unavailableToolDiagnostic('arp-scan', 'arp-scan returned no MAC addresses.'),
+    }
+  } catch (err) {
+    return {
+      macByIp: new Map<string, string>(),
+      diagnostic: unavailableToolDiagnostic('arp-scan', commandFailureMessage(err, 'arp-scan')),
+    }
+  }
+}
+
+async function runNmapPingScan(cidr: string) {
+  try {
+    const { stdout } = await execFileAsync(
+      'nmap',
+      ['-sn', '-n', cidr],
+      { timeout: 45_000, maxBuffer: 1024 * 1024 },
+    )
+    return {
+      macByIp: parseNmapPingScanOutput(String(stdout)),
+      diagnostic: unavailableToolDiagnostic('nmap', 'nmap returned no MAC addresses.'),
+    }
+  } catch (err) {
+    return {
+      macByIp: new Map<string, string>(),
+      diagnostic: unavailableToolDiagnostic('nmap', commandFailureMessage(err, 'nmap')),
+    }
+  }
+}
+
+export function parseArpScanOutput(output: string) {
+  const entries = new Map<string, string>()
+  for (const line of output.split(/\r?\n/)) {
+    const match = line.match(/^\s*((?:\d{1,3}\.){3}\d{1,3})\s+((?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2})\b/i)
+    const macAddress = normalizeMacAddress(match?.[2])
+    if (match?.[1] && macAddress) entries.set(match[1], macAddress)
+  }
+  return entries
+}
+
+export function parseNmapPingScanOutput(output: string) {
+  const entries = new Map<string, string>()
+  let currentIp: string | null = null
+  for (const line of output.split(/\r?\n/)) {
+    const reportMatch =
+      line.match(/^\s*Nmap scan report for\s+((?:\d{1,3}\.){3}\d{1,3})\s*$/i) ??
+      line.match(/^\s*Nmap scan report for\s+.+\s+\(((?:\d{1,3}\.){3}\d{1,3})\)\s*$/i)
+    if (reportMatch?.[1]) {
+      currentIp = reportMatch[1]
+      continue
+    }
+
+    const macMatch = line.match(/^\s*MAC Address:\s+((?:[0-9a-f]{2}:){5}[0-9a-f]{2})\b/i)
+    const macAddress = normalizeMacAddress(macMatch?.[1])
+    if (currentIp && macAddress) entries.set(currentIp, macAddress)
+  }
+  return entries
+}
+
+function discoveryMacScanMode(): DiscoveryMacScanMode {
+  const raw = process.env.DISCOVERY_MAC_SCAN_MODE?.trim().toLowerCase()
+  return DISCOVERY_MAC_SCAN_MODES.includes(raw as DiscoveryMacScanMode)
+    ? (raw as DiscoveryMacScanMode)
+    : 'auto'
+}
+
+function unavailableToolDiagnostic(tool: string, detail: string): DiscoveryScanDiagnostic {
+  return {
+    code: `${tool}-unavailable`,
+    severity: 'warning',
+    message: `${tool} did not provide MAC addresses.`,
+    detail,
+  }
+}
+
+function commandFailureMessage(err: unknown, command: string) {
+  const error = err as { code?: string; message?: string; stderr?: string }
+  if (error.code === 'ENOENT') return `${command} is not installed in this Rackpad runtime.`
+  return [error.stderr, error.message].filter(Boolean).join(' ').trim() || `${command} failed.`
+}
+
+function macUnavailableDiagnostic(reachableCount: number): DiscoveryScanDiagnostic {
+  return {
+    code: 'mac-unavailable',
+    severity: 'warning',
+    message: `No MAC addresses were visible for ${reachableCount} reachable host${reachableCount === 1 ? '' : 's'}.`,
+    detail:
+      'MAC discovery needs layer-2 visibility. Docker bridge networking, Docker Desktop, routed VLANs, VPNs, or missing NET_RAW/CAP_NET_RAW access can hide MAC addresses from Rackpad.',
+  }
+}
+
+async function scanHost(ipAddress: string, macByIp: Map<string, string>) {
   const result = await runIcmpProbe(ipAddress)
   if (result.result !== 'online') return null
 
-  const [hostname, macAddress] = await Promise.all([resolveHostname(ipAddress), lookupMacAddress(ipAddress)])
+  const cachedMacAddress = macByIp.get(ipAddress)
+  const [hostname, discoveredMacAddress] = await Promise.all([
+    resolveHostname(ipAddress),
+    cachedMacAddress ? Promise.resolve(cachedMacAddress) : lookupMacAddress(ipAddress),
+  ])
+  const macAddress = cachedMacAddress ?? discoveredMacAddress
   const deviceType = inferDeviceType(hostname)
   const displayName = hostname ? hostname.split('.')[0] : null
   const vendor = await lookupOuiVendor(macAddress)
@@ -215,7 +377,7 @@ async function scanHost(ipAddress: string) {
   }
 }
 
-async function scanHosts(hosts: string[], concurrency = 24) {
+async function scanHosts(hosts: string[], macByIp: Map<string, string>, concurrency = 24) {
   const results: Array<Awaited<ReturnType<typeof scanHost>>> = []
   let index = 0
 
@@ -223,7 +385,7 @@ async function scanHosts(hosts: string[], concurrency = 24) {
     while (index < hosts.length) {
       const current = hosts[index]
       index += 1
-      const result = await scanHost(current)
+      const result = await scanHost(current, macByIp)
       if (result) results.push(result)
     }
   }
@@ -276,7 +438,14 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
 
     const scannedAt = new Date().toISOString()
     const hosts = cidrHosts(cidr)
-    const reachableHosts = await scanHosts(hosts)
+    const macScan = await collectSubnetMacAddresses(cidr)
+    const reachableHosts = await scanHosts(hosts, macScan.macByIp)
+    const macAddressCount = reachableHosts.filter((record) => record?.macAddress).length
+    const vendorCount = reachableHosts.filter((record) => record?.vendor).length
+    const diagnostics = [...macScan.diagnostics]
+    if (reachableHosts.length > 0 && macAddressCount === 0) {
+      diagnostics.push(macUnavailableDiagnostic(reachableHosts.length))
+    }
 
     const upsert = db.prepare(`
       INSERT INTO discoveredDevices
@@ -328,6 +497,9 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     return {
       scannedHostCount: hosts.length,
       discoveredCount: rows.length,
+      macAddressCount,
+      vendorCount,
+      diagnostics,
       rows: rows.map(parseDiscoveredDevice),
     }
   })

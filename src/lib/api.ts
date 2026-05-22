@@ -7,6 +7,7 @@ import type {
   DeviceTypeDefinition,
   DeviceMonitor,
   DiscoveredDevice,
+  DiscoveryScanResult,
   DhcpScope,
   IpAssignment,
   IpZone,
@@ -788,11 +789,7 @@ export const api = {
   },
 
   scanDiscoveredDevices(body: { labId: string; cidr: string }) {
-    return request<{
-      scannedHostCount: number;
-      discoveredCount: number;
-      rows: DiscoveredDevice[];
-    }>("/discovery/scan", {
+    return request<DiscoveryScanResult>("/discovery/scan", {
       method: "POST",
       body: JSON.stringify(body),
     });

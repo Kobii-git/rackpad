@@ -1,6 +1,6 @@
 services:
   rackpad:
-    image: ${RACKPAD_IMAGE:-ghcr.io/kobii-git/rackpad}:${RACKPAD_TAG:-1.1.2}
+    image: ${RACKPAD_IMAGE:-ghcr.io/kobii-git/rackpad}:${RACKPAD_TAG:-1.2.1-beta.2}
     container_name: rackpad
     init: true
     restart: unless-stopped
@@ -13,6 +13,21 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-0}
       TRUSTED_HOSTS: ${TRUSTED_HOSTS:-}
       TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+      APP_URL: ${APP_URL:-}
+      OIDC_ENABLED: ${OIDC_ENABLED:-0}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_LABEL: ${OIDC_LABEL:-OIDC}
+      OIDC_DEFAULT_ROLE: ${OIDC_DEFAULT_ROLE:-viewer}
+      OIDC_ADMIN_USERS: ${OIDC_ADMIN_USERS:-}
+      OIDC_EDITOR_USERS: ${OIDC_EDITOR_USERS:-}
+      OIDC_VIEWER_USERS: ${OIDC_VIEWER_USERS:-}
+      OIDC_ADMIN_GROUPS: ${OIDC_ADMIN_GROUPS:-}
+      OIDC_EDITOR_GROUPS: ${OIDC_EDITOR_GROUPS:-}
+      OIDC_VIEWER_GROUPS: ${OIDC_VIEWER_GROUPS:-}
+      OUI_AUTO_UPDATE: ${OUI_AUTO_UPDATE:-1}
+      DISCOVERY_MAC_SCAN_MODE: ${DISCOVERY_MAC_SCAN_MODE:-auto}
     ports:
       - "${RACKPAD_PORT:-3000}:3000"
     volumes:

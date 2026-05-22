@@ -1,6 +1,6 @@
 services:
   rackpad:
-    image: ghcr.io/${GITHUB_REPO_OWNER:-kobii-git}/rackpad:${RACKPAD_TAG:-1.1.2}
+    image: ghcr.io/${GITHUB_REPO_OWNER:-kobii-git}/rackpad:${RACKPAD_TAG:-1.2.1-beta.2}
     build:
       context: .
       dockerfile: Dockerfile
@@ -30,6 +30,7 @@ services:
       OIDC_EDITOR_GROUPS: ${OIDC_EDITOR_GROUPS:-}
       OIDC_VIEWER_GROUPS: ${OIDC_VIEWER_GROUPS:-}
       OUI_AUTO_UPDATE: ${OUI_AUTO_UPDATE:-1}
+      DISCOVERY_MAC_SCAN_MODE: ${DISCOVERY_MAC_SCAN_MODE:-auto}
     ports:
       - "${RACKPAD_PORT:-3000}:3000"
     volumes:
