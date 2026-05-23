@@ -6,6 +6,11 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Changed
+
+- Updated GitHub install/demo instructions, screenshot coverage, and seeded
+  demo content for the v1.2.2 feature set.
+
 ## [1.2.2] - 2026-05-24
 
 ### Added

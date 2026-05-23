@@ -24,6 +24,12 @@ const studioLab = {
 
 const labs = [lab, studioLab]
 
+const demoRackImageDataUrl =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAaQAAADwCAYAAABPJBBgAAAFq0lEQVR4nO3dMYoTcRiHYW+iW1pY2+wJLKe2mRvkXJbeKE2q1IrVCkMUtDMT5ntdnuJpfwQWvhfyh82bpw/PLwAw7c30BwCAJ0ECoEKQAEgQJAASBAmABEECIEGQAEgQJAASBAmABEECIEGQAEgQJAASBAmABEECIEGQAEgQJAASBAmABEECIEGQAEgQJAASBAmABEECIEGQAEgQJAASBAmABEECIEGQAEgQJAASUkF6+/7jPztfrgDc3HNHp2//7yB9+/7jpUKQAPa5545O3/5fBAngFREkQQJIECRBAkgQpAdZ1hMAB5u+/YIEwGb69gsSAJvp258MkjckgH28IQkSQIIgCRJAgiAJEkCCIAkSQIIgCRJAgiAJEkCCIAkSQIIgCRJAgiAJEkCCIAkSQIIgCRJAgiANBun502cAbgRJkAASBEmQABIESZAAEgRJkAASBEmQABIESZAAEgRJkAASBEmQABIESZAAEgRJkAASBEmQABIESZAAEgRJkAASBEmQABIESZAAEgTpQZb1BMDBpm+/IAGwmb79ggTAZvr2J4PkDQlgH29Ig0E6X64A3AiSIAEkCJIgASQIkiABJAiSIAEkCJIgASQIkiABJAiSIAEkCJIgASQIkiABJAiSIAEkCJIgASQIkiABJAjSYJCm/7MuQIkgCRJAgiAJEkCCIAkSQIIgCRJAgiAJEkCCIAkSQIIgCRJAgiAJEkCCIAkSQIIgCRJAgiAJEkCCIAkSQIIgCRJAgiAJEkCCIAkSQIIgCRJAgiA9yLKeADjY9O0XJAA207dfkADYTN/+ZJC8IQHs4w1JkAASBEmQABIEaTBI58sVgBtBEiSABEESJIAEQRIkgARBEiSABEESJIAEQRIkgARBEiSABEESJIAEQRIkgARBEiSABEESJIAEQRIkgARBEiSABEESJIAEQRoM0vRvjwCUCJIgASQIkiABJAiSIAEkCJIgASQIkiABJAiSIAEkCJIgASQIkiABJAiSIAEkCJIgASQIkiABJAiSIAEkCNKDLOsJgINN335BAmAzffsFCYDN9O1PBskbEsA+3pAECSBBkAQJIEGQBAkgQZAECSBBkAQJIEGQBAkgQZAECSBBkAQJIEGQBAkgQZAECSBBkAQJIEGQBAkgQZAECSBBkAQJIEGQBAkgQZAECSBBkAQJIEGQBAkgQZAECSBBkAQJIEGQBAkgQZAECSBBkAQJIEGQBAkgQZAECSBBkAQJIEGQBAkgQZAECSBBkAaDdL5cAbgRJEECSBCkB1nWEwAHm779ggTAZvr2CxIAm+nbnwySNySAfbwhCRJAgiAJEkCCIAkSQIIgCRJAgiAJEkCCIA0G6d3XL3+494/4945du3bt/o+7giRIdu3atZvYFSRBsmvXrt3EriAJkl27du0mdgVJkOzatWs3sStIgmTXrl27iV1BEiS7du3aTewKkiDZtWvXbmJXkATJrl27dhO7giRIdu3atZvYFSRBsmvXrt3EriAJkl27du0mdgVJkOzatWs3sStIgmTXrl27iV1BEiS7du3aTewKkiDZtWvXbmJXkATJrl27dhO7giRIdu3atZvYFSRBsmvXrt3EriAJkl27du0mdgVJkOzatWs3sStIgmTXrl27iV1BEiS7du3aTewKkiDZtWvXbmJXkATJrl27dhO7gvQgy3oC4GDTt1+QANhM335BAmAzffuTQbrnu897v7sFeI28IQkSQIIgCRJAgiAJEkCCIAkSQIIgCRJAgiAJEkCCIAkSQIIgCRJAgiAJEkCCIAkSQIIgCRJAgiAJEkCCIAkSQIIgCRJAgiAJEkCCIAkSQIIgCRJAgiAJEkCCIAHAToIEQIIgAZAgSAAkCBIACYIEQIIgAZAgSAAkCBIACYIEQIIgAZAgSAAkCBIACYIEQMJP2/WNeYcVhYAAAAAASUVORK5CYII='
+
+const demoRoomImageDataUrl =
+  'data:image/png;base64,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'
+
 const rooms = [
   { id: 'room_lab', labId: 'lab_home', name: 'Lab / server room', description: 'Primary rack room for compute, storage, switching, and edge services.', location: 'Basement / NW closet', notes: null },
   { id: 'room_lounge', labId: 'lab_home', name: 'Lounge', description: 'Downstairs living area with WiFi clients and media devices.', location: 'Ground floor', notes: null },
@@ -73,6 +79,36 @@ const devices = [
   { id: 'd_studio_tablet', labId: 'lab_studio', roomId: 'room_studio', rackId: null, hostname: 'studio-ipad', displayName: 'Studio Tablet',   deviceType: 'endpoint', manufacturer: 'Apple', model: 'iPad Air', serial: null, managementIp: '10.42.10.60', status: 'online', placement: 'wireless', parentDeviceId: 'd_studio_ap', startU: null, heightU: null, face: null, tags: JSON.stringify(['wifi', 'tablet']), notes: 'Used for dashboards and media controls in the studio.', lastSeen: new Date(now - 30_000).toISOString() },
   { id: 'd_studio_printer', labId: 'lab_studio', roomId: 'room_studio', rackId: null, hostname: 'maker-printer', displayName: 'Label Printer', deviceType: 'endpoint', manufacturer: 'Brother', model: 'QL-820NWB', serial: null, managementIp: '10.42.20.25', status: 'online', placement: 'room', parentDeviceId: null, startU: null, heightU: null, face: null, tags: JSON.stringify(['printer', 'maker']), notes: 'Bench-side label printer for cabling and storage bins.', lastSeen: new Date(now - 600_000).toISOString() },
 ]
+
+const demoMacAddressByDeviceId: Record<string, string> = {
+  d_sw_tor: 'f8:c0:7a:10:21:b4',
+  d_sw_agg: 'f8:c0:7a:10:33:a1',
+  d_fw: '00:0d:b9:47:11:01',
+  d_unifi: 'f4:92:bf:10:10:04',
+  d_pdu_net: '00:c0:b7:10:02:50',
+  d_srv_pve1: 'ac:1f:6b:10:10:11',
+  d_srv_pve2: 'ac:1f:6b:10:10:12',
+  d_srv_pve3: 'ac:1f:6b:10:10:13',
+  d_srv_nas: 'd0:50:99:10:10:20',
+  d_srv_backup: '9c:dc:71:10:10:21',
+  d_ups: '28:29:86:10:02:51',
+  d_pdu_cmp: '00:c0:b7:10:02:52',
+  d_ap_lounge: '74:ac:b9:60:01:30',
+  d_ap_office: '74:ac:b9:60:01:31',
+  d_wifi_phone: '6c:ae:8b:10:10:60',
+  d_wifi_laptop: '48:2a:e3:10:10:61',
+  d_wifi_tv: '90:9a:4a:50:01:20',
+  d_wifi_doorbell: 'd8:3a:dd:20:00:13',
+  d_room_macmini: 'f0:18:98:44:55:66',
+  d_room_printer: '3c:22:fb:11:22:33',
+  d_room_pi: 'b8:27:eb:20:00:40',
+  d_studio_fw: '00:0d:b9:42:10:01',
+  d_studio_sw: '48:a9:8a:42:10:02',
+  d_studio_host: '1c:69:7a:42:10:10',
+  d_studio_ap: '74:ac:b9:42:10:30',
+  d_studio_tablet: 'a4:d1:8c:42:10:60',
+  d_studio_printer: '3c:22:fb:42:20:25',
+}
 
 const deviceCapacityById: Record<string, { cpuCores?: number; memoryGb?: number; storageGb?: number; specs?: string }> = {
   d_srv_pve1: { cpuCores: 8, memoryGb: 64, storageGb: 2000, specs: 'Xeon-D host | 8 cores | 64 GB RAM | 2 TB NVMe' },
@@ -374,7 +410,7 @@ const discoveredDevices = [
   { id: 'disc_home_dup', labId: 'lab_home', ipAddress: '10.0.10.82', hostname: 'printer-01', displayName: 'Brother Laser Upstairs', deviceType: 'endpoint', placement: 'room', macAddress: '3c:22:fb:11:22:33', vendor: 'Brother', source: 'seed-demo', status: 'new', notes: 'Scan result matches the upstairs printer and demonstrates duplicate detection.', importedDeviceId: null, lastSeen: new Date(now - 4 * 60_000).toISOString(), lastScannedAt: new Date(now - 4 * 60_000).toISOString() },
   { id: 'disc_home_imported', labId: 'lab_home', ipAddress: '10.0.10.81', hostname: 'build-mini-01', displayName: 'Build Mini', deviceType: 'server', placement: 'room', macAddress: 'f0:18:98:44:55:66', vendor: 'Apple', source: 'seed-demo', status: 'imported', notes: 'Previously linked into inventory to showcase the imported state.', importedDeviceId: 'd_room_macmini', lastSeen: new Date(now - 12 * 60_000).toISOString(), lastScannedAt: new Date(now - 12 * 60_000).toISOString() },
   { id: 'disc_home_dismissed', labId: 'lab_home', ipAddress: '10.0.20.77', hostname: 'temp-cam-probe', displayName: 'Unknown camera probe', deviceType: 'endpoint', placement: 'room', macAddress: 'd8:3a:dd:ab:cd:ef', vendor: 'TP-Link', source: 'seed-demo', status: 'dismissed', notes: 'Dismissed after determining it was a transient test client.', importedDeviceId: null, lastSeen: new Date(now - 36 * 60_000).toISOString(), lastScannedAt: new Date(now - 36 * 60_000).toISOString() },
-  { id: 'disc_studio_new', labId: 'lab_studio', ipAddress: '10.42.20.50', hostname: 'laser-cutter-probe', displayName: 'Laser cutter bridge', deviceType: 'endpoint', placement: 'room', macAddress: 'b8:27:eb:77:88:99', vendor: 'Raspberry Pi', source: 'seed-demo', status: 'new', notes: 'Awaiting manual review before import into the studio lab.', importedDeviceId: null, lastSeen: new Date(now - 9 * 60_000).toISOString(), lastScannedAt: new Date(now - 9 * 60_000).toISOString() },
+  { id: 'disc_studio_new', labId: 'lab_studio', ipAddress: '10.42.20.50', hostname: 'laser-cutter-probe', displayName: 'Laser cutter bridge', deviceType: 'laser_cutter', placement: 'room', macAddress: 'b8:27:eb:77:88:99', vendor: 'Raspberry Pi', source: 'seed-demo', status: 'new', notes: 'Awaiting manual review before import into the studio lab. Uses a custom device type to show flexible inventory categories.', importedDeviceId: null, lastSeen: new Date(now - 9 * 60_000).toISOString(), lastScannedAt: new Date(now - 9 * 60_000).toISOString() },
 ]
 
 const deviceMonitors = [
@@ -414,6 +450,110 @@ const appSettings = [
   },
 ]
 
+const documentationPages = [
+  {
+    id: 'doc_home_runbook',
+    labId: 'lab_home',
+    title: 'Home Lab Runbook',
+    content: [
+      '# Home Lab Runbook',
+      '',
+      '## Weekly checks',
+      '',
+      '- Review Dashboard health and recent monitor activity.',
+      '- Open Visualizer in Health mode and check warning or offline devices.',
+      '- Confirm backup-01 maintenance notes before applying updates.',
+      '',
+      '## Rack reference',
+      '',
+      `![CMP-01 rack front reference](${demoRackImageDataUrl})`,
+      '',
+      '## Known maintenance windows',
+      '',
+      '| Device | Window | Notes |',
+      '| --- | --- | --- |',
+      '| backup-01 | Sunday 02:00 | PBS sync and disk scrub |',
+      '| truenas-01 | First Saturday | Pool scrub and SMART checks |',
+      '| sw-tor-01 | As needed | Firmware with rollback config saved |',
+    ].join('\n'),
+    createdAt: new Date(now - 5 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 2 * 3600_000).toISOString(),
+  },
+  {
+    id: 'doc_oidc_authentik',
+    labId: 'lab_home',
+    title: 'OIDC Authentik Checklist',
+    content: [
+      '# OIDC Authentik Checklist',
+      '',
+      'Use this page as a copyable example for a private Rackpad deployment.',
+      '',
+      '```bash',
+      'OIDC_ENABLED=1',
+      'OIDC_LABEL=Authentik',
+      'OIDC_ISSUER_URL=https://authentik.example.com/application/o/rackpad',
+      'OIDC_REDIRECT_URI=https://rackpad.example.com/api/auth/oidc/callback',
+      'OIDC_DEFAULT_ROLE=viewer',
+      'OIDC_ADMIN_GROUPS=admin',
+      'OIDC_DEBUG=1',
+      '```',
+      '',
+      'If sign-in returns a provider 404, test the discovery document directly:',
+      '',
+      '```bash',
+      'curl https://authentik.example.com/application/o/rackpad/.well-known/openid-configuration',
+      '```',
+      '',
+      'Disable `OIDC_DEBUG` again after the provider is confirmed.',
+    ].join('\n'),
+    createdAt: new Date(now - 4 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 90 * 60_000).toISOString(),
+  },
+  {
+    id: 'doc_studio_notes',
+    labId: 'lab_studio',
+    title: 'Studio Network Notes',
+    content: [
+      '# Studio Network Notes',
+      '',
+      'The studio lab is a smaller rack with a detached-office AP, a compact hypervisor, and maker-space peripherals.',
+      '',
+      `![Studio room reference](${demoRoomImageDataUrl})`,
+      '',
+      '- Keep Studio-Main on VLAN 10 for trusted clients.',
+      '- Keep Studio-IoT on VLAN 20 for printers, sensors, and shop tools.',
+      '- The laser cutter bridge is intentionally left in Discovery to show staged custom device import.',
+    ].join('\n'),
+    createdAt: new Date(now - 3 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 45 * 60_000).toISOString(),
+  },
+]
+
+const deviceImages = [
+  {
+    id: 'img_pve1_rack_front',
+    deviceId: 'd_srv_pve1',
+    label: 'Rack front reference',
+    fileName: 'pve-01-rack-front.png',
+    mimeType: 'image/png',
+    dataUrl: demoRackImageDataUrl,
+    notes: 'Example device image used to document the host position and nearby cabling.',
+    createdAt: new Date(now - 3 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 3 * 24 * 3600_000).toISOString(),
+  },
+  {
+    id: 'img_ap_lounge_mount',
+    deviceId: 'd_ap_lounge',
+    label: 'Ceiling mount reference',
+    fileName: 'lounge-ap-mount.png',
+    mimeType: 'image/png',
+    dataUrl: demoRoomImageDataUrl,
+    notes: 'Example room reference for wireless placement and AP association documentation.',
+    createdAt: new Date(now - 2 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 2 * 24 * 3600_000).toISOString(),
+  },
+]
+
 const auditLog = [
   { id: 'a1', ts: new Date(now - 3 * 60_000).toISOString(),         user: 'admin',  action: 'ip.assign',     entityType: 'IpAssignment', entityId: 'ip_v5',        summary: 'Assigned 10.0.10.54 to ollama (vm)' },
   { id: 'a2', ts: new Date(now - 12 * 60_000).toISOString(),        user: 'admin',  action: 'device.update', entityType: 'Device',       entityId: 'd_unifi',      summary: 'Marked unifi-01 status: warning' },
@@ -440,10 +580,10 @@ export function seedIfEmpty() {
   const insertRack = db.prepare('INSERT INTO racks (id, labId, name, totalU, description, location, notes, roomId) VALUES (@id, @labId, @name, @totalU, @description, @location, @notes, @roomId)')
   const insertDevice = db.prepare(`
     INSERT INTO devices
-      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, status,
+      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, status,
        startU, heightU, face, tags, notes, lastSeen, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs)
     VALUES
-      (@id, @labId, @rackId, @hostname, @displayName, @deviceType, @manufacturer, @model, @serial, @managementIp, @status,
+      (@id, @labId, @rackId, @hostname, @displayName, @deviceType, @manufacturer, @model, @serial, @managementIp, @macAddress, @status,
        @startU, @heightU, @face, @tags, @notes, @lastSeen, @placement, @parentDeviceId, @roomId, @cpuCores, @memoryGb, @storageGb, @specs)
   `)
   const insertPort = db.prepare(`
@@ -501,6 +641,8 @@ export function seedIfEmpty() {
   const insertWifiRadioSsid = db.prepare('INSERT INTO wifiRadioSsids VALUES (@radioId, @ssidId)')
   const insertWifiClientAssociation = db.prepare('INSERT INTO wifiClientAssociations VALUES (@clientDeviceId, @apDeviceId, @radioId, @ssidId, @band, @channel, @signalDbm, @lastSeen, @lastRoamAt, @notes)')
   const insertAppSetting = db.prepare('INSERT INTO appSettings VALUES (@key, @value, @updatedAt)')
+  const insertDocumentationPage = db.prepare('INSERT INTO documentationPages (id, labId, title, content, createdAt, updatedAt) VALUES (@id, @labId, @title, @content, @createdAt, @updatedAt)')
+  const insertDeviceImage = db.prepare('INSERT INTO deviceImages (id, deviceId, label, fileName, mimeType, dataUrl, notes, createdAt, updatedAt) VALUES (@id, @deviceId, @label, @fileName, @mimeType, @dataUrl, @notes, @createdAt, @updatedAt)')
   const insertAudit = db.prepare('INSERT INTO auditLog VALUES (@id, @ts, @user, @action, @entityType, @entityId, @summary)')
 
   // Wrap everything in a transaction so seed is atomic
@@ -516,11 +658,13 @@ export function seedIfEmpty() {
     for (const d of devices) {
       const capacity = deviceCapacityById[d.id] ?? {}
       const roomId = 'roomId' in d ? d.roomId : null
+      const macAddress = (d as { macAddress?: string | null }).macAddress
       insertDevice.run({
         ...d,
         placement: d.placement ?? (d.rackId ? 'rack' : d.deviceType === 'vm' ? 'virtual' : d.deviceType === 'ap' ? 'wireless' : 'room'),
         parentDeviceId: d.parentDeviceId ?? null,
         roomId,
+        macAddress: macAddress ?? demoMacAddressByDeviceId[d.id] ?? null,
         cpuCores: d.cpuCores ?? capacity.cpuCores ?? null,
         memoryGb: d.memoryGb ?? capacity.memoryGb ?? null,
         storageGb: d.storageGb ?? capacity.storageGb ?? null,
@@ -550,6 +694,8 @@ export function seedIfEmpty() {
     for (const radioSsid of wifiRadioSsids) insertWifiRadioSsid.run(radioSsid)
     for (const association of wifiClientAssociations) insertWifiClientAssociation.run(association)
     for (const setting of appSettings) insertAppSetting.run(setting)
+    for (const page of documentationPages) insertDocumentationPage.run(page)
+    for (const image of deviceImages) insertDeviceImage.run(image)
     for (const a of auditLog) insertAudit.run(a)
   })
 

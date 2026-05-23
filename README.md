@@ -2,7 +2,7 @@
 
 Rackpad is a self-hosted infrastructure inventory and operations app for racks, devices, ports, cables, VLANs, IP address management, WiFi, compute, discovery, monitoring, labs, and users.
 
-Current release: `v1.1.2`
+Current release: `v1.2.2`
 
 It is a full-stack app:
 
@@ -22,6 +22,8 @@ If `rackpad.co.za` is unavailable, the repo still contains the core material you
 - [Hyper-V import guide](./docs/HYPERV_IMPORT.md)
 - [Reports guide](./docs/REPORTS.md)
 - [Visualizer guide](./docs/VISUALIZER.md)
+- [OIDC login guide](./docs/OIDC.md)
+- [Documentation and images guide](./docs/DOCUMENTATION.md)
 - [Security policy](./SECURITY.md)
 - [Changelog](./CHANGELOG.md)
 - [MIT license](./LICENSE)
@@ -41,17 +43,21 @@ These are live captures from the working Rackpad demo environment, embedded dire
 | ------------------------------------------------------------ | ---------------------------------------------------------------- |
 | ![Rackpad devices inventory](./docs/screenshots/devices.png) | ![Rackpad ports and patching view](./docs/screenshots/ports.png) |
 
-### Operations, compute, and wireless
+### Operations, topology, and documentation
 
-| Monitoring                                                         | Compute                                                      |
+| Monitoring                                                         | Visualizer                                                        |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| ![Rackpad monitoring workspace](./docs/screenshots/monitoring.png) | ![Rackpad visualizer workspace](./docs/screenshots/visualizer.png) |
+
+| Documentation                                                      | Compute                                                      |
 | ------------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![Rackpad monitoring workspace](./docs/screenshots/monitoring.png) | ![Rackpad compute workspace](./docs/screenshots/compute.png) |
+| ![Rackpad documentation workspace](./docs/screenshots/documentation.png) | ![Rackpad compute workspace](./docs/screenshots/compute.png) |
+
+### Wireless, discovery, and address management
 
 | WiFi                                                   | Discovery                                                        |
 | ------------------------------------------------------ | ---------------------------------------------------------------- |
 | ![Rackpad WiFi workspace](./docs/screenshots/wifi.png) | ![Rackpad discovery workspace](./docs/screenshots/discovery.png) |
-
-### Network and address management
 
 | IPAM                                                   |
 | ------------------------------------------------------ |
@@ -72,6 +78,7 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - Discovery for staged imports, MAC/vendor hints, and duplicate detection
 - Monitoring for multi-target ICMP, TCP, HTTP, and HTTPS checks
 - IPAM for subnets, DHCP scopes, IP zones, and linked assignments
+- Documentation for Markdown notes, runbooks, and inline pictures
 - Imports for review-first Hyper-V host and VM onboarding
 - Reports for printable/PDF, Excel-compatible, and CSV exports
 - Visualizer for rack, loose-room, port, and cable relationship maps
@@ -81,6 +88,8 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - Rack inventory and physical placement
 - Add, edit, and delete racks
 - Add, edit, and delete devices
+- Custom device types for inventory, discovery, icons, filters, and port templates
+- MAC address fields, search, sort, import, and display beside IP context
 - Device placement modes for rack, room, wireless, and virtual inventory
 - Parent-child device relationships for hosted VMs and AP-linked wireless clients
 - Compute workspace for virtualization hosts and VMs
@@ -97,17 +106,21 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - Discovery enrichment with MAC/vendor capture and direct linking to existing inventory
 - Management IP synchronization between device records and IPAM
 - Next-free IP allocation and IP release
+- Direct links between devices, ports, IPAM assignments, racks, rooms, dashboard cards, reports, and visualizer inspector entries
 - Audit log writes for the main workflows
 - User bootstrap, login, logout, and user management
+- Optional OIDC login with PKCE, role mapping, and Authentik-style issuer/debug guidance
 - Admin-only JSON backup export from the users screen
-- Backup exports preserve password hashes for restore, but redact stored alert-delivery secrets before download
+- Backup exports preserve password hashes, documentation pages, device images, MACs, and parent-linked devices for restore, but redact stored alert-delivery secrets before download
 - Device health-check configuration, alert destinations, repeat-alert controls, and on-demand monitor runs
 - Multiple monitor targets per device so servers, firewalls, and multi-NIC systems can track separate management, service, storage, or VIP endpoints
 - SMTP/email alert delivery beside Discord and Telegram, plus recent alert activity in the admin area
 - Reports workspace with printable/PDF-friendly inventory summaries plus Excel-compatible and CSV exports
-- Visualizer workspace for rack, room-tech, port, and cable relationship mapping
+- Visualizer workspace for rack, room-tech, port, and cable relationship mapping, with Health mode, Trace mode, loose-device layout toggles, and room-only rack-zone toggles
+- Markdown Documentation workspace for runbooks and notes, including inline image insertion
+- Device image attachments with labels and notes on device detail pages
 - Hyper-V import wizard for staging hosts, VMs, power state, guest OS, virtual switches, virtual NICs, VLANs, IPs, CPU, memory, and disk data from a local PowerShell export, with editable host mapping before import
-- Expanded demo data with multiple labs, discovery states, custom templates, multi-target monitors, room tech, compute, and WiFi examples
+- Expanded demo data with multiple labs, MAC addresses, discovery states, custom templates/device types, multi-target monitors, room tech, documentation pages, device image examples, compute, and WiFi examples
 - Production build of the frontend and backend
 - Docker packaging for the frontend + API together
 
@@ -118,6 +131,8 @@ Use these when you want the workflow steps rather than just the overview:
 - [Hyper-V import](./docs/HYPERV_IMPORT.md): download the collector, collect inventory on a Hyper-V host, map or create the host record, review VMs, and import selected categories.
 - [Reports](./docs/REPORTS.md): generate a clean inventory report, print/save to PDF, and export CSV or Excel-compatible files.
 - [Visualizer](./docs/VISUALIZER.md): inspect rack, loose-room, port, and cable relationships from existing Rackpad data.
+- [OIDC login](./docs/OIDC.md): configure Authentik or another IdP, map roles, and debug issuer/discovery URL problems.
+- [Documentation and images](./docs/DOCUMENTATION.md): create Markdown runbooks, insert pictures, attach device reference images, and include them in backups.
 
 ## Versioning
 
@@ -141,7 +156,7 @@ Recommended workflow:
 
 - test new work from `beta`
 - merge validated fixes and features into `main`
-- create version tags like `v1.1.0` from `main`
+- create version tags like `v1.2.2` from `main`
 
 If you want the newest testing build instead of the latest stable tag:
 
@@ -294,7 +309,7 @@ curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/inst
 ```
 
 Use `RACKPAD_TAG=latest` if you want the newest stable GHCR image, or pin an
-exact Docker tag such as `1.1.2` when you want controlled production upgrades:
+exact Docker tag such as `1.2.2` when you want controlled production upgrades:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
@@ -315,7 +330,7 @@ cd /opt/rackpad
 sudo curl -fsSLo compose.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.release.yml
 sudo tee .env >/dev/null <<'EOF'
 RACKPAD_IMAGE=ghcr.io/kobii-git/rackpad
-RACKPAD_TAG=1.1.2
+RACKPAD_TAG=1.2.2
 RACKPAD_PORT=3000
 MONITOR_INTERVAL_MS=300000
 TRUST_PROXY=0
