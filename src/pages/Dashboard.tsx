@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import { Link } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
 import {
   Card,
@@ -106,33 +107,41 @@ export default function Dashboard() {
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatCard
-            label="Devices"
-            value={devices.length}
-            hint={`${onlineCount} online | ${warningCount} warning`}
-            accent
-            delay={0}
-          />
-          <StatCard
-            label="Ports linked"
-            value={linkedPortCount}
-            unit={`/ ${totalPorts}`}
-            hint={`${Math.round((linkedPortCount / Math.max(1, totalPorts)) * 100)}% utilization`}
-            delay={0.04}
-          />
-          <StatCard
-            label="IPs allocated"
-            value={ipAssignments.length}
-            unit={`/ ${subnets.length * 254}`}
-            hint={`${subnets.length} subnets`}
-            delay={0.08}
-          />
-          <StatCard
-            label="Cables"
-            value={portLinks.length}
-            hint={`${vlans.length} VLANs configured`}
-            delay={0.12}
-          />
+          <Link to="/devices" className="block">
+            <StatCard
+              label="Devices"
+              value={devices.length}
+              hint={`${onlineCount} online | ${warningCount} warning`}
+              accent
+              delay={0}
+            />
+          </Link>
+          <Link to="/ports" className="block">
+            <StatCard
+              label="Ports linked"
+              value={linkedPortCount}
+              unit={`/ ${totalPorts}`}
+              hint={`${Math.round((linkedPortCount / Math.max(1, totalPorts)) * 100)}% utilization`}
+              delay={0.04}
+            />
+          </Link>
+          <Link to="/ipam" className="block">
+            <StatCard
+              label="IPs allocated"
+              value={ipAssignments.length}
+              unit={`/ ${subnets.length * 254}`}
+              hint={`${subnets.length} subnets`}
+              delay={0.08}
+            />
+          </Link>
+          <Link to="/cables" className="block">
+            <StatCard
+              label="Cables"
+              value={portLinks.length}
+              hint={`${vlans.length} VLANs configured`}
+              delay={0.12}
+            />
+          </Link>
         </div>
 
         <div className="grid grid-cols-12 gap-3">
@@ -361,8 +370,9 @@ export default function Dashboard() {
                     return acc;
                   }, {}),
                 ).map(([type, count]) => (
-                  <div
+                  <Link
                     key={type}
+                    to="/devices"
                     className="rk-panel-inset flex items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2.5"
                   >
                     <DeviceTypeIcon
@@ -378,7 +388,7 @@ export default function Dashboard() {
                       </Mono>
                     </div>
                     <ChevronRight className="size-3 text-[var(--text-muted)]" />
-                  </div>
+                  </Link>
                 ))}
               </div>
             </CardBody>

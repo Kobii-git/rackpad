@@ -49,6 +49,7 @@ import type {
   WifiRadio,
   WifiSsid,
 } from "@/lib/types";
+import { formatDeviceAddress } from "@/lib/network-labels";
 import { relativeTime, statusLabel } from "@/lib/utils";
 import {
   Link2,
@@ -88,6 +89,16 @@ type EditorState =
       clientDeviceId: string;
       association?: WifiClientAssociation;
     };
+
+function wifiAddressLabel(
+  device?: Device | null,
+  managementIp?: string | null,
+) {
+  return formatDeviceAddress({
+    managementIp: managementIp ?? device?.managementIp,
+    macAddress: device?.macAddress ?? null,
+  });
+}
 
 export default function WifiView() {
   const currentUser = useStore((s) => s.currentUser);
@@ -372,9 +383,15 @@ export default function WifiView() {
                         </div>
 
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-fg-subtle)]">
-                          {controller.managementIp && (
+                          {wifiAddressLabel(
+                            linkedDevice,
+                            controller.managementIp,
+                          ) && (
                             <span className="font-mono">
-                              {controller.managementIp}
+                              {wifiAddressLabel(
+                                linkedDevice,
+                                controller.managementIp,
+                              )}
                             </span>
                           )}
                           {linkedDevice && (
@@ -527,9 +544,9 @@ export default function WifiView() {
                             </div>
                             <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-fg-subtle)]">
                               {ap.displayName && <span>{ap.displayName}</span>}
-                              {ap.managementIp && (
+                              {formatDeviceAddress(ap) && (
                                 <span className="font-mono">
-                                  {ap.managementIp}
+                                  {formatDeviceAddress(ap)}
                                 </span>
                               )}
                               {controller && (
@@ -710,9 +727,9 @@ export default function WifiView() {
                                               {association.signalDbm} dBm
                                             </span>
                                           )}
-                                          {client.managementIp && (
+                                          {formatDeviceAddress(client) && (
                                             <span className="font-mono">
-                                              {client.managementIp}
+                                              {formatDeviceAddress(client)}
                                             </span>
                                           )}
                                         </div>
@@ -813,7 +830,7 @@ export default function WifiView() {
                                     </Link>
                                     <div className="text-[11px] text-[var(--color-fg-subtle)]">
                                       {client.displayName ||
-                                        client.managementIp ||
+                                        formatDeviceAddress(client) ||
                                         statusLabel[client.status]}
                                     </div>
                                   </div>

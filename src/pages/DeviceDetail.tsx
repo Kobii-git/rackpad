@@ -43,6 +43,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { formatPortLabel, relativeTime, statusLabel } from "@/lib/utils";
+import { formatDeviceAddress } from "@/lib/network-labels";
 
 type MonitorForm = {
   name: string;
@@ -147,13 +148,12 @@ export default function DeviceDetail() {
     }, {});
   }, [vlans]);
   const virtualSwitchById = useMemo(() => {
-    return virtualSwitches.reduce<Record<string, (typeof virtualSwitches)[number]>>(
-      (acc, entry) => {
-        acc[entry.id] = entry;
-        return acc;
-      },
-      {},
-    );
+    return virtualSwitches.reduce<
+      Record<string, (typeof virtualSwitches)[number]>
+    >((acc, entry) => {
+      acc[entry.id] = entry;
+      return acc;
+    }, {});
   }, [virtualSwitches]);
 
   useEffect(() => {
@@ -231,8 +231,7 @@ export default function DeviceDetail() {
     (port) => port.linkState === "up",
   ).length;
   const isVisualGrid =
-    device?.deviceType === "switch" ||
-    device?.deviceType === "router";
+    device?.deviceType === "switch" || device?.deviceType === "router";
   const hardwareMeta = [device?.manufacturer, device?.model]
     .filter(Boolean)
     .join(" ");
@@ -586,7 +585,11 @@ export default function DeviceDetail() {
               </div>
             </div>
             <dl className="grid grid-cols-3 gap-x-6 gap-y-1 text-[11px]">
-              <Stat label="Mgmt IP" value={device.managementIp} mono />
+              <Stat
+                label="Mgmt IP / MAC"
+                value={formatDeviceAddress(device)}
+                mono
+              />
               <Stat label="Serial" value={device.serial} mono />
               <Stat label="Last seen" value={relativeTime(device.lastSeen)} />
               <Stat
@@ -669,16 +672,16 @@ export default function DeviceDetail() {
                     />
                     <Row label="Rack" value={rack?.name} />
                     <Row
-                        label={
-                          device.placement === "wireless"
-                            ? "Connected AP"
-                            : device.placement === "virtual"
-                              ? "Host device"
-                              : device.placement === "shelf"
-                                ? "Rack shelf"
+                      label={
+                        device.placement === "wireless"
+                          ? "Connected AP"
+                          : device.placement === "virtual"
+                            ? "Host device"
+                            : device.placement === "shelf"
+                              ? "Rack shelf"
                               : "Parent"
-                        }
-                        value={parentDevice?.hostname}
+                      }
+                      value={parentDevice?.hostname}
                     />
                     <Row label="Face" value={device.face} />
                     <Row
@@ -747,7 +750,7 @@ export default function DeviceDetail() {
                             </div>
                             <div className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
                               {child.displayName ||
-                                child.managementIp ||
+                                formatDeviceAddress(child) ||
                                 formatPlacement(child.placement)}
                             </div>
                           </Link>

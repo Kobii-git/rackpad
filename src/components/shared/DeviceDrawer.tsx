@@ -37,6 +37,7 @@ interface FormState {
   model: string;
   serial: string;
   managementIp: string;
+  macAddress: string;
   status: DeviceStatus;
   placement: NonNullable<Device["placement"]>;
   parentDeviceId: string;
@@ -71,6 +72,7 @@ function blankForm(defaults?: Partial<FormState>): FormState {
     model: "",
     serial: "",
     managementIp: "",
+    macAddress: "",
     status: "unknown",
     placement: defaults?.rackId ? "rack" : "room",
     parentDeviceId: "",
@@ -109,6 +111,7 @@ function deviceToForm(device: Device): FormState {
     model: device.model ?? "",
     serial: device.serial ?? "",
     managementIp: device.managementIp ?? "",
+    macAddress: device.macAddress ?? "",
     status: device.status,
     placement: device.placement ?? (device.rackId ? "rack" : "room"),
     parentDeviceId: device.parentDeviceId ?? "",
@@ -221,7 +224,8 @@ export function DeviceDrawer({
       .filter((entry) => {
         if (form.placement === "wireless") return entry.deviceType === "ap";
         if (form.placement === "virtual") return entry.deviceType !== "vm";
-        if (form.placement === "shelf") return entry.deviceType === "rack_shelf";
+        if (form.placement === "shelf")
+          return entry.deviceType === "rack_shelf";
         return true;
       })
       .sort((a, b) => a.hostname.localeCompare(b.hostname));
@@ -381,6 +385,7 @@ export function DeviceDrawer({
         model: form.model.trim() || undefined,
         serial: form.serial.trim() || undefined,
         managementIp: form.managementIp.trim() || undefined,
+        macAddress: form.macAddress.trim() || undefined,
         status: form.status,
         placement: form.placement,
         parentDeviceId:
@@ -605,6 +610,15 @@ export function DeviceDrawer({
                         set("managementIp", event.target.value)
                       }
                       placeholder="e.g. 10.0.10.12"
+                    />
+                  </Field>
+                  <Field label="MAC address">
+                    <Input
+                      value={form.macAddress}
+                      onChange={(event) =>
+                        set("macAddress", event.target.value)
+                      }
+                      placeholder="e.g. aa:bb:cc:dd:ee:ff"
                     />
                   </Field>
                 </Section>

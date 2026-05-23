@@ -25,6 +25,7 @@ import {
   useStore,
 } from "@/lib/store";
 import type { Device, Port, VirtualSwitch } from "@/lib/types";
+import { formatDeviceAddress } from "@/lib/network-labels";
 import { statusLabel } from "@/lib/utils";
 
 const HOST_DEVICE_TYPES = new Set<Device["deviceType"]>([
@@ -400,9 +401,9 @@ export default function ComputeView() {
                               <div className="flex items-center gap-2 text-sm text-[var(--text-tertiary)]">
                                 <StatusDot status={host.status} />
                                 <span>{statusLabel[host.status]}</span>
-                                {host.managementIp && (
+                                {formatDeviceAddress(host) && (
                                   <span className="font-mono text-[11px]">
-                                    {host.managementIp}
+                                    {formatDeviceAddress(host)}
                                   </span>
                                 )}
                               </div>
@@ -447,7 +448,7 @@ export default function ComputeView() {
                                     </div>
                                     <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
                                       {guest.displayName ||
-                                        guest.managementIp ||
+                                        formatDeviceAddress(guest) ||
                                         statusLabel[guest.status]}
                                     </div>
                                   </Link>
@@ -538,23 +539,23 @@ export default function ComputeView() {
                             </div>
                             <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
                               {host.displayName ||
-                                host.managementIp ||
+                                formatDeviceAddress(host) ||
                                 statusLabel[host.status]}
                             </div>
-                              <VirtualSwitchSection
-                                host={host}
-                                virtualSwitches={
-                                  virtualSwitchesByHostId[host.id] ?? []
-                                }
-                                hostPorts={portsByDeviceId[host.id] ?? []}
-                                portsByVirtualSwitchId={portsByVirtualSwitchId}
-                                devicesById={devicesById}
-                                virtualSwitchesById={virtualSwitchById}
-                                canEdit={canEdit}
-                                editingHostId={bridgeEditorHostId}
-                                editingId={bridgeEditingId}
-                                bridgeForm={bridgeForm}
-                                bridgeSaving={bridgeSaving}
+                            <VirtualSwitchSection
+                              host={host}
+                              virtualSwitches={
+                                virtualSwitchesByHostId[host.id] ?? []
+                              }
+                              hostPorts={portsByDeviceId[host.id] ?? []}
+                              portsByVirtualSwitchId={portsByVirtualSwitchId}
+                              devicesById={devicesById}
+                              virtualSwitchesById={virtualSwitchById}
+                              canEdit={canEdit}
+                              editingHostId={bridgeEditorHostId}
+                              editingId={bridgeEditingId}
+                              bridgeForm={bridgeForm}
+                              bridgeSaving={bridgeSaving}
                               bridgeDeletingId={bridgeDeletingId}
                               bridgeError={bridgeError}
                               onFormChange={setBridgeForm}
@@ -619,7 +620,7 @@ export default function ComputeView() {
                       </div>
                       <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
                         {device.displayName ||
-                          device.managementIp ||
+                          formatDeviceAddress(device) ||
                           "No host selected yet"}
                       </div>
                     </Link>
@@ -735,18 +736,22 @@ function VirtualSwitchSection({
       {virtualSwitches.length > 0 ? (
         <div className="grid gap-2">
           {virtualSwitches.map((virtualSwitch) => {
-            const members = [...(portsByVirtualSwitchId[virtualSwitch.id] ?? [])]
-              .sort(sortPortsByMembership(devicesById));
+            const members = [
+              ...(portsByVirtualSwitchId[virtualSwitch.id] ?? []),
+            ].sort(sortPortsByMembership(devicesById));
             const hostUplinkPorts = members.filter(
               (port) => port.deviceId === host.id,
             );
-            const guestPorts = members.filter((port) => port.deviceId !== host.id);
+            const guestPorts = members.filter(
+              (port) => port.deviceId !== host.id,
+            );
             const isEditing = editingId === virtualSwitch.id && editorOpen;
-            const tone = virtualSwitch.kind === "external"
-              ? "accent"
-              : virtualSwitch.kind === "internal"
-                ? "info"
-                : "neutral";
+            const tone =
+              virtualSwitch.kind === "external"
+                ? "accent"
+                : virtualSwitch.kind === "internal"
+                  ? "info"
+                  : "neutral";
 
             return (
               <div
@@ -763,8 +768,8 @@ function VirtualSwitchSection({
                       <Badge tone={tone}>{virtualSwitch.kind}</Badge>
                     </div>
                     <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
-                      {members.length} member ports | {hostUplinkPorts.length} host uplinks |{" "}
-                      {guestPorts.length} guest NICs
+                      {members.length} member ports | {hostUplinkPorts.length}{" "}
+                      host uplinks | {guestPorts.length} guest NICs
                     </div>
                     {virtualSwitch.notes ? (
                       <div className="mt-1 text-[11px] text-[var(--text-muted)]">
@@ -783,7 +788,9 @@ function VirtualSwitchSection({
                                 key={port.id}
                                 className="rounded-[var(--radius-xs)] border border-[var(--accent-primary-border)] bg-[var(--accent-primary-soft)] px-2 py-1 text-xs text-[var(--text-primary)]"
                               >
-                                <strong className="font-medium">{port.name}</strong>
+                                <strong className="font-medium">
+                                  {port.name}
+                                </strong>
                                 <span className="ml-2 text-[var(--text-tertiary)]">
                                   {formatPortMeta(port)}
                                 </span>
@@ -947,7 +954,9 @@ function VirtualSwitchSection({
                 {sortedHostPorts.length > 0 ? (
                   <div className="grid gap-2 sm:grid-cols-2">
                     {sortedHostPorts.map((port) => {
-                      const selected = bridgeForm.uplinkPortIds.includes(port.id);
+                      const selected = bridgeForm.uplinkPortIds.includes(
+                        port.id,
+                      );
                       const assignedElsewhere =
                         port.virtualSwitchId &&
                         port.virtualSwitchId !== editingId
@@ -977,7 +986,9 @@ function VirtualSwitchSection({
                             <span className="text-sm font-medium text-[var(--text-primary)]">
                               {port.name}
                             </span>
-                            {selected ? <Badge tone="accent">uplink</Badge> : null}
+                            {selected ? (
+                              <Badge tone="accent">uplink</Badge>
+                            ) : null}
                           </div>
                           <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
                             {formatPortMeta(port)}

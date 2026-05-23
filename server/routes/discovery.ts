@@ -18,9 +18,21 @@ import {
   ValidationError,
 } from '../lib/validation.js'
 
-const DEVICE_PLACEMENTS = ['rack', 'room', 'wireless', 'virtual', 'shelf'] as const
+const DEVICE_PLACEMENTS = [
+  'rack',
+  'room',
+  'wireless',
+  'virtual',
+  'shelf',
+] as const
 const DISCOVERY_STATUSES = ['new', 'imported', 'dismissed'] as const
-const DISCOVERY_MAC_SCAN_MODES = ['auto', 'neighbor', 'arp-scan', 'nmap', 'off'] as const
+const DISCOVERY_MAC_SCAN_MODES = [
+  'auto',
+  'neighbor',
+  'arp-scan',
+  'nmap',
+  'off',
+] as const
 const execFileAsync = promisify(execFile)
 
 type DiscoveryMacScanMode = (typeof DISCOVERY_MAC_SCAN_MODES)[number]
@@ -50,18 +62,29 @@ function parseDiscoveredDevice(row: Record<string, unknown>) {
     source: String(row.source),
     status: String(row.status),
     notes: row.notes ? String(row.notes) : null,
-    importedDeviceId: row.importedDeviceId ? String(row.importedDeviceId) : null,
+    importedDeviceId: row.importedDeviceId
+      ? String(row.importedDeviceId)
+      : null,
     lastSeen: row.lastSeen ? String(row.lastSeen) : null,
     lastScannedAt: String(row.lastScannedAt),
   }
 }
 
 function ipToInt(ipAddress: string) {
-  return ipAddress.split('.').reduce((acc, octet) => (acc << 8) + Number.parseInt(octet, 10), 0) >>> 0
+  return (
+    ipAddress
+      .split('.')
+      .reduce((acc, octet) => (acc << 8) + Number.parseInt(octet, 10), 0) >>> 0
+  )
 }
 
 function intToIp(value: number) {
-  return [(value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff].join('.')
+  return [
+    (value >>> 24) & 0xff,
+    (value >>> 16) & 0xff,
+    (value >>> 8) & 0xff,
+    value & 0xff,
+  ].join('.')
 }
 
 function cidrHosts(cidr: string) {
@@ -74,23 +97,42 @@ function cidrHosts(cidr: string) {
     throw new ValidationError('CIDR must include at least one usable host.')
   }
   if (hostCount > 254) {
-    throw new ValidationError('Discovery scans are limited to /24 or smaller networks.')
+    throw new ValidationError(
+      'Discovery scans are limited to /24 or smaller networks.',
+    )
   }
 
   const network = ipToInt(networkAddress)
-  return Array.from({ length: hostCount }, (_, index) => intToIp(network + index + 1))
+  return Array.from({ length: hostCount }, (_, index) =>
+    intToIp(network + index + 1),
+  )
 }
 
 function inferDeviceType(hostname: string | null) {
   const value = hostname?.toLowerCase() ?? ''
   if (!value) return 'endpoint' as const
-  if (value.includes('ap') || value.includes('wifi') || value.includes('wlan')) return 'ap' as const
+  if (value.includes('ap') || value.includes('wifi') || value.includes('wlan'))
+    return 'ap' as const
   if (value.includes('vm')) return 'vm' as const
-  if (value.includes('fw') || value.includes('firewall') || value.includes('pfsense') || value.includes('opnsense')) return 'firewall' as const
+  if (
+    value.includes('fw') ||
+    value.includes('firewall') ||
+    value.includes('pfsense') ||
+    value.includes('opnsense')
+  )
+    return 'firewall' as const
   if (value.includes('sw') || value.includes('switch')) return 'switch' as const
-  if (value.includes('rtr') || value.includes('router') || value.includes('gw')) return 'router' as const
-  if (value.includes('srv') || value.includes('proxmox') || value.includes('esx') || value.includes('host')) return 'server' as const
-  if (value.includes('nas') || value.includes('storage')) return 'storage' as const
+  if (value.includes('rtr') || value.includes('router') || value.includes('gw'))
+    return 'router' as const
+  if (
+    value.includes('srv') ||
+    value.includes('proxmox') ||
+    value.includes('esx') ||
+    value.includes('host')
+  )
+    return 'server' as const
+  if (value.includes('nas') || value.includes('storage'))
+    return 'storage' as const
   return 'endpoint' as const
 }
 
@@ -113,12 +155,10 @@ async function reverseLookup(ipAddress: string) {
 async function systemHostnameLookup(ipAddress: string) {
   if (process.platform !== 'win32') {
     try {
-      const { stdout } = await execFileAsync('getent', ['hosts', ipAddress], { timeout: 4000 })
-      const entry = String(stdout)
-        .trim()
-        .split(/\s+/)
-        .slice(1)
-        .find(Boolean)
+      const { stdout } = await execFileAsync('getent', ['hosts', ipAddress], {
+        timeout: 4000,
+      })
+      const entry = String(stdout).trim().split(/\s+/).slice(1).find(Boolean)
       if (entry) return entry.replace(/\.$/, '')
     } catch {
       // Ignore missing getent or empty results.
@@ -126,20 +166,29 @@ async function systemHostnameLookup(ipAddress: string) {
   }
 
   try {
-    const { stdout } = await execFileAsync('nslookup', [ipAddress], { timeout: 4000 })
+    const { stdout } = await execFileAsync('nslookup', [ipAddress], {
+      timeout: 4000,
+    })
     const line = String(stdout)
       .split(/\r?\n/)
       .map((entry) => entry.trim())
       .find((entry) => /name\s*=|^name:/i.test(entry))
     if (!line) return null
-    return line.split(/name\s*=|name:/i)[1]?.trim().replace(/\.$/, '') ?? null
+    return (
+      line
+        .split(/name\s*=|name:/i)[1]
+        ?.trim()
+        .replace(/\.$/, '') ?? null
+    )
   } catch {
     return null
   }
 }
 
 async function resolveHostname(ipAddress: string) {
-  return (await reverseLookup(ipAddress)) ?? (await systemHostnameLookup(ipAddress))
+  return (
+    (await reverseLookup(ipAddress)) ?? (await systemHostnameLookup(ipAddress))
+  )
 }
 
 function normalizeMacAddress(value: string | null | undefined) {
@@ -167,8 +216,12 @@ async function lookupMacAddress(ipAddress: string) {
 
 async function lookupMacFromIpNeighbour(ipAddress: string) {
   try {
-    const { stdout } = await execFileAsync('ip', ['neigh', 'show', ipAddress], { timeout: 4000 })
-    const match = String(stdout).match(/lladdr\s+((?:[0-9a-f]{2}:){5}[0-9a-f]{2})/i)
+    const { stdout } = await execFileAsync('ip', ['neigh', 'show', ipAddress], {
+      timeout: 4000,
+    })
+    const match = String(stdout).match(
+      /lladdr\s+((?:[0-9a-f]{2}:){5}[0-9a-f]{2})/i,
+    )
     return normalizeMacAddress(match?.[1])
   } catch {
     return null
@@ -207,7 +260,9 @@ function parseArpOutput(output: string, ipAddress: string) {
   return null
 }
 
-async function collectSubnetMacAddresses(cidr: string): Promise<MacScanContext> {
+async function collectSubnetMacAddresses(
+  cidr: string,
+): Promise<MacScanContext> {
   const mode = discoveryMacScanMode()
   const diagnostics: DiscoveryScanDiagnostic[] = []
   const macByIp = new Map<string, string>()
@@ -260,31 +315,42 @@ async function runArpScan(cidr: string) {
     )
     return {
       macByIp: parseArpScanOutput(String(stdout)),
-      diagnostic: unavailableToolDiagnostic('arp-scan', 'arp-scan returned no MAC addresses.'),
+      diagnostic: unavailableToolDiagnostic(
+        'arp-scan',
+        'arp-scan returned no MAC addresses.',
+      ),
     }
   } catch (err) {
     return {
       macByIp: new Map<string, string>(),
-      diagnostic: unavailableToolDiagnostic('arp-scan', commandFailureMessage(err, 'arp-scan')),
+      diagnostic: unavailableToolDiagnostic(
+        'arp-scan',
+        commandFailureMessage(err, 'arp-scan'),
+      ),
     }
   }
 }
 
 async function runNmapPingScan(cidr: string) {
   try {
-    const { stdout } = await execFileAsync(
-      'nmap',
-      ['-sn', '-n', cidr],
-      { timeout: 45_000, maxBuffer: 1024 * 1024 },
-    )
+    const { stdout } = await execFileAsync('nmap', ['-sn', '-n', cidr], {
+      timeout: 45_000,
+      maxBuffer: 1024 * 1024,
+    })
     return {
       macByIp: parseNmapPingScanOutput(String(stdout)),
-      diagnostic: unavailableToolDiagnostic('nmap', 'nmap returned no MAC addresses.'),
+      diagnostic: unavailableToolDiagnostic(
+        'nmap',
+        'nmap returned no MAC addresses.',
+      ),
     }
   } catch (err) {
     return {
       macByIp: new Map<string, string>(),
-      diagnostic: unavailableToolDiagnostic('nmap', commandFailureMessage(err, 'nmap')),
+      diagnostic: unavailableToolDiagnostic(
+        'nmap',
+        commandFailureMessage(err, 'nmap'),
+      ),
     }
   }
 }
@@ -292,7 +358,9 @@ async function runNmapPingScan(cidr: string) {
 export function parseArpScanOutput(output: string) {
   const entries = new Map<string, string>()
   for (const line of output.split(/\r?\n/)) {
-    const match = line.match(/^\s*((?:\d{1,3}\.){3}\d{1,3})\s+((?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2})\b/i)
+    const match = line.match(
+      /^\s*((?:\d{1,3}\.){3}\d{1,3})\s+((?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2})\b/i,
+    )
     const macAddress = normalizeMacAddress(match?.[2])
     if (match?.[1] && macAddress) entries.set(match[1], macAddress)
   }
@@ -305,13 +373,17 @@ export function parseNmapPingScanOutput(output: string) {
   for (const line of output.split(/\r?\n/)) {
     const reportMatch =
       line.match(/^\s*Nmap scan report for\s+((?:\d{1,3}\.){3}\d{1,3})\s*$/i) ??
-      line.match(/^\s*Nmap scan report for\s+.+\s+\(((?:\d{1,3}\.){3}\d{1,3})\)\s*$/i)
+      line.match(
+        /^\s*Nmap scan report for\s+.+\s+\(((?:\d{1,3}\.){3}\d{1,3})\)\s*$/i,
+      )
     if (reportMatch?.[1]) {
       currentIp = reportMatch[1]
       continue
     }
 
-    const macMatch = line.match(/^\s*MAC Address:\s+((?:[0-9a-f]{2}:){5}[0-9a-f]{2})\b/i)
+    const macMatch = line.match(
+      /^\s*MAC Address:\s+((?:[0-9a-f]{2}:){5}[0-9a-f]{2})\b/i,
+    )
     const macAddress = normalizeMacAddress(macMatch?.[1])
     if (currentIp && macAddress) entries.set(currentIp, macAddress)
   }
@@ -325,7 +397,10 @@ function discoveryMacScanMode(): DiscoveryMacScanMode {
     : 'auto'
 }
 
-function unavailableToolDiagnostic(tool: string, detail: string): DiscoveryScanDiagnostic {
+function unavailableToolDiagnostic(
+  tool: string,
+  detail: string,
+): DiscoveryScanDiagnostic {
   return {
     code: `${tool}-unavailable`,
     severity: 'warning',
@@ -336,11 +411,17 @@ function unavailableToolDiagnostic(tool: string, detail: string): DiscoveryScanD
 
 function commandFailureMessage(err: unknown, command: string) {
   const error = err as { code?: string; message?: string; stderr?: string }
-  if (error.code === 'ENOENT') return `${command} is not installed in this Rackpad runtime.`
-  return [error.stderr, error.message].filter(Boolean).join(' ').trim() || `${command} failed.`
+  if (error.code === 'ENOENT')
+    return `${command} is not installed in this Rackpad runtime.`
+  return (
+    [error.stderr, error.message].filter(Boolean).join(' ').trim() ||
+    `${command} failed.`
+  )
 }
 
-function macUnavailableDiagnostic(reachableCount: number): DiscoveryScanDiagnostic {
+function macUnavailableDiagnostic(
+  reachableCount: number,
+): DiscoveryScanDiagnostic {
   return {
     code: 'mac-unavailable',
     severity: 'warning',
@@ -357,7 +438,9 @@ async function scanHost(ipAddress: string, macByIp: Map<string, string>) {
   const cachedMacAddress = macByIp.get(ipAddress)
   const [hostname, discoveredMacAddress] = await Promise.all([
     resolveHostname(ipAddress),
-    cachedMacAddress ? Promise.resolve(cachedMacAddress) : lookupMacAddress(ipAddress),
+    cachedMacAddress
+      ? Promise.resolve(cachedMacAddress)
+      : lookupMacAddress(ipAddress),
   ])
   const macAddress = cachedMacAddress ?? discoveredMacAddress
   const deviceType = inferDeviceType(hostname)
@@ -377,7 +460,11 @@ async function scanHost(ipAddress: string, macByIp: Map<string, string>) {
   }
 }
 
-async function scanHosts(hosts: string[], macByIp: Map<string, string>, concurrency = 24) {
+async function scanHosts(
+  hosts: string[],
+  macByIp: Map<string, string>,
+  concurrency = 24,
+) {
   const results: Array<Awaited<ReturnType<typeof scanHost>>> = []
   let index = 0
 
@@ -390,32 +477,37 @@ async function scanHosts(hosts: string[], macByIp: Map<string, string>, concurre
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(concurrency, hosts.length) }, () => worker()))
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, hosts.length) }, () => worker()),
+  )
   return results
 }
 
 export const discoveryRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: { labId?: string; status?: string } }>('/', async (req) => {
-    let sql = 'SELECT * FROM discoveredDevices WHERE 1=1'
-    const params: unknown[] = []
+  app.get<{ Querystring: { labId?: string; status?: string } }>(
+    '/',
+    async (req) => {
+      let sql = 'SELECT * FROM discoveredDevices WHERE 1=1'
+      const params: unknown[] = []
 
-    if (req.query.labId) {
-      sql += ' AND labId = ?'
-      params.push(req.query.labId)
-    }
-    if (req.query.status) {
-      const body = { status: req.query.status }
-      const status = optionalEnum(body, 'status', DISCOVERY_STATUSES)
-      if (status) {
-        sql += ' AND status = ?'
-        params.push(status)
+      if (req.query.labId) {
+        sql += ' AND labId = ?'
+        params.push(req.query.labId)
       }
-    }
+      if (req.query.status) {
+        const body = { status: req.query.status }
+        const status = optionalEnum(body, 'status', DISCOVERY_STATUSES)
+        if (status) {
+          sql += ' AND status = ?'
+          params.push(status)
+        }
+      }
 
-    sql += ' ORDER BY lastScannedAt DESC, ipAddress ASC'
-    const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
-    return rows.map(parseDiscoveredDevice)
-  })
+      sql += ' ORDER BY lastScannedAt DESC, ipAddress ASC'
+      const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
+      return rows.map(parseDiscoveredDevice)
+    },
+  )
 
   app.post('/scan', async (req, reply) => {
     if (!requireAdmin(req, reply)) return
@@ -440,7 +532,9 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     const hosts = cidrHosts(cidr)
     const macScan = await collectSubnetMacAddresses(cidr)
     const reachableHosts = await scanHosts(hosts, macScan.macByIp)
-    const macAddressCount = reachableHosts.filter((record) => record?.macAddress).length
+    const macAddressCount = reachableHosts.filter(
+      (record) => record?.macAddress,
+    ).length
     const vendorCount = reachableHosts.filter((record) => record?.vendor).length
     const diagnostics = [...macScan.diagnostics]
     if (reachableHosts.length > 0 && macAddressCount === 0) {
@@ -488,11 +582,15 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
 
     persistScan()
 
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(
+        `
       SELECT * FROM discoveredDevices
       WHERE labId = ? AND lastScannedAt = ?
       ORDER BY ipAddress ASC
-    `).all(labId, scannedAt) as Record<string, unknown>[]
+    `,
+      )
+      .all(labId, scannedAt) as Record<string, unknown>[]
 
     return {
       scannedHostCount: hosts.length,
@@ -505,7 +603,9 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.patch<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const existing = db.prepare('SELECT * FROM discoveredDevices WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
+    const existing = db
+      .prepare('SELECT * FROM discoveredDevices WHERE id = ?')
+      .get(req.params.id) as Record<string, unknown> | undefined
     if (!existing) {
       return reply.status(404).send({ error: 'Discovered device not found.' })
     }
@@ -520,7 +620,9 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     const deviceType = optionalDeviceType(body)
     const placement = optionalEnum(body, 'placement', DEVICE_PLACEMENTS)
     const status = optionalEnum(body, 'status', DISCOVERY_STATUSES)
-    const importedDeviceId = optionalString(body, 'importedDeviceId', { maxLength: 80 })
+    const importedDeviceId = optionalString(body, 'importedDeviceId', {
+      maxLength: 80,
+    })
     const lastSeen = optionalString(body, 'lastSeen', { maxLength: 80 })
 
     if (lastSeen) ensureIsoDate(lastSeen, 'lastSeen')
@@ -553,14 +655,16 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     }
     if (importedDeviceId !== undefined) {
       if (importedDeviceId) {
-        const importedDevice = db.prepare('SELECT id, labId FROM devices WHERE id = ?').get(importedDeviceId) as
-          | { id: string; labId: string }
-          | undefined
+        const importedDevice = db
+          .prepare('SELECT id, labId FROM devices WHERE id = ?')
+          .get(importedDeviceId) as { id: string; labId: string } | undefined
         if (!importedDevice) {
           throw new ValidationError('Imported device does not exist.')
         }
         if (importedDevice.labId !== String(existing.labId)) {
-          throw new ValidationError('Imported device must belong to the same lab.')
+          throw new ValidationError(
+            'Imported device must belong to the same lab.',
+          )
         }
       }
       updates.push('importedDeviceId = ?')
@@ -572,13 +676,30 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     }
 
     values.push(req.params.id)
-    db.prepare(`UPDATE discoveredDevices SET ${updates.join(', ')} WHERE id = ?`).run(...values)
-    const row = db.prepare('SELECT * FROM discoveredDevices WHERE id = ?').get(req.params.id) as Record<string, unknown>
+    db.prepare(
+      `UPDATE discoveredDevices SET ${updates.join(', ')} WHERE id = ?`,
+    ).run(...values)
+    const linkedMacAddress =
+      typeof existing.macAddress === 'string' ? existing.macAddress : ''
+    if (importedDeviceId && linkedMacAddress) {
+      db.prepare(
+        `
+        UPDATE devices
+        SET macAddress = COALESCE(macAddress, ?)
+        WHERE id = ?
+      `,
+      ).run(linkedMacAddress, importedDeviceId)
+    }
+    const row = db
+      .prepare('SELECT * FROM discoveredDevices WHERE id = ?')
+      .get(req.params.id) as Record<string, unknown>
     return parseDiscoveredDevice(row)
   })
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const existing = db.prepare('SELECT id FROM discoveredDevices WHERE id = ?').get(req.params.id)
+    const existing = db
+      .prepare('SELECT id FROM discoveredDevices WHERE id = ?')
+      .get(req.params.id)
     if (!existing) {
       return reply.status(404).send({ error: 'Discovered device not found.' })
     }

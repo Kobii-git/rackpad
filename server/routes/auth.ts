@@ -19,17 +19,33 @@ import {
   getOidcPublicConfig,
   handleOidcCallback,
 } from '../lib/oidc.js'
-import { asObject, optionalBoolean, optionalString, requiredString, ValidationError } from '../lib/validation.js'
+import {
+  asObject,
+  optionalBoolean,
+  optionalString,
+  requiredString,
+  ValidationError,
+} from '../lib/validation.js'
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
 const MAX_LOGIN_ATTEMPTS = 8
-const loginAttempts = new Map<string, { count: number; windowStartedAt: number; blockedUntil: number | null }>()
+const loginAttempts = new Map<
+  string,
+  { count: number; windowStartedAt: number; blockedUntil: number | null }
+>()
 
-function writeAuthAudit(action: string, actor: string, entityId: string, summary: string) {
-  db.prepare(`
+function writeAuthAudit(
+  action: string,
+  actor: string,
+  entityId: string,
+  summary: string,
+) {
+  db.prepare(
+    `
     INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     createId('a'),
     new Date().toISOString(),
     actor,
@@ -60,12 +76,17 @@ function recordFailedAttempt(key: string) {
   const now = Date.now()
   const current = loginAttempts.get(key)
   if (!current || now - current.windowStartedAt > LOGIN_WINDOW_MS) {
-    loginAttempts.set(key, { count: 1, windowStartedAt: now, blockedUntil: null })
+    loginAttempts.set(key, {
+      count: 1,
+      windowStartedAt: now,
+      blockedUntil: null,
+    })
     return
   }
 
   const nextCount = current.count + 1
-  const blockedUntil = nextCount >= MAX_LOGIN_ATTEMPTS ? now + LOGIN_WINDOW_MS : null
+  const blockedUntil =
+    nextCount >= MAX_LOGIN_ATTEMPTS ? now + LOGIN_WINDOW_MS : null
   loginAttempts.set(key, {
     count: nextCount,
     windowStartedAt: current.windowStartedAt,
@@ -89,16 +110,23 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const rateLimitKey = getAuthRateLimitKey(req.ip)
     const blockedUntil = getBlockedUntil(rateLimitKey)
     if (blockedUntil) {
-      return reply.status(429).send({ error: `Too many setup attempts. Try again after ${new Date(blockedUntil).toLocaleTimeString()}.` })
+      return reply.status(429).send({
+        error: `Too many setup attempts. Try again after ${new Date(blockedUntil).toLocaleTimeString()}.`,
+      })
     }
 
     if (!needsBootstrap()) {
-      return reply.status(409).send({ error: 'Initial account has already been created.' })
+      return reply
+        .status(409)
+        .send({ error: 'Initial account has already been created.' })
     }
 
     const body = asObject(req.body)
-    const username = requiredString(body, 'username', { maxLength: 40 }).toLowerCase()
-    const displayName = optionalString(body, 'displayName', { maxLength: 80 }) ?? username
+    const username = requiredString(body, 'username', {
+      maxLength: 40,
+    }).toLowerCase()
+    const displayName =
+      optionalString(body, 'displayName', { maxLength: 80 }) ?? username
     const password = requiredString(body, 'password', { maxLength: 200 })
     const loadDemoData = optionalBoolean(body, 'loadDemoData') ?? false
 
@@ -110,10 +138,19 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const userId = createId('u')
     const createdAt = new Date().toISOString()
     const bootstrap = db.transaction(() => {
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO users (id, username, displayName, passwordHash, role, disabled, createdAt, lastLoginAt)
         VALUES (?, ?, ?, ?, 'admin', 0, ?, ?)
-      `).run(userId, username, displayName, hashPassword(password), createdAt, createdAt)
+      `,
+      ).run(
+        userId,
+        username,
+        displayName,
+        hashPassword(password),
+        createdAt,
+        createdAt,
+      )
 
       if (loadDemoData) {
         seedIfEmpty()
@@ -161,20 +198,34 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const rateLimitKey = getAuthRateLimitKey(req.ip)
     const blockedUntil = getBlockedUntil(rateLimitKey)
     if (blockedUntil) {
-      return reply.status(429).send({ error: `Too many login attempts. Try again after ${new Date(blockedUntil).toLocaleTimeString()}.` })
+      return reply.status(429).send({
+        error: `Too many login attempts. Try again after ${new Date(blockedUntil).toLocaleTimeString()}.`,
+      })
     }
 
     const body = asObject(req.body)
-    const username = requiredString(body, 'username', { maxLength: 40 }).toLowerCase()
+    const username = requiredString(body, 'username', {
+      maxLength: 40,
+    }).toLowerCase()
     const password = requiredString(body, 'password', { maxLength: 200 })
 
-    const row = db.prepare(`
+    const row = db
+      .prepare(
+        `
       SELECT id, username, displayName, role, disabled, createdAt, lastLoginAt, passwordHash
       FROM users
       WHERE username = ?
-    `).get(username) as (Record<string, unknown> & { passwordHash: string }) | undefined
+    `,
+      )
+      .get(username) as
+      | (Record<string, unknown> & { passwordHash: string })
+      | undefined
 
-    if (!row || Number(row.disabled ?? 0) === 1 || !verifyPassword(password, row.passwordHash)) {
+    if (
+      !row ||
+      Number(row.disabled ?? 0) === 1 ||
+      !verifyPassword(password, row.passwordHash)
+    ) {
       recordFailedAttempt(rateLimitKey)
       return reply.status(401).send({ error: 'Invalid username or password.' })
     }
@@ -185,7 +236,12 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const session = createSession(String(row.id))
     const user = parsePublicUser({ ...row, lastLoginAt: now })
     clearFailedAttempts(rateLimitKey)
-    writeAuthAudit('auth.login', user.username, user.id, 'Signed in to Rackpad.')
+    writeAuthAudit(
+      'auth.login',
+      user.username,
+      user.id,
+      'Signed in to Rackpad.',
+    )
 
     return {
       token: session.token,
@@ -194,10 +250,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
-  app.get<{ Querystring: { returnTo?: string } }>('/oidc/start', async (req, reply) => {
-    const url = await createOidcAuthorizationUrl(req, req.query.returnTo)
-    return reply.redirect(url)
-  })
+  app.get<{ Querystring: { returnTo?: string } }>(
+    '/oidc/start',
+    async (req, reply) => {
+      const url = await createOidcAuthorizationUrl(req, req.query.returnTo)
+      return reply.redirect(url)
+    },
+  )
 
   app.get<{
     Querystring: {
@@ -208,12 +267,15 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
   }>('/oidc/callback', async (req, reply) => {
     try {
-      const result = await handleOidcCallback({
-        code: req.query.code,
-        state: req.query.state,
-        error: req.query.error,
-        errorDescription: req.query.error_description,
-      })
+      const result = await handleOidcCallback(
+        {
+          code: req.query.code,
+          state: req.query.state,
+          error: req.query.error,
+          errorDescription: req.query.error_description,
+        },
+        req.log,
+      )
       const redirect = new URL('/auth/oidc/callback', 'http://rackpad.local')
       redirect.searchParams.set('session', result.sessionCode)
       redirect.searchParams.set('returnTo', result.returnTo)
@@ -232,7 +294,12 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const body = asObject(req.body)
     const sessionCode = requiredString(body, 'session', { maxLength: 200 })
     const session = consumeOidcSession(sessionCode)
-    writeAuthAudit('auth.oidc.login', session.user.username, session.user.id, 'Signed in to Rackpad with OIDC.')
+    writeAuthAudit(
+      'auth.oidc.login',
+      session.user.username,
+      session.user.id,
+      'Signed in to Rackpad with OIDC.',
+    )
     return reply.send({
       token: session.token,
       expiresAt: session.expiresAt,
@@ -266,7 +333,12 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const session = lookupSession(token)
     if (session) {
       db.prepare('DELETE FROM userSessions WHERE id = ?').run(session.sessionId)
-      writeAuthAudit('auth.logout', session.username, session.id, 'Signed out of Rackpad.')
+      writeAuthAudit(
+        'auth.logout',
+        session.username,
+        session.id,
+        'Signed out of Rackpad.',
+      )
     }
     return reply.status(204).send()
   })

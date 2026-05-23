@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
 import { PortGrid } from "@/components/ports/PortGrid";
 import { PortList } from "@/components/ports/PortList";
@@ -36,6 +37,7 @@ import type {
   VirtualSwitch,
 } from "@/lib/types";
 import { deviceTypeLabel } from "@/lib/device-types";
+import { formatDeviceAddress } from "@/lib/network-labels";
 import { formatPortLabel } from "@/lib/utils";
 import { ArrowRight, Filter, Network, Plus, Save, Trash2 } from "lucide-react";
 
@@ -261,8 +263,7 @@ export default function PortView() {
   const [deviceTypeFilter, setDeviceTypeFilter] = useState<DeviceType | "all">(
     "all",
   );
-  const [portLinkFilter, setPortLinkFilter] =
-    useState<PortLinkFilter>("all");
+  const [portLinkFilter, setPortLinkFilter] = useState<PortLinkFilter>("all");
   const [portQuery, setPortQuery] = useState("");
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<
@@ -282,13 +283,10 @@ export default function PortView() {
     }, {});
   }, [devices]);
   const vlanById = useMemo(() => {
-    return vlans.reduce<Record<string, (typeof vlans)[number]>>(
-      (acc, vlan) => {
-        acc[vlan.id] = vlan;
-        return acc;
-      },
-      {},
-    );
+    return vlans.reduce<Record<string, (typeof vlans)[number]>>((acc, vlan) => {
+      acc[vlan.id] = vlan;
+      return acc;
+    }, {});
   }, [vlans]);
 
   const portsByDeviceId = useMemo(() => {
@@ -299,13 +297,12 @@ export default function PortView() {
   }, [ports]);
 
   const virtualSwitchById = useMemo(() => {
-    return virtualSwitches.reduce<Record<string, (typeof virtualSwitches)[number]>>(
-      (acc, virtualSwitch) => {
-        acc[virtualSwitch.id] = virtualSwitch;
-        return acc;
-      },
-      {},
-    );
+    return virtualSwitches.reduce<
+      Record<string, (typeof virtualSwitches)[number]>
+    >((acc, virtualSwitch) => {
+      acc[virtualSwitch.id] = virtualSwitch;
+      return acc;
+    }, {});
   }, [virtualSwitches]);
 
   const portById = useMemo(() => {
@@ -348,6 +345,7 @@ export default function PortView() {
         entry.manufacturer,
         entry.model,
         entry.managementIp,
+        entry.macAddress,
         entry.placement,
         entry.status,
         ...(entry.tags ?? []),
@@ -497,8 +495,7 @@ export default function PortView() {
 
   const isVisualGrid =
     device &&
-    (device.deviceType === "switch" ||
-      device.deviceType === "router");
+    (device.deviceType === "switch" || device.deviceType === "router");
 
   const linkedCount = devicePorts.filter(
     (port) => port.linkState === "up",
@@ -724,7 +721,8 @@ export default function PortView() {
         <div className="flex w-64 shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-bg-2)]/40">
           <div className="border-b border-[var(--color-line)] px-4 py-3">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-              {filteredPortBearingDevices.length} / {portBearingDevices.length} devices
+              {filteredPortBearingDevices.length} / {portBearingDevices.length}{" "}
+              devices
             </span>
             <div className="mt-3 space-y-2">
               <div className="relative">
@@ -794,8 +792,10 @@ export default function PortView() {
                     <div className="truncate text-xs font-medium text-[var(--color-fg)]">
                       {entry.hostname}
                     </div>
-                    <div className="font-mono text-[10px] text-[var(--color-fg-subtle)]">
-                      {linked}/{entryPorts.length} linked
+                    <div className="truncate font-mono text-[10px] text-[var(--color-fg-subtle)]">
+                      {entry.macAddress
+                        ? entry.macAddress
+                        : `${linked}/${entryPorts.length} linked`}
                     </div>
                   </div>
                   <StatusDot status={entry.status} />
@@ -826,17 +826,22 @@ export default function PortView() {
                       {deviceTypeLabel(device.deviceType, deviceTypes)}
                     </span>
                   </div>
-                  <h2 className="text-lg font-semibold tracking-tight">
+                  <Link
+                    to={`/devices/${device.id}`}
+                    className="text-lg font-semibold tracking-tight hover:text-[var(--color-accent)]"
+                  >
                     {device.hostname}
-                  </h2>
+                  </Link>
                   <div className="mt-0.5 text-xs text-[var(--color-fg-subtle)]">
                     {device.manufacturer} {device.model}
-                    {device.managementIp && (
+                    {formatDeviceAddress(device) && (
                       <>
                         <span className="mx-1.5 text-[var(--color-fg-faint)]">
                           |
                         </span>
-                        <span className="font-mono">{device.managementIp}</span>
+                        <span className="font-mono">
+                          {formatDeviceAddress(device)}
+                        </span>
                       </>
                     )}
                   </div>
@@ -1745,7 +1750,9 @@ function portSearchHaystack(
       : link.fromPortId
     : undefined;
   const peerPort = peerPortId ? context.portById[peerPortId] : undefined;
-  const peerDevice = peerPort ? context.deviceById[peerPort.deviceId] : undefined;
+  const peerDevice = peerPort
+    ? context.deviceById[peerPort.deviceId]
+    : undefined;
   const accessVlan = port.vlanId ? context.vlanById[port.vlanId] : undefined;
   const taggedVlans = (port.allowedVlanIds ?? [])
     .map((vlanId) => context.vlanById[vlanId])
@@ -1770,6 +1777,7 @@ function portSearchHaystack(
     virtualSwitch?.kind,
     peerDevice?.hostname,
     peerDevice?.managementIp,
+    peerDevice?.macAddress,
     peerDevice?.deviceType,
     peerPort?.name,
     link?.cableType,

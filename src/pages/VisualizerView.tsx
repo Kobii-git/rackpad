@@ -4,10 +4,15 @@ import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
 import { buildVisualizerModel } from "./visualizer/model";
 import { VisualizerCanvas } from "./visualizer/VisualizerCanvas";
-import type { TraceModeState } from "./visualizer/types";
+import type {
+  TraceModeState,
+  VisualizerLooseDevicePlacement,
+} from "./visualizer/types";
 
 const HEALTH_STORAGE_KEY = "rackpad.visualizer.health";
 const NO_CABLE_BANNER_KEY = "rackpad.visualizer.no-cable-banner.dismissed";
+const LOOSE_PLACEMENT_STORAGE_KEY = "rackpad.visualizer.loose-placement";
+const ROOM_ONLY_SECTIONS_STORAGE_KEY = "rackpad.visualizer.room-only-sections";
 
 export default function VisualizerView() {
   const lab = useStore((s) => s.lab);
@@ -24,17 +29,24 @@ export default function VisualizerView() {
   const discoveredDevices = useStore((s) => s.discoveredDevices);
   const virtualSwitches = useStore((s) => s.virtualSwitches);
   const [cableType, setCableType] = useState("all");
-  const [expandedRackRuns, setExpandedRackRuns] = useState<Set<string>>(
-    () => readSessionSet("rackpad.visualizer.expanded-rack-runs"),
+  const [expandedRackRuns, setExpandedRackRuns] = useState<Set<string>>(() =>
+    readSessionSet("rackpad.visualizer.expanded-rack-runs"),
   );
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    () => readSessionSet("rackpad.visualizer.collapsed-groups"),
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() =>
+    readSessionSet("rackpad.visualizer.collapsed-groups"),
   );
-  const [healthOverlay, setHealthOverlay] = useState(
-    () => readBoolean(HEALTH_STORAGE_KEY, false),
+  const [healthOverlay, setHealthOverlay] = useState(() =>
+    readBoolean(HEALTH_STORAGE_KEY, false),
   );
-  const [noCableBannerDismissed, setNoCableBannerDismissed] = useState(
-    () => readBoolean(NO_CABLE_BANNER_KEY, false),
+  const [looseDevicePlacement, setLooseDevicePlacement] =
+    useState<VisualizerLooseDevicePlacement>(() =>
+      readLooseDevicePlacement(LOOSE_PLACEMENT_STORAGE_KEY),
+    );
+  const [includeRoomOnlySections, setIncludeRoomOnlySections] = useState(() =>
+    readBoolean(ROOM_ONLY_SECTIONS_STORAGE_KEY, false),
+  );
+  const [noCableBannerDismissed, setNoCableBannerDismissed] = useState(() =>
+    readBoolean(NO_CABLE_BANNER_KEY, false),
   );
   const [traceMode, setTraceMode] = useState<TraceModeState>({
     enabled: false,
@@ -58,6 +70,10 @@ export default function VisualizerView() {
         virtualSwitches,
         expandedRackRuns,
         collapsedGroups,
+        layout: {
+          looseDevicePlacement,
+          includeRoomOnlySections,
+        },
       }),
     [
       racks,
@@ -72,6 +88,8 @@ export default function VisualizerView() {
       virtualSwitches,
       expandedRackRuns,
       collapsedGroups,
+      looseDevicePlacement,
+      includeRoomOnlySections,
     ],
   );
 
@@ -103,6 +121,22 @@ export default function VisualizerView() {
     });
   }
 
+  function toggleLooseDevicePlacement() {
+    setLooseDevicePlacement((current) => {
+      const next = current === "below-racks" ? "beside-racks" : "below-racks";
+      writeString(LOOSE_PLACEMENT_STORAGE_KEY, next);
+      return next;
+    });
+  }
+
+  function toggleRoomOnlySections() {
+    setIncludeRoomOnlySections((current) => {
+      const next = !current;
+      writeBoolean(ROOM_ONLY_SECTIONS_STORAGE_KEY, next);
+      return next;
+    });
+  }
+
   return (
     <>
       <TopBar
@@ -110,11 +144,24 @@ export default function VisualizerView() {
         title="Visualizer"
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {lab.name} | {model.counts.cables} cables | {model.counts.devices} devices
+            {lab.name} | {model.counts.cables} cables | {model.counts.devices}{" "}
+            devices
           </span>
         }
         actions={
           <div className="flex items-center gap-2">
+            <VisualizerToggle
+              checked={looseDevicePlacement === "below-racks"}
+              label="Loose below"
+              ariaLabel="Place loose devices below racks"
+              onChange={toggleLooseDevicePlacement}
+            />
+            <VisualizerToggle
+              checked={includeRoomOnlySections}
+              label="No rack required"
+              ariaLabel="Place rooms without racks in rack zone"
+              onChange={toggleRoomOnlySections}
+            />
             <select
               value={cableType}
               onChange={(event) => setCableType(event.target.value)}
@@ -181,6 +228,37 @@ export default function VisualizerView() {
   );
 }
 
+function VisualizerToggle({
+  checked,
+  label,
+  ariaLabel,
+  onChange,
+}: {
+  checked: boolean;
+  label: string;
+  ariaLabel: string;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      className={`inline-flex h-8 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border px-2.5 text-xs font-medium transition-colors ${
+        checked
+          ? "border-[var(--border-strong)] bg-[var(--surface-3)] text-[var(--text-primary)]"
+          : "border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_32%,transparent)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onChange()}
+        className="size-3 accent-[var(--accent-primary)]"
+        aria-label={ariaLabel}
+      />
+      <span className="whitespace-nowrap">{label}</span>
+    </label>
+  );
+}
+
 function readBoolean(key: string, fallback: boolean) {
   try {
     const value = window.localStorage.getItem(key);
@@ -194,6 +272,23 @@ function readBoolean(key: string, fallback: boolean) {
 function writeBoolean(key: string, value: boolean) {
   try {
     window.localStorage.setItem(key, String(value));
+  } catch {
+    // Ignore storage failures; the in-memory state still works.
+  }
+}
+
+function readLooseDevicePlacement(key: string): VisualizerLooseDevicePlacement {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value === "below-racks" ? "below-racks" : "beside-racks";
+  } catch {
+    return "beside-racks";
+  }
+}
+
+function writeString(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
   } catch {
     // Ignore storage failures; the in-memory state still works.
   }

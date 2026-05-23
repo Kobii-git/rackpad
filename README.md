@@ -221,8 +221,10 @@ OIDC_ENABLED=0
 OIDC_ISSUER_URL=
 OIDC_CLIENT_ID=
 OIDC_CLIENT_SECRET=
+OIDC_REDIRECT_URI=
 OIDC_LABEL=OIDC
 OIDC_DEFAULT_ROLE=viewer
+OIDC_DEBUG=0
 OIDC_ADMIN_USERS=
 OIDC_EDITOR_USERS=
 OIDC_VIEWER_USERS=
@@ -236,6 +238,33 @@ DISCOVERY_MAC_SCAN_MODE=auto
 OIDC uses the authorization-code flow with PKCE. Configure the provider
 redirect URI as `APP_URL/api/auth/oidc/callback`, or set `OIDC_REDIRECT_URI`
 explicitly when Rackpad is behind a proxy with a non-standard public URL.
+`OIDC_ISSUER_URL` must be the provider issuer, not the authorize URL or client
+settings page. Rackpad fetches
+`OIDC_ISSUER_URL/.well-known/openid-configuration`; if login returns a 502 with
+HTTP 404, test that exact discovery URL in a browser or with `curl`. For
+providers with per-application issuers, such as authentik, this usually means
+using the application/provider issuer path rather than the IdP root domain.
+Set `OIDC_DEBUG=1` temporarily to log the discovery URL, redirect URI, token
+endpoint status, and JWKS URL used during sign-in.
+
+Example Authentik configuration:
+
+```bash
+OIDC_ENABLED=1
+OIDC_ISSUER_URL=https://authentik.example.com/application/o/rackpad
+OIDC_CLIENT_ID=<client-id>
+OIDC_CLIENT_SECRET=<client-secret>
+OIDC_REDIRECT_URI=https://rackpad.example.com/api/auth/oidc/callback
+OIDC_LABEL=Authentik
+OIDC_DEFAULT_ROLE=viewer
+OIDC_ADMIN_GROUPS=admin
+```
+
+In Authentik, set the redirect URI to
+`https://rackpad.example.com/api/auth/oidc/callback` and assign a signing key to
+the provider/application. For a single-admin private deployment you can set
+`OIDC_DEFAULT_ROLE=admin`; for shared installs, keep the default role at
+`viewer` and map admin/editor groups explicitly.
 
 Discovery MAC/vendor enrichment needs layer-2 visibility from the Rackpad
 runtime. `DISCOVERY_MAC_SCAN_MODE=auto` tries `arp-scan` and `nmap` when the

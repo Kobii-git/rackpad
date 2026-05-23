@@ -11,6 +11,12 @@ import type {
 
 export type VisualizerHealth = "online" | "warning" | "offline" | "unknown";
 export type VisualizerColumnKind = "rack" | "room";
+export type VisualizerLooseDevicePlacement = "beside-racks" | "below-racks";
+
+export interface VisualizerLayoutOptions {
+  looseDevicePlacement: VisualizerLooseDevicePlacement;
+  includeRoomOnlySections: boolean;
+}
 
 export interface VisualizerPoint {
   x: number;

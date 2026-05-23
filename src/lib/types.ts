@@ -107,6 +107,7 @@ export interface Device {
   model?: string;
   serial?: string;
   managementIp?: string;
+  macAddress?: string | null;
   status: DeviceStatus;
   placement?: DevicePlacement;
   parentDeviceId?: ID;

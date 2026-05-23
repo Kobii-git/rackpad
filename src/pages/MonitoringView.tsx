@@ -22,6 +22,7 @@ import {
   useStore,
 } from "@/lib/store";
 import type { Device, DeviceMonitor } from "@/lib/types";
+import { formatDeviceAddress } from "@/lib/network-labels";
 import { relativeTime, statusLabel } from "@/lib/utils";
 import {
   applySortDirection,
@@ -89,6 +90,7 @@ export default function MonitoringView() {
           device.hostname,
           device.displayName,
           device.managementIp,
+          device.macAddress,
           rollupStatus,
           statusLabel[rollupStatus],
           ...monitors.flatMap((monitor) => [
@@ -184,9 +186,7 @@ export default function MonitoringView() {
               size="sm"
               onClick={() => void handleRunAll()}
               disabled={
-                !canManageMonitoring ||
-                runningAll ||
-                stats.monitorTargets === 0
+                !canManageMonitoring || runningAll || stats.monitorTargets === 0
               }
             >
               <RefreshCcw className="size-3.5" />
@@ -413,7 +413,9 @@ function DeviceMonitorCard({
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-tertiary)]">
             {device.displayName && <span>{device.displayName}</span>}
-            {device.managementIp && <Mono>{device.managementIp}</Mono>}
+            {formatDeviceAddress(device) && (
+              <Mono>{formatDeviceAddress(device)}</Mono>
+            )}
             {device.status !== rollupStatus && (
               <span>inventory {statusLabel[device.status].toLowerCase()}</span>
             )}
@@ -637,7 +639,10 @@ function compareMonitorEntries(
   } else if (sort.key === "targets") {
     result = compareNumber(a.monitors.length, b.monitors.length);
   } else {
-    result = compareDate(latestMonitorCheck(a.monitors), latestMonitorCheck(b.monitors));
+    result = compareDate(
+      latestMonitorCheck(a.monitors),
+      latestMonitorCheck(b.monitors),
+    );
   }
 
   if (result === 0) result = compareText(a.device.hostname, b.device.hostname);

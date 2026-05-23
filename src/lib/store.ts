@@ -497,6 +497,7 @@ function normalizeDeviceChanges(
     "model",
     "serial",
     "managementIp",
+    "macAddress",
     "placement",
     "parentDeviceId",
     "cpuCores",
@@ -858,9 +859,14 @@ export async function login(input: {
   }
 }
 
-export function startOidcLogin(returnTo = window.location.pathname + window.location.search) {
-  const target = returnTo && returnTo !== "/auth/oidc/callback" ? returnTo : "/";
-  window.location.assign(`/api/auth/oidc/start?returnTo=${encodeURIComponent(target)}`);
+export function startOidcLogin(
+  returnTo = window.location.pathname + window.location.search,
+) {
+  const target =
+    returnTo && returnTo !== "/auth/oidc/callback" ? returnTo : "/";
+  window.location.assign(
+    `/api/auth/oidc/start?returnTo=${encodeURIComponent(target)}`,
+  );
 }
 
 export async function completeOidcLogin(session: string): Promise<string> {
@@ -876,7 +882,9 @@ export async function completeOidcLogin(session: string): Promise<string> {
     return authSession.returnTo || "/";
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Failed to complete OIDC sign-in.";
+      error instanceof Error
+        ? error.message
+        : "Failed to complete OIDC sign-in.";
     setState((prev) => ({
       ...prev,
       authLoading: false,
@@ -1856,6 +1864,7 @@ export interface CreateDeviceInput {
   model?: string;
   serial?: string;
   managementIp?: string;
+  macAddress?: string;
   status?: Device["status"];
   placement?: Device["placement"];
   parentDeviceId?: string;
@@ -1876,6 +1885,7 @@ export interface CreateDeviceInput {
 export async function createDevice(input: CreateDeviceInput): Promise<Device> {
   const trimmedHostname = input.hostname.trim();
   const trimmedManagementIp = input.managementIp?.trim() || undefined;
+  const trimmedMacAddress = input.macAddress?.trim() || undefined;
 
   validateManagementIp(trimmedManagementIp);
 
@@ -1888,6 +1898,7 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
     model: input.model,
     serial: input.serial,
     managementIp: trimmedManagementIp,
+    macAddress: trimmedMacAddress,
     status: input.status ?? "unknown",
     placement: input.placement,
     parentDeviceId: input.parentDeviceId,

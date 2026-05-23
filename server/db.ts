@@ -5,8 +5,9 @@ import { createId } from './lib/ids.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-const DB_PATH = process.env.DATABASE_PATH ?? path.resolve(__dirname, '../rackpad.db')
-const CURRENT_SCHEMA_VERSION = 13
+const DB_PATH =
+  process.env.DATABASE_PATH ?? path.resolve(__dirname, '../rackpad.db')
+const CURRENT_SCHEMA_VERSION = 14
 
 export const db = new Database(DB_PATH)
 
@@ -545,32 +546,81 @@ const SCHEMA_MIGRATIONS = [
         ON oidcIdentities (userId);
     `,
   },
+  {
+    version: 14,
+    sql: `
+      ALTER TABLE devices ADD COLUMN macAddress TEXT;
+
+      UPDATE devices
+      SET macAddress = (
+        SELECT discoveredDevices.macAddress
+        FROM discoveredDevices
+        WHERE discoveredDevices.importedDeviceId = devices.id
+          AND discoveredDevices.macAddress IS NOT NULL
+        ORDER BY discoveredDevices.lastScannedAt DESC
+        LIMIT 1
+      )
+      WHERE macAddress IS NULL
+        AND EXISTS (
+          SELECT 1
+          FROM discoveredDevices
+          WHERE discoveredDevices.importedDeviceId = devices.id
+            AND discoveredDevices.macAddress IS NOT NULL
+        );
+
+      UPDATE devices
+      SET macAddress = (
+        SELECT discoveredDevices.macAddress
+        FROM discoveredDevices
+        WHERE discoveredDevices.labId = devices.labId
+          AND discoveredDevices.ipAddress = devices.managementIp
+          AND discoveredDevices.macAddress IS NOT NULL
+        ORDER BY discoveredDevices.lastScannedAt DESC
+        LIMIT 1
+      )
+      WHERE macAddress IS NULL
+        AND managementIp IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM discoveredDevices
+          WHERE discoveredDevices.labId = devices.labId
+            AND discoveredDevices.ipAddress = devices.managementIp
+            AND discoveredDevices.macAddress IS NOT NULL
+        );
+    `,
+  },
 ] as const
 
 const applySchema = db.transaction(() => {
   db.exec(BOOTSTRAP_SCHEMA_SQL)
 
-  const row = db.prepare('SELECT version FROM schemaVersion WHERE id = 1').get() as { version?: number } | undefined
+  const row = db
+    .prepare('SELECT version FROM schemaVersion WHERE id = 1')
+    .get() as { version?: number } | undefined
   let currentVersion = Number(row?.version ?? 0)
 
   for (const migration of SCHEMA_MIGRATIONS) {
     if (currentVersion >= migration.version) continue
     db.exec(migration.sql)
     const updatedAt = new Date().toISOString()
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO schemaVersion (id, version, updatedAt)
       VALUES (1, ?, ?)
       ON CONFLICT(id) DO UPDATE SET version = excluded.version, updatedAt = excluded.updatedAt
-    `).run(migration.version, updatedAt)
+    `,
+    ).run(migration.version, updatedAt)
     currentVersion = migration.version
   }
 
   if (currentVersion === 0) {
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO schemaVersion (id, version, updatedAt)
       VALUES (1, ?, ?)
       ON CONFLICT(id) DO UPDATE SET version = excluded.version, updatedAt = excluded.updatedAt
-    `).run(CURRENT_SCHEMA_VERSION, new Date().toISOString())
+    `,
+    ).run(CURRENT_SCHEMA_VERSION, new Date().toISOString())
   }
 })
 
@@ -593,13 +643,20 @@ type PatchPanelPortRow = {
 }
 
 export function ensurePatchPanelPassThroughPorts(deviceIds?: string[]) {
-  const targetDeviceIds = deviceIds && deviceIds.length > 0
-    ? [...new Set(deviceIds)]
-    : (db.prepare(`
+  const targetDeviceIds =
+    deviceIds && deviceIds.length > 0
+      ? [...new Set(deviceIds)]
+      : (
+          db
+            .prepare(
+              `
         SELECT id
         FROM devices
         WHERE deviceType = 'patch_panel'
-      `).all() as Array<{ id: string }>).map((row) => row.id)
+      `,
+            )
+            .all() as Array<{ id: string }>
+        ).map((row) => row.id)
 
   if (targetDeviceIds.length === 0) return 0
 
@@ -670,7 +727,9 @@ export function parseRow<T extends Record<string, unknown>>(
   for (const col of jsonColumns) {
     if (typeof row[col] === 'string') {
       try {
-        ;(row as Record<string, unknown>)[String(col)] = JSON.parse(String(row[col]))
+        ;(row as Record<string, unknown>)[String(col)] = JSON.parse(
+          String(row[col]),
+        )
       } catch {
         // Leave the raw value as-is if JSON parsing fails.
       }

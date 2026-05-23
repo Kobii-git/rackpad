@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import {
   Activity,
   Cable,
@@ -38,6 +39,7 @@ import type {
   WifiController,
   WifiSsid,
 } from "@/lib/types";
+import { formatDeviceAddress } from "@/lib/network-labels";
 import {
   cidrSize,
   formatBandwidthMbps,
@@ -57,6 +59,7 @@ const REPORT_DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
 
 export default function ReportsView() {
   const lab = useStore((s) => s.lab);
+  const rooms = useStore((s) => s.rooms);
   const racks = useStore((s) => s.racks);
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
@@ -79,6 +82,7 @@ export default function ReportsView() {
 
   const model = useMemo(() => {
     const rackById = indexById(racks);
+    const roomById = indexById(rooms);
     const deviceById = indexById(devices);
     const portById = indexById(ports);
     const vlanById = indexById(vlans);
@@ -129,6 +133,7 @@ export default function ReportsView() {
       );
       return {
         rack,
+        room: rack.roomId ? roomById[rack.roomId] : undefined,
         devices: rackDevices.length,
         usedU,
         freeU: Math.max(0, rack.totalU - usedU),
@@ -138,6 +143,7 @@ export default function ReportsView() {
 
     return {
       rackById,
+      roomById,
       deviceById,
       portById,
       vlanById,
@@ -163,6 +169,7 @@ export default function ReportsView() {
     portLinks,
     ports,
     racks,
+    rooms,
     subnets,
     virtualSwitches,
     vlans,
@@ -445,6 +452,7 @@ export default function ReportsView() {
                   <thead>
                     <tr>
                       <th>Rack</th>
+                      <th>Room</th>
                       <th>Location</th>
                       <th>Devices</th>
                       <th>Used U</th>
@@ -456,7 +464,18 @@ export default function ReportsView() {
                     {model.rackRows.map((row) => (
                       <tr key={row.rack.id}>
                         <td className="font-medium text-[var(--text-primary)]">
-                          {row.rack.name}
+                          <Link to="/racks" className="hover:underline">
+                            {row.rack.name}
+                          </Link>
+                        </td>
+                        <td>
+                          {row.room ? (
+                            <Link to="/racks" className="hover:underline">
+                              {row.room.name}
+                            </Link>
+                          ) : (
+                            "-"
+                          )}
                         </td>
                         <td>{row.rack.location ?? "-"}</td>
                         <td>
@@ -537,9 +556,12 @@ export default function ReportsView() {
                               type={device.deviceType}
                               className="size-4 text-[var(--accent-primary)]"
                             />
-                            <span className="truncate text-sm font-medium text-[var(--text-primary)]">
+                            <Link
+                              to={`/devices/${device.id}`}
+                              className="truncate text-sm font-medium text-[var(--text-primary)] hover:underline"
+                            >
                               {device.hostname}
-                            </span>
+                            </Link>
                             <Badge tone={statusBadgeTone(device.status)}>
                               <StatusDot status={device.status} />
                               {statusLabel[device.status]}
@@ -978,6 +1000,7 @@ function buildDevicesCsv({
       "Type",
       "Status",
       "Management IP",
+      "MAC address",
       "Manufacturer",
       "Model",
       "Placement",
@@ -1005,6 +1028,7 @@ function buildDevicesCsv({
         device.deviceType,
         device.status,
         device.managementIp,
+        device.macAddress,
         device.manufacturer,
         device.model,
         device.placement,
@@ -1244,12 +1268,26 @@ function buildWifiCsv({
   ssidById: Record<string, WifiSsid>;
 }): CsvRows {
   return [
-    ["Section", "Name", "Device", "IP", "SSID", "Band", "Signal", "Notes"],
+    [
+      "Section",
+      "Name",
+      "Device",
+      "IP / MAC",
+      "SSID",
+      "Band",
+      "Signal",
+      "Notes",
+    ],
     ...wifiControllers.map((controller) => [
       "controller",
       controller.name,
       controller.deviceId ? deviceById[controller.deviceId]?.hostname : "",
-      controller.managementIp,
+      formatDeviceAddress({
+        managementIp: controller.managementIp ?? undefined,
+        macAddress: controller.deviceId
+          ? deviceById[controller.deviceId]?.macAddress
+          : null,
+      }),
       "",
       "",
       "",
@@ -1271,7 +1309,7 @@ function buildWifiCsv({
         "ap",
         device?.hostname,
         device?.hostname,
-        device?.managementIp,
+        device ? formatDeviceAddress(device) : "",
         "",
         "",
         "",
@@ -1288,7 +1326,7 @@ function buildWifiCsv({
         "client",
         client?.hostname,
         ap?.hostname,
-        client?.managementIp,
+        client ? formatDeviceAddress(client) : "",
         ssid?.name,
         association.band,
         association.signalDbm,

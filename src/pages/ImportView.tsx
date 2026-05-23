@@ -679,7 +679,9 @@ function HostPreview({
           <select
             className="w-full rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-input)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--focus-ring)]"
             value={value?.targetDeviceId ?? AUTO_HOST_TARGET}
-            onChange={(event) => onChange({ targetDeviceId: event.target.value })}
+            onChange={(event) =>
+              onChange({ targetDeviceId: event.target.value })
+            }
           >
             <option value={AUTO_HOST_TARGET}>
               Auto match or create {host?.computerName ?? "Hyper-V host"}
@@ -709,14 +711,18 @@ function HostPreview({
             <Input
               disabled={!hostRecordEnabled}
               value={value?.displayName ?? ""}
-              onChange={(event) => onChange({ displayName: event.target.value })}
+              onChange={(event) =>
+                onChange({ displayName: event.target.value })
+              }
             />
           </Field>
           <Field label="Manufacturer">
             <Input
               disabled={!hostRecordEnabled}
               value={value?.manufacturer ?? ""}
-              onChange={(event) => onChange({ manufacturer: event.target.value })}
+              onChange={(event) =>
+                onChange({ manufacturer: event.target.value })
+              }
             />
           </Field>
           <Field label="Model">
@@ -1160,7 +1166,8 @@ async function upsertHost(
     sourceDraft.targetDeviceId !== AUTO_HOST_TARGET
       ? context.devicesById[sourceDraft.targetDeviceId]
       : null;
-  const existing = selected ?? context.devicesByHostname[hostname.toLowerCase()];
+  const existing =
+    selected ?? context.devicesByHostname[hostname.toLowerCase()];
   const specs = hostSpecs(host, sourceDraft);
 
   if (existing) {
@@ -1346,6 +1353,9 @@ async function upsertVmDevice({
     osFamily ? `os:${osFamily}` : "",
   ].filter(Boolean);
   const specs = options.specs ? vmSpecs(draft.source, draft) : "";
+  const macAddress = (draft.source.networkAdapters ?? [])
+    .map((adapter) => adapter.macAddress?.trim())
+    .find(Boolean);
   const notes = [
     draft.notes,
     sourceIps.length > 0 ? `Collected IPs: ${sourceIps.join(", ")}` : "",
@@ -1365,6 +1375,7 @@ async function upsertVmDevice({
     placement: "virtual" as const,
     parentDeviceId: hostDevice?.id,
     managementIp,
+    macAddress,
     model: osName || existing?.model,
     cpuCores: options.specs ? toNumber(draft.cpuCores) : undefined,
     memoryGb: options.specs ? toNumber(draft.memoryGb) : undefined,

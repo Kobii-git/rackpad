@@ -28,6 +28,7 @@ type SortKey =
   | "type"
   | "model"
   | "managementIp"
+  | "macAddress"
   | "placement"
   | "ports"
   | "status";
@@ -87,6 +88,7 @@ export default function DevicesList() {
           device.manufacturer,
           device.model,
           device.managementIp,
+          device.macAddress,
           device.deviceType,
           ...(device.tags ?? []),
         ]
@@ -195,7 +197,7 @@ export default function DevicesList() {
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search hostname, model, IP, tag..."
+            placeholder="Search hostname, model, IP, MAC, tag..."
             className="pl-7"
           />
         </div>
@@ -235,6 +237,13 @@ export default function DevicesList() {
                     Mgmt IP
                   </SortableHeader>
                   <SortableHeader
+                    sortKey="macAddress"
+                    sort={sort}
+                    onSort={handleSort}
+                  >
+                    MAC
+                  </SortableHeader>
+                  <SortableHeader
                     sortKey="placement"
                     sort={sort}
                     onSort={handleSort}
@@ -270,7 +279,9 @@ export default function DevicesList() {
                   const parentDevice = device.parentDeviceId
                     ? deviceById[device.parentDeviceId]
                     : undefined;
-                  const room = device.roomId ? roomById[device.roomId] : undefined;
+                  const room = device.roomId
+                    ? roomById[device.roomId]
+                    : undefined;
                   return (
                     <tr
                       key={device.id}
@@ -305,6 +316,11 @@ export default function DevicesList() {
                       <Td>
                         <Mono className="text-[var(--color-fg)]">
                           {device.managementIp ?? "-"}
+                        </Mono>
+                      </Td>
+                      <Td>
+                        <Mono className="text-[var(--color-fg)]">
+                          {device.macAddress ?? "-"}
                         </Mono>
                       </Td>
                       <Td>
@@ -473,6 +489,8 @@ function compareDevices(
     result = compareText(deviceModelSortValue(a), deviceModelSortValue(b));
   } else if (sort.key === "managementIp") {
     result = compareIp(a.managementIp, b.managementIp);
+  } else if (sort.key === "macAddress") {
+    result = compareText(a.macAddress, b.macAddress);
   } else if (sort.key === "placement") {
     result = compareText(
       devicePlacementSortValue(a, rackById, roomById, deviceById),

@@ -30,11 +30,17 @@ import {
   CardLabel,
   CardTitle,
 } from "@/components/ui/Card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/Tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/Tooltip";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { Mono } from "@/components/shared/Mono";
 import { StatusDot } from "@/components/shared/StatusDot";
 import type { Port } from "@/lib/types";
+import { formatDeviceAddress } from "@/lib/network-labels";
 import { formatPortEndpointLabel, statusLabel } from "@/lib/utils";
 import {
   buildSearchResults,
@@ -142,7 +148,12 @@ export function VisualizerCanvas({
         setSelection(null);
         setHoveredCableId(null);
         setQuery("");
-        setTraceMode({ enabled: false, firstPortId: null, result: null, message: null });
+        setTraceMode({
+          enabled: false,
+          firstPortId: null,
+          result: null,
+          message: null,
+        });
         return;
       }
       if (editing) return;
@@ -180,7 +191,10 @@ export function VisualizerCanvas({
     if (!viewport) return;
     const rect = viewport.getBoundingClientRect();
     const scale = clamp(
-      Math.min((rect.width - 48) / model.width, (rect.height - 48) / model.height),
+      Math.min(
+        (rect.width - 48) / model.width,
+        (rect.height - 48) / model.height,
+      ),
       0.5,
       2,
     );
@@ -199,12 +213,21 @@ export function VisualizerCanvas({
     setTraceMode((current) =>
       current.enabled
         ? { enabled: false, firstPortId: null, result: null, message: null }
-        : { enabled: true, firstPortId: null, result: null, message: "Click first port..." },
+        : {
+            enabled: true,
+            firstPortId: null,
+            result: null,
+            message: "Click first port...",
+          },
     );
   }
 
   function handleWheel(event: WheelEvent<HTMLDivElement>) {
-    if ((event.target as HTMLElement).closest("[data-visualizer-scrollable='true']")) {
+    if (
+      (event.target as HTMLElement).closest(
+        "[data-visualizer-scrollable='true']",
+      )
+    ) {
       return;
     }
     event.preventDefault();
@@ -343,7 +366,11 @@ export function VisualizerCanvas({
         setSelection({ kind: "device", id: node.device.id });
         return;
       }
-      const result = tracePorts(model, traceMode.firstPortId, visualPort.port.id);
+      const result = tracePorts(
+        model,
+        traceMode.firstPortId,
+        visualPort.port.id,
+      );
       setTraceMode({
         enabled: true,
         firstPortId: traceMode.firstPortId,
@@ -362,7 +389,10 @@ export function VisualizerCanvas({
   }
 
   function cableIsVisible(cable: VisualizerCable) {
-    if (cableType !== "all" && (cable.link.cableType || "Unknown") !== cableType) {
+    if (
+      cableType !== "all" &&
+      (cable.link.cableType || "Unknown") !== cableType
+    ) {
       return false;
     }
     return true;
@@ -404,10 +434,30 @@ export function VisualizerCanvas({
       <div className="flex flex-1 gap-4 overflow-hidden px-6 py-5">
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           <div className="grid gap-3 md:grid-cols-4">
-            <VisualizerStat icon={Server} label="Devices" value={model.counts.devices} hint={`${model.rackZone.racks.length} racks mapped`} />
-            <VisualizerStat icon={Cable} label="Cables" value={visibleCables.length} hint="shown on canvas" />
-            <VisualizerStat icon={Route} label="Cross-zone" value={model.counts.crossZone} hint="links crossing zones" />
-            <VisualizerStat icon={Network} label="Patch panel" value={model.counts.patchPanel} hint="front/rear handoffs" />
+            <VisualizerStat
+              icon={Server}
+              label="Devices"
+              value={model.counts.devices}
+              hint={`${model.rackZone.racks.length} racks mapped`}
+            />
+            <VisualizerStat
+              icon={Cable}
+              label="Cables"
+              value={visibleCables.length}
+              hint="shown on canvas"
+            />
+            <VisualizerStat
+              icon={Route}
+              label="Cross-zone"
+              value={model.counts.crossZone}
+              hint="links crossing zones"
+            />
+            <VisualizerStat
+              icon={Network}
+              label="Patch panel"
+              value={model.counts.patchPanel}
+              hint="front/rear handoffs"
+            />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -421,7 +471,9 @@ export function VisualizerCanvas({
                 key={entry.type}
                 active={typeFilters.has(entry.type)}
                 label={`${entry.label} ${entry.count}`}
-                onClick={(event) => toggleTypeFilter(entry.type, event.shiftKey)}
+                onClick={(event) =>
+                  toggleTypeFilter(entry.type, event.shiftKey)
+                }
               />
             ))}
           </div>
@@ -461,19 +513,35 @@ export function VisualizerCanvas({
                           }`}
                         >
                           <span className="min-w-0">
-                            <span className="block truncate font-medium">{result.label}</span>
-                            <span className="block truncate font-mono text-[10px] text-[var(--text-tertiary)]">{result.meta}</span>
+                            <span className="block truncate font-medium">
+                              {result.label}
+                            </span>
+                            <span className="block truncate font-mono text-[10px] text-[var(--text-tertiary)]">
+                              {result.meta}
+                            </span>
                           </span>
-                          <Badge tone={result.kind === "device" ? "neutral" : "cyan"}>{result.kind}</Badge>
+                          <Badge
+                            tone={result.kind === "device" ? "neutral" : "cyan"}
+                          >
+                            {result.kind}
+                          </Badge>
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
-                <Button variant={healthOverlay ? "secondary" : "outline"} size="sm" onClick={onToggleHealth}>
+                <Button
+                  variant={healthOverlay ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={onToggleHealth}
+                >
                   1 Health
                 </Button>
-                <Button variant={traceMode.enabled ? "secondary" : "outline"} size="sm" onClick={toggleTraceMode}>
+                <Button
+                  variant={traceMode.enabled ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={toggleTraceMode}
+                >
                   2 Trace
                 </Button>
               </div>
@@ -482,7 +550,11 @@ export function VisualizerCanvas({
               <div
                 ref={viewportRef}
                 className={`relative h-full overflow-hidden bg-[radial-gradient(circle_at_1px_1px,rgb(255_255_255_/_0.035)_1px,transparent_0)] [background-size:24px_24px] ${
-                  traceMode.enabled ? "cursor-crosshair" : dragStart ? "cursor-grabbing" : "cursor-grab"
+                  traceMode.enabled
+                    ? "cursor-crosshair"
+                    : dragStart
+                      ? "cursor-grabbing"
+                      : "cursor-grab"
                 }`}
                 onWheel={handleWheel}
                 onMouseDown={handleCanvasPointerDown}
@@ -493,9 +565,7 @@ export function VisualizerCanvas({
                 {model.counts.cables === 0 && !noCableBannerDismissed && (
                   <NoCableBanner onDismiss={onDismissNoCableBanner} />
                 )}
-                {traceMode.enabled && (
-                  <TraceBanner traceMode={traceMode} />
-                )}
+                {traceMode.enabled && <TraceBanner traceMode={traceMode} />}
                 <div className="absolute left-4 top-4 z-[70] flex gap-2">
                   <Button variant="outline" size="sm" onClick={fitToViewport}>
                     <LocateFixed className="size-3.5" />
@@ -521,7 +591,13 @@ export function VisualizerCanvas({
                     aria-label="Cable links between Rackpad devices"
                   >
                     <defs>
-                      <filter id="visualizer-cable-glow" x="-20%" y="-20%" width="140%" height="140%">
+                      <filter
+                        id="visualizer-cable-glow"
+                        x="-20%"
+                        y="-20%"
+                        width="140%"
+                        height="140%"
+                      >
                         <feGaussianBlur stdDeviation="2.2" result="blur" />
                         <feMerge>
                           <feMergeNode in="blur" />
@@ -535,7 +611,9 @@ export function VisualizerCanvas({
                         cable={cable}
                         active={isCableActive(cable)}
                         dimmed={isCableDimmed(cable)}
-                        traceActive={Boolean(traceMode.result?.cableIds.has(cable.link.id))}
+                        traceActive={Boolean(
+                          traceMode.result?.cableIds.has(cable.link.id),
+                        )}
                         healthOverlay={healthOverlay}
                       />
                     ))}
@@ -578,10 +656,15 @@ export function VisualizerCanvas({
                         model={model}
                         healthOverlay={healthOverlay}
                         dimmed={isNodeDimmed(node)}
-                        selected={selection?.kind === "device" && selection.id === node.device.id}
+                        selected={
+                          selection?.kind === "device" &&
+                          selection.id === node.device.id
+                        }
                         pulsed={pulsedDeviceId === node.device.id}
                         tracePortIds={traceMode.result?.portIds ?? null}
-                        traceFirstPortId={traceMode.enabled ? traceMode.firstPortId : null}
+                        traceFirstPortId={
+                          traceMode.enabled ? traceMode.firstPortId : null
+                        }
                         onSelect={() => selectDevice(node.device.id)}
                         onPortClick={(port) => handlePortClick(node, port)}
                       />
@@ -613,7 +696,10 @@ export function VisualizerCanvas({
     if (traceMode.result) return traceMode.result.cableIds.has(cable.link.id);
     if (selectedCableId) return cable.link.id === selectedCableId;
     if (isolatedDeviceId) {
-      return cable.fromDevice?.id === isolatedDeviceId || cable.toDevice?.id === isolatedDeviceId;
+      return (
+        cable.fromDevice?.id === isolatedDeviceId ||
+        cable.toDevice?.id === isolatedDeviceId
+      );
     }
     return cableMatchesFilter(cable);
   }
@@ -622,18 +708,26 @@ export function VisualizerCanvas({
     if (traceMode.result) return !traceMode.result.cableIds.has(cable.link.id);
     if (selectedCableId) return cable.link.id !== selectedCableId;
     if (isolatedDeviceId) {
-      return cable.fromDevice?.id !== isolatedDeviceId && cable.toDevice?.id !== isolatedDeviceId;
+      return (
+        cable.fromDevice?.id !== isolatedDeviceId &&
+        cable.toDevice?.id !== isolatedDeviceId
+      );
     }
     return !cableMatchesFilter(cable);
   }
 
   function isNodeDimmed(node: VisualizerNode) {
     if (traceMode.result) {
-      return !node.ports.some((port) => traceMode.result?.portIds.has(port.port.id));
+      return !node.ports.some((port) =>
+        traceMode.result?.portIds.has(port.port.id),
+      );
     }
     if (!nodeMatchesFilter(node)) return true;
     if (!isolatedDeviceId) return false;
-    return node.device.id !== isolatedDeviceId && !activeNeighborIds.has(node.device.id);
+    return (
+      node.device.id !== isolatedDeviceId &&
+      !activeNeighborIds.has(node.device.id)
+    );
   }
 }
 
@@ -662,11 +756,12 @@ function ZonePanels({
         <ZoneHeader
           eyebrow="Rack zone"
           title="Rack elevations"
-          stats={`${model.rackZone.racks.length} racks`}
+          stats={`${model.rackZone.sections.length} rooms | ${model.rackZone.racks.length} racks`}
         />
-        {model.rackZone.racks.length === 0 ? (
+        {model.rackZone.sections.length === 0 ? (
           <div className="absolute left-6 right-6 top-24 rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] p-4 text-sm text-[var(--text-tertiary)]">
-            Add racks to place rack-mounted equipment in this zone.
+            Add racks or enable room-only sections to place room inventory in
+            this zone.
           </div>
         ) : (
           <>
@@ -742,7 +837,9 @@ function ZoneHeader({
     <div className="absolute left-0 right-0 top-0 border-b border-[var(--border-subtle)] px-5 py-4">
       <div className="rk-kicker">{eyebrow}</div>
       <div className="mt-1 flex items-end justify-between gap-3">
-        <div className="text-sm font-semibold text-[var(--text-primary)]">{title}</div>
+        <div className="text-sm font-semibold text-[var(--text-primary)]">
+          {title}
+        </div>
         <Mono className="text-[10px] text-[var(--text-tertiary)]">{stats}</Mono>
       </div>
     </div>
@@ -780,7 +877,8 @@ function RackRoomSectionView({
             </div>
           </div>
           <Mono className="shrink-0 text-[9px] text-[var(--text-tertiary)]">
-            {section.stats.racks} racks | {section.stats.devices} devices | {section.stats.cables} links
+            {section.stats.racks} racks | {section.stats.devices} devices |{" "}
+            {section.stats.cables} links
           </Mono>
         </div>
       </div>
@@ -811,9 +909,12 @@ function RackPanelView({
     >
       <div className="border-b border-[var(--border-subtle)] px-3 py-3">
         <div className="rk-kicker">{panel.rack.location ?? "Rack"}</div>
-        <div className="mt-1 truncate text-sm font-semibold text-[var(--text-primary)]">{panel.rack.name}</div>
+        <div className="mt-1 truncate text-sm font-semibold text-[var(--text-primary)]">
+          {panel.rack.name}
+        </div>
         <Mono className="text-[10px] text-[var(--text-tertiary)]">
-          {panel.stats.totalU}U | {panel.stats.mounted} mounted | {panel.stats.freeU}U free
+          {panel.stats.totalU}U | {panel.stats.mounted} mounted |{" "}
+          {panel.stats.freeU}U free
         </Mono>
       </div>
       <div
@@ -911,8 +1012,12 @@ function RoomGroupView({
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-xs font-semibold text-[var(--text-primary)]">{group.name}</div>
-          <div className="mt-0.5 truncate text-[10px] text-[var(--text-tertiary)]">{group.subtitle}</div>
+          <div className="truncate text-xs font-semibold text-[var(--text-primary)]">
+            {group.name}
+          </div>
+          <div className="mt-0.5 truncate text-[10px] text-[var(--text-tertiary)]">
+            {group.subtitle}
+          </div>
         </div>
         <Mono className="text-[9px] text-[var(--text-tertiary)]">
           {group.total} | {group.online} up | {group.down} down
@@ -980,10 +1085,18 @@ function DeviceCard({
           <DeviceTypeIcon type={node.device.deviceType} className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-semibold text-[var(--text-primary)]">{node.device.hostname}</div>
+          <div className="truncate text-xs font-semibold text-[var(--text-primary)]">
+            {node.device.hostname}
+          </div>
           {!compactRackNode && (
             <div className="truncate font-mono text-[9px] text-[var(--text-tertiary)]">
-              {node.device.managementIp ?? typeLabel(node.device.deviceType)}
+              {formatDeviceAddress(
+                {
+                  managementIp: node.device.managementIp,
+                  macAddress: node.macAddress,
+                },
+                typeLabel(node.device.deviceType),
+              )}
             </div>
           )}
         </div>
@@ -1034,7 +1147,7 @@ function PortSquare({
     visualPort.port.kind === "qsfp" ||
     visualPort.port.kind === "fiber";
   const fill = visualPort.linked
-    ? visualPort.color ?? "var(--accent-primary)"
+    ? (visualPort.color ?? "var(--accent-primary)")
     : "rgb(255 255 255 / 0.05)";
   return (
     <Tooltip>
@@ -1057,12 +1170,10 @@ function PortSquare({
               active
                 ? "var(--accent-primary)"
                 : visualPort.linked
-                  ? visualPort.color ?? "var(--accent-primary)"
+                  ? (visualPort.color ?? "var(--accent-primary)")
                   : "rgb(255 255 255 / 0.22)"
             }`,
-            boxShadow: active
-              ? "0 0 0 2px rgb(242 157 56 / 0.22)"
-              : undefined,
+            boxShadow: active ? "0 0 0 2px rgb(242 157 56 / 0.22)" : undefined,
           }}
           aria-label={portTooltip(visualPort, model)}
         >
@@ -1096,7 +1207,11 @@ function CableSvg({
     healthOverlay &&
     cable.fromNode?.health === "offline" &&
     cable.toNode?.health === "offline";
-  const color = downPair ? "var(--danger)" : traceActive ? "var(--accent-primary)" : cable.color;
+  const color = downPair
+    ? "var(--danger)"
+    : traceActive
+      ? "var(--accent-primary)"
+      : cable.color;
   const opacity = traceActive ? 1 : dimmed ? 0.06 : active ? 1 : 0.5;
   const strokeWidth = traceActive ? 5.5 : active ? 5 : cable.up ? 2.6 : 2;
   return (
@@ -1120,9 +1235,17 @@ function CableSvg({
         strokeOpacity={opacity}
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeDasharray={cable.unknown ? "7 6" : cable.bothOnline ? "12 10" : undefined}
-        className={cable.bothOnline && !cable.unknown ? "visualizer-cable-online" : undefined}
-        filter={active || traceActive ? "url(#visualizer-cable-glow)" : undefined}
+        strokeDasharray={
+          cable.unknown ? "7 6" : cable.bothOnline ? "12 10" : undefined
+        }
+        className={
+          cable.bothOnline && !cable.unknown
+            ? "visualizer-cable-online"
+            : undefined
+        }
+        filter={
+          active || traceActive ? "url(#visualizer-cable-glow)" : undefined
+        }
         style={{ transition: "opacity 150ms ease, stroke-width 150ms ease" }}
       />
       {[cable.fromPoint, cable.toPoint].map((point, index) => (
@@ -1159,7 +1282,7 @@ function Inspector({
   onSelectCable: (id: string) => void;
 }) {
   const neighbors = selectedNode
-    ? model.directNeighborsByDeviceId[selectedNode.device.id] ?? []
+    ? (model.directNeighborsByDeviceId[selectedNode.device.id] ?? [])
     : [];
   return (
     <>
@@ -1194,14 +1317,19 @@ function Inspector({
             </div>
           )}
           {selectedNode && (
-            <DeviceInspector node={selectedNode} neighbors={neighbors} onSelectDevice={onSelectDevice} onSelectCable={onSelectCable} />
+            <DeviceInspector
+              node={selectedNode}
+              neighbors={neighbors}
+              onSelectCable={onSelectCable}
+            />
           )}
           {selectedCable && !selectedNode && (
-            <CableInspector cable={selectedCable} onSelectDevice={onSelectDevice} />
+            <CableInspector
+              cable={selectedCable}
+              onSelectDevice={onSelectDevice}
+            />
           )}
-          {traceResult && (
-            <TraceSummary model={model} result={traceResult} />
-          )}
+          {traceResult && <TraceSummary model={model} result={traceResult} />}
         </CardBody>
       </Card>
 
@@ -1212,7 +1340,10 @@ function Inspector({
             <CardHeading>{model.cables.length} cables</CardHeading>
           </CardTitle>
         </CardHeader>
-        <CardBody data-visualizer-scrollable="true" className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+        <CardBody
+          data-visualizer-scrollable="true"
+          className="min-h-0 flex-1 space-y-2 overflow-y-auto"
+        >
           {model.cables.map((cable) => (
             <button
               key={cable.link.id}
@@ -1222,13 +1353,17 @@ function Inspector({
             >
               <div className="min-w-0">
                 <div className="truncate text-xs text-[var(--text-primary)]">
-                  {cable.fromDevice?.hostname ?? "Unknown"} to {cable.toDevice?.hostname ?? "Unknown"}
+                  {cable.fromDevice?.hostname ?? "Unknown"} to{" "}
+                  {cable.toDevice?.hostname ?? "Unknown"}
                 </div>
                 <Mono className="text-[10px] text-[var(--text-tertiary)]">
                   {cable.fromPort?.name ?? "?"} to {cable.toPort?.name ?? "?"}
                 </Mono>
               </div>
-              <span className="size-3 rounded-sm border border-[var(--border-subtle)]" style={{ background: cable.color }} />
+              <span
+                className="size-3 rounded-sm border border-[var(--border-subtle)]"
+                style={{ background: cable.color }}
+              />
             </button>
           ))}
         </CardBody>
@@ -1240,7 +1375,6 @@ function Inspector({
 function DeviceInspector({
   node,
   neighbors,
-  onSelectDevice,
   onSelectCable,
 }: {
   node: VisualizerNode;
@@ -1251,18 +1385,26 @@ function DeviceInspector({
     link: VisualizerCable["link"];
     color: string;
   }>;
-  onSelectDevice: (id: string) => void;
   onSelectCable: (id: string) => void;
 }) {
   return (
     <div className="space-y-3">
+      <Button variant="outline" size="sm" asChild>
+        <Link to={`/devices/${node.device.id}`}>Open device</Link>
+      </Button>
       <div className="grid grid-cols-2 gap-2">
         <InfoBox label="IP" value={node.device.managementIp} mono />
         <InfoBox label="MAC" value={node.macAddress} mono />
         <InfoBox label="Type" value={typeLabel(node.device.deviceType)} />
         <InfoBox label="Placement" value={placementLabel(node)} />
-        <InfoBox label="Ports" value={`${node.portSummary.linked}/${node.portSummary.total} linked`} />
-        <InfoBox label="Vendor" value={node.vendor ?? node.device.manufacturer} />
+        <InfoBox
+          label="Ports"
+          value={`${node.portSummary.linked}/${node.portSummary.total} linked`}
+        />
+        <InfoBox
+          label="Vendor"
+          value={node.vendor ?? node.device.manufacturer}
+        />
       </div>
       <div>
         <div className="rk-kicker mb-2">Direct connections</div>
@@ -1273,28 +1415,36 @@ function DeviceInspector({
             </div>
           ) : (
             neighbors.map((neighbor) => (
-              <button
+              <div
                 key={`${neighbor.link.id}:${neighbor.device.id}`}
-                type="button"
-                onClick={() => onSelectCable(neighbor.link.id)}
-                className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2 text-left hover:bg-[var(--surface-hover)]"
+                className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2 hover:bg-[var(--surface-hover)]"
               >
-                <span className="min-w-0">
-                  <span className="block truncate text-xs font-medium text-[var(--text-primary)]">{neighbor.device.hostname}</span>
+                <button
+                  type="button"
+                  onClick={() => onSelectCable(neighbor.link.id)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <span className="block truncate text-xs font-medium text-[var(--text-primary)]">
+                    {neighbor.device.hostname}
+                  </span>
                   <Mono className="text-[10px] text-[var(--text-tertiary)]">
                     {neighbor.port.name} to {neighbor.peerPort.name}
-                    {neighbor.link.cableLength ? ` | ${neighbor.link.cableLength}` : ""}
+                    {neighbor.link.cableLength
+                      ? ` | ${neighbor.link.cableLength}`
+                      : ""}
                   </Mono>
-                </span>
+                </button>
+                <Link
+                  to={`/devices/${neighbor.device.id}`}
+                  className="shrink-0 rounded-[var(--radius-xs)] border border-[var(--border-subtle)] px-2 py-1 text-[10px] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+                >
+                  Open
+                </Link>
                 <span
-                  className="size-3 rounded-full border border-[var(--border-subtle)]"
+                  className="size-3 shrink-0 rounded-full border border-[var(--border-subtle)]"
                   style={{ background: neighbor.color }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelectDevice(neighbor.device.id);
-                  }}
                 />
-              </button>
+              </div>
             ))
           )}
         </div>
@@ -1352,7 +1502,10 @@ function TraceSummary({
           const fromDevice = model.deviceById[segment.fromPort.deviceId];
           const toDevice = model.deviceById[segment.toPort.deviceId];
           return (
-            <div key={index} className="rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.18)] px-2 py-1.5 text-xs">
+            <div
+              key={index}
+              className="rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.18)] px-2 py-1.5 text-xs"
+            >
               <div className="text-[var(--text-primary)]">
                 {fromDevice?.hostname ?? "Unknown"} {segment.fromPort.name} to{" "}
                 {toDevice?.hostname ?? "Unknown"} {segment.toPort.name}
@@ -1420,7 +1573,9 @@ function InfoBox({
   return (
     <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] p-2">
       <div className="rk-kicker">{label}</div>
-      <div className={`mt-1 break-words text-xs text-[var(--text-primary)] ${mono ? "font-mono" : ""}`}>
+      <div
+        className={`mt-1 break-words text-xs text-[var(--text-primary)] ${mono ? "font-mono" : ""}`}
+      >
         {value || "-"}
       </div>
     </div>
@@ -1444,8 +1599,12 @@ function VisualizerStat({
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="rk-kicker">{label}</div>
-            <div className="mt-1 text-xl font-semibold text-[var(--text-primary)]">{value}</div>
-            <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">{hint}</div>
+            <div className="mt-1 text-xl font-semibold text-[var(--text-primary)]">
+              {value}
+            </div>
+            <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+              {hint}
+            </div>
           </div>
           <div className="grid size-9 place-items-center rounded-[var(--radius-md)] border border-[var(--accent-secondary-border)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary)]">
             <Icon className="size-4" />
@@ -1484,10 +1643,19 @@ function NoCableBanner({ onDismiss }: { onDismiss: () => void }) {
   return (
     <div className="absolute left-24 right-24 top-4 z-[80] flex items-center justify-between gap-4 rounded-[var(--radius-md)] border border-[var(--accent-primary-border)] bg-[color-mix(in_srgb,var(--surface-2)_92%,black)] px-4 py-3 shadow-[var(--shadow-card)]">
       <div>
-        <div className="text-sm font-semibold text-[var(--text-primary)]">No cables documented yet.</div>
-        <div className="text-xs text-[var(--text-tertiary)]">Patch a cable in Cables to see connections here.</div>
+        <div className="text-sm font-semibold text-[var(--text-primary)]">
+          No cables documented yet.
+        </div>
+        <div className="text-xs text-[var(--text-tertiary)]">
+          Patch a cable in Cables to see connections here.
+        </div>
       </div>
-      <Button variant="ghost" size="icon" onClick={onDismiss} aria-label="Dismiss no cables banner">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onDismiss}
+        aria-label="Dismiss no cables banner"
+      >
         <X className="size-4" />
       </Button>
     </div>
@@ -1520,7 +1688,10 @@ function VisualizerSkeleton() {
       <div className="flex min-w-0 flex-1 flex-col gap-4">
         <div className="grid gap-3 md:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="rk-skeleton h-24 rounded-[var(--radius-lg)] border border-[var(--border-default)]" />
+            <div
+              key={index}
+              className="rk-skeleton h-24 rounded-[var(--radius-lg)] border border-[var(--border-default)]"
+            />
           ))}
         </div>
         <div className="rk-skeleton min-h-0 flex-1 rounded-[var(--radius-lg)] border border-[var(--border-default)]" />
@@ -1544,7 +1715,9 @@ function VisualizerNoDevices() {
             Add racks, devices, and cables to see your topology
           </h2>
           <p className="mt-2 text-sm text-[var(--text-tertiary)]">
-            The Visualizer is generated from Rackpad inventory, so it becomes useful as soon as your first devices and patch cables are documented.
+            The Visualizer is generated from Rackpad inventory, so it becomes
+            useful as soon as your first devices and patch cables are
+            documented.
           </p>
           <div className="mt-5 flex justify-center gap-3">
             <Button asChild>
@@ -1584,7 +1757,10 @@ function placementLabel(node: VisualizerNode) {
       node.device.heightU ? ` / ${node.device.heightU}U` : ""
     }`;
   }
-  if (node.roomName) return node.device.placement ? `${node.roomName} | ${node.device.placement}` : node.roomName;
+  if (node.roomName)
+    return node.device.placement
+      ? `${node.roomName} | ${node.device.placement}`
+      : node.roomName;
   if (node.device.placement) return node.device.placement;
   return "Room / loose";
 }

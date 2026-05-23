@@ -6,6 +6,32 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.1-beta.3] - 2026-05-23
+
+### Added
+
+- Device records now have a MAC address field, discovery imports preserve it,
+  and major IP displays show the MAC beside the management IP when known.
+- Devices, Discovery, Ports, IPAM, Dashboard, Reports, and the Visualizer now
+  expose more direct navigation links between devices, racks, rooms, ports, and
+  addresses.
+- Visualizer layout options can place room loose devices below racks and can
+  show room-only sections in the rack-zone pane without creating a placeholder
+  rack.
+- `OIDC_DEBUG=1` adds issuer/discovery/token/JWKS troubleshooting logs for OIDC
+  sign-in setup.
+- Docker compose examples now pass `OIDC_REDIRECT_URI`, and the README includes
+  a working Authentik-style OIDC configuration example.
+- Backlog notes captured for a markdown documentation workspace and device image
+  attachments.
+
+### Changed
+
+- OIDC provider errors now include the discovery URL that failed, making issuer
+  URL 404s easier to diagnose.
+- Device MAC addresses can now be searched and sorted directly in inventory
+  views, including the Devices table and Discovery inbox.
+
 ## [1.2.1-beta.2] - 2026-05-22
 
 ### Added

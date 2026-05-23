@@ -24,6 +24,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { formatDeviceAddress } from "@/lib/network-labels";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
 
@@ -157,6 +158,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         device.manufacturer,
         device.model,
         device.managementIp,
+        device.macAddress,
         ...(device.tags ?? []),
       ]
         .filter(Boolean)
@@ -172,6 +174,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             device.deviceType.replace("_", " "),
             device.manufacturer,
             device.model,
+            formatDeviceAddress(device),
           ]
             .filter(Boolean)
             .join(" · "),

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
 import {
   Card,
@@ -40,6 +40,7 @@ import type {
 } from "@/lib/types";
 import { Hash, Network, Plus, Save, Trash2 } from "lucide-react";
 import { cidrSize } from "@/lib/utils";
+import { formatDeviceMac } from "@/lib/network-labels";
 
 const TYPE_LABELS: Record<IpAssignment["assignmentType"], string> = {
   device: "Devices",
@@ -820,11 +821,36 @@ export default function IpamView() {
                             key={assignment.id}
                             className="grid grid-cols-12 items-center gap-3 px-4 py-2 transition-colors hover:bg-[var(--color-surface)]/40"
                           >
-                            <Mono className="col-span-3 text-[var(--color-fg)]">
-                              {assignment.ipAddress}
-                            </Mono>
+                            <div className="col-span-3">
+                              {device ? (
+                                <Link
+                                  to={`/devices/${device.id}`}
+                                  className="font-mono text-[var(--color-fg)] hover:text-[var(--color-accent)]"
+                                >
+                                  {assignment.ipAddress}
+                                </Link>
+                              ) : (
+                                <Mono className="block text-[var(--color-fg)]">
+                                  {assignment.ipAddress}
+                                </Mono>
+                              )}
+                              {device && formatDeviceMac(device) && (
+                                <Mono className="block text-[10px] text-[var(--color-fg-muted)]">
+                                  {formatDeviceMac(device)}
+                                </Mono>
+                              )}
+                            </div>
                             <div className="col-span-2 text-xs">
-                              {assignment.hostname ?? "-"}
+                              {device ? (
+                                <Link
+                                  to={`/devices/${device.id}`}
+                                  className="hover:text-[var(--color-accent)]"
+                                >
+                                  {assignment.hostname ?? device.hostname}
+                                </Link>
+                              ) : (
+                                (assignment.hostname ?? "-")
+                              )}
                             </div>
                             <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">
                               {device

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { motion } from "motion/react";
 import type { Device, Rack, RackFace } from "@/lib/types";
+import { formatDeviceAddress } from "@/lib/network-labels";
 import { cn, statusColor, statusGlow } from "@/lib/utils";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { StatusDot } from "@/components/shared/StatusDot";
@@ -243,9 +244,9 @@ function DeviceTile({
           <span className="text-[var(--text-tertiary)]">
             {[device.manufacturer, device.model].filter(Boolean).join(" ")}
           </span>
-          {device.managementIp && (
+          {formatDeviceAddress(device) && (
             <span className="text-[var(--text-tertiary)]">
-              mgmt: {device.managementIp}
+              mgmt: {formatDeviceAddress(device)}
             </span>
           )}
         </div>

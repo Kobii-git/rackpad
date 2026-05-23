@@ -28,6 +28,10 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
 
 - `Health` recolors device stripes by monitor rollup: green online, amber warning, red down, neutral unknown.
 - `Trace mode` lets you click two ports and highlights the documented L1 path between them.
+- `Loose below` places room loose-device groups below racks instead of beside
+  them, which can reduce cable paths crossing through other devices.
+- `No rack required` keeps rooms with only loose devices in the rack-elevation
+  zone instead of the separate room/loose zone.
 - Cable type filter limits the canvas to one cable type.
 - Type chips fade non-matching devices and unrelated cables.
 - Shift-click type chips to multi-select device types.

@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ExternalLink, MapPin, Pencil, Plus, Save, Server, Trash2 } from "lucide-react";
+import {
+  ExternalLink,
+  MapPin,
+  Pencil,
+  Plus,
+  Save,
+  Server,
+  Trash2,
+} from "lucide-react";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { TopBar } from "@/components/layout/TopBar";
 import { RackView } from "@/components/rack/RackView";
@@ -32,6 +40,7 @@ import {
 } from "@/lib/store";
 import type { Device, Port, RackFace, Room } from "@/lib/types";
 import { statusLabel } from "@/lib/utils";
+import { formatDeviceAddress } from "@/lib/network-labels";
 
 const UNRACKED_VIEW_ID = "__unracked__";
 const ROOM_VIEW_PREFIX = "__room__:";
@@ -638,7 +647,8 @@ export default function RackViewPage() {
                               : ""
                           }`}
                           childDevices={devices.filter(
-                            (entry) => entry.parentDeviceId === selectedDevice.id,
+                            (entry) =>
+                              entry.parentDeviceId === selectedDevice.id,
                           )}
                         />
                       </motion.div>
@@ -702,7 +712,7 @@ export default function RackViewPage() {
                   placement: "room",
                   roomId: viewingRoom.id,
                 }
-            : undefined
+              : undefined
         }
         onClose={() => setDrawerOpen(false)}
       />
@@ -773,7 +783,11 @@ function UnrackedPanel({
                   <Row label="Manufacturer" value={device.manufacturer} />
                   <Row label="Model" value={device.model} mono />
                   <Row label="Serial" value={device.serial} mono />
-                  <Row label="Mgmt IP" value={device.managementIp} mono />
+                  <Row
+                    label="Mgmt IP / MAC"
+                    value={formatDeviceAddress(device)}
+                    mono
+                  />
                   <Row
                     label="Ports"
                     value={String(portsByDeviceId[device.id]?.length ?? 0)}
@@ -800,7 +814,13 @@ function RoomPanel({
   portsByDeviceId,
 }: {
   room: Room;
-  racks: Array<{ id: string; name: string; totalU: number; description?: string; location?: string }>;
+  racks: Array<{
+    id: string;
+    name: string;
+    totalU: number;
+    description?: string;
+    location?: string;
+  }>;
   devices: Device[];
   portsByDeviceId: Record<string, Port[]>;
 }) {
@@ -853,8 +873,9 @@ function RoomPanel({
               </div>
             ) : (
               racks.map((rack) => (
-                <div
+                <Link
                   key={rack.id}
+                  to="/racks"
                   className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2"
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -870,7 +891,7 @@ function RoomPanel({
                       {rack.description || rack.location}
                     </div>
                   )}
-                </div>
+                </Link>
               ))
             )}
           </CardBody>
@@ -932,7 +953,7 @@ function DeviceRoomRow({
           {device.hostname}
         </div>
         <div className="truncate text-[11px] text-[var(--color-fg-subtle)]">
-          {device.managementIp ?? device.deviceType.replace("_", " ")}
+          {formatDeviceAddress(device, device.deviceType.replace("_", " "))}
         </div>
       </div>
       <Mono className="text-[10px] text-[var(--color-fg-muted)]">
@@ -1003,7 +1024,7 @@ function DeviceSummaryCard({
           <Row label="Manufacturer" value={device.manufacturer} />
           <Row label="Model" value={device.model} mono />
           <Row label="Serial" value={device.serial} mono />
-          <Row label="Mgmt IP" value={device.managementIp} mono />
+          <Row label="Mgmt IP / MAC" value={formatDeviceAddress(device)} mono />
           <Row label="Position" value={position} />
           <Row label="Ports" value={String(portCount)} />
           {device.deviceType === RACK_SHELF_TYPE && (

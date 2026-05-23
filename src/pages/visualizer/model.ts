@@ -23,6 +23,7 @@ import {
   defaultDeviceTypeLabel,
   normalizeDeviceTypeId,
 } from "@/lib/device-types";
+import { formatDeviceAddress } from "@/lib/network-labels";
 import type {
   RackBand,
   RackPanel,
@@ -33,6 +34,7 @@ import type {
   TraceSegment,
   VisualizerCable,
   VisualizerHealth,
+  VisualizerLayoutOptions,
   VisualizerModel,
   VisualizerNeighbor,
   VisualizerNode,
@@ -62,6 +64,10 @@ const ROOM_ROW_HEIGHT = 54;
 const GROUP_HEADER_HEIGHT = 48;
 const GROUP_GAP = 14;
 const CABLE_FALLBACK_COLOR = "rgb(151 167 183 / 0.5)";
+const DEFAULT_LAYOUT_OPTIONS: VisualizerLayoutOptions = {
+  looseDevicePlacement: "beside-racks",
+  includeRoomOnlySections: false,
+};
 
 const DEVICE_TYPE_ORDER: DeviceType[] = [
   "switch",
@@ -114,6 +120,7 @@ interface BuildVisualizerInput {
   virtualSwitches: VirtualSwitch[];
   expandedRackRuns: Set<string>;
   collapsedGroups: Set<string>;
+  layout?: Partial<VisualizerLayoutOptions>;
 }
 
 interface SubnetRange {
@@ -122,7 +129,14 @@ interface SubnetRange {
   end: number;
 }
 
-export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerModel {
+export function buildVisualizerModel(
+  input: BuildVisualizerInput,
+): VisualizerModel {
+  const layout: VisualizerLayoutOptions = {
+    ...DEFAULT_LAYOUT_OPTIONS,
+    ...input.layout,
+  };
+  const placeLooseBelow = layout.looseDevicePlacement === "below-racks";
   const racks = [...input.racks].sort((a, b) => a.name.localeCompare(b.name));
   const roomsById = indexById(input.rooms);
   const deviceById = indexById(input.devices);
@@ -161,22 +175,29 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
   const looseDevices = input.devices.filter(
     (device) => !device.rackId || !rackIds.has(device.rackId),
   );
-  const roomIdsWithRacks = new Set(
-    racks
-      .map((rack) => rack.roomId)
-      .filter((roomId): roomId is string => Boolean(roomId)),
-  );
   const looseDeviceRoomById = new Map(
     looseDevices.map((device) => [
       device.id,
       roomForDevice(device, deviceById, racksById, roomsById),
     ]),
   );
+  const rackRoomInputs = buildRackRoomInputs({
+    racks,
+    looseDevices,
+    looseDeviceRoomById,
+    roomsById,
+    includeRoomOnlySections: layout.includeRoomOnlySections,
+  });
+  const rackSectionRoomIds = new Set(
+    rackRoomInputs
+      .map((section) => section.room?.id)
+      .filter((roomId): roomId is string => Boolean(roomId)),
+  );
   const rackSectionLooseDeviceIds = new Set(
     looseDevices
       .filter((device) => {
         const room = looseDeviceRoomById.get(device.id);
-        return Boolean(room && roomIdsWithRacks.has(room.id));
+        return Boolean(room && rackSectionRoomIds.has(room.id));
       })
       .map((device) => device.id),
   );
@@ -185,7 +206,7 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
   const rackPanels: RackPanel[] = [];
   let rackSectionX = RACK_ZONE_X + ZONE_PADDING;
   const rackSectionY = ZONE_Y + ZONE_HEADER;
-  for (const sectionInput of buildRackRoomInputs(racks, roomsById)) {
+  for (const sectionInput of rackRoomInputs) {
     const sectionLooseDevices = sectionInput.room
       ? looseDevices.filter(
           (device) =>
@@ -197,15 +218,21 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
       sectionInput.racks.length * RACK_PANEL_WIDTH +
       Math.max(0, sectionInput.racks.length - 1) * RACK_PANEL_GAP;
     const looseGroupWidth =
-      sectionLooseDevices.length > 0 ? RACK_LOOSE_GROUP_WIDTH : 0;
+      sectionLooseDevices.length > 0
+        ? placeLooseBelow
+          ? Math.max(RACK_LOOSE_GROUP_WIDTH, rackColumnsWidth)
+          : RACK_LOOSE_GROUP_WIDTH
+        : 0;
     const looseGroupGap =
-      rackColumnsWidth > 0 && looseGroupWidth > 0 ? RACK_PANEL_GAP : 0;
+      !placeLooseBelow && rackColumnsWidth > 0 && looseGroupWidth > 0
+        ? RACK_PANEL_GAP
+        : 0;
+    const sectionContentWidth = placeLooseBelow
+      ? Math.max(rackColumnsWidth, looseGroupWidth)
+      : rackColumnsWidth + looseGroupGap + looseGroupWidth;
     const sectionWidth = Math.max(
       RACK_PANEL_WIDTH + RACK_SECTION_PADDING * 2,
-      RACK_SECTION_PADDING * 2 +
-        rackColumnsWidth +
-        looseGroupGap +
-        looseGroupWidth,
+      RACK_SECTION_PADDING * 2 + sectionContentWidth,
     );
     const rackPanelY = rackSectionY + RACK_SECTION_HEADER;
     const sectionPanels = sectionInput.racks.map((rack, rackIndex) => {
@@ -235,11 +262,15 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
       return panel;
     });
     rackPanels.push(...sectionPanels);
+    const rackPanelHeight = maxOf(sectionPanels, (panel) => panel.height, 0);
     const looseGroupX =
       rackSectionX +
       RACK_SECTION_PADDING +
-      rackColumnsWidth +
-      looseGroupGap;
+      (placeLooseBelow ? 0 : rackColumnsWidth + looseGroupGap);
+    const looseGroupY =
+      placeLooseBelow && rackPanelHeight > 0
+        ? rackPanelY + rackPanelHeight + GROUP_GAP
+        : rackPanelY;
     const sectionLooseGroups =
       sectionLooseDevices.length > 0
         ? buildRoomGroups({
@@ -258,29 +289,33 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
             monitorsByDeviceId,
             collapsedGroups: input.collapsedGroups,
             x: looseGroupX,
-            y: rackPanelY,
-            width: RACK_LOOSE_GROUP_WIDTH,
+            y: looseGroupY,
+            width: looseGroupWidth,
           })
         : [];
     for (const group of sectionLooseGroups) {
       nodes.push(...group.nodes);
     }
-    const sectionDeviceIds = new Set(
-      [
-        ...sectionPanels.flatMap((panel) =>
-          panel.nodes.map((node) => node.device.id),
-        ),
-        ...sectionLooseDevices.map((device) => device.id),
-      ],
-    );
-    const looseGroupHeight = roomGroupsHeight(sectionLooseGroups, rackPanelY);
+    const sectionDeviceIds = new Set([
+      ...sectionPanels.flatMap((panel) =>
+        panel.nodes.map((node) => node.device.id),
+      ),
+      ...sectionLooseDevices.map((device) => device.id),
+    ]);
+    const looseGroupHeight = roomGroupsHeight(sectionLooseGroups, looseGroupY);
+    const sectionBodyHeight = placeLooseBelow
+      ? Math.max(
+          300,
+          rackPanelHeight +
+            (rackPanelHeight > 0 && looseGroupHeight > 0 ? GROUP_GAP : 0) +
+            looseGroupHeight,
+        )
+      : Math.max(
+          maxOf(sectionPanels, (panel) => panel.height, 300),
+          looseGroupHeight,
+        );
     const sectionHeight =
-      RACK_SECTION_HEADER +
-      ZONE_PADDING +
-      Math.max(
-        maxOf(sectionPanels, (panel) => panel.height, 300),
-        looseGroupHeight,
-      );
+      RACK_SECTION_HEADER + ZONE_PADDING + sectionBodyHeight;
     rackSections.push({
       id: sectionInput.id,
       name: sectionInput.name,
@@ -295,7 +330,11 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
       stats: {
         racks: sectionPanels.length,
         devices: sectionDeviceIds.size,
-        cables: countLinksTouchingDevices(input.portLinks, portById, sectionDeviceIds),
+        cables: countLinksTouchingDevices(
+          input.portLinks,
+          portById,
+          sectionDeviceIds,
+        ),
       },
     });
     rackSectionX += sectionWidth + RACK_SECTION_GAP;
@@ -310,7 +349,9 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
 
   const rackZoneHeight = Math.max(
     460,
-    ZONE_HEADER + ZONE_PADDING + maxOf(rackSections, (section) => section.height, 300),
+    ZONE_HEADER +
+      ZONE_PADDING +
+      maxOf(rackSections, (section) => section.height, 300),
   );
 
   const roomZoneX = RACK_ZONE_X + rackZoneWidth + ZONE_GAP;
@@ -346,7 +387,10 @@ export function buildVisualizerModel(input: BuildVisualizerInput): VisualizerMod
       GROUP_GAP +
       roomGroups.reduce(
         (sum, group) =>
-          sum + GROUP_HEADER_HEIGHT + (group.collapsed ? 0 : group.nodes.length * ROOM_ROW_HEIGHT) + GROUP_GAP,
+          sum +
+          GROUP_HEADER_HEIGHT +
+          (group.collapsed ? 0 : group.nodes.length * ROOM_ROW_HEIGHT) +
+          GROUP_GAP,
         0,
       ),
   );
@@ -478,7 +522,9 @@ function buildRackPanel(input: {
       y: top + 2,
       width: RACK_NODE_WIDTH,
       height: Math.max(Math.max(24, rackUnitHeight - 4), bottom - top - 4),
-      zoneId: input.room ? `room:${input.room.id}:rack:${input.rack.id}` : `rack:${input.rack.id}`,
+      zoneId: input.room
+        ? `room:${input.room.id}:rack:${input.rack.id}`
+        : `rack:${input.rack.id}`,
       rackId: input.rack.id,
       rackName: input.rack.name,
       roomId: input.room?.id ?? null,
@@ -490,7 +536,10 @@ function buildRackPanel(input: {
       discoveredByIp: input.discoveredByIp,
       subnetRanges: input.subnetRanges,
       vlansById: input.vlansById,
-      health: getDeviceHealth(device, input.monitorsByDeviceId[device.id] ?? []),
+      health: getDeviceHealth(
+        device,
+        input.monitorsByDeviceId[device.id] ?? [],
+      ),
     });
   });
   const panelHeight = bodyY - input.y + bodyHeight + 48;
@@ -556,7 +605,13 @@ function rackUnitHeightForDevices(
   return RACK_UNIT_BASE_HEIGHT;
 }
 
-function buildRackRoomInputs(racks: Rack[], roomsById: Record<string, Room>) {
+function buildRackRoomInputs(input: {
+  racks: Rack[];
+  looseDevices: Device[];
+  looseDeviceRoomById: Map<string, Room | undefined>;
+  roomsById: Record<string, Room>;
+  includeRoomOnlySections: boolean;
+}) {
   const groups = new Map<
     string,
     {
@@ -567,8 +622,8 @@ function buildRackRoomInputs(racks: Rack[], roomsById: Record<string, Room>) {
       racks: Rack[];
     }
   >();
-  for (const rack of racks) {
-    const room = rack.roomId ? roomsById[rack.roomId] : undefined;
+  for (const rack of input.racks) {
+    const room = rack.roomId ? input.roomsById[rack.roomId] : undefined;
     const key = room ? `room:${room.id}` : "room:unassigned";
     const existing = groups.get(key);
     if (existing) {
@@ -578,10 +633,28 @@ function buildRackRoomInputs(racks: Rack[], roomsById: Record<string, Room>) {
     groups.set(key, {
       id: key,
       name: room?.name ?? "Unassigned room",
-      subtitle: room?.location ?? room?.description ?? "Racks without a room assignment",
+      subtitle:
+        room?.location ??
+        room?.description ??
+        "Racks without a room assignment",
       room,
       racks: [rack],
     });
+  }
+  if (input.includeRoomOnlySections) {
+    for (const device of input.looseDevices) {
+      const room = input.looseDeviceRoomById.get(device.id);
+      if (!room) continue;
+      const key = `room:${room.id}`;
+      if (groups.has(key)) continue;
+      groups.set(key, {
+        id: key,
+        name: room.name,
+        subtitle: room.location ?? room.description ?? "Room inventory",
+        room,
+        racks: [],
+      });
+    }
   }
   return Array.from(groups.values()).sort(
     (a, b) => a.name.localeCompare(b.name) || b.racks.length - a.racks.length,
@@ -621,7 +694,12 @@ function buildRoomGroups(input: {
   >();
   const hasSubnets = input.subnets.length > 0;
   for (const device of input.devices) {
-    const room = roomForDevice(device, input.deviceById, input.racksById, input.roomsById);
+    const room = roomForDevice(
+      device,
+      input.deviceById,
+      input.racksById,
+      input.roomsById,
+    );
     const roomKey = room ? `room:${room.id}` : "room:unassigned";
     const roomPrefix = room ? room.name : "Unassigned";
     if (isVirtualInventoryDevice(device)) {
@@ -636,9 +714,11 @@ function buildRoomGroups(input: {
         existing.devices.push(device);
       } else {
         groups.set(key, {
-          name: parent ? `${roomPrefix} / VMs on ${parent.hostname}` : `${roomPrefix} / Unassigned VMs`,
+          name: parent
+            ? `${roomPrefix} / VMs on ${parent.hostname}`
+            : `${roomPrefix} / Unassigned VMs`,
           subtitle: parent
-            ? `Hosted virtual inventory${parent.managementIp ? ` | ${parent.managementIp}` : ""}`
+            ? `Hosted virtual inventory${formatDeviceAddress(parent) ? ` | ${formatDeviceAddress(parent)}` : ""}`
             : "Virtual devices missing a host link",
           color: typeColor("vm"),
           groupType: "virtual-host",
@@ -672,7 +752,9 @@ function buildRoomGroups(input: {
     } else {
       groups.set(key, {
         name: `${roomPrefix} / ${DEVICE_TYPE_LABEL[device.deviceType]}`,
-        subtitle: room ? room.location ?? "Room inventory" : "Loose / unassigned inventory",
+        subtitle: room
+          ? (room.location ?? "Room inventory")
+          : "Loose / unassigned inventory",
         color: typeColor(device.deviceType),
         groupType: "device-type",
         devices: [device],
@@ -683,13 +765,25 @@ function buildRoomGroups(input: {
 
   let y = input.y;
   return Array.from(groups.entries())
-    .sort(([, a], [, b]) => b.devices.length - a.devices.length || a.name.localeCompare(b.name))
+    .sort(
+      ([, a], [, b]) =>
+        b.devices.length - a.devices.length || a.name.localeCompare(b.name),
+    )
     .map(([id, group]) => {
       const collapsed = input.collapsedGroups.has(id);
       const sortedDevices = [...group.devices].sort((a, b) => {
-        const aHealth = getDeviceHealth(a, input.monitorsByDeviceId[a.id] ?? []);
-        const bHealth = getDeviceHealth(b, input.monitorsByDeviceId[b.id] ?? []);
-        return healthSort(aHealth) - healthSort(bHealth) || a.hostname.localeCompare(b.hostname);
+        const aHealth = getDeviceHealth(
+          a,
+          input.monitorsByDeviceId[a.id] ?? [],
+        );
+        const bHealth = getDeviceHealth(
+          b,
+          input.monitorsByDeviceId[b.id] ?? [],
+        );
+        return (
+          healthSort(aHealth) - healthSort(bHealth) ||
+          a.hostname.localeCompare(b.hostname)
+        );
       });
       const groupTop = y;
       y += GROUP_HEADER_HEIGHT;
@@ -702,7 +796,9 @@ function buildRoomGroups(input: {
               y: groupTop + GROUP_HEADER_HEIGHT + index * ROOM_ROW_HEIGHT,
               width: ROOM_NODE_WIDTH,
               height: NODE_HEIGHT,
-              zoneId: group.room ? `room:${group.room.id}:loose` : "room:unassigned:loose",
+              zoneId: group.room
+                ? `room:${group.room.id}:loose`
+                : "room:unassigned:loose",
               roomId: group.room?.id ?? null,
               roomName: group.room?.name ?? "Unassigned room",
               ports: input.portsByDeviceId[device.id] ?? [],
@@ -712,7 +808,10 @@ function buildRoomGroups(input: {
               discoveredByIp: input.discoveredByIp,
               subnetRanges: input.subnetRanges,
               vlansById: input.vlansById,
-              health: getDeviceHealth(device, input.monitorsByDeviceId[device.id] ?? []),
+              health: getDeviceHealth(
+                device,
+                input.monitorsByDeviceId[device.id] ?? [],
+              ),
             }),
           );
       if (!collapsed) y += nodes.length * ROOM_ROW_HEIGHT;
@@ -729,11 +828,17 @@ function buildRoomGroups(input: {
         total: group.devices.length,
         online: group.devices.filter(
           (device) =>
-            getDeviceHealth(device, input.monitorsByDeviceId[device.id] ?? []) === "online",
+            getDeviceHealth(
+              device,
+              input.monitorsByDeviceId[device.id] ?? [],
+            ) === "online",
         ).length,
         down: group.devices.filter(
           (device) =>
-            getDeviceHealth(device, input.monitorsByDeviceId[device.id] ?? []) === "offline",
+            getDeviceHealth(
+              device,
+              input.monitorsByDeviceId[device.id] ?? [],
+            ) === "offline",
         ).length,
         collapsed,
         groupType: group.groupType,
@@ -752,12 +857,15 @@ function roomForDevice(
   racksById: Record<string, Rack>,
   roomsById: Record<string, Room>,
 ) {
-  if (device.roomId && roomsById[device.roomId]) return roomsById[device.roomId];
+  if (device.roomId && roomsById[device.roomId])
+    return roomsById[device.roomId];
   if (device.rackId) {
     const rack = racksById[device.rackId];
     if (rack?.roomId && roomsById[rack.roomId]) return roomsById[rack.roomId];
   }
-  const parent = device.parentDeviceId ? deviceById[device.parentDeviceId] : undefined;
+  const parent = device.parentDeviceId
+    ? deviceById[device.parentDeviceId]
+    : undefined;
   if (parent) return roomForDevice(parent, deviceById, racksById, roomsById);
   return undefined;
 }
@@ -808,7 +916,7 @@ function createNode(input: {
       linked: linked.length,
       total: input.ports.length,
     },
-    macAddress: discovered?.macAddress,
+    macAddress: input.device.macAddress ?? discovered?.macAddress,
     vendor: discovered?.vendor,
     subnet,
   };
@@ -838,7 +946,8 @@ function layoutPortStrip(input: {
   const rows = Math.ceil(count / columns);
   const stripHeight = rows * cell + (rows - 1) * gap;
   const startX = input.node.x + input.node.width - stripWidth - 8;
-  const startY = input.node.y + Math.max(5, (input.node.height - stripHeight) / 2);
+  const startY =
+    input.node.y + Math.max(5, (input.node.height - stripHeight) / 2);
   return input.ports.map((port, index) => {
     const col = index % columns;
     const row = Math.floor(index / columns);
@@ -857,7 +966,7 @@ function layoutPortStrip(input: {
       destinationLabel: null,
       vlanSummary: portVlanSummary(port, input.vlansById),
       bridgeName: port.virtualSwitchId
-        ? input.virtualSwitchById[port.virtualSwitchId]?.name ?? null
+        ? (input.virtualSwitchById[port.virtualSwitchId]?.name ?? null)
         : null,
     };
   });
@@ -874,9 +983,18 @@ function buildCable(input: {
   const toPort = input.portById[input.link.toPortId];
   const fromDevice = fromPort ? input.deviceById[fromPort.deviceId] : undefined;
   const toDevice = toPort ? input.deviceById[toPort.deviceId] : undefined;
-  const fromNode = fromDevice ? input.nodesByDeviceId[fromDevice.id] : undefined;
+  const fromNode = fromDevice
+    ? input.nodesByDeviceId[fromDevice.id]
+    : undefined;
   const toNode = toDevice ? input.nodesByDeviceId[toDevice.id] : undefined;
-  if (!fromPort || !toPort || !fromDevice || !toDevice || !fromNode || !toNode) {
+  if (
+    !fromPort ||
+    !toPort ||
+    !fromDevice ||
+    !toDevice ||
+    !fromNode ||
+    !toNode
+  ) {
     return null;
   }
   const fromPoint = portPoint(fromNode, fromPort.id, toNode);
@@ -987,8 +1105,9 @@ export function tracePorts(
 
   for (const device of Object.values(model.deviceById)) {
     if (device.deviceType !== "patch_panel") continue;
-    const grouped = groupBy(model.portsByDeviceId[device.id] ?? [], (port) =>
-      `${port.kind}:${port.name}`,
+    const grouped = groupBy(
+      model.portsByDeviceId[device.id] ?? [],
+      (port) => `${port.kind}:${port.name}`,
     );
     for (const pair of Object.values(grouped)) {
       const front = pair.find((port) => port.face === "front");
@@ -1080,7 +1199,10 @@ export function buildSearchResults(
         kind: "device",
         id: node.device.id,
         label: node.device.hostname,
-        meta: node.device.managementIp ?? DEVICE_TYPE_LABEL[node.device.deviceType],
+        meta:
+          [node.device.managementIp, node.macAddress]
+            .filter(Boolean)
+            .join(" | ") || DEVICE_TYPE_LABEL[node.device.deviceType],
         score,
       });
     }
@@ -1114,7 +1236,11 @@ export function buildSearchResults(
   return results.sort((a, b) => b.score - a.score).slice(0, 24);
 }
 
-function cablePath(from: { x: number; y: number }, to: { x: number; y: number }, index: number) {
+function cablePath(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  index: number,
+) {
   const dx = Math.abs(to.x - from.x);
   const laneOffset = ((index % 9) - 4) * 5;
   if (dx < 72) {
@@ -1268,7 +1394,9 @@ function findSubnet(
 }
 
 function isSlotPort(kind: PortKind) {
-  return kind === "sfp" || kind === "sfp_plus" || kind === "qsfp" || kind === "fiber";
+  return (
+    kind === "sfp" || kind === "sfp_plus" || kind === "qsfp" || kind === "fiber"
+  );
 }
 
 function comparePorts(a: Port, b: Port) {
@@ -1341,7 +1469,10 @@ function fuzzyScore(haystack: string, needle: string) {
   return matched * 10;
 }
 
-export function portTooltip(visualPort: VisualizerPort, model: VisualizerModel) {
+export function portTooltip(
+  visualPort: VisualizerPort,
+  model: VisualizerModel,
+) {
   const link = visualPort.linkId ? model.cableById[visualPort.linkId] : null;
   const peer =
     link?.fromPort?.id === visualPort.port.id

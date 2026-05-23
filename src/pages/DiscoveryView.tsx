@@ -24,7 +24,11 @@ import {
   updateDiscoveredDeviceRecord,
   useStore,
 } from "@/lib/store";
-import type { Device, DiscoveredDevice, DiscoveryScanResult } from "@/lib/types";
+import type {
+  Device,
+  DiscoveredDevice,
+  DiscoveryScanResult,
+} from "@/lib/types";
 import {
   applySortDirection,
   compareDate,
@@ -76,6 +80,7 @@ export default function DiscoveryView() {
   const [error, setError] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filter, setFilter] = useState<DiscoveryFilter>("all");
+  const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortState<DiscoverySortKey>>({
     key: "ip",
     direction: "asc",
@@ -155,17 +160,41 @@ export default function DiscoveryView() {
   );
 
   const filteredDevices = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
     return discoveredDevices
       .filter((device) => {
-        if (filter === "all") return true;
-        if (filter === "duplicates")
-          return (duplicateMatchesById[device.id] ?? []).length > 0;
-        return device.status === filter;
+        const matchesFilter =
+          filter === "all"
+            ? true
+            : filter === "duplicates"
+              ? (duplicateMatchesById[device.id] ?? []).length > 0
+              : device.status === filter;
+        if (!matchesFilter) return false;
+        if (!normalizedQuery) return true;
+        const haystack = [
+          device.ipAddress,
+          device.hostname,
+          device.displayName,
+          device.deviceType,
+          device.placement,
+          device.vendor,
+          device.macAddress,
+          device.status,
+          ...(duplicateMatchesById[device.id] ?? []).flatMap((match) => [
+            match.hostname,
+            match.managementIp,
+            match.macAddress,
+          ]),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(normalizedQuery);
       })
       .sort((a, b) =>
         compareDiscoveredDevices(a, b, sort, duplicateMatchesById),
       );
-  }, [discoveredDevices, duplicateMatchesById, filter, sort]);
+  }, [discoveredDevices, duplicateMatchesById, filter, query, sort]);
 
   const selected = selectedId
     ? discoveredDevices.find((device) => device.id === selectedId)
@@ -185,6 +214,7 @@ export default function DiscoveryView() {
       deviceType: selected.deviceType ?? "endpoint",
       manufacturer: selected.vendor ?? "",
       managementIp: selected.ipAddress,
+      macAddress: selected.macAddress ?? "",
       placement: selected.placement ?? "room",
       notes: selected.notes ?? "",
       status: "unknown" as const,
@@ -392,37 +422,48 @@ export default function DiscoveryView() {
 
         {lastScanResult && <ScanSummary result={lastScanResult} />}
 
-        <div className="flex flex-wrap gap-2">
-          <FilterButton
-            active={filter === "all"}
-            onClick={() => setFilter("all")}
-          >
-            All
-          </FilterButton>
-          <FilterButton
-            active={filter === "new"}
-            onClick={() => setFilter("new")}
-          >
-            New
-          </FilterButton>
-          <FilterButton
-            active={filter === "duplicates"}
-            onClick={() => setFilter("duplicates")}
-          >
-            Duplicates
-          </FilterButton>
-          <FilterButton
-            active={filter === "imported"}
-            onClick={() => setFilter("imported")}
-          >
-            Imported
-          </FilterButton>
-          <FilterButton
-            active={filter === "dismissed"}
-            onClick={() => setFilter("dismissed")}
-          >
-            Dismissed
-          </FilterButton>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            <FilterButton
+              active={filter === "all"}
+              onClick={() => setFilter("all")}
+            >
+              All
+            </FilterButton>
+            <FilterButton
+              active={filter === "new"}
+              onClick={() => setFilter("new")}
+            >
+              New
+            </FilterButton>
+            <FilterButton
+              active={filter === "duplicates"}
+              onClick={() => setFilter("duplicates")}
+            >
+              Duplicates
+            </FilterButton>
+            <FilterButton
+              active={filter === "imported"}
+              onClick={() => setFilter("imported")}
+            >
+              Imported
+            </FilterButton>
+            <FilterButton
+              active={filter === "dismissed"}
+              onClick={() => setFilter("dismissed")}
+            >
+              Dismissed
+            </FilterButton>
+          </div>
+          <div className="relative min-w-64">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search IP, hostname, MAC..."
+              className="h-8 pl-8 text-xs"
+            />
+          </div>
         </div>
 
         <div className="flex min-h-0 flex-1 gap-5 overflow-hidden">
@@ -438,7 +479,11 @@ export default function DiscoveryView() {
                 <table className="rk-table min-w-[980px]">
                   <thead>
                     <tr>
-                      <SortableHeader sortKey="ip" sort={sort} onSort={handleSort}>
+                      <SortableHeader
+                        sortKey="ip"
+                        sort={sort}
+                        onSort={handleSort}
+                      >
                         IP
                       </SortableHeader>
                       <SortableHeader
@@ -995,12 +1040,16 @@ function compareDiscoveredDevices(
       b.hostname ?? b.displayName ?? "",
     );
   } else if (sort.key === "type") {
-    result = compareText(a.deviceType ?? "endpoint", b.deviceType ?? "endpoint");
+    result = compareText(
+      a.deviceType ?? "endpoint",
+      b.deviceType ?? "endpoint",
+    );
   } else if (sort.key === "placement") {
     result = compareText(a.placement ?? "room", b.placement ?? "room");
   } else if (sort.key === "vendor") {
     result =
-      compareText(a.vendor, b.vendor) || compareText(a.macAddress, b.macAddress);
+      compareText(a.vendor, b.vendor) ||
+      compareText(a.macAddress, b.macAddress);
   } else if (sort.key === "match") {
     result = compareNumber(
       duplicateMatchesById[a.id]?.length ?? 0,
