@@ -8,8 +8,10 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Changed
 
-- Updated GitHub install/demo instructions, screenshot coverage, and seeded
-  demo content for the v1.2.2 feature set.
+- Updated GitHub install/demo instructions, seeded demo content, and 1920x1200
+  screenshot coverage for the v1.2.2 feature set.
+- Added richer Visualizer screenshots for cable selection, health overlay, trace
+  mode, and loose-device layout options.
 
 ## [1.2.2] - 2026-05-24
 

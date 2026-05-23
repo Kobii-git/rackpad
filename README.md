@@ -31,7 +31,8 @@ If `rackpad.co.za` is unavailable, the repo still contains the core material you
 
 ## Screenshots
 
-These are live captures from the working Rackpad demo environment, embedded directly in the GitHub repo.
+These are 1920x1200 live captures from the working Rackpad demo environment,
+embedded directly in the GitHub repo.
 
 ### Overview and physical inventory
 
@@ -43,25 +44,39 @@ These are live captures from the working Rackpad demo environment, embedded dire
 | ------------------------------------------------------------ | ---------------------------------------------------------------- |
 | ![Rackpad devices inventory](./docs/screenshots/devices.png) | ![Rackpad ports and patching view](./docs/screenshots/ports.png) |
 
-### Operations, topology, and documentation
+| Cables                                                   | IPAM                                                   |
+| -------------------------------------------------------- | ------------------------------------------------------ |
+| ![Rackpad cables workspace](./docs/screenshots/cables.png) | ![Rackpad IPAM workspace](./docs/screenshots/ipam.png) |
 
-| Monitoring                                                         | Visualizer                                                        |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| ![Rackpad monitoring workspace](./docs/screenshots/monitoring.png) | ![Rackpad visualizer workspace](./docs/screenshots/visualizer.png) |
+### Visualizer cable mapping
 
-| Documentation                                                      | Compute                                                      |
+| Topology and cable paths                                       | Selected cable inspector                                                |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| ![Rackpad visualizer workspace](./docs/screenshots/visualizer.png) | ![Rackpad visualizer selected cable](./docs/screenshots/visualizer-cables.png) |
+
+| Health overlay                                                        | Trace mode                                                        |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| ![Rackpad visualizer health overlay](./docs/screenshots/visualizer-health.png) | ![Rackpad visualizer trace mode](./docs/screenshots/visualizer-trace.png) |
+
+| Loose devices below racks                                             |
+| --------------------------------------------------------------------- |
+| ![Rackpad visualizer loose-device layout](./docs/screenshots/visualizer-layout.png) |
+
+### Operations and documentation
+
+| Monitoring                                                         | Compute                                                      |
 | ------------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![Rackpad documentation workspace](./docs/screenshots/documentation.png) | ![Rackpad compute workspace](./docs/screenshots/compute.png) |
+| ![Rackpad monitoring workspace](./docs/screenshots/monitoring.png) | ![Rackpad compute workspace](./docs/screenshots/compute.png) |
+
+| Documentation                                                      |
+| ------------------------------------------------------------------ |
+| ![Rackpad documentation workspace](./docs/screenshots/documentation.png) |
 
 ### Wireless, discovery, and address management
 
 | WiFi                                                   | Discovery                                                        |
 | ------------------------------------------------------ | ---------------------------------------------------------------- |
 | ![Rackpad WiFi workspace](./docs/screenshots/wifi.png) | ![Rackpad discovery workspace](./docs/screenshots/discovery.png) |
-
-| IPAM                                                   |
-| ------------------------------------------------------ |
-| ![Rackpad IPAM workspace](./docs/screenshots/ipam.png) |
 
 These are enough to see the app before installing it, and the full screenshot set used for GitHub previews lives in [`docs/screenshots`](./docs/screenshots).
 

@@ -6,6 +6,20 @@ documented cable paths between ports.
 
 Open Rackpad -> `Visualizer`.
 
+## Screenshots
+
+| Topology and cable paths | Selected cable inspector |
+| --- | --- |
+| ![Rackpad visualizer topology](./screenshots/visualizer.png) | ![Rackpad visualizer selected cable](./screenshots/visualizer-cables.png) |
+
+| Health overlay | Trace mode |
+| --- | --- |
+| ![Rackpad visualizer health overlay](./screenshots/visualizer-health.png) | ![Rackpad visualizer trace mode](./screenshots/visualizer-trace.png) |
+
+| Loose devices below racks |
+| --- |
+| ![Rackpad visualizer loose-device layout](./screenshots/visualizer-layout.png) |
+
 ## What It Shows
 
 - Rack-mounted equipment grouped in the left rack-elevation zone, with racks
