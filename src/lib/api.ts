@@ -4,8 +4,10 @@ import type {
   AuditEntry,
   AuthSession,
   Device,
+  DeviceImage,
   DeviceTypeDefinition,
   DeviceMonitor,
+  DocumentationPage,
   DiscoveredDevice,
   DiscoveryScanResult,
   DhcpScope,
@@ -49,6 +51,10 @@ export class ApiError extends Error {
 }
 
 export type DevicePatch = Nullable<Omit<Device, "id" | "labId">>;
+export type DeviceImagePatch = Nullable<Pick<DeviceImage, "label" | "notes">>;
+export type DocumentationPagePatch = Nullable<
+  Pick<DocumentationPage, "title" | "content">
+>;
 export type LabPatch = Nullable<Omit<Lab, "id">>;
 export type RoomPatch = Nullable<Omit<Room, "id" | "labId">>;
 export type RackPatch = Nullable<Omit<Rack, "id" | "labId">>;
@@ -434,6 +440,62 @@ export const api = {
     return request<Device[]>("/devices", undefined, params);
   },
 
+  getDocumentationPages(params?: { labId?: string }) {
+    return request<DocumentationPage[]>("/documentation", undefined, params);
+  },
+
+  createDocumentationPage(
+    body: Omit<DocumentationPage, "id" | "createdAt" | "updatedAt"> & {
+      id?: string;
+    },
+  ) {
+    return request<DocumentationPage>("/documentation", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateDocumentationPage(id: string, body: DocumentationPagePatch) {
+    return request<DocumentationPage>(`/documentation/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteDocumentationPage(id: string) {
+    return request<void>(`/documentation/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  getDeviceImages(params?: { deviceId?: string; labId?: string }) {
+    return request<DeviceImage[]>("/device-images", undefined, params);
+  },
+
+  createDeviceImage(
+    body: Omit<DeviceImage, "id" | "createdAt" | "updatedAt"> & {
+      id?: string;
+    },
+  ) {
+    return request<DeviceImage>("/device-images", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateDeviceImage(id: string, body: DeviceImagePatch) {
+    return request<DeviceImage>(`/device-images/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteDeviceImage(id: string) {
+    return request<void>(`/device-images/${id}`, {
+      method: "DELETE",
+    });
+  },
+
   getDeviceTypes() {
     return request<DeviceTypeDefinition[]>("/device-types");
   },
@@ -449,9 +511,7 @@ export const api = {
     return request<VirtualSwitch[]>("/virtual-switches", undefined, params);
   },
 
-  createVirtualSwitch(
-    body: Omit<VirtualSwitch, "id"> & { id?: string },
-  ) {
+  createVirtualSwitch(body: Omit<VirtualSwitch, "id"> & { id?: string }) {
     return request<VirtualSwitch>("/virtual-switches", {
       method: "POST",
       body: JSON.stringify(body),

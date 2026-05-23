@@ -123,6 +123,27 @@ export interface Device {
   lastSeen?: string;
 }
 
+export interface DeviceImage {
+  id: ID;
+  deviceId: ID;
+  label: string;
+  fileName: string;
+  mimeType: string;
+  dataUrl: string;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentationPage {
+  id: ID;
+  labId: ID;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Port {
   id: ID;
   deviceId: ID;

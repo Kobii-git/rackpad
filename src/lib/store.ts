@@ -4,10 +4,12 @@ import type {
   AppUser,
   AuditEntry,
   Device,
+  DeviceImage,
   DeviceTypeDefinition,
   DeviceMonitor,
   DiscoveredDevice,
   DiscoveryScanResult,
+  DocumentationPage,
   DhcpScope,
   IpAssignment,
   IpAssignmentType,
@@ -33,6 +35,8 @@ import type {
 } from "./types";
 import type {
   DevicePatch,
+  DeviceImagePatch,
+  DocumentationPagePatch,
   DiscoveredDevicePatch,
   DhcpScopePatch,
   LabPatch,
@@ -84,6 +88,8 @@ interface State {
   rooms: Room[];
   racks: Rack[];
   devices: Device[];
+  deviceImages: DeviceImage[];
+  documentationPages: DocumentationPage[];
   deviceTypes: DeviceTypeDefinition[];
   ports: Port[];
   portLinks: PortLink[];
@@ -111,6 +117,8 @@ const EMPTY_DATA = {
   rooms: [] as Room[],
   racks: [] as Rack[],
   devices: [] as Device[],
+  deviceImages: [] as DeviceImage[],
+  documentationPages: [] as DocumentationPage[],
   deviceTypes: [] as DeviceTypeDefinition[],
   ports: [] as Port[],
   portLinks: [] as PortLink[],
@@ -241,6 +249,22 @@ function sortRooms(rooms: Room[]) {
 
 function sortDevices(devices: Device[]) {
   return [...devices].sort((a, b) => a.hostname.localeCompare(b.hostname));
+}
+
+function sortDeviceImages(images: DeviceImage[]) {
+  return [...images].sort(
+    (a, b) =>
+      Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
+      a.label.localeCompare(b.label),
+  );
+}
+
+function sortDocumentationPages(pages: DocumentationPage[]) {
+  return [...pages].sort(
+    (a, b) =>
+      Date.parse(b.updatedAt) - Date.parse(a.updatedAt) ||
+      a.title.localeCompare(b.title),
+  );
 }
 
 function sortDeviceTypes(deviceTypes: DeviceTypeDefinition[]) {
@@ -428,6 +452,8 @@ function filterAuditForLab(
     assignmentIds: Set<string>;
     monitorIds: Set<string>;
     discoveredIds: Set<string>;
+    documentationPageIds: Set<string>;
+    deviceImageIds: Set<string>;
     wifiControllerIds: Set<string>;
     wifiSsidIds: Set<string>;
     wifiAccessPointIds: Set<string>;
@@ -468,6 +494,10 @@ function filterAuditForLab(
           return context.monitorIds.has(entry.entityId);
         case "DiscoveredDevice":
           return context.discoveredIds.has(entry.entityId);
+        case "DocumentationPage":
+          return context.documentationPageIds.has(entry.entityId);
+        case "DeviceImage":
+          return context.deviceImageIds.has(entry.entityId);
         case "WifiController":
           return context.wifiControllerIds.has(entry.entityId);
         case "WifiSsid":
@@ -944,6 +974,8 @@ export async function loadAll(
         deviceMonitors: api.getDeviceMonitors(),
         portTemplates: api.getPortTemplates(),
         discoveredDevices: api.getDiscoveredDevices(),
+        documentationPages: api.getDocumentationPages(),
+        deviceImages: api.getDeviceImages(),
         wifiControllers: api.getWifiControllers(),
         wifiSsids: api.getWifiSsids(),
         wifiAccessPoints: api.getWifiAccessPoints(),
@@ -1091,6 +1123,24 @@ export async function loadAll(
         allDiscoveredDevices.map((device) => device.id),
       );
 
+      const allDocumentationPages = sortDocumentationPages(
+        (
+          (resolved.get("documentationPages") as
+            | DocumentationPage[]
+            | undefined) ?? []
+        ).filter((page) => page.labId === activeLab.id),
+      );
+      const documentationPageIds = new Set(
+        allDocumentationPages.map((page) => page.id),
+      );
+
+      const allDeviceImages = sortDeviceImages(
+        (
+          (resolved.get("deviceImages") as DeviceImage[] | undefined) ?? []
+        ).filter((image) => deviceIds.has(image.deviceId)),
+      );
+      const deviceImageIds = new Set(allDeviceImages.map((image) => image.id));
+
       const allWifiControllers = sortWifiControllers(
         (
           (resolved.get("wifiControllers") as WifiController[] | undefined) ??
@@ -1162,6 +1212,8 @@ export async function loadAll(
           assignmentIds,
           monitorIds,
           discoveredIds,
+          documentationPageIds,
+          deviceImageIds,
           wifiControllerIds,
           wifiSsidIds,
           wifiAccessPointIds,
@@ -1197,6 +1249,8 @@ export async function loadAll(
         deviceMonitors: allMonitors,
         portTemplates: allPortTemplates,
         discoveredDevices: allDiscoveredDevices,
+        documentationPages: allDocumentationPages,
+        deviceImages: allDeviceImages,
         wifiControllers: allWifiControllers,
         wifiSsids: allWifiSsids,
         wifiAccessPoints: allWifiAccessPoints,
@@ -2074,6 +2128,7 @@ export async function deleteDevice(id: string): Promise<boolean> {
     deviceMonitors: prev.deviceMonitors.filter(
       (monitor) => monitor.deviceId !== id,
     ),
+    deviceImages: prev.deviceImages.filter((image) => image.deviceId !== id),
     discoveredDevices: prev.discoveredDevices.map((entry) =>
       entry.importedDeviceId === id
         ? { ...entry, importedDeviceId: null, status: "new" }
@@ -2098,6 +2153,159 @@ export async function deleteDevice(id: string): Promise<boolean> {
     "Device",
     id,
     `Deleted device ${device.hostname}`,
+  );
+
+  return true;
+}
+
+export async function createDocumentationPageRecord(input: {
+  title: string;
+  content?: string;
+}): Promise<DocumentationPage> {
+  const created = await api.createDocumentationPage({
+    labId: state.lab.id,
+    title: input.title.trim(),
+    content: input.content ?? "",
+  });
+
+  setState((prev) => ({
+    ...prev,
+    documentationPages: sortDocumentationPages([
+      created,
+      ...prev.documentationPages,
+    ]),
+  }));
+
+  void recordAudit(
+    "documentation.create",
+    "DocumentationPage",
+    created.id,
+    `Added documentation page ${created.title}`,
+  );
+
+  return created;
+}
+
+export async function updateDocumentationPageRecord(
+  id: string,
+  changes: DocumentationPagePatch,
+): Promise<DocumentationPage | null> {
+  const existing = state.documentationPages.find((page) => page.id === id);
+  if (!existing) return null;
+
+  const updated = await api.updateDocumentationPage(id, changes);
+  setState((prev) => ({
+    ...prev,
+    documentationPages: replaceById(
+      prev.documentationPages,
+      updated,
+      sortDocumentationPages,
+    ),
+  }));
+
+  void recordAudit(
+    "documentation.update",
+    "DocumentationPage",
+    id,
+    `Updated documentation page ${updated.title}`,
+  );
+
+  return updated;
+}
+
+export async function deleteDocumentationPageRecord(
+  id: string,
+): Promise<boolean> {
+  const existing = state.documentationPages.find((page) => page.id === id);
+  if (!existing) return false;
+
+  await api.deleteDocumentationPage(id);
+  setState((prev) => ({
+    ...prev,
+    documentationPages: removeById(prev.documentationPages, id),
+  }));
+
+  void recordAudit(
+    "documentation.delete",
+    "DocumentationPage",
+    id,
+    `Deleted documentation page ${existing.title}`,
+  );
+
+  return true;
+}
+
+export async function createDeviceImageRecord(input: {
+  deviceId: string;
+  label: string;
+  fileName: string;
+  mimeType: string;
+  dataUrl: string;
+  notes?: string | null;
+}): Promise<DeviceImage> {
+  const created = await api.createDeviceImage({
+    deviceId: input.deviceId,
+    label: input.label.trim() || input.fileName.replace(/\.[^.]+$/, ""),
+    fileName: input.fileName,
+    mimeType: input.mimeType,
+    dataUrl: input.dataUrl,
+    notes: input.notes?.trim() || null,
+  });
+
+  setState((prev) => ({
+    ...prev,
+    deviceImages: sortDeviceImages([created, ...prev.deviceImages]),
+  }));
+
+  const device = state.devices.find((entry) => entry.id === created.deviceId);
+  void recordAudit(
+    "device.image.create",
+    "DeviceImage",
+    created.id,
+    `Added image ${created.label} to ${device?.hostname ?? created.deviceId}`,
+  );
+
+  return created;
+}
+
+export async function updateDeviceImageRecord(
+  id: string,
+  changes: DeviceImagePatch,
+): Promise<DeviceImage | null> {
+  const existing = state.deviceImages.find((image) => image.id === id);
+  if (!existing) return null;
+
+  const updated = await api.updateDeviceImage(id, changes);
+  setState((prev) => ({
+    ...prev,
+    deviceImages: replaceById(prev.deviceImages, updated, sortDeviceImages),
+  }));
+
+  void recordAudit(
+    "device.image.update",
+    "DeviceImage",
+    id,
+    `Updated image ${updated.label}`,
+  );
+
+  return updated;
+}
+
+export async function deleteDeviceImageRecord(id: string): Promise<boolean> {
+  const existing = state.deviceImages.find((image) => image.id === id);
+  if (!existing) return false;
+
+  await api.deleteDeviceImage(id);
+  setState((prev) => ({
+    ...prev,
+    deviceImages: removeById(prev.deviceImages, id),
+  }));
+
+  void recordAudit(
+    "device.image.delete",
+    "DeviceImage",
+    id,
+    `Deleted image ${existing.label}`,
   );
 
   return true;

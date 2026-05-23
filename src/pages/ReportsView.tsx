@@ -464,13 +464,19 @@ export default function ReportsView() {
                     {model.rackRows.map((row) => (
                       <tr key={row.rack.id}>
                         <td className="font-medium text-[var(--text-primary)]">
-                          <Link to="/racks" className="hover:underline">
+                          <Link
+                            to={`/racks?rackId=${row.rack.id}`}
+                            className="hover:underline"
+                          >
                             {row.rack.name}
                           </Link>
                         </td>
                         <td>
                           {row.room ? (
-                            <Link to="/racks" className="hover:underline">
+                            <Link
+                              to={`/racks?roomId=${row.room.id}`}
+                              className="hover:underline"
+                            >
                               {row.room.name}
                             </Link>
                           ) : (

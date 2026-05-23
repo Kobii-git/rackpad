@@ -1,133 +1,143 @@
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import type { FastifyPluginAsync } from 'fastify'
-import { db, ensurePatchPanelPassThroughPorts, parseRow } from '../db.js'
-import { requireAdmin, setBootstrapState } from '../lib/auth.js'
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import type { FastifyPluginAsync } from "fastify";
+import { db, ensurePatchPanelPassThroughPorts, parseRow } from "../db.js";
+import { requireAdmin, setBootstrapState } from "../lib/auth.js";
 import {
   DEFAULT_ALERT_SETTINGS,
   loadAlertSettings,
   saveAlertSettings,
   sendTestAlert,
-} from '../lib/alerts.js'
-import { createId } from '../lib/ids.js'
+} from "../lib/alerts.js";
+import { createId } from "../lib/ids.js";
 import {
   asObject,
   optionalBoolean,
   optionalInteger,
   optionalString,
   ValidationError,
-} from '../lib/validation.js'
+} from "../lib/validation.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const ROOT_DIR = path.resolve(__dirname, '../..')
-const PACKAGE_JSON_PATH = path.resolve(ROOT_DIR, 'package.json')
-const APP_VERSION = readAppVersion()
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT_DIR = path.resolve(__dirname, "../..");
+const PACKAGE_JSON_PATH = path.resolve(ROOT_DIR, "package.json");
+const APP_VERSION = readAppVersion();
 const REDACTED_ALERT_SETTING_FIELDS = [
-  'discordWebhookUrl',
-  'telegramBotToken',
-  'smtpPassword',
-] as const
+  "discordWebhookUrl",
+  "telegramBotToken",
+  "smtpPassword",
+] as const;
 
 function readAppVersion() {
   try {
-    const packageJson = JSON.parse(readFileSync(PACKAGE_JSON_PATH, 'utf8')) as {
-      version?: string
-    }
-    return packageJson.version ?? '0.0.0'
+    const packageJson = JSON.parse(readFileSync(PACKAGE_JSON_PATH, "utf8")) as {
+      version?: string;
+    };
+    return packageJson.version ?? "0.0.0";
   } catch {
-    return '0.0.0'
+    return "0.0.0";
   }
 }
 
 function createBackupFilename(exportedAt: string) {
-  return `rackpad-backup-${exportedAt.replace(/[:.]/g, '-').replace('T', '_').replace('Z', '')}.json`
+  return `rackpad-backup-${exportedAt.replace(/[:.]/g, "-").replace("T", "_").replace("Z", "")}.json`;
 }
 
 function sanitizeBackupAppSettings(rows: Record<string, unknown>[]) {
   return rows.map((row) => {
-    if (row.key !== 'alertSettings' || typeof row.value !== 'string') {
-      return row
+    if (row.key !== "alertSettings" || typeof row.value !== "string") {
+      return row;
     }
 
     try {
-      const parsed = JSON.parse(row.value) as Record<string, unknown>
-      const next = { ...DEFAULT_ALERT_SETTINGS, ...parsed }
+      const parsed = JSON.parse(row.value) as Record<string, unknown>;
+      const next = { ...DEFAULT_ALERT_SETTINGS, ...parsed };
       for (const key of REDACTED_ALERT_SETTING_FIELDS) {
-        next[key] = null
+        next[key] = null;
       }
       return {
         ...row,
         value: JSON.stringify(next),
-      }
+      };
     } catch {
-      return row
+      return row;
     }
-  })
+  });
 }
 
 const exportBackupSnapshot = db.transaction(
   (exportedAt: string, exportedBy: string, filename: string) => {
-    const auditId = createId('a')
+    const auditId = createId("a");
 
     const snapshot = {
-      format: 'rackpad-backup-v1',
+      format: "rackpad-backup-v1",
       appVersion: APP_VERSION,
       exportedAt,
       exportedBy,
       secretsRedacted: true,
       data: {
-        labs: db.prepare('SELECT * FROM labs ORDER BY name, id').all(),
-        rooms: db.prepare('SELECT * FROM rooms ORDER BY labId, name, id').all(),
-        racks: db.prepare('SELECT * FROM racks ORDER BY name, id').all(),
+        labs: db.prepare("SELECT * FROM labs ORDER BY name, id").all(),
+        rooms: db.prepare("SELECT * FROM rooms ORDER BY labId, name, id").all(),
+        racks: db.prepare("SELECT * FROM racks ORDER BY name, id").all(),
         devices: (
           db
-            .prepare('SELECT * FROM devices ORDER BY hostname, id')
+            .prepare("SELECT * FROM devices ORDER BY hostname, id")
             .all() as Record<string, unknown>[]
-        ).map((row) => parseRow(row, ['tags'])),
+        ).map((row) => parseRow(row, ["tags"])),
         virtualSwitches: db
           .prepare(
-            'SELECT * FROM virtualSwitches ORDER BY hostDeviceId, name, id',
+            "SELECT * FROM virtualSwitches ORDER BY hostDeviceId, name, id",
           )
           .all(),
         ports: (
           db
-            .prepare('SELECT * FROM ports ORDER BY deviceId, position, id')
+            .prepare("SELECT * FROM ports ORDER BY deviceId, position, id")
             .all() as Record<string, unknown>[]
-        ).map((row) => parseRow(row, ['allowedVlanIds'])),
+        ).map((row) => parseRow(row, ["allowedVlanIds"])),
         portLinks: db
-          .prepare('SELECT * FROM portLinks ORDER BY fromPortId, toPortId, id')
+          .prepare("SELECT * FROM portLinks ORDER BY fromPortId, toPortId, id")
           .all(),
         portTemplates: (
           db
-            .prepare('SELECT * FROM portTemplates ORDER BY name, id')
+            .prepare("SELECT * FROM portTemplates ORDER BY name, id")
             .all() as Record<string, unknown>[]
-        ).map((row) => parseRow(row, ['deviceTypes', 'ports'])),
-        vlans: db.prepare('SELECT * FROM vlans ORDER BY vlanId, id').all(),
+        ).map((row) => parseRow(row, ["deviceTypes", "ports"])),
+        vlans: db.prepare("SELECT * FROM vlans ORDER BY vlanId, id").all(),
         vlanRanges: db
-          .prepare('SELECT * FROM vlanRanges ORDER BY startVlan, id')
+          .prepare("SELECT * FROM vlanRanges ORDER BY startVlan, id")
           .all(),
-        subnets: db.prepare('SELECT * FROM subnets ORDER BY cidr, id').all(),
+        subnets: db.prepare("SELECT * FROM subnets ORDER BY cidr, id").all(),
         dhcpScopes: (
           db
-            .prepare('SELECT * FROM dhcpScopes ORDER BY subnetId, name, id')
+            .prepare("SELECT * FROM dhcpScopes ORDER BY subnetId, name, id")
             .all() as Record<string, unknown>[]
-        ).map((row) => parseRow(row, ['dnsServers'])),
+        ).map((row) => parseRow(row, ["dnsServers"])),
         ipZones: db
-          .prepare('SELECT * FROM ipZones ORDER BY subnetId, startIp, id')
+          .prepare("SELECT * FROM ipZones ORDER BY subnetId, startIp, id")
           .all(),
         ipAssignments: db
           .prepare(
-            'SELECT * FROM ipAssignments ORDER BY subnetId, ipAddress, id',
+            "SELECT * FROM ipAssignments ORDER BY subnetId, ipAddress, id",
           )
           .all(),
         discoveredDevices: db
           .prepare(
-            'SELECT * FROM discoveredDevices ORDER BY lastScannedAt DESC, ipAddress, id',
+            "SELECT * FROM discoveredDevices ORDER BY lastScannedAt DESC, ipAddress, id",
+          )
+          .all(),
+        documentationPages: db
+          .prepare(
+            "SELECT * FROM documentationPages ORDER BY labId, updatedAt DESC, title, id",
+          )
+          .all(),
+        deviceImages: db
+          .prepare(
+            "SELECT * FROM deviceImages ORDER BY deviceId, createdAt DESC, id",
           )
           .all(),
         auditLog: db
-          .prepare('SELECT * FROM auditLog ORDER BY ts DESC, id DESC')
+          .prepare("SELECT * FROM auditLog ORDER BY ts DESC, id DESC")
           .all(),
         users: db
           .prepare(
@@ -139,41 +149,41 @@ const exportBackupSnapshot = db.transaction(
           )
           .all(),
         oidcIdentities: db
-          .prepare('SELECT * FROM oidcIdentities ORDER BY issuer, subject')
+          .prepare("SELECT * FROM oidcIdentities ORDER BY issuer, subject")
           .all(),
         deviceMonitors: db
-          .prepare('SELECT * FROM deviceMonitors ORDER BY deviceId, id')
+          .prepare("SELECT * FROM deviceMonitors ORDER BY deviceId, id")
           .all(),
         wifiControllers: db
-          .prepare('SELECT * FROM wifiControllers ORDER BY name, id')
+          .prepare("SELECT * FROM wifiControllers ORDER BY name, id")
           .all(),
         wifiSsids: db
-          .prepare('SELECT * FROM wifiSsids ORDER BY name, id')
+          .prepare("SELECT * FROM wifiSsids ORDER BY name, id")
           .all(),
         wifiAccessPoints: db
-          .prepare('SELECT * FROM wifiAccessPoints ORDER BY deviceId')
+          .prepare("SELECT * FROM wifiAccessPoints ORDER BY deviceId")
           .all(),
         wifiRadios: db
           .prepare(
-            'SELECT * FROM wifiRadios ORDER BY apDeviceId, band, slotName, id',
+            "SELECT * FROM wifiRadios ORDER BY apDeviceId, band, slotName, id",
           )
           .all(),
         wifiRadioSsids: db
-          .prepare('SELECT * FROM wifiRadioSsids ORDER BY radioId, ssidId')
+          .prepare("SELECT * FROM wifiRadioSsids ORDER BY radioId, ssidId")
           .all(),
         wifiClientAssociations: db
           .prepare(
-            'SELECT * FROM wifiClientAssociations ORDER BY apDeviceId, clientDeviceId',
+            "SELECT * FROM wifiClientAssociations ORDER BY apDeviceId, clientDeviceId",
           )
           .all(),
         appSettings: sanitizeBackupAppSettings(
-          db.prepare('SELECT * FROM appSettings ORDER BY key').all() as Record<
+          db.prepare("SELECT * FROM appSettings ORDER BY key").all() as Record<
             string,
             unknown
           >[],
         ),
       },
-    }
+    };
 
     db.prepare(
       `
@@ -184,109 +194,117 @@ const exportBackupSnapshot = db.transaction(
       auditId,
       exportedAt,
       exportedBy,
-      'admin.export',
-      'Backup',
+      "admin.export",
+      "Backup",
       auditId,
       `Exported Rackpad backup ${filename}`,
-    )
+    );
 
-    return snapshot
+    return snapshot;
   },
-)
+);
 
 function normalizeArrayRecordArray(value: unknown, key: string) {
   if (!Array.isArray(value)) {
-    throw new ValidationError(`${key} must be an array.`)
+    throw new ValidationError(`${key} must be an array.`);
   }
-  return value.map((entry) => asObject(entry))
+  return value.map((entry) => asObject(entry));
 }
 
 const restoreBackupSnapshot = db.transaction(
   (snapshot: Record<string, unknown>, restoredBy: string) => {
-    if (snapshot.format !== 'rackpad-backup-v1') {
-      throw new ValidationError('Unsupported backup format.')
+    if (snapshot.format !== "rackpad-backup-v1") {
+      throw new ValidationError("Unsupported backup format.");
     }
 
-    const data = asObject(snapshot.data)
-    const labs = normalizeArrayRecordArray(data.labs, 'data.labs')
-    const rooms = normalizeArrayRecordArray(data.rooms ?? [], 'data.rooms')
-    const racks = normalizeArrayRecordArray(data.racks, 'data.racks')
-    const devices = normalizeArrayRecordArray(data.devices, 'data.devices')
+    const data = asObject(snapshot.data);
+    const labs = normalizeArrayRecordArray(data.labs, "data.labs");
+    const rooms = normalizeArrayRecordArray(data.rooms ?? [], "data.rooms");
+    const racks = normalizeArrayRecordArray(data.racks, "data.racks");
+    const devices = normalizeArrayRecordArray(data.devices, "data.devices");
     const virtualSwitches = normalizeArrayRecordArray(
       data.virtualSwitches ?? [],
-      'data.virtualSwitches',
-    )
-    const ports = normalizeArrayRecordArray(data.ports, 'data.ports')
+      "data.virtualSwitches",
+    );
+    const ports = normalizeArrayRecordArray(data.ports, "data.ports");
     const portLinks = normalizeArrayRecordArray(
       data.portLinks,
-      'data.portLinks',
-    )
+      "data.portLinks",
+    );
     const portTemplates = normalizeArrayRecordArray(
       data.portTemplates ?? [],
-      'data.portTemplates',
-    )
-    const vlans = normalizeArrayRecordArray(data.vlans, 'data.vlans')
+      "data.portTemplates",
+    );
+    const vlans = normalizeArrayRecordArray(data.vlans, "data.vlans");
     const vlanRanges = normalizeArrayRecordArray(
       data.vlanRanges,
-      'data.vlanRanges',
-    )
-    const subnets = normalizeArrayRecordArray(data.subnets, 'data.subnets')
+      "data.vlanRanges",
+    );
+    const subnets = normalizeArrayRecordArray(data.subnets, "data.subnets");
     const dhcpScopes = normalizeArrayRecordArray(
       data.dhcpScopes,
-      'data.dhcpScopes',
-    )
-    const ipZones = normalizeArrayRecordArray(data.ipZones, 'data.ipZones')
+      "data.dhcpScopes",
+    );
+    const ipZones = normalizeArrayRecordArray(data.ipZones, "data.ipZones");
     const ipAssignments = normalizeArrayRecordArray(
       data.ipAssignments,
-      'data.ipAssignments',
-    )
+      "data.ipAssignments",
+    );
     const discoveredDevices = normalizeArrayRecordArray(
       data.discoveredDevices ?? [],
-      'data.discoveredDevices',
-    )
-    const auditLog = normalizeArrayRecordArray(data.auditLog, 'data.auditLog')
-    const users = normalizeArrayRecordArray(data.users, 'data.users')
+      "data.discoveredDevices",
+    );
+    const documentationPages = normalizeArrayRecordArray(
+      data.documentationPages ?? [],
+      "data.documentationPages",
+    );
+    const deviceImages = normalizeArrayRecordArray(
+      data.deviceImages ?? [],
+      "data.deviceImages",
+    );
+    const auditLog = normalizeArrayRecordArray(data.auditLog, "data.auditLog");
+    const users = normalizeArrayRecordArray(data.users, "data.users");
     const oidcIdentities = normalizeArrayRecordArray(
       data.oidcIdentities ?? [],
-      'data.oidcIdentities',
-    )
+      "data.oidcIdentities",
+    );
     const deviceMonitors = normalizeArrayRecordArray(
       data.deviceMonitors,
-      'data.deviceMonitors',
-    )
+      "data.deviceMonitors",
+    );
     const wifiControllers = normalizeArrayRecordArray(
       data.wifiControllers ?? [],
-      'data.wifiControllers',
-    )
+      "data.wifiControllers",
+    );
     const wifiSsids = normalizeArrayRecordArray(
       data.wifiSsids ?? [],
-      'data.wifiSsids',
-    )
+      "data.wifiSsids",
+    );
     const wifiAccessPoints = normalizeArrayRecordArray(
       data.wifiAccessPoints ?? [],
-      'data.wifiAccessPoints',
-    )
+      "data.wifiAccessPoints",
+    );
     const wifiRadios = normalizeArrayRecordArray(
       data.wifiRadios ?? [],
-      'data.wifiRadios',
-    )
+      "data.wifiRadios",
+    );
     const wifiRadioSsids = normalizeArrayRecordArray(
       data.wifiRadioSsids ?? [],
-      'data.wifiRadioSsids',
-    )
+      "data.wifiRadioSsids",
+    );
     const wifiClientAssociations = normalizeArrayRecordArray(
       data.wifiClientAssociations ?? [],
-      'data.wifiClientAssociations',
-    )
+      "data.wifiClientAssociations",
+    );
     const appSettings = normalizeArrayRecordArray(
       data.appSettings ?? [],
-      'data.appSettings',
-    )
+      "data.appSettings",
+    );
 
     if (users.length === 0) {
       throw new ValidationError(
-        'Backup must contain at least one user account.',
-      )
+        "Backup must contain at least one user account.",
+      );
     }
 
     db.exec(`
@@ -301,6 +319,8 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM deviceMonitors;
     DELETE FROM appSettings;
     DELETE FROM auditLog;
+    DELETE FROM deviceImages;
+    DELETE FROM documentationPages;
     DELETE FROM ipAssignments;
     DELETE FROM discoveredDevices;
     DELETE FROM portLinks;
@@ -317,110 +337,118 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM rooms;
     DELETE FROM users;
     DELETE FROM labs;
-  `)
+  `);
 
     const insertLab = db.prepare(
-      'INSERT INTO labs (id, name, description, location) VALUES (?, ?, ?, ?)',
-    )
+      "INSERT INTO labs (id, name, description, location) VALUES (?, ?, ?, ?)",
+    );
     const insertRoom = db.prepare(
-      'INSERT INTO rooms (id, labId, name, description, location, notes) VALUES (?, ?, ?, ?, ?, ?)',
-    )
+      "INSERT INTO rooms (id, labId, name, description, location, notes) VALUES (?, ?, ?, ?, ?, ?)",
+    );
     const insertRack = db.prepare(
-      'INSERT INTO racks (id, labId, name, totalU, description, location, notes, roomId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    )
+      "INSERT INTO racks (id, labId, name, totalU, description, location, notes, roomId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    );
     const insertDevice = db.prepare(`
     INSERT INTO devices
       (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, tags, notes, lastSeen)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  `);
     const updateDeviceParent = db.prepare(`
     UPDATE devices
     SET parentDeviceId = ?
     WHERE id = ?
-  `)
+  `);
     const insertVirtualSwitch = db.prepare(`
     INSERT INTO virtualSwitches (id, hostDeviceId, name, kind, notes)
     VALUES (?, ?, ?, ?, ?)
-  `)
+  `);
     const insertPort = db.prepare(`
     INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  `);
     const insertPortLink = db.prepare(
-      'INSERT INTO portLinks (id, fromPortId, toPortId, cableType, cableLength, color, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    )
+      "INSERT INTO portLinks (id, fromPortId, toPortId, cableType, cableLength, color, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    );
     const insertPortTemplate = db.prepare(`
     INSERT INTO portTemplates (id, name, description, deviceTypes, ports, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `)
+  `);
     const insertVlan = db.prepare(
-      'INSERT INTO vlans (id, labId, vlanId, name, description, color) VALUES (?, ?, ?, ?, ?, ?)',
-    )
+      "INSERT INTO vlans (id, labId, vlanId, name, description, color) VALUES (?, ?, ?, ?, ?, ?)",
+    );
     const insertVlanRange = db.prepare(
-      'INSERT INTO vlanRanges (id, labId, name, startVlan, endVlan, purpose, color) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    )
+      "INSERT INTO vlanRanges (id, labId, name, startVlan, endVlan, purpose, color) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    );
     const insertSubnet = db.prepare(
-      'INSERT INTO subnets (id, labId, cidr, name, description, vlanId) VALUES (?, ?, ?, ?, ?, ?)',
-    )
+      "INSERT INTO subnets (id, labId, cidr, name, description, vlanId) VALUES (?, ?, ?, ?, ?, ?)",
+    );
     const insertDhcpScope = db.prepare(
-      'INSERT INTO dhcpScopes (id, subnetId, name, startIp, endIp, gateway, dnsServers, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    )
+      "INSERT INTO dhcpScopes (id, subnetId, name, startIp, endIp, gateway, dnsServers, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    );
     const insertIpZone = db.prepare(
-      'INSERT INTO ipZones (id, subnetId, kind, startIp, endIp, description) VALUES (?, ?, ?, ?, ?, ?)',
-    )
+      "INSERT INTO ipZones (id, subnetId, kind, startIp, endIp, description) VALUES (?, ?, ?, ?, ?, ?)",
+    );
     const insertIpAssignment = db.prepare(`
     INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, deviceId, portId, vmId, containerId, hostname, description)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  `);
     const insertDiscoveredDevice = db.prepare(`
     INSERT INTO discoveredDevices
       (id, labId, ipAddress, hostname, displayName, deviceType, placement, macAddress, vendor, source, status, notes, importedDeviceId, lastSeen, lastScannedAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  `);
+    const insertDocumentationPage = db.prepare(`
+    INSERT INTO documentationPages (id, labId, title, content, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+    const insertDeviceImage = db.prepare(`
+    INSERT INTO deviceImages (id, deviceId, label, fileName, mimeType, dataUrl, notes, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
     const insertAudit = db.prepare(
-      'INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    )
+      "INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    );
     const insertUser = db.prepare(`
     INSERT INTO users (id, username, displayName, passwordHash, role, disabled, createdAt, lastLoginAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  `);
     const insertOidcIdentity = db.prepare(`
     INSERT INTO oidcIdentities (issuer, subject, userId, email, displayName, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `)
+  `);
     const insertDeviceMonitor = db.prepare(`
     INSERT INTO deviceMonitors (id, deviceId, name, type, target, port, path, intervalMs, enabled, sortOrder, lastCheckAt, lastAlertAt, lastResult, lastMessage)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  `);
     const insertWifiController = db.prepare(`
     INSERT INTO wifiControllers (id, labId, deviceId, name, vendor, model, managementIp, notes)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  `);
     const insertWifiSsid = db.prepare(`
     INSERT INTO wifiSsids (id, labId, name, purpose, security, hidden, vlanId, color)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  `);
     const insertWifiAccessPoint = db.prepare(`
     INSERT INTO wifiAccessPoints (deviceId, controllerId, location, firmwareVersion, notes)
     VALUES (?, ?, ?, ?, ?)
-  `)
+  `);
     const insertWifiRadio = db.prepare(`
     INSERT INTO wifiRadios (id, apDeviceId, slotName, band, channel, channelWidth, txPower, notes)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  `);
     const insertWifiRadioSsid = db.prepare(`
     INSERT INTO wifiRadioSsids (radioId, ssidId)
     VALUES (?, ?)
-  `)
+  `);
     const insertWifiClientAssociation = db.prepare(`
     INSERT INTO wifiClientAssociations
       (clientDeviceId, apDeviceId, radioId, ssidId, band, channel, signalDbm, lastSeen, lastRoamAt, notes)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  `);
     const insertAppSetting = db.prepare(`
     INSERT INTO appSettings (key, value, updatedAt)
     VALUES (?, ?, ?)
-  `)
+  `);
 
     for (const row of labs) {
       insertLab.run(
@@ -428,7 +456,7 @@ const restoreBackupSnapshot = db.transaction(
         row.name,
         row.description ?? null,
         row.location ?? null,
-      )
+      );
     }
     for (const row of users) {
       insertUser.run(
@@ -440,7 +468,7 @@ const restoreBackupSnapshot = db.transaction(
         Number(row.disabled ?? 0),
         row.createdAt,
         row.lastLoginAt ?? null,
-      )
+      );
     }
     for (const row of oidcIdentities) {
       insertOidcIdentity.run(
@@ -451,7 +479,7 @@ const restoreBackupSnapshot = db.transaction(
         row.displayName ?? null,
         row.createdAt,
         row.updatedAt,
-      )
+      );
     }
     for (const row of rooms) {
       insertRoom.run(
@@ -461,7 +489,7 @@ const restoreBackupSnapshot = db.transaction(
         row.description ?? null,
         row.location ?? null,
         row.notes ?? null,
-      )
+      );
     }
     for (const row of racks) {
       insertRack.run(
@@ -473,7 +501,7 @@ const restoreBackupSnapshot = db.transaction(
         row.location ?? null,
         row.notes ?? null,
         row.roomId ?? null,
-      )
+      );
     }
     for (const row of devices) {
       insertDevice.run(
@@ -502,30 +530,30 @@ const restoreBackupSnapshot = db.transaction(
         row.tags ? JSON.stringify(row.tags) : null,
         row.notes ?? null,
         row.lastSeen ?? null,
-      )
+      );
     }
-    const deviceIds = new Set(devices.map((row) => String(row.id)))
+    const deviceIds = new Set(devices.map((row) => String(row.id)));
     for (const row of devices) {
       const parentDeviceId = row.parentDeviceId
         ? String(row.parentDeviceId)
-        : null
+        : null;
       if (
         !parentDeviceId ||
         parentDeviceId === String(row.id) ||
         !deviceIds.has(parentDeviceId)
       ) {
-        continue
+        continue;
       }
-      updateDeviceParent.run(parentDeviceId, row.id)
+      updateDeviceParent.run(parentDeviceId, row.id);
     }
     for (const row of virtualSwitches) {
       insertVirtualSwitch.run(
         row.id,
         row.hostDeviceId,
         row.name,
-        row.kind ?? 'external',
+        row.kind ?? "external",
         row.notes ?? null,
-      )
+      );
     }
     for (const row of vlans) {
       insertVlan.run(
@@ -535,7 +563,7 @@ const restoreBackupSnapshot = db.transaction(
         row.name,
         row.description ?? null,
         row.color ?? null,
-      )
+      );
     }
     for (const row of vlanRanges) {
       insertVlanRange.run(
@@ -546,7 +574,7 @@ const restoreBackupSnapshot = db.transaction(
         row.endVlan,
         row.purpose ?? null,
         row.color ?? null,
-      )
+      );
     }
     for (const row of subnets) {
       insertSubnet.run(
@@ -556,7 +584,7 @@ const restoreBackupSnapshot = db.transaction(
         row.name,
         row.description ?? null,
         row.vlanId ?? null,
-      )
+      );
     }
     for (const row of ports) {
       insertPort.run(
@@ -567,19 +595,19 @@ const restoreBackupSnapshot = db.transaction(
         row.kind,
         row.speed ?? null,
         row.linkState,
-        row.mode ?? 'access',
+        row.mode ?? "access",
         row.vlanId ?? null,
         row.allowedVlanIds ? JSON.stringify(row.allowedVlanIds) : null,
         row.description ?? null,
         row.face ?? null,
         row.virtualSwitchId ?? null,
-      )
+      );
     }
     ensurePatchPanelPassThroughPorts(
       devices
-        .filter((row) => row.deviceType === 'patch_panel')
+        .filter((row) => row.deviceType === "patch_panel")
         .map((row) => String(row.id)),
-    )
+    );
     for (const row of portLinks) {
       insertPortLink.run(
         row.id,
@@ -589,7 +617,7 @@ const restoreBackupSnapshot = db.transaction(
         row.cableLength ?? null,
         row.color ?? null,
         row.notes ?? null,
-      )
+      );
     }
     for (const row of portTemplates) {
       insertPortTemplate.run(
@@ -600,7 +628,7 @@ const restoreBackupSnapshot = db.transaction(
         JSON.stringify(row.ports ?? []),
         row.createdAt ?? new Date().toISOString(),
         row.updatedAt ?? new Date().toISOString(),
-      )
+      );
     }
     for (const row of dhcpScopes) {
       insertDhcpScope.run(
@@ -612,7 +640,7 @@ const restoreBackupSnapshot = db.transaction(
         row.gateway ?? null,
         row.dnsServers ? JSON.stringify(row.dnsServers) : null,
         row.description ?? null,
-      )
+      );
     }
     for (const row of ipZones) {
       insertIpZone.run(
@@ -622,7 +650,7 @@ const restoreBackupSnapshot = db.transaction(
         row.startIp,
         row.endIp,
         row.description ?? null,
-      )
+      );
     }
     for (const row of ipAssignments) {
       insertIpAssignment.run(
@@ -636,7 +664,7 @@ const restoreBackupSnapshot = db.transaction(
         row.containerId ?? null,
         row.hostname ?? null,
         row.description ?? null,
-      )
+      );
     }
     for (const row of discoveredDevices) {
       insertDiscoveredDevice.run(
@@ -650,12 +678,37 @@ const restoreBackupSnapshot = db.transaction(
         row.macAddress ?? null,
         row.vendor ?? null,
         row.source,
-        row.status ?? 'new',
+        row.status ?? "new",
         row.notes ?? null,
         row.importedDeviceId ?? null,
         row.lastSeen ?? null,
         row.lastScannedAt ?? new Date().toISOString(),
-      )
+      );
+    }
+    for (const row of documentationPages) {
+      const now = new Date().toISOString();
+      insertDocumentationPage.run(
+        row.id,
+        row.labId,
+        row.title,
+        row.content ?? "",
+        row.createdAt ?? now,
+        row.updatedAt ?? row.createdAt ?? now,
+      );
+    }
+    for (const row of deviceImages) {
+      const now = new Date().toISOString();
+      insertDeviceImage.run(
+        row.id,
+        row.deviceId,
+        row.label,
+        row.fileName,
+        row.mimeType,
+        row.dataUrl,
+        row.notes ?? null,
+        row.createdAt ?? now,
+        row.updatedAt ?? row.createdAt ?? now,
+      );
     }
     for (const row of auditLog) {
       insertAudit.run(
@@ -666,13 +719,13 @@ const restoreBackupSnapshot = db.transaction(
         row.entityType,
         row.entityId,
         row.summary,
-      )
+      );
     }
     for (const row of deviceMonitors) {
       insertDeviceMonitor.run(
         row.id,
         row.deviceId,
-        row.name ?? 'Primary',
+        row.name ?? "Primary",
         row.type,
         row.target ?? null,
         row.port ?? null,
@@ -684,7 +737,7 @@ const restoreBackupSnapshot = db.transaction(
         row.lastAlertAt ?? null,
         row.lastResult ?? null,
         row.lastMessage ?? null,
-      )
+      );
     }
     for (const row of wifiControllers) {
       insertWifiController.run(
@@ -696,7 +749,7 @@ const restoreBackupSnapshot = db.transaction(
         row.model ?? null,
         row.managementIp ?? null,
         row.notes ?? null,
-      )
+      );
     }
     for (const row of wifiSsids) {
       insertWifiSsid.run(
@@ -708,7 +761,7 @@ const restoreBackupSnapshot = db.transaction(
         Number(row.hidden ?? 0),
         row.vlanId ?? null,
         row.color ?? null,
-      )
+      );
     }
     for (const row of wifiAccessPoints) {
       insertWifiAccessPoint.run(
@@ -717,7 +770,7 @@ const restoreBackupSnapshot = db.transaction(
         row.location ?? null,
         row.firmwareVersion ?? null,
         row.notes ?? null,
-      )
+      );
     }
     for (const row of wifiRadios) {
       insertWifiRadio.run(
@@ -729,10 +782,10 @@ const restoreBackupSnapshot = db.transaction(
         row.channelWidth ?? null,
         row.txPower ?? null,
         row.notes ?? null,
-      )
+      );
     }
     for (const row of wifiRadioSsids) {
-      insertWifiRadioSsid.run(row.radioId, row.ssidId)
+      insertWifiRadioSsid.run(row.radioId, row.ssidId);
     }
     for (const row of wifiClientAssociations) {
       insertWifiClientAssociation.run(
@@ -746,29 +799,29 @@ const restoreBackupSnapshot = db.transaction(
         row.lastSeen ?? null,
         row.lastRoamAt ?? null,
         row.notes ?? null,
-      )
+      );
     }
     for (const row of appSettings) {
       insertAppSetting.run(
         row.key,
         row.value,
         row.updatedAt ?? new Date().toISOString(),
-      )
+      );
     }
 
-    const restoredAt = new Date().toISOString()
-    const restoreAuditId = createId('a')
+    const restoredAt = new Date().toISOString();
+    const restoreAuditId = createId("a");
     insertAudit.run(
       restoreAuditId,
       restoredAt,
       restoredBy,
-      'admin.restore',
-      'Backup',
+      "admin.restore",
+      "Backup",
       restoreAuditId,
-      `Restored Rackpad backup exported at ${String(snapshot.exportedAt ?? 'unknown time')}`,
-    )
+      `Restored Rackpad backup exported at ${String(snapshot.exportedAt ?? "unknown time")}`,
+    );
 
-    setBootstrapState(users.length === 0)
+    setBootstrapState(users.length === 0);
 
     return {
       restored: true,
@@ -780,6 +833,8 @@ const restoreBackupSnapshot = db.transaction(
         devices: devices.length,
         virtualSwitches: virtualSwitches.length,
         discoveredDevices: discoveredDevices.length,
+        documentationPages: documentationPages.length,
+        deviceImages: deviceImages.length,
         portTemplates: portTemplates.length,
         wifiControllers: wifiControllers.length,
         wifiSsids: wifiSsids.length,
@@ -789,92 +844,92 @@ const restoreBackupSnapshot = db.transaction(
         subnets: subnets.length,
         users: users.length,
       },
-    }
+    };
   },
-)
+);
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/alert-settings', async (req, reply) => {
-    if (!requireAdmin(req, reply)) return
-    return loadAlertSettings()
-  })
+  app.get("/alert-settings", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    return loadAlertSettings();
+  });
 
-  app.put('/alert-settings', async (req, reply) => {
-    if (!requireAdmin(req, reply)) return
-    const body = asObject(req.body)
+  app.put("/alert-settings", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const body = asObject(req.body);
     const saved = saveAlertSettings({
-      enabled: optionalBoolean(body, 'enabled') ?? false,
-      notifyOnDown: optionalBoolean(body, 'notifyOnDown') ?? true,
-      notifyOnRecovery: optionalBoolean(body, 'notifyOnRecovery') ?? true,
-      repeatWhileOffline: optionalBoolean(body, 'repeatWhileOffline') ?? false,
+      enabled: optionalBoolean(body, "enabled") ?? false,
+      notifyOnDown: optionalBoolean(body, "notifyOnDown") ?? true,
+      notifyOnRecovery: optionalBoolean(body, "notifyOnRecovery") ?? true,
+      repeatWhileOffline: optionalBoolean(body, "repeatWhileOffline") ?? false,
       repeatIntervalMinutes:
-        optionalInteger(body, 'repeatIntervalMinutes', {
+        optionalInteger(body, "repeatIntervalMinutes", {
           min: 1,
           max: 10080,
         }) ?? 60,
-      discordWebhookUrl: optionalString(body, 'discordWebhookUrl', {
+      discordWebhookUrl: optionalString(body, "discordWebhookUrl", {
         maxLength: 1000,
       }),
-      telegramBotToken: optionalString(body, 'telegramBotToken', {
+      telegramBotToken: optionalString(body, "telegramBotToken", {
         maxLength: 255,
       }),
-      telegramChatId: optionalString(body, 'telegramChatId', {
+      telegramChatId: optionalString(body, "telegramChatId", {
         maxLength: 255,
       }),
-      smtpHost: optionalString(body, 'smtpHost', { maxLength: 255 }),
-      smtpPort: optionalInteger(body, 'smtpPort', { min: 1, max: 65535 }),
-      smtpSecure: optionalBoolean(body, 'smtpSecure') ?? false,
-      smtpUsername: optionalString(body, 'smtpUsername', { maxLength: 255 }),
-      smtpPassword: optionalString(body, 'smtpPassword', {
+      smtpHost: optionalString(body, "smtpHost", { maxLength: 255 }),
+      smtpPort: optionalInteger(body, "smtpPort", { min: 1, max: 65535 }),
+      smtpSecure: optionalBoolean(body, "smtpSecure") ?? false,
+      smtpUsername: optionalString(body, "smtpUsername", { maxLength: 255 }),
+      smtpPassword: optionalString(body, "smtpPassword", {
         maxLength: 255,
         allowEmpty: true,
       }),
-      smtpFrom: optionalString(body, 'smtpFrom', { maxLength: 255 }),
-      smtpTo: optionalString(body, 'smtpTo', { maxLength: 1000 }),
-    })
+      smtpFrom: optionalString(body, "smtpFrom", { maxLength: 255 }),
+      smtpTo: optionalString(body, "smtpTo", { maxLength: 1000 }),
+    });
     db.prepare(
       `
       INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
     ).run(
-      createId('a'),
+      createId("a"),
       new Date().toISOString(),
       req.authUser.username,
-      'alert.settings.update',
-      'AlertSettings',
-      'alert-settings',
-      'Updated notification channels and delivery controls.',
-    )
-    return saved
-  })
+      "alert.settings.update",
+      "AlertSettings",
+      "alert-settings",
+      "Updated notification channels and delivery controls.",
+    );
+    return saved;
+  });
 
-  app.post('/alert-settings/test', async (req, reply) => {
-    if (!requireAdmin(req, reply)) return
-    return sendTestAlert(req.authUser.username)
-  })
+  app.post("/alert-settings/test", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    return sendTestAlert(req.authUser.username);
+  });
 
-  app.get('/export', async (req, reply) => {
-    if (!requireAdmin(req, reply)) return
+  app.get("/export", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
 
-    const exportedAt = new Date().toISOString()
-    const filename = createBackupFilename(exportedAt)
+    const exportedAt = new Date().toISOString();
+    const filename = createBackupFilename(exportedAt);
     const snapshot = exportBackupSnapshot(
       exportedAt,
       req.authUser.username,
       filename,
-    )
+    );
 
-    reply.header('Cache-Control', 'no-store')
-    reply.header('Content-Type', 'application/json; charset=utf-8')
-    reply.header('Content-Disposition', `attachment; filename="${filename}"`)
+    reply.header("Cache-Control", "no-store");
+    reply.header("Content-Type", "application/json; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="${filename}"`);
 
-    return snapshot
-  })
+    return snapshot;
+  });
 
-  app.post('/restore', async (req, reply) => {
-    if (!requireAdmin(req, reply)) return
-    const snapshot = asObject(req.body)
-    return reply.send(restoreBackupSnapshot(snapshot, req.authUser.username))
-  })
-}
+  app.post("/restore", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const snapshot = asObject(req.body);
+    return reply.send(restoreBackupSnapshot(snapshot, req.authUser.username));
+  });
+};

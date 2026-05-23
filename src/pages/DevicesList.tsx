@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { TopBar } from "@/components/layout/TopBar";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -34,6 +34,7 @@ type SortKey =
   | "status";
 
 export default function DevicesList() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useStore((s) => s.currentUser);
   const devices = useStore((s) => s.devices);
   const deviceTypes = useStore((s) => s.deviceTypes);
@@ -48,6 +49,17 @@ export default function DevicesList() {
     direction: "asc",
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const typeParam = searchParams.get("type");
+
+  useEffect(() => {
+    if (typeParam && typeParam !== type) {
+      setType(typeParam);
+      return;
+    }
+    if (!typeParam && type !== null) {
+      setType(null);
+    }
+  }, [type, typeParam]);
 
   const rackById = useMemo(() => {
     return racks.reduce<Record<string, Rack>>((acc, rack) => {
@@ -123,6 +135,17 @@ export default function DevicesList() {
     setSort((current) => toggleSort(current, key));
   }
 
+  function setTypeFilter(nextType: DeviceType | null) {
+    setType(nextType);
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextType) {
+      nextParams.set("type", nextType);
+    } else {
+      nextParams.delete("type");
+    }
+    setSearchParams(nextParams);
+  }
+
   const typeCounts = useMemo(() => {
     return devices.reduce<Record<string, number>>((acc, device) => {
       acc[device.deviceType] = (acc[device.deviceType] ?? 0) + 1;
@@ -157,7 +180,7 @@ export default function DevicesList() {
       <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => setType(null)}
+            onClick={() => setTypeFilter(null)}
             className={`rounded-[var(--radius-xs)] border px-2.5 py-1 transition-colors ${
               type === null
                 ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"
@@ -175,7 +198,7 @@ export default function DevicesList() {
             return (
               <button
                 key={entry.id}
-                onClick={() => setType(entry.id)}
+                onClick={() => setTypeFilter(entry.id)}
                 className={`inline-flex items-center gap-1.5 rounded-[var(--radius-xs)] border px-2.5 py-1 transition-colors ${
                   type === entry.id
                     ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"

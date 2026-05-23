@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { TopBar } from "@/components/layout/TopBar";
@@ -22,8 +22,10 @@ import { PortList } from "@/components/ports/PortList";
 import { api } from "@/lib/api";
 import {
   canEditInventory,
+  createDeviceImageRecord,
   createDeviceMonitorConfig,
   deleteDevice,
+  deleteDeviceImageRecord,
   deleteDeviceMonitorConfig,
   loadAll,
   runDeviceMonitorCheck,
@@ -32,9 +34,17 @@ import {
   updateDeviceMonitorConfig,
   useStore,
 } from "@/lib/store";
-import type { Device, DeviceMonitor, Port, PortLink, Vlan } from "@/lib/types";
+import type {
+  Device,
+  DeviceImage,
+  DeviceMonitor,
+  Port,
+  PortLink,
+  Vlan,
+} from "@/lib/types";
 import {
   ArrowLeft,
+  ImagePlus,
   Pencil,
   Plus,
   RefreshCcw,
@@ -44,6 +54,11 @@ import {
 } from "lucide-react";
 import { formatPortLabel, relativeTime, statusLabel } from "@/lib/utils";
 import { formatDeviceAddress } from "@/lib/network-labels";
+import {
+  defaultImageLabel,
+  imageSizeLimitLabel,
+  readImageFileAsDataUrl,
+} from "@/lib/image-data-url";
 
 type MonitorForm = {
   name: string;
@@ -80,6 +95,7 @@ export default function DeviceDetail() {
   const auditLog = useStore((s) => s.auditLog);
   const racks = useStore((s) => s.racks);
   const deviceMonitors = useStore((s) => s.deviceMonitors);
+  const deviceImages = useStore((s) => s.deviceImages);
   const canEdit = canEditInventory(currentUser);
   const canManageMonitoring = currentUser?.role === "admin";
 
@@ -102,11 +118,21 @@ export default function DeviceDetail() {
   const [activityLimit, setActivityLimit] = useState(500);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState("");
+  const [imageLabel, setImageLabel] = useState("");
+  const [imageNotes, setImageNotes] = useState("");
+  const [imageSaving, setImageSaving] = useState(false);
+  const [imageDeletingId, setImageDeletingId] = useState<string | null>(null);
+  const [imageError, setImageError] = useState("");
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const device = id ? devices.find((entry) => entry.id === id) : undefined;
   const deviceMonitorList = useMemo(
     () => (id ? deviceMonitors.filter((entry) => entry.deviceId === id) : []),
     [deviceMonitors, id],
+  );
+  const deviceImageList = useMemo(
+    () => (id ? deviceImages.filter((entry) => entry.deviceId === id) : []),
+    [deviceImages, id],
   );
   const selectedMonitor =
     selectedMonitorId && selectedMonitorId !== NEW_MONITOR_ID
@@ -158,6 +184,9 @@ export default function DeviceDetail() {
 
   useEffect(() => {
     setSelectedMonitorId(null);
+    setImageLabel("");
+    setImageNotes("");
+    setImageError("");
   }, [device?.id]);
 
   useEffect(() => {
@@ -317,6 +346,47 @@ export default function DeviceDetail() {
       await unassignIp(assignmentId);
     } finally {
       setReleasingId(null);
+    }
+  }
+
+  async function handleImageSelected(file: File | undefined) {
+    if (!file || !device || !canEdit) return;
+    setImageSaving(true);
+    setImageError("");
+    try {
+      const dataUrl = await readImageFileAsDataUrl(file);
+      await createDeviceImageRecord({
+        deviceId: device.id,
+        label: imageLabel.trim() || defaultImageLabel(file.name),
+        fileName: file.name,
+        mimeType: file.type,
+        dataUrl,
+        notes: imageNotes.trim() || null,
+      });
+      setImageLabel("");
+      setImageNotes("");
+    } catch (err) {
+      setImageError(
+        err instanceof Error ? err.message : "Failed to add image.",
+      );
+    } finally {
+      setImageSaving(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  }
+
+  async function handleDeleteImage(image: DeviceImage) {
+    if (!window.confirm(`Delete image ${image.label}?`)) return;
+    setImageDeletingId(image.id);
+    setImageError("");
+    try {
+      await deleteDeviceImageRecord(image.id);
+    } catch (err) {
+      setImageError(
+        err instanceof Error ? err.message : "Failed to delete image.",
+      );
+    } finally {
+      setImageDeletingId(null);
     }
   }
 
@@ -480,7 +550,10 @@ export default function DeviceDetail() {
           rack ? (
             <>
               Devices |{" "}
-              <Link to="/racks" className="hover:text-[var(--color-fg-muted)]">
+              <Link
+                to={`/racks?rackId=${rack.id}`}
+                className="hover:text-[var(--color-fg-muted)]"
+              >
                 {rack.name}
               </Link>
             </>
@@ -538,6 +611,14 @@ export default function DeviceDetail() {
             )}
           </>
         }
+      />
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={(event) => void handleImageSelected(event.target.files?.[0])}
       />
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
@@ -612,6 +693,9 @@ export default function DeviceDetail() {
               Network | {deviceIps.length}
             </TabsTrigger>
             <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
+            <TabsTrigger value="images">
+              Images | {deviceImageList.length}
+            </TabsTrigger>
             <TabsTrigger value="notes">Notes</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
@@ -1229,6 +1313,115 @@ export default function DeviceDetail() {
                 </div>
               </CardBody>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="images" className="pt-4">
+            <div className="grid grid-cols-12 gap-4">
+              {canEdit && (
+                <Card className="col-span-12 lg:col-span-4">
+                  <CardHeader>
+                    <CardTitle>
+                      <CardLabel>Reference</CardLabel>
+                      <CardHeading>Add image</CardHeading>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardBody className="space-y-3">
+                    {imageError && (
+                      <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-sm text-[var(--color-err)]">
+                        {imageError}
+                      </div>
+                    )}
+                    <Input
+                      value={imageLabel}
+                      onChange={(event) => setImageLabel(event.target.value)}
+                      placeholder="Label"
+                    />
+                    <textarea
+                      value={imageNotes}
+                      onChange={(event) => setImageNotes(event.target.value)}
+                      className="rk-control rk-textarea min-h-24 w-full text-sm"
+                      placeholder="Notes"
+                    />
+                    <div className="flex items-center justify-between gap-3">
+                      <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
+                        {imageSizeLimitLabel()} max
+                      </Mono>
+                      <Button
+                        size="sm"
+                        onClick={() => imageInputRef.current?.click()}
+                        disabled={imageSaving}
+                      >
+                        <ImagePlus className="size-3.5" />
+                        {imageSaving ? "Adding..." : "Choose image"}
+                      </Button>
+                    </div>
+                  </CardBody>
+                </Card>
+              )}
+
+              <Card
+                className={
+                  canEdit ? "col-span-12 lg:col-span-8" : "col-span-12"
+                }
+              >
+                <CardHeader>
+                  <CardTitle>
+                    <CardLabel>Reference</CardLabel>
+                    <CardHeading>{deviceImageList.length} images</CardHeading>
+                  </CardTitle>
+                </CardHeader>
+                <CardBody>
+                  {deviceImageList.length === 0 ? (
+                    <div className="text-sm text-[var(--color-fg-subtle)]">
+                      No images attached to this device yet.
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {deviceImageList.map((image) => (
+                        <div
+                          key={image.id}
+                          className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-bg)]"
+                        >
+                          <img
+                            src={image.dataUrl}
+                            alt={image.label}
+                            className="h-56 w-full bg-black/20 object-contain"
+                            loading="lazy"
+                          />
+                          <div className="space-y-2 border-t border-[var(--color-line)] p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium text-[var(--color-fg)]">
+                                  {image.label}
+                                </div>
+                                <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
+                                  {relativeTime(image.createdAt)}
+                                </Mono>
+                              </div>
+                              {canEdit && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => void handleDeleteImage(image)}
+                                  disabled={imageDeletingId === image.id}
+                                >
+                                  <Trash2 />
+                                </Button>
+                              )}
+                            </div>
+                            {image.notes && (
+                              <div className="text-xs leading-5 text-[var(--color-fg-subtle)]">
+                                {image.notes}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardBody>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="notes" className="pt-4">

@@ -19,6 +19,7 @@ import {
   X,
   ChevronRight,
   Activity,
+  BookOpen,
   FileText,
   Route,
   UploadCloud,
@@ -127,6 +128,14 @@ const PAGES: SearchResult[] = [
     href: "/reports",
     Icon: FileText,
   },
+  {
+    id: "p-documentation",
+    group: "Pages",
+    title: "Documentation",
+    subtitle: "Markdown notes",
+    href: "/documentation",
+    Icon: BookOpen,
+  },
 ];
 
 interface CommandPaletteProps {
@@ -142,6 +151,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
   const devices = useStore((s) => s.devices);
+  const documentationPages = useStore((s) => s.documentationPages);
   const vlans = useStore((s) => s.vlans);
   const ipAssignments = useStore((s) => s.ipAssignments);
 
@@ -225,12 +235,29 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       }
     }
 
+    for (const page of documentationPages) {
+      const haystack = [page.title, page.content]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (haystack.includes(q)) {
+        out.push({
+          id: `doc-${page.id}`,
+          group: "Pages",
+          title: page.title,
+          subtitle: "Documentation",
+          href: `/documentation?pageId=${page.id}`,
+          Icon: BookOpen,
+        });
+      }
+    }
+
     for (const page of PAGES) {
       if (page.title.toLowerCase().includes(q)) out.push(page);
     }
 
     return out;
-  }, [devices, ipAssignments, query, vlans]);
+  }, [devices, documentationPages, ipAssignments, query, vlans]);
 
   const grouped = useMemo(() => {
     const groups: {

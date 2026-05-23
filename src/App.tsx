@@ -25,6 +25,7 @@ const VlansView = lazy(() => import("@/pages/VlansView"));
 const IpamView = lazy(() => import("@/pages/IpamView"));
 const ReportsView = lazy(() => import("@/pages/ReportsView"));
 const VisualizerView = lazy(() => import("@/pages/VisualizerView"));
+const DocumentationView = lazy(() => import("@/pages/DocumentationView"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const OidcCallback = lazy(() => import("@/pages/OidcCallback"));
 
@@ -165,6 +166,14 @@ export default function App() {
           element={
             <RouteFrame>
               <VisualizerView />
+            </RouteFrame>
+          }
+        />
+        <Route
+          path="/documentation"
+          element={
+            <RouteFrame>
+              <DocumentationView />
             </RouteFrame>
           }
         />

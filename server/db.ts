@@ -1,18 +1,18 @@
-import Database from 'better-sqlite3'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { createId } from './lib/ids.js'
+import Database from "better-sqlite3";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createId } from "./lib/ids.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
-  process.env.DATABASE_PATH ?? path.resolve(__dirname, '../rackpad.db')
-const CURRENT_SCHEMA_VERSION = 14
+  process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
+const CURRENT_SCHEMA_VERSION = 15;
 
-export const db = new Database(DB_PATH)
+export const db = new Database(DB_PATH);
 
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
+db.pragma("journal_mode = WAL");
+db.pragma("foreign_keys = ON");
 
 const BOOTSTRAP_SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS schemaVersion (
@@ -20,7 +20,7 @@ const BOOTSTRAP_SCHEMA_SQL = `
     version   INTEGER NOT NULL,
     updatedAt TEXT NOT NULL
   );
-`
+`;
 
 const SCHEMA_MIGRATIONS = [
   {
@@ -589,28 +589,62 @@ const SCHEMA_MIGRATIONS = [
         );
     `,
   },
-] as const
+  {
+    version: 15,
+    sql: `
+      CREATE TABLE IF NOT EXISTS documentationPages (
+        id        TEXT PRIMARY KEY,
+        labId     TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        title     TEXT NOT NULL,
+        content   TEXT NOT NULL DEFAULT '',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_documentation_pages_lab_id
+        ON documentationPages (labId);
+
+      CREATE INDEX IF NOT EXISTS idx_documentation_pages_lab_updated
+        ON documentationPages (labId, updatedAt DESC);
+
+      CREATE TABLE IF NOT EXISTS deviceImages (
+        id        TEXT PRIMARY KEY,
+        deviceId  TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        label     TEXT NOT NULL,
+        fileName  TEXT NOT NULL,
+        mimeType  TEXT NOT NULL,
+        dataUrl   TEXT NOT NULL,
+        notes     TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_device_images_device_id
+        ON deviceImages (deviceId);
+    `,
+  },
+] as const;
 
 const applySchema = db.transaction(() => {
-  db.exec(BOOTSTRAP_SCHEMA_SQL)
+  db.exec(BOOTSTRAP_SCHEMA_SQL);
 
   const row = db
-    .prepare('SELECT version FROM schemaVersion WHERE id = 1')
-    .get() as { version?: number } | undefined
-  let currentVersion = Number(row?.version ?? 0)
+    .prepare("SELECT version FROM schemaVersion WHERE id = 1")
+    .get() as { version?: number } | undefined;
+  let currentVersion = Number(row?.version ?? 0);
 
   for (const migration of SCHEMA_MIGRATIONS) {
-    if (currentVersion >= migration.version) continue
-    db.exec(migration.sql)
-    const updatedAt = new Date().toISOString()
+    if (currentVersion >= migration.version) continue;
+    db.exec(migration.sql);
+    const updatedAt = new Date().toISOString();
     db.prepare(
       `
       INSERT INTO schemaVersion (id, version, updatedAt)
       VALUES (1, ?, ?)
       ON CONFLICT(id) DO UPDATE SET version = excluded.version, updatedAt = excluded.updatedAt
     `,
-    ).run(migration.version, updatedAt)
-    currentVersion = migration.version
+    ).run(migration.version, updatedAt);
+    currentVersion = migration.version;
   }
 
   if (currentVersion === 0) {
@@ -620,27 +654,27 @@ const applySchema = db.transaction(() => {
       VALUES (1, ?, ?)
       ON CONFLICT(id) DO UPDATE SET version = excluded.version, updatedAt = excluded.updatedAt
     `,
-    ).run(CURRENT_SCHEMA_VERSION, new Date().toISOString())
+    ).run(CURRENT_SCHEMA_VERSION, new Date().toISOString());
   }
-})
+});
 
-applySchema()
+applySchema();
 
 type PatchPanelPortRow = {
-  id: string
-  deviceId: string
-  name: string
-  position: number
-  kind: string
-  speed: string | null
-  linkState: string
-  mode: string | null
-  vlanId: string | null
-  allowedVlanIds: string | null
-  description: string | null
-  face: string | null
-  virtualSwitchId: string | null
-}
+  id: string;
+  deviceId: string;
+  name: string;
+  position: number;
+  kind: string;
+  speed: string | null;
+  linkState: string;
+  mode: string | null;
+  vlanId: string | null;
+  allowedVlanIds: string | null;
+  description: string | null;
+  face: string | null;
+  virtualSwitchId: string | null;
+};
 
 export function ensurePatchPanelPassThroughPorts(deviceIds?: string[]) {
   const targetDeviceIds =
@@ -656,84 +690,84 @@ export function ensurePatchPanelPassThroughPorts(deviceIds?: string[]) {
       `,
             )
             .all() as Array<{ id: string }>
-        ).map((row) => row.id)
+        ).map((row) => row.id);
 
-  if (targetDeviceIds.length === 0) return 0
+  if (targetDeviceIds.length === 0) return 0;
 
   const selectPorts = db.prepare(`
     SELECT id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId
     FROM ports
     WHERE deviceId = ?
     ORDER BY position, name, id
-  `)
+  `);
   const insertPort = db.prepare(`
     INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId)
     VALUES (@id, @deviceId, @name, @position, @kind, @speed, @linkState, @mode, @vlanId, @allowedVlanIds, @description, @face, @virtualSwitchId)
-  `)
+  `);
 
   const normalize = db.transaction((ids: string[]) => {
-    let createdCount = 0
+    let createdCount = 0;
 
     for (const deviceId of ids) {
-      const ports = selectPorts.all(deviceId) as PatchPanelPortRow[]
-      const groups = new Map<string, PatchPanelPortRow[]>()
+      const ports = selectPorts.all(deviceId) as PatchPanelPortRow[];
+      const groups = new Map<string, PatchPanelPortRow[]>();
 
       for (const port of ports) {
-        const key = `${port.kind}|${port.name.trim().toLowerCase()}`
-        const group = groups.get(key)
+        const key = `${port.kind}|${port.name.trim().toLowerCase()}`;
+        const group = groups.get(key);
         if (group) {
-          group.push(port)
+          group.push(port);
         } else {
-          groups.set(key, [port])
+          groups.set(key, [port]);
         }
       }
 
       for (const group of groups.values()) {
-        const front = group.find((port) => port.face !== 'rear')
-        const rear = group.find((port) => port.face === 'rear')
+        const front = group.find((port) => port.face !== "rear");
+        const rear = group.find((port) => port.face === "rear");
 
         if (front && !rear) {
           insertPort.run({
             ...front,
-            id: createId('p'),
-            face: 'rear',
-            linkState: 'down',
-          })
-          createdCount += 1
+            id: createId("p"),
+            face: "rear",
+            linkState: "down",
+          });
+          createdCount += 1;
         } else if (rear && !front) {
           insertPort.run({
             ...rear,
-            id: createId('p'),
-            face: 'front',
-            linkState: 'down',
-          })
-          createdCount += 1
+            id: createId("p"),
+            face: "front",
+            linkState: "down",
+          });
+          createdCount += 1;
         }
       }
     }
 
-    return createdCount
-  })
+    return createdCount;
+  });
 
-  return normalize(targetDeviceIds)
+  return normalize(targetDeviceIds);
 }
 
-ensurePatchPanelPassThroughPorts()
+ensurePatchPanelPassThroughPorts();
 
 export function parseRow<T extends Record<string, unknown>>(
   row: T,
   jsonColumns: (keyof T)[],
 ): T {
   for (const col of jsonColumns) {
-    if (typeof row[col] === 'string') {
+    if (typeof row[col] === "string") {
       try {
-        ;(row as Record<string, unknown>)[String(col)] = JSON.parse(
+        (row as Record<string, unknown>)[String(col)] = JSON.parse(
           String(row[col]),
-        )
+        );
       } catch {
         // Leave the raw value as-is if JSON parsing fails.
       }
     }
   }
-  return row
+  return row;
 }

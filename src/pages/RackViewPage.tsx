@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ExternalLink,
@@ -83,6 +83,7 @@ const EMPTY_ROOM_FORM: RoomForm = {
 const RACK_SHELF_TYPE = "rack_shelf";
 
 export default function RackViewPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useStore((s) => s.currentUser);
   const activeLab = useStore((s) => s.lab);
   const rooms = useStore((s) => s.rooms);
@@ -107,6 +108,9 @@ export default function RackViewPage() {
   const [deletingRoom, setDeletingRoom] = useState(false);
   const [roomError, setRoomError] = useState("");
   const [roomForm, setRoomForm] = useState<RoomForm>(EMPTY_ROOM_FORM);
+  const rackParam = searchParams.get("rackId") ?? "";
+  const roomParam = searchParams.get("roomId") ?? "";
+  const viewParam = searchParams.get("view") ?? "";
 
   const roomById = useMemo(() => {
     return rooms.reduce<Record<string, Room>>((acc, room) => {
@@ -125,6 +129,24 @@ export default function RackViewPage() {
   );
 
   useEffect(() => {
+    if (rackParam && racks.some((entry) => entry.id === rackParam)) {
+      if (selectedViewId !== rackParam) setSelectedViewId(rackParam);
+      return;
+    }
+
+    if (roomParam && rooms.some((room) => room.id === roomParam)) {
+      const nextViewId = `${ROOM_VIEW_PREFIX}${roomParam}`;
+      if (selectedViewId !== nextViewId) setSelectedViewId(nextViewId);
+      return;
+    }
+
+    if (viewParam === "loose") {
+      if (selectedViewId !== UNRACKED_VIEW_ID) {
+        setSelectedViewId(UNRACKED_VIEW_ID);
+      }
+      return;
+    }
+
     if (selectedViewId === UNRACKED_VIEW_ID) {
       return;
     }
@@ -156,7 +178,33 @@ export default function RackViewPage() {
     if (!selectedViewId || !racks.some((rack) => rack.id === selectedViewId)) {
       setSelectedViewId(racks[0].id);
     }
-  }, [racks, rooms, selectedViewId, unrackedDevices.length]);
+  }, [
+    rackParam,
+    racks,
+    roomParam,
+    rooms,
+    selectedViewId,
+    unrackedDevices.length,
+    viewParam,
+  ]);
+
+  function selectLooseView() {
+    setSelectedViewId(UNRACKED_VIEW_ID);
+    setSelectedDeviceId(undefined);
+    setSearchParams({ view: "loose" });
+  }
+
+  function selectRoomView(roomId: string) {
+    setSelectedViewId(`${ROOM_VIEW_PREFIX}${roomId}`);
+    setSelectedDeviceId(undefined);
+    setSearchParams({ roomId });
+  }
+
+  function selectRackView(rackId: string) {
+    setSelectedViewId(rackId);
+    setSelectedDeviceId(undefined);
+    setSearchParams({ rackId });
+  }
 
   const viewingUnracked = selectedViewId === UNRACKED_VIEW_ID;
   const selectedRoomId = selectedViewId.startsWith(ROOM_VIEW_PREFIX)
@@ -225,7 +273,7 @@ export default function RackViewPage() {
           notes: rackForm.notes.trim() || undefined,
           roomId: rackForm.roomId || undefined,
         });
-        setSelectedViewId(created.id);
+        selectRackView(created.id);
         setEditorMode("closed");
         return;
       }
@@ -259,7 +307,7 @@ export default function RackViewPage() {
           location: roomForm.location.trim() || undefined,
           notes: roomForm.notes.trim() || undefined,
         });
-        setSelectedViewId(`${ROOM_VIEW_PREFIX}${created.id}`);
+        selectRoomView(created.id);
         setRoomEditorMode("closed");
         return;
       }
@@ -271,7 +319,7 @@ export default function RackViewPage() {
         location: roomForm.location.trim() || null,
         notes: roomForm.notes.trim() || null,
       });
-      setSelectedViewId(`${ROOM_VIEW_PREFIX}${updated.id}`);
+      selectRoomView(updated.id);
       setRoomEditorMode("closed");
     } catch (err) {
       setRoomError(err instanceof Error ? err.message : "Failed to save room.");
@@ -293,7 +341,12 @@ export default function RackViewPage() {
     setRoomError("");
     try {
       await deleteRoomRecord(viewingRoom.id);
-      setSelectedViewId(unrackedDevices.length > 0 ? UNRACKED_VIEW_ID : "");
+      if (unrackedDevices.length > 0) {
+        selectLooseView();
+      } else {
+        setSelectedViewId("");
+        setSearchParams({});
+      }
       setRoomEditorMode("closed");
     } catch (err) {
       setRoomError(
@@ -315,7 +368,12 @@ export default function RackViewPage() {
     setRackError("");
     try {
       await deleteRackRecord(rack.id);
-      setSelectedViewId(unrackedDevices.length > 0 ? UNRACKED_VIEW_ID : "");
+      if (unrackedDevices.length > 0) {
+        selectLooseView();
+      } else {
+        setSelectedViewId("");
+        setSearchParams({});
+      }
       setEditorMode("closed");
     } catch (err) {
       setRackError(
@@ -455,10 +513,7 @@ export default function RackViewPage() {
             </div>
             <div className="flex-1 overflow-y-auto py-2">
               <button
-                onClick={() => {
-                  setSelectedViewId(UNRACKED_VIEW_ID);
-                  setSelectedDeviceId(undefined);
-                }}
+                onClick={selectLooseView}
                 className={`w-full border-l-2 px-4 py-2.5 text-left transition-colors ${
                   viewingUnracked
                     ? "border-[var(--color-accent)] bg-[var(--color-surface)]"
@@ -494,10 +549,7 @@ export default function RackViewPage() {
                     return (
                       <button
                         key={room.id}
-                        onClick={() => {
-                          setSelectedViewId(`${ROOM_VIEW_PREFIX}${room.id}`);
-                          setSelectedDeviceId(undefined);
-                        }}
+                        onClick={() => selectRoomView(room.id)}
                         className={`w-full border-l-2 px-4 py-2.5 text-left transition-colors ${
                           isActive
                             ? "border-[var(--color-accent)] bg-[var(--color-surface)]"
@@ -533,10 +585,7 @@ export default function RackViewPage() {
                 return (
                   <button
                     key={entry.id}
-                    onClick={() => {
-                      setSelectedViewId(entry.id);
-                      setSelectedDeviceId(undefined);
-                    }}
+                    onClick={() => selectRackView(entry.id)}
                     className={`w-full border-l-2 px-4 py-2.5 text-left transition-colors ${
                       isActive
                         ? "border-[var(--color-accent)] bg-[var(--color-surface)]"
@@ -875,7 +924,7 @@ function RoomPanel({
               racks.map((rack) => (
                 <Link
                   key={rack.id}
-                  to="/racks"
+                  to={`/racks?rackId=${rack.id}`}
                   className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2"
                 >
                   <div className="flex items-center justify-between gap-3">

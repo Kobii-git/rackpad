@@ -6,6 +6,24 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.1-beta.4] - 2026-05-23
+
+### Added
+
+- Added a Markdown Documentation workspace with persisted pages, preview, search,
+  and inline image insertion.
+- Added persisted device image attachments with labels and notes on each device
+  detail page.
+- Rack and room links can now deep-link into the Racks workspace with selected
+  rack or room context.
+- Dashboard inventory type tiles now open the Devices page filtered to that
+  device type.
+
+### Changed
+
+- Rack/report navigation now targets specific rack and room context instead of
+  only opening the general Racks page.
+
 ## [1.2.1-beta.3] - 2026-05-23
 
 ### Added
@@ -22,8 +40,6 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   sign-in setup.
 - Docker compose examples now pass `OIDC_REDIRECT_URI`, and the README includes
   a working Authentik-style OIDC configuration example.
-- Backlog notes captured for a markdown documentation workspace and device image
-  attachments.
 
 ### Changed
 

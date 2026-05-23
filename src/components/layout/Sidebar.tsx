@@ -16,6 +16,7 @@ import {
   Cpu,
   Activity,
   FileText,
+  BookOpen,
   Route,
   UploadCloud,
 } from "lucide-react";
@@ -39,6 +40,7 @@ const baseNavItems = [
   { to: "/ipam", icon: Network, label: "IPAM" },
   { to: "/reports", icon: FileText, label: "Reports" },
   { to: "/visualizer", icon: Route, label: "Visualizer" },
+  { to: "/documentation", icon: BookOpen, label: "Docs" },
 ] as const;
 
 interface SidebarProps {

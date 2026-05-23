@@ -372,7 +372,7 @@ export default function Dashboard() {
                 ).map(([type, count]) => (
                   <Link
                     key={type}
-                    to="/devices"
+                    to={`/devices?type=${encodeURIComponent(type)}`}
                     className="rk-panel-inset flex items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2.5"
                   >
                     <DeviceTypeIcon
