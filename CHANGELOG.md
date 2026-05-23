@@ -6,6 +6,39 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-05-24
+
+### Added
+
+- Added OIDC sign-in support with PKCE, role mapping, Authentik-style
+  configuration guidance, and `OIDC_DEBUG=1` troubleshooting logs.
+- Added custom device types across inventory, discovery, icons, filters, and
+  port templates.
+- Added MAC address support across device records, discovery imports, inventory
+  search/sort, ports, IPAM, monitoring, reports, racks, WiFi, compute, and the
+  Visualizer.
+- Added a Markdown Documentation workspace with persisted pages, preview,
+  search, and inline image insertion.
+- Added persisted device image attachments with labels and notes on device
+  detail pages.
+- Added rack and room deep links for the Racks workspace, plus Dashboard
+  inventory type links that open filtered device lists.
+
+### Changed
+
+- Visualizer cable highlighting, room loose-device layout, and room-only rack
+  zone behavior are easier to inspect and tune.
+- OIDC provider errors now include the discovery URL that failed, making issuer
+  URL 404s easier to diagnose.
+- Discovery can report why MAC addresses are unavailable and can use stronger
+  MAC discovery helpers when the deployment has layer-2 visibility.
+
+### Fixed
+
+- Updated vulnerable transitive packages through the Fastify static-file stack.
+- Backup/restore now preserves parent-linked devices, documentation pages,
+  device images, MAC addresses, and related beta data.
+
 ## [1.2.1-beta.4] - 2026-05-23
 
 ### Added
