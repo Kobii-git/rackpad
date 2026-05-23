@@ -155,7 +155,7 @@ Or from the Proxmox host shell:
 
 ```bash
 pct set <CTID> -features nesting=1,keyctl=1
-pct restart <CTID>
+pct reboot <CTID>
 ```
 
 Replace `<CTID>` with your container ID.
