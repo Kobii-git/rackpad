@@ -20,7 +20,8 @@ VMs and containers should live under.
 - Workload power state mapped to Rackpad health.
 - Proxmox VMID, node name, workload type, template flag, boot flag, uptime, and
   source tags in specs/notes.
-- CPU, memory, storage, disk controller, disk storage, and disk notes.
+- CPU, configured/max memory allocation, storage, disk controller, disk storage,
+  and disk notes.
 - Linux bridges and OVS-style bridge names as compute bridge records.
 - QEMU and LXC network adapters as virtual ports.
 - MAC addresses, bridge names, access VLAN tags, trunk VLANs, and virtual NIC
@@ -113,6 +114,8 @@ Before importing, check:
 - Any IP conflict badges are intentional. Rackpad skips conflicting primary IPs
   instead of overwriting existing IPAM assignments.
 - Bridge names, MAC addresses, access tags, and trunk VLANs look right.
+- RAM values reflect the configured/max allocation. Live memory usage from the
+  collection moment is kept as separate review metadata when available.
 - The selected category toggles match what you want imported this pass.
 
 ## Recommended Import Order

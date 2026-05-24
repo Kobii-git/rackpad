@@ -674,6 +674,7 @@ def collect_qemu(node, item):
         if NET_KEY_RE.match(key)
     ]
     maxmem_gb = bytes_to_gb(status.get("maxmem")) or mib_to_gb(config.get("memory"))
+    used_memory_gb = bytes_to_gb(status.get("mem"))
     storage_gb = sum(disk.get("sizeGb") or 0 for disk in disks) or bytes_to_gb(status.get("maxdisk"))
     cores = number(config.get("cores"))
     sockets = number(config.get("sockets")) or 1
@@ -687,8 +688,9 @@ def collect_qemu(node, item):
         "generation": None,
         "version": config.get("machine") or config.get("bios"),
         "processorCount": cpu_count,
-        "memoryAssignedGb": bytes_to_gb(status.get("mem")),
+        "memoryAssignedGb": maxmem_gb,
         "memoryStartupGb": maxmem_gb,
+        "memoryUsedGb": used_memory_gb,
         "dynamicMemoryEnabled": enabled(config.get("balloon")),
         "storageGb": round_gb(storage_gb) if storage_gb else None,
         "disks": disks,
@@ -743,6 +745,8 @@ def collect_lxc(node, item):
         for key, value in sorted(config.items())
         if NET_KEY_RE.match(key)
     ]
+    memory_gb = mib_to_gb(config.get("memory")) or bytes_to_gb(status.get("maxmem"))
+    used_memory_gb = bytes_to_gb(status.get("mem"))
     storage_gb = sum(disk.get("sizeGb") or 0 for disk in disks) or bytes_to_gb(status.get("maxdisk"))
     name = config.get("hostname") or item.get("name") or f"ct-{vmid}"
     errors = unique([config_error, status_error, live_error])
@@ -753,8 +757,9 @@ def collect_lxc(node, item):
         "generation": None,
         "version": config.get("arch"),
         "processorCount": int(number(config.get("cores")) or number(status.get("cpus")) or 0) or None,
-        "memoryAssignedGb": bytes_to_gb(status.get("mem")),
-        "memoryStartupGb": mib_to_gb(config.get("memory")) or bytes_to_gb(status.get("maxmem")),
+        "memoryAssignedGb": memory_gb,
+        "memoryStartupGb": memory_gb,
+        "memoryUsedGb": used_memory_gb,
         "dynamicMemoryEnabled": False,
         "storageGb": round_gb(storage_gb) if storage_gb else None,
         "disks": disks,

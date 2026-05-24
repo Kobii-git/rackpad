@@ -119,6 +119,7 @@ interface HyperVVm {
   processorCount?: number;
   memoryAssignedGb?: number | null;
   memoryStartupGb?: number | null;
+  memoryUsedGb?: number | null;
   dynamicMemoryEnabled?: boolean;
   storageGb?: number | null;
   disks?: HyperVDisk[];
@@ -1421,11 +1422,7 @@ function vmToDraft(
     osFamily: inferGuestOsFamily(osName, guest.osVersion),
     osName,
     cpuCores: vm.processorCount ? String(vm.processorCount) : "",
-    memoryGb: vm.memoryAssignedGb
-      ? String(vm.memoryAssignedGb)
-      : vm.memoryStartupGb
-        ? String(vm.memoryStartupGb)
-        : "",
+    memoryGb: formatOptionalNumber(workloadAllocatedMemoryGb(vm)),
     storageGb: vm.storageGb ? String(vm.storageGb) : "",
     notes: vm.notes ?? "",
   };
@@ -1478,6 +1475,14 @@ function workloadTypeLabel(vm: HyperVVm) {
   const type = `${vm.kind ?? vm.vmType ?? ""}`.toLowerCase();
   if (type.includes("qemu")) return "QEMU VM";
   return "VM";
+}
+
+function workloadAllocatedMemoryGb(vm: HyperVVm) {
+  const provider = providerForWorkload(vm);
+  if (provider === "proxmox") {
+    return vm.memoryStartupGb ?? vm.memoryAssignedGb ?? null;
+  }
+  return vm.memoryAssignedGb ?? vm.memoryStartupGb ?? null;
 }
 
 function findExistingHost(
@@ -2230,6 +2235,10 @@ function vmSpecs(vm: HyperVVm, draft?: VmDraft) {
     vm.dynamicMemoryEnabled != null
       ? `Dynamic memory: ${vm.dynamicMemoryEnabled ? "enabled" : "disabled"}`
       : "",
+    workloadAllocatedMemoryGb(vm)
+      ? `Memory allocation: ${workloadAllocatedMemoryGb(vm)} GB`
+      : "",
+    vm.memoryUsedGb ? `Memory used at collection: ${vm.memoryUsedGb} GB` : "",
     vm.disks?.length
       ? `Disks:\n${vm.disks
           .map(
@@ -2273,6 +2282,10 @@ function nextPortPosition(ports: Port[]) {
 function toNumber(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function formatOptionalNumber(value: number | null | undefined) {
+  return value == null ? "" : String(value);
 }
 
 function slugHost(value: string, fallback = "imported-workload") {

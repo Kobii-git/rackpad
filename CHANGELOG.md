@@ -6,6 +6,15 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.3-beta.8] - 2026-05-24
+
+### Fixed
+
+- Proxmox imports now use configured/max RAM allocation for QEMU VMs and LXC
+  containers instead of importing live used memory as the device RAM value.
+- Proxmox collector output now keeps live used memory as separate
+  `memoryUsedGb` metadata for review without overwriting allocated RAM.
+
 ## [1.2.3-beta.7] - 2026-05-24
 
 ### Fixed
