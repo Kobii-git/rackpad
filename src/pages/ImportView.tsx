@@ -232,6 +232,17 @@ const HYPERV_COLLECTOR_URL = "/api/imports/hyperv-collector";
 const PROXMOX_COLLECTOR_URL = "/api/imports/proxmox-collector";
 const AUTO_HOST_TARGET = "__auto__";
 
+type ProviderRunbookStep = {
+  title: string;
+  description: string;
+  command?: string;
+};
+
+type ProviderRunbookCommand = {
+  label: string;
+  command: string;
+};
+
 const PROVIDER_COPY: Record<
   ImportProvider,
   {
@@ -246,6 +257,12 @@ const PROVIDER_COPY: Record<
     downloadUrl: string;
     command: string;
     summary: string;
+    runbook: {
+      prerequisites: string[];
+      steps: ProviderRunbookStep[];
+      optionalCommands?: ProviderRunbookCommand[];
+      notes: string[];
+    };
   }
 > = {
   hyperv: {
@@ -262,6 +279,41 @@ const PROVIDER_COPY: Record<
       "powershell -ExecutionPolicy Bypass -File .\\collect-hyperv.ps1 -OutputPath .\\rackpad-hyperv-inventory.json -IncludeHostAdapters",
     summary:
       "Stages host, virtual switches, VMs, vNICs, VLANs, guest IPs, CPU, RAM, disk, power state, and guest OS data.",
+    runbook: {
+      prerequisites: [
+        "Run from an elevated PowerShell session on the Hyper-V host.",
+        "Use the host you want to inventory; the collector writes one JSON file for upload.",
+        "Guest IP collection depends on Hyper-V integration services reporting guest network data.",
+      ],
+      steps: [
+        {
+          title: "Download the collector",
+          description:
+            "Use the Hyper-V Download button and save the file as collect-hyperv.ps1 on the Hyper-V host.",
+        },
+        {
+          title: "Run the collector",
+          description:
+            "Run this in elevated PowerShell from the folder that contains collect-hyperv.ps1.",
+          command:
+            "powershell -ExecutionPolicy Bypass -File .\\collect-hyperv.ps1 -OutputPath .\\rackpad-hyperv-inventory.json -IncludeHostAdapters",
+        },
+        {
+          title: "Upload the JSON",
+          description:
+            "Return to Rackpad, choose rackpad-hyperv-inventory.json, and let the importer build a review plan.",
+        },
+        {
+          title: "Review and import",
+          description:
+            "Confirm the host, VMs, switches, VLANs, ports, MACs, IPs, and specs. Uncheck anything you want to skip, then select Import selected.",
+        },
+      ],
+      notes: [
+        "Rackpad stages the file first and does not write records until Import selected is pressed.",
+        "Existing devices are matched by hostname or display name before Rackpad creates new records.",
+      ],
+    },
   },
   proxmox: {
     label: "Proxmox",
@@ -277,6 +329,64 @@ const PROVIDER_COPY: Record<
       "chmod +x ./collect-proxmox.sh && sudo ./collect-proxmox.sh --output ./rackpad-proxmox-inventory.json",
     summary:
       "Stages the node, Linux bridges, host adapters, QEMU VMs, LXC containers, MACs, VLAN tags/trunks, guest IPs, CPU, RAM, disks, boot flags, and Proxmox metadata.",
+    runbook: {
+      prerequisites: [
+        "Run on each Proxmox node you want to inventory. The collector requires python3 and pvesh.",
+        "Use root or a sudo-capable account with access to pvesh and pct.",
+        "QEMU guest IPs require the guest agent. LXC live IPs require running containers unless static IPs are present in config.",
+      ],
+      steps: [
+        {
+          title: "Download the collector",
+          description:
+            "Use the Proxmox Download button, then copy collect-proxmox.sh to the Proxmox node you want to import.",
+        },
+        {
+          title: "Run the collector",
+          description:
+            "Run this on the Proxmox node. It creates rackpad-proxmox-inventory.json in the current folder.",
+          command:
+            "chmod +x ./collect-proxmox.sh\nsudo ./collect-proxmox.sh --output ./rackpad-proxmox-inventory.json",
+        },
+        {
+          title: "Upload the JSON",
+          description:
+            "Return to Rackpad, choose rackpad-proxmox-inventory.json, and review the generated import plan.",
+        },
+        {
+          title: "Review and import",
+          description:
+            "Confirm the node, Linux bridges, host adapters, QEMU VMs, LXC containers, disks, MACs, VLANs, IPs, CPU, and RAM. Uncheck anything you want to skip, then select Import selected.",
+        },
+        {
+          title: "Repeat for clusters",
+          description:
+            "For a Proxmox cluster, run the collector once per node and upload each JSON file to keep node, bridge, VM, and container data complete.",
+        },
+      ],
+      optionalCommands: [
+        {
+          label: "Collect a specific node",
+          command:
+            "sudo ./collect-proxmox.sh --node pve1 --output ./rackpad-proxmox-inventory.json",
+        },
+        {
+          label: "Skip live guest network probes",
+          command:
+            "sudo ./collect-proxmox.sh --no-guest-network --output ./rackpad-proxmox-inventory.json",
+        },
+        {
+          label: "Skip host adapters",
+          command:
+            "sudo ./collect-proxmox.sh --no-host-adapters --output ./rackpad-proxmox-inventory.json",
+        },
+      ],
+      notes: [
+        "Rackpad imports LXC workloads as containers and QEMU workloads as VMs.",
+        "If guest IPs are missing, enable the QEMU guest agent or verify that LXC network config exposes static addresses.",
+        "Existing devices are matched by hostname or display name before Rackpad creates new records.",
+      ],
+    },
   },
 };
 
@@ -570,6 +680,8 @@ export default function ImportView() {
             </CardBody>
           </Card>
 
+          <CollectorRunbooks />
+
           <Card>
             <CardHeader>
               <CardTitle>
@@ -691,6 +803,122 @@ const CATEGORY_COPY: Record<
     description: "Create missing VLAN records referenced by guest adapters.",
   },
 };
+
+function CollectorRunbooks() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <CardLabel>Collector runbook</CardLabel>
+          <CardHeading>Exact steps before importing</CardHeading>
+        </CardTitle>
+        <Badge tone="ok">
+          <CheckCircle2 className="size-3" />
+          beta guide
+        </Badge>
+      </CardHeader>
+      <CardBody>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {(["hyperv", "proxmox"] as const).map((provider) => (
+            <ProviderRunbook key={provider} provider={provider} />
+          ))}
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
+function ProviderRunbook({ provider }: { provider: ImportProvider }) {
+  const copy = PROVIDER_COPY[provider];
+  return (
+    <section className="rk-panel-inset rounded-[var(--radius-md)] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-[var(--text-primary)]">
+            {copy.label}
+          </div>
+          <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+            {copy.downloadName} - {copy.schema}
+          </div>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <a
+            href={copy.downloadUrl}
+            download={copy.downloadName}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <DownloadCloud className="size-3.5" />
+            Download
+          </a>
+        </Button>
+      </div>
+
+      <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.015)] p-3">
+        <div className="rk-kicker">Before you run it</div>
+        <ul className="mt-2 space-y-1.5 text-xs leading-5 text-[var(--text-tertiary)]">
+          {copy.runbook.prerequisites.map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="mt-2 size-1 shrink-0 rounded-full bg-[var(--accent-secondary)]" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <ol className="mt-4 space-y-3">
+        {copy.runbook.steps.map((step, index) => (
+          <li key={step.title} className="flex gap-3">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] font-mono text-[10px] text-[var(--text-secondary)]">
+              {index + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium text-[var(--text-primary)]">
+                {step.title}
+              </div>
+              <p className="mt-1 text-xs leading-5 text-[var(--text-tertiary)]">
+                {step.description}
+              </p>
+              {step.command && (
+                <pre className="mt-2 overflow-x-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.22)] p-3 font-mono text-[11px] leading-5 text-[var(--text-secondary)]">
+                  {step.command}
+                </pre>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      {copy.runbook.optionalCommands?.length ? (
+        <div className="mt-4 space-y-2">
+          <div className="rk-kicker">Optional commands</div>
+          {copy.runbook.optionalCommands.map((entry) => (
+            <div key={entry.label}>
+              <div className="text-[11px] font-medium text-[var(--text-secondary)]">
+                {entry.label}
+              </div>
+              <pre className="mt-1 overflow-x-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.22)] p-3 font-mono text-[11px] leading-5 text-[var(--text-secondary)]">
+                {entry.command}
+              </pre>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.015)] p-3">
+        <div className="rk-kicker">Import notes</div>
+        <ul className="mt-2 space-y-1.5 text-xs leading-5 text-[var(--text-tertiary)]">
+          {copy.runbook.notes.map((item) => (
+            <li key={item} className="flex gap-2">
+              <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-[var(--success)]" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
 
 function HostPreview({
   devices,

@@ -6,6 +6,16 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.3-beta.2] - 2026-05-24
+
+### Added
+
+- Added in-app Hyper-V and Proxmox collector runbooks on the Imports page with
+  prerequisites, exact commands, upload/review steps, Proxmox cluster guidance,
+  and optional Proxmox collector flags.
+- Added a low-key Ko-fi support link in the sidebar footer with an optional-use
+  disclaimer.
+
 ## [1.2.3-beta.1] - 2026-05-24
 
 ### Added

@@ -19,6 +19,8 @@ import {
   BookOpen,
   Route,
   UploadCloud,
+  Coffee,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { selectLab, useStore } from "@/lib/store";
@@ -169,7 +171,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
         </kbd>
       </button>
 
-      <nav className="flex flex-col gap-1 px-2">
+      <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-2">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -226,6 +228,22 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
             </div>
           </div>
         )}
+        <a
+          href="https://ko-fi.com/k0bii"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.015)] px-3 py-2 text-[11px] text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+          aria-label="Support Rackpad on Ko-fi"
+        >
+          <Coffee className="size-3.5 shrink-0 text-[var(--accent-secondary)]" />
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">Support Rackpad</span>
+            <span className="mt-0.5 block text-[10px] leading-4 text-[var(--text-muted)]">
+              Optional tip link; Rackpad remains free to use.
+            </span>
+          </span>
+          <ExternalLink className="size-3 shrink-0 text-[var(--text-tertiary)]" />
+        </a>
       </div>
     </aside>
   );
