@@ -60,11 +60,11 @@ http://LXC_IP:3000
 
 ## Install a specific version or port
 
-The script defaults to the current release. To install a specific tag:
+The script defaults to the current stable release. To install the current beta:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
-RACKPAD_TAG=1.2.3-beta.1 bash /tmp/install-rackpad.sh
+RACKPAD_TAG=beta bash /tmp/install-rackpad.sh
 ```
 
 To follow the newest stable GHCR image instead of pinning a release:

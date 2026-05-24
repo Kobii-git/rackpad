@@ -6,6 +6,14 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.3-beta.5] - 2026-05-24
+
+### Fixed
+
+- Docker images now include the Proxmox collector script, so the in-app
+  Proxmox collector download works from GHCR deployments.
+- Docker beta install examples now use the published moving `beta` image tag.
+
 ## [1.2.3-beta.4] - 2026-05-24
 
 ### Fixed
