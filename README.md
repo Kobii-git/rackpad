@@ -2,7 +2,7 @@
 
 Rackpad is a self-hosted infrastructure inventory and operations app for racks, devices, ports, cables, VLANs, IP address management, WiFi, compute, discovery, monitoring, labs, and users.
 
-Current release: `v1.2.3-beta.3`
+Current release: `v1.2.3-beta.4`
 
 It is a full-stack app:
 
@@ -327,7 +327,7 @@ curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/inst
 ```
 
 Use `RACKPAD_TAG=latest` if you want the newest stable GHCR image, or pin an
-exact Docker tag such as `1.2.3-beta.3` when you want controlled beta upgrades:
+exact Docker tag such as `1.2.3-beta.4` when you want controlled beta upgrades:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
@@ -348,7 +348,7 @@ cd /opt/rackpad
 sudo curl -fsSLo compose.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.release.yml
 sudo tee .env >/dev/null <<'EOF'
 RACKPAD_IMAGE=ghcr.io/kobii-git/rackpad
-RACKPAD_TAG=1.2.3-beta.3
+RACKPAD_TAG=1.2.3-beta.4
 RACKPAD_PORT=3000
 MONITOR_INTERVAL_MS=300000
 TRUST_PROXY=0

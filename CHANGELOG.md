@@ -6,6 +6,13 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.3-beta.4] - 2026-05-24
+
+### Fixed
+
+- Proxmox LXC imports no longer treat the `gw=` gateway value as a container IP
+  address when staging static LXC network configuration.
+
 ## [1.2.3-beta.3] - 2026-05-24
 
 ### Changed

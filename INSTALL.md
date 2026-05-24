@@ -1,6 +1,6 @@
 # Rackpad Installation Guide
 
-Current release: `v1.2.3-beta.3`
+Current release: `v1.2.3-beta.4`
 
 Rackpad is easiest to run from Docker. You can either pull the published image
 without cloning the repo, or clone the repo and build it yourself.
@@ -15,7 +15,7 @@ without cloning the repo, or clone the repo and build it yourself.
 ## Main Branch Or Version Tag?
 
 - `main` is the stable source branch and is fine for cloning the latest stable code.
-- `RACKPAD_TAG=1.2.3-beta.3` pins the Docker image to a known release. Git tags use
+- `RACKPAD_TAG=1.2.3-beta.4` pins the Docker image to a known release. Git tags use
   the `v` prefix, but Docker image tags do not.
 - `RACKPAD_TAG=latest` follows the newest published stable GHCR image and is
   convenient for quick installs or test labs.
@@ -32,7 +32,7 @@ Rackpad uses this environment file for Docker installs:
 
 ```bash
 RACKPAD_IMAGE=ghcr.io/kobii-git/rackpad
-RACKPAD_TAG=1.2.3-beta.3
+RACKPAD_TAG=1.2.3-beta.4
 RACKPAD_PORT=3000
 MONITOR_INTERVAL_MS=300000
 TRUST_PROXY=0
@@ -43,7 +43,7 @@ TRUSTED_ORIGINS=
 Most users only change:
 
 - `RACKPAD_PORT`: host port to expose, default `3000`.
-- `RACKPAD_TAG`: release version to run, for example `1.2.3-beta.3`, or `latest` for
+- `RACKPAD_TAG`: release version to run, for example `1.2.3-beta.4`, or `latest` for
   the newest stable GHCR image.
 - `TRUST_PROXY`, `TRUSTED_HOSTS`, `TRUSTED_ORIGINS`: set these when using a reverse proxy.
 
@@ -81,7 +81,7 @@ Create `.env`:
 ```bash
 sudo tee .env >/dev/null <<'EOF'
 RACKPAD_IMAGE=ghcr.io/kobii-git/rackpad
-RACKPAD_TAG=1.2.3-beta.3
+RACKPAD_TAG=1.2.3-beta.4
 RACKPAD_PORT=3000
 MONITOR_INTERVAL_MS=300000
 TRUST_PROXY=0
@@ -123,7 +123,7 @@ sudo docker compose up --build -d
 To build an exact release instead of current `main`:
 
 ```bash
-sudo git checkout v1.2.3-beta.3
+sudo git checkout v1.2.3-beta.4
 sudo docker compose up --build -d
 ```
 
@@ -212,7 +212,7 @@ Invoke-WebRequest `
 ```powershell
 @'
 RACKPAD_IMAGE=ghcr.io/kobii-git/rackpad
-RACKPAD_TAG=1.2.3-beta.3
+RACKPAD_TAG=1.2.3-beta.4
 RACKPAD_PORT=3000
 MONITOR_INTERVAL_MS=300000
 TRUST_PROXY=0

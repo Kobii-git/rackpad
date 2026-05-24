@@ -514,10 +514,8 @@ def lxc_network_adapter(vmid, key, value, live_by_name, live_by_mac):
     name = options.get("name") or key
     mac = options.get("hwaddr") or options.get("mac") or options.get("macaddr")
     mac_key = normalize_mac(mac)
-    configured_ips = [
-        clean_ipv4(options.get("ip")),
-        clean_ipv4(options.get("gw")),
-    ]
+    # `gw` is the container gateway, not an address assigned to the container.
+    configured_ips = [clean_ipv4(options.get("ip"))]
     live_ips = []
     if name:
         live_ips.extend(live_by_name.get(name, []))
