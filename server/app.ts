@@ -32,6 +32,10 @@ const HYPERV_COLLECTOR_PATH = path.resolve(
   __dirname,
   "../scripts/collect-hyperv.ps1",
 );
+const PROXMOX_COLLECTOR_PATH = path.resolve(
+  __dirname,
+  "../scripts/collect-proxmox.sh",
+);
 const DEV_ORIGINS = new Set(["http://localhost:5173", "http://127.0.0.1:5173"]);
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
@@ -235,10 +239,27 @@ export async function createApp() {
       )
       .send(readFileSync(HYPERV_COLLECTOR_PATH, "utf8"));
   });
+  app.get("/api/imports/proxmox-collector", async (_req, reply) => {
+    if (!existsSync(PROXMOX_COLLECTOR_PATH)) {
+      reply.status(404).send({
+        error: "Proxmox collector script is not available in this build.",
+      });
+      return;
+    }
+
+    reply
+      .header("Content-Type", "text/x-shellscript; charset=utf-8")
+      .header(
+        "Content-Disposition",
+        'attachment; filename="collect-proxmox.sh"',
+      )
+      .send(readFileSync(PROXMOX_COLLECTOR_PATH, "utf8"));
+  });
 
   const publicPaths = new Set([
     "/api/health",
     "/api/imports/hyperv-collector",
+    "/api/imports/proxmox-collector",
     "/api/auth/status",
     "/api/auth/bootstrap",
     "/api/auth/login",

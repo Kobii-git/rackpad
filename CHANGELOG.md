@@ -6,12 +6,33 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.3-beta.1] - 2026-05-24
+
+### Added
+
+- Added a Proxmox import workflow with a downloadable Linux collector for
+  staging Proxmox nodes, Linux bridges, QEMU VMs, LXC containers, MAC
+  addresses, VLAN tags/trunks, guest IPs, CPU, RAM, disks, boot flags, source
+  tags, and Proxmox metadata before import.
+- Added Proxmox import documentation with collector options, review checklist,
+  and troubleshooting notes for QEMU guest agent and LXC IP collection.
+
 ### Changed
 
+- The Imports workspace now supports both Hyper-V and Proxmox collector JSON
+  files in the same review-first staging flow, with LXC containers imported as
+  container devices and container IP assignments.
 - Updated GitHub install/demo instructions, seeded demo content, and 1920x1200
   screenshot coverage for the v1.2.2 feature set.
 - Added richer Visualizer screenshots for cable selection, health overlay, trace
   mode, and loose-device layout options.
+
+### Fixed
+
+- Fixed built-in switch port template positions so SFP/SFP+ uplinks sort after
+  the numbered copper ports when new devices are created from templates.
+- TCP monitor checks now report offline instead of returning a 500 when the
+  runtime blocks outbound socket opens.
 
 ## [1.2.2] - 2026-05-24
 

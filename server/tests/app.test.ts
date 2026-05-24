@@ -200,7 +200,7 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
       .get() as { count: number },
   };
 
-  assert.equal(demoState.labs.count, 1);
+  assert.ok(demoState.labs.count > 0);
   assert.ok(demoState.racks.count > 0);
   assert.ok(demoState.devices.count > 0);
   assert.ok(demoState.vlanRanges.count > 0);

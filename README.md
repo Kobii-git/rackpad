@@ -2,7 +2,7 @@
 
 Rackpad is a self-hosted infrastructure inventory and operations app for racks, devices, ports, cables, VLANs, IP address management, WiFi, compute, discovery, monitoring, labs, and users.
 
-Current release: `v1.2.2`
+Current release: `v1.2.3-beta.1`
 
 It is a full-stack app:
 
@@ -20,6 +20,7 @@ If `rackpad.co.za` is unavailable, the repo still contains the core material you
 - [Installation guide](./INSTALL.md)
 - [Proxmox install notes](./docs/PROXMOX.md)
 - [Hyper-V import guide](./docs/HYPERV_IMPORT.md)
+- [Proxmox import guide](./docs/PROXMOX_IMPORT.md)
 - [Reports guide](./docs/REPORTS.md)
 - [Visualizer guide](./docs/VISUALIZER.md)
 - [OIDC login guide](./docs/OIDC.md)
@@ -94,7 +95,7 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - Monitoring for multi-target ICMP, TCP, HTTP, and HTTPS checks
 - IPAM for subnets, DHCP scopes, IP zones, and linked assignments
 - Documentation for Markdown notes, runbooks, and inline pictures
-- Imports for review-first Hyper-V host and VM onboarding
+- Imports for review-first Hyper-V and Proxmox host, VM, and container onboarding
 - Reports for printable/PDF, Excel-compatible, and CSV exports
 - Visualizer for rack, loose-room, port, and cable relationship maps
 
@@ -135,6 +136,7 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - Markdown Documentation workspace for runbooks and notes, including inline image insertion
 - Device image attachments with labels and notes on device detail pages
 - Hyper-V import wizard for staging hosts, VMs, power state, guest OS, virtual switches, virtual NICs, VLANs, IPs, CPU, memory, and disk data from a local PowerShell export, with editable host mapping before import
+- Proxmox import wizard for staging nodes, Linux bridges, QEMU VMs, LXC containers, MACs, VLAN tags/trunks, guest IPs, CPU, RAM, disks, boot flags, and Proxmox metadata from a local node export
 - Expanded demo data with multiple labs, MAC addresses, discovery states, custom templates/device types, multi-target monitors, room tech, documentation pages, device image examples, compute, and WiFi examples
 - Production build of the frontend and backend
 - Docker packaging for the frontend + API together
@@ -144,6 +146,7 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 Use these when you want the workflow steps rather than just the overview:
 
 - [Hyper-V import](./docs/HYPERV_IMPORT.md): download the collector, collect inventory on a Hyper-V host, map or create the host record, review VMs, and import selected categories.
+- [Proxmox import](./docs/PROXMOX_IMPORT.md): download the collector, collect inventory on a Proxmox node, map or create the node record, review QEMU VMs and LXC containers, and import selected categories.
 - [Reports](./docs/REPORTS.md): generate a clean inventory report, print/save to PDF, and export CSV or Excel-compatible files.
 - [Visualizer](./docs/VISUALIZER.md): inspect rack, loose-room, port, and cable relationships from existing Rackpad data.
 - [OIDC login](./docs/OIDC.md): configure Authentik or another IdP, map roles, and debug issuer/discovery URL problems.
@@ -171,7 +174,7 @@ Recommended workflow:
 
 - test new work from `beta`
 - merge validated fixes and features into `main`
-- create version tags like `v1.2.2` from `main`
+- create version tags like `v1.2.3` from `main`
 
 If you want the newest testing build instead of the latest stable tag:
 
@@ -324,7 +327,7 @@ curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/inst
 ```
 
 Use `RACKPAD_TAG=latest` if you want the newest stable GHCR image, or pin an
-exact Docker tag such as `1.2.2` when you want controlled production upgrades:
+exact Docker tag such as `1.2.3-beta.1` when you want controlled beta upgrades:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
@@ -345,7 +348,7 @@ cd /opt/rackpad
 sudo curl -fsSLo compose.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.release.yml
 sudo tee .env >/dev/null <<'EOF'
 RACKPAD_IMAGE=ghcr.io/kobii-git/rackpad
-RACKPAD_TAG=1.2.2
+RACKPAD_TAG=1.2.3-beta.1
 RACKPAD_PORT=3000
 MONITOR_INTERVAL_MS=300000
 TRUST_PROXY=0

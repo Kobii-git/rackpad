@@ -5,6 +5,10 @@ path is to enable LXC nesting, install Docker inside the container, and pull the
 published Rackpad container image from GHCR. This avoids cloning the source repo
 onto the server.
 
+If you want to import Proxmox node, VM, container, bridge, MAC, VLAN, IP, CPU,
+RAM, and disk data into Rackpad, see the
+[Proxmox import guide](./PROXMOX_IMPORT.md).
+
 ## Recommended LXC size
 
 - Debian 12 or Ubuntu 24.04 LXC
@@ -60,7 +64,7 @@ The script defaults to the current release. To install a specific tag:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
-RACKPAD_TAG=1.2.2 bash /tmp/install-rackpad.sh
+RACKPAD_TAG=1.2.3-beta.1 bash /tmp/install-rackpad.sh
 ```
 
 To follow the newest stable GHCR image instead of pinning a release:

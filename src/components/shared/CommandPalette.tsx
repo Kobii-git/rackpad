@@ -76,7 +76,7 @@ const PAGES: SearchResult[] = [
     id: "p-imports",
     group: "Pages",
     title: "Imports",
-    subtitle: "Hyper-V import wizard",
+    subtitle: "Hyper-V and Proxmox import",
     href: "/imports",
     Icon: UploadCloud,
   },

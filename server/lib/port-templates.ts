@@ -30,7 +30,6 @@ function rangeNames(prefix: string, count: number, kind: PortTemplateKind, speed
     kind,
     speed,
     face: 'front' as const,
-    position: index + 1,
   }))
 }
 
