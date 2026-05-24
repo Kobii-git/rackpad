@@ -1,5 +1,16 @@
-import { motion } from "motion/react";
 import { Link } from "react-router-dom";
+import {
+  Activity,
+  AlertTriangle,
+  Boxes,
+  Cable,
+  ChevronRight,
+  ClipboardList,
+  HardDrive,
+  Network,
+  Server,
+  Wifi,
+} from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
 import {
   Card,
@@ -9,23 +20,19 @@ import {
   CardLabel,
   CardTitle,
 } from "@/components/ui/Card";
-import { StatCard } from "@/components/shared/StatCard";
+import { Badge } from "@/components/ui/Badge";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { Mono } from "@/components/shared/Mono";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { AllocatePanel } from "@/components/shared/AllocatePanel";
 import { canEditInventory, useStore } from "@/lib/store";
-import {
-  formatBandwidthMbps,
-  parsePortSpeedMbps,
-  relativeTime,
-  statusLabel,
-} from "@/lib/utils";
-import { Activity, ChevronRight } from "lucide-react";
+import { formatDeviceAddress } from "@/lib/network-labels";
+import { cidrSize, relativeTime, statusLabel } from "@/lib/utils";
 
 export default function Dashboard() {
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
+  const rooms = useStore((s) => s.rooms);
   const racks = useStore((s) => s.racks);
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
@@ -34,60 +41,74 @@ export default function Dashboard() {
   const ipAssignments = useStore((s) => s.ipAssignments);
   const auditLog = useStore((s) => s.auditLog);
   const vlans = useStore((s) => s.vlans);
+  const deviceMonitors = useStore((s) => s.deviceMonitors);
+  const discoveredDevices = useStore((s) => s.discoveredDevices);
   const canEdit = canEditInventory(currentUser);
 
-  const onlineCount = devices.filter(
-    (device) => device.status === "online",
-  ).length;
-  const warningCount = devices.filter(
-    (device) => device.status === "warning",
-  ).length;
-  const linkedPortCount = ports.filter(
-    (port) => port.linkState === "up",
-  ).length;
-  const totalPorts = ports.length;
-  const portsWithSpeed = ports.filter(
-    (port) => parsePortSpeedMbps(port.speed) != null,
+  const devicesById = Object.fromEntries(
+    devices.map((device) => [device.id, device]),
   );
-  const configuredCapacityMbps = ports.reduce(
-    (sum, port) => sum + (parsePortSpeedMbps(port.speed) ?? 0),
+  const cabledPortIds = new Set(
+    portLinks.flatMap((link) => [link.fromPortId, link.toPortId]),
+  );
+  const totalUsableIps = subnets.reduce(
+    (sum, subnet) => sum + Math.max(0, cidrSize(subnet.cidr) - 2),
     0,
   );
-  const linkedCapacityMbps = ports.reduce(
-    (sum, port) =>
-      sum +
-      (port.linkState === "up" ? (parsePortSpeedMbps(port.speed) ?? 0) : 0),
-    0,
-  );
-  const capacityBuckets = Array.from(
-    ports
-      .reduce((acc, port) => {
-        const speedMbps = parsePortSpeedMbps(port.speed);
-        if (speedMbps == null) return acc;
-        const key = formatBandwidthMbps(speedMbps);
-        const current = acc.get(key) ?? {
-          label: key,
-          total: 0,
-          linked: 0,
-          capacityMbps: 0,
-        };
-        current.total += 1;
-        current.capacityMbps += speedMbps;
-        if (port.linkState === "up") current.linked += 1;
-        acc.set(key, current);
-        return acc;
-      }, new Map<string, { label: string; total: number; linked: number; capacityMbps: number }>())
-      .values(),
-  ).sort((a, b) => b.capacityMbps - a.capacityMbps || b.total - a.total);
-  const documentedSpeedPct =
-    totalPorts === 0
+  const ipUsagePct =
+    totalUsableIps === 0
       ? 0
-      : Math.round((portsWithSpeed.length / totalPorts) * 100);
+      : Math.round((ipAssignments.length / totalUsableIps) * 100);
+  const uncabledPorts = Math.max(0, ports.length - cabledPortIds.size);
+  const portsWithoutSpeed = ports.filter((port) => !port.speed).length;
+  const enabledMonitors = deviceMonitors.filter(
+    (monitor) => monitor.enabled && monitor.type !== "none",
+  );
+  const monitorIssues = enabledMonitors.filter((monitor) =>
+    ["offline", "unknown"].includes(monitor.lastResult ?? "unknown"),
+  );
+  const attentionDevices = devices
+    .filter((device) => ["offline", "warning", "unknown"].includes(device.status))
+    .sort((a, b) => statusPriority(a.status) - statusPriority(b.status))
+    .slice(0, 6);
+  const newDiscoveries = discoveredDevices.filter(
+    (device) => device.status === "new",
+  ).length;
+  const unplacedDevices = devices.filter(
+    (device) =>
+      device.placement !== "virtual" &&
+      !device.rackId &&
+      !device.roomId &&
+      !device.parentDeviceId,
+  ).length;
+  const rackUtilization = racks.length
+    ? Math.round(
+        (devices.reduce(
+          (sum, device) =>
+            sum + (device.rackId && device.heightU ? device.heightU : 0),
+          0,
+        ) /
+          Math.max(
+            1,
+            racks.reduce((sum, rack) => sum + rack.totalU, 0),
+          )) *
+          100,
+      )
+    : 0;
+  const deviceTypes = Object.entries(
+    devices.reduce<Record<string, number>>((acc, device) => {
+      acc[device.deviceType] = (acc[device.deviceType] ?? 0) + 1;
+      return acc;
+    }, {}),
+  )
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 8);
+  const recentActivity = auditLog.slice(0, 5);
 
   return (
     <>
       <TopBar
-        subtitle="Overview"
+        subtitle="Operations overview"
         title="Dashboard"
         meta={
           <>
@@ -98,7 +119,7 @@ export default function Dashboard() {
               {lab.name}
             </span>
             <span className="font-mono text-[10px] text-[var(--text-muted)]">
-              {racks.length} racks | {devices.length} devices
+              {rooms.length} rooms | {racks.length} racks | {devices.length} devices
             </span>
           </>
         }
@@ -106,281 +127,218 @@ export default function Dashboard() {
       />
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
-        <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Link to="/devices" className="block">
-            <StatCard
-              label="Devices"
-              value={devices.length}
-              hint={`${onlineCount} online | ${warningCount} warning`}
-              accent
-              delay={0}
-            />
-          </Link>
-          <Link to="/ports" className="block">
-            <StatCard
-              label="Ports linked"
-              value={linkedPortCount}
-              unit={`/ ${totalPorts}`}
-              hint={`${Math.round((linkedPortCount / Math.max(1, totalPorts)) * 100)}% utilization`}
-              delay={0.04}
-            />
-          </Link>
-          <Link to="/ipam" className="block">
-            <StatCard
-              label="IPs allocated"
-              value={ipAssignments.length}
-              unit={`/ ${subnets.length * 254}`}
-              hint={`${subnets.length} subnets`}
-              delay={0.08}
-            />
-          </Link>
-          <Link to="/cables" className="block">
-            <StatCard
-              label="Cables"
-              value={portLinks.length}
-              hint={`${vlans.length} VLANs configured`}
-              delay={0.12}
-            />
-          </Link>
+        <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <DashboardMetric
+            to="/monitoring"
+            icon={AlertTriangle}
+            label="Needs attention"
+            value={attentionDevices.length + monitorIssues.length}
+            hint={`${attentionDevices.length} devices, ${monitorIssues.length} monitors`}
+            tone={attentionDevices.length + monitorIssues.length > 0 ? "warn" : "ok"}
+          />
+          <DashboardMetric
+            to="/ipam"
+            icon={Network}
+            label="IPAM used"
+            value={`${ipUsagePct}%`}
+            hint={`${ipAssignments.length}/${totalUsableIps || 0} usable addresses`}
+            tone={ipUsagePct > 85 ? "warn" : "info"}
+          />
+          <DashboardMetric
+            to="/ports"
+            icon={Cable}
+            label="Ports cabled"
+            value={`${cabledPortIds.size}/${ports.length}`}
+            hint={`${uncabledPorts} uncabled, ${portsWithoutSpeed} missing speed`}
+            tone={uncabledPorts > 0 ? "neutral" : "ok"}
+          />
+          <DashboardMetric
+            to="/discovery"
+            icon={ClipboardList}
+            label="Discovery queue"
+            value={newDiscoveries}
+            hint={`${discoveredDevices.length} discovered hosts total`}
+            tone={newDiscoveries > 0 ? "warn" : "neutral"}
+          />
         </div>
 
-        <div className="grid grid-cols-12 gap-3">
+        <div className="grid grid-cols-12 gap-4">
+          <Card className="col-span-12 xl:col-span-5">
+            <CardHeader>
+              <CardTitle>
+                <CardLabel>Action queue</CardLabel>
+                <CardHeading>Devices to review</CardHeading>
+              </CardTitle>
+              <Badge tone={attentionDevices.length > 0 ? "warn" : "ok"}>
+                {attentionDevices.length} open
+              </Badge>
+            </CardHeader>
+            <CardBody className="space-y-2">
+              {attentionDevices.length === 0 ? (
+                <EmptyLine title="No device status issues" />
+              ) : (
+                attentionDevices.map((device) => (
+                  <Link
+                    key={device.id}
+                    to={`/devices/${device.id}`}
+                    className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                  >
+                    <StatusDot status={device.status} />
+                    <DeviceTypeIcon
+                      type={device.deviceType}
+                      className="size-4 text-[var(--accent-primary)]"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-[var(--text-primary)]">
+                        {device.hostname}
+                      </div>
+                      <div className="truncate text-[11px] text-[var(--text-tertiary)]">
+                        {formatDeviceAddress(device) ||
+                          device.displayName ||
+                          device.deviceType.replace("_", " ")}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-[11px] text-[var(--text-secondary)]">
+                      {statusLabel[device.status]}
+                    </span>
+                  </Link>
+                ))
+              )}
+            </CardBody>
+          </Card>
+
+          <Card className="col-span-12 xl:col-span-4">
+            <CardHeader>
+              <CardTitle>
+                <CardLabel>Monitoring</CardLabel>
+                <CardHeading>Probe health</CardHeading>
+              </CardTitle>
+              <Badge tone={monitorIssues.length > 0 ? "warn" : "ok"}>
+                {enabledMonitors.length} enabled
+              </Badge>
+            </CardHeader>
+            <CardBody className="space-y-2">
+              {monitorIssues.length === 0 ? (
+                <EmptyLine title="No monitor failures" />
+              ) : (
+                monitorIssues.slice(0, 5).map((monitor) => {
+                  const device = devicesById[monitor.deviceId];
+                  return (
+                    <Link
+                      key={monitor.id}
+                      to={device ? `/devices/${device.id}` : "/monitoring"}
+                      className="block rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="truncate text-sm text-[var(--text-primary)]">
+                          {device?.hostname ?? monitor.name}
+                        </span>
+                        <Badge tone={monitor.lastResult === "offline" ? "err" : "neutral"}>
+                          {monitor.lastResult ?? "unknown"}
+                        </Badge>
+                      </div>
+                      <div className="mt-1 truncate text-[11px] text-[var(--text-tertiary)]">
+                        {monitor.name} | {monitor.target ?? "no target"}
+                      </div>
+                    </Link>
+                  );
+                })
+              )}
+            </CardBody>
+          </Card>
+
+          <Card className="col-span-12 xl:col-span-3">
+            <CardHeader>
+              <CardTitle>
+                <CardLabel>Recent activity</CardLabel>
+                <CardHeading>Last 5 changes</CardHeading>
+              </CardTitle>
+              <Link
+                to="/audit-log"
+                className="text-xs text-[var(--accent-primary)] hover:underline"
+              >
+                View all
+              </Link>
+            </CardHeader>
+            <CardBody className="space-y-2">
+              {recentActivity.length === 0 ? (
+                <EmptyLine title="No audit activity yet" />
+              ) : (
+                recentActivity.map((entry) => (
+                  <Link
+                    key={entry.id}
+                    to="/audit-log"
+                    className="block rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                  >
+                    <div className="line-clamp-2 text-xs text-[var(--text-primary)]">
+                      {entry.summary}
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <Mono className="text-[10px] text-[var(--text-tertiary)]">
+                        {entry.user}
+                      </Mono>
+                      <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)]">
+                        {relativeTime(entry.ts)}
+                      </span>
+                    </div>
+                  </Link>
+                ))
+              )}
+            </CardBody>
+          </Card>
+
           <Card className="col-span-12 lg:col-span-4">
             <CardHeader>
               <CardTitle>
-                <CardLabel>Health</CardLabel>
-                <CardHeading>Device status</CardHeading>
+                <CardLabel>Inventory shape</CardLabel>
+                <CardHeading>Placement coverage</CardHeading>
               </CardTitle>
             </CardHeader>
-            <CardBody>
-              <div className="space-y-2.5">
-                {(
-                  [
-                    "online",
-                    "warning",
-                    "maintenance",
-                    "offline",
-                    "unknown",
-                  ] as const
-                ).map((status) => {
-                  const count = devices.filter(
-                    (device) => device.status === status,
-                  ).length;
-                  const pct = Math.round(
-                    (count / Math.max(1, devices.length)) * 100,
-                  );
-                  if (count === 0) return null;
-                  return (
-                    <div key={status}>
-                      <div className="mb-1 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <StatusDot status={status} />
-                          <span className="text-xs text-[var(--text-primary)]">
-                            {statusLabel[status]}
-                          </span>
-                        </div>
-                        <Mono className="text-[var(--text-secondary)]">
-                          {count}
-                        </Mono>
-                      </div>
-                      <div className="rk-progress-track h-1.5">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${pct}%` }}
-                          transition={{
-                            duration: 0.5,
-                            delay: 0.2,
-                            ease: [0.22, 1, 0.36, 1],
-                          }}
-                          className="h-full rounded-full"
-                          style={{
-                            backgroundColor:
-                              status === "online"
-                                ? "var(--success)"
-                                : status === "warning"
-                                  ? "var(--warning)"
-                                  : status === "maintenance"
-                                    ? "var(--info)"
-                                    : status === "offline"
-                                      ? "var(--danger)"
-                                      : "var(--neutral)",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+            <CardBody className="space-y-3">
+              <CoverageRow
+                label="Rack utilization"
+                value={`${rackUtilization}%`}
+                pct={rackUtilization}
+              />
+              <CoverageRow
+                label="Cabled ports"
+                value={`${cabledPortIds.size}/${ports.length}`}
+                pct={Math.round((cabledPortIds.size / Math.max(1, ports.length)) * 100)}
+              />
+              <CoverageRow
+                label="IPAM usage"
+                value={`${ipUsagePct}%`}
+                pct={ipUsagePct}
+              />
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <MiniStat icon={Server} label="Racks" value={racks.length} />
+                <MiniStat icon={Wifi} label="Rooms" value={rooms.length} />
+                <MiniStat icon={HardDrive} label="Unplaced" value={unplacedDevices} />
               </div>
             </CardBody>
           </Card>
 
-          <Card className="col-span-12 lg:col-span-8">
-            <CardHeader>
-              <CardTitle>
-                <CardLabel>Network | inventory derived</CardLabel>
-                <CardHeading>Aggregate capacity</CardHeading>
-              </CardTitle>
-              <div className="max-w-xl text-right text-[11px] text-[var(--color-fg-subtle)]">
-                Estimated from saved port speeds and link states. This is not
-                live traffic telemetry yet.
-              </div>
-            </CardHeader>
-            <CardBody>
-              <div className="grid gap-3 md:grid-cols-3">
-                <CapacityStat
-                  label="Configured"
-                  value={formatBandwidthMbps(configuredCapacityMbps)}
-                  hint={`${portsWithSpeed.length}/${totalPorts} ports have documented speeds`}
-                />
-                <CapacityStat
-                  label="Linked"
-                  value={formatBandwidthMbps(linkedCapacityMbps)}
-                  hint={`${linkedPortCount} live links documented`}
-                />
-                <CapacityStat
-                  label="Coverage"
-                  value={`${documentedSpeedPct}%`}
-                  hint="of ports can contribute to capacity estimates"
-                />
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {capacityBuckets.length === 0 ? (
-                  <div className="rk-empty">
-                    <div className="rk-empty-title">
-                      No capacity profile yet
-                    </div>
-                    <div className="rk-empty-copy">
-                      Add port speeds such as{" "}
-                      <span className="font-mono text-[var(--text-primary)]">
-                        1G
-                      </span>
-                      ,
-                      <span className="mx-1 font-mono text-[var(--text-primary)]">
-                        2.5G
-                      </span>
-                      , or
-                      <span className="ml-1 font-mono text-[var(--text-primary)]">
-                        10G
-                      </span>{" "}
-                      to turn this into a useful capacity view.
-                    </div>
-                  </div>
-                ) : (
-                  capacityBuckets.map((bucket) => {
-                    const ratio = Math.round(
-                      (bucket.linked / Math.max(1, bucket.total)) * 100,
-                    );
-                    return (
-                      <div
-                        key={bucket.label}
-                        className="rk-panel-inset rounded-[var(--radius-md)] p-3"
-                      >
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                          <div>
-                            <div className="rk-kicker">
-                              {bucket.label} ports
-                            </div>
-                            <div className="text-sm font-medium text-[var(--text-primary)]">
-                              {bucket.linked}/{bucket.total} linked
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-mono text-[11px] text-[var(--text-primary)]">
-                              {formatBandwidthMbps(bucket.capacityMbps)}
-                            </div>
-                            <div className="text-[11px] text-[var(--text-tertiary)]">
-                              documented capacity
-                            </div>
-                          </div>
-                        </div>
-                        <div className="rk-progress-track h-2">
-                          <div
-                            className="rk-progress-fill"
-                            style={{ width: `${ratio}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card className="col-span-12 lg:col-span-7">
-            <CardHeader>
-              <CardTitle>
-                <CardLabel>Audit log</CardLabel>
-                <CardHeading>Recent activity</CardHeading>
-              </CardTitle>
-              <Activity className="size-4 text-[var(--color-fg-subtle)]" />
-            </CardHeader>
-            <CardBody className="p-0">
-              <ul className="divide-y divide-[var(--border-subtle)]">
-                {auditLog.map((entry, index) => (
-                  <motion.li
-                    key={entry.id}
-                    initial={{ opacity: 0, x: -4 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 + index * 0.04, duration: 0.25 }}
-                    className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[rgb(255_255_255_/_0.03)]"
-                  >
-                    <span
-                      className="mt-0.5 h-9 w-1 shrink-0 rounded-full"
-                      style={{ backgroundColor: activityTone(entry.action) }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm text-[var(--text-primary)]">
-                        {entry.summary}
-                      </div>
-                      <div className="mt-1 flex items-center gap-2">
-                        <Mono className="text-[10px] text-[var(--text-tertiary)]">
-                          {entry.user}
-                        </Mono>
-                        <span className="text-[10px] text-[var(--text-muted)]">
-                          |
-                        </span>
-                        <Mono className="text-[10px] text-[var(--text-tertiary)]">
-                          {entry.action}
-                        </Mono>
-                      </div>
-                    </div>
-                    <span className="shrink-0 whitespace-nowrap font-mono text-[10px] text-[var(--text-muted)]">
-                      {relativeTime(entry.ts)}
-                    </span>
-                  </motion.li>
-                ))}
-              </ul>
-            </CardBody>
-          </Card>
-
-          <Card className="col-span-12 lg:col-span-5">
+          <Card className="col-span-12 lg:col-span-4">
             <CardHeader>
               <CardTitle>
                 <CardLabel>By type</CardLabel>
-                <CardHeading>Inventory</CardHeading>
+                <CardHeading>Device mix</CardHeading>
               </CardTitle>
             </CardHeader>
             <CardBody>
               <div className="grid grid-cols-2 gap-2">
-                {Object.entries(
-                  devices.reduce<Record<string, number>>((acc, device) => {
-                    acc[device.deviceType] = (acc[device.deviceType] ?? 0) + 1;
-                    return acc;
-                  }, {}),
-                ).map(([type, count]) => (
+                {deviceTypes.map(([type, count]) => (
                   <Link
                     key={type}
                     to={`/devices?type=${encodeURIComponent(type)}`}
                     className="rk-panel-inset flex items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2.5"
                   >
                     <DeviceTypeIcon
-                      type={type as never}
+                      type={type}
                       className="size-4 text-[var(--accent-primary)]"
                     />
                     <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                      <span className="text-xs font-medium capitalize text-[var(--text-primary)]">
+                      <span className="truncate text-xs font-medium capitalize text-[var(--text-primary)]">
                         {type.replace("_", " ")}
                       </span>
                       <Mono className="text-[10px] text-[var(--text-tertiary)]">
@@ -393,44 +351,146 @@ export default function Dashboard() {
               </div>
             </CardBody>
           </Card>
+
+          <Card className="col-span-12 lg:col-span-4">
+            <CardHeader>
+              <CardTitle>
+                <CardLabel>Network docs</CardLabel>
+                <CardHeading>Coverage gaps</CardHeading>
+              </CardTitle>
+            </CardHeader>
+            <CardBody className="space-y-2">
+              <GapRow
+                to="/ports"
+                label="Ports without speed"
+                value={portsWithoutSpeed}
+              />
+              <GapRow to="/ports" label="Ports without cable" value={uncabledPorts} />
+              <GapRow to="/ipam" label="Subnets" value={subnets.length} />
+              <GapRow to="/vlans" label="VLANs" value={vlans.length} />
+            </CardBody>
+          </Card>
         </div>
       </div>
     </>
   );
 }
 
-function CapacityStat({
+function DashboardMetric({
+  to,
+  icon: Icon,
   label,
   value,
   hint,
+  tone,
 }: {
+  to: string;
+  icon: typeof Activity;
   label: string;
-  value: string;
+  value: string | number;
   hint: string;
+  tone: "ok" | "warn" | "info" | "neutral";
 }) {
+  const toneClass =
+    tone === "ok"
+      ? "border-[var(--success)]/35 bg-[var(--success)]/8 text-[var(--success)]"
+      : tone === "warn"
+        ? "border-[var(--warning)]/35 bg-[var(--warning)]/10 text-[var(--warning)]"
+        : tone === "info"
+          ? "border-[var(--info)]/35 bg-[var(--info)]/10 text-[var(--info)]"
+          : "border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.025)] text-[var(--text-secondary)]";
   return (
-    <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">
-      <div className="rk-kicker">{label}</div>
-      <div className="mt-1 text-lg font-semibold tracking-[-0.03em] text-[var(--text-primary)]">
-        {value}
+    <Link
+      to={to}
+      className="rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-1)] p-4 shadow-[var(--shadow-card)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="rk-kicker">{label}</div>
+          <div className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">
+            {value}
+          </div>
+          <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">{hint}</div>
+        </div>
+        <div className={`grid size-10 place-items-center rounded-[var(--radius-md)] border ${toneClass}`}>
+          <Icon className="size-4" />
+        </div>
       </div>
-      <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">{hint}</div>
+    </Link>
+  );
+}
+
+function EmptyLine({ title }: { title: string }) {
+  return (
+    <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--border-default)] px-3 py-4 text-center text-sm text-[var(--text-tertiary)]">
+      {title}
     </div>
   );
 }
 
-function activityTone(action: string) {
-  if (action.startsWith("port.")) return "var(--accent-secondary)";
-  if (action.startsWith("device.")) return "var(--accent-primary)";
-  if (action.startsWith("wifi.")) return "var(--info)";
-  if (action.startsWith("discovery.")) return "var(--warning)";
-  if (
-    action.startsWith("vlan.") ||
-    action.startsWith("subnet.") ||
-    action.startsWith("scope.") ||
-    action.startsWith("ip.")
-  ) {
-    return "var(--success)";
-  }
-  return "var(--neutral)";
+function CoverageRow({
+  label,
+  value,
+  pct,
+}: {
+  label: string;
+  value: string;
+  pct: number;
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <span className="text-xs text-[var(--text-secondary)]">{label}</span>
+        <Mono className="text-[10px] text-[var(--text-tertiary)]">{value}</Mono>
+      </div>
+      <div className="rk-progress-track h-2">
+        <div className="rk-progress-fill" style={{ width: `${Math.min(100, pct)}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Activity;
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] p-2">
+      <Icon className="mb-2 size-3.5 text-[var(--accent-primary)]" />
+      <div className="font-mono text-sm text-[var(--text-primary)]">{value}</div>
+      <div className="text-[10px] text-[var(--text-tertiary)]">{label}</div>
+    </div>
+  );
+}
+
+function GapRow({
+  to,
+  label,
+  value,
+}: {
+  to: string;
+  label: string;
+  value: number;
+}) {
+  return (
+    <Link
+      to={to}
+      className="flex items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2 text-sm transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+    >
+      <span className="text-[var(--text-secondary)]">{label}</span>
+      <Mono className="text-[var(--text-primary)]">{value}</Mono>
+    </Link>
+  );
+}
+
+function statusPriority(status: string) {
+  if (status === "offline") return 0;
+  if (status === "warning") return 1;
+  if (status === "unknown") return 2;
+  return 3;
 }

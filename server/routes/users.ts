@@ -26,15 +26,41 @@ function auditUserChange(actor: string, action: string, entityId: string, summar
   )
 }
 
+function userSelectSql(where = '') {
+  return `
+    SELECT
+      u.id,
+      u.username,
+      u.displayName,
+      u.role,
+      u.disabled,
+      u.createdAt,
+      u.lastLoginAt,
+      CASE WHEN oi.userId IS NULL THEN 'local' ELSE 'oidc' END AS authProvider,
+      oi.issuer AS oidcIssuer
+    FROM users u
+    LEFT JOIN (
+      SELECT userId, MIN(issuer) AS issuer
+      FROM oidcIdentities
+      GROUP BY userId
+    ) oi ON oi.userId = u.id
+    ${where}
+  `
+}
+
+function parseAdminUser(row: Record<string, unknown>) {
+  return {
+    ...parsePublicUser(row),
+    authProvider: row.authProvider === 'oidc' ? 'oidc' : 'local',
+    oidcIssuer: row.oidcIssuer ? String(row.oidcIssuer) : null,
+  }
+}
+
 export const usersRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', async (req, reply) => {
     if (!requireAdmin(req, reply)) return
-    const rows = db.prepare(`
-      SELECT id, username, displayName, role, disabled, createdAt, lastLoginAt
-      FROM users
-      ORDER BY username
-    `).all() as Record<string, unknown>[]
-    return rows.map(parsePublicUser)
+    const rows = db.prepare(`${userSelectSql()} ORDER BY u.username`).all() as Record<string, unknown>[]
+    return rows.map(parseAdminUser)
   })
 
   app.post('/', async (req, reply) => {
@@ -63,14 +89,10 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
     `).run(id, username, displayName, hashPassword(password), role, disabled ? 1 : 0, createdAt)
 
-    const row = db.prepare(`
-      SELECT id, username, displayName, role, disabled, createdAt, lastLoginAt
-      FROM users
-      WHERE id = ?
-    `).get(id) as Record<string, unknown>
+    const row = db.prepare(userSelectSql('WHERE u.id = ?')).get(id) as Record<string, unknown>
     auditUserChange(req.authUser.username, 'user.create', id, `Created ${username} with role ${role}.`)
 
-    return reply.status(201).send(parsePublicUser(row))
+    return reply.status(201).send(parseAdminUser(row))
   })
 
   app.patch<{ Params: { id: string } }>('/:id', async (req, reply) => {
@@ -166,11 +188,7 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
       db.prepare('DELETE FROM userSessions WHERE userId = ?').run(req.params.id)
     }
 
-    const row = db.prepare(`
-      SELECT id, username, displayName, role, disabled, createdAt, lastLoginAt
-      FROM users
-      WHERE id = ?
-    `).get(req.params.id) as Record<string, unknown>
+    const row = db.prepare(userSelectSql('WHERE u.id = ?')).get(req.params.id) as Record<string, unknown>
     auditUserChange(
       req.authUser.username,
       'user.update',
@@ -178,7 +196,7 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
       changeNotes.length > 0 ? `Updated ${current.username}: ${changeNotes.join('; ')}.` : `Updated ${current.username}.`,
     )
 
-    return parsePublicUser(row)
+    return parseAdminUser(row)
   })
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {

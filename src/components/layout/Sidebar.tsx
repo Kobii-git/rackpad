@@ -16,6 +16,7 @@ import {
   Cpu,
   Activity,
   FileText,
+  ScrollText,
   BookOpen,
   Route,
   UploadCloud,
@@ -27,7 +28,7 @@ import { APP_IS_BETA, APP_VERSION_TAG } from "@/lib/version";
 const baseNavItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/labs", icon: Building2, label: "Labs" },
-  { to: "/racks", icon: Server, label: "Racks" },
+  { to: "/racks", icon: Server, label: "Racks / Rooms" },
   { to: "/devices", icon: Boxes, label: "Devices" },
   { to: "/compute", icon: Cpu, label: "Compute" },
   { to: "/wifi", icon: Wifi, label: "WiFi" },
@@ -39,6 +40,7 @@ const baseNavItems = [
   { to: "/vlans", icon: Hash, label: "VLANs" },
   { to: "/ipam", icon: Network, label: "IPAM" },
   { to: "/reports", icon: FileText, label: "Reports" },
+  { to: "/audit-log", icon: ScrollText, label: "Audit" },
   { to: "/visualizer", icon: Route, label: "Visualizer" },
   { to: "/documentation", icon: BookOpen, label: "Docs" },
 ] as const;

@@ -6,6 +6,36 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.3-beta.9] - 2026-05-24
+
+### Added
+
+- Added a dedicated Audit Log page and limited Dashboard recent activity to the
+  five newest entries with a direct link to the full log.
+- Device detail port tabs now include a full tabular port view for switches and
+  patch panels in addition to the visual port layout.
+
+### Changed
+
+- Reworked the Dashboard around operational review data: attention items,
+  monitor issues, IPAM usage, cabled-port coverage, discovery queue, placement
+  coverage, device mix, and network documentation gaps.
+- Renamed the navigation and page title from Racks to Racks / Rooms.
+- Discovery now places the inspector above the inbox in a shorter scrollable
+  panel so the host table has more horizontal space.
+- Visualizer side context can be collapsed, keeps summary stats in a compact
+  two-column rail, and gives the rack zone more canvas space.
+- Documentation panes now use more of the viewport, with larger Markdown and
+  preview panes.
+- Users now show a local/OIDC auth-source badge in the account list and detail
+  pane.
+
+### Fixed
+
+- Room rack links now render as proper block rows instead of inline anchors.
+- Visualizer direct connections now scroll vertically and cable inspectors add
+  direct links to the endpoint device pages.
+
 ## [1.2.3-beta.8] - 2026-05-24
 
 ### Fixed

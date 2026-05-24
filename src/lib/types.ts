@@ -257,6 +257,8 @@ export interface AppUser {
   disabled: boolean;
   createdAt: string;
   lastLoginAt?: string | null;
+  authProvider?: "local" | "oidc";
+  oidcIssuer?: string | null;
 }
 
 export interface AuthSession {

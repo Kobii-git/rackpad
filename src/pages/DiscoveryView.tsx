@@ -466,8 +466,8 @@ export default function DiscoveryView() {
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 gap-5 overflow-hidden">
-          <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+          <div className="order-2 min-w-0 flex-1 overflow-y-auto">
             <Card>
               <CardHeader>
                 <CardTitle>
@@ -619,7 +619,7 @@ export default function DiscoveryView() {
             </Card>
           </div>
 
-          <div className="w-full max-w-md shrink-0 overflow-y-auto">
+          <div className="order-1 w-full shrink-0 overflow-y-auto">
             <Card>
               <CardHeader>
                 <CardTitle>
@@ -630,7 +630,7 @@ export default function DiscoveryView() {
                 </CardTitle>
                 {selected && <DiscoveryBadge status={selected.status} />}
               </CardHeader>
-              <CardBody className="space-y-4">
+              <CardBody className="max-h-[22rem] space-y-4 overflow-y-auto">
                 {!selected || !draft ? (
                   <div className="rk-empty">
                     <div className="rk-empty-title">
