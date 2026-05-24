@@ -2,7 +2,7 @@
 
 Rackpad is a self-hosted infrastructure inventory and operations app for racks, devices, ports, cables, VLANs, IP address management, WiFi, compute, discovery, monitoring, labs, and users.
 
-Current release: `v1.2.3-beta.5`
+Current release: `v1.2.3-beta.6`
 
 It is a full-stack app:
 

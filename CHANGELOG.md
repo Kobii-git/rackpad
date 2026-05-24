@@ -6,6 +6,14 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.3-beta.6] - 2026-05-24
+
+### Fixed
+
+- Proxmox collector now falls back to `pct list`, `pct config`, and
+  `pct status` when the Proxmox API shell LXC endpoints do not return
+  container data, so LXC containers are included alongside QEMU VMs.
+
 ## [1.2.3-beta.5] - 2026-05-24
 
 ### Fixed

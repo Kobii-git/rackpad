@@ -136,6 +136,90 @@ def pvesh(path):
     return run(["pvesh", "get", path, "--output-format", "json"], json_output=True)
 
 
+def normalize_workload_list(data):
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in ("data", "result", "items"):
+            value = data.get(key)
+            if isinstance(value, list):
+                return value
+    return []
+
+
+def parse_key_value_output(value):
+    parsed = {}
+    for line in str(value or "").splitlines():
+        if ":" not in line:
+            continue
+        key, item_value = line.split(":", 1)
+        parsed[key.strip()] = item_value.strip()
+    return parsed
+
+
+def parse_pct_list(value):
+    containers = []
+    for line in str(value or "").splitlines()[1:]:
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        vmid = number(parts[0])
+        if vmid is None:
+            continue
+        status = parts[1]
+        if len(parts) >= 4:
+            name = " ".join(parts[3:])
+        else:
+            name = parts[2]
+        containers.append(
+            {
+                "vmid": int(vmid),
+                "name": name,
+                "status": status,
+            }
+        )
+    return containers
+
+
+def pct_list():
+    output, error = run(["pct", "list"])
+    if error:
+        return [], error
+    return parse_pct_list(output), None
+
+
+def pct_config(vmid):
+    output, error = run(["pct", "config", str(vmid)])
+    if error:
+        return None, error
+    config = parse_key_value_output(output)
+    return config, None if config else "empty pct config output"
+
+
+def pct_status(vmid):
+    output, error = run(["pct", "status", str(vmid)])
+    if error:
+        return None, error
+    status = parse_key_value_output(output)
+    return status, None if status else "empty pct status output"
+
+
+def workload_sort_key(entry):
+    parsed = number(entry.get("vmid") or entry.get("ctid"))
+    return parsed if parsed is not None else 0
+
+
+def list_lxc_workloads(node):
+    data, error = pvesh(f"/nodes/{node}/lxc")
+    items = normalize_workload_list(data)
+    if items:
+        return items, error
+
+    fallback_items, fallback_error = pct_list()
+    errors = unique([error, fallback_error])
+    return fallback_items, "; ".join(errors) if errors and not fallback_items else error
+
+
 def read_text(path):
     try:
         return Path(path).read_text(encoding="utf-8", errors="ignore").strip()
@@ -626,9 +710,23 @@ def collect_qemu(node, item):
 
 
 def collect_lxc(node, item):
-    vmid = item.get("vmid")
+    vmid = item.get("vmid") or item.get("ctid")
     config, config_error = pvesh(f"/nodes/{node}/lxc/{vmid}/config")
     status, status_error = pvesh(f"/nodes/{node}/lxc/{vmid}/status/current")
+    if not isinstance(config, dict) or not config:
+        pct_config_data, pct_config_error = pct_config(vmid)
+        if isinstance(pct_config_data, dict) and pct_config_data:
+            config = pct_config_data
+            config_error = None
+        elif pct_config_error and not config_error:
+            config_error = pct_config_error
+    if not isinstance(status, dict) or not status:
+        pct_status_data, pct_status_error = pct_status(vmid)
+        if isinstance(pct_status_data, dict) and pct_status_data:
+            status = pct_status_data
+            status_error = None
+        elif pct_status_error and not status_error:
+            status_error = pct_status_error
     config = config if isinstance(config, dict) else {}
     status = status if isinstance(status, dict) else {}
     live_interfaces, live_error = ([], None)
@@ -722,20 +820,20 @@ def main():
 
     interfaces = load_ip_address()
     qemu_items, qemu_error = pvesh(f"/nodes/{node}/qemu")
-    lxc_items, lxc_error = pvesh(f"/nodes/{node}/lxc")
-    qemu_items = qemu_items if isinstance(qemu_items, list) else []
-    lxc_items = lxc_items if isinstance(lxc_items, list) else []
+    lxc_items, lxc_error = list_lxc_workloads(node)
+    qemu_items = normalize_workload_list(qemu_items)
+    lxc_items = normalize_workload_list(lxc_items)
 
     vms = []
-    for item in sorted(qemu_items, key=lambda entry: entry.get("vmid", 0)):
+    for item in sorted(qemu_items, key=workload_sort_key):
         vms.append(collect_qemu(node, item))
-    for item in sorted(lxc_items, key=lambda entry: entry.get("vmid", 0)):
+    for item in sorted(lxc_items, key=workload_sort_key):
         vms.append(collect_lxc(node, item))
 
     payload = {
         "schema": SCHEMA,
         "provider": "proxmox",
-        "collectorVersion": "1",
+        "collectorVersion": "2",
         "collectedAt": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
         "host": host_summary(node, interfaces),
         "switches": collect_switches(interfaces),

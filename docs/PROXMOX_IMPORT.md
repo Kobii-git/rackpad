@@ -42,9 +42,11 @@ chmod +x ./collect-proxmox.sh
 sudo ./collect-proxmox.sh --output ./rackpad-proxmox-inventory.json
 ```
 
-The collector uses local Proxmox and Linux commands only: `pvesh`, `ip`,
-`pveversion`, and, for running LXC containers, `pct exec ... ip -j address show`.
-It does not send data anywhere.
+The collector uses local Proxmox and Linux commands only: `pvesh`, `pct`, `ip`,
+and `pveversion`. For LXC containers it can fall back to `pct list`,
+`pct config`, and `pct status`; for running LXC containers it can also use
+`pct exec ... ip -j address show` to collect live IPs. It does not send data
+anywhere.
 
 Expected output:
 
