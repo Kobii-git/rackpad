@@ -148,7 +148,9 @@ function AllocateIpForm({
     canEdit &&
     !!previewIp &&
     hostname.trim().length > 0 &&
-    (assignmentType === "device" || assignmentType === "vm");
+    (assignmentType === "device" ||
+      assignmentType === "vm" ||
+      assignmentType === "container");
 
   async function submit() {
     if (!canSubmit) return;
@@ -261,8 +263,16 @@ function AllocateIpForm({
           defaults={{
             hostname: hostname.trim(),
             managementIp: previewIp,
-            deviceType: assignmentType === "vm" ? "vm" : "server",
-            placement: assignmentType === "vm" ? "virtual" : "room",
+            deviceType:
+              assignmentType === "vm"
+                ? "vm"
+                : assignmentType === "container"
+                  ? "container"
+                  : "server",
+            placement:
+              assignmentType === "vm" || assignmentType === "container"
+                ? "virtual"
+                : "room",
             notes: description.trim(),
           }}
           onSaved={() => {

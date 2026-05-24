@@ -75,6 +75,7 @@ const DEVICE_TYPE_ORDER: DeviceType[] = [
   "patch_panel",
   "ap",
   "vm",
+  "container",
   "endpoint",
   "firewall",
   "router",
@@ -97,6 +98,7 @@ const DEVICE_TYPE_LABEL: Record<string, string> = {
   ap: "AP",
   endpoint: "Endpoint",
   vm: "VM",
+  container: "Container",
   patch_panel: "Patch panel",
   brush_panel: "Brush panel",
   blanking_panel: "Blanking panel",
@@ -848,7 +850,11 @@ function buildRoomGroups(input: {
 }
 
 function isVirtualInventoryDevice(device: Device) {
-  return device.placement === "virtual" || device.deviceType === "vm";
+  return (
+    device.placement === "virtual" ||
+    device.deviceType === "vm" ||
+    device.deviceType === "container"
+  );
 }
 
 function roomForDevice(

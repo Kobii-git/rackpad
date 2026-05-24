@@ -11,6 +11,7 @@ export const BUILT_IN_DEVICE_TYPES = [
   { id: 'ap', label: 'Access point' },
   { id: 'endpoint', label: 'Endpoint' },
   { id: 'vm', label: 'Virtual machine' },
+  { id: 'container', label: 'Container' },
   { id: 'patch_panel', label: 'Patch panel' },
   { id: 'brush_panel', label: 'Brush panel' },
   { id: 'blanking_panel', label: 'Blanking panel' },

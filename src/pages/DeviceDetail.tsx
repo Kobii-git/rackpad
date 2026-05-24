@@ -882,17 +882,39 @@ export default function DeviceDetail() {
                     </CardBody>
                   </Card>
                 ) : isVisualGrid ? (
-                  <PortGrid
-                    device={device}
-                    ports={devicePorts}
-                    links={linkByPortId}
-                    portsById={portById}
-                    devicesById={deviceById}
-                    vlansById={vlanById}
-                    virtualSwitchesById={virtualSwitchById}
-                    onSelectPort={setSelectedPortId}
-                    selectedPortId={selectedPortId}
-                  />
+                  <div className="space-y-4">
+                    <PortGrid
+                      device={device}
+                      ports={devicePorts}
+                      links={linkByPortId}
+                      portsById={portById}
+                      devicesById={deviceById}
+                      vlansById={vlanById}
+                      virtualSwitchesById={virtualSwitchById}
+                      onSelectPort={setSelectedPortId}
+                      selectedPortId={selectedPortId}
+                    />
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>
+                          <CardLabel>Table</CardLabel>
+                          <CardHeading>All ports</CardHeading>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardBody className="p-0">
+                        <PortList
+                          ports={devicePorts}
+                          links={linkByPortId}
+                          portsById={portById}
+                          devicesById={deviceById}
+                          vlansById={vlanById}
+                          virtualSwitchesById={virtualSwitchById}
+                          onSelectPort={setSelectedPortId}
+                          selectedPortId={selectedPortId}
+                        />
+                      </CardBody>
+                    </Card>
+                  </div>
                 ) : (
                   <Card>
                     <CardHeader>

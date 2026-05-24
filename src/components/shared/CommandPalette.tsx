@@ -21,6 +21,7 @@ import {
   Activity,
   BookOpen,
   FileText,
+  ScrollText,
   Route,
   UploadCloud,
 } from "lucide-react";
@@ -51,8 +52,8 @@ const PAGES: SearchResult[] = [
   {
     id: "p-racks",
     group: "Pages",
-    title: "Racks",
-    subtitle: "Physical layout",
+    title: "Racks / Rooms",
+    subtitle: "Physical rooms and racks",
     href: "/racks",
     Icon: Server,
   },
@@ -76,7 +77,7 @@ const PAGES: SearchResult[] = [
     id: "p-imports",
     group: "Pages",
     title: "Imports",
-    subtitle: "Hyper-V import wizard",
+    subtitle: "Hyper-V and Proxmox import",
     href: "/imports",
     Icon: UploadCloud,
   },
@@ -127,6 +128,14 @@ const PAGES: SearchResult[] = [
     subtitle: "Export and print",
     href: "/reports",
     Icon: FileText,
+  },
+  {
+    id: "p-audit",
+    group: "Pages",
+    title: "Audit log",
+    subtitle: "Recent activity",
+    href: "/audit-log",
+    Icon: ScrollText,
   },
   {
     id: "p-documentation",

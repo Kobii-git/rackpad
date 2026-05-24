@@ -428,8 +428,13 @@ export default function UsersPage() {
                       {user.role}
                     </Badge>
                   </div>
-                  <div className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
-                    @{user.username}
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
+                      @{user.username}
+                    </span>
+                    <Badge tone={user.authProvider === "oidc" ? "info" : "neutral"}>
+                      {user.authProvider === "oidc" ? "oidc" : "local"}
+                    </Badge>
                   </div>
                   {user.disabled && (
                     <div className="mt-1 text-[11px] text-[var(--color-err)]">
@@ -469,9 +474,20 @@ export default function UsersPage() {
                     {form.role}
                   </Badge>
                   {selectedUser && (
-                    <Badge tone={selectedUser.disabled ? "err" : "ok"}>
-                      {selectedUser.disabled ? "disabled" : "active"}
-                    </Badge>
+                    <>
+                      <Badge
+                        tone={
+                          selectedUser.authProvider === "oidc"
+                            ? "info"
+                            : "neutral"
+                        }
+                      >
+                        {selectedUser.authProvider === "oidc" ? "oidc" : "local"}
+                      </Badge>
+                      <Badge tone={selectedUser.disabled ? "err" : "ok"}>
+                        {selectedUser.disabled ? "disabled" : "active"}
+                      </Badge>
+                    </>
                   )}
                 </div>
               </CardHeader>
@@ -549,6 +565,14 @@ export default function UsersPage() {
 
                     {selectedUser && (
                       <div className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4 md:grid-cols-2">
+                        <Stat
+                          label="Auth source"
+                          value={
+                            selectedUser.authProvider === "oidc"
+                              ? `OIDC${selectedUser.oidcIssuer ? ` | ${selectedUser.oidcIssuer}` : ""}`
+                              : "Local password"
+                          }
+                        />
                         <Stat
                           label="Created"
                           value={new Date(

@@ -6,12 +6,173 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-05-24
+
+### Added
+
+- Added a Proxmox import workflow with a downloadable Linux collector for
+  staging Proxmox nodes, Linux bridges, QEMU VMs, LXC containers, MAC
+  addresses, VLAN tags/trunks, guest IPs, CPU, configured RAM, live RAM usage
+  metadata, disks, boot flags, source tags, and Proxmox metadata before import.
+- Added in-app Hyper-V and Proxmox collector runbooks with prerequisites, exact
+  commands, upload/review steps, Proxmox cluster guidance, and collector
+  options.
+- Added a dedicated Audit Log page, with Dashboard recent activity limited to
+  the five newest entries and linked to the full log.
+- Added a full tabular port view on switch and patch-panel device detail pages.
+
 ### Changed
 
+- Reworked the Dashboard around operational review data: attention items,
+  monitor issues, IPAM usage, cabled-port coverage, discovery queue, placement
+  coverage, device mix, and network documentation gaps.
+- The Imports workspace now supports both Hyper-V and Proxmox collector JSON
+  files in the same review-first staging flow.
+- Renamed Racks to Racks / Rooms in navigation and page titles.
+- Discovery now places the inspector above the inbox in a shorter scrollable
+  panel so the host table has more room.
+- Visualizer side context can collapse, uses compact summary stats, gives rack
+  zones more canvas room, and keeps loose-device layout controls documented.
+- Documentation panes now use more of the viewport, with larger Markdown and
+  preview panes.
+- Users now show local/OIDC auth-source badges in the account list and detail
+  pane.
+- Updated install docs, Proxmox install notes, Proxmox import docs, README
+  feature coverage, and stable Docker defaults for the 1.3.0 release.
+
+### Fixed
+
+- Proxmox imports now include LXC/CT workloads as container devices instead of
+  stopping after QEMU VMs.
+- Proxmox imports now use configured/max RAM allocation for QEMU VMs and LXC
+  containers instead of importing live used memory as the device RAM value.
+- Proxmox collection now falls back to `pct list`, `pct config`, and
+  `pct status` when API shell endpoints do not return container data.
+- Proxmox LXC static network parsing no longer treats the `gw=` gateway as a
+  container IP address.
+- Docker images now include the Proxmox collector script so the in-app download
+  works from GHCR deployments.
+- Room rack links now render as proper block rows instead of inline anchors.
+- Visualizer direct connections now scroll vertically and cable inspectors add
+  direct links to endpoint device pages.
+- Built-in switch port template positions keep SFP/SFP+ uplinks after numbered
+  copper ports.
+- TCP monitor checks now report offline instead of returning a 500 when the
+  runtime blocks outbound socket opens.
+
+## [1.2.3-beta.9] - 2026-05-24
+
+### Added
+
+- Added a dedicated Audit Log page and limited Dashboard recent activity to the
+  five newest entries with a direct link to the full log.
+- Device detail port tabs now include a full tabular port view for switches and
+  patch panels in addition to the visual port layout.
+
+### Changed
+
+- Reworked the Dashboard around operational review data: attention items,
+  monitor issues, IPAM usage, cabled-port coverage, discovery queue, placement
+  coverage, device mix, and network documentation gaps.
+- Renamed the navigation and page title from Racks to Racks / Rooms.
+- Discovery now places the inspector above the inbox in a shorter scrollable
+  panel so the host table has more horizontal space.
+- Visualizer side context can be collapsed, keeps summary stats in a compact
+  two-column rail, and gives the rack zone more canvas space.
+- Documentation panes now use more of the viewport, with larger Markdown and
+  preview panes.
+- Users now show a local/OIDC auth-source badge in the account list and detail
+  pane.
+
+### Fixed
+
+- Room rack links now render as proper block rows instead of inline anchors.
+- Visualizer direct connections now scroll vertically and cable inspectors add
+  direct links to the endpoint device pages.
+
+## [1.2.3-beta.8] - 2026-05-24
+
+### Fixed
+
+- Proxmox imports now use configured/max RAM allocation for QEMU VMs and LXC
+  containers instead of importing live used memory as the device RAM value.
+- Proxmox collector output now keeps live used memory as separate
+  `memoryUsedGb` metadata for review without overwriting allocated RAM.
+
+## [1.2.3-beta.7] - 2026-05-24
+
+### Fixed
+
+- Added `container` as a built-in device type so Proxmox LXC/CT workloads
+  import correctly instead of stopping after QEMU VMs.
+- Containers now use the same virtual-workload defaults as VMs for placement,
+  ports, device type pickers, and compute views.
+
+## [1.2.3-beta.6] - 2026-05-24
+
+### Fixed
+
+- Proxmox collector now falls back to `pct list`, `pct config`, and
+  `pct status` when the Proxmox API shell LXC endpoints do not return
+  container data, so LXC containers are included alongside QEMU VMs.
+
+## [1.2.3-beta.5] - 2026-05-24
+
+### Fixed
+
+- Docker images now include the Proxmox collector script, so the in-app
+  Proxmox collector download works from GHCR deployments.
+- Docker beta install examples now use the published moving `beta` image tag.
+
+## [1.2.3-beta.4] - 2026-05-24
+
+### Fixed
+
+- Proxmox LXC imports no longer treat the `gw=` gateway value as a container IP
+  address when staging static LXC network configuration.
+
+## [1.2.3-beta.3] - 2026-05-24
+
+### Changed
+
+- Removed the Ko-fi support link from the application UI and kept the optional
+  support link only in the GitHub README.
+
+## [1.2.3-beta.2] - 2026-05-24
+
+### Added
+
+- Added in-app Hyper-V and Proxmox collector runbooks on the Imports page with
+  prerequisites, exact commands, upload/review steps, Proxmox cluster guidance,
+  and optional Proxmox collector flags.
+
+## [1.2.3-beta.1] - 2026-05-24
+
+### Added
+
+- Added a Proxmox import workflow with a downloadable Linux collector for
+  staging Proxmox nodes, Linux bridges, QEMU VMs, LXC containers, MAC
+  addresses, VLAN tags/trunks, guest IPs, CPU, RAM, disks, boot flags, source
+  tags, and Proxmox metadata before import.
+- Added Proxmox import documentation with collector options, review checklist,
+  and troubleshooting notes for QEMU guest agent and LXC IP collection.
+
+### Changed
+
+- The Imports workspace now supports both Hyper-V and Proxmox collector JSON
+  files in the same review-first staging flow, with LXC containers imported as
+  container devices and container IP assignments.
 - Updated GitHub install/demo instructions, seeded demo content, and 1920x1200
   screenshot coverage for the v1.2.2 feature set.
 - Added richer Visualizer screenshots for cable selection, health overlay, trace
   mode, and loose-device layout options.
+
+### Fixed
+
+- Fixed built-in switch port template positions so SFP/SFP+ uplinks sort after
+  the numbered copper ports when new devices are created from templates.
+- TCP monitor checks now report offline instead of returning a 500 when the
+  runtime blocks outbound socket opens.
 
 ## [1.2.2] - 2026-05-24
 

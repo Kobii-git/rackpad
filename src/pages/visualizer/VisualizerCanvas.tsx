@@ -14,6 +14,8 @@ import {
   Cable,
   LocateFixed,
   Network,
+  PanelRightClose,
+  PanelRightOpen,
   Route,
   Search,
   Server,
@@ -115,6 +117,7 @@ export function VisualizerCanvas({
   const [query, setQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
   const [pulsedDeviceId, setPulsedDeviceId] = useState<string | null>(null);
+  const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
 
   const searchResults = useMemo(
     () => buildSearchResults(model, query),
@@ -432,52 +435,7 @@ export function VisualizerCanvas({
   return (
     <TooltipProvider>
       <div className="flex flex-1 gap-4 overflow-hidden px-6 py-5">
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <div className="grid gap-3 md:grid-cols-4">
-            <VisualizerStat
-              icon={Server}
-              label="Devices"
-              value={model.counts.devices}
-              hint={`${model.rackZone.racks.length} racks mapped`}
-            />
-            <VisualizerStat
-              icon={Cable}
-              label="Cables"
-              value={visibleCables.length}
-              hint="shown on canvas"
-            />
-            <VisualizerStat
-              icon={Route}
-              label="Cross-zone"
-              value={model.counts.crossZone}
-              hint="links crossing zones"
-            />
-            <VisualizerStat
-              icon={Network}
-              label="Patch panel"
-              value={model.counts.patchPanel}
-              hint="front/rear handoffs"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <TypeChip
-              active={typeFilters.size === 0}
-              label={`All ${model.counts.devices}`}
-              onClick={() => setTypeFilters(new Set())}
-            />
-            {model.deviceTypes.map((entry) => (
-              <TypeChip
-                key={entry.type}
-                active={typeFilters.has(entry.type)}
-                label={`${entry.label} ${entry.count}`}
-                onClick={(event) =>
-                  toggleTypeFilter(entry.type, event.shiftKey)
-                }
-              />
-            ))}
-          </div>
-
+        <div className="flex min-w-0 flex-1 flex-col">
           <Card className="min-h-0 flex flex-1 flex-col">
             <CardHeader>
               <CardTitle>
@@ -677,16 +635,52 @@ export function VisualizerCanvas({
           </Card>
         </div>
 
-        <aside className="hidden h-full min-h-0 w-[26rem] shrink-0 flex-col gap-4 overflow-hidden xl:flex">
-          <Inspector
-            model={model}
-            selection={selection}
-            selectedCable={selectedCable}
-            selectedNode={selectedNode}
-            traceResult={traceMode.result}
-            onSelectDevice={(id) => selectDevice(id, true)}
-            onSelectCable={selectCable}
-          />
+        <aside
+          className={`hidden h-full min-h-0 shrink-0 flex-col overflow-hidden xl:flex ${
+            sidePanelCollapsed ? "w-12" : "w-[26rem]"
+          }`}
+        >
+          <div className="flex h-full min-h-0 flex-col gap-3">
+            <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-1)] px-2 py-2">
+              {!sidePanelCollapsed && (
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
+                  Context
+                </span>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSidePanelCollapsed((value) => !value)}
+                aria-label={
+                  sidePanelCollapsed
+                    ? "Expand visualizer side panel"
+                    : "Collapse visualizer side panel"
+                }
+                className="ml-auto"
+              >
+                {sidePanelCollapsed ? (
+                  <PanelRightOpen className="size-4" />
+                ) : (
+                  <PanelRightClose className="size-4" />
+                )}
+              </Button>
+            </div>
+            {!sidePanelCollapsed && (
+              <VisualizerSidePanel
+                model={model}
+                visibleCables={visibleCables}
+                typeFilters={typeFilters}
+                setTypeFilters={setTypeFilters}
+                toggleTypeFilter={toggleTypeFilter}
+                selection={selection}
+                selectedCable={selectedCable}
+                selectedNode={selectedNode}
+                traceResult={traceMode.result}
+                onSelectDevice={(id) => selectDevice(id, true)}
+                onSelectCable={selectCable}
+              />
+            )}
+          </div>
         </aside>
       </div>
     </TooltipProvider>
@@ -1264,6 +1258,101 @@ function CableSvg({
   );
 }
 
+function VisualizerSidePanel({
+  model,
+  visibleCables,
+  typeFilters,
+  setTypeFilters,
+  toggleTypeFilter,
+  selection,
+  selectedCable,
+  selectedNode,
+  traceResult,
+  onSelectDevice,
+  onSelectCable,
+}: {
+  model: VisualizerModel;
+  visibleCables: VisualizerCable[];
+  typeFilters: Set<string>;
+  setTypeFilters: Dispatch<SetStateAction<Set<string>>>;
+  toggleTypeFilter: (type: string, shift: boolean) => void;
+  selection: VisualizerSelection;
+  selectedCable: VisualizerCable | null;
+  selectedNode: VisualizerNode | null;
+  traceResult: TraceResult | null;
+  onSelectDevice: (id: string) => void;
+  onSelectCable: (id: string) => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-2">
+          <VisualizerRailStat
+            icon={Server}
+            label="Devices"
+            value={model.counts.devices}
+            hint={`${model.rackZone.racks.length} racks`}
+          />
+          <VisualizerRailStat
+            icon={Cable}
+            label="Cables"
+            value={visibleCables.length}
+            hint="shown"
+          />
+        </div>
+        <div className="space-y-2">
+          <VisualizerRailStat
+            icon={Route}
+            label="Cross-zone"
+            value={model.counts.crossZone}
+            hint="links"
+          />
+          <VisualizerRailStat
+            icon={Network}
+            label="Patch panel"
+            value={model.counts.patchPanel}
+            hint="handoffs"
+          />
+        </div>
+      </div>
+
+      <Card className="shrink-0">
+        <CardHeader>
+          <CardTitle>
+            <CardLabel>Filters</CardLabel>
+            <CardHeading>Device types</CardHeading>
+          </CardTitle>
+        </CardHeader>
+        <CardBody className="flex max-h-32 flex-wrap gap-2 overflow-y-auto">
+          <TypeChip
+            active={typeFilters.size === 0}
+            label={`All ${model.counts.devices}`}
+            onClick={() => setTypeFilters(new Set())}
+          />
+          {model.deviceTypes.map((entry) => (
+            <TypeChip
+              key={entry.type}
+              active={typeFilters.has(entry.type)}
+              label={`${entry.label} ${entry.count}`}
+              onClick={(event) => toggleTypeFilter(entry.type, event.shiftKey)}
+            />
+          ))}
+        </CardBody>
+      </Card>
+
+      <Inspector
+        model={model}
+        selection={selection}
+        selectedCable={selectedCable}
+        selectedNode={selectedNode}
+        traceResult={traceResult}
+        onSelectDevice={onSelectDevice}
+        onSelectCable={onSelectCable}
+      />
+    </div>
+  );
+}
+
 function Inspector({
   model,
   selection,
@@ -1408,7 +1497,10 @@ function DeviceInspector({
       </div>
       <div>
         <div className="rk-kicker mb-2">Direct connections</div>
-        <div className="space-y-2">
+        <div
+          data-visualizer-scrollable="true"
+          className="max-h-56 space-y-2 overflow-y-auto pr-1"
+        >
           {neighbors.length === 0 ? (
             <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] p-3 text-xs text-[var(--text-tertiary)]">
               No documented cable neighbors.
@@ -1474,6 +1566,18 @@ function CableInspector({
         port={cable.toPort}
         onClick={() => cable.toDevice && onSelectDevice(cable.toDevice.id)}
       />
+      <div className="grid grid-cols-2 gap-2">
+        {cable.fromDevice && (
+          <Button variant="outline" size="sm" asChild>
+            <Link to={`/devices/${cable.fromDevice.id}`}>Open from</Link>
+          </Button>
+        )}
+        {cable.toDevice && (
+          <Button variant="outline" size="sm" asChild>
+            <Link to={`/devices/${cable.toDevice.id}`}>Open to</Link>
+          </Button>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <InfoBox label="Type" value={cable.link.cableType} />
         <InfoBox label="Length" value={cable.link.cableLength} />
@@ -1577,6 +1681,37 @@ function InfoBox({
         className={`mt-1 break-words text-xs text-[var(--text-primary)] ${mono ? "font-mono" : ""}`}
       >
         {value || "-"}
+      </div>
+    </div>
+  );
+}
+
+function VisualizerRailStat({
+  icon: Icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string | number;
+  hint: string;
+}) {
+  return (
+    <div className="rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="rk-kicker truncate">{label}</div>
+          <div className="mt-1 text-lg font-semibold text-[var(--text-primary)]">
+            {value}
+          </div>
+          <div className="mt-0.5 truncate text-[10px] text-[var(--text-tertiary)]">
+            {hint}
+          </div>
+        </div>
+        <div className="grid size-7 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--accent-secondary-border)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary)]">
+          <Icon className="size-3.5" />
+        </div>
       </div>
     </div>
   );

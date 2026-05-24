@@ -391,7 +391,7 @@ export default function RackViewPage() {
     <>
       <TopBar
         subtitle={activeLab.name}
-        title="Racks"
+        title="Racks / Rooms"
         actions={
           canEdit ? (
             <>
@@ -925,7 +925,7 @@ function RoomPanel({
                 <Link
                   key={rack.id}
                   to={`/racks?rackId=${rack.id}`}
-                  className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2"
+                  className="block rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 transition-colors hover:border-[var(--color-line-strong)] hover:bg-[var(--color-surface)]"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-mono text-xs font-medium text-[var(--color-fg)]">

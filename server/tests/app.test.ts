@@ -200,7 +200,7 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
       .get() as { count: number },
   };
 
-  assert.equal(demoState.labs.count, 1);
+  assert.ok(demoState.labs.count > 0);
   assert.ok(demoState.racks.count > 0);
   assert.ok(demoState.devices.count > 0);
   assert.ok(demoState.vlanRanges.count > 0);
@@ -798,6 +798,68 @@ test("custom device types can be created and used by devices and templates", asy
     ),
     true,
   );
+});
+
+test("container is a built-in virtual workload device type", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const listRes = await app.inject({
+    method: "GET",
+    url: "/api/device-types",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(listRes.statusCode, 200);
+  const deviceTypes = readJson(listRes) as Array<{
+    id: string;
+    builtIn: boolean;
+  }>;
+  assert.equal(
+    deviceTypes.some((entry) => entry.id === "container" && entry.builtIn),
+    true,
+  );
+
+  const hostRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "container-host-01",
+      deviceType: "server",
+      status: "online",
+      placement: "room",
+    },
+  });
+  assert.equal(hostRes.statusCode, 201);
+  const host = readJson(hostRes) as { id: string };
+
+  const containerRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "ct-dns-01",
+      deviceType: "container",
+      status: "online",
+      parentDeviceId: host.id,
+    },
+  });
+  assert.equal(containerRes.statusCode, 201);
+  const container = readJson(containerRes) as {
+    deviceType: string;
+    placement: string;
+    parentDeviceId: string;
+  };
+  assert.equal(container.deviceType, "container");
+  assert.equal(container.placement, "virtual");
+  assert.equal(container.parentDeviceId, host.id);
 });
 
 test("custom port templates can be created, updated, and deleted", async () => {

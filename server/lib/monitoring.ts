@@ -323,6 +323,13 @@ function tcpCheck(host: string, port: number) {
         })
         return
       }
+      if (error.code === 'EACCES' || error.code === 'EPERM') {
+        resolve({
+          result: 'offline',
+          message: `TCP ${host}:${port} could not be opened from the Rackpad runtime: ${error.message}`,
+        })
+        return
+      }
       reject(error)
     })
   })

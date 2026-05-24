@@ -223,7 +223,8 @@ export function DeviceDrawer({
       .filter((entry) => !device || entry.id !== device.id)
       .filter((entry) => {
         if (form.placement === "wireless") return entry.deviceType === "ap";
-        if (form.placement === "virtual") return entry.deviceType !== "vm";
+        if (form.placement === "virtual")
+          return !["vm", "container"].includes(entry.deviceType);
         if (form.placement === "shelf")
           return entry.deviceType === "rack_shelf";
         return true;

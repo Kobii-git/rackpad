@@ -209,7 +209,7 @@ export default function DocumentationView() {
       />
 
       <div className="flex flex-1 overflow-hidden">
-        <aside className="flex w-72 shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-bg-2)]/40">
+        <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-bg-2)]/40">
           <div className="border-b border-[var(--color-line)] p-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
@@ -254,7 +254,7 @@ export default function DocumentationView() {
           </div>
         </aside>
 
-        <main className="flex-1 overflow-y-auto px-6 py-5">
+        <main className="flex-1 overflow-hidden px-4 py-4">
           {!selectedPage ? (
             <Card className="mx-auto mt-16 max-w-xl">
               <CardHeader>
@@ -277,9 +277,9 @@ export default function DocumentationView() {
               </CardBody>
             </Card>
           ) : (
-            <div className="grid grid-cols-12 gap-4">
-              <section className="col-span-12 xl:col-span-6">
-                <Card>
+            <div className="grid h-full min-h-0 grid-cols-12 gap-4">
+              <section className="col-span-12 flex min-h-0 xl:col-span-6">
+                <Card className="flex min-h-0 w-full flex-col">
                   <CardHeader>
                     <CardTitle>
                       <CardLabel>Markdown</CardLabel>
@@ -297,7 +297,7 @@ export default function DocumentationView() {
                       </Button>
                     )}
                   </CardHeader>
-                  <CardBody className="space-y-3">
+                  <CardBody className="flex min-h-0 flex-1 flex-col gap-3">
                     {error && (
                       <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-sm text-[var(--color-err)]">
                         {error}
@@ -313,7 +313,7 @@ export default function DocumentationView() {
                       value={draftContent}
                       onChange={(event) => setDraftContent(event.target.value)}
                       disabled={!canEdit}
-                      className="rk-control rk-textarea min-h-[560px] w-full resize-y font-mono text-xs leading-5 text-[var(--color-fg)]"
+                      className="rk-control rk-textarea min-h-[640px] flex-1 resize-none font-mono text-xs leading-5 text-[var(--color-fg)] xl:min-h-0"
                     />
                     <div className="flex items-center justify-between gap-3">
                       <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
@@ -334,8 +334,8 @@ export default function DocumentationView() {
                 </Card>
               </section>
 
-              <section className="col-span-12 xl:col-span-6">
-                <Card>
+              <section className="col-span-12 flex min-h-0 xl:col-span-6">
+                <Card className="flex min-h-0 w-full flex-col">
                   <CardHeader>
                     <CardTitle>
                       <CardLabel>Preview</CardLabel>
@@ -344,7 +344,7 @@ export default function DocumentationView() {
                       </CardHeading>
                     </CardTitle>
                   </CardHeader>
-                  <CardBody>
+                  <CardBody className="min-h-[640px] flex-1 overflow-y-auto xl:min-h-0">
                     <MarkdownPreview content={draftContent} />
                   </CardBody>
                 </Card>

@@ -44,13 +44,23 @@ import type {
 } from "@/lib/types";
 import { cidrSize, cn, ipToInt } from "@/lib/utils";
 
+type ImportProvider = "hyperv" | "proxmox";
+
 interface HyperVPayload {
   schema?: string;
+  provider?: string;
   collectedAt?: string;
   host?: HyperVHost;
   switches?: HyperVSwitch[];
   hostAdapters?: HyperVHostAdapter[];
   vms?: HyperVVm[];
+  summary?: {
+    node?: string;
+    qemu?: number;
+    lxc?: number;
+    workloads?: number;
+  };
+  collectorErrors?: string[];
 }
 
 interface HyperVHost {
@@ -62,6 +72,12 @@ interface HyperVHost {
   memoryGb?: number;
   osCaption?: string;
   osVersion?: string;
+  nodeName?: string;
+  pveVersion?: string | null;
+  pveVersionVerbose?: string | null;
+  kernelVersion?: string | null;
+  hostIpAddresses?: string[];
+  statusError?: string | null;
 }
 
 interface HyperVHostAdapter {
@@ -103,6 +119,7 @@ interface HyperVVm {
   processorCount?: number;
   memoryAssignedGb?: number | null;
   memoryStartupGb?: number | null;
+  memoryUsedGb?: number | null;
   dynamicMemoryEnabled?: boolean;
   storageGb?: number | null;
   disks?: HyperVDisk[];
@@ -111,6 +128,17 @@ interface HyperVVm {
   guestOsName?: string | null;
   guestOsVersion?: string | null;
   notes?: string | null;
+  kind?: string;
+  vmType?: string;
+  vmid?: number | string;
+  node?: string;
+  template?: boolean;
+  tags?: string[] | string;
+  onBoot?: boolean;
+  uptimeSeconds?: number;
+  unprivileged?: boolean;
+  swapGb?: number | null;
+  collectorErrors?: string[];
 }
 
 interface HyperVDisk {
@@ -118,6 +146,8 @@ interface HyperVDisk {
   controllerType?: string;
   sizeGb?: number | null;
   vhdType?: string | null;
+  storage?: string;
+  raw?: string;
 }
 
 interface HyperVNetworkAdapter {
@@ -129,6 +159,8 @@ interface HyperVNetworkAdapter {
   connected?: boolean;
   ipAddresses?: string[];
   vlan?: HyperVVlanConfig;
+  model?: string;
+  raw?: string;
 }
 
 interface HyperVVlanConfig {
@@ -198,7 +230,166 @@ const VLAN_COLORS = [
 
 const IPV4_RE = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const HYPERV_COLLECTOR_URL = "/api/imports/hyperv-collector";
+const PROXMOX_COLLECTOR_URL = "/api/imports/proxmox-collector";
 const AUTO_HOST_TARGET = "__auto__";
+
+type ProviderRunbookStep = {
+  title: string;
+  description: string;
+  command?: string;
+};
+
+type ProviderRunbookCommand = {
+  label: string;
+  command: string;
+};
+
+const PROVIDER_COPY: Record<
+  ImportProvider,
+  {
+    label: string;
+    schema: string;
+    sourceTag: string;
+    hostFallback: string;
+    workloadFallback: string;
+    hostNoun: string;
+    workloadNoun: string;
+    downloadName: string;
+    downloadUrl: string;
+    command: string;
+    summary: string;
+    runbook: {
+      prerequisites: string[];
+      steps: ProviderRunbookStep[];
+      optionalCommands?: ProviderRunbookCommand[];
+      notes: string[];
+    };
+  }
+> = {
+  hyperv: {
+    label: "Hyper-V",
+    schema: "rackpad.hyperv.inventory.v1",
+    sourceTag: "hyper-v",
+    hostFallback: "hyperv-host",
+    workloadFallback: "hyperv-vm",
+    hostNoun: "Hyper-V host",
+    workloadNoun: "VMs",
+    downloadName: "collect-hyperv.ps1",
+    downloadUrl: HYPERV_COLLECTOR_URL,
+    command:
+      "powershell -ExecutionPolicy Bypass -File .\\collect-hyperv.ps1 -OutputPath .\\rackpad-hyperv-inventory.json -IncludeHostAdapters",
+    summary:
+      "Stages host, virtual switches, VMs, vNICs, VLANs, guest IPs, CPU, RAM, disk, power state, and guest OS data.",
+    runbook: {
+      prerequisites: [
+        "Run from an elevated PowerShell session on the Hyper-V host.",
+        "Use the host you want to inventory; the collector writes one JSON file for upload.",
+        "Guest IP collection depends on Hyper-V integration services reporting guest network data.",
+      ],
+      steps: [
+        {
+          title: "Download the collector",
+          description:
+            "Use the Hyper-V Download button and save the file as collect-hyperv.ps1 on the Hyper-V host.",
+        },
+        {
+          title: "Run the collector",
+          description:
+            "Run this in elevated PowerShell from the folder that contains collect-hyperv.ps1.",
+          command:
+            "powershell -ExecutionPolicy Bypass -File .\\collect-hyperv.ps1 -OutputPath .\\rackpad-hyperv-inventory.json -IncludeHostAdapters",
+        },
+        {
+          title: "Upload the JSON",
+          description:
+            "Return to Rackpad, choose rackpad-hyperv-inventory.json, and let the importer build a review plan.",
+        },
+        {
+          title: "Review and import",
+          description:
+            "Confirm the host, VMs, switches, VLANs, ports, MACs, IPs, and specs. Uncheck anything you want to skip, then select Import selected.",
+        },
+      ],
+      notes: [
+        "Rackpad stages the file first and does not write records until Import selected is pressed.",
+        "Existing devices are matched by hostname or display name before Rackpad creates new records.",
+      ],
+    },
+  },
+  proxmox: {
+    label: "Proxmox",
+    schema: "rackpad.proxmox.inventory.v1",
+    sourceTag: "proxmox",
+    hostFallback: "proxmox-host",
+    workloadFallback: "proxmox-guest",
+    hostNoun: "Proxmox node",
+    workloadNoun: "VMs / containers",
+    downloadName: "collect-proxmox.sh",
+    downloadUrl: PROXMOX_COLLECTOR_URL,
+    command:
+      "chmod +x ./collect-proxmox.sh && sudo ./collect-proxmox.sh --output ./rackpad-proxmox-inventory.json",
+    summary:
+      "Stages the node, Linux bridges, host adapters, QEMU VMs, LXC containers, MACs, VLAN tags/trunks, guest IPs, CPU, RAM, disks, boot flags, and Proxmox metadata.",
+    runbook: {
+      prerequisites: [
+        "Run on each Proxmox node you want to inventory. The collector requires python3 and pvesh.",
+        "Use root or a sudo-capable account with access to pvesh and pct.",
+        "QEMU guest IPs require the guest agent. LXC live IPs require running containers unless static IPs are present in config.",
+      ],
+      steps: [
+        {
+          title: "Download the collector",
+          description:
+            "Use the Proxmox Download button, then copy collect-proxmox.sh to the Proxmox node you want to import.",
+        },
+        {
+          title: "Run the collector",
+          description:
+            "Run this on the Proxmox node. It creates rackpad-proxmox-inventory.json in the current folder.",
+          command:
+            "chmod +x ./collect-proxmox.sh\nsudo ./collect-proxmox.sh --output ./rackpad-proxmox-inventory.json",
+        },
+        {
+          title: "Upload the JSON",
+          description:
+            "Return to Rackpad, choose rackpad-proxmox-inventory.json, and review the generated import plan.",
+        },
+        {
+          title: "Review and import",
+          description:
+            "Confirm the node, Linux bridges, host adapters, QEMU VMs, LXC containers, disks, MACs, VLANs, IPs, CPU, and RAM. Uncheck anything you want to skip, then select Import selected.",
+        },
+        {
+          title: "Repeat for clusters",
+          description:
+            "For a Proxmox cluster, run the collector once per node and upload each JSON file to keep node, bridge, VM, and container data complete.",
+        },
+      ],
+      optionalCommands: [
+        {
+          label: "Collect a specific node",
+          command:
+            "sudo ./collect-proxmox.sh --node pve1 --output ./rackpad-proxmox-inventory.json",
+        },
+        {
+          label: "Skip live guest network probes",
+          command:
+            "sudo ./collect-proxmox.sh --no-guest-network --output ./rackpad-proxmox-inventory.json",
+        },
+        {
+          label: "Skip host adapters",
+          command:
+            "sudo ./collect-proxmox.sh --no-host-adapters --output ./rackpad-proxmox-inventory.json",
+        },
+      ],
+      notes: [
+        "Rackpad imports LXC workloads as containers and QEMU workloads as VMs.",
+        "If guest IPs are missing, enable the QEMU guest agent or verify that LXC network config exposes static addresses.",
+        "Existing devices are matched by hostname or display name before Rackpad creates new records.",
+      ],
+    },
+  },
+};
 
 export default function ImportView() {
   const currentUser = useStore((s) => s.currentUser);
@@ -217,6 +408,8 @@ export default function ImportView() {
   const [parseError, setParseError] = useState("");
   const [importing, setImporting] = useState(false);
   const [importLog, setImportLog] = useState<string[]>([]);
+  const importProvider = payload ? providerForPayload(payload) : null;
+  const importCopy = importProvider ? PROVIDER_COPY[importProvider] : null;
 
   const devicesByHostname = useMemo(() => {
     return devices.reduce<Record<string, Device>>((acc, device) => {
@@ -278,12 +471,13 @@ export default function ImportView() {
       const parsed = JSON.parse(await file.text()) as HyperVPayload;
       if (!Array.isArray(parsed.vms)) {
         throw new Error(
-          "This file does not look like a Rackpad Hyper-V inventory export.",
+          "This file does not look like a Rackpad Hyper-V or Proxmox inventory export.",
         );
       }
+      const provider = providerForPayload(parsed);
       setPayload(parsed);
-      setHostDraft(hostToDraft(parsed));
-      setVmDrafts(parsed.vms.map(vmToDraft));
+      setHostDraft(hostToDraft(parsed, provider));
+      setVmDrafts(parsed.vms.map((vm, index) => vmToDraft(vm, index, provider)));
     } catch (error) {
       setPayload(null);
       setHostDraft(null);
@@ -401,7 +595,7 @@ export default function ImportView() {
         title="Imports"
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {lab.name} | Hyper-V first-pass importer
+            {lab.name} | {importCopy?.label ?? "Hyper-V / Proxmox"} importer
           </span>
         }
         actions={
@@ -422,49 +616,28 @@ export default function ImportView() {
           <Card>
             <CardHeader>
               <CardTitle>
-                <CardLabel>Hyper-V collector</CardLabel>
-                <CardHeading>
-                  Upload inventory JSON from a Hyper-V host
-                </CardHeading>
+                <CardLabel>Inventory collectors</CardLabel>
+                <CardHeading>Upload Hyper-V or Proxmox JSON</CardHeading>
               </CardTitle>
               <Badge tone="cyan">
                 <FileJson className="size-3" />
-                rackpad.hyperv.inventory.v1
+                review-first import
               </Badge>
             </CardHeader>
             <CardBody className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
               <div className="space-y-3">
                 <p className="text-sm text-[var(--text-tertiary)]">
-                  Run the collector on the Hyper-V host, then upload the JSON
-                  here. Rackpad will stage the host, virtual switches, VMs,
-                  virtual NICs, VLAN settings, specs, and IPs before importing.
+                  Run a collector on the virtualization host, then upload the
+                  JSON here. Rackpad stages the host, guests, virtual networks,
+                  VLANs, ports, specs, MACs, and IPs before anything is written.
                 </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button asChild variant="outline" size="sm">
-                    <a
-                      href={HYPERV_COLLECTOR_URL}
-                      download="collect-hyperv.ps1"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <DownloadCloud className="size-3.5" />
-                      Download collector
-                    </a>
-                  </Button>
-                  <span className="text-xs text-[var(--text-tertiary)]">
-                    Save it on the Hyper-V host, run it in PowerShell, then
-                    upload the generated JSON here.
-                  </span>
-                </div>
-                <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">
-                  <div className="rk-kicker">Collector command</div>
-                  <pre className="mt-2 overflow-x-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.22)] p-3 font-mono text-[11px] text-[var(--text-secondary)]">
-                    {`powershell -ExecutionPolicy Bypass -File .\\collect-hyperv.ps1 -OutputPath .\\rackpad-hyperv-inventory.json -IncludeHostAdapters`}
-                  </pre>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <CollectorDownload provider="hyperv" />
+                  <CollectorDownload provider="proxmox" />
                 </div>
                 <label className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]">
                   <Upload className="size-4" />
-                  Choose Hyper-V JSON
+                  Choose import JSON
                   <input
                     type="file"
                     accept="application/json,.json"
@@ -482,7 +655,7 @@ export default function ImportView() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <ImportStat
                   icon={Server}
-                  label="VMs selected"
+                  label={importCopy?.workloadNoun ?? "Workloads selected"}
                   value={summary?.selectedVms ?? 0}
                   hint={`${summary?.existingMatches ?? 0} matched existing`}
                 />
@@ -507,6 +680,8 @@ export default function ImportView() {
               </div>
             </CardBody>
           </Card>
+
+          <CollectorRunbooks />
 
           <Card>
             <CardHeader>
@@ -601,11 +776,11 @@ const CATEGORY_COPY: Record<
 > = {
   host: {
     title: "Host record",
-    description: "Create or update the Hyper-V host as a server device.",
+    description: "Create or update the virtualization host as a server device.",
   },
   vms: {
-    title: "VMs",
-    description: "Create or update selected VM device records.",
+    title: "Workloads",
+    description: "Create or update selected VM and container records.",
   },
   specs: {
     title: "CPU, RAM, disks, OS",
@@ -618,17 +793,133 @@ const CATEGORY_COPY: Record<
   },
   networks: {
     title: "Virtual switches",
-    description: "Create external, internal, and private host switches.",
+    description: "Create Hyper-V switches or Proxmox bridge records.",
   },
   ports: {
     title: "Virtual ports",
-    description: "Create VM NIC ports with switch and VLAN metadata.",
+    description: "Create guest NIC ports with switch and VLAN metadata.",
   },
   vlans: {
     title: "VLANs",
-    description: "Create missing VLAN records referenced by VM adapters.",
+    description: "Create missing VLAN records referenced by guest adapters.",
   },
 };
+
+function CollectorRunbooks() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <CardLabel>Collector runbook</CardLabel>
+          <CardHeading>Exact steps before importing</CardHeading>
+        </CardTitle>
+        <Badge tone="ok">
+          <CheckCircle2 className="size-3" />
+          beta guide
+        </Badge>
+      </CardHeader>
+      <CardBody>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {(["hyperv", "proxmox"] as const).map((provider) => (
+            <ProviderRunbook key={provider} provider={provider} />
+          ))}
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
+function ProviderRunbook({ provider }: { provider: ImportProvider }) {
+  const copy = PROVIDER_COPY[provider];
+  return (
+    <section className="rk-panel-inset rounded-[var(--radius-md)] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-[var(--text-primary)]">
+            {copy.label}
+          </div>
+          <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+            {copy.downloadName} - {copy.schema}
+          </div>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <a
+            href={copy.downloadUrl}
+            download={copy.downloadName}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <DownloadCloud className="size-3.5" />
+            Download
+          </a>
+        </Button>
+      </div>
+
+      <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.015)] p-3">
+        <div className="rk-kicker">Before you run it</div>
+        <ul className="mt-2 space-y-1.5 text-xs leading-5 text-[var(--text-tertiary)]">
+          {copy.runbook.prerequisites.map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="mt-2 size-1 shrink-0 rounded-full bg-[var(--accent-secondary)]" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <ol className="mt-4 space-y-3">
+        {copy.runbook.steps.map((step, index) => (
+          <li key={step.title} className="flex gap-3">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] font-mono text-[10px] text-[var(--text-secondary)]">
+              {index + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium text-[var(--text-primary)]">
+                {step.title}
+              </div>
+              <p className="mt-1 text-xs leading-5 text-[var(--text-tertiary)]">
+                {step.description}
+              </p>
+              {step.command && (
+                <pre className="mt-2 overflow-x-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.22)] p-3 font-mono text-[11px] leading-5 text-[var(--text-secondary)]">
+                  {step.command}
+                </pre>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      {copy.runbook.optionalCommands?.length ? (
+        <div className="mt-4 space-y-2">
+          <div className="rk-kicker">Optional commands</div>
+          {copy.runbook.optionalCommands.map((entry) => (
+            <div key={entry.label}>
+              <div className="text-[11px] font-medium text-[var(--text-secondary)]">
+                {entry.label}
+              </div>
+              <pre className="mt-1 overflow-x-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.22)] p-3 font-mono text-[11px] leading-5 text-[var(--text-secondary)]">
+                {entry.command}
+              </pre>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.015)] p-3">
+        <div className="rk-kicker">Import notes</div>
+        <ul className="mt-2 space-y-1.5 text-xs leading-5 text-[var(--text-tertiary)]">
+          {copy.runbook.notes.map((item) => (
+            <li key={item} className="flex gap-2">
+              <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-[var(--success)]" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
 
 function HostPreview({
   devices,
@@ -645,18 +936,22 @@ function HostPreview({
   payload: HyperVPayload;
   value: HostDraft | null;
 }) {
+  const provider = providerForPayload(payload);
+  const copy = PROVIDER_COPY[provider];
   const host = payload.host;
   const matched = findExistingHost(payload, devicesByHostname);
   const selected =
     value?.targetDeviceId && value.targetDeviceId !== AUTO_HOST_TARGET
       ? devices.find((device) => device.id === value.targetDeviceId)
       : null;
-  const hostCandidates = devices.filter((device) => device.deviceType !== "vm");
+  const hostCandidates = devices.filter(
+    (device) => !isWorkloadDeviceType(device.deviceType),
+  );
   const targetLabel = selected
     ? `Selected existing: ${selected.hostname}`
     : matched
       ? `Auto-matched: ${matched.hostname}`
-      : "Will create a new Hyper-V host";
+      : `Will create a new ${copy.hostNoun}`;
 
   return (
     <Card>
@@ -664,7 +959,7 @@ function HostPreview({
         <CardTitle>
           <CardLabel>Host</CardLabel>
           <CardHeading>
-            {value?.displayName || host?.computerName || "Unknown Hyper-V host"}
+            {value?.displayName || host?.computerName || `Unknown ${copy.hostNoun}`}
           </CardHeading>
         </CardTitle>
         <div className="flex flex-wrap justify-end gap-2">
@@ -684,7 +979,7 @@ function HostPreview({
             }
           >
             <option value={AUTO_HOST_TARGET}>
-              Auto match or create {host?.computerName ?? "Hyper-V host"}
+              Auto match or create {host?.computerName ?? copy.hostNoun}
             </option>
             {hostCandidates.map((device) => (
               <option key={device.id} value={device.id}>
@@ -774,6 +1069,12 @@ function HostPreview({
         </Field>
 
         <InfoRow label="Collected FQDN" value={host?.fqdn} />
+        {provider === "proxmox" && (
+          <>
+            <InfoRow label="Proxmox node" value={host?.nodeName} />
+            <InfoRow label="Proxmox version" value={host?.pveVersion} />
+          </>
+        )}
         <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">
           <div className="rk-kicker">Switches</div>
           <div className="mt-2 space-y-2">
@@ -818,7 +1119,7 @@ function VmPreview({
       <CardHeader>
         <CardTitle>
           <CardLabel>Wizard</CardLabel>
-          <CardHeading>Review VMs before import</CardHeading>
+          <CardHeading>Review workloads before import</CardHeading>
         </CardTitle>
         <Badge tone="accent">
           {drafts.filter((draft) => draft.include).length} selected
@@ -839,9 +1140,11 @@ function VmPreview({
             existing &&
             ipConflict &&
             (ipConflict.deviceId === existing.id ||
-              ipConflict.vmId === existing.id);
+              ipConflict.vmId === existing.id ||
+              ipConflict.containerId === existing.id);
           const osFamily =
             draft.osFamily || inferGuestOsFamily(draft.osName, guest.osVersion);
+          const workloadLabel = workloadTypeLabel(draft.source);
           return (
             <div
               key={draft.key}
@@ -864,6 +1167,7 @@ function VmPreview({
                   {draft.source.name ?? draft.hostname}
                 </label>
                 <div className="flex flex-wrap gap-2">
+                  <Badge tone="info">{workloadLabel}</Badge>
                   <Badge tone={existing ? "warn" : "ok"}>
                     {existing ? "will update" : "new"}
                   </Badge>
@@ -1064,33 +1368,73 @@ function ImportStat({
   );
 }
 
-function vmToDraft(vm: HyperVVm, index: number): VmDraft {
+function CollectorDownload({ provider }: { provider: ImportProvider }) {
+  const copy = PROVIDER_COPY[provider];
+  return (
+    <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-medium text-[var(--text-primary)]">
+            {copy.label}
+          </div>
+          <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+            {copy.schema}
+          </div>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <a
+            href={copy.downloadUrl}
+            download={copy.downloadName}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <DownloadCloud className="size-3.5" />
+            Download
+          </a>
+        </Button>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-[var(--text-tertiary)]">
+        {copy.summary}
+      </p>
+      <pre className="mt-3 overflow-x-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.22)] p-3 font-mono text-[11px] text-[var(--text-secondary)]">
+        {copy.command}
+      </pre>
+    </div>
+  );
+}
+
+function vmToDraft(
+  vm: HyperVVm,
+  index: number,
+  provider: ImportProvider = providerForWorkload(vm),
+): VmDraft {
   const ips = vmIps(vm);
   const guest = getVmGuestInfo(vm);
   const osName = deriveGuestOsName(vm);
+  const fallback = PROVIDER_COPY[provider].workloadFallback;
   return {
     key: vm.id || vm.name || `vm-${index}`,
     source: vm,
     include: true,
-    hostname: slugHost(vm.name || `vm-${index + 1}`),
+    hostname: slugHost(vm.name || `${fallback}-${index + 1}`, fallback),
     displayName: vm.name || "",
     managementIp: ips[0] ?? "",
     osFamily: inferGuestOsFamily(osName, guest.osVersion),
     osName,
     cpuCores: vm.processorCount ? String(vm.processorCount) : "",
-    memoryGb: vm.memoryAssignedGb
-      ? String(vm.memoryAssignedGb)
-      : vm.memoryStartupGb
-        ? String(vm.memoryStartupGb)
-        : "",
+    memoryGb: formatOptionalNumber(workloadAllocatedMemoryGb(vm)),
     storageGb: vm.storageGb ? String(vm.storageGb) : "",
     notes: vm.notes ?? "",
   };
 }
 
-function hostToDraft(payload: HyperVPayload): HostDraft {
+function hostToDraft(
+  payload: HyperVPayload,
+  provider: ImportProvider = providerForPayload(payload),
+): HostDraft {
   const host = payload.host;
-  const hostname = slugHost(host?.computerName || host?.fqdn || "hyperv-host");
+  const fallback = PROVIDER_COPY[provider].hostFallback;
+  const hostname = slugHost(host?.computerName || host?.fqdn || fallback, fallback);
 
   return {
     targetDeviceId: AUTO_HOST_TARGET,
@@ -1106,12 +1450,47 @@ function hostToDraft(payload: HyperVPayload): HostDraft {
   };
 }
 
+function providerForPayload(payload?: HyperVPayload | null): ImportProvider {
+  const text = `${payload?.provider ?? ""} ${payload?.schema ?? ""}`.toLowerCase();
+  return text.includes("proxmox") ? "proxmox" : "hyperv";
+}
+
+function providerForWorkload(vm: HyperVVm): ImportProvider {
+  const text = `${vm.kind ?? ""} ${vm.vmType ?? ""} ${vm.id ?? ""}`.toLowerCase();
+  return text.includes("lxc") || text.includes("qemu") ? "proxmox" : "hyperv";
+}
+
+function isContainerWorkload(vm: HyperVVm) {
+  const text = `${vm.kind ?? ""} ${vm.vmType ?? ""}`.toLowerCase();
+  return text.includes("lxc") || text.includes("container");
+}
+
+function isWorkloadDeviceType(deviceType: string) {
+  const value = deviceType.toLowerCase();
+  return value === "vm" || value === "container";
+}
+
+function workloadTypeLabel(vm: HyperVVm) {
+  if (isContainerWorkload(vm)) return "LXC container";
+  const type = `${vm.kind ?? vm.vmType ?? ""}`.toLowerCase();
+  if (type.includes("qemu")) return "QEMU VM";
+  return "VM";
+}
+
+function workloadAllocatedMemoryGb(vm: HyperVVm) {
+  const provider = providerForWorkload(vm);
+  if (provider === "proxmox") {
+    return vm.memoryStartupGb ?? vm.memoryAssignedGb ?? null;
+  }
+  return vm.memoryAssignedGb ?? vm.memoryStartupGb ?? null;
+}
+
 function findExistingHost(
   payload: HyperVPayload,
   devicesByHostname: Record<string, Device>,
 ) {
   const host = payload.host;
-  const keys = [host?.computerName, host?.fqdn]
+  const keys = [host?.computerName, host?.fqdn, host?.nodeName]
     .map((value) => value?.trim().toLowerCase())
     .filter((value): value is string => Boolean(value));
   for (const key of keys) {
@@ -1143,6 +1522,13 @@ function hostSpecs(host: HyperVHost | undefined, draft: HostDraft) {
     draft.cpuCores.trim() ? `Logical processors: ${draft.cpuCores.trim()}` : "",
     draft.memoryGb.trim() ? `Memory: ${draft.memoryGb.trim()} GB` : "",
     host?.fqdn ? `FQDN: ${host.fqdn}` : "",
+    host?.nodeName ? `Proxmox node: ${host.nodeName}` : "",
+    host?.pveVersion ? `Proxmox version: ${host.pveVersion}` : "",
+    host?.kernelVersion ? `Kernel: ${host.kernelVersion}` : "",
+    host?.hostIpAddresses?.length
+      ? `Host IPs: ${host.hostIpAddresses.join(", ")}`
+      : "",
+    host?.statusError ? `Collector status warning: ${host.statusError}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -1157,10 +1543,13 @@ async function upsertHost(
     log: string[];
   },
 ) {
+  const provider = providerForPayload(payload);
+  const copy = PROVIDER_COPY[provider];
   const host = payload.host;
-  const sourceDraft = draft ?? hostToDraft(payload);
+  const sourceDraft = draft ?? hostToDraft(payload, provider);
   const hostname = slugHost(
-    sourceDraft.hostname || host?.computerName || host?.fqdn || "hyperv-host",
+    sourceDraft.hostname || host?.computerName || host?.fqdn || copy.hostFallback,
+    copy.hostFallback,
   );
   const selected =
     sourceDraft.targetDeviceId !== AUTO_HOST_TARGET
@@ -1182,10 +1571,10 @@ async function upsertHost(
       cpuCores: toNumber(sourceDraft.cpuCores) ?? existing.cpuCores,
       memoryGb: toNumber(sourceDraft.memoryGb) ?? existing.memoryGb,
       specs: mergeText(existing.specs, specs),
-      tags: mergeTags(existing.tags, ["hyper-v", "imported"]),
+      tags: mergeTags(existing.tags, [copy.sourceTag, "imported"]),
       notes: mergeText(existing.notes, sourceDraft.notes),
     });
-    context.log.push(`Updated Hyper-V host ${updated?.hostname ?? hostname}.`);
+    context.log.push(`Updated ${copy.hostNoun} ${updated?.hostname ?? hostname}.`);
     return updated ?? existing;
   }
 
@@ -1200,13 +1589,13 @@ async function upsertHost(
     cpuCores: toNumber(sourceDraft.cpuCores),
     memoryGb: toNumber(sourceDraft.memoryGb),
     specs,
-    tags: ["hyper-v", "imported"],
+    tags: [copy.sourceTag, "imported"],
     notes: mergeText(
-      "Imported from Hyper-V inventory collector.",
+      `Imported from ${copy.label} inventory collector.`,
       sourceDraft.notes,
     ),
   });
-  context.log.push(`Created Hyper-V host ${created.hostname}.`);
+  context.log.push(`Created ${copy.hostNoun} ${created.hostname}.`);
   return created;
 }
 
@@ -1238,7 +1627,7 @@ async function ensureVlans({
     const vlan = await createVlanRecord({
       vlanId,
       name: `VLAN ${vlanId}`,
-      description: "Imported from Hyper-V virtual NIC configuration.",
+      description: "Imported from virtualization guest NIC configuration.",
       color: VLAN_COLORS[vlanId % VLAN_COLORS.length],
     });
     map[vlanId] = vlan;
@@ -1324,7 +1713,16 @@ async function upsertVmDevice({
   options: ImportOptions;
   log: string[];
 }) {
-  const hostname = slugHost(draft.hostname || draft.source.name || "hyperv-vm");
+  const provider = providerForWorkload(draft.source);
+  const copy = PROVIDER_COPY[provider];
+  const isContainer = isContainerWorkload(draft.source);
+  const workloadLabel = isContainer ? "container" : "VM";
+  const hostname = slugHost(
+    draft.hostname ||
+      draft.source.name ||
+      (isContainer ? "proxmox-container" : copy.workloadFallback),
+    copy.workloadFallback,
+  );
   const existing = devicesByHostname[hostname.toLowerCase()];
   const candidateManagementIp =
     options.ips &&
@@ -1339,7 +1737,8 @@ async function upsertVmDevice({
     candidateManagementIp &&
     (!managementIpConflict ||
       managementIpConflict.deviceId === existing?.id ||
-      managementIpConflict.vmId === existing?.id)
+      managementIpConflict.vmId === existing?.id ||
+      managementIpConflict.containerId === existing?.id)
       ? candidateManagementIp
       : undefined;
   const sourceIps = vmIps(draft.source);
@@ -1348,9 +1747,12 @@ async function upsertVmDevice({
   const osFamily =
     draft.osFamily || inferGuestOsFamily(osName, guest.osVersion);
   const importedTags = [
-    "hyper-v",
+    copy.sourceTag,
     "imported",
+    isContainer ? "container" : "vm",
+    draft.source.kind || draft.source.vmType || "",
     osFamily ? `os:${osFamily}` : "",
+    ...normalizeStringList(draft.source.tags),
   ].filter(Boolean);
   const specs = options.specs ? vmSpecs(draft.source, draft) : "";
   const macAddress = (draft.source.networkAdapters ?? [])
@@ -1363,14 +1765,19 @@ async function upsertVmDevice({
     candidateManagementIp && !managementIp
       ? `Primary IP ${candidateManagementIp} was skipped because it is already assigned in IPAM.`
       : "",
-    draft.source.id ? `Hyper-V VM ID: ${draft.source.id}` : "",
+    draft.source.id ? `${copy.label} ID: ${draft.source.id}` : "",
+    draft.source.vmid ? `Proxmox VMID: ${draft.source.vmid}` : "",
+    draft.source.node ? `Proxmox node: ${draft.source.node}` : "",
+    draft.source.collectorErrors?.length
+      ? `Collector warnings: ${draft.source.collectorErrors.join("; ")}`
+      : "",
   ]
     .filter(Boolean)
     .join("\n");
   const patch = {
     hostname,
     displayName: draft.displayName.trim() || draft.source.name || hostname,
-    deviceType: "vm" as const,
+    deviceType: isContainer ? "container" : ("vm" as const),
     status: mapVmStatus(draft.source.state),
     placement: "virtual" as const,
     parentDeviceId: hostDevice?.id,
@@ -1392,7 +1799,7 @@ async function upsertVmDevice({
       notes: mergeText(existing.notes, notes),
       tags: mergeTags(existing.tags, patch.tags),
     });
-    log.push(`Updated VM ${updated?.hostname ?? existing.hostname}.`);
+    log.push(`Updated ${workloadLabel} ${updated?.hostname ?? existing.hostname}.`);
     if (candidateManagementIp && !managementIp) {
       log.push(
         `Skipped primary IP ${candidateManagementIp} for ${hostname}; IPAM already has that address.`,
@@ -1402,7 +1809,7 @@ async function upsertVmDevice({
   }
 
   const created = await createDevice(patch);
-  log.push(`Created VM ${created.hostname}.`);
+  log.push(`Created ${workloadLabel} ${created.hostname}.`);
   if (candidateManagementIp && !managementIp) {
     log.push(
       `Skipped primary IP ${candidateManagementIp} for ${hostname}; IPAM already has that address.`,
@@ -1490,6 +1897,8 @@ async function importSecondaryIps({
   existingKeys: Set<string>;
   log: string[];
 }) {
+  const isContainer = isContainerWorkload(draft.source);
+  const provider = providerForWorkload(draft.source);
   const candidateIps = new Set(vmIps(draft.source));
   if (draft.managementIp) candidateIps.add(draft.managementIp.trim());
   if (device.managementIp) candidateIps.delete(device.managementIp);
@@ -1502,11 +1911,12 @@ async function importSecondaryIps({
     const created = await createIpAssignmentRecord({
       subnetId: subnet.id,
       ipAddress,
-      assignmentType: "vm",
+      assignmentType: isContainer ? "container" : "vm",
       deviceId: device.id,
-      vmId: device.id,
+      vmId: isContainer ? undefined : device.id,
+      containerId: isContainer ? device.id : undefined,
       hostname: device.hostname,
-      description: "Imported from Hyper-V guest network adapter.",
+      description: `Imported from ${PROVIDER_COPY[provider].label} guest network adapter.`,
     });
     existingKeys.add(key);
     log.push(`Imported IP ${created.ipAddress} for ${device.hostname}.`);
@@ -1672,8 +2082,15 @@ function mapSwitchKind(kind?: string): VirtualSwitch["kind"] {
 function mapVmStatus(state?: string): DeviceStatus {
   const value = (state ?? "").toLowerCase();
   if (value === "running") return "online";
-  if (value === "off") return "offline";
-  if (value === "paused" || value === "saved") return "maintenance";
+  if (value === "off" || value === "stopped") return "offline";
+  if (
+    value === "paused" ||
+    value === "saved" ||
+    value === "suspended" ||
+    value === "template"
+  ) {
+    return "maintenance";
+  }
   return "unknown";
 }
 
@@ -1701,11 +2118,34 @@ function getVmGuestInfo(vm: HyperVVm) {
 function deriveGuestOsName(vm: HyperVVm) {
   const guest = getVmGuestInfo(vm);
   const osName = guest.osName?.trim();
-  if (osName) return osName;
+  if (osName) return friendlyGuestOsName(osName, vm);
   if (isLikelyLinuxKernelVersion(guest.osVersion)) {
     return `Linux (kernel ${guest.osVersion})`;
   }
   return "";
+}
+
+function friendlyGuestOsName(value: string, vm: HyperVVm) {
+  if (providerForWorkload(vm) !== "proxmox") return value;
+  const normalized = value.toLowerCase();
+  const proxmoxNames: Record<string, string> = {
+    l24: "Linux 2.4",
+    l26: "Linux",
+    win11: "Windows 11",
+    win10: "Windows 10",
+    win8: "Windows 8",
+    win7: "Windows 7",
+    w2k22: "Windows Server 2022",
+    w2k19: "Windows Server 2019",
+    w2k16: "Windows Server 2016",
+    w2k12: "Windows Server 2012",
+    w2k8: "Windows Server 2008",
+    wxp: "Windows XP",
+    solaris: "Solaris",
+    other: "Other OS",
+  };
+  if (normalized.startsWith("lxc ")) return value;
+  return proxmoxNames[normalized] ?? value;
 }
 
 function isLikelyLinuxKernelVersion(value?: string | null) {
@@ -1777,17 +2217,39 @@ function vmSpecs(vm: HyperVVm, draft?: VmDraft) {
     guest.integrationServicesVersion
       ? `Integration services: ${guest.integrationServicesVersion}`
       : "",
+    vm.kind || vm.vmType ? `Workload type: ${workloadTypeLabel(vm)}` : "",
+    vm.vmid ? `Proxmox VMID: ${vm.vmid}` : "",
+    vm.node ? `Proxmox node: ${vm.node}` : "",
+    vm.template != null ? `Template: ${vm.template ? "yes" : "no"}` : "",
+    vm.onBoot != null ? `Start on boot: ${vm.onBoot ? "yes" : "no"}` : "",
+    vm.unprivileged != null
+      ? `Unprivileged container: ${vm.unprivileged ? "yes" : "no"}`
+      : "",
+    vm.swapGb ? `Swap: ${vm.swapGb} GB` : "",
+    vm.uptimeSeconds ? `Uptime: ${vm.uptimeSeconds} seconds` : "",
+    normalizeStringList(vm.tags).length
+      ? `Source tags: ${normalizeStringList(vm.tags).join(", ")}`
+      : "",
     vm.generation ? `Generation: ${vm.generation}` : "",
     vm.version ? `Configuration version: ${vm.version}` : "",
     vm.dynamicMemoryEnabled != null
       ? `Dynamic memory: ${vm.dynamicMemoryEnabled ? "enabled" : "disabled"}`
       : "",
+    workloadAllocatedMemoryGb(vm)
+      ? `Memory allocation: ${workloadAllocatedMemoryGb(vm)} GB`
+      : "",
+    vm.memoryUsedGb ? `Memory used at collection: ${vm.memoryUsedGb} GB` : "",
     vm.disks?.length
       ? `Disks:\n${vm.disks
           .map(
             (disk) =>
               `- ${disk.path ?? "unknown"} (${disk.sizeGb ?? "unknown"} GB${disk.vhdType ? `, ${disk.vhdType}` : ""})`,
           )
+          .join("\n")}`
+      : "",
+    vm.collectorErrors?.length
+      ? `Collector warnings:\n${vm.collectorErrors
+          .map((entry) => `- ${entry}`)
           .join("\n")}`
       : "",
   ]
@@ -1822,12 +2284,16 @@ function toNumber(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-function slugHost(value: string) {
+function formatOptionalNumber(value: number | null | undefined) {
+  return value == null ? "" : String(value);
+}
+
+function slugHost(value: string, fallback = "imported-workload") {
   return (
     value
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9.-]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "hyperv-vm"
+      .replace(/^-+|-+$/g, "") || fallback
   );
 }

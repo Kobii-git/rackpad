@@ -9,6 +9,7 @@ export const BUILT_IN_DEVICE_TYPES: DeviceTypeDefinition[] = [
   { id: "ap", label: "Access point", builtIn: true },
   { id: "endpoint", label: "Endpoint", builtIn: true },
   { id: "vm", label: "Virtual machine", builtIn: true },
+  { id: "container", label: "Container", builtIn: true },
   { id: "patch_panel", label: "Patch panel", builtIn: true },
   { id: "brush_panel", label: "Brush panel", builtIn: true },
   { id: "blanking_panel", label: "Blanking panel", builtIn: true },
