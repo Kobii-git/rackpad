@@ -111,7 +111,7 @@ export default function ComputeView() {
       devices
         .filter(
           (device) =>
-            device.deviceType !== "vm" &&
+            !["vm", "container"].includes(device.deviceType) &&
             (vmHostIds.has(device.id) ||
               HOST_DEVICE_TYPES.has(device.deviceType)),
         )

@@ -138,7 +138,7 @@ function inferDeviceType(hostname: string | null) {
 
 function inferPlacement(deviceType: string) {
   if (deviceType === 'ap') return 'wireless' as const
-  if (deviceType === 'vm') return 'virtual' as const
+  if (deviceType === 'vm' || deviceType === 'container') return 'virtual' as const
   return 'room' as const
 }
 

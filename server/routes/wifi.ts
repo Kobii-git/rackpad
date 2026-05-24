@@ -25,6 +25,7 @@ const DEVICE_TYPES = [
   'ap',
   'endpoint',
   'vm',
+  'container',
   'patch_panel',
   'brush_panel',
   'blanking_panel',

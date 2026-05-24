@@ -52,7 +52,8 @@ function derivePlacement(input: {
   if (input.placement) return input.placement
   if (input.rackId || input.startU != null || input.heightU != null)
     return 'rack'
-  if (input.deviceType === 'vm') return 'virtual'
+  if (input.deviceType === 'vm' || input.deviceType === 'container')
+    return 'virtual'
   if (input.deviceType === 'ap') return 'wireless'
   if (input.deviceType === 'rack_shelf') return 'rack'
   return 'room'

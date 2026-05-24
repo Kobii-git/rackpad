@@ -149,9 +149,9 @@ export const BUILT_IN_PORT_TEMPLATES: PortTemplate[] = [
   },
   {
     id: 'vm-2xvirtio',
-    name: '2x VirtIO VM',
-    deviceTypes: ['vm'],
-    description: 'Virtual machine with two documented VirtIO network interfaces.',
+    name: '2x VirtIO workload',
+    deviceTypes: ['vm', 'container'],
+    description: 'Virtual machine or container with two documented VirtIO network interfaces.',
     ports: normalizePorts([
       { name: 'eth0', kind: 'virtual', speed: 'virtio' },
       { name: 'eth1', kind: 'virtual', speed: 'virtio' },

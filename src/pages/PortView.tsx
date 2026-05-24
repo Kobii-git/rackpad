@@ -147,8 +147,10 @@ function blankTemplateForm(
     };
   }
 
-  const defaultKind: Port["kind"] = deviceType === "vm" ? "virtual" : "rj45";
-  const defaultSpeed = deviceType === "vm" ? "virtio" : "";
+  const isVirtualWorkload =
+    deviceType === "vm" || deviceType === "container";
+  const defaultKind: Port["kind"] = isVirtualWorkload ? "virtual" : "rj45";
+  const defaultSpeed = isVirtualWorkload ? "virtio" : "";
   return {
     name: "",
     description: "",
@@ -166,7 +168,8 @@ function blankTemplateForm(
 }
 
 function blankPortForm(device?: Device): PortFormState {
-  const isVirtualDevice = device?.deviceType === "vm";
+  const isVirtualDevice =
+    device?.deviceType === "vm" || device?.deviceType === "container";
   return {
     name: "",
     kind: isVirtualDevice ? "virtual" : "rj45",

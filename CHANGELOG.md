@@ -6,6 +6,15 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.3-beta.7] - 2026-05-24
+
+### Fixed
+
+- Added `container` as a built-in device type so Proxmox LXC/CT workloads
+  import correctly instead of stopping after QEMU VMs.
+- Containers now use the same virtual-workload defaults as VMs for placement,
+  ports, device type pickers, and compute views.
+
 ## [1.2.3-beta.6] - 2026-05-24
 
 ### Fixed

@@ -661,7 +661,7 @@ export function seedIfEmpty() {
       const macAddress = (d as { macAddress?: string | null }).macAddress
       insertDevice.run({
         ...d,
-        placement: d.placement ?? (d.rackId ? 'rack' : d.deviceType === 'vm' ? 'virtual' : d.deviceType === 'ap' ? 'wireless' : 'room'),
+        placement: d.placement ?? (d.rackId ? 'rack' : d.deviceType === 'vm' || d.deviceType === 'container' ? 'virtual' : d.deviceType === 'ap' ? 'wireless' : 'room'),
         parentDeviceId: d.parentDeviceId ?? null,
         roomId,
         macAddress: macAddress ?? demoMacAddressByDeviceId[d.id] ?? null,

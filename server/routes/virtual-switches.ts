@@ -40,7 +40,11 @@ function requireHostDevice(deviceId: string) {
   if (!device) {
     throw new ValidationError('Selected host device does not exist.')
   }
-  if (device.deviceType === 'vm' || device.parentDeviceId) {
+  if (
+    device.deviceType === 'vm' ||
+    device.deviceType === 'container' ||
+    device.parentDeviceId
+  ) {
     throw new ValidationError('Virtual switches must be attached to a physical host or parent device.')
   }
   return device
