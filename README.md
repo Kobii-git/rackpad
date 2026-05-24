@@ -2,7 +2,7 @@
 
 Rackpad is a self-hosted infrastructure inventory and operations app for racks, devices, ports, cables, VLANs, IP address management, WiFi, compute, discovery, monitoring, labs, and users.
 
-Current release: `v1.2.3-beta.2`
+Current release: `v1.2.3-beta.3`
 
 It is a full-stack app:
 
@@ -192,6 +192,11 @@ The repository now also includes:
 - a basic disclosure policy in [SECURITY.md](./SECURITY.md)
 - maintainer/support expectations in [SUPPORT.md](./SUPPORT.md)
 
+## Support the project
+
+Rackpad is free to use. If it helps you and you want to support the work,
+there is an optional Ko-fi link here on GitHub: [ko-fi.com/k0bii](https://ko-fi.com/k0bii).
+
 ## Requirements
 
 - Docker Engine with the Compose plugin for normal installs
@@ -327,7 +332,7 @@ curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/inst
 ```
 
 Use `RACKPAD_TAG=latest` if you want the newest stable GHCR image, or pin an
-exact Docker tag such as `1.2.3-beta.2` when you want controlled beta upgrades:
+exact Docker tag such as `1.2.3-beta.3` when you want controlled beta upgrades:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
@@ -348,7 +353,7 @@ cd /opt/rackpad
 sudo curl -fsSLo compose.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.release.yml
 sudo tee .env >/dev/null <<'EOF'
 RACKPAD_IMAGE=ghcr.io/kobii-git/rackpad
-RACKPAD_TAG=1.2.3-beta.2
+RACKPAD_TAG=1.2.3-beta.3
 RACKPAD_PORT=3000
 MONITOR_INTERVAL_MS=300000
 TRUST_PROXY=0
