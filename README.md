@@ -2,7 +2,7 @@
 
 Rackpad is a self-hosted infrastructure inventory and operations app for racks, devices, ports, cables, VLANs, IP address management, WiFi, compute, discovery, monitoring, labs, and users.
 
-Current release: `v1.2.3-beta.9`
+Current release: `v1.3.0`
 
 It is a full-stack app:
 
@@ -174,7 +174,7 @@ Recommended workflow:
 
 - test new work from `beta`
 - merge validated fixes and features into `main`
-- create version tags like `v1.2.3` from `main`
+- create version tags like `v1.3.0` from `main`
 
 If you want the newest testing build instead of the latest stable tag:
 
@@ -326,12 +326,13 @@ sudo apt-get install -y curl ca-certificates
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh | bash
 ```
 
-Use `RACKPAD_TAG=latest` if you want the newest stable GHCR image, or
-`RACKPAD_TAG=beta` if you want the newest beta image:
+Use `RACKPAD_TAG=latest` if you want the newest stable GHCR image,
+`RACKPAD_TAG=1.3.0` if you want this exact release, or `RACKPAD_TAG=beta` if
+you want the newest beta image:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
-RACKPAD_TAG=latest bash /tmp/install-rackpad.sh
+RACKPAD_TAG=1.3.0 bash /tmp/install-rackpad.sh
 ```
 
 Open:
@@ -348,7 +349,7 @@ cd /opt/rackpad
 sudo curl -fsSLo compose.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.release.yml
 sudo tee .env >/dev/null <<'EOF'
 RACKPAD_IMAGE=ghcr.io/kobii-git/rackpad
-RACKPAD_TAG=beta
+RACKPAD_TAG=1.3.0
 RACKPAD_PORT=3000
 MONITOR_INTERVAL_MS=300000
 TRUST_PROXY=0

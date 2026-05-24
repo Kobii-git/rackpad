@@ -147,8 +147,8 @@ hostname/display name and updated rather than duplicated.
 - Existing host, VM, and container devices are matched by hostname/display name
   and updated rather than duplicated. The host selector can override the
   automatic host match when your Rackpad record uses a different name.
-- The first beta collector targets one Proxmox node at a time. Run it once per
-  node when you want to stage a whole cluster.
+- The collector targets one Proxmox node at a time. Run it once per node when
+  you want to stage a whole cluster.
 
 ## Troubleshooting
 
