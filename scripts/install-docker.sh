@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 RACKPAD_IMAGE="${RACKPAD_IMAGE:-ghcr.io/kobii-git/rackpad}"
-RACKPAD_TAG="${RACKPAD_TAG:-1.3.0}"
+RACKPAD_TAG="${RACKPAD_TAG:-1.4.0}"
 RACKPAD_PORT="${RACKPAD_PORT:-3000}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/rackpad}"
 MONITOR_INTERVAL_MS="${MONITOR_INTERVAL_MS:-300000}"
@@ -104,7 +104,7 @@ fi
 run tee "$INSTALL_DIR/compose.yml" >/dev/null <<'EOF'
 services:
   rackpad:
-    image: ${RACKPAD_IMAGE:-ghcr.io/kobii-git/rackpad}:${RACKPAD_TAG:-1.3.0}
+    image: ${RACKPAD_IMAGE:-ghcr.io/kobii-git/rackpad}:${RACKPAD_TAG:-1.4.0}
     container_name: rackpad
     init: true
     restart: unless-stopped
