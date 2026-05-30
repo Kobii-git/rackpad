@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { IpAssignment, Subnet } from "@/lib/types";
+import type { DhcpScope, IpAssignment, Subnet } from "@/lib/types";
 import { ipToInt, cidrSize } from "@/lib/utils";
 import {
   Tooltip,
@@ -10,16 +10,25 @@ import {
 interface IpUtilizationBarProps {
   subnet: Subnet;
   assignments: IpAssignment[];
+  scopes?: DhcpScope[];
 }
 
 const CELL_SIZE = 12;
+type TechnicalAddressKind = "gateway" | "dns";
+
+interface TechnicalAddress {
+  kinds: TechnicalAddressKind[];
+  labels: string[];
+}
 
 export function IpUtilizationBar({
   subnet,
   assignments,
+  scopes = [],
 }: IpUtilizationBarProps) {
   const total = cidrSize(subnet.cidr);
   const baseInt = ipToInt(subnet.cidr.split("/")[0]);
+  const broadcastInt = baseInt + total - 1;
 
   const usedMap = useMemo(() => {
     const map = new Map<number, IpAssignment>();
@@ -29,7 +38,38 @@ export function IpUtilizationBar({
     return map;
   }, [assignments]);
 
-  const used = assignments.length;
+  const technicalMap = useMemo(() => {
+    const map = new Map<number, TechnicalAddress>();
+    const addTechnicalAddress = (
+      ipAddress: string | undefined,
+      kind: TechnicalAddressKind,
+      label: string,
+    ) => {
+      if (!ipAddress) return;
+      const ipInt = ipToInt(ipAddress);
+      if (ipInt <= baseInt || ipInt >= broadcastInt) return;
+      const existing = map.get(ipInt) ?? { kinds: [], labels: [] };
+      if (!existing.kinds.includes(kind)) existing.kinds.push(kind);
+      if (!existing.labels.includes(label)) existing.labels.push(label);
+      map.set(ipInt, existing);
+    };
+
+    for (const scope of scopes) {
+      addTechnicalAddress(scope.gateway, "gateway", `${scope.name} gateway`);
+      for (const dnsServer of scope.dnsServers ?? []) {
+        addTechnicalAddress(dnsServer, "dns", `${scope.name} DNS`);
+      }
+    }
+
+    return map;
+  }, [baseInt, broadcastInt, scopes]);
+
+  const used = useMemo(() => {
+    const usedAddresses = new Set<number>();
+    for (const ipInt of usedMap.keys()) usedAddresses.add(ipInt);
+    for (const ipInt of technicalMap.keys()) usedAddresses.add(ipInt);
+    return usedAddresses.size;
+  }, [technicalMap, usedMap]);
   const pct = Math.round((used / Math.max(1, total - 2)) * 100);
   const showCells = Math.min(total, 256);
 
@@ -58,8 +98,9 @@ export function IpUtilizationBar({
         {Array.from({ length: showCells }).map((_, index) => {
           const ipInt = baseInt + index;
           const assignment = usedMap.get(ipInt);
+          const technical = technicalMap.get(ipInt);
           const isNetwork = index === 0;
-          const isBroadcast = index === showCells - 1;
+          const isBroadcast = ipInt === broadcastInt;
 
           return (
             <Tooltip key={index}>
@@ -71,10 +112,15 @@ export function IpUtilizationBar({
                     height: CELL_SIZE,
                     backgroundColor: getCellColor(
                       assignment,
+                      technical,
                       isNetwork || isBroadcast,
                     ),
                     opacity:
-                      isNetwork || isBroadcast ? 0.4 : assignment ? 1 : 0.18,
+                      isNetwork || isBroadcast
+                        ? 0.4
+                        : assignment || technical
+                          ? 1
+                          : 0.18,
                   }}
                 />
               </TooltipTrigger>
@@ -97,7 +143,17 @@ export function IpUtilizationBar({
                       </div>
                     </>
                   )}
-                  {!assignment && !isNetwork && !isBroadcast && (
+                  {technical && (
+                    <>
+                      <div className="text-[var(--text-primary)]">
+                        {technical.labels.join(" / ")}
+                      </div>
+                      <div className="text-[var(--text-tertiary)]">
+                        reserved by DHCP scope
+                      </div>
+                    </>
+                  )}
+                  {!assignment && !technical && !isNetwork && !isBroadcast && (
                     <div className="text-[var(--text-tertiary)]">free</div>
                   )}
                 </div>
@@ -112,14 +168,20 @@ export function IpUtilizationBar({
         <Legend color="var(--accent-primary)" label="VM" />
         <Legend color="var(--info)" label="Container" />
         <Legend color="var(--warning)" label="Reserved" />
+        <Legend color="var(--warning)" label="Gateway/DNS" />
         <Legend color="var(--text-muted)" label="Free" muted />
       </div>
     </div>
   );
 }
 
-function getCellColor(assignment?: IpAssignment, edge?: boolean): string {
+function getCellColor(
+  assignment?: IpAssignment,
+  technical?: TechnicalAddress,
+  edge?: boolean,
+): string {
   if (edge) return "var(--text-muted)";
+  if (!assignment && technical) return "var(--warning)";
   if (!assignment) return "var(--surface-4)";
   switch (assignment.assignmentType) {
     case "device":

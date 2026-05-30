@@ -123,6 +123,8 @@ function AllocateIpForm({
   onAllocated?: (kind: "ip" | "vlan", id: string) => void;
 }) {
   const subnets = useStore((s) => s.subnets);
+  const scopes = useStore((s) => s.scopes);
+  const ipZones = useStore((s) => s.ipZones);
   const ipAssignments = useStore((s) => s.ipAssignments);
   const currentUser = useStore((s) => s.currentUser);
   const canEdit = canEditInventory(currentUser);
@@ -140,7 +142,7 @@ function AllocateIpForm({
   const previewIp = useMemo(() => {
     if (!subnetId) return null;
     return previewNextStaticIp(subnetId);
-  }, [ipAssignments, subnetId]);
+  }, [ipAssignments, ipZones, scopes, subnets, subnetId]);
 
   const subnet = subnets.find((entry) => entry.id === subnetId);
   const canSubmit = !!previewIp && hostname.trim().length > 0;

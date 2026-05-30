@@ -35,6 +35,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   the ports workspace.
 - Discovery scans now identify DHCP gateways, DNS servers, reserved IPs, and
   infrastructure ranges from IPAM and dismiss them from the active client queue.
+- IP allocation and utilization now treat DHCP gateways and DNS servers as
+  reserved technical addresses instead of free client addresses.
 - Imported discovery rows no longer continue showing duplicate warnings after
   they are linked to an existing device.
 

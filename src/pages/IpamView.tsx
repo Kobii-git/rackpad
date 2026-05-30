@@ -755,7 +755,11 @@ export default function IpamView() {
               </CardTitle>
             </CardHeader>
             <CardBody>
-              <IpUtilizationBar subnet={subnet} assignments={assignments} />
+              <IpUtilizationBar
+                subnet={subnet}
+                assignments={assignments}
+                scopes={subnetScopes}
+              />
             </CardBody>
           </Card>
 

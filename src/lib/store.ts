@@ -1446,6 +1446,12 @@ export function previewNextStaticIp(subnetId: string): string | null {
       .filter((assignment) => assignment.subnetId === subnetId)
       .map((assignment) => ipToInt(assignment.ipAddress)),
   );
+  for (const scope of dhcpScopes) {
+    addDhcpTechnicalAddress(assignedSet, scope.gateway);
+    for (const dnsServer of scope.dnsServers ?? []) {
+      addDhcpTechnicalAddress(assignedSet, dnsServer);
+    }
+  }
 
   if (staticZones.length > 0) {
     for (const zone of staticZones) {
@@ -1469,6 +1475,11 @@ export function previewNextStaticIp(subnetId: string): string | null {
       skipReserved: false,
     },
   );
+}
+
+function addDhcpTechnicalAddress(target: Set<number>, ipAddress?: string | null) {
+  if (!ipAddress) return;
+  target.add(ipToInt(ipAddress));
 }
 
 export function previewNextVlanId(rangeId: string): number | null {
