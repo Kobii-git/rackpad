@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
+import { ReferenceImageGallery } from "@/components/shared/ReferenceImageGallery";
 import { TopBar } from "@/components/layout/TopBar";
 import { RackView } from "@/components/rack/RackView";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
@@ -38,7 +39,13 @@ import {
   updateRoomRecord,
   useStore,
 } from "@/lib/store";
-import type { Device, Port, RackFace, Room } from "@/lib/types";
+import type {
+  Device,
+  Port,
+  RackFace,
+  ReferenceImage,
+  Room,
+} from "@/lib/types";
 import { statusLabel } from "@/lib/utils";
 import { formatDeviceAddress } from "@/lib/network-labels";
 
@@ -56,6 +63,7 @@ type RackForm = {
 
 type RackEditorMode = "closed" | "create" | "edit";
 type RoomEditorMode = "closed" | "create" | "edit";
+type RackDisplayFace = RackFace | "both";
 
 type RoomForm = {
   name: string;
@@ -90,9 +98,10 @@ export default function RackViewPage() {
   const racks = useStore((s) => s.racks);
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
+  const referenceImages = useStore((s) => s.referenceImages);
   const canEdit = canEditInventory(currentUser);
   const [selectedViewId, setSelectedViewId] = useState("");
-  const [face, setFace] = useState<RackFace>("front");
+  const [face, setFace] = useState<RackDisplayFace>("front");
   const [selectedDeviceId, setSelectedDeviceId] = useState<
     string | undefined
   >();
@@ -249,6 +258,11 @@ export default function RackViewPage() {
   const rackDevices = rack
     ? devices.filter((device) => device.rackId === rack.id)
     : [];
+  const rackImages = rack
+    ? referenceImages.filter(
+        (image) => image.entityType === "rack" && image.entityId === rack.id,
+      )
+    : [];
   const selectedDevice = selectedDeviceId
     ? devices.find((device) => device.id === selectedDeviceId)
     : undefined;
@@ -257,6 +271,12 @@ export default function RackViewPage() {
     : [];
   const selectedRoomDevices = viewingRoom
     ? allLooseDevices.filter((device) => device.roomId === viewingRoom.id)
+    : [];
+  const selectedRoomImages = viewingRoom
+    ? referenceImages.filter(
+        (image) =>
+          image.entityType === "room" && image.entityId === viewingRoom.id,
+      )
     : [];
 
   async function handleSaveRack() {
@@ -629,6 +649,8 @@ export default function RackViewPage() {
                 room={viewingRoom}
                 racks={selectedRoomRacks}
                 devices={selectedRoomDevices}
+                images={selectedRoomImages}
+                canEdit={canEdit}
                 portsByDeviceId={portsByDeviceId}
               />
             ) : rack ? (
@@ -650,11 +672,14 @@ export default function RackViewPage() {
 
                   <Tabs
                     value={face}
-                    onValueChange={(value) => setFace(value as RackFace)}
+                    onValueChange={(value) =>
+                      setFace(value as RackDisplayFace)
+                    }
                   >
                     <TabsList>
                       <TabsTrigger value="front">Front</TabsTrigger>
                       <TabsTrigger value="rear">Rear</TabsTrigger>
+                      <TabsTrigger value="both">Both</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
@@ -671,6 +696,41 @@ export default function RackViewPage() {
                       )
                     }
                   />
+
+                  {face === "both" ? (
+                    <div className="grid w-96 shrink-0 gap-4">
+                      <ReferenceImageGallery
+                        entityType="rack"
+                        entityId={rack.id}
+                        images={rackImages}
+                        face="front"
+                        canEdit={canEdit}
+                        compact
+                        emptyText="No front rack picture yet."
+                      />
+                      <ReferenceImageGallery
+                        entityType="rack"
+                        entityId={rack.id}
+                        images={rackImages}
+                        face="rear"
+                        canEdit={canEdit}
+                        compact
+                        emptyText="No rear rack picture yet."
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-96 shrink-0">
+                      <ReferenceImageGallery
+                        entityType="rack"
+                        entityId={rack.id}
+                        images={rackImages}
+                        face={face}
+                        canEdit={canEdit}
+                        compact
+                        emptyText={`No ${face} rack picture yet.`}
+                      />
+                    </div>
+                  )}
 
                   <AnimatePresence>
                     {selectedDevice && (
@@ -860,6 +920,8 @@ function RoomPanel({
   room,
   racks,
   devices,
+  images,
+  canEdit,
   portsByDeviceId,
 }: {
   room: Room;
@@ -871,6 +933,8 @@ function RoomPanel({
     location?: string;
   }>;
   devices: Device[];
+  images: ReferenceImage[];
+  canEdit: boolean;
   portsByDeviceId: Record<string, Port[]>;
 }) {
   return (
@@ -899,6 +963,14 @@ function RoomPanel({
           </CardBody>
         </Card>
       )}
+
+      <ReferenceImageGallery
+        entityType="room"
+        entityId={room.id}
+        images={images}
+        canEdit={canEdit}
+        emptyText="No room picture yet."
+      />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>

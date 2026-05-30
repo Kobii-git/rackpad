@@ -14,7 +14,7 @@ import {
 interface RackViewProps {
   rack: Rack;
   devices: Device[];
-  face: RackFace;
+  face: RackFace | "both";
   onSelectDevice?: (deviceId: string) => void;
   selectedDeviceId?: string;
 }
@@ -80,10 +80,47 @@ export function RackView({
   onSelectDevice,
   selectedDeviceId,
 }: RackViewProps) {
+  const faces: RackFace[] = face === "both" ? ["front", "rear"] : [face];
+  return (
+    <div className="flex flex-wrap items-start gap-4">
+      {faces.map((rackFace) => (
+        <RackFaceView
+          key={rackFace}
+          rack={rack}
+          devices={devices}
+          face={rackFace}
+          onSelectDevice={onSelectDevice}
+          selectedDeviceId={selectedDeviceId}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RackFaceView({
+  rack,
+  devices,
+  face,
+  onSelectDevice,
+  selectedDeviceId,
+}: {
+  rack: Rack;
+  devices: Device[];
+  face: RackFace;
+  onSelectDevice?: (deviceId: string) => void;
+  selectedDeviceId?: string;
+}) {
   const slots = useMemo(
     () => buildLayout(rack, devices, face),
     [rack, devices, face],
   );
+  const childDevicesByParent = useMemo(() => {
+    return devices.reduce<Record<string, Device[]>>((acc, device) => {
+      if (!device.parentDeviceId) return acc;
+      (acc[device.parentDeviceId] ??= []).push(device);
+      return acc;
+    }, {});
+  }, [devices]);
   const occupantSlots = slots.filter((slot) => slot.device && slot.isStart);
   const emptyCount = slots.filter((slot) => !slot.device).length;
 
@@ -111,6 +148,7 @@ export function RackView({
                       key={slot.device.id}
                       device={slot.device}
                       heightU={slot.spanU ?? 1}
+                      childDevices={childDevicesByParent[slot.device.id] ?? []}
                       selected={selectedDeviceId === slot.device.id}
                       onClick={() => onSelectDevice?.(slot.device!.id)}
                     />
@@ -166,11 +204,13 @@ function RackRail({ slots, side }: { slots: Slot[]; side: "left" | "right" }) {
 function DeviceTile({
   device,
   heightU,
+  childDevices,
   selected,
   onClick,
 }: {
   device: Device;
   heightU: number;
+  childDevices: Device[];
   selected: boolean;
   onClick: () => void;
 }) {
@@ -223,10 +263,32 @@ function DeviceTile({
               {device.hostname}
             </span>
             <span className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-              {[device.manufacturer, device.model].filter(Boolean).join(" ") ||
-                device.deviceType.replace("_", " ")}
+              {childDevices.length > 0
+                ? `${childDevices.length} devices on shelf`
+                : [device.manufacturer, device.model]
+                    .filter(Boolean)
+                    .join(" ") || device.deviceType.replace("_", " ")}
             </span>
           </div>
+
+          {childDevices.length > 0 && (
+            <span className="flex max-w-[9rem] shrink-0 gap-1 overflow-hidden">
+              {childDevices.slice(0, 5).map((child) => (
+                <span
+                  key={child.id}
+                  title={child.hostname}
+                  className="grid size-5 place-items-center rounded-[var(--radius-xs)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.045)] text-[var(--text-secondary)]"
+                >
+                  <DeviceTypeIcon type={child.deviceType} className="size-3" />
+                </span>
+              ))}
+              {childDevices.length > 5 && (
+                <span className="grid size-5 place-items-center rounded-[var(--radius-xs)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.045)] font-mono text-[9px] text-[var(--text-tertiary)]">
+                  +{childDevices.length - 5}
+                </span>
+              )}
+            </span>
+          )}
 
           <span className="shrink-0 rounded-[999px] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.04)] px-1.5 py-0.5 font-mono text-[10px] uppercase text-[var(--text-muted)]">
             U{device.startU}
@@ -247,6 +309,11 @@ function DeviceTile({
           {formatDeviceAddress(device) && (
             <span className="text-[var(--text-tertiary)]">
               mgmt: {formatDeviceAddress(device)}
+            </span>
+          )}
+          {childDevices.length > 0 && (
+            <span className="text-[var(--text-tertiary)]">
+              shelf: {childDevices.map((child) => child.hostname).join(", ")}
             </span>
           )}
         </div>

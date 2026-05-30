@@ -62,7 +62,11 @@ export const roomsRoutes: FastifyPluginAsync = async (app) => {
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const row = db.prepare('SELECT id FROM rooms WHERE id = ?').get(req.params.id)
     if (!row) return reply.status(404).send({ error: 'Room not found' })
-    db.prepare('DELETE FROM rooms WHERE id = ?').run(req.params.id)
+    const removeRoom = db.transaction(() => {
+      db.prepare("DELETE FROM referenceImages WHERE entityType = 'room' AND entityId = ?").run(req.params.id)
+      db.prepare('DELETE FROM rooms WHERE id = ?').run(req.params.id)
+    })
+    removeRoom()
     return reply.status(204).send()
   })
 }

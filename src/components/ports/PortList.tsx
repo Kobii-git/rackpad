@@ -19,6 +19,8 @@ interface PortListProps {
   virtualSwitchesById?: Record<string, VirtualSwitch>;
   onSelectPort?: (portId: string) => void;
   selectedPortId?: string;
+  selectedPortIds?: Set<string>;
+  onTogglePortSelection?: (portId: string) => void;
 }
 
 export function PortList({
@@ -30,6 +32,8 @@ export function PortList({
   virtualSwitchesById = {},
   onSelectPort,
   selectedPortId,
+  selectedPortIds,
+  onTogglePortSelection,
 }: PortListProps) {
   const isPatchPanel =
     ports.length > 0 &&
@@ -41,6 +45,7 @@ export function PortList({
       <table className="rk-table">
         <thead>
           <tr>
+            {onTogglePortSelection && <Th className="w-1">Select</Th>}
             <Th className="w-1">•</Th>
             <Th>Port</Th>
             <Th>Type</Th>
@@ -61,6 +66,30 @@ export function PortList({
 
                 return (
                   <tr key={row.key} data-selected={selected}>
+                    {onTogglePortSelection && (
+                      <Td>
+                        <div className="flex flex-col gap-1">
+                          {row.front && (
+                            <PortSelectionCheckbox
+                              port={row.front}
+                              selected={Boolean(
+                                selectedPortIds?.has(row.front.id),
+                              )}
+                              onToggle={onTogglePortSelection}
+                            />
+                          )}
+                          {row.rear && (
+                            <PortSelectionCheckbox
+                              port={row.rear}
+                              selected={Boolean(
+                                selectedPortIds?.has(row.rear.id),
+                              )}
+                              onToggle={onTogglePortSelection}
+                            />
+                          )}
+                        </div>
+                      </Td>
+                    )}
                     <Td>
                       <StatusDot
                         link={resolvePatchPanelLinkState(row.front, row.rear)}
@@ -166,6 +195,15 @@ export function PortList({
                 onClick={() => onSelectPort?.(port.id)}
                 className={cn(onSelectPort ? "cursor-pointer" : "")}
               >
+                {onTogglePortSelection && (
+                  <Td>
+                    <PortSelectionCheckbox
+                      port={port}
+                      selected={Boolean(selectedPortIds?.has(port.id))}
+                      onToggle={onTogglePortSelection}
+                    />
+                  </Td>
+                )}
                 <Td>
                   <StatusDot link={port.linkState} />
                 </Td>
@@ -250,6 +288,26 @@ function Td({
   children: ReactNode;
 }) {
   return <td className={cn(className)}>{children}</td>;
+}
+
+function PortSelectionCheckbox({
+  port,
+  selected,
+  onToggle,
+}: {
+  port: Port;
+  selected: boolean;
+  onToggle: (portId: string) => void;
+}) {
+  return (
+    <input
+      type="checkbox"
+      checked={selected}
+      onClick={(event) => event.stopPropagation()}
+      onChange={() => onToggle(port.id)}
+      aria-label={`Select port ${formatPortLabel(port, { includeFace: true })}`}
+    />
+  );
 }
 
 function formatPortModeSummary(

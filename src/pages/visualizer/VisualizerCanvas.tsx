@@ -12,6 +12,7 @@ import {
 import { Link } from "react-router-dom";
 import {
   Cable,
+  ExternalLink,
   LocateFixed,
   Network,
   PanelRightClose,
@@ -48,6 +49,7 @@ import {
   buildSearchResults,
   nodeStripeColor,
   portTooltip,
+  traceFromPort,
   tracePorts,
   typeLabel,
 } from "./model";
@@ -360,11 +362,22 @@ export function VisualizerCanvas({
   function handlePortClick(node: VisualizerNode, visualPort: VisualizerPort) {
     if (traceMode.enabled) {
       if (!traceMode.firstPortId) {
+        const result = traceFromPort(model, visualPort.port.id);
+        if (result) {
+          setTraceMode({
+            enabled: true,
+            firstPortId: visualPort.port.id,
+            result,
+            message: `${result.segments.length} hop path traced from selected port.`,
+          });
+          setSelection({ kind: "device", id: node.device.id });
+          return;
+        }
         setTraceMode({
           enabled: true,
           firstPortId: visualPort.port.id,
           result: null,
-          message: "Click second port...",
+          message: "No onward path found. Click a second port to trace manually.",
         });
         setSelection({ kind: "device", id: node.device.id });
         return;
@@ -736,6 +749,28 @@ function ZonePanels({
   onToggleRackRun: (key: string) => void;
   onToggleGroup: (key: string) => void;
 }) {
+  if (model.layoutMode === "pyramid") {
+    return (
+      <div className="absolute inset-0 z-20">
+        <div
+          className="absolute rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[linear-gradient(180deg,rgb(255_255_255_/_0.028),transparent_20%),var(--surface-1)] shadow-[var(--shadow-card)]"
+          style={{
+            left: model.rackZone.x,
+            top: model.rackZone.y,
+            width: model.rackZone.width,
+            height: model.rackZone.height - 40,
+          }}
+        >
+          <ZoneHeader
+            eyebrow="Pyramid view"
+            title="Master and endpoint map"
+            stats={`${model.counts.devices} devices | ${model.counts.cables} links`}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="absolute inset-0 z-20">
       <div
@@ -909,6 +944,9 @@ function RackPanelView({
         <Mono className="text-[10px] text-[var(--text-tertiary)]">
           {panel.stats.totalU}U | {panel.stats.mounted} mounted |{" "}
           {panel.stats.freeU}U free
+          {panel.stats.rearMounted > 0
+            ? ` | ${panel.stats.frontMounted}F/${panel.stats.rearMounted}R`
+            : ""}
         </Mono>
       </div>
       <div
@@ -920,6 +958,16 @@ function RackPanelView({
           height: panel.bodyHeight,
         }}
       >
+        {panel.stats.rearMounted > 0 && (
+          <>
+            <span className="pointer-events-none absolute left-3 top-1 z-10 rounded-[var(--radius-xs)] bg-[rgb(0_0_0_/_0.32)] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+              Front
+            </span>
+            <span className="pointer-events-none absolute right-3 top-1 z-10 rounded-[var(--radius-xs)] bg-[rgb(0_0_0_/_0.32)] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+              Rear
+            </span>
+          </>
+        )}
         {panel.bands.map((band) => (
           <RackBandView
             key={band.id}
@@ -1478,8 +1526,11 @@ function DeviceInspector({
 }) {
   return (
     <div className="space-y-3">
-      <Button variant="outline" size="sm" asChild>
-        <Link to={`/devices/${node.device.id}`}>Open device</Link>
+      <Button size="sm" asChild>
+        <Link to={`/devices/${node.device.id}`}>
+          <ExternalLink className="size-3.5" />
+          Open device
+        </Link>
       </Button>
       <div className="grid grid-cols-2 gap-2">
         <InfoBox label="IP" value={node.device.managementIp} mono />

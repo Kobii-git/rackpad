@@ -44,6 +44,8 @@ import type {
 } from "@/lib/types";
 import {
   ArrowLeft,
+  Download,
+  ExternalLink,
   ImagePlus,
   Pencil,
   Plus,
@@ -388,6 +390,19 @@ export default function DeviceDetail() {
     } finally {
       setImageDeletingId(null);
     }
+  }
+
+  function handleOpenImage(image: DeviceImage) {
+    window.open(image.dataUrl, "_blank", "noopener,noreferrer");
+  }
+
+  function handleDownloadImage(image: DeviceImage) {
+    const anchor = document.createElement("a");
+    anchor.href = image.dataUrl;
+    anchor.download = image.fileName || `${image.label}.image`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   }
 
   async function handleSaveMonitor() {
@@ -1420,16 +1435,37 @@ export default function DeviceDetail() {
                                   {relativeTime(image.createdAt)}
                                 </Mono>
                               </div>
-                              {canEdit && (
+                              <div className="flex shrink-0 items-center gap-1">
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => void handleDeleteImage(image)}
-                                  disabled={imageDeletingId === image.id}
+                                  onClick={() => handleOpenImage(image)}
+                                  aria-label={`Open ${image.label} larger`}
                                 >
-                                  <Trash2 />
+                                  <ExternalLink />
                                 </Button>
-                              )}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDownloadImage(image)}
+                                  aria-label={`Download ${image.label}`}
+                                >
+                                  <Download />
+                                </Button>
+                                {canEdit && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() =>
+                                      void handleDeleteImage(image)
+                                    }
+                                    disabled={imageDeletingId === image.id}
+                                    aria-label={`Delete ${image.label}`}
+                                  >
+                                    <Trash2 />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                             {image.notes && (
                               <div className="text-xs leading-5 text-[var(--color-fg-subtle)]">
@@ -1689,7 +1725,9 @@ function PortInspectorCard({
 
             <div className="flex justify-end">
               <Button variant="outline" size="sm" asChild>
-                <Link to="/ports">Open in ports workspace</Link>
+                <Link to={`/ports?deviceId=${port.deviceId}&portId=${port.id}`}>
+                  Open in ports workspace
+                </Link>
               </Button>
             </div>
           </>

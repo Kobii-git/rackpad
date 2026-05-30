@@ -23,6 +23,7 @@ import { wifiRoutes } from "./routes/wifi.js";
 import { virtualSwitchesRoutes } from "./routes/virtual-switches.js";
 import { documentationRoutes } from "./routes/documentation.js";
 import { deviceImagesRoutes } from "./routes/device-images.js";
+import { referenceImagesRoutes } from "./routes/reference-images.js";
 import { getAuthToken, lookupSession, needsBootstrap } from "./lib/auth.js";
 import { ValidationError } from "./lib/validation.js";
 
@@ -356,6 +357,7 @@ export async function createApp() {
   });
   await app.register(documentationRoutes, { prefix: "/api/documentation" });
   await app.register(deviceImagesRoutes, { prefix: "/api/device-images" });
+  await app.register(referenceImagesRoutes, { prefix: "/api/reference-images" });
   await app.register(adminRoutes, { prefix: "/api/admin" });
 
   if (existsSync(DIST_DIR)) {

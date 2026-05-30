@@ -78,6 +78,8 @@ export default function CableView() {
   const [createForm, setCreateForm] = useState<CableFormState>(EMPTY_FORM);
   const [selectedLinkId, setSelectedLinkId] = useState<string>();
   const [editForm, setEditForm] = useState({
+    fromPortId: "",
+    toPortId: "",
     cableType: "",
     cableLength: "",
     color: "",
@@ -159,6 +161,25 @@ export default function CableView() {
   const selectedLink = selectedLinkId
     ? portLinks.find((link) => link.id === selectedLinkId)
     : undefined;
+  const selectedEndpointPortIds = useMemo(
+    () =>
+      new Set(
+        selectedLink ? [selectedLink.fromPortId, selectedLink.toPortId] : [],
+      ),
+    [selectedLink],
+  );
+  const editAvailablePorts = useMemo(() => {
+    return [...ports]
+      .filter(
+        (port) =>
+          !linkedPortIds.has(port.id) || selectedEndpointPortIds.has(port.id),
+      )
+      .sort((a, b) =>
+        portOptionLabel(a, deviceById).localeCompare(
+          portOptionLabel(b, deviceById),
+        ),
+      );
+  }, [deviceById, linkedPortIds, ports, selectedEndpointPortIds]);
 
   useEffect(() => {
     if (!filtered.length) {
@@ -173,12 +194,21 @@ export default function CableView() {
 
   useEffect(() => {
     if (!selectedLink) {
-      setEditForm({ cableType: "", cableLength: "", color: "", notes: "" });
+      setEditForm({
+        fromPortId: "",
+        toPortId: "",
+        cableType: "",
+        cableLength: "",
+        color: "",
+        notes: "",
+      });
       setEditError("");
       return;
     }
 
     setEditForm({
+      fromPortId: selectedLink.fromPortId,
+      toPortId: selectedLink.toPortId,
       cableType: selectedLink.cableType ?? "",
       cableLength: selectedLink.cableLength ?? "",
       color: selectedLink.color ?? "",
@@ -217,6 +247,8 @@ export default function CableView() {
     setEditError("");
     try {
       await updateCable(selectedLink.id, {
+        fromPortId: editForm.fromPortId,
+        toPortId: editForm.toPortId,
         cableType: editForm.cableType.trim() || undefined,
         cableLength: editForm.cableLength.trim() || undefined,
         color: editForm.color.trim() || undefined,
@@ -415,6 +447,47 @@ export default function CableView() {
                     />
                   </div>
 
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Field label="From port">
+                      <Select
+                        value={editForm.fromPortId}
+                        onChange={(value) =>
+                          setEditForm((prev) => ({
+                            ...prev,
+                            fromPortId: value,
+                          }))
+                        }
+                      >
+                        {editAvailablePorts
+                          .filter((port) => port.id !== editForm.toPortId)
+                          .map((port) => (
+                            <option key={port.id} value={port.id}>
+                              {portOptionLabel(port, deviceById)}
+                            </option>
+                          ))}
+                      </Select>
+                    </Field>
+                    <Field label="To port">
+                      <Select
+                        value={editForm.toPortId}
+                        onChange={(value) =>
+                          setEditForm((prev) => ({
+                            ...prev,
+                            toPortId: value,
+                          }))
+                        }
+                      >
+                        {editAvailablePorts
+                          .filter((port) => port.id !== editForm.fromPortId)
+                          .map((port) => (
+                            <option key={port.id} value={port.id}>
+                              {portOptionLabel(port, deviceById)}
+                            </option>
+                          ))}
+                      </Select>
+                    </Field>
+                  </div>
+
                   <div className="grid gap-3 md:grid-cols-3">
                     <Field label="Cable type">
                       <Input
@@ -487,7 +560,12 @@ export default function CableView() {
                     )}
                     <Button
                       size="sm"
-                      disabled={saving || !canEdit}
+                      disabled={
+                        saving ||
+                        !canEdit ||
+                        !editForm.fromPortId ||
+                        !editForm.toPortId
+                      }
                       onClick={() => void handleSaveCable()}
                     >
                       <Save className="size-3.5" />

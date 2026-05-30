@@ -69,8 +69,7 @@ export default function Dashboard() {
   );
   const attentionDevices = devices
     .filter((device) => ["offline", "warning", "unknown"].includes(device.status))
-    .sort((a, b) => statusPriority(a.status) - statusPriority(b.status))
-    .slice(0, 6);
+    .sort((a, b) => statusPriority(a.status) - statusPriority(b.status));
   const newDiscoveries = discoveredDevices.filter(
     (device) => device.status === "new",
   ).length;
@@ -167,13 +166,13 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle>
                 <CardLabel>Action queue</CardLabel>
-                <CardHeading>Devices to review</CardHeading>
+                <CardHeading>Device status issues</CardHeading>
               </CardTitle>
               <Badge tone={attentionDevices.length > 0 ? "warn" : "ok"}>
                 {attentionDevices.length} open
               </Badge>
             </CardHeader>
-            <CardBody className="space-y-2">
+            <CardBody className="max-h-96 space-y-2 overflow-y-auto pr-1">
               {attentionDevices.length === 0 ? (
                 <EmptyLine title="No device status issues" />
               ) : (
@@ -211,17 +210,17 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle>
                 <CardLabel>Monitoring</CardLabel>
-                <CardHeading>Probe health</CardHeading>
+                <CardHeading>Monitor targets to review</CardHeading>
               </CardTitle>
               <Badge tone={monitorIssues.length > 0 ? "warn" : "ok"}>
                 {enabledMonitors.length} enabled
               </Badge>
             </CardHeader>
-            <CardBody className="space-y-2">
+            <CardBody className="max-h-96 space-y-2 overflow-y-auto pr-1">
               {monitorIssues.length === 0 ? (
                 <EmptyLine title="No monitor failures" />
               ) : (
-                monitorIssues.slice(0, 5).map((monitor) => {
+                monitorIssues.map((monitor) => {
                   const device = devicesById[monitor.deviceId];
                   return (
                     <Link
@@ -313,7 +312,12 @@ export default function Dashboard() {
               <div className="grid grid-cols-3 gap-2 pt-1">
                 <MiniStat icon={Server} label="Racks" value={racks.length} />
                 <MiniStat icon={Wifi} label="Rooms" value={rooms.length} />
-                <MiniStat icon={HardDrive} label="Unplaced" value={unplacedDevices} />
+                <MiniStat
+                  icon={HardDrive}
+                  label="Unplaced"
+                  value={unplacedDevices}
+                  to="/devices?placement=unplaced"
+                />
               </div>
             </CardBody>
           </Card>
@@ -454,16 +458,33 @@ function MiniStat({
   icon: Icon,
   label,
   value,
+  to,
 }: {
   icon: typeof Activity;
   label: string;
   value: number;
+  to?: string;
 }) {
-  return (
-    <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] p-2">
+  const content = (
+    <>
       <Icon className="mb-2 size-3.5 text-[var(--accent-primary)]" />
       <div className="font-mono text-sm text-[var(--text-primary)]">{value}</div>
       <div className="text-[10px] text-[var(--text-tertiary)]">{label}</div>
+    </>
+  );
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] p-2 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+      >
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] p-2">
+      {content}
     </div>
   );
 }

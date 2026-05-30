@@ -43,6 +43,16 @@ type DiscoveryScanDiagnostic = {
   detail?: string
 }
 
+type TechnicalAddress = {
+  role: string
+  reason: string
+}
+
+type TechnicalAddressContext = {
+  byIp: Map<string, TechnicalAddress>
+  ranges: Array<TechnicalAddress & { start: number; end: number }>
+}
+
 type MacScanContext = {
   macByIp: Map<string, string>
   diagnostics: DiscoveryScanDiagnostic[]
@@ -64,6 +74,10 @@ function parseDiscoveredDevice(row: Record<string, unknown>) {
     notes: row.notes ? String(row.notes) : null,
     importedDeviceId: row.importedDeviceId
       ? String(row.importedDeviceId)
+      : null,
+    technicalRole: row.technicalRole ? String(row.technicalRole) : null,
+    technicalReason: row.technicalReason
+      ? String(row.technicalReason)
       : null,
     lastSeen: row.lastSeen ? String(row.lastSeen) : null,
     lastScannedAt: String(row.lastScannedAt),
@@ -106,6 +120,149 @@ function cidrHosts(cidr: string) {
   return Array.from({ length: hostCount }, (_, index) =>
     intToIp(network + index + 1),
   )
+}
+
+function parseStringArray(value: unknown) {
+  if (!value) return []
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === 'string')
+  }
+  if (typeof value !== 'string') return []
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return Array.isArray(parsed)
+      ? parsed.filter((entry): entry is string => typeof entry === 'string')
+      : []
+  } catch {
+    return value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+  }
+}
+
+function setTechnicalAddress(
+  byIp: Map<string, TechnicalAddress>,
+  ipAddress: string | null | undefined,
+  address: TechnicalAddress,
+) {
+  if (!ipAddress || byIp.has(ipAddress)) return
+  byIp.set(ipAddress, address)
+}
+
+function collectTechnicalAddresses(labId: string): TechnicalAddressContext {
+  const byIp = new Map<string, TechnicalAddress>()
+  const ranges: TechnicalAddressContext['ranges'] = []
+
+  const scopes = db
+    .prepare(
+      `
+      SELECT
+        dhcpScopes.name,
+        dhcpScopes.gateway,
+        dhcpScopes.dnsServers,
+        subnets.name AS subnetName
+      FROM dhcpScopes
+      JOIN subnets ON subnets.id = dhcpScopes.subnetId
+      WHERE subnets.labId = ?
+    `,
+    )
+    .all(labId) as Array<{
+    name: string
+    gateway: string | null
+    dnsServers: string | null
+    subnetName: string
+  }>
+
+  for (const scope of scopes) {
+    setTechnicalAddress(byIp, scope.gateway, {
+      role: 'gateway',
+      reason: `${scope.subnetName} DHCP gateway`,
+    })
+    for (const dnsServer of parseStringArray(scope.dnsServers)) {
+      setTechnicalAddress(byIp, dnsServer, {
+        role: 'dns',
+        reason: `${scope.subnetName} DNS server`,
+      })
+    }
+  }
+
+  const assignments = db
+    .prepare(
+      `
+      SELECT
+        ipAssignments.ipAddress,
+        ipAssignments.assignmentType,
+        ipAssignments.hostname,
+        ipAssignments.description,
+        subnets.name AS subnetName
+      FROM ipAssignments
+      JOIN subnets ON subnets.id = ipAssignments.subnetId
+      WHERE subnets.labId = ?
+        AND ipAssignments.assignmentType IN ('reserved', 'infrastructure')
+    `,
+    )
+    .all(labId) as Array<{
+    ipAddress: string
+    assignmentType: string
+    hostname: string | null
+    description: string | null
+    subnetName: string
+  }>
+
+  for (const assignment of assignments) {
+    setTechnicalAddress(byIp, assignment.ipAddress, {
+      role: assignment.assignmentType,
+      reason:
+        assignment.description ??
+        assignment.hostname ??
+        `${assignment.subnetName} ${assignment.assignmentType} IP`,
+    })
+  }
+
+  const zones = db
+    .prepare(
+      `
+      SELECT
+        ipZones.kind,
+        ipZones.startIp,
+        ipZones.endIp,
+        ipZones.description,
+        subnets.name AS subnetName
+      FROM ipZones
+      JOIN subnets ON subnets.id = ipZones.subnetId
+      WHERE subnets.labId = ?
+        AND ipZones.kind IN ('reserved', 'infrastructure')
+    `,
+    )
+    .all(labId) as Array<{
+    kind: string
+    startIp: string
+    endIp: string
+    description: string | null
+    subnetName: string
+  }>
+
+  for (const zone of zones) {
+    ranges.push({
+      start: ipToInt(zone.startIp),
+      end: ipToInt(zone.endIp),
+      role: zone.kind,
+      reason: zone.description ?? `${zone.subnetName} ${zone.kind} range`,
+    })
+  }
+
+  return { byIp, ranges }
+}
+
+function technicalAddressForIp(
+  ipAddress: string,
+  context: TechnicalAddressContext,
+) {
+  const direct = context.byIp.get(ipAddress)
+  if (direct) return direct
+  const value = ipToInt(ipAddress)
+  return context.ranges.find((range) => value >= range.start && value <= range.end)
 }
 
 function inferDeviceType(hostname: string | null) {
@@ -531,11 +688,28 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     const scannedAt = new Date().toISOString()
     const hosts = cidrHosts(cidr)
     const macScan = await collectSubnetMacAddresses(cidr)
-    const reachableHosts = await scanHosts(hosts, macScan.macByIp)
+    const technicalAddresses = collectTechnicalAddresses(labId)
+    const reachableHosts = (await scanHosts(hosts, macScan.macByIp)).map(
+      (record) => {
+        if (!record) return record
+        const technical = technicalAddressForIp(
+          record.ipAddress,
+          technicalAddresses,
+        )
+        return {
+          ...record,
+          technicalRole: technical?.role ?? null,
+          technicalReason: technical?.reason ?? null,
+        }
+      },
+    )
     const macAddressCount = reachableHosts.filter(
       (record) => record?.macAddress,
     ).length
     const vendorCount = reachableHosts.filter((record) => record?.vendor).length
+    const technicalCount = reachableHosts.filter(
+      (record) => record?.technicalRole,
+    ).length
     const diagnostics = [...macScan.diagnostics]
     if (reachableHosts.length > 0 && macAddressCount === 0) {
       diagnostics.push(macUnavailableDiagnostic(reachableHosts.length))
@@ -543,15 +717,46 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
 
     const upsert = db.prepare(`
       INSERT INTO discoveredDevices
-        (id, labId, ipAddress, hostname, displayName, deviceType, placement, macAddress, vendor, source, status, notes, importedDeviceId, lastSeen, lastScannedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, labId, ipAddress, hostname, displayName, deviceType, placement, macAddress, vendor, source, status, notes, importedDeviceId, technicalRole, technicalReason, lastSeen, lastScannedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(labId, ipAddress) DO UPDATE SET
-        hostname = COALESCE(excluded.hostname, discoveredDevices.hostname),
-        displayName = COALESCE(discoveredDevices.displayName, excluded.displayName),
-        deviceType = COALESCE(discoveredDevices.deviceType, excluded.deviceType),
-        placement = COALESCE(discoveredDevices.placement, excluded.placement),
-        macAddress = COALESCE(discoveredDevices.macAddress, excluded.macAddress),
-        vendor = COALESCE(discoveredDevices.vendor, excluded.vendor),
+        hostname = CASE
+          WHEN discoveredDevices.importedDeviceId IS NOT NULL
+            THEN discoveredDevices.hostname
+          ELSE COALESCE(excluded.hostname, discoveredDevices.hostname)
+        END,
+        displayName = CASE
+          WHEN discoveredDevices.importedDeviceId IS NOT NULL
+            THEN discoveredDevices.displayName
+          ELSE COALESCE(discoveredDevices.displayName, excluded.displayName)
+        END,
+        deviceType = CASE
+          WHEN discoveredDevices.importedDeviceId IS NOT NULL
+            THEN discoveredDevices.deviceType
+          ELSE COALESCE(discoveredDevices.deviceType, excluded.deviceType)
+        END,
+        placement = CASE
+          WHEN discoveredDevices.importedDeviceId IS NOT NULL
+            THEN discoveredDevices.placement
+          ELSE COALESCE(discoveredDevices.placement, excluded.placement)
+        END,
+        macAddress = CASE
+          WHEN discoveredDevices.importedDeviceId IS NOT NULL
+            THEN discoveredDevices.macAddress
+          ELSE COALESCE(discoveredDevices.macAddress, excluded.macAddress)
+        END,
+        vendor = CASE
+          WHEN discoveredDevices.importedDeviceId IS NOT NULL
+            THEN discoveredDevices.vendor
+          ELSE COALESCE(discoveredDevices.vendor, excluded.vendor)
+        END,
+        technicalRole = excluded.technicalRole,
+        technicalReason = excluded.technicalReason,
+        status = CASE
+          WHEN discoveredDevices.status = 'new' AND excluded.technicalRole IS NOT NULL
+            THEN 'dismissed'
+          ELSE discoveredDevices.status
+        END,
         source = excluded.source,
         lastSeen = excluded.lastSeen,
         lastScannedAt = excluded.lastScannedAt
@@ -571,9 +776,11 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
           record.macAddress,
           record.vendor,
           record.source,
-          'new',
+          record.technicalRole ? 'dismissed' : 'new',
           null,
           null,
+          record.technicalRole,
+          record.technicalReason,
           record.lastSeen,
           scannedAt,
         )
@@ -597,6 +804,7 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
       discoveredCount: rows.length,
       macAddressCount,
       vendorCount,
+      technicalCount,
       diagnostics,
       rows: rows.map(parseDiscoveredDevice),
     }
@@ -649,15 +857,34 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
       updates.push('placement = ?')
       values.push(placement)
     }
+    let statusUpdated = false
     if (status !== undefined) {
       updates.push('status = ?')
       values.push(status)
+      statusUpdated = true
     }
     if (importedDeviceId !== undefined) {
+      let importedDevice:
+        | {
+            id: string
+            labId: string
+            hostname: string
+            displayName: string | null
+            deviceType: string
+            placement: string | null
+            macAddress: string | null
+          }
+        | undefined
       if (importedDeviceId) {
-        const importedDevice = db
-          .prepare('SELECT id, labId FROM devices WHERE id = ?')
-          .get(importedDeviceId) as { id: string; labId: string } | undefined
+        importedDevice = db
+          .prepare(
+            `
+            SELECT id, labId, hostname, displayName, deviceType, placement, macAddress
+            FROM devices
+            WHERE id = ?
+          `,
+          )
+          .get(importedDeviceId) as typeof importedDevice
         if (!importedDevice) {
           throw new ValidationError('Imported device does not exist.')
         }
@@ -669,6 +896,34 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
       }
       updates.push('importedDeviceId = ?')
       values.push(importedDeviceId)
+      if (importedDevice) {
+        updates.push(
+          'hostname = ?',
+          'displayName = ?',
+          'deviceType = ?',
+          'placement = ?',
+          'macAddress = COALESCE(?, macAddress)',
+        )
+        values.push(
+          importedDevice.hostname,
+          importedDevice.displayName,
+          importedDevice.deviceType,
+          importedDevice.placement,
+          importedDevice.macAddress,
+        )
+        if (!statusUpdated) {
+          updates.push('status = ?')
+          values.push('imported')
+          statusUpdated = true
+        }
+        if (importedDevice.macAddress) {
+          const linkedVendor = await lookupOuiVendor(importedDevice.macAddress)
+          if (linkedVendor) {
+            updates.push('vendor = COALESCE(vendor, ?)')
+            values.push(linkedVendor)
+          }
+        }
+      }
     }
 
     if (updates.length === 0) {

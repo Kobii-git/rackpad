@@ -6,6 +6,7 @@ import { buildVisualizerModel } from "./visualizer/model";
 import { VisualizerCanvas } from "./visualizer/VisualizerCanvas";
 import type {
   TraceModeState,
+  VisualizerLayoutMode,
   VisualizerLooseDevicePlacement,
 } from "./visualizer/types";
 
@@ -13,6 +14,7 @@ const HEALTH_STORAGE_KEY = "rackpad.visualizer.health";
 const NO_CABLE_BANNER_KEY = "rackpad.visualizer.no-cable-banner.dismissed";
 const LOOSE_PLACEMENT_STORAGE_KEY = "rackpad.visualizer.loose-placement";
 const ROOM_ONLY_SECTIONS_STORAGE_KEY = "rackpad.visualizer.room-only-sections";
+const LAYOUT_MODE_STORAGE_KEY = "rackpad.visualizer.layout-mode";
 
 export default function VisualizerView() {
   const lab = useStore((s) => s.lab);
@@ -37,6 +39,9 @@ export default function VisualizerView() {
   );
   const [healthOverlay, setHealthOverlay] = useState(() =>
     readBoolean(HEALTH_STORAGE_KEY, false),
+  );
+  const [layoutMode, setLayoutMode] = useState<VisualizerLayoutMode>(() =>
+    readLayoutMode(LAYOUT_MODE_STORAGE_KEY),
   );
   const [looseDevicePlacement, setLooseDevicePlacement] =
     useState<VisualizerLooseDevicePlacement>(() =>
@@ -71,6 +76,7 @@ export default function VisualizerView() {
         expandedRackRuns,
         collapsedGroups,
         layout: {
+          topologyLayout: layoutMode,
           looseDevicePlacement,
           includeRoomOnlySections,
         },
@@ -88,6 +94,7 @@ export default function VisualizerView() {
       virtualSwitches,
       expandedRackRuns,
       collapsedGroups,
+      layoutMode,
       looseDevicePlacement,
       includeRoomOnlySections,
     ],
@@ -150,18 +157,35 @@ export default function VisualizerView() {
         }
         actions={
           <div className="flex items-center gap-2">
-            <VisualizerToggle
-              checked={looseDevicePlacement === "below-racks"}
-              label="Loose below"
-              ariaLabel="Place loose devices below racks"
-              onChange={toggleLooseDevicePlacement}
-            />
-            <VisualizerToggle
-              checked={includeRoomOnlySections}
-              label="No rack required"
-              ariaLabel="Place rooms without racks in rack zone"
-              onChange={toggleRoomOnlySections}
-            />
+            <select
+              value={layoutMode}
+              onChange={(event) => {
+                const next = event.target.value as VisualizerLayoutMode;
+                setLayoutMode(next);
+                writeString(LAYOUT_MODE_STORAGE_KEY, next);
+              }}
+              className="rk-control h-8 w-32 px-2 text-xs text-[var(--text-primary)]"
+              aria-label="Visualizer layout"
+            >
+              <option value="grouped">Grouped</option>
+              <option value="pyramid">Pyramid</option>
+            </select>
+            {layoutMode === "grouped" && (
+              <>
+                <VisualizerToggle
+                  checked={looseDevicePlacement === "below-racks"}
+                  label="Loose below"
+                  ariaLabel="Place loose devices below racks"
+                  onChange={toggleLooseDevicePlacement}
+                />
+                <VisualizerToggle
+                  checked={includeRoomOnlySections}
+                  label="No rack required"
+                  ariaLabel="Place rooms without racks in rack zone"
+                  onChange={toggleRoomOnlySections}
+                />
+              </>
+            )}
             <select
               value={cableType}
               onChange={(event) => setCableType(event.target.value)}
@@ -283,6 +307,15 @@ function readLooseDevicePlacement(key: string): VisualizerLooseDevicePlacement {
     return value === "below-racks" ? "below-racks" : "beside-racks";
   } catch {
     return "beside-racks";
+  }
+}
+
+function readLayoutMode(key: string): VisualizerLayoutMode {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value === "pyramid" ? "pyramid" : "grouped";
+  } catch {
+    return "grouped";
   }
 }
 

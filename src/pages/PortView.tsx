@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
 import { PortGrid } from "@/components/ports/PortGrid";
 import { PortList } from "@/components/ports/PortList";
@@ -74,6 +74,22 @@ interface PortFormState {
   description: string;
   face: NonNullable<Port["face"]>;
 }
+
+interface BulkPortFormState {
+  kind: Port["kind"];
+  speed: string;
+  linkState: Port["linkState"];
+  mode: NonNullable<Port["mode"]>;
+  vlanId: string;
+}
+
+const EMPTY_BULK_PORT_FORM: BulkPortFormState = {
+  kind: "rj45",
+  speed: "",
+  linkState: "down",
+  mode: "access",
+  vlanId: "",
+};
 
 interface TemplatePortFormState {
   name: string;
@@ -232,6 +248,7 @@ function appendTemplatePorts(form: TemplateFormState): TemplateFormState {
 }
 
 export default function PortView() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useStore((s) => s.currentUser);
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
@@ -257,6 +274,17 @@ export default function PortView() {
   );
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [selectedPortId, setSelectedPortId] = useState<string | undefined>();
+  const [selectedPortIds, setSelectedPortIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [bulkPortFields, setBulkPortFields] = useState<
+    Set<keyof BulkPortFormState>
+  >(new Set());
+  const [bulkPortForm, setBulkPortForm] = useState<BulkPortFormState>(
+    EMPTY_BULK_PORT_FORM,
+  );
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkError, setBulkError] = useState("");
   const [form, setForm] = useState<PortFormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -322,6 +350,8 @@ export default function PortView() {
       return acc;
     }, {});
   }, [portLinks]);
+  const requestedDeviceId = searchParams.get("deviceId") ?? "";
+  const requestedPortId = searchParams.get("portId") ?? "";
 
   const filteredPortBearingDevices = useMemo(() => {
     const query = deviceQuery.trim().toLowerCase();
@@ -381,6 +411,28 @@ export default function PortView() {
   ]);
 
   useEffect(() => {
+    if (requestedPortId && portById[requestedPortId]) {
+      const requestedPort = portById[requestedPortId];
+      if (requestedPort.deviceId !== selectedDeviceId) {
+        setSelectedDeviceId(requestedPort.deviceId);
+      }
+      if (selectedPortId !== requestedPort.id) {
+        setSelectedPortId(requestedPort.id);
+      }
+      return;
+    }
+    if (
+      requestedDeviceId &&
+      filteredPortBearingDevices.some(
+        (deviceEntry) => deviceEntry.id === requestedDeviceId,
+      )
+    ) {
+      if (selectedDeviceId !== requestedDeviceId) {
+        setSelectedDeviceId(requestedDeviceId);
+        setSelectedPortId(undefined);
+      }
+      return;
+    }
     if (!filteredPortBearingDevices.length) {
       setSelectedDeviceId("");
       setSelectedPortId(undefined);
@@ -395,7 +447,14 @@ export default function PortView() {
       setSelectedDeviceId(filteredPortBearingDevices[0].id);
       setSelectedPortId(undefined);
     }
-  }, [filteredPortBearingDevices, selectedDeviceId]);
+  }, [
+    filteredPortBearingDevices,
+    portById,
+    requestedDeviceId,
+    requestedPortId,
+    selectedDeviceId,
+    selectedPortId,
+  ]);
 
   const device = deviceById[selectedDeviceId];
   const devicePorts = portsByDeviceId[selectedDeviceId] ?? [];
@@ -424,6 +483,13 @@ export default function PortView() {
     virtualSwitchById,
     vlanById,
   ]);
+  const selectedBulkPorts = useMemo(
+    () => visibleDevicePorts.filter((port) => selectedPortIds.has(port.id)),
+    [selectedPortIds, visibleDevicePorts],
+  );
+  const allVisiblePortsSelected =
+    visibleDevicePorts.length > 0 &&
+    visibleDevicePorts.every((port) => selectedPortIds.has(port.id));
   const candidateVirtualSwitches = useMemo(() => {
     if (!device) return [];
     const hostDeviceId = device.parentDeviceId ?? device.id;
@@ -444,6 +510,14 @@ export default function PortView() {
       setSelectedPortId(visibleDevicePorts[0].id);
     }
   }, [selectedPortId, visibleDevicePorts]);
+
+  useEffect(() => {
+    const portIds = new Set(ports.map((port) => port.id));
+    setSelectedPortIds((current) => {
+      const next = new Set([...current].filter((portId) => portIds.has(portId)));
+      return next.size === current.size ? current : next;
+    });
+  }, [ports]);
 
   useEffect(() => {
     if (!portTemplates.length) {
@@ -689,6 +763,79 @@ export default function PortView() {
     }
   }
 
+  function togglePortSelection(portId: string) {
+    setSelectedPortIds((current) => {
+      const next = new Set(current);
+      if (next.has(portId)) next.delete(portId);
+      else next.add(portId);
+      return next;
+    });
+  }
+
+  function toggleAllVisiblePorts() {
+    setSelectedPortIds((current) => {
+      const next = new Set(current);
+      if (allVisiblePortsSelected) {
+        for (const port of visibleDevicePorts) next.delete(port.id);
+      } else {
+        for (const port of visibleDevicePorts) next.add(port.id);
+      }
+      return next;
+    });
+  }
+
+  function toggleBulkPortField(key: keyof BulkPortFormState) {
+    setBulkPortFields((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function selectPort(portId: string | undefined) {
+    setSelectedPortId(portId);
+    if (device && portId) {
+      setSearchParams({ deviceId: device.id, portId });
+    }
+  }
+
+  async function handleBulkPortSave() {
+    if (selectedBulkPorts.length === 0 || bulkPortFields.size === 0) return;
+    const changes: Partial<Omit<Port, "id" | "deviceId" | "position">> = {};
+    if (bulkPortFields.has("kind")) changes.kind = bulkPortForm.kind;
+    if (bulkPortFields.has("speed")) {
+      changes.speed = bulkPortForm.speed.trim() || undefined;
+    }
+    if (bulkPortFields.has("linkState")) {
+      changes.linkState = bulkPortForm.linkState;
+    }
+    if (bulkPortFields.has("mode")) {
+      changes.mode = bulkPortForm.mode;
+      changes.allowedVlanIds = [];
+    }
+    if (bulkPortFields.has("vlanId")) {
+      changes.vlanId = bulkPortForm.vlanId || undefined;
+    }
+
+    setBulkSaving(true);
+    setBulkError("");
+    try {
+      for (const port of selectedBulkPorts) {
+        await updatePort(port.id, changes);
+      }
+      setSelectedPortIds(new Set());
+      setBulkPortFields(new Set());
+      setBulkPortForm(EMPTY_BULK_PORT_FORM);
+    } catch (err) {
+      setBulkError(
+        err instanceof Error ? err.message : "Failed to update selected ports.",
+      );
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
   return (
     <>
       <TopBar
@@ -780,6 +927,7 @@ export default function PortView() {
                     setSelectedDeviceId(entry.id);
                     setSelectedPortId(undefined);
                     setCreating(false);
+                    setSearchParams({ deviceId: entry.id });
                   }}
                   className={`flex w-full items-center gap-2.5 border-l-2 px-4 py-2 text-left transition-colors ${
                     isActive
@@ -813,12 +961,12 @@ export default function PortView() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-hidden px-6 py-5">
           {!device ? (
             <EmptyDevice />
           ) : (
-            <div className="grid grid-cols-12 gap-5">
-              <div className="col-span-12 xl:col-span-8">
+            <div className="grid h-full min-h-0 grid-cols-12 gap-5">
+              <div className="col-span-12 min-h-0 overflow-y-auto pr-1 xl:col-span-8">
                 <div className="mb-5">
                   <div className="mb-1 flex items-center gap-2">
                     <DeviceTypeIcon
@@ -860,23 +1008,59 @@ export default function PortView() {
                       className="h-8 pl-8 text-xs"
                     />
                   </div>
-                  <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
-                    {visibleDevicePorts.length} / {devicePorts.length} shown
-                  </Mono>
+                  <div className="flex items-center gap-3">
+                    {canEdit && visibleDevicePorts.length > 0 && (
+                      <label className="inline-flex items-center gap-2 text-xs text-[var(--color-fg-subtle)]">
+                        <input
+                          type="checkbox"
+                          checked={allVisiblePortsSelected}
+                          onChange={() => toggleAllVisiblePorts()}
+                        />
+                        Select shown
+                      </label>
+                    )}
+                    <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
+                      {visibleDevicePorts.length} / {devicePorts.length} shown
+                    </Mono>
+                  </div>
                 </div>
 
                 {isVisualGrid ? (
-                  <PortGrid
-                    device={device}
-                    ports={visibleDevicePorts}
-                    links={linkByPortId}
-                    portsById={portById}
-                    devicesById={deviceById}
-                    vlansById={vlanById}
-                    virtualSwitchesById={virtualSwitchById}
-                    onSelectPort={setSelectedPortId}
-                    selectedPortId={selectedPortId}
-                  />
+                  <div className="space-y-4">
+                    <PortGrid
+                      device={device}
+                      ports={visibleDevicePorts}
+                      links={linkByPortId}
+                      portsById={portById}
+                      devicesById={deviceById}
+                      vlansById={vlanById}
+                      virtualSwitchesById={virtualSwitchById}
+                      onSelectPort={selectPort}
+                      selectedPortId={selectedPortId}
+                    />
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>
+                          <CardLabel>Table</CardLabel>
+                          <CardHeading>Selectable ports</CardHeading>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardBody className="p-0">
+                        <PortList
+                          ports={visibleDevicePorts}
+                          links={linkByPortId}
+                          portsById={portById}
+                          devicesById={deviceById}
+                          vlansById={vlanById}
+                          virtualSwitchesById={virtualSwitchById}
+                          onSelectPort={selectPort}
+                          selectedPortId={selectedPortId}
+                          selectedPortIds={selectedPortIds}
+                          onTogglePortSelection={togglePortSelection}
+                        />
+                      </CardBody>
+                    </Card>
+                  </div>
                 ) : (
                   <Card>
                     <CardHeader>
@@ -895,15 +1079,160 @@ export default function PortView() {
                         devicesById={deviceById}
                         vlansById={vlanById}
                         virtualSwitchesById={virtualSwitchById}
-                        onSelectPort={setSelectedPortId}
+                        onSelectPort={selectPort}
                         selectedPortId={selectedPortId}
+                        selectedPortIds={selectedPortIds}
+                        onTogglePortSelection={togglePortSelection}
                       />
                     </CardBody>
                   </Card>
                 )}
               </div>
 
-              <div className="col-span-12 space-y-5 xl:col-span-4">
+              <div className="col-span-12 min-h-0 space-y-5 overflow-y-auto pr-1 xl:col-span-4">
+                {canEdit && selectedBulkPorts.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>
+                        <CardLabel>Bulk edit</CardLabel>
+                        <CardHeading>
+                          {selectedBulkPorts.length} selected ports
+                        </CardHeading>
+                      </CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedPortIds(new Set())}
+                      >
+                        Clear
+                      </Button>
+                    </CardHeader>
+                    <CardBody className="space-y-3">
+                      <BulkField
+                        label="Kind"
+                        checked={bulkPortFields.has("kind")}
+                        onChecked={() => toggleBulkPortField("kind")}
+                      >
+                        <Select
+                          value={bulkPortForm.kind}
+                          onChange={(value) =>
+                            setBulkPortForm((prev) => ({
+                              ...prev,
+                              kind: value as Port["kind"],
+                            }))
+                          }
+                        >
+                          {PORT_KINDS.map((kind) => (
+                            <option key={kind} value={kind}>
+                              {kind}
+                            </option>
+                          ))}
+                        </Select>
+                      </BulkField>
+                      <BulkField
+                        label="Speed"
+                        checked={bulkPortFields.has("speed")}
+                        onChecked={() => toggleBulkPortField("speed")}
+                      >
+                        <Input
+                          value={bulkPortForm.speed}
+                          onChange={(event) =>
+                            setBulkPortForm((prev) => ({
+                              ...prev,
+                              speed: event.target.value,
+                            }))
+                          }
+                          placeholder="1G, 10G, virtio..."
+                        />
+                      </BulkField>
+                      <div className="grid grid-cols-2 gap-3">
+                        <BulkField
+                          label="State"
+                          checked={bulkPortFields.has("linkState")}
+                          onChecked={() => toggleBulkPortField("linkState")}
+                        >
+                          <Select
+                            value={bulkPortForm.linkState}
+                            onChange={(value) =>
+                              setBulkPortForm((prev) => ({
+                                ...prev,
+                                linkState: value as Port["linkState"],
+                              }))
+                            }
+                          >
+                            {LINK_STATES.map((state) => (
+                              <option key={state} value={state}>
+                                {state}
+                              </option>
+                            ))}
+                          </Select>
+                        </BulkField>
+                        <BulkField
+                          label="Mode"
+                          checked={bulkPortFields.has("mode")}
+                          onChecked={() => toggleBulkPortField("mode")}
+                        >
+                          <Select
+                            value={bulkPortForm.mode}
+                            onChange={(value) =>
+                              setBulkPortForm((prev) => ({
+                                ...prev,
+                                mode: value as Port["mode"],
+                              }))
+                            }
+                          >
+                            {PORT_MODES.map((mode) => (
+                              <option key={mode} value={mode}>
+                                {mode}
+                              </option>
+                            ))}
+                          </Select>
+                        </BulkField>
+                      </div>
+                      <BulkField
+                        label={
+                          bulkPortForm.mode === "trunk"
+                            ? "Native VLAN"
+                            : "Access VLAN"
+                        }
+                        checked={bulkPortFields.has("vlanId")}
+                        onChecked={() => toggleBulkPortField("vlanId")}
+                      >
+                        <Select
+                          value={bulkPortForm.vlanId}
+                          onChange={(value) =>
+                            setBulkPortForm((prev) => ({
+                              ...prev,
+                              vlanId: value,
+                            }))
+                          }
+                        >
+                          <option value="">Unassigned</option>
+                          {vlans.map((vlan) => (
+                            <option key={vlan.id} value={vlan.id}>
+                              {vlan.vlanId} - {vlan.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </BulkField>
+                      {bulkError && (
+                        <div className="text-xs text-[var(--color-err)]">
+                          {bulkError}
+                        </div>
+                      )}
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          disabled={bulkSaving || bulkPortFields.size === 0}
+                          onClick={() => void handleBulkPortSave()}
+                        >
+                          <Save className="size-3.5" />
+                          {bulkSaving ? "Saving..." : "Apply to ports"}
+                        </Button>
+                      </div>
+                    </CardBody>
+                  </Card>
+                )}
                 <Card>
                   <CardHeader>
                     <CardTitle>
@@ -1695,6 +2024,28 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
       <span className="rk-field-label">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function BulkField({
+  label,
+  checked,
+  onChecked,
+  children,
+}: {
+  label: string;
+  checked: boolean;
+  onChecked: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 flex items-center gap-2">
+        <input type="checkbox" checked={checked} onChange={() => onChecked()} />
+        <span className="rk-field-label mb-0">{label}</span>
+      </span>
       {children}
     </label>
   );

@@ -61,10 +61,18 @@ const NODE_HEIGHT = 40;
 const ROOM_ZONE_WIDTH = 430;
 const ROOM_NODE_WIDTH = 332;
 const ROOM_ROW_HEIGHT = 54;
+const PYRAMID_ZONE_X = 28;
+const PYRAMID_ZONE_Y = 28;
+const PYRAMID_NODE_WIDTH = 218;
+const PYRAMID_NODE_HEIGHT = 44;
+const PYRAMID_NODE_GAP_X = 34;
+const PYRAMID_LAYER_GAP_Y = 78;
+const PYRAMID_COMPONENT_GAP = 72;
 const GROUP_HEADER_HEIGHT = 48;
 const GROUP_GAP = 14;
 const CABLE_FALLBACK_COLOR = "rgb(151 167 183 / 0.5)";
 const DEFAULT_LAYOUT_OPTIONS: VisualizerLayoutOptions = {
+  topologyLayout: "grouped",
   looseDevicePlacement: "beside-racks",
   includeRoomOnlySections: false,
 };
@@ -138,6 +146,9 @@ export function buildVisualizerModel(
     ...DEFAULT_LAYOUT_OPTIONS,
     ...input.layout,
   };
+  if (layout.topologyLayout === "pyramid") {
+    return buildPyramidVisualizerModel(input, layout);
+  }
   const placeLooseBelow = layout.looseDevicePlacement === "below-racks";
   const racks = [...input.racks].sort((a, b) => a.name.localeCompare(b.name));
   const roomsById = indexById(input.rooms);
@@ -420,6 +431,7 @@ export function buildVisualizerModel(
   const height = Math.max(rackZoneHeight, roomZoneHeight) + ZONE_Y + 12;
 
   return {
+    layoutMode: "grouped",
     width,
     height,
     rackZone: {
@@ -470,6 +482,178 @@ export function buildVisualizerModel(
   };
 }
 
+function buildPyramidVisualizerModel(
+  input: BuildVisualizerInput,
+  layout: VisualizerLayoutOptions,
+): VisualizerModel {
+  const deviceById = indexById(input.devices);
+  const portById = indexById(input.ports);
+  const vlanById = indexById(input.vlans);
+  const virtualSwitchById = indexById(input.virtualSwitches);
+  const racksById = indexById(input.racks);
+  const roomsById = indexById(input.rooms);
+  const portsByDeviceId = groupBy(input.ports, (port) => port.deviceId);
+  for (const devicePorts of Object.values(portsByDeviceId)) {
+    devicePorts.sort(comparePorts);
+  }
+
+  const portLinkByPortId: Record<string, PortLink> = {};
+  for (const link of input.portLinks) {
+    portLinkByPortId[link.fromPortId] = link;
+    portLinkByPortId[link.toPortId] = link;
+  }
+
+  const monitorsByDeviceId = groupBy(
+    input.deviceMonitors.filter(
+      (monitor) => monitor.enabled && monitor.type !== "none",
+    ),
+    (monitor) => monitor.deviceId,
+  );
+  const subnetRanges = input.subnets.map(toSubnetRange).filter(Boolean);
+  const discoveredByDeviceId = new Map<string, DiscoveredDevice>();
+  const discoveredByIp = new Map<string, DiscoveredDevice>();
+  for (const discovered of input.discoveredDevices) {
+    if (discovered.importedDeviceId) {
+      discoveredByDeviceId.set(discovered.importedDeviceId, discovered);
+    }
+    discoveredByIp.set(discovered.ipAddress, discovered);
+  }
+
+  const adjacency = buildDeviceAdjacency(input.devices, input.portLinks, portById);
+  const nodes: VisualizerNode[] = [];
+  let cursorX = PYRAMID_ZONE_X + ZONE_PADDING + 18;
+  const contentY = PYRAMID_ZONE_Y + ZONE_HEADER + 42;
+  let maxBottom = contentY + PYRAMID_NODE_HEIGHT;
+
+  const components = buildPyramidComponents(input.devices, adjacency);
+  for (const component of components) {
+    const layers = buildPyramidLayers(component, adjacency, deviceById);
+    const layerWidths = layers.map((layer) =>
+      layer.length * PYRAMID_NODE_WIDTH +
+      Math.max(0, layer.length - 1) * PYRAMID_NODE_GAP_X,
+    );
+    const componentWidth = Math.max(PYRAMID_NODE_WIDTH, ...layerWidths);
+    const zoneId =
+      component.length === 1 && (adjacency[component[0]]?.size ?? 0) === 0
+        ? "pyramid:unlinked"
+        : `pyramid:${component[0]}`;
+
+    layers.forEach((layer, depth) => {
+      const sortedLayer = [...layer].sort((a, b) =>
+        comparePyramidDevices(deviceById[a], deviceById[b], adjacency),
+      );
+      const layerWidth =
+        sortedLayer.length * PYRAMID_NODE_WIDTH +
+        Math.max(0, sortedLayer.length - 1) * PYRAMID_NODE_GAP_X;
+      const layerX = cursorX + Math.max(0, (componentWidth - layerWidth) / 2);
+      const y =
+        contentY + depth * (PYRAMID_NODE_HEIGHT + PYRAMID_LAYER_GAP_Y);
+      sortedLayer.forEach((deviceId, index) => {
+        const device = deviceById[deviceId];
+        if (!device) return;
+        const room = roomForDevice(device, deviceById, racksById, roomsById);
+        const rack = device.rackId ? racksById[device.rackId] : undefined;
+        nodes.push(
+          createNode({
+            device,
+            x: layerX + index * (PYRAMID_NODE_WIDTH + PYRAMID_NODE_GAP_X),
+            y,
+            width: PYRAMID_NODE_WIDTH,
+            height: PYRAMID_NODE_HEIGHT,
+            zoneId,
+            rackId: rack?.id,
+            rackName: rack?.name,
+            roomId: room?.id ?? null,
+            roomName: room?.name ?? "Unassigned room",
+            ports: portsByDeviceId[device.id] ?? [],
+            portLinkByPortId,
+            virtualSwitchById,
+            discoveredByDeviceId,
+            discoveredByIp,
+            subnetRanges,
+            vlansById: vlanById,
+            health: getDeviceHealth(
+              device,
+              monitorsByDeviceId[device.id] ?? [],
+            ),
+          }),
+        );
+      });
+      maxBottom = Math.max(maxBottom, y + PYRAMID_NODE_HEIGHT);
+    });
+
+    cursorX += componentWidth + PYRAMID_COMPONENT_GAP;
+  }
+
+  const nodesByDeviceId = Object.fromEntries(
+    nodes.map((node) => [node.device.id, node]),
+  );
+  const cables = input.portLinks
+    .map((link, index) =>
+      buildCable({
+        link,
+        index,
+        portById,
+        deviceById,
+        nodesByDeviceId,
+      }),
+    )
+    .filter((entry): entry is VisualizerCable => Boolean(entry));
+  const cableById = Object.fromEntries(
+    cables.map((cable) => [cable.link.id, cable]),
+  );
+  const directNeighborsByDeviceId = buildNeighbors(cables);
+  const width = Math.max(920, cursorX + ZONE_PADDING + 24);
+  const height = Math.max(560, maxBottom + ZONE_PADDING + 20);
+
+  return {
+    layoutMode: layout.topologyLayout,
+    width,
+    height,
+    rackZone: {
+      x: PYRAMID_ZONE_X,
+      y: PYRAMID_ZONE_Y,
+      width: width - PYRAMID_ZONE_X - 32,
+      height,
+      sections: [],
+      racks: [],
+    },
+    roomZone: {
+      id: "room-zone",
+      x: width + ZONE_GAP,
+      y: PYRAMID_ZONE_Y,
+      width: 0,
+      height,
+      groups: [],
+      stats: { total: 0, online: 0, down: 0 },
+    },
+    nodes,
+    nodesByDeviceId,
+    cables,
+    cableById,
+    portsByDeviceId,
+    portById,
+    portLinkByPortId,
+    deviceById,
+    vlanById,
+    directNeighborsByDeviceId,
+    deviceTypes: buildDeviceTypeCounts(input.devices),
+    cableTypes: Array.from(
+      new Set(input.portLinks.map((link) => link.cableType || "Unknown")),
+    ).sort((a, b) => a.localeCompare(b)),
+    counts: {
+      devices: input.devices.length,
+      cables: input.portLinks.length,
+      crossZone: cables.filter((cable) => cable.crossZone).length,
+      patchPanel: cables.filter(
+        (cable) =>
+          cable.fromDevice?.deviceType === "patch_panel" ||
+          cable.toDevice?.deviceType === "patch_panel",
+      ).length,
+    },
+  };
+}
+
 function buildRackPanel(input: {
   rack: Rack;
   room?: Room;
@@ -492,8 +676,38 @@ function buildRackPanel(input: {
     input.devices,
     input.portsByDeviceId,
   );
+  const mountedDevices = input.devices.filter((device) => device.startU != null);
+  const mountedFrontCount = mountedDevices.filter(
+    (device) => (device.face ?? "front") === "front",
+  ).length;
+  const mountedRearCount = mountedDevices.filter(
+    (device) => (device.face ?? "front") === "rear",
+  ).length;
+  const faces = [
+    mountedFrontCount > 0 ? "front" : null,
+    mountedRearCount > 0 ? "rear" : null,
+  ].filter((face): face is "front" | "rear" => Boolean(face));
+  const useDualFaceLayout = mountedRearCount > 0;
+  const nodeAreaX = useDualFaceLayout ? bodyX + 12 : bodyX + 32;
+  const nodeAreaWidth = useDualFaceLayout
+    ? input.rack.totalU <= 12
+      ? bodyWidth - 18
+      : bodyWidth - 24
+    : RACK_NODE_WIDTH;
+  const faceGap = 8;
+  const faceNodeWidth = useDualFaceLayout
+    ? Math.max(98, Math.floor((nodeAreaWidth - faceGap) / 2))
+    : RACK_NODE_WIDTH;
+  const mountedDeviceIds = new Set(mountedDevices.map((device) => device.id));
+  const shelfChildrenByParent = groupBy(
+    input.devices.filter(
+      (device) =>
+        device.parentDeviceId && !mountedDeviceIds.has(device.id),
+    ),
+    (device) => device.parentDeviceId ?? "",
+  );
   const occupiedUnits = new Set<number>();
-  for (const device of input.devices) {
+  for (const device of mountedDevices) {
     const start = device.startU ?? 1;
     const height = device.heightU ?? 1;
     for (let u = start; u < start + height; u += 1) {
@@ -508,7 +722,11 @@ function buildRackPanel(input: {
       yByUnit.set(u, { y: bodyY + band.y, height: band.height });
     }
   }
-  const nodes = input.devices.map((device) => {
+  const rackNodeBounds = new Map<
+    string,
+    { top: number; bottom: number; height: number }
+  >();
+  const nodes = mountedDevices.map((device) => {
     const start = device.startU ?? 1;
     const heightU = device.heightU ?? 1;
     const topU = Math.min(input.rack.totalU, start + heightU - 1);
@@ -518,11 +736,20 @@ function buildRackPanel(input: {
     const bottom = bottomBand
       ? bottomBand.y + bottomBand.height
       : top + NODE_HEIGHT;
+    rackNodeBounds.set(device.id, {
+      top,
+      bottom,
+      height: Math.max(Math.max(24, rackUnitHeight - 4), bottom - top - 4),
+    });
+    const face = device.face ?? "front";
+    const nodeX = useDualFaceLayout
+      ? nodeAreaX + (face === "rear" ? faceNodeWidth + faceGap : 0)
+      : bodyX + 32;
     return createNode({
       device,
-      x: bodyX + 32,
+      x: nodeX,
       y: top + 2,
-      width: RACK_NODE_WIDTH,
+      width: useDualFaceLayout ? faceNodeWidth : RACK_NODE_WIDTH,
       height: Math.max(Math.max(24, rackUnitHeight - 4), bottom - top - 4),
       zoneId: input.room
         ? `room:${input.room.id}:rack:${input.rack.id}`
@@ -544,6 +771,58 @@ function buildRackPanel(input: {
       ),
     });
   });
+  for (const [parentId, children] of Object.entries(shelfChildrenByParent)) {
+    const parentBounds = rackNodeBounds.get(parentId);
+    const parentNode = nodes.find((node) => node.device.id === parentId);
+    if (!parentBounds || !parentNode) continue;
+    const gap = 4;
+    const availableWidth = parentNode.width - 12;
+    const childWidth = Math.max(
+      useDualFaceLayout ? 28 : 34,
+      Math.floor((availableWidth - gap * (children.length - 1)) / children.length),
+    );
+    const childHeight = Math.max(20, Math.min(30, parentBounds.height - 8));
+    const startX =
+      parentNode.x +
+      6 +
+      Math.max(
+        0,
+        (availableWidth -
+          (childWidth * children.length + gap * (children.length - 1))) /
+          2,
+      );
+    children
+      .sort((a, b) => a.hostname.localeCompare(b.hostname))
+      .forEach((device, index) => {
+        nodes.push(
+          createNode({
+            device,
+            x: startX + index * (childWidth + gap),
+            y: parentNode.y + Math.max(4, (parentBounds.height - childHeight) / 2),
+            width: childWidth,
+            height: childHeight,
+            zoneId: input.room
+              ? `room:${input.room.id}:rack:${input.rack.id}`
+              : `rack:${input.rack.id}`,
+            rackId: input.rack.id,
+            rackName: input.rack.name,
+            roomId: input.room?.id ?? null,
+            roomName: input.room?.name ?? "Unassigned room",
+            ports: input.portsByDeviceId[device.id] ?? [],
+            portLinkByPortId: input.portLinkByPortId,
+            virtualSwitchById: input.virtualSwitchById,
+            discoveredByDeviceId: input.discoveredByDeviceId,
+            discoveredByIp: input.discoveredByIp,
+            subnetRanges: input.subnetRanges,
+            vlansById: input.vlansById,
+            health: getDeviceHealth(
+              device,
+              input.monitorsByDeviceId[device.id] ?? [],
+            ),
+          }),
+        );
+      });
+  }
   const panelHeight = bodyY - input.y + bodyHeight + 48;
   return {
     id: input.rack.id,
@@ -562,8 +841,11 @@ function buildRackPanel(input: {
     stats: {
       totalU: input.rack.totalU,
       mounted: input.devices.length,
+      frontMounted: mountedFrontCount,
+      rearMounted: mountedRearCount,
       freeU: Math.max(0, input.rack.totalU - occupiedUnits.size),
     },
+    faces: faces.length > 0 ? faces : ["front"],
   };
 }
 
@@ -1062,6 +1344,174 @@ function buildNeighbors(cables: VisualizerCable[]) {
   return neighbors;
 }
 
+function buildDeviceAdjacency(
+  devices: Device[],
+  links: PortLink[],
+  portById: Record<string, Port>,
+) {
+  const adjacency: Record<string, Set<string>> = {};
+  for (const device of devices) {
+    adjacency[device.id] = new Set();
+  }
+  for (const link of links) {
+    const fromPort = portById[link.fromPortId];
+    const toPort = portById[link.toPortId];
+    if (!fromPort || !toPort || fromPort.deviceId === toPort.deviceId) {
+      continue;
+    }
+    adjacency[fromPort.deviceId]?.add(toPort.deviceId);
+    adjacency[toPort.deviceId]?.add(fromPort.deviceId);
+  }
+  return adjacency;
+}
+
+function buildPyramidComponents(
+  devices: Device[],
+  adjacency: Record<string, Set<string>>,
+) {
+  const visited = new Set<string>();
+  const linkedComponents: string[][] = [];
+  const unlinked: string[] = [];
+  const sortedDeviceIds = [...devices]
+    .sort((a, b) => comparePyramidDevices(a, b, adjacency))
+    .map((device) => device.id);
+
+  for (const deviceId of sortedDeviceIds) {
+    if (visited.has(deviceId)) continue;
+    const queue = [deviceId];
+    const component: string[] = [];
+    visited.add(deviceId);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      component.push(current);
+      for (const neighbor of adjacency[current] ?? []) {
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+    if (component.length === 1 && (adjacency[component[0]]?.size ?? 0) === 0) {
+      unlinked.push(component[0]);
+    } else {
+      linkedComponents.push(component);
+    }
+  }
+
+  linkedComponents.sort((a, b) => {
+    const aScore = maxOf(a, (id) => adjacency[id]?.size ?? 0, 0);
+    const bScore = maxOf(b, (id) => adjacency[id]?.size ?? 0, 0);
+    return b.length - a.length || bScore - aScore || a[0].localeCompare(b[0]);
+  });
+
+  if (unlinked.length > 0) {
+    const groupedUnlinked: string[][] = [];
+    for (let index = 0; index < unlinked.length; index += 8) {
+      groupedUnlinked.push(unlinked.slice(index, index + 8));
+    }
+    return [...linkedComponents, ...groupedUnlinked];
+  }
+
+  return linkedComponents;
+}
+
+function buildPyramidLayers(
+  component: string[],
+  adjacency: Record<string, Set<string>>,
+  deviceById: Record<string, Device>,
+) {
+  if (component.every((deviceId) => (adjacency[deviceId]?.size ?? 0) === 0)) {
+    return [component];
+  }
+
+  const componentSet = new Set(component);
+  const root = pickPyramidRoot(component, adjacency, deviceById);
+  const layers: string[][] = [];
+  const visited = new Set([root]);
+  const queue: Array<{ id: string; depth: number }> = [{ id: root, depth: 0 }];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    (layers[current.depth] ??= []).push(current.id);
+    const neighbors = [...(adjacency[current.id] ?? [])]
+      .filter((neighbor) => componentSet.has(neighbor))
+      .sort((a, b) =>
+        comparePyramidDevices(deviceById[a], deviceById[b], adjacency),
+      );
+    for (const neighbor of neighbors) {
+      if (visited.has(neighbor)) continue;
+      visited.add(neighbor);
+      queue.push({ id: neighbor, depth: current.depth + 1 });
+    }
+  }
+
+  const missed = component.filter((deviceId) => !visited.has(deviceId));
+  if (missed.length > 0) {
+    layers.push(missed);
+  }
+
+  return layers;
+}
+
+function pickPyramidRoot(
+  component: string[],
+  adjacency: Record<string, Set<string>>,
+  deviceById: Record<string, Device>,
+) {
+  return [...component].sort((a, b) =>
+    comparePyramidRootDevices(deviceById[a], deviceById[b], adjacency),
+  )[0];
+}
+
+function comparePyramidRootDevices(
+  a: Device | undefined,
+  b: Device | undefined,
+  adjacency: Record<string, Set<string>>,
+) {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  const priority =
+    pyramidRootPriority(b) - pyramidRootPriority(a) ||
+    (adjacency[b.id]?.size ?? 0) - (adjacency[a.id]?.size ?? 0) ||
+    typeOrder(a.deviceType) - typeOrder(b.deviceType);
+  return priority || a.hostname.localeCompare(b.hostname);
+}
+
+function comparePyramidDevices(
+  a: Device | undefined,
+  b: Device | undefined,
+  adjacency: Record<string, Set<string>>,
+) {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  return (
+    typeOrder(a.deviceType) - typeOrder(b.deviceType) ||
+    (adjacency[b.id]?.size ?? 0) - (adjacency[a.id]?.size ?? 0) ||
+    a.hostname.localeCompare(b.hostname)
+  );
+}
+
+function pyramidRootPriority(device: Device) {
+  switch (device.deviceType) {
+    case "firewall":
+      return 90;
+    case "router":
+      return 80;
+    case "switch":
+      return 70;
+    case "patch_panel":
+      return 60;
+    case "ap":
+      return 50;
+    case "server":
+    case "storage":
+      return 40;
+    default:
+      return 10;
+  }
+}
+
 function countLinksTouchingDevices(
   links: PortLink[],
   portById: Record<string, Port>,
@@ -1083,6 +1533,41 @@ export function tracePorts(
   toPortId: string,
 ): TraceResult | null {
   if (fromPortId === toPortId) return null;
+  return traceToPort(buildTraceAdjacency(model), fromPortId, toPortId);
+}
+
+export function traceFromPort(
+  model: VisualizerModel,
+  fromPortId: string,
+): TraceResult | null {
+  const adjacency = buildTraceAdjacency(model);
+  const queue = [fromPortId];
+  const visited = new Set([fromPortId]);
+  const previous = new Map<string, TraceSegment>();
+  let fallbackPortId: string | null = null;
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current !== fromPortId) fallbackPortId = current;
+    const nextSegments = adjacency[current] ?? [];
+    if (current !== fromPortId && nextSegments.length <= 1) {
+      return buildTraceResult(fromPortId, current, previous);
+    }
+    for (const segment of nextSegments) {
+      const next = segment.toPort.id;
+      if (visited.has(next)) continue;
+      visited.add(next);
+      previous.set(next, segment);
+      queue.push(next);
+    }
+  }
+
+  return fallbackPortId
+    ? buildTraceResult(fromPortId, fallbackPortId, previous)
+    : null;
+}
+
+function buildTraceAdjacency(model: VisualizerModel) {
   const adjacency: Record<string, TraceSegment[]> = {};
 
   function addSegment(segment: TraceSegment) {
@@ -1134,6 +1619,14 @@ export function tracePorts(
     }
   }
 
+  return adjacency;
+}
+
+function traceToPort(
+  adjacency: Record<string, TraceSegment[]>,
+  fromPortId: string,
+  toPortId: string,
+) {
   const queue = [fromPortId];
   const visited = new Set([fromPortId]);
   const previous = new Map<string, TraceSegment>();
@@ -1145,37 +1638,46 @@ export function tracePorts(
       visited.add(next);
       previous.set(next, segment);
       if (next === toPortId) {
-        const segments: TraceSegment[] = [];
-        let cursor = toPortId;
-        while (cursor !== fromPortId) {
-          const step = previous.get(cursor);
-          if (!step) break;
-          segments.unshift(step);
-          cursor = step.fromPort.id;
-        }
-        const cableIds = new Set(
-          segments
-            .map((segment) => segment.link?.id)
-            .filter((id): id is string => Boolean(id)),
-        );
-        const portIds = new Set<string>();
-        for (const segment of segments) {
-          portIds.add(segment.fromPort.id);
-          portIds.add(segment.toPort.id);
-        }
-        return {
-          fromPortId,
-          toPortId,
-          segments,
-          cableIds,
-          portIds,
-          totalCableLengthLabel: summarizeCableLengths(segments),
-        };
+        return buildTraceResult(fromPortId, toPortId, previous);
       }
       queue.push(next);
     }
   }
   return null;
+}
+
+function buildTraceResult(
+  fromPortId: string,
+  toPortId: string,
+  previous: Map<string, TraceSegment>,
+): TraceResult | null {
+  const segments: TraceSegment[] = [];
+  let cursor = toPortId;
+  while (cursor !== fromPortId) {
+    const step = previous.get(cursor);
+    if (!step) break;
+    segments.unshift(step);
+    cursor = step.fromPort.id;
+  }
+  if (segments.length === 0) return null;
+  const cableIds = new Set(
+    segments
+      .map((segment) => segment.link?.id)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const portIds = new Set<string>();
+  for (const segment of segments) {
+    portIds.add(segment.fromPort.id);
+    portIds.add(segment.toPort.id);
+  }
+  return {
+    fromPortId,
+    toPortId,
+    segments,
+    cableIds,
+    portIds,
+    totalCableLengthLabel: summarizeCableLengths(segments),
+  };
 }
 
 export function buildSearchResults(
