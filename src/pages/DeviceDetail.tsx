@@ -22,6 +22,7 @@ import { PortList } from "@/components/ports/PortList";
 import { api } from "@/lib/api";
 import {
   canEditInventory,
+  createIpAssignmentRecord,
   createDeviceImageRecord,
   createDeviceMonitorConfig,
   deleteDevice,
@@ -38,8 +39,10 @@ import type {
   Device,
   DeviceImage,
   DeviceMonitor,
+  IpAssignmentType,
   Port,
   PortLink,
+  Subnet,
   Vlan,
 } from "@/lib/types";
 import {
@@ -82,6 +85,22 @@ const EMPTY_MONITOR_FORM: MonitorForm = {
   intervalMinutes: "5",
 };
 
+type NetworkIpForm = {
+  subnetId: string;
+  ipAddress: string;
+  assignmentType: IpAssignmentType;
+  portId: string;
+  description: string;
+};
+
+const EMPTY_NETWORK_IP_FORM: NetworkIpForm = {
+  subnetId: "",
+  ipAddress: "",
+  assignmentType: "interface",
+  portId: "",
+  description: "",
+};
+
 const NEW_MONITOR_ID = "__new_monitor__";
 
 export default function DeviceDetail() {
@@ -94,6 +113,7 @@ export default function DeviceDetail() {
   const virtualSwitches = useStore((s) => s.virtualSwitches);
   const vlans = useStore((s) => s.vlans);
   const ipAssignments = useStore((s) => s.ipAssignments);
+  const subnets = useStore((s) => s.subnets);
   const auditLog = useStore((s) => s.auditLog);
   const racks = useStore((s) => s.racks);
   const deviceMonitors = useStore((s) => s.deviceMonitors);
@@ -105,6 +125,11 @@ export default function DeviceDetail() {
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [releasingId, setReleasingId] = useState<string | null>(null);
+  const [networkForm, setNetworkForm] = useState<NetworkIpForm>(
+    EMPTY_NETWORK_IP_FORM,
+  );
+  const [networkSaving, setNetworkSaving] = useState(false);
+  const [networkError, setNetworkError] = useState("");
   const [selectedPortId, setSelectedPortId] = useState<string | undefined>();
   const [selectedMonitorId, setSelectedMonitorId] = useState<string | null>(
     null,
@@ -175,6 +200,12 @@ export default function DeviceDetail() {
       return acc;
     }, {});
   }, [vlans]);
+  const subnetById = useMemo(() => {
+    return subnets.reduce<Record<string, Subnet>>((acc, entry) => {
+      acc[entry.id] = entry;
+      return acc;
+    }, {});
+  }, [subnets]);
   const virtualSwitchById = useMemo(() => {
     return virtualSwitches.reduce<
       Record<string, (typeof virtualSwitches)[number]>
@@ -189,7 +220,21 @@ export default function DeviceDetail() {
     setImageLabel("");
     setImageNotes("");
     setImageError("");
-  }, [device?.id]);
+    setNetworkForm({
+      ...EMPTY_NETWORK_IP_FORM,
+      subnetId: subnets[0]?.id ?? "",
+    });
+    setNetworkError("");
+  }, [device?.id, subnets]);
+
+  useEffect(() => {
+    if (!subnets.length) return;
+    setNetworkForm((prev) =>
+      prev.subnetId && subnets.some((entry) => entry.id === prev.subnetId)
+        ? prev
+        : { ...prev, subnetId: subnets[0].id },
+    );
+  }, [subnets]);
 
   useEffect(() => {
     if (!device) return;
@@ -220,12 +265,25 @@ export default function DeviceDetail() {
   }, [device, selectedMonitor, deviceMonitorList.length]);
 
   const devicePorts = device?.id ? (portsByDeviceId[device.id] ?? []) : [];
+  const networkAssignablePorts = devicePorts.filter(
+    (port) => port.kind !== "power",
+  );
   const rack = device?.rackId
     ? racks.find((entry) => entry.id === device.rackId)
     : undefined;
   const deviceIps = device?.id
     ? ipAssignments.filter((assignment) => assignment.deviceId === device.id)
     : [];
+  const hostSharedAssignment =
+    device?.managementIp && device.parentDeviceId
+      ? ipAssignments.find(
+          (assignment) =>
+            assignment.deviceId === device.parentDeviceId &&
+            assignment.ipAddress === device.managementIp,
+        )
+      : undefined;
+  const displayedDeviceIpCount =
+    deviceIps.length + (hostSharedAssignment ? 1 : 0);
   const parentDevice = device?.parentDeviceId
     ? deviceById[device.parentDeviceId]
     : undefined;
@@ -348,6 +406,57 @@ export default function DeviceDetail() {
       await unassignIp(assignmentId);
     } finally {
       setReleasingId(null);
+    }
+  }
+
+  function setNetworkField<K extends keyof NetworkIpForm>(
+    key: K,
+    value: NetworkIpForm[K],
+  ) {
+    setNetworkForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleAssignIp() {
+    if (!device || !canEdit) return;
+    setNetworkError("");
+
+    const ipAddress = networkForm.ipAddress.trim();
+    const subnetId = networkForm.subnetId.trim();
+    if (!subnetId) {
+      setNetworkError("Select the subnet for this address.");
+      return;
+    }
+    if (!ipAddress) {
+      setNetworkError("IP address is required.");
+      return;
+    }
+
+    setNetworkSaving(true);
+    try {
+      await createIpAssignmentRecord({
+        subnetId,
+        ipAddress,
+        assignmentType: networkForm.assignmentType,
+        deviceId: device.id,
+        portId: networkForm.portId || undefined,
+        hostname: device.hostname,
+        description:
+          networkForm.description.trim() ||
+          (networkForm.portId
+            ? `Interface ${portById[networkForm.portId]?.name ?? ""}`.trim()
+            : "Device address"),
+      });
+      setNetworkForm((prev) => ({
+        ...EMPTY_NETWORK_IP_FORM,
+        subnetId: prev.subnetId,
+        assignmentType: prev.assignmentType,
+      }));
+    } catch (err) {
+      setNetworkError(
+        err instanceof Error ? err.message : "Failed to assign IP address.",
+      );
+    } finally {
+      setNetworkSaving(false);
     }
   }
 
@@ -692,7 +801,7 @@ export default function DeviceDetail() {
                 label="Ports"
                 value={`${linkedCount}/${devicePorts.length} linked`}
               />
-              <Stat label="IPs" value={String(deviceIps.length)} />
+              <Stat label="IPs" value={String(displayedDeviceIpCount)} />
               <Stat label="Tags" value={device.tags?.join(", ") ?? "-"} />
             </dl>
           </div>
@@ -705,7 +814,7 @@ export default function DeviceDetail() {
               Ports | {devicePorts.length}
             </TabsTrigger>
             <TabsTrigger value="network">
-              Network | {deviceIps.length}
+              Network | {displayedDeviceIpCount}
             </TabsTrigger>
             <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
             <TabsTrigger value="images">
@@ -969,6 +1078,98 @@ export default function DeviceDetail() {
           </TabsContent>
 
           <TabsContent value="network" className="pt-4">
+            {canEdit && (
+              <Card className="mb-4">
+                <CardHeader>
+                  <CardTitle>
+                    <CardLabel>Assign address</CardLabel>
+                    <CardHeading>Add device or interface IP</CardHeading>
+                  </CardTitle>
+                </CardHeader>
+                <CardBody className="space-y-3">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <Field label="Subnet">
+                      <Select
+                        value={networkForm.subnetId}
+                        onChange={(value) => setNetworkField("subnetId", value)}
+                        disabled={subnets.length === 0}
+                      >
+                        <option value="">Select subnet</option>
+                        {subnets.map((subnet) => (
+                          <option key={subnet.id} value={subnet.id}>
+                            {subnet.cidr} - {subnet.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="IP address">
+                      <Input
+                        value={networkForm.ipAddress}
+                        onChange={(event) =>
+                          setNetworkField("ipAddress", event.target.value)
+                        }
+                        placeholder="192.168.10.1"
+                      />
+                    </Field>
+                    <Field label="Type">
+                      <Select
+                        value={networkForm.assignmentType}
+                        onChange={(value) =>
+                          setNetworkField(
+                            "assignmentType",
+                            value as IpAssignmentType,
+                          )
+                        }
+                      >
+                        <option value="interface">Interface</option>
+                        <option value="device">Device</option>
+                        <option value="infrastructure">Infrastructure</option>
+                        <option value="reserved">Reserved</option>
+                        <option value="vm">VM</option>
+                        <option value="container">Container</option>
+                      </Select>
+                    </Field>
+                    <Field label="Port">
+                      <Select
+                        value={networkForm.portId}
+                        onChange={(value) => setNetworkField("portId", value)}
+                      >
+                        <option value="">Device-level</option>
+                        {networkAssignablePorts.map((port) => (
+                          <option key={port.id} value={port.id}>
+                            {formatPortLabel(port, { includeFace: true })}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                    <Field label="Description">
+                      <Input
+                        value={networkForm.description}
+                        onChange={(event) =>
+                          setNetworkField("description", event.target.value)
+                        }
+                        placeholder="Gateway, docker0, WAN, storage NIC..."
+                      />
+                    </Field>
+                    <Button
+                      size="sm"
+                      onClick={() => void handleAssignIp()}
+                      disabled={networkSaving || subnets.length === 0}
+                    >
+                      <Plus className="size-3.5" />
+                      {networkSaving ? "Assigning..." : "Assign IP"}
+                    </Button>
+                  </div>
+                  {networkError && (
+                    <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-xs text-[var(--color-err)]">
+                      {networkError}
+                    </div>
+                  )}
+                </CardBody>
+              </Card>
+            )}
             <Card>
               <CardHeader>
                 <CardTitle>
@@ -978,12 +1179,38 @@ export default function DeviceDetail() {
               </CardHeader>
               <CardBody className="p-0">
                 <div className="divide-y divide-[var(--color-line)]">
-                  {deviceIps.length === 0 ? (
+                  {displayedDeviceIpCount === 0 ? (
                     <div className="px-4 py-6 text-center text-xs text-[var(--color-fg-subtle)]">
                       No IPs assigned to this device.
                     </div>
                   ) : (
-                    deviceIps.map((ip) => (
+                    <>
+                      {hostSharedAssignment && parentDevice && (
+                        <div className="grid grid-cols-12 items-center gap-3 px-4 py-2">
+                          <Mono className="col-span-3 text-[var(--color-fg)]">
+                            {hostSharedAssignment.ipAddress}
+                          </Mono>
+                          <div className="col-span-3 text-xs">
+                            {parentDevice.hostname}
+                            <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">
+                              shared parent address
+                            </Mono>
+                          </div>
+                          <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">
+                            Host-network child using parent host IP
+                          </div>
+                          <div className="col-span-2 flex items-center justify-end">
+                            <Badge tone="neutral">host network</Badge>
+                          </div>
+                        </div>
+                      )}
+                      {[...deviceIps]
+                        .sort((a, b) =>
+                          a.ipAddress.localeCompare(b.ipAddress, undefined, {
+                            numeric: true,
+                          }),
+                        )
+                        .map((ip) => (
                       <div
                         key={ip.id}
                         className="grid grid-cols-12 items-center gap-3 px-4 py-2"
@@ -991,9 +1218,21 @@ export default function DeviceDetail() {
                         <Mono className="col-span-3 text-[var(--color-fg)]">
                           {ip.ipAddress}
                         </Mono>
-                        <div className="col-span-3 text-xs">{ip.hostname}</div>
+                        <div className="col-span-3 text-xs">
+                          {subnetById[ip.subnetId]?.name ?? ip.hostname ?? "-"}
+                          <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">
+                            {subnetById[ip.subnetId]?.cidr ?? ""}
+                          </Mono>
+                        </div>
                         <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">
-                          {ip.description ?? "-"}
+                          <div>{ip.description ?? "-"}</div>
+                          {ip.portId && portById[ip.portId] && (
+                            <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">
+                              {formatPortLabel(portById[ip.portId], {
+                                includeFace: true,
+                              })}
+                            </Mono>
+                          )}
                         </div>
                         <div className="col-span-2 flex items-center justify-end gap-2">
                           <Badge tone="cyan">{ip.assignmentType}</Badge>
@@ -1009,7 +1248,8 @@ export default function DeviceDetail() {
                           </Button>
                         </div>
                       </div>
-                    ))
+                        ))}
+                    </>
                   )}
                 </div>
               </CardBody>

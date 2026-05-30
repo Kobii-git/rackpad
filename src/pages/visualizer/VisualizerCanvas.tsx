@@ -2,6 +2,7 @@ import {
   type Dispatch,
   type KeyboardEvent,
   type MouseEvent,
+  type PointerEvent,
   type SetStateAction,
   type WheelEvent,
   useEffect,
@@ -64,6 +65,7 @@ import type {
   VisualizerCable,
   VisualizerModel,
   VisualizerNode,
+  VisualizerPoint,
   VisualizerPort,
   VisualizerSelection,
 } from "./types";
@@ -80,6 +82,7 @@ interface VisualizerCanvasProps {
   onDismissNoCableBanner: () => void;
   onToggleRackRun: (key: string) => void;
   onToggleGroup: (key: string) => void;
+  onNodePositionChange?: (deviceId: string, position: VisualizerPoint) => void;
 }
 
 interface TransformState {
@@ -100,6 +103,7 @@ export function VisualizerCanvas({
   onDismissNoCableBanner,
   onToggleRackRun,
   onToggleGroup,
+  onNodePositionChange,
 }: VisualizerCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -120,6 +124,13 @@ export function VisualizerCanvas({
   const [searchIndex, setSearchIndex] = useState(0);
   const [pulsedDeviceId, setPulsedDeviceId] = useState<string | null>(null);
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
+  const [nodeDrag, setNodeDrag] = useState<{
+    deviceId: string;
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startPosition: VisualizerPoint;
+  } | null>(null);
 
   const searchResults = useMemo(
     () => buildSearchResults(model, query),
@@ -290,6 +301,60 @@ export function VisualizerCanvas({
     setDragStart(null);
   }
 
+  function handleNodePointerDown(
+    event: PointerEvent<HTMLDivElement>,
+    node: VisualizerNode,
+  ) {
+    if (
+      model.layoutMode !== "pyramid" ||
+      !onNodePositionChange ||
+      event.button !== 0
+    ) {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (target.closest("button,a,input,textarea,select")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setSelection({ kind: "device", id: node.device.id });
+    setNodeDrag({
+      deviceId: node.device.id,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startPosition: { x: node.x, y: node.y },
+    });
+  }
+
+  function handleNodePointerMove(
+    event: PointerEvent<HTMLDivElement>,
+    node: VisualizerNode,
+  ) {
+    if (!nodeDrag || nodeDrag.deviceId !== node.device.id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const dx = (event.clientX - nodeDrag.startClientX) / transform.scale;
+    const dy = (event.clientY - nodeDrag.startClientY) / transform.scale;
+    onNodePositionChange?.(node.device.id, {
+      x: nodeDrag.startPosition.x + dx,
+      y: nodeDrag.startPosition.y + dy,
+    });
+  }
+
+  function handleNodePointerUp(
+    event: PointerEvent<HTMLDivElement>,
+    node: VisualizerNode,
+  ) {
+    if (!nodeDrag || nodeDrag.deviceId !== node.device.id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture(nodeDrag.pointerId)) {
+      event.currentTarget.releasePointerCapture(nodeDrag.pointerId);
+    }
+    setNodeDrag(null);
+  }
+
   function selectDevice(deviceId: string, focus = false) {
     setSelection({ kind: "device", id: deviceId });
     setHoveredCableId(null);
@@ -452,7 +517,11 @@ export function VisualizerCanvas({
           <Card className="min-h-0 flex flex-1 flex-col">
             <CardHeader>
               <CardTitle>
-                <CardLabel>Grouped zones</CardLabel>
+                <CardLabel>
+                  {model.layoutMode === "pyramid"
+                    ? "Pyramid view"
+                    : "Grouped zones"}
+                </CardLabel>
                 <CardHeading>Physical and logical cable paths</CardHeading>
               </CardTitle>
               <div className="flex items-center gap-2">
@@ -523,7 +592,7 @@ export function VisualizerCanvas({
                 className={`relative h-full overflow-hidden bg-[radial-gradient(circle_at_1px_1px,rgb(255_255_255_/_0.035)_1px,transparent_0)] [background-size:24px_24px] ${
                   traceMode.enabled
                     ? "cursor-crosshair"
-                    : dragStart
+                    : dragStart || nodeDrag
                       ? "cursor-grabbing"
                       : "cursor-grab"
                 }`}
@@ -638,6 +707,18 @@ export function VisualizerCanvas({
                         }
                         onSelect={() => selectDevice(node.device.id)}
                         onPortClick={(port) => handlePortClick(node, port)}
+                        draggable={Boolean(
+                          model.layoutMode === "pyramid" &&
+                            onNodePositionChange,
+                        )}
+                        dragging={nodeDrag?.deviceId === node.device.id}
+                        onPointerDown={(event) =>
+                          handleNodePointerDown(event, node)
+                        }
+                        onPointerMove={(event) =>
+                          handleNodePointerMove(event, node)
+                        }
+                        onPointerUp={(event) => handleNodePointerUp(event, node)}
                       />
                     ))}
                   </div>
@@ -1080,6 +1161,11 @@ function DeviceCard({
   traceFirstPortId,
   onSelect,
   onPortClick,
+  draggable,
+  dragging,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
 }: {
   node: VisualizerNode;
   model: VisualizerModel;
@@ -1091,6 +1177,11 @@ function DeviceCard({
   traceFirstPortId: string | null;
   onSelect: () => void;
   onPortClick: (port: VisualizerPort) => void;
+  draggable: boolean;
+  dragging: boolean;
+  onPointerDown: (event: PointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
+  onPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
 }) {
   const stripe = nodeStripeColor(node, healthOverlay);
   const compactRackNode = Boolean(node.rackId && node.height < 34);
@@ -1103,13 +1194,21 @@ function DeviceCard({
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") onSelect();
       }}
-      className={`absolute z-50 overflow-hidden rounded-[var(--radius-md)] border bg-[var(--surface-2)] text-left shadow-[0_10px_24px_rgb(0_0_0_/_0.18)] transition-[opacity,background-color,border-color,box-shadow,transform] duration-150 ${
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      className={`absolute z-50 overflow-hidden rounded-[var(--radius-md)] border bg-[var(--surface-2)] text-left shadow-[0_10px_24px_rgb(0_0_0_/_0.18)] ${
+        dragging
+          ? "transition-none"
+          : "transition-[opacity,background-color,border-color,box-shadow,transform] duration-150"
+      } ${
         compactRackNode ? "px-2 py-1 pr-10" : "px-2.5 py-2 pr-12"
       } ${
         selected
           ? "border-[var(--accent-primary-border)] shadow-[var(--shadow-selected)]"
           : "border-[var(--border-default)] hover:-translate-y-px hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
-      } ${pulsed ? "visualizer-pulse" : ""}`}
+      } ${draggable ? "cursor-move" : ""} ${dragging ? "z-[65] scale-[1.015] border-[var(--accent-primary-border)] shadow-[var(--shadow-selected)]" : ""} ${pulsed ? "visualizer-pulse" : ""}`}
       style={{
         left: node.x,
         top: node.y,

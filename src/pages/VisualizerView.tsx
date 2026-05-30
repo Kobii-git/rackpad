@@ -8,6 +8,7 @@ import type {
   TraceModeState,
   VisualizerLayoutMode,
   VisualizerLooseDevicePlacement,
+  VisualizerPoint,
   VisualizerRackFaceMode,
 } from "./visualizer/types";
 
@@ -17,6 +18,8 @@ const LOOSE_PLACEMENT_STORAGE_KEY = "rackpad.visualizer.loose-placement";
 const ROOM_ONLY_SECTIONS_STORAGE_KEY = "rackpad.visualizer.room-only-sections";
 const LAYOUT_MODE_STORAGE_KEY = "rackpad.visualizer.layout-mode";
 const RACK_FACE_MODE_STORAGE_KEY = "rackpad.visualizer.rack-face-mode";
+const CUSTOM_NODE_POSITIONS_STORAGE_KEY =
+  "rackpad.visualizer.custom-node-positions";
 
 export default function VisualizerView() {
   const lab = useStore((s) => s.lab);
@@ -48,6 +51,9 @@ export default function VisualizerView() {
   const [rackFaceMode, setRackFaceMode] = useState<VisualizerRackFaceMode>(() =>
     readRackFaceMode(RACK_FACE_MODE_STORAGE_KEY),
   );
+  const [customNodePositions, setCustomNodePositions] = useState<
+    Record<string, VisualizerPoint>
+  >(() => readPointMap(CUSTOM_NODE_POSITIONS_STORAGE_KEY));
   const [looseDevicePlacement, setLooseDevicePlacement] =
     useState<VisualizerLooseDevicePlacement>(() =>
       readLooseDevicePlacement(LOOSE_PLACEMENT_STORAGE_KEY),
@@ -85,6 +91,7 @@ export default function VisualizerView() {
           looseDevicePlacement,
           includeRoomOnlySections,
           rackFaceMode,
+          customNodePositions,
         },
       }),
     [
@@ -102,6 +109,7 @@ export default function VisualizerView() {
       collapsedGroups,
       layoutMode,
       rackFaceMode,
+      customNodePositions,
       looseDevicePlacement,
       includeRoomOnlySections,
     ],
@@ -149,6 +157,25 @@ export default function VisualizerView() {
       writeBoolean(ROOM_ONLY_SECTIONS_STORAGE_KEY, next);
       return next;
     });
+  }
+
+  function updateCustomNodePosition(deviceId: string, position: VisualizerPoint) {
+    setCustomNodePositions((current) => {
+      const next = {
+        ...current,
+        [deviceId]: {
+          x: Math.round(position.x),
+          y: Math.round(position.y),
+        },
+      };
+      writePointMap(CUSTOM_NODE_POSITIONS_STORAGE_KEY, next);
+      return next;
+    });
+  }
+
+  function resetCustomNodePositions() {
+    setCustomNodePositions({});
+    writePointMap(CUSTOM_NODE_POSITIONS_STORAGE_KEY, {});
   }
 
   return (
@@ -206,6 +233,16 @@ export default function VisualizerView() {
                   onChange={toggleRoomOnlySections}
                 />
               </>
+            )}
+            {layoutMode === "pyramid" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetCustomNodePositions}
+                disabled={Object.keys(customNodePositions).length === 0}
+              >
+                Reset nodes
+              </Button>
             )}
             <select
               value={cableType}
@@ -268,6 +305,7 @@ export default function VisualizerView() {
         }}
         onToggleRackRun={toggleRackRun}
         onToggleGroup={toggleGroup}
+        onNodePositionChange={updateCustomNodePosition}
       />
     </>
   );
@@ -346,6 +384,34 @@ function readRackFaceMode(key: string): VisualizerRackFaceMode {
     return value === "rear" || value === "both" ? value : "front";
   } catch {
     return "front";
+  }
+}
+
+function readPointMap(key: string): Record<string, VisualizerPoint> {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+    if (!parsed || typeof parsed !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([, value]) => {
+        if (!value || typeof value !== "object") return false;
+        const point = value as Partial<VisualizerPoint>;
+        return Number.isFinite(point.x) && Number.isFinite(point.y);
+      }),
+    ) as Record<string, VisualizerPoint>;
+  } catch {
+    return {};
+  }
+}
+
+function writePointMap(key: string, value: Record<string, VisualizerPoint>) {
+  try {
+    if (Object.keys(value).length === 0) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage issues in locked-down browsers.
   }
 }
 

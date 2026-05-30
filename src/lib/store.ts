@@ -610,7 +610,10 @@ function findSubnetForIp(ipAddress: string) {
 
 function validateManagementIp(
   managementIp: string | undefined,
-  options: { existingAssignmentId?: string } = {},
+  options: {
+    existingAssignmentId?: string;
+    parentDeviceId?: string | null;
+  } = {},
 ) {
   const ipAddress = managementIp?.trim();
   if (!ipAddress) return null;
@@ -631,11 +634,32 @@ function validateManagementIp(
       assignment.ipAddress === ipAddress &&
       assignment.id !== options.existingAssignmentId,
   );
+  const parentSharesAddress =
+    options.parentDeviceId &&
+    state.devices.some(
+      (device) =>
+        device.id === options.parentDeviceId &&
+        device.managementIp === ipAddress,
+    );
   if (conflict) {
+    if (parentSharesAddress && conflict.deviceId === options.parentDeviceId) {
+      return {
+        ipAddress,
+        subnet,
+        sharedWithDeviceId: options.parentDeviceId,
+      };
+    }
     throw new Error(`IP ${ipAddress} is already assigned.`);
   }
+  if (parentSharesAddress) {
+    return {
+      ipAddress,
+      subnet,
+      sharedWithDeviceId: options.parentDeviceId,
+    };
+  }
 
-  return { ipAddress, subnet };
+  return { ipAddress, subnet, sharedWithDeviceId: undefined };
 }
 
 function findManagementAssignment(
@@ -694,9 +718,16 @@ async function syncDeviceManagementAssignment(
   );
   const validated = validateManagementIp(device.managementIp, {
     existingAssignmentId: existingAssignment?.id,
+    parentDeviceId: device.parentDeviceId,
   });
 
   if (!validated) {
+    if (!existingAssignment) return {};
+    await api.deleteIpAssignment(existingAssignment.id);
+    return { deletedId: existingAssignment.id };
+  }
+
+  if (validated.sharedWithDeviceId) {
     if (!existingAssignment) return {};
     await api.deleteIpAssignment(existingAssignment.id);
     return { deletedId: existingAssignment.id };
@@ -2071,7 +2102,9 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
   const trimmedManagementIp = input.managementIp?.trim() || undefined;
   const trimmedMacAddress = input.macAddress?.trim() || undefined;
 
-  validateManagementIp(trimmedManagementIp);
+  validateManagementIp(trimmedManagementIp, {
+    parentDeviceId: input.parentDeviceId,
+  });
 
   const created = await api.createDevice({
     labId: state.lab.id,
@@ -2148,6 +2181,12 @@ export async function updateDevice(
   )
     ? changes.managementIp?.trim() || undefined
     : existing.managementIp;
+  const nextParentDeviceId = Object.prototype.hasOwnProperty.call(
+    changes,
+    "parentDeviceId",
+  )
+    ? (changes.parentDeviceId ?? null)
+    : (existing.parentDeviceId ?? null);
 
   validateManagementIp(nextManagementIp, {
     existingAssignmentId: findManagementAssignment(
@@ -2155,6 +2194,7 @@ export async function updateDevice(
       existing.managementIp,
       nextManagementIp,
     )?.id,
+    parentDeviceId: nextParentDeviceId,
   });
 
   const updated = await api.updateDevice(id, {

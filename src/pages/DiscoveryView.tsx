@@ -340,12 +340,17 @@ export default function DiscoveryView() {
 
   async function handleLinkExisting(deviceId: string) {
     if (!selected) return;
+    const device = deviceById[deviceId];
     setLinkingId(deviceId);
     setError("");
     try {
       await updateDiscoveredDeviceRecord(selected.id, {
         status: "imported",
         importedDeviceId: deviceId,
+        hostname: device?.hostname ?? selected.hostname ?? null,
+        displayName: device?.displayName ?? selected.displayName ?? null,
+        deviceType: device?.deviceType ?? selected.deviceType ?? "endpoint",
+        placement: device?.placement ?? selected.placement ?? "room",
       });
     } catch (err) {
       setError(

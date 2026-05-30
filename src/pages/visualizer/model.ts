@@ -47,8 +47,8 @@ const ZONE_Y = 28;
 const ZONE_PADDING = 24;
 const ZONE_GAP = 44;
 const ZONE_HEADER = 76;
-const RACK_PANEL_WIDTH = 324;
-const RACK_PANEL_DUAL_FACE_WIDTH = 468;
+const RACK_PANEL_WIDTH = 360;
+const RACK_PANEL_DUAL_FACE_WIDTH = 588;
 const RACK_PANEL_GAP = 22;
 const RACK_LOOSE_GROUP_WIDTH = 360;
 const RACK_SECTION_GAP = 28;
@@ -58,18 +58,18 @@ const RACK_UNIT_BASE_HEIGHT = 28;
 const RACK_UNIT_MEDIUM_HEIGHT = 36;
 const RACK_UNIT_DENSE_HEIGHT = 44;
 const RACK_UNIT_ULTRA_DENSE_HEIGHT = 52;
-const RACK_NODE_WIDTH = 218;
+const RACK_NODE_WIDTH = 252;
 const NODE_HEIGHT = 40;
 const ROOM_ZONE_WIDTH = 430;
-const ROOM_NODE_WIDTH = 332;
+const ROOM_NODE_WIDTH = 360;
 const ROOM_ROW_HEIGHT = 54;
 const PYRAMID_ZONE_X = 28;
 const PYRAMID_ZONE_Y = 28;
-const PYRAMID_NODE_WIDTH = 218;
-const PYRAMID_NODE_HEIGHT = 44;
-const PYRAMID_NODE_GAP_X = 34;
-const PYRAMID_LAYER_GAP_Y = 78;
-const PYRAMID_COMPONENT_GAP = 72;
+const PYRAMID_NODE_WIDTH = 264;
+const PYRAMID_NODE_HEIGHT = 50;
+const PYRAMID_NODE_GAP_X = 72;
+const PYRAMID_LAYER_GAP_Y = 116;
+const PYRAMID_COMPONENT_GAP = 120;
 const GROUP_HEADER_HEIGHT = 48;
 const GROUP_GAP = 14;
 const CABLE_FALLBACK_COLOR = "rgb(151 167 183 / 0.5)";
@@ -78,6 +78,7 @@ const DEFAULT_LAYOUT_OPTIONS: VisualizerLayoutOptions = {
   looseDevicePlacement: "beside-racks",
   includeRoomOnlySections: false,
   rackFaceMode: "front",
+  customNodePositions: {},
 };
 
 const NATURAL_COLLATOR = new Intl.Collator(undefined, {
@@ -599,6 +600,8 @@ function buildPyramidVisualizerModel(
     cursorX += componentWidth + PYRAMID_COMPONENT_GAP;
   }
 
+  applyCustomNodePositions(nodes, layout.customNodePositions);
+
   const nodesByDeviceId = Object.fromEntries(
     nodes.map((node) => [node.device.id, node]),
   );
@@ -617,8 +620,10 @@ function buildPyramidVisualizerModel(
     cables.map((cable) => [cable.link.id, cable]),
   );
   const directNeighborsByDeviceId = buildNeighbors(cables);
-  const width = Math.max(920, cursorX + ZONE_PADDING + 24);
-  const height = Math.max(560, maxBottom + ZONE_PADDING + 20);
+  const nodeRight = maxOf(nodes, (node) => node.x + node.width, 0);
+  const nodeBottom = maxOf(nodes, (node) => node.y + node.height, 0);
+  const width = Math.max(920, cursorX + ZONE_PADDING + 24, nodeRight + 80);
+  const height = Math.max(560, maxBottom + ZONE_PADDING + 20, nodeBottom + 80);
 
   return {
     layoutMode: layout.topologyLayout,
@@ -802,28 +807,34 @@ function buildRackPanel(input: {
     if (!parentBounds || !parentNode) continue;
     const gap = 4;
     const availableWidth = parentNode.width - 12;
+    const columns = children.length > 3 ? 2 : Math.max(1, children.length);
+    const rows = Math.ceil(children.length / columns);
     const childWidth = Math.max(
-      useDualFaceLayout ? 28 : 34,
-      Math.floor((availableWidth - gap * (children.length - 1)) / children.length),
+      useDualFaceLayout ? 78 : 88,
+      Math.floor((availableWidth - gap * (columns - 1)) / columns),
     );
-    const childHeight = Math.max(20, Math.min(30, parentBounds.height - 8));
+    const childHeight = Math.max(
+      22,
+      Math.min(30, (parentBounds.height - 8 - gap * (rows - 1)) / rows),
+    );
     const startX =
       parentNode.x +
       6 +
       Math.max(
         0,
         (availableWidth -
-          (childWidth * children.length + gap * (children.length - 1))) /
-          2,
+          (childWidth * columns + gap * (columns - 1))) / 2,
       );
     children
       .sort(compareDeviceName)
       .forEach((device, index) => {
+        const col = index % columns;
+        const row = Math.floor(index / columns);
         nodes.push(
           createNode({
             device,
-            x: startX + index * (childWidth + gap),
-            y: parentNode.y + Math.max(4, (parentBounds.height - childHeight) / 2),
+            x: startX + col * (childWidth + gap),
+            y: parentNode.y + 4 + row * (childHeight + gap),
             width: childWidth,
             height: childHeight,
             zoneId: input.room
@@ -904,6 +915,23 @@ function rackUnitHeightForDevices(
   devices: Device[],
   portsByDeviceId: Record<string, Port[]>,
 ) {
+  const childCountByParent = devices.reduce<Record<string, number>>(
+    (acc, device) => {
+      if (device.parentDeviceId) {
+        acc[device.parentDeviceId] = (acc[device.parentDeviceId] ?? 0) + 1;
+      }
+      return acc;
+    },
+    {},
+  );
+  const maxShelfChildren = devices.reduce((max, device) => {
+    if ((device.heightU ?? 1) > 1) return max;
+    return Math.max(max, childCountByParent[device.id] ?? 0);
+  }, 0);
+  if (maxShelfChildren >= 5) return 92;
+  if (maxShelfChildren >= 3) return 74;
+  if (maxShelfChildren >= 2) return 58;
+
   const maxOneUPorts = devices.reduce((max, device) => {
     const heightU = device.heightU ?? 1;
     if (heightU > 1) return max;
@@ -1242,6 +1270,33 @@ function createNode(input: {
     vlansById: input.vlansById,
   });
   return baseNode;
+}
+
+function applyCustomNodePositions(
+  nodes: VisualizerNode[],
+  positions: VisualizerLayoutOptions["customNodePositions"],
+) {
+  for (const node of nodes) {
+    const position = positions[node.device.id];
+    if (!position) continue;
+    const nextX = Math.max(
+      PYRAMID_ZONE_X + ZONE_PADDING,
+      Math.round(position.x),
+    );
+    const nextY = Math.max(
+      PYRAMID_ZONE_Y + ZONE_HEADER,
+      Math.round(position.y),
+    );
+    const deltaX = nextX - node.x;
+    const deltaY = nextY - node.y;
+    node.x = nextX;
+    node.y = nextY;
+    node.ports = node.ports.map((visualPort) => ({
+      ...visualPort,
+      x: visualPort.x + deltaX,
+      y: visualPort.y + deltaY,
+    }));
+  }
 }
 
 function layoutPortStrip(input: {
@@ -1780,18 +1835,32 @@ function cablePath(
   index: number,
 ) {
   const dx = Math.abs(to.x - from.x);
-  const laneOffset = ((index % 9) - 4) * 5;
+  const dy = Math.abs(to.y - from.y);
+  const laneOffset = ((index % 17) - 8) * 7;
   if (dx < 72) {
-    const busX = Math.max(from.x, to.x) + 54 + Math.abs(laneOffset);
+    const busX = Math.max(from.x, to.x) + 72 + Math.abs(laneOffset) * 0.8;
     return `M ${from.x} ${from.y} L ${busX} ${from.y} C ${busX + laneOffset} ${from.y}, ${
       busX + laneOffset
     } ${to.y}, ${busX} ${to.y} L ${to.x} ${to.y}`;
   }
-  const curve = Math.max(64, dx * 0.36);
-  const offset = laneOffset;
-  return `M ${from.x} ${from.y + offset} C ${from.x + curve} ${from.y + offset}, ${
-    to.x - curve
-  } ${to.y - offset}, ${to.x} ${to.y - offset}`;
+  if (dy < 86) {
+    const laneY =
+      Math.min(from.y, to.y) - 38 - Math.abs(laneOffset) * 0.75;
+    const corner = Math.min(44, dx * 0.25);
+    return `M ${from.x} ${from.y} C ${from.x + corner} ${from.y}, ${
+      from.x + corner
+    } ${laneY}, ${from.x + corner * 2} ${laneY} L ${
+      to.x - corner * 2
+    } ${laneY} C ${to.x - corner} ${laneY}, ${to.x - corner} ${to.y}, ${
+      to.x
+    } ${to.y}`;
+  }
+  const curve = Math.max(86, dx * 0.34);
+  return `M ${from.x} ${from.y + laneOffset} C ${
+    from.x + curve
+  } ${from.y + laneOffset}, ${to.x - curve} ${to.y - laneOffset}, ${
+    to.x
+  } ${to.y - laneOffset}`;
 }
 
 function portPoint(node: VisualizerNode, portId: string, peer: VisualizerNode) {
