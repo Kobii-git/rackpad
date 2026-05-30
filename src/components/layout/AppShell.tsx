@@ -49,7 +49,7 @@ export function AppShell() {
       <div className="rk-page-ambient flex h-screen overflow-hidden bg-[var(--bg-page)]">
         {shellReady && <Sidebar onOpenSearch={() => setPaletteOpen(true)} />}
         <main className="relative flex flex-1 flex-col overflow-hidden">
-          <div className="pointer-events-none absolute inset-0 bg-grid opacity-45" />
+          <div className="pointer-events-none absolute inset-0 bg-grid opacity-30" />
           <div className="relative flex flex-1 flex-col overflow-hidden">
             {!authReady || !currentUser ? (
               showLoadingCard ? (
@@ -118,7 +118,7 @@ function CenteredStatus({
     <div className="flex flex-1 items-center justify-center px-6">
       <div className="rk-panel w-full max-w-md rounded-[var(--radius-lg)] p-6 text-center shadow-[var(--shadow-elev)]">
         <div className="rk-kicker">{eyebrow}</div>
-        <h2 className="mt-2 text-lg font-semibold tracking-[-0.03em] text-[var(--text-primary)]">
+        <h2 className="mt-2 text-lg font-semibold tracking-normal text-[var(--text-primary)]">
           {title}
         </h2>
         <p className="mt-2 text-sm text-[var(--text-tertiary)]">{body}</p>

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import type { CSSProperties } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -68,7 +69,9 @@ export default function Dashboard() {
     ["offline", "unknown"].includes(monitor.lastResult ?? "unknown"),
   );
   const attentionDevices = devices
-    .filter((device) => ["offline", "warning", "unknown"].includes(device.status))
+    .filter((device) =>
+      ["offline", "warning", "unknown"].includes(device.status),
+    )
     .sort((a, b) => statusPriority(a.status) - statusPriority(b.status));
   const newDiscoveries = discoveredDevices.filter(
     (device) => device.status === "new",
@@ -118,14 +121,15 @@ export default function Dashboard() {
               {lab.name}
             </span>
             <span className="font-mono text-[10px] text-[var(--text-muted)]">
-              {rooms.length} rooms | {racks.length} racks | {devices.length} devices
+              {rooms.length} rooms | {racks.length} racks | {devices.length}{" "}
+              devices
             </span>
           </>
         }
         actions={canEdit ? <AllocatePanel /> : undefined}
       />
 
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div className="flex-1 overflow-y-auto rk-page-pad">
         <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
           <DashboardMetric
             to="/monitoring"
@@ -133,7 +137,9 @@ export default function Dashboard() {
             label="Needs attention"
             value={attentionDevices.length + monitorIssues.length}
             hint={`${attentionDevices.length} devices, ${monitorIssues.length} monitors`}
-            tone={attentionDevices.length + monitorIssues.length > 0 ? "warn" : "ok"}
+            tone={
+              attentionDevices.length + monitorIssues.length > 0 ? "warn" : "ok"
+            }
           />
           <DashboardMetric
             to="/ipam"
@@ -180,7 +186,7 @@ export default function Dashboard() {
                   <Link
                     key={device.id}
                     to={`/devices/${device.id}`}
-                    className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                    className="rk-list-row flex items-center gap-3 px-3 py-2"
                   >
                     <StatusDot status={device.status} />
                     <DeviceTypeIcon
@@ -226,13 +232,17 @@ export default function Dashboard() {
                     <Link
                       key={monitor.id}
                       to={device ? `/devices/${device.id}` : "/monitoring"}
-                      className="block rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                      className="rk-list-row block px-3 py-2"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <span className="truncate text-sm text-[var(--text-primary)]">
                           {device?.hostname ?? monitor.name}
                         </span>
-                        <Badge tone={monitor.lastResult === "offline" ? "err" : "neutral"}>
+                        <Badge
+                          tone={
+                            monitor.lastResult === "offline" ? "err" : "neutral"
+                          }
+                        >
                           {monitor.lastResult ?? "unknown"}
                         </Badge>
                       </div>
@@ -267,7 +277,7 @@ export default function Dashboard() {
                   <Link
                     key={entry.id}
                     to="/audit-log"
-                    className="block rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                    className="rk-list-row block px-3 py-2"
                   >
                     <div className="line-clamp-2 text-xs text-[var(--text-primary)]">
                       {entry.summary}
@@ -302,7 +312,9 @@ export default function Dashboard() {
               <CoverageRow
                 label="Cabled ports"
                 value={`${cabledPortIds.size}/${ports.length}`}
-                pct={Math.round((cabledPortIds.size / Math.max(1, ports.length)) * 100)}
+                pct={Math.round(
+                  (cabledPortIds.size / Math.max(1, ports.length)) * 100,
+                )}
               />
               <CoverageRow
                 label="IPAM usage"
@@ -335,7 +347,7 @@ export default function Dashboard() {
                   <Link
                     key={type}
                     to={`/devices?type=${encodeURIComponent(type)}`}
-                    className="rk-panel-inset flex items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2.5"
+                    className="rk-list-row flex items-center gap-2.5 px-3 py-2.5"
                   >
                     <DeviceTypeIcon
                       type={type}
@@ -369,7 +381,11 @@ export default function Dashboard() {
                 label="Ports without speed"
                 value={portsWithoutSpeed}
               />
-              <GapRow to="/ports" label="Ports without cable" value={uncabledPorts} />
+              <GapRow
+                to="/ports"
+                label="Ports without cable"
+                value={uncabledPorts}
+              />
               <GapRow to="/ipam" label="Subnets" value={subnets.length} />
               <GapRow to="/vlans" label="VLANs" value={vlans.length} />
             </CardBody>
@@ -397,26 +413,39 @@ function DashboardMetric({
 }) {
   const toneClass =
     tone === "ok"
-      ? "border-[var(--success)]/35 bg-[var(--success)]/8 text-[var(--success)]"
+      ? "border-[var(--success-border)] bg-[var(--success-soft)] text-[var(--success)]"
       : tone === "warn"
-        ? "border-[var(--warning)]/35 bg-[var(--warning)]/10 text-[var(--warning)]"
+        ? "border-[var(--warning-border)] bg-[var(--warning-soft)] text-[var(--warning)]"
         : tone === "info"
-          ? "border-[var(--info)]/35 bg-[var(--info)]/10 text-[var(--info)]"
+          ? "border-[var(--info-border)] bg-[var(--info-soft)] text-[var(--info)]"
           : "border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.025)] text-[var(--text-secondary)]";
+  const metricAccent =
+    tone === "ok"
+      ? "var(--success)"
+      : tone === "warn"
+        ? "var(--warning)"
+        : tone === "info"
+          ? "var(--info)"
+          : "var(--neutral)";
   return (
     <Link
       to={to}
-      className="rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-1)] p-4 shadow-[var(--shadow-card)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+      className="rk-metric-card"
+      style={{ "--metric-accent": metricAccent } as CSSProperties}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex items-start justify-between gap-3 pl-2">
+        <div className="min-w-0">
           <div className="rk-kicker">{label}</div>
-          <div className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">
+          <div className="mt-2 text-[1.65rem] font-semibold leading-none tracking-normal text-[var(--text-primary)]">
             {value}
           </div>
-          <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">{hint}</div>
+          <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+            {hint}
+          </div>
         </div>
-        <div className={`grid size-10 place-items-center rounded-[var(--radius-md)] border ${toneClass}`}>
+        <div
+          className={`grid size-9 place-items-center rounded-[var(--radius-sm)] border ${toneClass}`}
+        >
           <Icon className="size-4" />
         </div>
       </div>
@@ -448,7 +477,10 @@ function CoverageRow({
         <Mono className="text-[10px] text-[var(--text-tertiary)]">{value}</Mono>
       </div>
       <div className="rk-progress-track h-2">
-        <div className="rk-progress-fill" style={{ width: `${Math.min(100, pct)}%` }} />
+        <div
+          className="rk-progress-fill"
+          style={{ width: `${Math.min(100, pct)}%` }}
+        />
       </div>
     </div>
   );
@@ -468,25 +500,20 @@ function MiniStat({
   const content = (
     <>
       <Icon className="mb-2 size-3.5 text-[var(--accent-primary)]" />
-      <div className="font-mono text-sm text-[var(--text-primary)]">{value}</div>
+      <div className="font-mono text-sm text-[var(--text-primary)]">
+        {value}
+      </div>
       <div className="text-[10px] text-[var(--text-tertiary)]">{label}</div>
     </>
   );
   if (to) {
     return (
-      <Link
-        to={to}
-        className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] p-2 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
-      >
+      <Link to={to} className="rk-list-row block p-2">
         {content}
       </Link>
     );
   }
-  return (
-    <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] p-2">
-      {content}
-    </div>
-  );
+  return <div className="rk-list-row p-2">{content}</div>;
 }
 
 function GapRow({
@@ -501,7 +528,7 @@ function GapRow({
   return (
     <Link
       to={to}
-      className="flex items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2 text-sm transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+      className="rk-list-row flex items-center justify-between gap-3 px-3 py-2 text-sm"
     >
       <span className="text-[var(--text-secondary)]">{label}</span>
       <Mono className="text-[var(--text-primary)]">{value}</Mono>

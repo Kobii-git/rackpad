@@ -8,51 +8,51 @@
     ui-monospace, "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono",
     Menlo, monospace;
 
-  --radius-xs: 5px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
 
-  --u-height: 30px;
+  --u-height: 28px;
 }
 
 @layer base {
   :root {
     color-scheme: dark;
 
-    --bg-page: #080d13;
-    --bg-shell: #0d131b;
-    --bg-grid: rgb(148 163 184 / 0.04);
+    --bg-page: #070a0f;
+    --bg-shell: #0b1017;
+    --bg-grid: rgb(148 163 184 / 0.026);
 
-    --surface-1: #111826;
-    --surface-2: #161f2c;
-    --surface-3: #1c2635;
-    --surface-4: #232f43;
-    --surface-input: #172130;
-    --surface-hover: #1c2939;
-    --surface-selected: #1c2736;
-    --surface-disabled: #111720;
+    --surface-1: #0f1621;
+    --surface-2: #121a26;
+    --surface-3: #172230;
+    --surface-4: #1c2938;
+    --surface-input: #101823;
+    --surface-hover: #172233;
+    --surface-selected: #171f2b;
+    --surface-disabled: #10151d;
 
-    --border-subtle: rgb(163 184 208 / 0.08);
-    --border-default: rgb(163 184 208 / 0.14);
-    --border-strong: rgb(163 184 208 / 0.2);
-    --border-focus: rgb(249 171 55 / 0.55);
-    --border-selected: rgb(249 171 55 / 0.42);
-    --edge-highlight: rgb(255 255 255 / 0.06);
+    --border-subtle: rgb(167 183 205 / 0.07);
+    --border-default: rgb(167 183 205 / 0.12);
+    --border-strong: rgb(167 183 205 / 0.19);
+    --border-focus: rgb(233 161 63 / 0.5);
+    --border-selected: rgb(233 161 63 / 0.36);
+    --edge-highlight: rgb(255 255 255 / 0.055);
 
-    --text-primary: #e6edf5;
-    --text-secondary: #b7c2cf;
-    --text-tertiary: #8e9aa8;
-    --text-muted: #687483;
+    --text-primary: #edf2f7;
+    --text-secondary: #bdc7d2;
+    --text-tertiary: #8d9aaa;
+    --text-muted: #637082;
     --text-disabled: #4b5563;
     --text-inverse: #09111a;
 
-    --accent-primary: #f29d38;
-    --accent-primary-hover: #f6ad54;
-    --accent-primary-active: #d88620;
-    --accent-primary-soft: rgb(242 157 56 / 0.16);
-    --accent-primary-border: rgb(242 157 56 / 0.34);
-    --accent-primary-glow: rgb(242 157 56 / 0.18);
+    --accent-primary: #e69a3b;
+    --accent-primary-hover: #f0aa50;
+    --accent-primary-active: #c97920;
+    --accent-primary-soft: rgb(230 154 59 / 0.12);
+    --accent-primary-border: rgb(230 154 59 / 0.28);
+    --accent-primary-glow: rgb(230 154 59 / 0.1);
 
     --accent-secondary: #4dc8d7;
     --accent-secondary-hover: #6fd6e3;
@@ -82,11 +82,11 @@
     --neutral-border: rgb(151 167 183 / 0.24);
 
     --shadow-card:
-      0 1px 0 0 var(--edge-highlight) inset, 0 18px 34px rgb(0 0 0 / 0.24);
+      0 1px 0 0 var(--edge-highlight) inset, 0 12px 28px rgb(0 0 0 / 0.2);
     --shadow-elev:
-      0 1px 0 0 rgb(255 255 255 / 0.08) inset, 0 26px 56px rgb(0 0 0 / 0.36);
+      0 1px 0 0 rgb(255 255 255 / 0.07) inset, 0 24px 60px rgb(0 0 0 / 0.34);
     --shadow-selected:
-      0 1px 0 0 rgb(255 255 255 / 0.08) inset, 0 22px 44px rgb(0 0 0 / 0.32),
+      0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 16px 36px rgb(0 0 0 / 0.24),
       0 0 0 1px var(--border-selected);
 
     --ring-focus:
@@ -153,11 +153,11 @@
   html.light {
     color-scheme: light;
 
-    --bg-page: #eff3f8;
-    --bg-shell: #e6ebf2;
-    --bg-grid: rgb(15 23 42 / 0.05);
+    --bg-page: #f2f5f9;
+    --bg-shell: #e9eef5;
+    --bg-grid: rgb(15 23 42 / 0.035);
 
-    --surface-1: #f8fafc;
+    --surface-1: #f9fbfd;
     --surface-2: #ffffff;
     --surface-3: #f0f4f8;
     --surface-4: #e5ebf3;
@@ -215,9 +215,9 @@
     --neutral-border: rgb(100 116 139 / 0.2);
 
     --shadow-card:
-      0 1px 0 0 var(--edge-highlight) inset, 0 18px 34px rgb(15 23 42 / 0.08);
+      0 1px 0 0 var(--edge-highlight) inset, 0 12px 28px rgb(15 23 42 / 0.07);
     --shadow-elev:
-      0 1px 0 0 rgb(255 255 255 / 0.95) inset, 0 28px 56px rgb(15 23 42 / 0.12);
+      0 1px 0 0 rgb(255 255 255 / 0.95) inset, 0 24px 52px rgb(15 23 42 / 0.11);
     --shadow-selected:
       0 1px 0 0 rgb(255 255 255 / 0.95) inset, 0 22px 42px rgb(15 23 42 / 0.1),
       0 0 0 1px var(--border-selected);
@@ -257,17 +257,7 @@
 
   body {
     background:
-      radial-gradient(
-        circle at top left,
-        rgb(77 200 215 / 0.08),
-        transparent 24%
-      ),
-      radial-gradient(
-        circle at top right,
-        rgb(242 157 56 / 0.08),
-        transparent 20%
-      ),
-      linear-gradient(180deg, rgb(255 255 255 / 0.015), transparent 18%),
+      linear-gradient(180deg, rgb(255 255 255 / 0.018), transparent 260px),
       var(--bg-page);
     color: var(--text-primary);
     font-family: var(--font-sans);
@@ -381,17 +371,19 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background:
-      radial-gradient(circle at top, rgb(255 255 255 / 0.022), transparent 32%),
-      linear-gradient(180deg, rgb(255 255 255 / 0.018), transparent 22%);
-    opacity: 0.8;
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.014),
+      transparent 18rem
+    );
+    opacity: 0.7;
   }
 
   .rk-kicker {
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     font-size: 10px;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
   }
 
@@ -402,9 +394,9 @@
 
   .rk-metric-value {
     color: var(--text-primary);
-    font-size: clamp(1.25rem, 1vw + 1rem, 2rem);
+    font-size: 1.75rem;
     font-weight: 700;
-    letter-spacing: -0.04em;
+    letter-spacing: 0;
     line-height: 1;
     font-variant-numeric: tabular-nums;
   }
@@ -412,9 +404,7 @@
   .rk-panel {
     position: relative;
     border: 1px solid var(--border-default);
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 22%),
-      var(--surface-2);
+    background: var(--surface-2);
     box-shadow: var(--shadow-card);
   }
 
@@ -423,31 +413,22 @@
     position: absolute;
     inset: 0 0 auto 0;
     height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      var(--edge-highlight),
-      transparent
-    );
-    opacity: 0.85;
+    background: var(--edge-highlight);
+    opacity: 0.75;
     pointer-events: none;
   }
 
   .rk-panel-inset {
     position: relative;
     border: 1px solid var(--border-subtle);
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.02), transparent 24%),
-      var(--surface-1);
+    background: var(--surface-1);
     box-shadow:
       0 1px 0 0 rgb(255 255 255 / 0.04) inset,
       0 10px 24px rgb(0 0 0 / 0.18);
   }
 
   .rk-panel-selected {
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 24%),
-      var(--surface-selected);
+    background: var(--surface-selected);
     border-color: var(--border-selected);
     box-shadow: var(--shadow-selected);
   }
@@ -458,7 +439,7 @@
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     font-size: 10px;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.13em;
     text-transform: uppercase;
   }
 
@@ -474,9 +455,7 @@
     width: 100%;
     border: 1px solid var(--border-default);
     border-radius: var(--radius-sm);
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 28%),
-      var(--surface-input);
+    background: var(--surface-input);
     color: var(--text-primary);
     box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.04);
   }
@@ -487,9 +466,7 @@
 
   .rk-control:hover:not(:disabled) {
     border-color: var(--border-strong);
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 28%),
-      var(--surface-hover);
+    background: var(--surface-hover);
   }
 
   .rk-control:disabled {
@@ -508,9 +485,7 @@
   .rk-empty {
     border: 1px dashed var(--border-default);
     border-radius: var(--radius-md);
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 24%),
-      color-mix(in srgb, var(--surface-1) 88%, transparent);
+    background: color-mix(in srgb, var(--surface-1) 90%, transparent);
     padding: 1rem;
     color: var(--text-secondary);
   }
@@ -533,9 +508,7 @@
     overflow: hidden;
     border: 1px solid var(--border-subtle);
     border-radius: 999px;
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.02), transparent 30%),
-      color-mix(in srgb, var(--surface-1) 90%, transparent);
+    background: color-mix(in srgb, var(--surface-1) 90%, transparent);
   }
 
   .rk-progress-fill {
@@ -553,9 +526,7 @@
     overflow: hidden;
     border: 1px solid var(--border-default);
     border-radius: var(--radius-md);
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.02), transparent 18%),
-      var(--surface-1);
+    background: var(--surface-1);
   }
 
   .rk-table {
@@ -565,13 +536,11 @@
 
   .rk-table thead tr {
     border-bottom: 1px solid var(--border-strong);
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 100%),
-      color-mix(in srgb, var(--surface-2) 92%, black 8%);
+    background: color-mix(in srgb, var(--surface-2) 94%, black 6%);
   }
 
   .rk-table th {
-    padding: 0.55rem 0.75rem;
+    padding: 0.5rem 0.75rem;
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     font-size: 10px;
@@ -597,7 +566,8 @@
 
   .rk-sort-button:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 34%, transparent);
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--accent-primary) 34%, transparent);
     border-radius: var(--radius-xs);
   }
 
@@ -608,7 +578,7 @@
   }
 
   .rk-table td {
-    padding: 0.7rem 0.75rem;
+    padding: 0.62rem 0.75rem;
     vertical-align: middle;
     border-bottom: 1px solid var(--border-subtle);
   }
@@ -621,21 +591,101 @@
   }
 
   .rk-table tbody tr:nth-child(even) {
-    background: rgb(255 255 255 / 0.016);
+    background: rgb(255 255 255 / 0.012);
   }
 
   .rk-table tbody tr:hover {
-    background: rgb(255 255 255 / 0.042);
+    background: rgb(255 255 255 / 0.035);
   }
 
   .rk-table tbody tr[data-selected="true"] {
     background:
-      linear-gradient(90deg, var(--accent-primary-soft), transparent 72%),
-      rgb(255 255 255 / 0.03);
+      linear-gradient(90deg, var(--accent-primary-soft), transparent 62%),
+      rgb(255 255 255 / 0.02);
   }
 
   .rk-section-divider {
     border-color: var(--border-subtle);
+  }
+
+  .rk-workspace {
+    flex: 1 1 0%;
+    overflow: hidden;
+  }
+
+  .rk-page-pad {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .rk-list-row {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: rgb(255 255 255 / 0.014);
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease;
+  }
+
+  .rk-list-row:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-hover);
+  }
+
+  .rk-filter-pill {
+    display: inline-flex;
+    min-height: 2rem;
+    align-items: center;
+    gap: 0.375rem;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: rgb(255 255 255 / 0.012);
+    padding: 0.35rem 0.625rem;
+    color: var(--text-secondary);
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease;
+  }
+
+  .rk-filter-pill:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .rk-filter-pill[data-active="true"] {
+    border-color: var(--accent-primary-border);
+    background: var(--accent-primary-soft);
+    color: var(--accent-primary-hover);
+  }
+
+  .rk-metric-card {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
+    padding: 0.875rem;
+    box-shadow: var(--shadow-card);
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      transform 150ms ease;
+  }
+
+  .rk-metric-card:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-hover);
+  }
+
+  .rk-metric-card::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--metric-accent, var(--accent-primary));
+    opacity: 0.8;
   }
 }
 

@@ -8,7 +8,7 @@ export function Mono({
   return (
     <span
       className={cn(
-        "font-mono text-[12px] tracking-tight text-[var(--color-fg)]",
+        "font-mono text-[12px] tracking-normal text-[var(--color-fg)]",
         className,
       )}
       {...props}

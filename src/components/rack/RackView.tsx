@@ -126,8 +126,8 @@ function RackFaceView({
 
   return (
     <div className="flex gap-4">
-      <div className="flex flex-col items-stretch overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-strong)] bg-[var(--surface-2)] shadow-[var(--shadow-elev)]">
-        <div className="flex items-center justify-between border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_42%,transparent)] px-3 py-2">
+      <div className="flex flex-col items-stretch overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-strong)] bg-[var(--surface-2)] shadow-[var(--shadow-card)]">
+        <div className="flex items-center justify-between border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_46%,transparent)] px-3 py-2">
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
             {rack.name} | {face}
           </span>
@@ -136,11 +136,11 @@ function RackFaceView({
           </span>
         </div>
 
-        <div className="flex bg-[linear-gradient(180deg,rgb(255_255_255_/_0.02),transparent_14%),var(--surface-1)]">
+        <div className="flex bg-[var(--surface-1)]">
           <RackRail slots={slots} side="left" />
 
           <div className="relative flex-1" style={{ width: 360 }}>
-            <div className="flex flex-col bg-[linear-gradient(90deg,rgb(255_255_255_/_0.01),transparent_24%,rgb(255_255_255_/_0.01))]">
+            <div className="flex flex-col bg-[var(--surface-1)]">
               {slots.map((slot) => {
                 if (slot.device && slot.isStart) {
                   return (
@@ -167,7 +167,7 @@ function RackFaceView({
           <RackRail slots={slots} side="right" />
         </div>
 
-        <div className="flex items-center justify-between border-t border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_42%,transparent)] px-3 py-2">
+        <div className="flex items-center justify-between border-t border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_46%,transparent)] px-3 py-2">
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
             {occupantSlots.length} devices | {emptyCount}U free
           </span>
@@ -181,7 +181,7 @@ function RackRail({ slots, side }: { slots: Slot[]; side: "left" | "right" }) {
   return (
     <div
       className={cn(
-        "flex flex-col bg-[linear-gradient(180deg,rgb(255_255_255_/_0.025),transparent_32%),var(--bg-shell)]",
+        "flex flex-col bg-[var(--bg-shell)]",
         side === "left"
           ? "border-r border-[var(--border-default)]"
           : "border-l border-[var(--border-default)]",
@@ -259,7 +259,7 @@ function DeviceTile({
           />
 
           <div className="min-w-0 flex flex-1 flex-col leading-tight">
-            <span className="truncate text-[13px] font-semibold tracking-[-0.01em] text-[var(--text-primary)]">
+            <span className="truncate text-[13px] font-semibold tracking-normal text-[var(--text-primary)]">
               {device.hostname}
             </span>
             <span className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
@@ -325,7 +325,7 @@ function DeviceTile({
 function EmptySlot() {
   return (
     <div
-      className="border-y border-[rgb(255_255_255_/_0.03)] bg-[linear-gradient(180deg,rgb(255_255_255_/_0.01),transparent),var(--surface-1)]"
+      className="border-y border-[rgb(255_255_255_/_0.03)] bg-[var(--surface-1)]"
       style={{ height: "var(--u-height)" }}
     >
       <div className="flex h-full items-center justify-between px-2 opacity-55">

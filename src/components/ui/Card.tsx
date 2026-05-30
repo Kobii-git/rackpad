@@ -24,7 +24,7 @@ export const CardHeader = React.forwardRef<
     ref={ref}
     className={cn(
       "flex items-start justify-between gap-3 border-b border-[var(--border-subtle)]",
-      "bg-[color-mix(in_srgb,var(--surface-1)_30%,transparent)] px-4 py-3.5",
+      "bg-[color-mix(in_srgb,var(--surface-1)_36%,transparent)] px-4 py-3",
       className,
     )}
     {...props}
@@ -59,7 +59,7 @@ export const CardHeading = React.forwardRef<
   <h2
     ref={ref}
     className={cn(
-      "text-[15px] font-semibold tracking-[-0.02em] text-[var(--text-primary)]",
+      "text-[14px] font-semibold tracking-normal text-[var(--text-primary)]",
       className,
     )}
     {...props}
@@ -82,7 +82,7 @@ export const CardFooter = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-1)_34%,transparent)] px-4 py-3",
+      "border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-1)_38%,transparent)] px-4 py-3",
       className,
     )}
     {...props}

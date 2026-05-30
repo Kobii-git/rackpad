@@ -39,13 +39,7 @@ import {
   updateRoomRecord,
   useStore,
 } from "@/lib/store";
-import type {
-  Device,
-  Port,
-  RackFace,
-  ReferenceImage,
-  Room,
-} from "@/lib/types";
+import type { Device, Port, RackFace, ReferenceImage, Room } from "@/lib/types";
 import { statusLabel } from "@/lib/utils";
 import { formatDeviceAddress } from "@/lib/network-labels";
 
@@ -524,8 +518,8 @@ export default function RackViewPage() {
         </div>
       ) : (
         <div className="flex flex-1 overflow-hidden">
-          <div className="flex w-72 shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-bg-2)]/40">
-            <div className="border-b border-[var(--color-line)] px-4 py-3">
+          <div className="flex w-72 shrink-0 flex-col border-r border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-shell)_70%,transparent)]">
+            <div className="border-b border-[var(--border-default)] px-4 py-3">
               <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
                 {rooms.length} rooms | {racks.length} racks |{" "}
                 {allLooseDevices.length} loose
@@ -536,8 +530,8 @@ export default function RackViewPage() {
                 onClick={selectLooseView}
                 className={`w-full border-l-2 px-4 py-2.5 text-left transition-colors ${
                   viewingUnracked
-                    ? "border-[var(--color-accent)] bg-[var(--color-surface)]"
-                    : "border-transparent hover:bg-[var(--color-surface)]/40"
+                    ? "border-[var(--color-accent)] bg-[var(--accent-primary-soft)]"
+                    : "border-transparent hover:bg-[var(--surface-hover)]"
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -554,7 +548,7 @@ export default function RackViewPage() {
               </button>
 
               {rooms.length > 0 && (
-                <div className="my-2 border-y border-[var(--color-line)] py-2">
+                <div className="my-2 border-y border-[var(--border-default)] py-2">
                   <div className="px-4 pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
                     Rooms
                   </div>
@@ -572,8 +566,8 @@ export default function RackViewPage() {
                         onClick={() => selectRoomView(room.id)}
                         className={`w-full border-l-2 px-4 py-2.5 text-left transition-colors ${
                           isActive
-                            ? "border-[var(--color-accent)] bg-[var(--color-surface)]"
-                            : "border-transparent hover:bg-[var(--color-surface)]/40"
+                            ? "border-[var(--color-accent)] bg-[var(--accent-primary-soft)]"
+                            : "border-transparent hover:bg-[var(--surface-hover)]"
                         }`}
                       >
                         <div className="flex items-center justify-between">
@@ -608,8 +602,8 @@ export default function RackViewPage() {
                     onClick={() => selectRackView(entry.id)}
                     className={`w-full border-l-2 px-4 py-2.5 text-left transition-colors ${
                       isActive
-                        ? "border-[var(--color-accent)] bg-[var(--color-surface)]"
-                        : "border-transparent hover:bg-[var(--color-surface)]/40"
+                        ? "border-[var(--color-accent)] bg-[var(--accent-primary-soft)]"
+                        : "border-transparent hover:bg-[var(--surface-hover)]"
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -638,7 +632,7 @@ export default function RackViewPage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-8 py-6">
+          <div className="flex-1 overflow-y-auto rk-page-pad">
             {viewingUnracked ? (
               <UnrackedPanel
                 devices={unrackedDevices}
@@ -660,7 +654,7 @@ export default function RackViewPage() {
                     <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
                       Rack
                     </div>
-                    <h2 className="text-lg font-semibold tracking-tight text-[var(--color-fg)]">
+                    <h2 className="text-lg font-semibold tracking-normal text-[var(--color-fg)]">
                       {rack.name}
                     </h2>
                     <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
@@ -672,9 +666,7 @@ export default function RackViewPage() {
 
                   <Tabs
                     value={face}
-                    onValueChange={(value) =>
-                      setFace(value as RackDisplayFace)
-                    }
+                    onValueChange={(value) => setFace(value as RackDisplayFace)}
                   >
                     <TabsList>
                       <TabsTrigger value="front">Front</TabsTrigger>
@@ -842,7 +834,7 @@ function UnrackedPanel({
         <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
           Physical layout
         </div>
-        <h2 className="text-lg font-semibold tracking-tight text-[var(--color-fg)]">
+        <h2 className="text-lg font-semibold tracking-normal text-[var(--color-fg)]">
           Loose / room tech
         </h2>
         <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
@@ -943,7 +935,7 @@ function RoomPanel({
         <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
           Room
         </div>
-        <h2 className="text-lg font-semibold tracking-tight text-[var(--color-fg)]">
+        <h2 className="text-lg font-semibold tracking-normal text-[var(--color-fg)]">
           {room.name}
         </h2>
         <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">

@@ -76,15 +76,15 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
   }
 
   return (
-    <aside className="relative flex h-full w-64 shrink-0 flex-col border-r border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-shell)_88%,black_12%)]">
+    <aside className="relative flex h-full w-60 shrink-0 flex-col border-r border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-shell)_94%,black_6%)]">
       <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-[linear-gradient(180deg,transparent,var(--edge-highlight),transparent)] opacity-70" />
-      <div className="flex items-center gap-3 px-4 pb-4 pt-4">
+      <div className="flex items-center gap-3 px-4 pb-3 pt-4">
         <Logo />
         <div className="min-w-0">
-          <div className="text-[15px] font-semibold tracking-[-0.03em] text-[var(--text-primary)]">
+          <div className="text-[15px] font-semibold tracking-normal text-[var(--text-primary)]">
             Rackpad
           </div>
-          <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
+          <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
             infra control
           </div>
         </div>
@@ -100,14 +100,14 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
         </div>
       </div>
 
-      <div className="mx-3 mb-4">
+      <div className="mx-3 mb-3">
         <button
           type="button"
           onClick={() => setLabMenuOpen((value) => !value)}
-          className="rk-panel-inset flex w-full items-center justify-between gap-2 rounded-[var(--radius-md)] px-3 py-2.5 text-left transition-[background-color,border-color,box-shadow] duration-150 hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+          className="rk-panel-inset flex w-full items-center justify-between gap-2 rounded-[var(--radius-md)] px-3 py-2 text-left transition-[background-color,border-color,box-shadow] duration-150 hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
         >
           <div className="min-w-0 flex flex-col leading-tight">
-            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
               Lab
             </span>
             <span className="truncate text-sm font-medium text-[var(--text-primary)]">
@@ -162,7 +162,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
 
       <button
         onClick={onOpenSearch}
-        className="mx-3 mb-3 flex w-[calc(100%-1.5rem)] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[rgb(255_255_255_/_0.015)] px-3 py-2 text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)]"
+        className="mx-3 mb-3 flex w-[calc(100%-1.5rem)] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[rgb(255_255_255_/_0.012)] px-3 py-2 text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)]"
       >
         <Search className="size-3.5" />
         <span className="text-xs">Search...</span>
@@ -171,7 +171,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
         </kbd>
       </button>
 
-      <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-2">
+      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-2">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -179,10 +179,10 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
             end={item.to === "/"}
             className={({ isActive }) =>
               cn(
-                "group flex items-center gap-2.5 rounded-[var(--radius-md)] px-2.5 py-2 text-sm transition-[background-color,border-color,color,box-shadow] duration-150",
+                "group flex items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 py-2 text-sm transition-[background-color,border-color,color,box-shadow] duration-150",
                 isActive
-                  ? "bg-[linear-gradient(90deg,var(--accent-primary-soft),transparent_88%)] text-[var(--text-primary)] shadow-[0_0_0_1px_var(--accent-primary-border)_inset]"
-                  : "text-[var(--text-secondary)] hover:bg-[rgb(255_255_255_/_0.04)] hover:text-[var(--text-primary)]",
+                  ? "bg-[var(--accent-primary-soft)] text-[var(--text-primary)] shadow-[0_0_0_1px_var(--accent-primary-border)_inset]"
+                  : "text-[var(--text-secondary)] hover:bg-[rgb(255_255_255_/_0.032)] hover:text-[var(--text-primary)]",
               )
             }
           >
@@ -191,9 +191,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
                 <span
                   className={cn(
                     "h-3.5 w-0.5 shrink-0 rounded-full transition-colors",
-                    isActive
-                      ? "bg-[var(--accent-primary)] shadow-[0_0_12px_var(--accent-primary-glow)]"
-                      : "bg-transparent",
+                    isActive ? "bg-[var(--accent-primary)]" : "bg-transparent",
                   )}
                 />
                 <item.icon className="size-4 shrink-0" />

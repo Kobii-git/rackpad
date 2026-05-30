@@ -19,8 +19,8 @@ export function TopBar({ title, subtitle, meta, actions }: TopBarProps) {
   return (
     <header
       className={cn(
-        "relative flex h-15 shrink-0 items-center justify-between gap-4 px-6",
-        "border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-shell)_92%,transparent)] shadow-[0_14px_30px_rgb(0_0_0_/_0.18)]",
+        "relative flex h-14 shrink-0 items-center justify-between gap-4 px-6",
+        "border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-shell)_96%,transparent)] shadow-[0_10px_24px_rgb(0_0_0_/_0.12)]",
       )}
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,var(--edge-highlight),transparent)] opacity-80" />
@@ -29,7 +29,7 @@ export function TopBar({ title, subtitle, meta, actions }: TopBarProps) {
           <div className="min-w-0">
             {subtitle && <div className="rk-kicker">{subtitle}</div>}
             {title && (
-              <h1 className="truncate text-[17px] font-semibold leading-tight tracking-[-0.03em] text-[var(--text-primary)]">
+              <h1 className="truncate text-[17px] font-semibold leading-tight tracking-normal text-[var(--text-primary)]">
                 {title}
               </h1>
             )}

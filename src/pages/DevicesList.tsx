@@ -331,15 +331,12 @@ export default function DevicesList() {
         }
       />
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+      <div className="flex-1 space-y-4 overflow-y-auto rk-page-pad">
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setTypeFilter(null)}
-            className={`rounded-[var(--radius-xs)] border px-2.5 py-1 transition-colors ${
-              type === null
-                ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"
-                : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
-            }`}
+            className="rk-filter-pill"
+            data-active={type === null}
           >
             <span className="font-mono text-[10px] uppercase tracking-wider">
               All
@@ -348,11 +345,8 @@ export default function DevicesList() {
           </button>
           <button
             onClick={() => setPlacementFilter(!showUnplacedOnly)}
-            className={`rounded-[var(--radius-xs)] border px-2.5 py-1 transition-colors ${
-              showUnplacedOnly
-                ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"
-                : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
-            }`}
+            className="rk-filter-pill"
+            data-active={showUnplacedOnly}
           >
             <span className="font-mono text-[10px] uppercase tracking-wider">
               Unplaced
@@ -368,11 +362,8 @@ export default function DevicesList() {
               <button
                 key={entry.id}
                 onClick={() => setTypeFilter(entry.id)}
-                className={`inline-flex items-center gap-1.5 rounded-[var(--radius-xs)] border px-2.5 py-1 transition-colors ${
-                  type === entry.id
-                    ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"
-                    : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
-                }`}
+                className="rk-filter-pill"
+                data-active={type === entry.id}
               >
                 <DeviceTypeIcon type={entry.id} className="size-3" />
                 <span className="font-mono text-[10px] uppercase tracking-wider capitalize">
@@ -594,9 +585,9 @@ export default function DevicesList() {
 
         <Card>
           <CardBody className="p-0">
-            <table className="w-full text-sm">
+            <table className="rk-table">
               <thead>
-                <tr className="border-b border-[var(--color-line)] bg-[var(--color-bg-2)]">
+                <tr>
                   <Th>
                     {canEdit && (
                       <input
@@ -685,7 +676,8 @@ export default function DevicesList() {
                   return (
                     <tr
                       key={device.id}
-                      className="group border-b border-[var(--color-line)] transition-colors last:border-b-0 hover:bg-[var(--color-surface)]"
+                      data-selected={selectedDeviceIds.has(device.id)}
+                      className="group"
                     >
                       <Td className="w-px">
                         {canEdit && (
@@ -863,7 +855,7 @@ export default function DevicesList() {
 
 function Th({ children }: { children?: ReactNode }) {
   return (
-    <th className="px-3 py-1.5 text-left font-mono text-[10px] font-normal uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+    <th className="text-left font-mono text-[10px] font-medium uppercase tracking-[0.13em] text-[var(--color-fg-subtle)]">
       {children}
     </th>
   );
