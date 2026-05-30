@@ -54,18 +54,49 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.patch<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const existing = db.prepare('SELECT id FROM portLinks WHERE id = ?').get(req.params.id)
+    const existing = db.prepare('SELECT * FROM portLinks WHERE id = ?').get(req.params.id) as
+      | { id: string; fromPortId: string; toPortId: string }
+      | undefined
     if (!existing) return reply.status(404).send({ error: 'Port link not found' })
 
     const body = asObject(req.body)
     const updates: string[] = []
     const values: unknown[] = []
 
+    const fromPortId = optionalString(body, 'fromPortId', { maxLength: 80 })
+    const toPortId = optionalString(body, 'toPortId', { maxLength: 80 })
     const cableType = optionalString(body, 'cableType', { maxLength: 80 })
     const cableLength = optionalString(body, 'cableLength', { maxLength: 40 })
     const color = optionalString(body, 'color', { maxLength: 40 })
     const notes = optionalString(body, 'notes', { maxLength: 500 })
+    const nextFromPortId = fromPortId ?? existing.fromPortId
+    const nextToPortId = toPortId ?? existing.toPortId
 
+    if (fromPortId !== undefined || toPortId !== undefined) {
+      if (nextFromPortId === nextToPortId) {
+        return reply.status(400).send({ error: 'A port cannot be linked to itself' })
+      }
+
+      const fromPort = db.prepare('SELECT id FROM ports WHERE id = ?').get(nextFromPortId)
+      const toPort = db.prepare('SELECT id FROM ports WHERE id = ?').get(nextToPortId)
+      if (!fromPort || !toPort) {
+        return reply.status(400).send({ error: 'Both cable endpoints must exist' })
+      }
+
+      const conflicting = db.prepare(`
+        SELECT id
+        FROM portLinks
+        WHERE id != ?
+          AND (fromPortId IN (?, ?) OR toPortId IN (?, ?))
+        LIMIT 1
+      `).get(req.params.id, nextFromPortId, nextToPortId, nextFromPortId, nextToPortId)
+      if (conflicting) {
+        return reply.status(409).send({ error: 'One of the selected ports is already linked' })
+      }
+    }
+
+    if (fromPortId !== undefined) { updates.push('fromPortId = ?'); values.push(nextFromPortId) }
+    if (toPortId !== undefined) { updates.push('toPortId = ?'); values.push(nextToPortId) }
     if (cableType !== undefined) { updates.push('cableType = ?'); values.push(cableType) }
     if (cableLength !== undefined) { updates.push('cableLength = ?'); values.push(cableLength) }
     if (color !== undefined) { updates.push('color = ?'); values.push(color) }
@@ -73,8 +104,26 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
 
     if (updates.length === 0) return reply.status(400).send({ error: 'No valid fields to update' })
 
-    values.push(req.params.id)
-    db.prepare(`UPDATE portLinks SET ${updates.join(', ')} WHERE id = ?`).run(...values)
+    const updateLink = db.transaction(() => {
+      values.push(req.params.id)
+      db.prepare(`UPDATE portLinks SET ${updates.join(', ')} WHERE id = ?`).run(...values)
+      for (const portId of new Set([
+        existing.fromPortId,
+        existing.toPortId,
+        nextFromPortId,
+        nextToPortId,
+      ])) {
+        const stillLinked = db.prepare(
+          'SELECT id FROM portLinks WHERE fromPortId = ? OR toPortId = ?'
+        ).get(portId, portId)
+        db.prepare("UPDATE ports SET linkState = ? WHERE id = ?").run(
+          stillLinked ? 'up' : 'down',
+          portId,
+        )
+      }
+    })
+
+    updateLink()
     return db.prepare('SELECT * FROM portLinks WHERE id = ?').get(req.params.id)
   })
 

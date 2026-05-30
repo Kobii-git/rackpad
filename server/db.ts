@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 15;
+const CURRENT_SCHEMA_VERSION = 17;
 
 export const db = new Database(DB_PATH);
 
@@ -621,6 +621,41 @@ const SCHEMA_MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS idx_device_images_device_id
         ON deviceImages (deviceId);
+    `,
+  },
+  {
+    version: 16,
+    sql: `
+      CREATE TABLE IF NOT EXISTS referenceImages (
+        id         TEXT PRIMARY KEY,
+        labId      TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        entityType TEXT NOT NULL,
+        entityId   TEXT NOT NULL,
+        label      TEXT NOT NULL,
+        fileName   TEXT NOT NULL,
+        mimeType   TEXT NOT NULL,
+        dataUrl    TEXT NOT NULL,
+        face       TEXT,
+        notes      TEXT,
+        createdAt  TEXT NOT NULL,
+        updatedAt  TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_reference_images_lab_id
+        ON referenceImages (labId);
+
+      CREATE INDEX IF NOT EXISTS idx_reference_images_entity
+        ON referenceImages (entityType, entityId);
+    `,
+  },
+  {
+    version: 17,
+    sql: `
+      ALTER TABLE discoveredDevices ADD COLUMN technicalRole TEXT;
+      ALTER TABLE discoveredDevices ADD COLUMN technicalReason TEXT;
+
+      CREATE INDEX IF NOT EXISTS idx_discovered_devices_lab_technical
+        ON discoveredDevices (labId, technicalRole);
     `,
   },
 ] as const;

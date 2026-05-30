@@ -19,6 +19,8 @@ import type {
   PortTemplate,
   OidcPublicConfig,
   Rack,
+  ReferenceImage,
+  ReferenceImageEntityType,
   Room,
   Subnet,
   UserRole,
@@ -52,6 +54,9 @@ export class ApiError extends Error {
 
 export type DevicePatch = Nullable<Omit<Device, "id" | "labId">>;
 export type DeviceImagePatch = Nullable<Pick<DeviceImage, "label" | "notes">>;
+export type ReferenceImagePatch = Nullable<
+  Pick<ReferenceImage, "label" | "notes" | "face">
+>;
 export type DocumentationPagePatch = Nullable<
   Pick<DocumentationPage, "title" | "content">
 >;
@@ -68,9 +73,7 @@ export type PortPatch = Nullable<Omit<Port, "id" | "deviceId" | "position">>;
 export type VirtualSwitchPatch = Nullable<
   Pick<VirtualSwitch, "name" | "kind" | "notes">
 >;
-export type PortLinkPatch = Nullable<
-  Omit<PortLink, "id" | "fromPortId" | "toPortId">
->;
+export type PortLinkPatch = Nullable<Omit<PortLink, "id">>;
 export type PortTemplatePatch = Nullable<
   Pick<PortTemplate, "name" | "description" | "deviceTypes" | "ports">
 >;
@@ -492,6 +495,38 @@ export const api = {
 
   deleteDeviceImage(id: string) {
     return request<void>(`/device-images/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  getReferenceImages(params?: {
+    labId?: string;
+    entityType?: ReferenceImageEntityType;
+    entityId?: string;
+  }) {
+    return request<ReferenceImage[]>("/reference-images", undefined, params);
+  },
+
+  createReferenceImage(
+    body: Omit<ReferenceImage, "id" | "labId" | "createdAt" | "updatedAt"> & {
+      id?: string;
+    },
+  ) {
+    return request<ReferenceImage>("/reference-images", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateReferenceImage(id: string, body: ReferenceImagePatch) {
+    return request<ReferenceImage>(`/reference-images/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteReferenceImage(id: string) {
+    return request<void>(`/reference-images/${id}`, {
       method: "DELETE",
     });
   },

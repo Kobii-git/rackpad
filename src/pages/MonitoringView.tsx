@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, RefreshCcw, Search } from "lucide-react";
+import { Activity, LayoutGrid, List, RefreshCcw, Search } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
 import { Button } from "@/components/ui/Button";
 import {
@@ -36,6 +36,7 @@ import {
 type MonitorFilter = "all" | "offline" | "warning" | "unknown" | "online";
 type MonitorRollupStatus = Exclude<MonitorFilter, "all">;
 type MonitorSortKey = "hostname" | "status" | "targets" | "lastCheck";
+type MonitorLayout = "cards" | "compact";
 
 export default function MonitoringView() {
   const currentUser = useStore((s) => s.currentUser);
@@ -49,6 +50,7 @@ export default function MonitoringView() {
     key: "hostname",
     direction: "asc",
   });
+  const [layout, setLayout] = useState<MonitorLayout>("cards");
   const [runningAll, setRunningAll] = useState(false);
   const [runningDeviceId, setRunningDeviceId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -239,6 +241,27 @@ export default function MonitoringView() {
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <span className="rk-kicker">Layout</span>
+            <Button
+              variant={layout === "cards" ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setLayout("cards")}
+              className="h-8"
+              aria-label="Show monitor cards"
+            >
+              <LayoutGrid className="size-3.5" />
+              Box
+            </Button>
+            <Button
+              variant={layout === "compact" ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setLayout("compact")}
+              className="h-8"
+              aria-label="Show compact monitor rows"
+            >
+              <List className="size-3.5" />
+              Compact
+            </Button>
             <span className="rk-kicker">Sort</span>
             <SortButton
               active={sort.key === "hostname"}
@@ -337,15 +360,27 @@ export default function MonitoringView() {
               </div>
             ) : (
               filteredDevices.map(({ device, monitors, rollupStatus }) => (
-                <DeviceMonitorCard
-                  key={device.id}
-                  device={device}
-                  monitors={monitors}
-                  rollupStatus={rollupStatus}
-                  running={runningDeviceId === device.id}
-                  onRun={() => void handleRunDevice(device.id)}
-                  canManageMonitoring={canManageMonitoring}
-                />
+                layout === "compact" ? (
+                  <DeviceMonitorRow
+                    key={device.id}
+                    device={device}
+                    monitors={monitors}
+                    rollupStatus={rollupStatus}
+                    running={runningDeviceId === device.id}
+                    onRun={() => void handleRunDevice(device.id)}
+                    canManageMonitoring={canManageMonitoring}
+                  />
+                ) : (
+                  <DeviceMonitorCard
+                    key={device.id}
+                    device={device}
+                    monitors={monitors}
+                    rollupStatus={rollupStatus}
+                    running={runningDeviceId === device.id}
+                    onRun={() => void handleRunDevice(device.id)}
+                    canManageMonitoring={canManageMonitoring}
+                  />
+                )
               ))
             )}
           </CardBody>
@@ -491,6 +526,91 @@ function DeviceMonitorCard({
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function DeviceMonitorRow({
+  device,
+  monitors,
+  rollupStatus,
+  running,
+  onRun,
+  canManageMonitoring,
+}: {
+  device: Device;
+  monitors: DeviceMonitor[];
+  rollupStatus: MonitorRollupStatus;
+  running: boolean;
+  onRun: () => void;
+  canManageMonitoring: boolean;
+}) {
+  const latestCheckAt = latestMonitorCheck(monitors);
+  const failingCount = monitors.filter(
+    (monitor) => monitor.lastResult === "offline",
+  ).length;
+  const unknownCount = monitors.filter(
+    (monitor) => monitor.lastResult === "unknown" || !monitor.lastResult,
+  ).length;
+  const targetSummary = monitors
+    .slice(0, 3)
+    .map((monitor) => `${monitor.name}:${monitor.lastResult ?? "unknown"}`)
+    .join(" | ");
+
+  return (
+    <div className="grid grid-cols-12 items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2">
+      <div className="col-span-12 flex min-w-0 items-center gap-2 md:col-span-3">
+        <DeviceTypeIcon
+          type={device.deviceType}
+          className="size-4 shrink-0 text-[var(--color-accent)]"
+        />
+        <Link
+          to={`/devices/${device.id}`}
+          className="truncate text-sm font-medium text-[var(--text-primary)] hover:text-[var(--color-accent)]"
+        >
+          {device.hostname}
+        </Link>
+      </div>
+      <div className="col-span-4 md:col-span-2">
+        <Badge
+          tone={
+            rollupStatus === "online"
+              ? "ok"
+              : rollupStatus === "offline"
+                ? "err"
+                : "neutral"
+          }
+        >
+          <StatusDot status={rollupStatus} />
+          {statusLabel[rollupStatus]}
+        </Badge>
+      </div>
+      <Mono className="col-span-4 text-[10px] text-[var(--text-tertiary)] md:col-span-2">
+        {monitors.length} targets
+      </Mono>
+      <div className="col-span-12 truncate text-xs text-[var(--text-tertiary)] md:col-span-3">
+        {targetSummary || formatDeviceAddress(device) || "No target summary"}
+      </div>
+      <div className="col-span-8 flex items-center gap-2 md:col-span-1">
+        {failingCount > 0 && <Badge tone="err">{failingCount} failing</Badge>}
+        {unknownCount > 0 && <Badge tone="neutral">{unknownCount} unknown</Badge>}
+        {latestCheckAt && (
+          <span className="text-[11px] text-[var(--text-tertiary)]">
+            {relativeTime(latestCheckAt)}
+          </span>
+        )}
+      </div>
+      <div className="col-span-4 flex justify-end md:col-span-1">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onRun}
+          disabled={!canManageMonitoring || running}
+        >
+          <Activity className="size-3.5" />
+          {running ? "Checking..." : "Check"}
+        </Button>
       </div>
     </div>
   );

@@ -78,7 +78,11 @@ export const racksRoutes: FastifyPluginAsync = async (app) => {
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const row = db.prepare('SELECT id FROM racks WHERE id = ?').get(req.params.id)
     if (!row) return reply.status(404).send({ error: 'Rack not found' })
-    db.prepare('DELETE FROM racks WHERE id = ?').run(req.params.id)
+    const removeRack = db.transaction(() => {
+      db.prepare("DELETE FROM referenceImages WHERE entityType = 'rack' AND entityId = ?").run(req.params.id)
+      db.prepare('DELETE FROM racks WHERE id = ?').run(req.params.id)
+    })
+    removeRack()
     return reply.status(204).send()
   })
 }

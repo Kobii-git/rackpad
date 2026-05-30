@@ -4,6 +4,7 @@ import type {
   Port,
   PortLink,
   Rack,
+  RackFace,
   Room,
   Subnet,
   Vlan,
@@ -12,8 +13,10 @@ import type {
 export type VisualizerHealth = "online" | "warning" | "offline" | "unknown";
 export type VisualizerColumnKind = "rack" | "room";
 export type VisualizerLooseDevicePlacement = "beside-racks" | "below-racks";
+export type VisualizerLayoutMode = "grouped" | "pyramid";
 
 export interface VisualizerLayoutOptions {
+  topologyLayout: VisualizerLayoutMode;
   looseDevicePlacement: VisualizerLooseDevicePlacement;
   includeRoomOnlySections: boolean;
 }
@@ -105,9 +108,12 @@ export interface RackPanel {
   bodyHeight: number;
   bands: RackBand[];
   nodes: VisualizerNode[];
+  faces: RackFace[];
   stats: {
     totalU: number;
     mounted: number;
+    frontMounted: number;
+    rearMounted: number;
     freeU: number;
   };
 }
@@ -188,6 +194,7 @@ export interface TraceResult {
 }
 
 export interface VisualizerModel {
+  layoutMode: VisualizerLayoutMode;
   width: number;
   height: number;
   rackZone: {

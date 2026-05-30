@@ -21,6 +21,7 @@ import type {
   PortTemplate,
   Rack,
   RackFace,
+  ReferenceImage,
   Room,
   Subnet,
   UserRole,
@@ -42,6 +43,7 @@ import type {
   LabPatch,
   MonitorPatch,
   PortPatch,
+  ReferenceImagePatch,
   PortTemplatePatch,
   RackPatch,
   RoomPatch,
@@ -89,6 +91,7 @@ interface State {
   racks: Rack[];
   devices: Device[];
   deviceImages: DeviceImage[];
+  referenceImages: ReferenceImage[];
   documentationPages: DocumentationPage[];
   deviceTypes: DeviceTypeDefinition[];
   ports: Port[];
@@ -118,6 +121,7 @@ const EMPTY_DATA = {
   racks: [] as Rack[],
   devices: [] as Device[],
   deviceImages: [] as DeviceImage[],
+  referenceImages: [] as ReferenceImage[],
   documentationPages: [] as DocumentationPage[],
   deviceTypes: [] as DeviceTypeDefinition[],
   ports: [] as Port[],
@@ -254,6 +258,17 @@ function sortDevices(devices: Device[]) {
 function sortDeviceImages(images: DeviceImage[]) {
   return [...images].sort(
     (a, b) =>
+      Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
+      a.label.localeCompare(b.label),
+  );
+}
+
+function sortReferenceImages(images: ReferenceImage[]) {
+  return [...images].sort(
+    (a, b) =>
+      a.entityType.localeCompare(b.entityType) ||
+      a.entityId.localeCompare(b.entityId) ||
+      String(a.face ?? "").localeCompare(String(b.face ?? "")) ||
       Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
       a.label.localeCompare(b.label),
   );
@@ -454,6 +469,7 @@ function filterAuditForLab(
     discoveredIds: Set<string>;
     documentationPageIds: Set<string>;
     deviceImageIds: Set<string>;
+    referenceImageIds: Set<string>;
     wifiControllerIds: Set<string>;
     wifiSsidIds: Set<string>;
     wifiAccessPointIds: Set<string>;
@@ -498,6 +514,8 @@ function filterAuditForLab(
           return context.documentationPageIds.has(entry.entityId);
         case "DeviceImage":
           return context.deviceImageIds.has(entry.entityId);
+        case "ReferenceImage":
+          return context.referenceImageIds.has(entry.entityId);
         case "WifiController":
           return context.wifiControllerIds.has(entry.entityId);
         case "WifiSsid":
@@ -976,6 +994,7 @@ export async function loadAll(
         discoveredDevices: api.getDiscoveredDevices(),
         documentationPages: api.getDocumentationPages(),
         deviceImages: api.getDeviceImages(),
+        referenceImages: api.getReferenceImages(),
         wifiControllers: api.getWifiControllers(),
         wifiSsids: api.getWifiSsids(),
         wifiAccessPoints: api.getWifiAccessPoints(),
@@ -1141,6 +1160,21 @@ export async function loadAll(
       );
       const deviceImageIds = new Set(allDeviceImages.map((image) => image.id));
 
+      const referenceImageTargets = new Set([...rackIds, ...roomIds]);
+      const allReferenceImages = sortReferenceImages(
+        (
+          (resolved.get("referenceImages") as ReferenceImage[] | undefined) ??
+          []
+        ).filter(
+          (image) =>
+            image.labId === activeLab.id &&
+            referenceImageTargets.has(image.entityId),
+        ),
+      );
+      const referenceImageIds = new Set(
+        allReferenceImages.map((image) => image.id),
+      );
+
       const allWifiControllers = sortWifiControllers(
         (
           (resolved.get("wifiControllers") as WifiController[] | undefined) ??
@@ -1214,6 +1248,7 @@ export async function loadAll(
           discoveredIds,
           documentationPageIds,
           deviceImageIds,
+          referenceImageIds,
           wifiControllerIds,
           wifiSsidIds,
           wifiAccessPointIds,
@@ -1251,6 +1286,7 @@ export async function loadAll(
         discoveredDevices: allDiscoveredDevices,
         documentationPages: allDocumentationPages,
         deviceImages: allDeviceImages,
+        referenceImages: allReferenceImages,
         wifiControllers: allWifiControllers,
         wifiSsids: allWifiSsids,
         wifiAccessPoints: allWifiAccessPoints,
@@ -1871,13 +1907,20 @@ export async function deleteCable(id: string): Promise<boolean> {
 
 export async function updateCable(
   id: string,
-  changes: Partial<Omit<PortLink, "id" | "fromPortId" | "toPortId">>,
+  changes: Partial<Omit<PortLink, "id">>,
 ): Promise<PortLink | null> {
   const existing = state.portLinks.find((link) => link.id === id);
   if (!existing) return null;
 
   const patch: Record<string, unknown> = {};
-  const allowedKeys = ["cableType", "cableLength", "color", "notes"] as const;
+  const allowedKeys = [
+    "fromPortId",
+    "toPortId",
+    "cableType",
+    "cableLength",
+    "color",
+    "notes",
+  ] as const;
   for (const key of allowedKeys) {
     if (Object.prototype.hasOwnProperty.call(changes, key)) {
       patch[key] = changes[key] ?? null;
@@ -1889,6 +1932,24 @@ export async function updateCable(
   setState((prev) => ({
     ...prev,
     portLinks: replaceById(prev.portLinks, updated),
+    ports: sortPorts(
+      prev.ports.map((port) => {
+        if (
+          ![
+            existing.fromPortId,
+            existing.toPortId,
+            updated.fromPortId,
+            updated.toPortId,
+          ].includes(port.id)
+        ) {
+          return port;
+        }
+        const linked = replaceById(prev.portLinks, updated).some(
+          (link) => link.fromPortId === port.id || link.toPortId === port.id,
+        );
+        return { ...port, linkState: linked ? "up" : "down" };
+      }),
+    ),
   }));
 
   const fromPort = state.ports.find((port) => port.id === updated.fromPortId);
@@ -2306,6 +2367,94 @@ export async function deleteDeviceImageRecord(id: string): Promise<boolean> {
     "DeviceImage",
     id,
     `Deleted image ${existing.label}`,
+  );
+
+  return true;
+}
+
+export async function createReferenceImageRecord(input: {
+  entityType: ReferenceImage["entityType"];
+  entityId: string;
+  label: string;
+  fileName: string;
+  mimeType: string;
+  dataUrl: string;
+  face?: ReferenceImage["face"];
+  notes?: string | null;
+}): Promise<ReferenceImage> {
+  const created = await api.createReferenceImage({
+    entityType: input.entityType,
+    entityId: input.entityId,
+    label: input.label.trim() || input.fileName.replace(/\.[^.]+$/, ""),
+    fileName: input.fileName,
+    mimeType: input.mimeType,
+    dataUrl: input.dataUrl,
+    face: input.entityType === "rack" ? (input.face ?? "front") : null,
+    notes: input.notes?.trim() || null,
+  });
+
+  setState((prev) => ({
+    ...prev,
+    referenceImages: sortReferenceImages([
+      created,
+      ...prev.referenceImages,
+    ]),
+  }));
+
+  void recordAudit(
+    "reference.image.create",
+    "ReferenceImage",
+    created.id,
+    `Added ${created.entityType} image ${created.label}`,
+  );
+
+  return created;
+}
+
+export async function updateReferenceImageRecord(
+  id: string,
+  changes: ReferenceImagePatch,
+): Promise<ReferenceImage | null> {
+  const existing = state.referenceImages.find((image) => image.id === id);
+  if (!existing) return null;
+
+  const updated = await api.updateReferenceImage(id, changes);
+  setState((prev) => ({
+    ...prev,
+    referenceImages: replaceById(
+      prev.referenceImages,
+      updated,
+      sortReferenceImages,
+    ),
+  }));
+
+  void recordAudit(
+    "reference.image.update",
+    "ReferenceImage",
+    id,
+    `Updated ${updated.entityType} image ${updated.label}`,
+  );
+
+  return updated;
+}
+
+export async function deleteReferenceImageRecord(
+  id: string,
+): Promise<boolean> {
+  const existing = state.referenceImages.find((image) => image.id === id);
+  if (!existing) return false;
+
+  await api.deleteReferenceImage(id);
+  setState((prev) => ({
+    ...prev,
+    referenceImages: removeById(prev.referenceImages, id),
+  }));
+
+  void recordAudit(
+    "reference.image.delete",
+    "ReferenceImage",
+    id,
+    `Deleted ${existing.entityType} image ${existing.label}`,
   );
 
   return true;

@@ -19,6 +19,7 @@ import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { SortableHeader } from "@/components/shared/SortableHeader";
 import {
   canEditInventory,
+  createDevice,
   deleteDiscoveredDeviceRecord,
   scanDiscoveredSubnet,
   updateDiscoveredDeviceRecord,
@@ -48,7 +49,14 @@ type DiscoveryDraft = {
   status: DiscoveredDevice["status"];
 };
 
-type DiscoveryFilter = "all" | "new" | "imported" | "dismissed" | "duplicates";
+type DiscoveryFilter =
+  | "active"
+  | "all"
+  | "new"
+  | "imported"
+  | "dismissed"
+  | "duplicates"
+  | "technical";
 type DiscoverySortKey =
   | "ip"
   | "hostname"
@@ -77,9 +85,11 @@ export default function DiscoveryView() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [autoMapping, setAutoMapping] = useState(false);
+  const [autoMapMessage, setAutoMapMessage] = useState("");
   const [error, setError] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [filter, setFilter] = useState<DiscoveryFilter>("all");
+  const [filter, setFilter] = useState<DiscoveryFilter>("active");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortState<DiscoverySortKey>>({
     key: "ip",
@@ -116,6 +126,11 @@ export default function DiscoveryView() {
 
     return discoveredDevices.reduce<Record<string, Device[]>>(
       (acc, discovered) => {
+        if (discovered.importedDeviceId || discovered.status !== "new") {
+          acc[discovered.id] = [];
+          return acc;
+        }
+
         const matches = new Map<string, Device>();
 
         for (const match of byIp.get(discovered.ipAddress) ?? []) {
@@ -130,16 +145,6 @@ export default function DiscoveryView() {
           for (const match of byHostname.get(key) ?? []) {
             matches.set(match.id, match);
           }
-        }
-
-        if (
-          discovered.importedDeviceId &&
-          deviceById[discovered.importedDeviceId]
-        ) {
-          matches.set(
-            discovered.importedDeviceId,
-            deviceById[discovered.importedDeviceId],
-          );
         }
 
         acc[discovered.id] = [...matches.values()].sort((a, b) =>
@@ -164,10 +169,15 @@ export default function DiscoveryView() {
     return discoveredDevices
       .filter((device) => {
         const matchesFilter =
-          filter === "all"
+          filter === "active"
+            ? device.status === "new" && !device.technicalRole
+            : filter === "all"
             ? true
+            : filter === "technical"
+              ? Boolean(device.technicalRole)
             : filter === "duplicates"
-              ? (duplicateMatchesById[device.id] ?? []).length > 0
+              ? device.status === "new" &&
+                (duplicateMatchesById[device.id] ?? []).length > 0
               : device.status === filter;
         if (!matchesFilter) return false;
         if (!normalizedQuery) return true;
@@ -179,7 +189,9 @@ export default function DiscoveryView() {
           device.placement,
           device.vendor,
           device.macAddress,
-          device.status,
+        device.status,
+          device.technicalRole,
+          device.technicalReason,
           ...(duplicateMatchesById[device.id] ?? []).flatMap((match) => [
             match.hostname,
             match.managementIp,
@@ -195,6 +207,17 @@ export default function DiscoveryView() {
         compareDiscoveredDevices(a, b, sort, duplicateMatchesById),
       );
   }, [discoveredDevices, duplicateMatchesById, filter, query, sort]);
+
+  const autoMapCandidates = useMemo(
+    () =>
+      discoveredDevices.filter(
+        (device) =>
+          device.status === "new" &&
+          !device.technicalRole &&
+          (duplicateMatchesById[device.id] ?? []).length === 0,
+      ),
+    [discoveredDevices, duplicateMatchesById],
+  );
 
   const selected = selectedId
     ? discoveredDevices.find((device) => device.id === selectedId)
@@ -260,6 +283,7 @@ export default function DiscoveryView() {
     if (!scanCidr.trim()) return;
     setScanning(true);
     setError("");
+    setAutoMapMessage("");
     try {
       const result = await scanDiscoveredSubnet(scanCidr.trim());
       setLastScanResult(result);
@@ -343,6 +367,59 @@ export default function DiscoveryView() {
     setDrawerOpen(false);
   }
 
+  async function handleAutoMap() {
+    if (!autoMapCandidates.length) return;
+    setAutoMapping(true);
+    setAutoMapMessage("");
+    setError("");
+    const failures: string[] = [];
+    let mapped = 0;
+
+    for (const discovered of autoMapCandidates) {
+      try {
+        const created = await createDevice({
+          hostname:
+            discovered.hostname?.trim() ||
+            discovered.displayName?.trim() ||
+            discovered.ipAddress.replaceAll(".", "-"),
+          displayName: discovered.displayName ?? undefined,
+          deviceType: discovered.deviceType ?? "endpoint",
+          manufacturer: discovered.vendor ?? undefined,
+          managementIp: discovered.ipAddress,
+          macAddress: discovered.macAddress ?? undefined,
+          placement: autoMapPlacement(discovered),
+          status: "unknown",
+          notes: discovered.notes ?? undefined,
+        });
+        await updateDiscoveredDeviceRecord(discovered.id, {
+          status: "imported",
+          importedDeviceId: created.id,
+        });
+        mapped += 1;
+      } catch (err) {
+        failures.push(
+          `${discovered.ipAddress}: ${
+            err instanceof Error ? err.message : "failed"
+          }`,
+        );
+      }
+    }
+
+    if (failures.length > 0) {
+      setError(
+        `Auto-map imported ${mapped} host${
+          mapped === 1 ? "" : "s"
+        }; ${failures.length} failed. ${failures.slice(0, 3).join(" ")}`,
+      );
+    } else {
+      setAutoMapMessage(
+        `Auto-mapped ${mapped} discovered host${mapped === 1 ? "" : "s"}.`,
+      );
+      setFilter("imported");
+    }
+    setAutoMapping(false);
+  }
+
   function handleSort(key: DiscoverySortKey) {
     setSort((current) => toggleSort(current, key));
   }
@@ -355,6 +432,9 @@ export default function DiscoveryView() {
   ).length;
   const dismissedCount = discoveredDevices.filter(
     (device) => device.status === "dismissed",
+  ).length;
+  const technicalCount = discoveredDevices.filter(
+    (device) => device.technicalRole,
   ).length;
 
   return (
@@ -392,7 +472,7 @@ export default function DiscoveryView() {
       />
 
       <div className="flex flex-1 flex-col gap-5 overflow-hidden px-6 py-5">
-        <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
           <DiscoveryStat
             label="Total"
             value={String(discoveredDevices.length)}
@@ -418,12 +498,23 @@ export default function DiscoveryView() {
             value={String(dismissedCount)}
             hint="Hidden from the active queue"
           />
+          <DiscoveryStat
+            label="Technical"
+            value={String(technicalCount)}
+            hint="IPAM gateway, DNS, reserved, or infra"
+          />
         </div>
 
         {lastScanResult && <ScanSummary result={lastScanResult} />}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
+            <FilterButton
+              active={filter === "active"}
+              onClick={() => setFilter("active")}
+            >
+              Active
+            </FilterButton>
             <FilterButton
               active={filter === "all"}
               onClick={() => setFilter("all")}
@@ -454,17 +545,43 @@ export default function DiscoveryView() {
             >
               Dismissed
             </FilterButton>
+            <FilterButton
+              active={filter === "technical"}
+              onClick={() => setFilter("technical")}
+            >
+              Technical
+            </FilterButton>
           </div>
-          <div className="relative min-w-64">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search IP, hostname, MAC..."
-              className="h-8 pl-8 text-xs"
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            {canEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleAutoMap()}
+                disabled={autoMapping || autoMapCandidates.length === 0}
+              >
+                {autoMapping
+                  ? "Auto-mapping..."
+                  : `Auto-map ${autoMapCandidates.length}`}
+              </Button>
+            )}
+            <div className="relative min-w-64">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search IP, hostname, MAC..."
+                className="h-8 pl-8 text-xs"
+              />
+            </div>
           </div>
         </div>
+
+        {autoMapMessage && (
+          <div className="rounded-[var(--radius-sm)] border border-[var(--color-ok)]/30 bg-[var(--color-ok)]/10 px-3 py-2 text-sm text-[var(--color-fg)]">
+            {autoMapMessage}
+          </div>
+        )}
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
           <div className="order-2 min-w-0 flex-1 overflow-y-auto">
@@ -589,7 +706,14 @@ export default function DiscoveryView() {
                             )}
                           </Td>
                           <Td>
-                            <DiscoveryBadge status={device.status} />
+                            <div className="flex flex-wrap gap-1">
+                              <DiscoveryBadge status={device.status} />
+                              {device.technicalRole && (
+                                <Badge tone="neutral">
+                                  {device.technicalRole}
+                                </Badge>
+                              )}
+                            </div>
                           </Td>
                           <Td className="font-mono text-[11px] text-[var(--color-fg-subtle)]">
                             {device.lastSeen ?? device.lastScannedAt}
@@ -643,6 +767,23 @@ export default function DiscoveryView() {
                   </div>
                 ) : (
                   <>
+                    {selected.technicalRole && (
+                      <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--color-fg-subtle)]" />
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-[var(--color-fg)]">
+                              IPAM technical address
+                            </div>
+                            <div className="mt-1 text-sm text-[var(--color-fg-subtle)]">
+                              {selected.technicalReason ??
+                                selected.technicalRole}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {selectedMatches.length > 0 && (
                       <div className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10 px-3 py-3">
                         <div className="flex items-start gap-2">
@@ -914,6 +1055,13 @@ function ScanSummary({ result }: { result: DiscoveryScanResult }) {
           reachable, saw{" "}
           <Mono className="text-xs">{result.macAddressCount}</Mono> MACs and{" "}
           <Mono className="text-xs">{result.vendorCount}</Mono> vendors.
+          {result.technicalCount > 0 && (
+            <>
+              {" "}
+              <Mono className="text-xs">{result.technicalCount}</Mono>{" "}
+              technical.
+            </>
+          )}
         </span>
       </div>
       {result.diagnostics.length > 0 && (
@@ -984,6 +1132,19 @@ function DiscoveryBadge({ status }: { status: DiscoveredDevice["status"] }) {
         ? "neutral"
         : "accent";
   return <Badge tone={tone}>{status}</Badge>;
+}
+
+function autoMapPlacement(
+  discovered: DiscoveredDevice,
+): NonNullable<DiscoveredDevice["placement"]> {
+  if (
+    discovered.placement === "wireless" ||
+    discovered.placement === "virtual" ||
+    discovered.placement === "room"
+  ) {
+    return discovered.placement;
+  }
+  return "room";
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

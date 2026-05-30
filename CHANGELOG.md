@@ -6,6 +6,38 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.4.0-beta.0] - 2026-05-30
+
+### Added
+
+- Added bulk editing for selected devices and selected ports.
+- Added rack and room reference images with front/rear rack filtering, larger
+  viewing, downloading, notes, and delete support.
+- Added a Pyramid visualizer layout for master-to-endpoint topology review.
+- Added discovery auto-map for clean new hosts, creating inventory devices and
+  linking the discovery row in one workflow.
+
+### Changed
+
+- Rack views can now show front and rear faces side by side.
+- Visualizer rack panels now separate rear-mounted devices from front-mounted
+  devices and show shelf/tray child devices more accurately.
+- Discovery now opens on an active inbox that excludes imported, dismissed, and
+  IPAM technical addresses from the main review queue.
+- Discovery linking now syncs linked rows from the selected inventory device.
+- Dashboard, monitoring, ports, cables, and visualizer workflows were tightened
+  from the Additional Notes feedback.
+
+### Fixed
+
+- Cable links can now be edited instead of deleted and recreated.
+- The device detail Ports action now deep-links to the selected device/port in
+  the ports workspace.
+- Discovery scans now identify DHCP gateways, DNS servers, reserved IPs, and
+  infrastructure ranges from IPAM and dismiss them from the active client queue.
+- Imported discovery rows no longer continue showing duplicate warnings after
+  they are linked to an existing device.
+
 ## [1.3.0] - 2026-05-24
 
 ### Added

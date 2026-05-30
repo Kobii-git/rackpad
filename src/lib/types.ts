@@ -135,6 +135,23 @@ export interface DeviceImage {
   updatedAt: string;
 }
 
+export type ReferenceImageEntityType = "rack" | "room";
+
+export interface ReferenceImage {
+  id: ID;
+  labId: ID;
+  entityType: ReferenceImageEntityType;
+  entityId: ID;
+  label: string;
+  fileName: string;
+  mimeType: string;
+  dataUrl: string;
+  face?: RackFace | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DocumentationPage {
   id: ID;
   labId: ID;
@@ -303,6 +320,8 @@ export interface DiscoveredDevice {
   status: DiscoveryStatus;
   notes?: string | null;
   importedDeviceId?: ID | null;
+  technicalRole?: string | null;
+  technicalReason?: string | null;
   lastSeen?: string | null;
   lastScannedAt: string;
 }
@@ -319,6 +338,7 @@ export interface DiscoveryScanResult {
   discoveredCount: number;
   macAddressCount: number;
   vendorCount: number;
+  technicalCount: number;
   diagnostics: DiscoveryScanDiagnostic[];
   rows: DiscoveredDevice[];
 }
