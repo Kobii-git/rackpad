@@ -6,6 +6,14 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-05-30
+
+### Fixed
+
+- Shelf-mounted physical hosts, such as a Raspberry Pi placed on a rack shelf,
+  can now own virtual switches/bridges while actual VMs and containers remain
+  blocked as bridge hosts.
+
 ## [1.4.0] - 2026-05-30
 
 ### Added

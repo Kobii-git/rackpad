@@ -10,6 +10,7 @@ type DeviceContext = {
   labId: string
   hostname: string
   deviceType: string
+  placement: string | null
   parentDeviceId: string | null
 }
 
@@ -25,7 +26,7 @@ function parseVirtualSwitch(row: Record<string, unknown>) {
 
 function getDeviceContext(deviceId: string) {
   return db.prepare(`
-    SELECT id, labId, hostname, deviceType, parentDeviceId
+    SELECT id, labId, hostname, deviceType, placement, parentDeviceId
     FROM devices
     WHERE id = ?
   `).get(deviceId) as DeviceContext | undefined
@@ -40,11 +41,7 @@ function requireHostDevice(deviceId: string) {
   if (!device) {
     throw new ValidationError('Selected host device does not exist.')
   }
-  if (
-    device.deviceType === 'vm' ||
-    device.deviceType === 'container' ||
-    device.parentDeviceId
-  ) {
+  if (device.deviceType === 'vm' || device.deviceType === 'container' || device.placement === 'virtual') {
     throw new ValidationError('Virtual switches must be attached to a physical host or parent device.')
   }
   return device

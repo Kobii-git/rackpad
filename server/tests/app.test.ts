@@ -982,6 +982,114 @@ test("rack placement validation rejects overlapping devices", async () => {
   assert.match(overlapRes.body, /overlap/i);
 });
 
+test("virtual switches can be attached to shelf-mounted physical hosts", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const rackRes = await app.inject({
+    method: "POST",
+    url: "/api/racks",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      name: "Compute Shelf Rack",
+      totalU: 12,
+    },
+  });
+  assert.equal(rackRes.statusCode, 201);
+  const rack = readJson(rackRes) as { id: string };
+
+  const shelfRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      rackId: rack.id,
+      hostname: "pi-shelf",
+      deviceType: "rack_shelf",
+      status: "unknown",
+      startU: 4,
+      heightU: 1,
+      face: "front",
+    },
+  });
+  assert.equal(shelfRes.statusCode, 201);
+  const shelf = readJson(shelfRes) as { id: string };
+
+  const hostRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "raspberrypi",
+      deviceType: "server",
+      status: "online",
+      placement: "shelf",
+      parentDeviceId: shelf.id,
+      managementIp: "192.168.0.1",
+    },
+  });
+  assert.equal(hostRes.statusCode, 201);
+  const host = readJson(hostRes) as { id: string };
+
+  const bridgeRes = await app.inject({
+    method: "POST",
+    url: "/api/virtual-switches",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      hostDeviceId: host.id,
+      name: "docker0",
+      kind: "internal",
+    },
+  });
+  assert.equal(bridgeRes.statusCode, 201);
+  const bridge = readJson(bridgeRes) as { hostDeviceId: string; name: string };
+  assert.equal(bridge.hostDeviceId, host.id);
+  assert.equal(bridge.name, "docker0");
+
+  const vmRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "guest-on-pi",
+      deviceType: "vm",
+      status: "online",
+      placement: "virtual",
+      parentDeviceId: host.id,
+    },
+  });
+  assert.equal(vmRes.statusCode, 201);
+  const vm = readJson(vmRes) as { id: string };
+
+  const vmBridgeRes = await app.inject({
+    method: "POST",
+    url: "/api/virtual-switches",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      hostDeviceId: vm.id,
+      name: "bad-bridge",
+      kind: "internal",
+    },
+  });
+  assert.equal(vmBridgeRes.statusCode, 400);
+  assert.match(vmBridgeRes.body, /physical host/i);
+});
+
 test("monitoring endpoints validate config, persist results, and stay admin-only", async () => {
   const adminToken = await bootstrapAdmin();
 
