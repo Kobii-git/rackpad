@@ -39,6 +39,7 @@ import type {
   VisualizerNeighbor,
   VisualizerNode,
   VisualizerPort,
+  VisualizerRackFaceMode,
 } from "./types";
 
 const RACK_ZONE_X = 28;
@@ -47,6 +48,7 @@ const ZONE_PADDING = 24;
 const ZONE_GAP = 44;
 const ZONE_HEADER = 76;
 const RACK_PANEL_WIDTH = 324;
+const RACK_PANEL_DUAL_FACE_WIDTH = 468;
 const RACK_PANEL_GAP = 22;
 const RACK_LOOSE_GROUP_WIDTH = 360;
 const RACK_SECTION_GAP = 28;
@@ -75,7 +77,13 @@ const DEFAULT_LAYOUT_OPTIONS: VisualizerLayoutOptions = {
   topologyLayout: "grouped",
   looseDevicePlacement: "beside-racks",
   includeRoomOnlySections: false,
+  rackFaceMode: "front",
 };
+
+const NATURAL_COLLATOR = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
 
 const DEVICE_TYPE_ORDER: DeviceType[] = [
   "switch",
@@ -219,6 +227,10 @@ export function buildVisualizerModel(
   const rackPanels: RackPanel[] = [];
   let rackSectionX = RACK_ZONE_X + ZONE_PADDING;
   const rackSectionY = ZONE_Y + ZONE_HEADER;
+  const rackPanelWidth =
+    layout.rackFaceMode === "both"
+      ? RACK_PANEL_DUAL_FACE_WIDTH
+      : RACK_PANEL_WIDTH;
   for (const sectionInput of rackRoomInputs) {
     const sectionLooseDevices = sectionInput.room
       ? looseDevices.filter(
@@ -228,7 +240,7 @@ export function buildVisualizerModel(
         )
       : [];
     const rackColumnsWidth =
-      sectionInput.racks.length * RACK_PANEL_WIDTH +
+      sectionInput.racks.length * rackPanelWidth +
       Math.max(0, sectionInput.racks.length - 1) * RACK_PANEL_GAP;
     const looseGroupWidth =
       sectionLooseDevices.length > 0
@@ -244,7 +256,7 @@ export function buildVisualizerModel(
       ? Math.max(rackColumnsWidth, looseGroupWidth)
       : rackColumnsWidth + looseGroupGap + looseGroupWidth;
     const sectionWidth = Math.max(
-      RACK_PANEL_WIDTH + RACK_SECTION_PADDING * 2,
+      rackPanelWidth + RACK_SECTION_PADDING * 2,
       RACK_SECTION_PADDING * 2 + sectionContentWidth,
     );
     const rackPanelY = rackSectionY + RACK_SECTION_HEADER;
@@ -255,13 +267,15 @@ export function buildVisualizerModel(
       const rackX =
         rackSectionX +
         RACK_SECTION_PADDING +
-        rackIndex * (RACK_PANEL_WIDTH + RACK_PANEL_GAP);
+        rackIndex * (rackPanelWidth + RACK_PANEL_GAP);
       const panel = buildRackPanel({
         rack,
         room: rack.roomId ? roomsById[rack.roomId] : undefined,
         devices: rackDevices,
         x: rackX,
         y: rackPanelY,
+        width: rackPanelWidth,
+        rackFaceMode: layout.rackFaceMode,
         portsByDeviceId,
         portLinkByPortId,
         virtualSwitchById,
@@ -468,7 +482,7 @@ export function buildVisualizerModel(
     deviceTypes: buildDeviceTypeCounts(input.devices),
     cableTypes: Array.from(
       new Set(input.portLinks.map((link) => link.cableType || "Unknown")),
-    ).sort((a, b) => a.localeCompare(b)),
+    ).sort((a, b) => NATURAL_COLLATOR.compare(a, b)),
     counts: {
       devices: input.devices.length,
       cables: input.portLinks.length,
@@ -640,7 +654,7 @@ function buildPyramidVisualizerModel(
     deviceTypes: buildDeviceTypeCounts(input.devices),
     cableTypes: Array.from(
       new Set(input.portLinks.map((link) => link.cableType || "Unknown")),
-    ).sort((a, b) => a.localeCompare(b)),
+    ).sort((a, b) => NATURAL_COLLATOR.compare(a, b)),
     counts: {
       devices: input.devices.length,
       cables: input.portLinks.length,
@@ -660,6 +674,8 @@ function buildRackPanel(input: {
   devices: Device[];
   x: number;
   y: number;
+  width: number;
+  rackFaceMode: VisualizerRackFaceMode;
   portsByDeviceId: Record<string, Port[]>;
   portLinkByPortId: Record<string, PortLink>;
   virtualSwitchById: Record<string, VirtualSwitch>;
@@ -671,23 +687,32 @@ function buildRackPanel(input: {
 }): RackPanel {
   const bodyX = input.x + 46;
   const bodyY = input.y + 78;
-  const bodyWidth = RACK_PANEL_WIDTH - 58;
+  const bodyWidth = input.width - 58;
   const rackUnitHeight = rackUnitHeightForDevices(
     input.devices,
     input.portsByDeviceId,
   );
-  const mountedDevices = input.devices.filter((device) => device.startU != null);
-  const mountedFrontCount = mountedDevices.filter(
+  const allMountedDevices = input.devices.filter(
+    (device) => device.startU != null,
+  );
+  const mountedFrontCount = allMountedDevices.filter(
     (device) => (device.face ?? "front") === "front",
   ).length;
-  const mountedRearCount = mountedDevices.filter(
+  const mountedRearCount = allMountedDevices.filter(
     (device) => (device.face ?? "front") === "rear",
   ).length;
+  const mountedDevices =
+    input.rackFaceMode === "both"
+      ? allMountedDevices
+      : allMountedDevices.filter(
+          (device) => (device.face ?? "front") === input.rackFaceMode,
+        );
   const faces = [
     mountedFrontCount > 0 ? "front" : null,
     mountedRearCount > 0 ? "rear" : null,
   ].filter((face): face is "front" | "rear" => Boolean(face));
-  const useDualFaceLayout = mountedRearCount > 0;
+  const useDualFaceLayout =
+    input.rackFaceMode === "both" && mountedRearCount > 0;
   const nodeAreaX = useDualFaceLayout ? bodyX + 12 : bodyX + 32;
   const nodeAreaWidth = useDualFaceLayout
     ? input.rack.totalU <= 12
@@ -696,7 +721,7 @@ function buildRackPanel(input: {
     : RACK_NODE_WIDTH;
   const faceGap = 8;
   const faceNodeWidth = useDualFaceLayout
-    ? Math.max(98, Math.floor((nodeAreaWidth - faceGap) / 2))
+    ? Math.max(150, Math.floor((nodeAreaWidth - faceGap) / 2))
     : RACK_NODE_WIDTH;
   const mountedDeviceIds = new Set(mountedDevices.map((device) => device.id));
   const shelfChildrenByParent = groupBy(
@@ -792,7 +817,7 @@ function buildRackPanel(input: {
           2,
       );
     children
-      .sort((a, b) => a.hostname.localeCompare(b.hostname))
+      .sort(compareDeviceName)
       .forEach((device, index) => {
         nodes.push(
           createNode({
@@ -830,7 +855,7 @@ function buildRackPanel(input: {
     room: input.room,
     x: input.x,
     y: input.y,
-    width: RACK_PANEL_WIDTH,
+    width: input.width,
     height: panelHeight,
     bodyX,
     bodyY,
@@ -846,6 +871,7 @@ function buildRackPanel(input: {
       freeU: Math.max(0, input.rack.totalU - occupiedUnits.size),
     },
     faces: faces.length > 0 ? faces : ["front"],
+    faceMode: input.rackFaceMode,
   };
 }
 
@@ -1051,7 +1077,8 @@ function buildRoomGroups(input: {
   return Array.from(groups.entries())
     .sort(
       ([, a], [, b]) =>
-        b.devices.length - a.devices.length || a.name.localeCompare(b.name),
+        b.devices.length - a.devices.length ||
+        NATURAL_COLLATOR.compare(a.name, b.name),
     )
     .map(([id, group]) => {
       const collapsed = input.collapsedGroups.has(id);
@@ -1065,8 +1092,7 @@ function buildRoomGroups(input: {
           input.monitorsByDeviceId[b.id] ?? [],
         );
         return (
-          healthSort(aHealth) - healthSort(bHealth) ||
-          a.hostname.localeCompare(b.hostname)
+          healthSort(aHealth) - healthSort(bHealth) || compareDeviceName(a, b)
         );
       });
       const groupTop = y;
@@ -1400,7 +1426,11 @@ function buildPyramidComponents(
   linkedComponents.sort((a, b) => {
     const aScore = maxOf(a, (id) => adjacency[id]?.size ?? 0, 0);
     const bScore = maxOf(b, (id) => adjacency[id]?.size ?? 0, 0);
-    return b.length - a.length || bScore - aScore || a[0].localeCompare(b[0]);
+    return (
+      b.length - a.length ||
+      bScore - aScore ||
+      NATURAL_COLLATOR.compare(a[0], b[0])
+    );
   });
 
   if (unlinked.length > 0) {
@@ -1474,7 +1504,7 @@ function comparePyramidRootDevices(
     pyramidRootPriority(b) - pyramidRootPriority(a) ||
     (adjacency[b.id]?.size ?? 0) - (adjacency[a.id]?.size ?? 0) ||
     typeOrder(a.deviceType) - typeOrder(b.deviceType);
-  return priority || a.hostname.localeCompare(b.hostname);
+  return priority || compareDeviceName(a, b);
 }
 
 function comparePyramidDevices(
@@ -1488,7 +1518,7 @@ function comparePyramidDevices(
   return (
     typeOrder(a.deviceType) - typeOrder(b.deviceType) ||
     (adjacency[b.id]?.size ?? 0) - (adjacency[a.id]?.size ?? 0) ||
-    a.hostname.localeCompare(b.hostname)
+    compareDeviceName(a, b)
   );
 }
 
@@ -1845,7 +1875,7 @@ function buildDeviceTypeCounts(devices: Device[]) {
   const ordered = DEVICE_TYPE_ORDER.filter((type) => counts.has(type));
   const custom = [...counts.keys()]
     .filter((type) => !DEVICE_TYPE_ORDER.includes(type))
-    .sort((a, b) => typeLabel(a).localeCompare(typeLabel(b)));
+    .sort((a, b) => NATURAL_COLLATOR.compare(typeLabel(a), typeLabel(b)));
 
   return [...ordered, ...custom].map((type) => ({
     type,
@@ -1908,13 +1938,23 @@ function isSlotPort(kind: PortKind) {
 }
 
 function comparePorts(a: Port, b: Port) {
-  return a.position - b.position || a.name.localeCompare(b.name);
+  return a.position - b.position || NATURAL_COLLATOR.compare(a.name, b.name);
 }
 
 function compareRackDevices(a: Device, b: Device) {
   const aStart = a.startU ?? 0;
   const bStart = b.startU ?? 0;
-  return bStart - aStart || a.hostname.localeCompare(b.hostname);
+  return bStart - aStart || compareDeviceName(a, b);
+}
+
+function compareDeviceName(a: Device, b: Device) {
+  return NATURAL_COLLATOR.compare(deviceSortLabel(a), deviceSortLabel(b));
+}
+
+function deviceSortLabel(device: Device) {
+  return (
+    device.displayName || device.hostname || device.managementIp || device.id
+  );
 }
 
 function indexById<T extends { id: string }>(items: T[]) {

@@ -943,8 +943,8 @@ function RackPanelView({
         </div>
         <Mono className="text-[10px] text-[var(--text-tertiary)]">
           {panel.stats.totalU}U | {panel.stats.mounted} mounted |{" "}
-          {panel.stats.freeU}U free
-          {panel.stats.rearMounted > 0
+          {panel.stats.freeU}U free | {faceModeLabel(panel.faceMode)}
+          {panel.stats.rearMounted > 0 && panel.faceMode === "both"
             ? ` | ${panel.stats.frontMounted}F/${panel.stats.rearMounted}R`
             : ""}
         </Mono>
@@ -958,7 +958,7 @@ function RackPanelView({
           height: panel.bodyHeight,
         }}
       >
-        {panel.stats.rearMounted > 0 && (
+        {panel.stats.rearMounted > 0 && panel.faceMode === "both" && (
           <>
             <span className="pointer-events-none absolute left-3 top-1 z-10 rounded-[var(--radius-xs)] bg-[rgb(0_0_0_/_0.32)] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
               Front
@@ -1949,6 +1949,11 @@ function placementLabel(node: VisualizerNode) {
       : node.roomName;
   if (node.device.placement) return node.device.placement;
   return "Room / loose";
+}
+
+function faceModeLabel(mode: RackPanel["faceMode"]) {
+  if (mode === "both") return "front + rear";
+  return mode;
 }
 
 function clamp(value: number, min: number, max: number) {

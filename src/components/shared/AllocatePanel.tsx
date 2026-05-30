@@ -17,7 +17,7 @@ import {
   allocateIp,
   allocateVlan,
   canEditInventory,
-  previewNextStaticIp,
+  previewNextIpAllocation,
   previewNextVlanId,
   useStore,
 } from "@/lib/store";
@@ -139,10 +139,11 @@ function AllocateIpForm({
   const [saving, setSaving] = useState(false);
   const [deviceDrawerOpen, setDeviceDrawerOpen] = useState(false);
 
-  const previewIp = useMemo(() => {
+  const preview = useMemo(() => {
     if (!subnetId) return null;
-    return previewNextStaticIp(subnetId);
-  }, [ipAssignments, ipZones, scopes, subnets, subnetId]);
+    return previewNextIpAllocation(subnetId, assignmentType);
+  }, [assignmentType, ipAssignments, ipZones, scopes, subnets, subnetId]);
+  const previewIp = preview?.ipAddress ?? null;
 
   const subnet = subnets.find((entry) => entry.id === subnetId);
   const canSubmit = !!previewIp && hostname.trim().length > 0;
@@ -191,9 +192,21 @@ function AllocateIpForm({
       <PreviewBox
         label="Next available"
         value={previewIp}
-        emptyText="No free static IPs in this subnet"
-        unit={subnet ? `· ${subnet.name}` : ""}
+        emptyText="No free static or DHCP reservation IPs in this subnet"
+        unit={[
+          subnet ? `· ${subnet.name}` : "",
+          preview?.source === "dhcp-reservation" ? "· DHCP reservation" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
       />
+
+      {preview?.source === "dhcp-reservation" && (
+        <div className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/8 px-3 py-2 text-[11px] text-[var(--color-fg-subtle)]">
+          This subnet has no static slot left, so Rackpad will record the next
+          DHCP address as a reservation.
+        </div>
+      )}
 
       <Field label="Type">
         <div className="grid grid-cols-4 gap-1">
@@ -236,7 +249,7 @@ function AllocateIpForm({
         <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        {canRegisterDevice && (
+        {canRegisterDevice && preview?.source !== "dhcp-reservation" && (
           <Button
             type="button"
             variant="outline"

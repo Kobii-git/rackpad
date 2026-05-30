@@ -1427,7 +1427,20 @@ export async function restoreAdminBackupSnapshot(snapshot: unknown) {
   return result;
 }
 
+export interface IpAllocationPreview {
+  ipAddress: string;
+  assignmentType: IpAssignmentType;
+  source: "static" | "dhcp-reservation";
+}
+
 export function previewNextStaticIp(subnetId: string): string | null {
+  return previewNextIpAllocation(subnetId)?.ipAddress ?? null;
+}
+
+export function previewNextIpAllocation(
+  subnetId: string,
+  requestedType: IpAssignmentType = "device",
+): IpAllocationPreview | null {
   const subnet = state.subnets.find((entry) => entry.id === subnetId);
   if (!subnet) return null;
 
@@ -1459,13 +1472,17 @@ export function previewNextStaticIp(subnetId: string): string | null {
       const end = ipToInt(zone.endIp);
       for (let candidate = start; candidate <= end; candidate += 1) {
         if (!assignedSet.has(candidate)) {
-          return intToIp(candidate);
+          return {
+            ipAddress: intToIp(candidate),
+            assignmentType: requestedType,
+            source: "static",
+          };
         }
       }
     }
   }
 
-  return nextFreeStaticIp(
+  const staticCandidate = nextFreeStaticIp(
     subnet.cidr,
     dhcpScopes,
     reservedZones,
@@ -1475,11 +1492,52 @@ export function previewNextStaticIp(subnetId: string): string | null {
       skipReserved: false,
     },
   );
+  if (staticCandidate) {
+    return {
+      ipAddress: staticCandidate,
+      assignmentType: requestedType,
+      source: "static",
+    };
+  }
+
+  const dhcpReservationCandidate = nextFreeDhcpReservationIp(
+    subnet.cidr,
+    dhcpScopes,
+    assignedSet,
+  );
+  if (!dhcpReservationCandidate) return null;
+
+  return {
+    ipAddress: dhcpReservationCandidate,
+    assignmentType: "reserved",
+    source: "dhcp-reservation",
+  };
 }
 
 function addDhcpTechnicalAddress(target: Set<number>, ipAddress?: string | null) {
   if (!ipAddress) return;
   target.add(ipToInt(ipAddress));
+}
+
+function nextFreeDhcpReservationIp(
+  subnetCidr: string,
+  dhcpScopes: DhcpScope[],
+  assignedSet: Set<number>,
+) {
+  const baseInt = ipToInt(subnetCidr.split("/")[0]);
+  const broadcast = baseInt + cidrSize(subnetCidr) - 1;
+  const sortedScopes = [...dhcpScopes].sort(
+    (a, b) => ipToInt(a.startIp) - ipToInt(b.startIp),
+  );
+
+  for (const scope of sortedScopes) {
+    const start = Math.max(baseInt + 1, ipToInt(scope.startIp));
+    const end = Math.min(broadcast - 1, ipToInt(scope.endIp));
+    for (let candidate = start; candidate <= end; candidate += 1) {
+      if (!assignedSet.has(candidate)) return intToIp(candidate);
+    }
+  }
+  return null;
 }
 
 export function previewNextVlanId(rangeId: string): number | null {
@@ -2482,14 +2540,14 @@ export interface AllocateIpInput {
 export async function allocateIp(
   input: AllocateIpInput,
 ): Promise<IpAssignment | null> {
-  const ipAddress = previewNextStaticIp(input.subnetId);
-  if (!ipAddress) return null;
+  const preview = previewNextIpAllocation(input.subnetId, input.assignmentType);
+  if (!preview) return null;
 
   const subnet = state.subnets.find((entry) => entry.id === input.subnetId);
   const created = await api.createIpAssignment({
     subnetId: input.subnetId,
-    ipAddress,
-    assignmentType: input.assignmentType,
+    ipAddress: preview.ipAddress,
+    assignmentType: preview.assignmentType,
     deviceId: input.deviceId,
     hostname: input.hostname,
     description: input.description,
@@ -2504,7 +2562,7 @@ export async function allocateIp(
     "ip.assign",
     "IpAssignment",
     created.id,
-    `Assigned ${ipAddress} to ${input.hostname} (${input.assignmentType}) in ${subnet?.name ?? "subnet"}`,
+    `Assigned ${preview.ipAddress} to ${input.hostname} (${preview.assignmentType}) in ${subnet?.name ?? "subnet"}`,
   );
 
   return created;

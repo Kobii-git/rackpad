@@ -14,11 +14,13 @@ export type VisualizerHealth = "online" | "warning" | "offline" | "unknown";
 export type VisualizerColumnKind = "rack" | "room";
 export type VisualizerLooseDevicePlacement = "beside-racks" | "below-racks";
 export type VisualizerLayoutMode = "grouped" | "pyramid";
+export type VisualizerRackFaceMode = "front" | "rear" | "both";
 
 export interface VisualizerLayoutOptions {
   topologyLayout: VisualizerLayoutMode;
   looseDevicePlacement: VisualizerLooseDevicePlacement;
   includeRoomOnlySections: boolean;
+  rackFaceMode: VisualizerRackFaceMode;
 }
 
 export interface VisualizerPoint {
@@ -109,6 +111,7 @@ export interface RackPanel {
   bands: RackBand[];
   nodes: VisualizerNode[];
   faces: RackFace[];
+  faceMode: VisualizerRackFaceMode;
   stats: {
     totalU: number;
     mounted: number;

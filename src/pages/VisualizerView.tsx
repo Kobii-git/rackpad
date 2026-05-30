@@ -8,6 +8,7 @@ import type {
   TraceModeState,
   VisualizerLayoutMode,
   VisualizerLooseDevicePlacement,
+  VisualizerRackFaceMode,
 } from "./visualizer/types";
 
 const HEALTH_STORAGE_KEY = "rackpad.visualizer.health";
@@ -15,6 +16,7 @@ const NO_CABLE_BANNER_KEY = "rackpad.visualizer.no-cable-banner.dismissed";
 const LOOSE_PLACEMENT_STORAGE_KEY = "rackpad.visualizer.loose-placement";
 const ROOM_ONLY_SECTIONS_STORAGE_KEY = "rackpad.visualizer.room-only-sections";
 const LAYOUT_MODE_STORAGE_KEY = "rackpad.visualizer.layout-mode";
+const RACK_FACE_MODE_STORAGE_KEY = "rackpad.visualizer.rack-face-mode";
 
 export default function VisualizerView() {
   const lab = useStore((s) => s.lab);
@@ -42,6 +44,9 @@ export default function VisualizerView() {
   );
   const [layoutMode, setLayoutMode] = useState<VisualizerLayoutMode>(() =>
     readLayoutMode(LAYOUT_MODE_STORAGE_KEY),
+  );
+  const [rackFaceMode, setRackFaceMode] = useState<VisualizerRackFaceMode>(() =>
+    readRackFaceMode(RACK_FACE_MODE_STORAGE_KEY),
   );
   const [looseDevicePlacement, setLooseDevicePlacement] =
     useState<VisualizerLooseDevicePlacement>(() =>
@@ -79,6 +84,7 @@ export default function VisualizerView() {
           topologyLayout: layoutMode,
           looseDevicePlacement,
           includeRoomOnlySections,
+          rackFaceMode,
         },
       }),
     [
@@ -95,6 +101,7 @@ export default function VisualizerView() {
       expandedRackRuns,
       collapsedGroups,
       layoutMode,
+      rackFaceMode,
       looseDevicePlacement,
       includeRoomOnlySections,
     ],
@@ -172,6 +179,20 @@ export default function VisualizerView() {
             </select>
             {layoutMode === "grouped" && (
               <>
+                <select
+                  value={rackFaceMode}
+                  onChange={(event) => {
+                    const next = event.target.value as VisualizerRackFaceMode;
+                    setRackFaceMode(next);
+                    writeString(RACK_FACE_MODE_STORAGE_KEY, next);
+                  }}
+                  className="rk-control h-8 w-28 px-2 text-xs text-[var(--text-primary)]"
+                  aria-label="Rack face"
+                >
+                  <option value="front">Front</option>
+                  <option value="rear">Rear</option>
+                  <option value="both">Both</option>
+                </select>
                 <VisualizerToggle
                   checked={looseDevicePlacement === "below-racks"}
                   label="Loose below"
@@ -316,6 +337,15 @@ function readLayoutMode(key: string): VisualizerLayoutMode {
     return value === "pyramid" ? "pyramid" : "grouped";
   } catch {
     return "grouped";
+  }
+}
+
+function readRackFaceMode(key: string): VisualizerRackFaceMode {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value === "rear" || value === "both" ? value : "front";
+  } catch {
+    return "front";
   }
 }
 
