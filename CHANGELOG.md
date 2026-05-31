@@ -6,6 +6,17 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-05-31
+
+### Fixed
+
+- DHCP reservation allocation now respects manually defined DHCP IP zones
+  instead of using the full DHCP scope range.
+- Add Device IP assignment now offers Static vs DHCP Reservation allocation
+  with a next-address preview that follows the selected allocation mode.
+- Server-side IPAM validation now blocks DHCP reservations outside the DHCP IP
+  zone when a DHCP zone exists for the subnet.
+
 ## [1.5.1] - 2026-05-31
 
 ### Changed
