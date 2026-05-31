@@ -6,6 +6,27 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.5.0-beta] - 2026-05-31
+
+Beta feature preview for the next Rackpad release.
+
+### Added
+
+- Added a React Flow diagram visualizer with draggable saved device placement,
+  grouped topology sections, minimap, and direct device/cable inspection.
+- Added monitoring bulk actions for selecting devices and enabling or disabling
+  ICMP checks.
+- Added an optional ICMP monitor toggle when auto-mapping discovery clients.
+
+### Changed
+
+- Improved IPAM and DHCP utilization around technical addresses, gateways, DNS
+  servers, reservations, and DHCP scope usage.
+- Improved discovery handling so gateway, DNS, reserved, dismissed, and linked
+  rows stay out of the active client workflow.
+- Improved visualizer scrolling and dense rack/shelf readability for larger
+  rack documentation views.
+
 ## [1.4.1] - 2026-05-30
 
 ### Fixed
