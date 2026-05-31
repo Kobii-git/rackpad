@@ -1604,6 +1604,22 @@ test("ip assignments support DHCP reservations and protect technical IPs", async
   assert.equal(scopeRes.statusCode, 201);
   const scope = readJson(scopeRes) as { id: string };
 
+  const dhcpZoneRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-zones",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      kind: "dhcp",
+      startIp: "192.168.50.15",
+      endIp: "192.168.50.20",
+      description: "Client DHCP pool",
+    },
+  });
+  assert.equal(dhcpZoneRes.statusCode, 201);
+
   const staticInDhcpRes = await app.inject({
     method: "POST",
     url: "/api/ip-assignments",
@@ -1620,7 +1636,7 @@ test("ip assignments support DHCP reservations and protect technical IPs", async
   assert.equal(staticInDhcpRes.statusCode, 400);
   assert.match(staticInDhcpRes.body, /DHCP reservations/i);
 
-  const reservationRes = await app.inject({
+  const reservationOutsideZoneRes = await app.inject({
     method: "POST",
     url: "/api/ip-assignments",
     headers: {
@@ -1629,6 +1645,24 @@ test("ip assignments support DHCP reservations and protect technical IPs", async
     payload: {
       subnetId: subnet.id,
       ipAddress: "192.168.50.10",
+      assignmentType: "device",
+      allocationMode: "dhcp-reservation",
+      dhcpScopeId: scope.id,
+      hostname: "reservation-outside-zone",
+    },
+  });
+  assert.equal(reservationOutsideZoneRes.statusCode, 400);
+  assert.match(reservationOutsideZoneRes.body, /DHCP IP zone/i);
+
+  const reservationRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      ipAddress: "192.168.50.15",
       assignmentType: "device",
       allocationMode: "dhcp-reservation",
       dhcpScopeId: scope.id,

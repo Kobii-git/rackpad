@@ -66,6 +66,16 @@ function dhcpScopeForIp(subnetId: string, ipAddress: string) {
   }>).find((scope) => ipInRange(ipAddress, scope.startIp, scope.endIp))
 }
 
+function dhcpZonesForSubnet(subnetId: string) {
+  return db.prepare(`
+    SELECT startIp, endIp
+    FROM ipZones
+    WHERE subnetId = ?
+      AND kind = 'dhcp'
+    ORDER BY startIp
+  `).all(subnetId) as Array<{ startIp: string; endIp: string }>
+}
+
 function dhcpTechnicalRole(subnetId: string, ipAddress: string) {
   const scopes = db.prepare('SELECT name, gateway, dnsServers FROM dhcpScopes WHERE subnetId = ?').all(subnetId) as Array<{
     name: string
@@ -135,6 +145,10 @@ function validateAssignmentSemantics(input: {
     }
     if (!ipInRange(input.ipAddress, scope.startIp, scope.endIp)) {
       throw new ValidationError('DHCP reservation IP must be inside the selected DHCP scope.')
+    }
+    const dhcpZones = dhcpZonesForSubnet(input.subnetId)
+    if (dhcpZones.length > 0 && !dhcpZones.some((zone) => ipInRange(input.ipAddress, zone.startIp, zone.endIp))) {
+      throw new ValidationError('DHCP reservation IP must be inside a DHCP IP zone.')
     }
   } else if (input.dhcpScopeId) {
     throw new ValidationError('Static assignments cannot reference a DHCP scope.')

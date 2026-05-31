@@ -1542,7 +1542,13 @@ export function previewNextIpAllocation(
   const staticZones = subnetZones
     .filter((zone) => zone.kind === "static")
     .sort((a, b) => ipToInt(a.startIp) - ipToInt(b.startIp));
+  const dhcpZones = subnetZones
+    .filter((zone) => zone.kind === "dhcp")
+    .sort((a, b) => ipToInt(a.startIp) - ipToInt(b.startIp));
   const reservedZones = subnetZones.filter((zone) => zone.kind === "reserved");
+  const blockedZones = subnetZones.filter(
+    (zone) => zone.kind === "reserved" || zone.kind === "infrastructure",
+  );
   const assignedSet = new Set(
     state.ipAssignments
       .filter((assignment) => assignment.subnetId === subnetId)
@@ -1602,6 +1608,8 @@ export function previewNextIpAllocation(
     options.dhcpScopeId
       ? dhcpScopes.filter((scope) => scope.id === options.dhcpScopeId)
       : dhcpScopes,
+    dhcpZones,
+    blockedZones,
     assignedSet,
   );
   if (!dhcpReservationCandidate) return null;
@@ -1632,6 +1640,8 @@ function addDhcpTechnicalAddress(target: Set<number>, ipAddress?: string | null)
 function nextFreeDhcpReservationIp(
   subnetCidr: string,
   dhcpScopes: DhcpScope[],
+  dhcpZones: IpZone[],
+  blockedZones: IpZone[],
   assignedSet: Set<number>,
 ) {
   const baseInt = ipToInt(subnetCidr.split("/")[0]);
@@ -1639,15 +1649,46 @@ function nextFreeDhcpReservationIp(
   const sortedScopes = [...dhcpScopes].sort(
     (a, b) => ipToInt(a.startIp) - ipToInt(b.startIp),
   );
+  const candidateRanges: Array<{ start: number; end: number }> = [];
 
   for (const scope of sortedScopes) {
-    const start = Math.max(baseInt + 1, ipToInt(scope.startIp));
-    const end = Math.min(broadcast - 1, ipToInt(scope.endIp));
+    const scopeStart = Math.max(baseInt + 1, ipToInt(scope.startIp));
+    const scopeEnd = Math.min(broadcast - 1, ipToInt(scope.endIp));
+
+    if (dhcpZones.length === 0) {
+      candidateRanges.push({ start: scopeStart, end: scopeEnd });
+      continue;
+    }
+
+    for (const zone of dhcpZones) {
+      const start = Math.max(scopeStart, ipToInt(zone.startIp));
+      const end = Math.min(scopeEnd, ipToInt(zone.endIp));
+      if (start <= end) {
+        candidateRanges.push({ start, end });
+      }
+    }
+  }
+
+  candidateRanges.sort((a, b) => a.start - b.start || a.end - b.end);
+
+  for (const range of candidateRanges) {
+    const start = Math.max(baseInt + 1, range.start);
+    const end = Math.min(broadcast - 1, range.end);
     for (let candidate = start; candidate <= end; candidate += 1) {
+      if (blockedZones.some((zone) => intInIpRange(candidate, zone))) continue;
       if (!assignedSet.has(candidate)) return intToIp(candidate);
     }
   }
   return null;
+}
+
+function intInIpRange(
+  candidate: number,
+  range: { startIp: string; endIp: string },
+) {
+  return (
+    candidate >= ipToInt(range.startIp) && candidate <= ipToInt(range.endIp)
+  );
 }
 
 export function previewNextVlanId(rangeId: string): number | null {
