@@ -1,5 +1,4 @@
 import {
-  type MouseEvent,
   useEffect,
   useMemo,
   useRef,
@@ -418,9 +417,9 @@ export function DiagramCanvas({
     writeDiagramPositions(DIAGRAM_SECTION_POSITIONS_STORAGE_KEY, {});
   }
 
-  function toggleTypeFilter(type: string, shift: boolean) {
+  function toggleTypeFilter(type: string) {
     setTypeFilters((current) => {
-      const next = new Set(shift ? current : []);
+      const next = new Set(current);
       if (next.has(type)) next.delete(type);
       else next.add(type);
       return next;
@@ -543,9 +542,7 @@ export function DiagramCanvas({
                 key={entry.type}
                 active={typeFilters.has(entry.type)}
                 label={`${entry.label} ${entry.count}`}
-                onClick={(event) =>
-                  toggleTypeFilter(entry.type, event.shiftKey)
-                }
+                onClick={() => toggleTypeFilter(entry.type)}
               />
             ))}
           </div>
@@ -720,7 +717,7 @@ function DiagramTypeChip({
 }: {
   label: string;
   active: boolean;
-  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
+  onClick: () => void;
 }) {
   return (
     <button

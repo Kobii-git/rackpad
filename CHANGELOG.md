@@ -14,8 +14,8 @@ Beta feature preview for the next Rackpad release.
 
 - Added a React Flow diagram visualizer with draggable saved device placement,
   grouped topology sections, minimap, and direct device/cable inspection.
-- Added Diagram controls for filtering by device type, matching the normal
-  visualizer type-filter workflow.
+- Added Diagram controls for filtering by device type, with multi-select
+  category toggles and an All reset.
 - Added whole-section dragging in Diagram view so racks, rooms, WiFi groups,
   and hosted/shelf groups can be moved together instead of only moving one
   device at a time.
