@@ -36,6 +36,9 @@ export default function VisualizerView() {
   const vlans = useStore((s) => s.vlans);
   const discoveredDevices = useStore((s) => s.discoveredDevices);
   const virtualSwitches = useStore((s) => s.virtualSwitches);
+  const wifiSsids = useStore((s) => s.wifiSsids);
+  const wifiAccessPoints = useStore((s) => s.wifiAccessPoints);
+  const wifiClientAssociations = useStore((s) => s.wifiClientAssociations);
   const [cableType, setCableType] = useState("all");
   const [expandedRackRuns, setExpandedRackRuns] = useState<Set<string>>(() =>
     readSessionSet("rackpad.visualizer.expanded-rack-runs"),
@@ -303,6 +306,9 @@ export default function VisualizerView() {
           loading={loading && !loaded}
           healthOverlay={healthOverlay}
           cableType={cableType}
+          wifiSsids={wifiSsids}
+          wifiAccessPoints={wifiAccessPoints}
+          wifiClientAssociations={wifiClientAssociations}
         />
       ) : (
         <VisualizerCanvas

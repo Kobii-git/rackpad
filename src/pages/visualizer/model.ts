@@ -2016,12 +2016,37 @@ function compareRackDevices(a: Device, b: Device) {
 }
 
 function compareDeviceName(a: Device, b: Device) {
+  const aIp = deviceSortIpValue(a);
+  const bIp = deviceSortIpValue(b);
+  if (aIp != null && bIp != null && aIp !== bIp) return aIp - bIp;
   return NATURAL_COLLATOR.compare(deviceSortLabel(a), deviceSortLabel(b));
 }
 
 function deviceSortLabel(device: Device) {
   return (
     device.displayName || device.hostname || device.managementIp || device.id
+  );
+}
+
+function deviceSortIpValue(device: Device) {
+  return (
+    parseSortableIp(device.managementIp) ?? parseSortableIp(deviceSortLabel(device))
+  );
+}
+
+function parseSortableIp(value?: string | null) {
+  if (!value) return null;
+  const match = value.match(
+    /(?:^|[^\d])(\d{1,3})[.-](\d{1,3})[.-](\d{1,3})[.-](\d{1,3})(?:[^\d]|$)/,
+  );
+  if (!match) return null;
+  const octets = match.slice(1, 5).map(Number);
+  if (octets.some((octet) => octet < 0 || octet > 255)) return null;
+  return (
+    octets[0] * 256 ** 3 +
+    octets[1] * 256 ** 2 +
+    octets[2] * 256 +
+    octets[3]
   );
 }
 

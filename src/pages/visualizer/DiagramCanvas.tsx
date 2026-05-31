@@ -24,8 +24,13 @@ import { Button } from "@/components/ui/Button";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { formatDeviceAddress } from "@/lib/network-labels";
-import { cn } from "@/lib/utils";
-import { nodeStripeColor, typeLabel } from "./model";
+import type {
+  WifiAccessPoint,
+  WifiClientAssociation,
+  WifiSsid,
+} from "@/lib/types";
+import { cn, normalizeColorToCss } from "@/lib/utils";
+import { nodeStripeColor, typeColor, typeLabel } from "./model";
 import type {
   VisualizerCable,
   VisualizerHealth,
@@ -35,23 +40,28 @@ import type {
 
 const DIAGRAM_POSITIONS_STORAGE_KEY = "rackpad.visualizer.diagram-positions";
 const SECTION_PADDING_X = 24;
-const SECTION_PADDING_BOTTOM = 24;
-const SECTION_HEADER_HEIGHT = 76;
-const SECTION_GAP_X = 40;
-const SECTION_GAP_Y = 40;
+const SECTION_PADDING_BOTTOM = 30;
+const SECTION_HEADER_HEIGHT = 84;
+const SECTION_GAP_X = 56;
+const SECTION_GAP_Y = 56;
 const SECTION_START_X = 36;
-const SECTION_START_Y = 36;
-const ROW_MAX_WIDTH = 1600;
-const DEVICE_NODE_WIDTH = 252;
-const DEVICE_NODE_HEIGHT = 76;
-const DEVICE_GAP_X = 18;
-const DEVICE_GAP_Y = 16;
+const SECTION_START_Y = 116;
+const ROW_MAX_WIDTH = 1900;
+const DEVICE_NODE_WIDTH = 300;
+const DEVICE_NODE_HEIGHT = 92;
+const DEVICE_GAP_X = 30;
+const DEVICE_GAP_Y = 24;
+const STACKED_DEVICE_GAP_Y = 14;
+const EDGE_LABEL_LIMIT = 42;
 
 interface DiagramCanvasProps {
   model: VisualizerModel;
   loading: boolean;
   healthOverlay: boolean;
   cableType: string;
+  wifiSsids: WifiSsid[];
+  wifiAccessPoints: WifiAccessPoint[];
+  wifiClientAssociations: WifiClientAssociation[];
 }
 
 interface DiagramPortData {
@@ -66,6 +76,7 @@ interface DiagramDeviceData extends Record<string, unknown> {
   deviceType: string;
   health: VisualizerHealth;
   hostname: string;
+  connectionCount: number;
   portSummary: string;
   ports: DiagramPortData[];
   sectionLabel: string;
@@ -79,6 +90,12 @@ interface DiagramSectionData extends Record<string, unknown> {
   countLabel: string;
   subtitle: string;
   title: string;
+}
+
+interface DiagramWifiContext {
+  accessPointByDeviceId: Record<string, WifiAccessPoint>;
+  associationByClientId: Record<string, WifiClientAssociation>;
+  ssidById: Record<string, WifiSsid>;
 }
 
 type DiagramDeviceNode = FlowNode<DiagramDeviceData, "device">;
@@ -96,6 +113,7 @@ interface DiagramSection {
   title: string;
   subtitle: string;
   accent: string;
+  layout: "grid" | "stack";
   sortGroup: number;
   nodes: VisualizerNode[];
   x: number;
@@ -122,15 +140,34 @@ export function DiagramCanvas({
   loading,
   healthOverlay,
   cableType,
+  wifiSsids,
+  wifiAccessPoints,
+  wifiClientAssociations,
 }: DiagramCanvasProps) {
   const [savedPositions, setSavedPositions] = useState<
     Record<string, XYPosition>
   >(() => readDiagramPositions(DIAGRAM_POSITIONS_STORAGE_KEY));
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [selectedCableId, setSelectedCableId] = useState<string | null>(null);
+  const wifiContext = useMemo(
+    () =>
+      buildDiagramWifiContext(
+        wifiSsids,
+        wifiAccessPoints,
+        wifiClientAssociations,
+      ),
+    [wifiSsids, wifiAccessPoints, wifiClientAssociations],
+  );
   const { flowNodes, flowEdges, sections, visibleCableCount } = useMemo(
-    () => buildDiagramLayout(model, cableType, healthOverlay, savedPositions),
-    [model, cableType, healthOverlay, savedPositions],
+    () =>
+      buildDiagramLayout(
+        model,
+        cableType,
+        healthOverlay,
+        savedPositions,
+        wifiContext,
+      ),
+    [model, cableType, healthOverlay, savedPositions, wifiContext],
   );
   const [nodes, setNodes, onNodesChange] =
     useNodesState<DiagramFlowNode>(flowNodes);
@@ -151,6 +188,40 @@ export function DiagramCanvas({
   const selectedCable = selectedCableId
     ? model.cableById[selectedCableId]
     : null;
+  const connectedCables = selectedNode
+    ? model.cables.filter(
+        (cable) =>
+          cableIsVisible(cable, cableType) &&
+          (cable.fromDevice?.id === selectedNode.device.id ||
+            cable.toDevice?.id === selectedNode.device.id),
+      )
+    : [];
+  const displayEdges = useMemo(
+    () =>
+      edges.map((edge) => {
+        const highlighted =
+          selectedCableId === edge.id ||
+          (selectedDeviceId != null &&
+            (edge.source === selectedDeviceId || edge.target === selectedDeviceId));
+        const dimmed =
+          Boolean(selectedCableId || selectedDeviceId) && !highlighted;
+        return {
+          ...edge,
+          animated: highlighted,
+          zIndex: highlighted ? 8 : 1,
+          style: {
+            ...edge.style,
+            strokeOpacity: highlighted
+              ? 0.96
+              : dimmed
+                ? 0.14
+                : edge.style?.strokeOpacity,
+            strokeWidth: highlighted ? 4 : edge.style?.strokeWidth,
+          },
+        };
+      }),
+    [edges, selectedCableId, selectedDeviceId],
+  );
 
   const handleNodeClick: NodeMouseHandler<DiagramFlowNode> = (_, node) => {
     if (node.type !== "device") return;
@@ -207,7 +278,7 @@ export function DiagramCanvas({
     <div className="visualizer-diagram relative h-[calc(100vh-8.5rem)] min-h-[620px] overflow-hidden border-t border-[var(--border-subtle)] bg-[var(--surface-1)]">
       <ReactFlow<DiagramFlowNode, DiagramFlowEdge>
         nodes={nodes}
-        edges={edges}
+        edges={displayEdges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
@@ -222,7 +293,12 @@ export function DiagramCanvas({
           setSelectedCableId(null);
         }}
         fitView
-        fitViewOptions={{ padding: 0.18, includeHiddenNodes: false }}
+        fitViewOptions={{
+          padding: 0.14,
+          includeHiddenNodes: false,
+          minZoom: 0.42,
+          maxZoom: 1,
+        }}
         minZoom={0.12}
         maxZoom={1.8}
         nodesConnectable={false}
@@ -275,9 +351,14 @@ export function DiagramCanvas({
         {(selectedNode || selectedCable) && (
           <Panel
             position="top-right"
-            className="rk-panel w-80 rounded-[var(--radius-md)] p-3 shadow-[var(--shadow-card)]"
+            className="rk-panel max-h-[calc(100vh-11rem)] w-[360px] overflow-y-auto rounded-[var(--radius-md)] p-3 shadow-[var(--shadow-card)]"
           >
-            {selectedNode && <DiagramDeviceInspector node={selectedNode} />}
+            {selectedNode && (
+              <DiagramDeviceInspector
+                node={selectedNode}
+                connectedCables={connectedCables}
+              />
+            )}
             {selectedCable && <DiagramCableInspector cable={selectedCable} />}
           </Panel>
         )}
@@ -287,30 +368,21 @@ export function DiagramCanvas({
 }
 
 function DiagramDeviceCard({ data, selected }: NodeProps<DiagramDeviceNode>) {
-  const shownPorts = data.ports.slice(0, 18);
+  const shownPorts = data.ports.slice(0, 24);
   const hiddenPortCount = Math.max(0, data.ports.length - shownPorts.length);
 
   return (
     <div
       className={cn(
-        "relative h-[76px] w-[252px] overflow-hidden rounded-[var(--radius-md)] border bg-[var(--surface-2)] px-3 py-2 text-left shadow-[0_14px_30px_rgb(0_0_0_/_0.18)] transition-colors",
+        "relative overflow-hidden rounded-[var(--radius-md)] border bg-[var(--surface-2)] px-3 py-2.5 text-left shadow-[0_14px_30px_rgb(0_0_0_/_0.18)] transition-colors",
         selected
           ? "border-[var(--accent-primary-border)] shadow-[var(--shadow-selected)]"
           : "border-[var(--border-default)]",
       )}
+      style={{ width: DEVICE_NODE_WIDTH, height: DEVICE_NODE_HEIGHT }}
+      title={`${data.hostname}${data.address ? ` | ${data.address}` : ""}`}
     >
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="in"
-        className="visualizer-diagram-handle"
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="out"
-        className="visualizer-diagram-handle"
-      />
+      <DiagramHandles />
       <span
         className="absolute inset-y-2 left-1 w-0.5 rounded-full"
         style={{ background: data.stripeColor }}
@@ -324,7 +396,7 @@ function DiagramDeviceCard({ data, selected }: NodeProps<DiagramDeviceNode>) {
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-xs font-semibold text-[var(--text-primary)]">
+            <span className="truncate text-[13px] font-semibold text-[var(--text-primary)]">
               {data.hostname}
             </span>
             <StatusDot status={healthToDeviceStatus(data.health)} />
@@ -336,6 +408,8 @@ function DiagramDeviceCard({ data, selected }: NodeProps<DiagramDeviceNode>) {
             <span className="truncate">{data.typeLabel}</span>
             <span className="shrink-0">|</span>
             <span className="shrink-0">{data.portSummary}</span>
+            <span className="shrink-0">|</span>
+            <span className="shrink-0">{data.connectionCount} links</span>
           </div>
         </div>
         <Link
@@ -347,8 +421,8 @@ function DiagramDeviceCard({ data, selected }: NodeProps<DiagramDeviceNode>) {
           <ExternalLink className="size-3.5" />
         </Link>
       </div>
-      <div className="absolute bottom-2 left-4 right-3 flex items-center justify-between gap-3">
-        <div className="flex max-w-[150px] flex-wrap gap-1">
+      <div className="absolute bottom-2.5 left-4 right-3 flex items-center justify-between gap-3">
+        <div className="flex max-w-[188px] flex-wrap gap-1">
           {shownPorts.map((port) => (
             <span
               key={port.id}
@@ -374,6 +448,33 @@ function DiagramDeviceCard({ data, selected }: NodeProps<DiagramDeviceNode>) {
         </span>
       </div>
     </div>
+  );
+}
+
+function DiagramHandles() {
+  return (
+    <>
+      {(["Left", "Right", "Top", "Bottom"] as const).map((side) => {
+        const position = Position[side];
+        const id = side.toLowerCase();
+        return (
+          <span key={id}>
+            <Handle
+              type="target"
+              position={position}
+              id={`target-${id}`}
+              className="visualizer-diagram-handle"
+            />
+            <Handle
+              type="source"
+              position={position}
+              id={`source-${id}`}
+              className="visualizer-diagram-handle"
+            />
+          </span>
+        );
+      })}
+    </>
   );
 }
 
@@ -408,7 +509,13 @@ function DiagramSectionCard({ data }: NodeProps<DiagramSectionNode>) {
   );
 }
 
-function DiagramDeviceInspector({ node }: { node: VisualizerNode }) {
+function DiagramDeviceInspector({
+  node,
+  connectedCables,
+}: {
+  node: VisualizerNode;
+  connectedCables: VisualizerCable[];
+}) {
   return (
     <div>
       <div className="rk-kicker">Device</div>
@@ -436,6 +543,62 @@ function DiagramDeviceInspector({ node }: { node: VisualizerNode }) {
         />
         <InspectorValue label="Rack" value={node.rackName || "Loose"} />
         <InspectorValue label="Room" value={node.roomName || "Unassigned"} />
+      </div>
+      <div className="mt-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-1)]">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-3 py-2">
+          <div className="rk-kicker">Connected cables</div>
+          <span className="font-mono text-[10px] text-[var(--text-muted)]">
+            {connectedCables.length}
+          </span>
+        </div>
+        <div className="max-h-64 overflow-y-auto p-2">
+          {connectedCables.length === 0 ? (
+            <div className="px-1 py-2 text-xs text-[var(--text-secondary)]">
+              No visible cable links for the current filter.
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {connectedCables.map((cable) => {
+                const peer =
+                  cable.fromDevice?.id === node.device.id
+                    ? cable.toDevice
+                    : cable.fromDevice;
+                const ownPort =
+                  cable.fromDevice?.id === node.device.id
+                    ? cable.fromPort
+                    : cable.toPort;
+                const peerPort =
+                  cable.fromDevice?.id === node.device.id
+                    ? cable.toPort
+                    : cable.fromPort;
+                return (
+                  <div
+                    key={cable.link.id}
+                    className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-2)] px-2.5 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ background: cable.color }}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--text-primary)]">
+                        {peer?.hostname ?? "Unknown device"}
+                      </span>
+                      <span className="font-mono text-[9px] uppercase text-[var(--text-muted)]">
+                        {cable.link.cableType || "Cable"}
+                      </span>
+                    </div>
+                    <div className="mt-1 truncate font-mono text-[10px] text-[var(--text-tertiary)]">
+                      {ownPort?.name ?? "port"}
+                      {" -> "}
+                      {peerPort?.name ?? "port"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
       <Link
         to={`/devices/${node.device.id}`}
@@ -507,9 +670,18 @@ function buildDiagramLayout(
   cableType: string,
   healthOverlay: boolean,
   savedPositions: Record<string, XYPosition>,
+  wifiContext: DiagramWifiContext,
 ): DiagramLayoutResult {
-  const sections = positionSections(buildSections(model));
+  const visibleCables = model.cables
+    .filter((cable) => cableIsVisible(cable, cableType))
+    .filter((cable) => cable.fromDevice && cable.toDevice);
+  const connectionCountByDeviceId = buildConnectionCounts(visibleCables);
+  const sections = positionSections(buildSections(model, wifiContext));
   const flowNodes: DiagramFlowNode[] = [];
+  const nodeGeometryById = new Map<
+    string,
+    { x: number; y: number; width: number; height: number }
+  >();
 
   for (const section of sections) {
     flowNodes.push({
@@ -536,6 +708,8 @@ function buildDiagramLayout(
     section.nodes.forEach((node, index) => {
       const column = index % section.columns;
       const row = Math.floor(index / section.columns);
+      const rowGap =
+        section.layout === "stack" ? STACKED_DEVICE_GAP_Y : DEVICE_GAP_Y;
       const position = savedPositions[node.device.id] ?? {
         x:
           section.x +
@@ -544,7 +718,7 @@ function buildDiagramLayout(
         y:
           section.y +
           SECTION_HEADER_HEIGHT +
-          row * (DEVICE_NODE_HEIGHT + DEVICE_GAP_Y),
+          row * (DEVICE_NODE_HEIGHT + rowGap),
       };
 
       flowNodes.push({
@@ -557,6 +731,7 @@ function buildDiagramLayout(
           deviceType: node.device.deviceType,
           health: node.health,
           hostname: node.device.hostname,
+          connectionCount: connectionCountByDeviceId[node.device.id] ?? 0,
           portSummary: `${node.portSummary.linked}/${node.portSummary.total}`,
           ports: node.ports.map((port) => ({
             id: port.port.id,
@@ -570,23 +745,35 @@ function buildDiagramLayout(
         },
         zIndex: 2,
       });
+      nodeGeometryById.set(node.device.id, {
+        x: position.x,
+        y: position.y,
+        width: DEVICE_NODE_WIDTH,
+        height: DEVICE_NODE_HEIGHT,
+      });
     });
   }
 
-  const flowEdges = model.cables
-    .filter((cable) => cableIsVisible(cable, cableType))
-    .filter((cable) => cable.fromDevice && cable.toDevice)
+  const showLabels = visibleCables.length <= EDGE_LABEL_LIMIT;
+  const flowEdges = visibleCables
     .map((cable): DiagramFlowEdge => {
       const offline = !cable.up || cable.unknown;
+      const sourceGeometry = cable.fromDevice
+        ? nodeGeometryById.get(cable.fromDevice.id)
+        : undefined;
+      const targetGeometry = cable.toDevice
+        ? nodeGeometryById.get(cable.toDevice.id)
+        : undefined;
+      const handles = chooseEdgeHandles(sourceGeometry, targetGeometry);
       return {
         id: cable.link.id,
         source: cable.fromDevice?.id ?? "",
-        sourceHandle: "out",
+        sourceHandle: `source-${handles.source}`,
         target: cable.toDevice?.id ?? "",
-        targetHandle: "in",
+        targetHandle: `target-${handles.target}`,
         type: "smoothstep",
         data: { cableId: cable.link.id },
-        label: cable.link.cableType || undefined,
+        label: showLabels ? cable.link.cableType || undefined : undefined,
         labelShowBg: true,
         labelBgPadding: [6, 3],
         labelBgBorderRadius: 4,
@@ -617,11 +804,11 @@ function buildDiagramLayout(
   };
 }
 
-function buildSections(model: VisualizerModel) {
+function buildSections(model: VisualizerModel, wifiContext: DiagramWifiContext) {
   const sectionsById = new Map<string, DiagramSection>();
 
   for (const node of [...model.nodes].sort(compareNodes)) {
-    const descriptor = describeSection(node, model);
+    const descriptor = describeSection(node, model, wifiContext);
     const existing = sectionsById.get(descriptor.id);
     if (existing) {
       existing.nodes.push(node);
@@ -648,7 +835,37 @@ function buildSections(model: VisualizerModel) {
   );
 }
 
-function describeSection(node: VisualizerNode, model: VisualizerModel) {
+function describeSection(
+  node: VisualizerNode,
+  model: VisualizerModel,
+  wifiContext: DiagramWifiContext,
+) {
+  const wifiAssociation = wifiContext.associationByClientId[node.device.id];
+  if (wifiAssociation) {
+    const accessPoint = model.deviceById[wifiAssociation.apDeviceId];
+    const ssid = wifiAssociation.ssidId
+      ? wifiContext.ssidById[wifiAssociation.ssidId]
+      : undefined;
+    return {
+      id: `wifi:${wifiAssociation.apDeviceId}:${
+        wifiAssociation.ssidId ?? "unassigned"
+      }`,
+      title: ssid?.name ?? "Unassigned SSID",
+      subtitle: [
+        "WiFi",
+        accessPoint?.hostname,
+        wifiAssociation.band?.replace("ghz", " GHz"),
+      ]
+        .filter(Boolean)
+        .join(" / "),
+      accent:
+        normalizeColorToCss(ssid?.color) ??
+        (accessPoint ? typeColor(accessPoint.deviceType) : typeColor("ap")),
+      layout: "grid" as const,
+      sortGroup: 2,
+    };
+  }
+
   const parent = node.device.parentDeviceId
     ? model.deviceById[node.device.parentDeviceId]
     : null;
@@ -662,6 +879,9 @@ function describeSection(node: VisualizerNode, model: VisualizerModel) {
           ? "Shelf / stacked devices"
           : "Hosted child devices",
       accent: parentNode?.typeColor ?? node.typeColor,
+      layout: (parent.deviceType === "rack_shelf" ? "stack" : "grid") as
+        | "stack"
+        | "grid",
       sortGroup: 1,
     };
   }
@@ -672,6 +892,7 @@ function describeSection(node: VisualizerNode, model: VisualizerModel) {
       title: node.rackName || "Rack",
       subtitle: node.roomName ? `${node.roomName} / rack` : "Rack inventory",
       accent: "var(--accent-secondary)",
+      layout: "grid" as const,
       sortGroup: 0,
     };
   }
@@ -682,7 +903,8 @@ function describeSection(node: VisualizerNode, model: VisualizerModel) {
       title: node.roomName || "Room",
       subtitle: "Room inventory",
       accent: "var(--accent-primary)",
-      sortGroup: 2,
+      layout: "grid" as const,
+      sortGroup: 3,
     };
   }
 
@@ -691,7 +913,8 @@ function describeSection(node: VisualizerNode, model: VisualizerModel) {
     title: "Loose / unassigned",
     subtitle: "No rack or room placement",
     accent: "var(--neutral)",
-    sortGroup: 3,
+    layout: "grid" as const,
+    sortGroup: 4,
   };
 }
 
@@ -701,11 +924,10 @@ function positionSections(sections: DiagramSection[]) {
   let rowHeight = 0;
 
   return sections.map((section) => {
-    const columns = Math.max(
-      1,
-      Math.min(4, Math.ceil(Math.sqrt(section.nodes.length))),
-    );
+    const columns = sectionColumnCount(section);
     const rows = Math.ceil(section.nodes.length / columns);
+    const gapY =
+      section.layout === "stack" ? STACKED_DEVICE_GAP_Y : DEVICE_GAP_Y;
     const width =
       SECTION_PADDING_X * 2 +
       columns * DEVICE_NODE_WIDTH +
@@ -714,7 +936,7 @@ function positionSections(sections: DiagramSection[]) {
       SECTION_HEADER_HEIGHT +
       SECTION_PADDING_BOTTOM +
       rows * DEVICE_NODE_HEIGHT +
-      Math.max(0, rows - 1) * DEVICE_GAP_Y;
+      Math.max(0, rows - 1) * gapY;
 
     if (x > SECTION_START_X && x + width > ROW_MAX_WIDTH) {
       x = SECTION_START_X;
@@ -734,6 +956,67 @@ function positionSections(sections: DiagramSection[]) {
     rowHeight = Math.max(rowHeight, height);
     return positioned;
   });
+}
+
+function buildDiagramWifiContext(
+  wifiSsids: WifiSsid[],
+  wifiAccessPoints: WifiAccessPoint[],
+  wifiClientAssociations: WifiClientAssociation[],
+): DiagramWifiContext {
+  return {
+    accessPointByDeviceId: Object.fromEntries(
+      wifiAccessPoints.map((accessPoint) => [
+        accessPoint.deviceId,
+        accessPoint,
+      ]),
+    ),
+    associationByClientId: Object.fromEntries(
+      wifiClientAssociations.map((association) => [
+        association.clientDeviceId,
+        association,
+      ]),
+    ),
+    ssidById: Object.fromEntries(wifiSsids.map((ssid) => [ssid.id, ssid])),
+  };
+}
+
+function buildConnectionCounts(cables: VisualizerCable[]) {
+  return cables.reduce<Record<string, number>>((acc, cable) => {
+    if (cable.fromDevice) {
+      acc[cable.fromDevice.id] = (acc[cable.fromDevice.id] ?? 0) + 1;
+    }
+    if (cable.toDevice) {
+      acc[cable.toDevice.id] = (acc[cable.toDevice.id] ?? 0) + 1;
+    }
+    return acc;
+  }, {});
+}
+
+function chooseEdgeHandles(
+  source?: { x: number; y: number; width: number; height: number },
+  target?: { x: number; y: number; width: number; height: number },
+) {
+  if (!source || !target) {
+    return { source: "right", target: "left" };
+  }
+  const sourceCenter = {
+    x: source.x + source.width / 2,
+    y: source.y + source.height / 2,
+  };
+  const targetCenter = {
+    x: target.x + target.width / 2,
+    y: target.y + target.height / 2,
+  };
+  const dx = targetCenter.x - sourceCenter.x;
+  const dy = targetCenter.y - sourceCenter.y;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0
+      ? { source: "right", target: "left" }
+      : { source: "left", target: "right" };
+  }
+  return dy >= 0
+    ? { source: "bottom", target: "top" }
+    : { source: "top", target: "bottom" };
 }
 
 function compareNodes(a: VisualizerNode, b: VisualizerNode) {
@@ -758,10 +1041,44 @@ function compareNodes(a: VisualizerNode, b: VisualizerNode) {
   const startA = a.device.startU ?? -1;
   const startB = b.device.startU ?? -1;
   if (startA !== startB) return startB - startA;
+  const ipA = nodeSortIpValue(a);
+  const ipB = nodeSortIpValue(b);
+  if (ipA != null && ipB != null && ipA !== ipB) return ipA - ipB;
   return a.device.hostname.localeCompare(b.device.hostname, undefined, {
     numeric: true,
     sensitivity: "base",
   });
+}
+
+function nodeSortIpValue(node: VisualizerNode) {
+  return (
+    parseSortableIp(node.device.managementIp) ??
+    parseSortableIp(node.device.displayName) ??
+    parseSortableIp(node.device.hostname)
+  );
+}
+
+function parseSortableIp(value?: string | null) {
+  if (!value) return null;
+  const match = value.match(
+    /(?:^|[^\d])(\d{1,3})[.-](\d{1,3})[.-](\d{1,3})[.-](\d{1,3})(?:[^\d]|$)/,
+  );
+  if (!match) return null;
+  const octets = match.slice(1, 5).map(Number);
+  if (octets.some((octet) => octet < 0 || octet > 255)) return null;
+  return (
+    octets[0] * 256 ** 3 +
+    octets[1] * 256 ** 2 +
+    octets[2] * 256 +
+    octets[3]
+  );
+}
+
+function sectionColumnCount(section: DiagramSection) {
+  if (section.layout === "stack") return 1;
+  if (section.nodes.length <= 1) return 1;
+  if (section.nodes.length <= 4) return 2;
+  return Math.max(2, Math.min(4, Math.ceil(Math.sqrt(section.nodes.length))));
 }
 
 function cableIsVisible(cable: VisualizerCable, cableType: string) {
