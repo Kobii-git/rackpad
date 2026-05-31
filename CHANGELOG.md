@@ -6,6 +6,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-05-31
+
 ### Changed
 
 - Normal Visualizer and Pyramid device-type filters now multi-select by default:
