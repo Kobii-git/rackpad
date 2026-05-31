@@ -153,7 +153,10 @@ function AllocateIpForm({
 
   useEffect(() => {
     if (allocationMode !== "dhcp-reservation") return;
-    if (dhcpScopeId && scopesForSubnet.some((scope) => scope.id === dhcpScopeId))
+    if (
+      dhcpScopeId &&
+      scopesForSubnet.some((scope) => scope.id === dhcpScopeId)
+    )
       return;
     setDhcpScopeId(scopesForSubnet[0]?.id ?? "");
   }, [allocationMode, dhcpScopeId, scopesForSubnet]);
@@ -197,8 +200,7 @@ function AllocateIpForm({
         description: description.trim() || undefined,
         assignmentType,
         allocationMode,
-        dhcpScopeId:
-          (preview.dhcpScopeId ?? effectiveDhcpScopeId) || undefined,
+        dhcpScopeId: (preview.dhcpScopeId ?? effectiveDhcpScopeId) || undefined,
       });
       if (result) {
         onAllocated?.("ip", result.id);
@@ -345,6 +347,7 @@ function AllocateIpForm({
             hostname: hostname.trim(),
             managementIp: previewIp,
             ipAllocationMode: preview.allocationMode,
+            ipSubnetId: subnetId,
             dhcpScopeId: preview.dhcpScopeId ?? "",
             deviceType:
               assignmentType === "vm"

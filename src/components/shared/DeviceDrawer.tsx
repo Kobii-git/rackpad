@@ -15,11 +15,19 @@ import { cn } from "@/lib/utils";
 import {
   createDevice,
   createDeviceTypeRecord,
+  previewNextIpAllocation,
   updateDevice,
   useStore,
 } from "@/lib/store";
 import { deviceTypeLabel } from "@/lib/device-types";
-import type { Device, DeviceStatus, DeviceType, RackFace } from "@/lib/types";
+import type {
+  Device,
+  DeviceStatus,
+  DeviceType,
+  IpAllocationMode,
+  IpAssignmentType,
+  RackFace,
+} from "@/lib/types";
 
 const STATUS_OPTIONS: DeviceStatus[] = [
   "online",
@@ -39,7 +47,8 @@ interface FormState {
   managementIp: string;
   macAddress: string;
   networkMode: NonNullable<Device["networkMode"]>;
-  ipAllocationMode: "static" | "dhcp-reservation";
+  ipAllocationMode: IpAllocationMode;
+  ipSubnetId: string;
   dhcpScopeId: string;
   status: DeviceStatus;
   placement: NonNullable<Device["placement"]>;
@@ -78,6 +87,7 @@ function blankForm(defaults?: Partial<FormState>): FormState {
     macAddress: "",
     networkMode: "normal",
     ipAllocationMode: "static",
+    ipSubnetId: "",
     dhcpScopeId: "",
     status: "unknown",
     placement: defaults?.rackId ? "rack" : "room",
@@ -120,6 +130,7 @@ function deviceToForm(device: Device): FormState {
     macAddress: device.macAddress ?? "",
     networkMode: device.networkMode ?? "normal",
     ipAllocationMode: "static",
+    ipSubnetId: "",
     dhcpScopeId: "",
     status: device.status,
     placement: device.placement ?? (device.rackId ? "rack" : "room"),
@@ -162,6 +173,8 @@ export function DeviceDrawer({
   const deviceTypes = useStore((s) => s.deviceTypes);
   const ports = useStore((s) => s.ports);
   const portTemplates = useStore((s) => s.portTemplates);
+  const subnets = useStore((s) => s.subnets);
+  const scopes = useStore((s) => s.scopes);
   const isEdit = !!device;
   const [form, setForm] = useState<FormState>(() =>
     device
@@ -258,6 +271,54 @@ export function DeviceDrawer({
     form.placement === "virtual" &&
     (form.deviceType === "vm" || form.deviceType === "container") &&
     Boolean(form.parentDeviceId);
+  const managementIp = form.managementIp.trim();
+  const managementSubnet = managementIp
+    ? subnets.find((subnet) => cidrContainsIp(subnet.cidr, managementIp))
+    : undefined;
+  const selectedIpSubnetId =
+    form.ipSubnetId || managementSubnet?.id || subnets[0]?.id || "";
+  const scopesForSelectedSubnet = useMemo(
+    () => scopes.filter((scope) => scope.subnetId === selectedIpSubnetId),
+    [scopes, selectedIpSubnetId],
+  );
+  const matchingDhcpScope = managementIp
+    ? scopesForSelectedSubnet.find((scope) =>
+        ipInRange(managementIp, scope.startIp, scope.endIp),
+      )
+    : undefined;
+  const effectiveDhcpScopeId =
+    form.dhcpScopeId ||
+    matchingDhcpScope?.id ||
+    scopesForSelectedSubnet[0]?.id ||
+    "";
+  const managementAssignmentType = useMemo<IpAssignmentType>(() => {
+    if (form.deviceType === "vm") return "vm";
+    if (form.deviceType === "container") return "container";
+    return "device";
+  }, [form.deviceType]);
+  const nextIpPreview = useMemo(() => {
+    if (isEdit || canUseHostSharedNetworking || !selectedIpSubnetId)
+      return null;
+    return previewNextIpAllocation(
+      selectedIpSubnetId,
+      managementAssignmentType,
+      {
+        allocationMode: form.ipAllocationMode,
+        dhcpScopeId:
+          form.ipAllocationMode === "dhcp-reservation"
+            ? effectiveDhcpScopeId || null
+            : null,
+      },
+    );
+  }, [
+    canUseHostSharedNetworking,
+    effectiveDhcpScopeId,
+    form.ipAllocationMode,
+    isEdit,
+    managementAssignmentType,
+    selectedIpSubnetId,
+  ]);
+  const managementIpInDhcpPool = Boolean(matchingDhcpScope);
 
   useEffect(() => {
     if (!form.portTemplateId) return;
@@ -298,6 +359,33 @@ export function DeviceDrawer({
     if (form.networkMode === "normal") return;
     setForm((prev) => ({ ...prev, networkMode: "normal" }));
   }, [canUseHostSharedNetworking, form.networkMode]);
+
+  useEffect(() => {
+    if (isEdit) return;
+    if (!selectedIpSubnetId || form.ipSubnetId) return;
+    setForm((prev) => ({ ...prev, ipSubnetId: selectedIpSubnetId }));
+  }, [form.ipSubnetId, isEdit, selectedIpSubnetId]);
+
+  useEffect(() => {
+    if (isEdit || form.ipAllocationMode !== "dhcp-reservation") return;
+    if (
+      form.dhcpScopeId &&
+      scopesForSelectedSubnet.some((scope) => scope.id === form.dhcpScopeId)
+    ) {
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      dhcpScopeId:
+        matchingDhcpScope?.id ?? scopesForSelectedSubnet[0]?.id ?? "",
+    }));
+  }, [
+    form.dhcpScopeId,
+    form.ipAllocationMode,
+    isEdit,
+    matchingDhcpScope?.id,
+    scopesForSelectedSubnet,
+  ]);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -393,6 +481,26 @@ export function DeviceDrawer({
       setError("Hostname is required.");
       return;
     }
+    if (
+      !isEdit &&
+      managementIp &&
+      managementIpInDhcpPool &&
+      form.ipAllocationMode !== "dhcp-reservation"
+    ) {
+      setError(
+        "This management IP is inside a DHCP pool. Choose DHCP reservation for the device assignment.",
+      );
+      return;
+    }
+    if (
+      !isEdit &&
+      managementIp &&
+      form.ipAllocationMode === "dhcp-reservation" &&
+      !effectiveDhcpScopeId
+    ) {
+      setError("Select a DHCP pool for this reservation.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -410,9 +518,7 @@ export function DeviceDrawer({
         serial: form.serial.trim() || undefined,
         managementIp: form.managementIp.trim() || undefined,
         macAddress: form.macAddress.trim() || undefined,
-        networkMode: canUseHostSharedNetworking
-          ? form.networkMode
-          : "normal",
+        networkMode: canUseHostSharedNetworking ? form.networkMode : "normal",
         status: form.status,
         placement: form.placement,
         parentDeviceId:
@@ -435,11 +541,12 @@ export function DeviceDrawer({
           isRackMounted && form.startU
             ? Number.parseInt(form.startU, 10)
             : undefined,
-        heightU: isRackMounted || isShelfMounted
-          ? form.heightU
-            ? Number.parseInt(form.heightU, 10)
-            : 1
-          : undefined,
+        heightU:
+          isRackMounted || isShelfMounted
+            ? form.heightU
+              ? Number.parseInt(form.heightU, 10)
+              : 1
+            : undefined,
         face: isRackMounted ? form.face : undefined,
         portTemplateId:
           canApplyTemplate && form.portTemplateId
@@ -457,7 +564,7 @@ export function DeviceDrawer({
               ipAllocationMode: form.ipAllocationMode,
               dhcpScopeId:
                 form.ipAllocationMode === "dhcp-reservation"
-                  ? form.dhcpScopeId || undefined
+                  ? effectiveDhcpScopeId || undefined
                   : undefined,
             });
 
@@ -646,6 +753,128 @@ export function DeviceDrawer({
                       placeholder="e.g. 10.0.10.12"
                     />
                   </Field>
+                  {!isEdit &&
+                    !canUseHostSharedNetworking &&
+                    subnets.length > 0 && (
+                      <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--surface-1)] p-3">
+                        <div className="mb-3 flex flex-wrap gap-1.5">
+                          {(["static", "dhcp-reservation"] as const).map(
+                            (mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                onClick={() =>
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    ipAllocationMode: mode,
+                                    dhcpScopeId:
+                                      mode === "dhcp-reservation"
+                                        ? effectiveDhcpScopeId
+                                        : "",
+                                  }))
+                                }
+                                className={cn(
+                                  "rounded-[var(--radius-xs)] border px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-colors",
+                                  form.ipAllocationMode === mode
+                                    ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"
+                                    : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]",
+                                )}
+                              >
+                                {mode === "dhcp-reservation"
+                                  ? "DHCP reservation"
+                                  : "Static IP"}
+                              </button>
+                            ),
+                          )}
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <Field label="Subnet">
+                            <Select
+                              value={selectedIpSubnetId}
+                              onChange={(value) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  ipSubnetId: value,
+                                  dhcpScopeId: "",
+                                }))
+                              }
+                            >
+                              {subnets.map((subnet) => (
+                                <option key={subnet.id} value={subnet.id}>
+                                  {subnet.cidr} · {subnet.name}
+                                </option>
+                              ))}
+                            </Select>
+                          </Field>
+                          {form.ipAllocationMode === "dhcp-reservation" ? (
+                            <Field label="DHCP pool">
+                              <Select
+                                value={effectiveDhcpScopeId}
+                                onChange={(value) => set("dhcpScopeId", value)}
+                                disabled={scopesForSelectedSubnet.length === 0}
+                              >
+                                {scopesForSelectedSubnet.length === 0 ? (
+                                  <option value="">No DHCP pool</option>
+                                ) : (
+                                  scopesForSelectedSubnet.map((scope) => (
+                                    <option key={scope.id} value={scope.id}>
+                                      {scope.name}
+                                    </option>
+                                  ))
+                                )}
+                              </Select>
+                            </Field>
+                          ) : (
+                            <div />
+                          )}
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0 text-xs text-[var(--color-fg-subtle)]">
+                            {managementIp && managementIpInDhcpPool ? (
+                              <>
+                                {managementIp} is in{" "}
+                                <span className="font-medium text-[var(--color-fg)]">
+                                  {matchingDhcpScope?.name}
+                                </span>
+                                .
+                              </>
+                            ) : nextIpPreview ? (
+                              <>
+                                Next{" "}
+                                {form.ipAllocationMode === "dhcp-reservation"
+                                  ? "reservation"
+                                  : "static"}{" "}
+                                IP:{" "}
+                                <span className="font-mono text-[var(--color-fg)]">
+                                  {nextIpPreview.ipAddress}
+                                </span>
+                              </>
+                            ) : (
+                              "No available address for this selection."
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={!nextIpPreview}
+                            onClick={() => {
+                              if (!nextIpPreview) return;
+                              setForm((prev) => ({
+                                ...prev,
+                                managementIp: nextIpPreview.ipAddress,
+                                ipAllocationMode: nextIpPreview.allocationMode,
+                                dhcpScopeId: nextIpPreview.dhcpScopeId ?? "",
+                              }));
+                            }}
+                          >
+                            Use next IP
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   {canUseHostSharedNetworking && (
                     <Field label="Network mode">
                       <div className="grid grid-cols-2 gap-1">
@@ -661,9 +890,7 @@ export function DeviceDrawer({
                                 : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]",
                             )}
                           >
-                            {mode === "host-shared"
-                              ? "Host shared"
-                              : "Normal"}
+                            {mode === "host-shared" ? "Host shared" : "Normal"}
                           </button>
                         ))}
                       </div>
@@ -1011,9 +1238,7 @@ export function DeviceDrawer({
                         min={1}
                         max={20}
                         value={form.heightU}
-                        onChange={(event) =>
-                          set("heightU", event.target.value)
-                        }
+                        onChange={(event) => set("heightU", event.target.value)}
                         placeholder="1"
                       />
                       <p className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
@@ -1122,4 +1347,39 @@ function Select({
       {children}
     </select>
   );
+}
+
+function cidrContainsIp(cidr: string, ipAddress: string) {
+  const [networkAddress, prefixRaw] = cidr.split("/");
+  const network = ipv4ToInt(networkAddress);
+  const target = ipv4ToInt(ipAddress);
+  const prefix = Number.parseInt(prefixRaw ?? "", 10);
+  if (network == null || target == null || !Number.isInteger(prefix)) {
+    return false;
+  }
+  if (prefix < 0 || prefix > 32) return false;
+  const hostBits = 32 - prefix;
+  const broadcast = hostBits === 0 ? network : network + (2 ** hostBits - 1);
+  return target >= network && target <= broadcast;
+}
+
+function ipInRange(ipAddress: string, startIp: string, endIp: string) {
+  const target = ipv4ToInt(ipAddress);
+  const start = ipv4ToInt(startIp);
+  const end = ipv4ToInt(endIp);
+  if (target == null || start == null || end == null) return false;
+  return target >= start && target <= end;
+}
+
+function ipv4ToInt(ipAddress: string) {
+  const octets = ipAddress.split(".");
+  if (octets.length !== 4) return null;
+  let value = 0;
+  for (const octet of octets) {
+    if (!/^\d+$/.test(octet)) return null;
+    const parsed = Number.parseInt(octet, 10);
+    if (parsed < 0 || parsed > 255) return null;
+    value = (value << 8) + parsed;
+  }
+  return value >>> 0;
 }
