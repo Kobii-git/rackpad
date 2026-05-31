@@ -20,6 +20,7 @@ import { SortableHeader } from "@/components/shared/SortableHeader";
 import {
   canEditInventory,
   createDevice,
+  createDeviceMonitorConfig,
   deleteDiscoveredDeviceRecord,
   scanDiscoveredSubnet,
   updateDiscoveredDeviceRecord,
@@ -86,6 +87,7 @@ export default function DiscoveryView() {
   const [deleting, setDeleting] = useState(false);
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const [autoMapping, setAutoMapping] = useState(false);
+  const [autoMapIcmpMonitors, setAutoMapIcmpMonitors] = useState(false);
   const [autoMapMessage, setAutoMapMessage] = useState("");
   const [error, setError] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -172,13 +174,13 @@ export default function DiscoveryView() {
           filter === "active"
             ? device.status === "new" && !device.technicalRole
             : filter === "all"
-            ? true
-            : filter === "technical"
-              ? Boolean(device.technicalRole)
-            : filter === "duplicates"
-              ? device.status === "new" &&
-                (duplicateMatchesById[device.id] ?? []).length > 0
-              : device.status === filter;
+              ? true
+              : filter === "technical"
+                ? Boolean(device.technicalRole)
+                : filter === "duplicates"
+                  ? device.status === "new" &&
+                    (duplicateMatchesById[device.id] ?? []).length > 0
+                  : device.status === filter;
         if (!matchesFilter) return false;
         if (!normalizedQuery) return true;
         const haystack = [
@@ -189,7 +191,7 @@ export default function DiscoveryView() {
           device.placement,
           device.vendor,
           device.macAddress,
-        device.status,
+          device.status,
           device.technicalRole,
           device.technicalReason,
           ...(duplicateMatchesById[device.id] ?? []).flatMap((match) => [
@@ -240,7 +242,7 @@ export default function DiscoveryView() {
       macAddress: selected.macAddress ?? "",
       placement: selected.placement ?? "room",
       notes: selected.notes ?? "",
-      status: "unknown" as const,
+      status: "online" as const,
     };
   }, [selected]);
 
@@ -379,6 +381,7 @@ export default function DiscoveryView() {
     setError("");
     const failures: string[] = [];
     let mapped = 0;
+    let monitorsCreated = 0;
 
     for (const discovered of autoMapCandidates) {
       try {
@@ -393,9 +396,18 @@ export default function DiscoveryView() {
           managementIp: discovered.ipAddress,
           macAddress: discovered.macAddress ?? undefined,
           placement: autoMapPlacement(discovered),
-          status: "unknown",
+          status: "online",
           notes: discovered.notes ?? undefined,
         });
+        if (autoMapIcmpMonitors && canManageDiscovery) {
+          await createDeviceMonitorConfig(created.id, {
+            name: "ICMP",
+            type: "icmp",
+            target: discovered.ipAddress,
+            enabled: true,
+          });
+          monitorsCreated += 1;
+        }
         await updateDiscoveredDeviceRecord(discovered.id, {
           status: "imported",
           importedDeviceId: created.id,
@@ -418,7 +430,13 @@ export default function DiscoveryView() {
       );
     } else {
       setAutoMapMessage(
-        `Auto-mapped ${mapped} discovered host${mapped === 1 ? "" : "s"}.`,
+        `Auto-mapped ${mapped} discovered host${mapped === 1 ? "" : "s"}${
+          monitorsCreated > 0
+            ? ` and added ${monitorsCreated} ICMP monitor${
+                monitorsCreated === 1 ? "" : "s"
+              }`
+            : ""
+        }.`,
       );
       setFilter("imported");
     }
@@ -559,16 +577,30 @@ export default function DiscoveryView() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {canEdit && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void handleAutoMap()}
-                disabled={autoMapping || autoMapCandidates.length === 0}
-              >
-                {autoMapping
-                  ? "Auto-mapping..."
-                  : `Auto-map ${autoMapCandidates.length}`}
-              </Button>
+              <>
+                <label className="inline-flex h-8 items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-2.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                  <input
+                    type="checkbox"
+                    checked={autoMapIcmpMonitors}
+                    onChange={(event) =>
+                      setAutoMapIcmpMonitors(event.target.checked)
+                    }
+                    disabled={!canManageDiscovery}
+                    className="size-3 accent-[var(--color-accent)]"
+                  />
+                  ICMP monitor
+                </label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleAutoMap()}
+                  disabled={autoMapping || autoMapCandidates.length === 0}
+                >
+                  {autoMapping
+                    ? "Auto-mapping..."
+                    : `Auto-map ${autoMapCandidates.length}`}
+                </Button>
+              </>
             )}
             <div className="relative min-w-64">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />

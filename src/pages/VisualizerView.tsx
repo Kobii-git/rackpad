@@ -3,6 +3,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
 import { buildVisualizerModel } from "./visualizer/model";
+import { DiagramCanvas } from "./visualizer/DiagramCanvas";
 import { VisualizerCanvas } from "./visualizer/VisualizerCanvas";
 import type {
   TraceModeState,
@@ -159,7 +160,10 @@ export default function VisualizerView() {
     });
   }
 
-  function updateCustomNodePosition(deviceId: string, position: VisualizerPoint) {
+  function updateCustomNodePosition(
+    deviceId: string,
+    position: VisualizerPoint,
+  ) {
     setCustomNodePositions((current) => {
       const next = {
         ...current,
@@ -198,11 +202,12 @@ export default function VisualizerView() {
                 setLayoutMode(next);
                 writeString(LAYOUT_MODE_STORAGE_KEY, next);
               }}
-              className="rk-control h-8 w-32 px-2 text-xs text-[var(--text-primary)]"
+              className="rk-control h-8 w-36 px-2 text-xs text-[var(--text-primary)]"
               aria-label="Visualizer layout"
             >
               <option value="grouped">Grouped</option>
               <option value="pyramid">Pyramid</option>
+              <option value="diagram">Diagram</option>
             </select>
             {layoutMode === "grouped" && (
               <>
@@ -264,49 +269,60 @@ export default function VisualizerView() {
             >
               Health
             </Button>
-            <Button
-              variant={traceMode.enabled ? "secondary" : "outline"}
-              size="sm"
-              onClick={() =>
-                setTraceMode((current) =>
-                  current.enabled
-                    ? {
-                        enabled: false,
-                        firstPortId: null,
-                        result: null,
-                        message: null,
-                      }
-                    : {
-                        enabled: true,
-                        firstPortId: null,
-                        result: null,
-                        message: "Click first port...",
-                      },
-                )
-              }
-            >
-              Trace mode
-            </Button>
+            {layoutMode !== "diagram" && (
+              <Button
+                variant={traceMode.enabled ? "secondary" : "outline"}
+                size="sm"
+                onClick={() =>
+                  setTraceMode((current) =>
+                    current.enabled
+                      ? {
+                          enabled: false,
+                          firstPortId: null,
+                          result: null,
+                          message: null,
+                        }
+                      : {
+                          enabled: true,
+                          firstPortId: null,
+                          result: null,
+                          message: "Click first port...",
+                        },
+                  )
+                }
+              >
+                Trace mode
+              </Button>
+            )}
           </div>
         }
       />
-      <VisualizerCanvas
-        model={model}
-        loading={loading && !loaded}
-        healthOverlay={healthOverlay}
-        onToggleHealth={toggleHealthOverlay}
-        traceMode={traceMode}
-        setTraceMode={setTraceMode}
-        cableType={cableType}
-        noCableBannerDismissed={noCableBannerDismissed}
-        onDismissNoCableBanner={() => {
-          setNoCableBannerDismissed(true);
-          writeBoolean(NO_CABLE_BANNER_KEY, true);
-        }}
-        onToggleRackRun={toggleRackRun}
-        onToggleGroup={toggleGroup}
-        onNodePositionChange={updateCustomNodePosition}
-      />
+      {layoutMode === "diagram" ? (
+        <DiagramCanvas
+          model={model}
+          loading={loading && !loaded}
+          healthOverlay={healthOverlay}
+          cableType={cableType}
+        />
+      ) : (
+        <VisualizerCanvas
+          model={model}
+          loading={loading && !loaded}
+          healthOverlay={healthOverlay}
+          onToggleHealth={toggleHealthOverlay}
+          traceMode={traceMode}
+          setTraceMode={setTraceMode}
+          cableType={cableType}
+          noCableBannerDismissed={noCableBannerDismissed}
+          onDismissNoCableBanner={() => {
+            setNoCableBannerDismissed(true);
+            writeBoolean(NO_CABLE_BANNER_KEY, true);
+          }}
+          onToggleRackRun={toggleRackRun}
+          onToggleGroup={toggleGroup}
+          onNodePositionChange={updateCustomNodePosition}
+        />
+      )}
     </>
   );
 }
@@ -372,7 +388,7 @@ function readLooseDevicePlacement(key: string): VisualizerLooseDevicePlacement {
 function readLayoutMode(key: string): VisualizerLayoutMode {
   try {
     const value = window.localStorage.getItem(key);
-    return value === "pyramid" ? "pyramid" : "grouped";
+    return value === "pyramid" || value === "diagram" ? value : "grouped";
   } catch {
     return "grouped";
   }

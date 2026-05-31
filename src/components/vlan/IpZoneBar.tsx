@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { DhcpScope, IpZone, Subnet } from "@/lib/types";
+import type { DhcpScope, IpAssignment, IpZone, Subnet } from "@/lib/types";
 import { ipToInt, cidrSize } from "@/lib/utils";
 import {
   Tooltip,
@@ -12,6 +12,7 @@ interface IpZoneBarProps {
   subnet: Subnet;
   zones: IpZone[];
   scopes: DhcpScope[];
+  assignments?: IpAssignment[];
 }
 
 const ZONE_COLOR: Record<IpZone["kind"], string> = {
@@ -28,12 +29,19 @@ const ZONE_LABEL: Record<IpZone["kind"], string> = {
   infrastructure: "Infrastructure",
 };
 
-export function IpZoneBar({ subnet, zones, scopes }: IpZoneBarProps) {
+type ZoneEntry = IpZone & { derived?: boolean };
+
+export function IpZoneBar({
+  subnet,
+  zones,
+  scopes,
+  assignments = [],
+}: IpZoneBarProps) {
   const total = cidrSize(subnet.cidr);
   const baseInt = ipToInt(subnet.cidr.split("/")[0]);
 
   const combined = useMemo(() => {
-    const explicit = [...zones];
+    const explicit: ZoneEntry[] = [...zones];
     const hasDhcp = zones.some((zone) => zone.kind === "dhcp");
     if (!hasDhcp) {
       for (const scope of scopes) {
@@ -44,11 +52,17 @@ export function IpZoneBar({ subnet, zones, scopes }: IpZoneBarProps) {
           startIp: scope.startIp,
           endIp: scope.endIp,
           description: scope.name,
+          derived: true,
         });
       }
     }
     return explicit.sort((a, b) => ipToInt(a.startIp) - ipToInt(b.startIp));
   }, [zones, scopes, subnet]);
+
+  const assignmentInts = useMemo(
+    () => assignments.map((assignment) => ipToInt(assignment.ipAddress)),
+    [assignments],
+  );
 
   if (combined.length === 0) {
     return (
@@ -68,6 +82,17 @@ export function IpZoneBar({ subnet, zones, scopes }: IpZoneBarProps) {
           const width = ((endN - startN + 1) / total) * 100;
           const color = ZONE_COLOR[zone.kind];
           const size = endN - startN + 1;
+          const assigned = countAssignedInRange(
+            assignmentInts,
+            startN,
+            endN,
+            baseInt,
+          );
+          const pct = Math.round((assigned / Math.max(1, size)) * 100);
+          const usageLabel =
+            zone.kind === "dhcp"
+              ? `${assigned}/${size} used | ${pct}%`
+              : `${size} addresses`;
 
           return (
             <Tooltip key={zone.id}>
@@ -88,6 +113,7 @@ export function IpZoneBar({ subnet, zones, scopes }: IpZoneBarProps) {
                       style={{ color }}
                     >
                       {ZONE_LABEL[zone.kind]}
+                      {zone.kind === "dhcp" ? ` ${pct}%` : ""}
                     </span>
                   )}
                 </button>
@@ -99,11 +125,12 @@ export function IpZoneBar({ subnet, zones, scopes }: IpZoneBarProps) {
                   </div>
                   <Mono className="text-[var(--text-tertiary)]">{`${zone.startIp} -> ${zone.endIp}`}</Mono>
                   <div className="text-[var(--text-tertiary)]">
-                    {size} addresses
+                    {usageLabel}
                   </div>
                   {zone.description && (
                     <div className="text-[var(--text-muted)]">
                       {zone.description}
+                      {zone.derived ? " (derived from DHCP scope)" : ""}
                     </div>
                   )}
                 </div>
@@ -139,6 +166,44 @@ export function IpZoneBar({ subnet, zones, scopes }: IpZoneBarProps) {
           },
         )}
       </div>
+
+      {combined.some((zone) => zone.kind === "dhcp") && (
+        <div className="flex flex-wrap gap-2">
+          {combined
+            .filter((zone) => zone.kind === "dhcp")
+            .map((zone) => {
+              const startN = ipToInt(zone.startIp) - baseInt;
+              const endN = ipToInt(zone.endIp) - baseInt;
+              const size = endN - startN + 1;
+              const assigned = countAssignedInRange(
+                assignmentInts,
+                startN,
+                endN,
+                baseInt,
+              );
+              const pct = Math.round((assigned / Math.max(1, size)) * 100);
+              return (
+                <span
+                  key={`${zone.id}:summary`}
+                  className="rounded-[var(--radius-xs)] border border-[var(--border-subtle)] bg-[var(--surface-1)] px-2 py-1 font-mono text-[10px] text-[var(--text-secondary)]"
+                >
+                  {zone.description ?? "DHCP"} {assigned}/{size} ({pct}%)
+                </span>
+              );
+            })}
+        </div>
+      )}
     </div>
   );
+}
+
+function countAssignedInRange(
+  assignmentInts: number[],
+  startOffset: number,
+  endOffset: number,
+  baseInt: number,
+) {
+  const start = baseInt + startOffset;
+  const end = baseInt + endOffset;
+  return assignmentInts.filter((ip) => ip >= start && ip <= end).length;
 }

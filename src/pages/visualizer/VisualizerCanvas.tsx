@@ -442,7 +442,8 @@ export function VisualizerCanvas({
           enabled: true,
           firstPortId: visualPort.port.id,
           result: null,
-          message: "No onward path found. Click a second port to trace manually.",
+          message:
+            "No onward path found. Click a second port to trace manually.",
         });
         setSelection({ kind: "device", id: node.device.id });
         return;
@@ -709,7 +710,7 @@ export function VisualizerCanvas({
                         onPortClick={(port) => handlePortClick(node, port)}
                         draggable={Boolean(
                           model.layoutMode === "pyramid" &&
-                            onNodePositionChange,
+                          onNodePositionChange,
                         )}
                         dragging={nodeDrag?.deviceId === node.device.id}
                         onPointerDown={(event) =>
@@ -718,7 +719,9 @@ export function VisualizerCanvas({
                         onPointerMove={(event) =>
                           handleNodePointerMove(event, node)
                         }
-                        onPointerUp={(event) => handleNodePointerUp(event, node)}
+                        onPointerUp={(event) =>
+                          handleNodePointerUp(event, node)
+                        }
                       />
                     ))}
                   </div>
@@ -1202,9 +1205,7 @@ function DeviceCard({
         dragging
           ? "transition-none"
           : "transition-[opacity,background-color,border-color,box-shadow,transform] duration-150"
-      } ${
-        compactRackNode ? "px-2 py-1 pr-10" : "px-2.5 py-2 pr-12"
-      } ${
+      } ${compactRackNode ? "px-2 py-1 pr-10" : "px-2.5 py-2 pr-12"} ${
         selected
           ? "border-[var(--accent-primary-border)] shadow-[var(--shadow-selected)]"
           : "border-[var(--border-default)] hover:-translate-y-px hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
@@ -1487,15 +1488,20 @@ function VisualizerSidePanel({
         </CardBody>
       </Card>
 
-      <Inspector
-        model={model}
-        selection={selection}
-        selectedCable={selectedCable}
-        selectedNode={selectedNode}
-        traceResult={traceResult}
-        onSelectDevice={onSelectDevice}
-        onSelectCable={onSelectCable}
-      />
+      <div
+        data-visualizer-scrollable="true"
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
+      >
+        <Inspector
+          model={model}
+          selection={selection}
+          selectedCable={selectedCable}
+          selectedNode={selectedNode}
+          traceResult={traceResult}
+          onSelectDevice={onSelectDevice}
+          onSelectCable={onSelectCable}
+        />
+      </div>
     </div>
   );
 }
@@ -1569,7 +1575,7 @@ function Inspector({
         </CardBody>
       </Card>
 
-      <Card className="flex min-h-0 flex-1 flex-col">
+      <Card className="flex min-h-64 flex-col">
         <CardHeader>
           <CardTitle>
             <CardLabel>Visible links</CardLabel>
@@ -1578,7 +1584,7 @@ function Inspector({
         </CardHeader>
         <CardBody
           data-visualizer-scrollable="true"
-          className="min-h-0 flex-1 space-y-2 overflow-y-auto"
+          className="max-h-80 min-h-0 space-y-2 overflow-y-auto"
         >
           {model.cables.map((cable) => (
             <button
@@ -1649,7 +1655,7 @@ function DeviceInspector({
         <div className="rk-kicker mb-2">Direct connections</div>
         <div
           data-visualizer-scrollable="true"
-          className="max-h-56 space-y-2 overflow-y-auto pr-1"
+          className="max-h-80 space-y-2 overflow-y-auto pr-1"
         >
           {neighbors.length === 0 ? (
             <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] p-3 text-xs text-[var(--text-tertiary)]">

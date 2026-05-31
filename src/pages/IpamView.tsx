@@ -742,6 +742,7 @@ export default function IpamView() {
                   subnet={subnet}
                   zones={subnetZones}
                   scopes={subnetScopes}
+                  assignments={assignments}
                 />
               </CardBody>
             </Card>

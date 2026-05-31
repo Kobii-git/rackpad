@@ -476,6 +476,80 @@
     opacity: 0.72;
   }
 
+  .visualizer-diagram .react-flow__pane {
+    cursor: grab;
+  }
+
+  .visualizer-diagram .react-flow__pane.dragging {
+    cursor: grabbing;
+  }
+
+  .visualizer-diagram .react-flow__node {
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+  }
+
+  .visualizer-diagram .react-flow__node-section {
+    pointer-events: none;
+  }
+
+  .visualizer-diagram .react-flow__node-device {
+    border-radius: var(--radius-md);
+  }
+
+  .visualizer-diagram .react-flow__node-device.selected {
+    box-shadow: none;
+  }
+
+  .visualizer-diagram .react-flow__edge-path {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .visualizer-diagram .react-flow__edge.selected .react-flow__edge-path {
+    stroke-width: 4;
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 10px var(--accent-primary-glow));
+  }
+
+  .visualizer-diagram .react-flow__edge-text {
+    fill: var(--text-tertiary);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .visualizer-diagram-handle {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .visualizer-diagram-controls {
+    overflow: hidden;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    box-shadow: var(--shadow-card);
+  }
+
+  .visualizer-diagram-controls button {
+    border-bottom-color: var(--border-subtle);
+    background: var(--surface-2);
+    color: var(--text-secondary);
+  }
+
+  .visualizer-diagram-controls button:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .visualizer-diagram-minimap {
+    overflow: hidden;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    box-shadow: var(--shadow-card);
+  }
+
   .rk-textarea {
     min-height: 5rem;
     resize: vertical;

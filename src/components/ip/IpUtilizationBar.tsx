@@ -13,7 +13,6 @@ interface IpUtilizationBarProps {
   scopes?: DhcpScope[];
 }
 
-const CELL_SIZE = 12;
 type TechnicalAddressKind = "gateway" | "dns";
 
 interface TechnicalAddress {
@@ -89,9 +88,9 @@ export function IpUtilizationBar({
       </div>
 
       <div
-        className="grid rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[linear-gradient(180deg,rgb(255_255_255_/_0.025),transparent_24%),var(--surface-1)] p-1 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)]"
+        className="grid w-full rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[linear-gradient(180deg,rgb(255_255_255_/_0.025),transparent_24%),var(--surface-1)] p-1 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)]"
         style={{
-          gridTemplateColumns: `repeat(32, ${CELL_SIZE}px)`,
+          gridTemplateColumns: "repeat(auto-fit, minmax(10px, 1fr))",
           gap: 2,
         }}
       >
@@ -108,8 +107,8 @@ export function IpUtilizationBar({
                 <div
                   className="cursor-pointer rounded-[3px] border border-[rgb(255_255_255_/_0.035)] transition-transform hover:scale-110"
                   style={{
-                    width: CELL_SIZE,
-                    height: CELL_SIZE,
+                    aspectRatio: "1 / 1",
+                    minHeight: 10,
                     backgroundColor: getCellColor(
                       assignment,
                       technical,

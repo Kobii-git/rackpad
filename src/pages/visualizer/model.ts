@@ -446,7 +446,7 @@ export function buildVisualizerModel(
   const height = Math.max(rackZoneHeight, roomZoneHeight) + ZONE_Y + 12;
 
   return {
-    layoutMode: "grouped",
+    layoutMode: layout.topologyLayout,
     width,
     height,
     rackZone: {
@@ -534,7 +534,11 @@ function buildPyramidVisualizerModel(
     discoveredByIp.set(discovered.ipAddress, discovered);
   }
 
-  const adjacency = buildDeviceAdjacency(input.devices, input.portLinks, portById);
+  const adjacency = buildDeviceAdjacency(
+    input.devices,
+    input.portLinks,
+    portById,
+  );
   const nodes: VisualizerNode[] = [];
   let cursorX = PYRAMID_ZONE_X + ZONE_PADDING + 18;
   const contentY = PYRAMID_ZONE_Y + ZONE_HEADER + 42;
@@ -543,9 +547,10 @@ function buildPyramidVisualizerModel(
   const components = buildPyramidComponents(input.devices, adjacency);
   for (const component of components) {
     const layers = buildPyramidLayers(component, adjacency, deviceById);
-    const layerWidths = layers.map((layer) =>
-      layer.length * PYRAMID_NODE_WIDTH +
-      Math.max(0, layer.length - 1) * PYRAMID_NODE_GAP_X,
+    const layerWidths = layers.map(
+      (layer) =>
+        layer.length * PYRAMID_NODE_WIDTH +
+        Math.max(0, layer.length - 1) * PYRAMID_NODE_GAP_X,
     );
     const componentWidth = Math.max(PYRAMID_NODE_WIDTH, ...layerWidths);
     const zoneId =
@@ -561,8 +566,7 @@ function buildPyramidVisualizerModel(
         sortedLayer.length * PYRAMID_NODE_WIDTH +
         Math.max(0, sortedLayer.length - 1) * PYRAMID_NODE_GAP_X;
       const layerX = cursorX + Math.max(0, (componentWidth - layerWidth) / 2);
-      const y =
-        contentY + depth * (PYRAMID_NODE_HEIGHT + PYRAMID_LAYER_GAP_Y);
+      const y = contentY + depth * (PYRAMID_NODE_HEIGHT + PYRAMID_LAYER_GAP_Y);
       sortedLayer.forEach((deviceId, index) => {
         const device = deviceById[deviceId];
         if (!device) return;
@@ -731,8 +735,7 @@ function buildRackPanel(input: {
   const mountedDeviceIds = new Set(mountedDevices.map((device) => device.id));
   const shelfChildrenByParent = groupBy(
     input.devices.filter(
-      (device) =>
-        device.parentDeviceId && !mountedDeviceIds.has(device.id),
+      (device) => device.parentDeviceId && !mountedDeviceIds.has(device.id),
     ),
     (device) => device.parentDeviceId ?? "",
   );
@@ -822,42 +825,39 @@ function buildRackPanel(input: {
       6 +
       Math.max(
         0,
-        (availableWidth -
-          (childWidth * columns + gap * (columns - 1))) / 2,
+        (availableWidth - (childWidth * columns + gap * (columns - 1))) / 2,
       );
-    children
-      .sort(compareDeviceName)
-      .forEach((device, index) => {
-        const col = index % columns;
-        const row = Math.floor(index / columns);
-        nodes.push(
-          createNode({
+    children.sort(compareDeviceName).forEach((device, index) => {
+      const col = index % columns;
+      const row = Math.floor(index / columns);
+      nodes.push(
+        createNode({
+          device,
+          x: startX + col * (childWidth + gap),
+          y: parentNode.y + 4 + row * (childHeight + gap),
+          width: childWidth,
+          height: childHeight,
+          zoneId: input.room
+            ? `room:${input.room.id}:rack:${input.rack.id}`
+            : `rack:${input.rack.id}`,
+          rackId: input.rack.id,
+          rackName: input.rack.name,
+          roomId: input.room?.id ?? null,
+          roomName: input.room?.name ?? "Unassigned room",
+          ports: input.portsByDeviceId[device.id] ?? [],
+          portLinkByPortId: input.portLinkByPortId,
+          virtualSwitchById: input.virtualSwitchById,
+          discoveredByDeviceId: input.discoveredByDeviceId,
+          discoveredByIp: input.discoveredByIp,
+          subnetRanges: input.subnetRanges,
+          vlansById: input.vlansById,
+          health: getDeviceHealth(
             device,
-            x: startX + col * (childWidth + gap),
-            y: parentNode.y + 4 + row * (childHeight + gap),
-            width: childWidth,
-            height: childHeight,
-            zoneId: input.room
-              ? `room:${input.room.id}:rack:${input.rack.id}`
-              : `rack:${input.rack.id}`,
-            rackId: input.rack.id,
-            rackName: input.rack.name,
-            roomId: input.room?.id ?? null,
-            roomName: input.room?.name ?? "Unassigned room",
-            ports: input.portsByDeviceId[device.id] ?? [],
-            portLinkByPortId: input.portLinkByPortId,
-            virtualSwitchById: input.virtualSwitchById,
-            discoveredByDeviceId: input.discoveredByDeviceId,
-            discoveredByIp: input.discoveredByIp,
-            subnetRanges: input.subnetRanges,
-            vlansById: input.vlansById,
-            health: getDeviceHealth(
-              device,
-              input.monitorsByDeviceId[device.id] ?? [],
-            ),
-          }),
-        );
-      });
+            input.monitorsByDeviceId[device.id] ?? [],
+          ),
+        }),
+      );
+    });
   }
   const panelHeight = bodyY - input.y + bodyHeight + 48;
   return {
@@ -1844,8 +1844,7 @@ function cablePath(
     } ${to.y}, ${busX} ${to.y} L ${to.x} ${to.y}`;
   }
   if (dy < 86) {
-    const laneY =
-      Math.min(from.y, to.y) - 38 - Math.abs(laneOffset) * 0.75;
+    const laneY = Math.min(from.y, to.y) - 38 - Math.abs(laneOffset) * 0.75;
     const corner = Math.min(44, dx * 0.25);
     return `M ${from.x} ${from.y} C ${from.x + corner} ${from.y}, ${
       from.x + corner
