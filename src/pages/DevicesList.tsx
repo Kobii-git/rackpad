@@ -10,9 +10,21 @@ import { Mono } from "@/components/shared/Mono";
 import { SortableHeader } from "@/components/shared/SortableHeader";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
-import { canEditInventory, updateDevice, useStore } from "@/lib/store";
-import type { Device, DeviceType, Port, Rack, Room } from "@/lib/types";
-import { ChevronRight, Filter, Plus, Save, X } from "lucide-react";
+import {
+  canEditInventory,
+  deleteDevice,
+  updateDevice,
+  useStore,
+} from "@/lib/store";
+import type {
+  Device,
+  DeviceStatus,
+  DeviceType,
+  Port,
+  Rack,
+  Room,
+} from "@/lib/types";
+import { ChevronRight, Filter, Plus, Save, Trash2, X } from "lucide-react";
 import { statusLabel } from "@/lib/utils";
 import { deviceTypeLabel } from "@/lib/device-types";
 import {
@@ -40,6 +52,7 @@ interface BulkDeviceForm {
   deviceType: string;
   manufacturer: string;
   model: string;
+  status: string;
   cpuCores: string;
   memoryGb: string;
   storageGb: string;
@@ -52,6 +65,7 @@ const EMPTY_BULK_DEVICE_FORM: BulkDeviceForm = {
   deviceType: "",
   manufacturer: "",
   model: "",
+  status: "",
   cpuCores: "",
   memoryGb: "",
   storageGb: "",
@@ -66,6 +80,7 @@ export default function DevicesList() {
   const rooms = useStore((s) => s.rooms);
   const racks = useStore((s) => s.racks);
   const ports = useStore((s) => s.ports);
+  const deviceMonitors = useStore((s) => s.deviceMonitors);
   const canEdit = canEditInventory(currentUser);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<DeviceType | null>(null);
@@ -171,6 +186,29 @@ export default function DevicesList() {
     type,
   ]);
   const selectedDeviceCount = selectedDeviceIds.size;
+  const selectedDevices = useMemo(
+    () => devices.filter((device) => selectedDeviceIds.has(device.id)),
+    [devices, selectedDeviceIds],
+  );
+  const selectedMonitorCount = useMemo(
+    () =>
+      deviceMonitors.filter((monitor) => selectedDeviceIds.has(monitor.deviceId))
+        .length,
+    [deviceMonitors, selectedDeviceIds],
+  );
+  const selectedPortCount = useMemo(
+    () => ports.filter((port) => selectedDeviceIds.has(port.deviceId)).length,
+    [ports, selectedDeviceIds],
+  );
+  const monitoredStatusCount = useMemo(
+    () =>
+      selectedDevices.filter((device) =>
+        deviceMonitors.some(
+          (monitor) => monitor.deviceId === device.id && monitor.enabled,
+        ),
+      ).length,
+    [deviceMonitors, selectedDevices],
+  );
   const allFilteredSelected =
     filtered.length > 0 &&
     filtered.every((device) => selectedDeviceIds.has(device.id));
@@ -242,6 +280,9 @@ export default function DevicesList() {
     if (bulkFields.has("model")) {
       changes.model = bulkForm.model.trim() || undefined;
     }
+    if (bulkFields.has("status") && bulkForm.status) {
+      changes.status = bulkForm.status as DeviceStatus;
+    }
     if (bulkFields.has("cpuCores")) {
       changes.cpuCores = bulkForm.cpuCores
         ? Number.parseInt(bulkForm.cpuCores, 10)
@@ -273,6 +314,41 @@ export default function DevicesList() {
     } catch (err) {
       setBulkError(
         err instanceof Error ? err.message : "Failed to update devices.",
+      );
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedDeviceIds.size === 0) return;
+    const dependencyParts = [
+      selectedPortCount ? `${selectedPortCount} ports/cable endpoints` : "",
+      selectedMonitorCount ? `${selectedMonitorCount} monitor targets` : "",
+    ].filter(Boolean);
+    const confirmed = window.confirm(
+      [
+        `Delete ${selectedDeviceIds.size} selected device${selectedDeviceIds.size === 1 ? "" : "s"}?`,
+        dependencyParts.length
+          ? `Related ${dependencyParts.join(" and ")} will be cleaned up.`
+          : "Related inventory references will be cleaned up.",
+        "This cannot be undone.",
+      ].join("\n\n"),
+    );
+    if (!confirmed) return;
+
+    setBulkSaving(true);
+    setBulkError("");
+    try {
+      for (const deviceId of selectedDeviceIds) {
+        await deleteDevice(deviceId);
+      }
+      setSelectedDeviceIds(new Set());
+      setBulkFields(new Set());
+      setBulkForm(EMPTY_BULK_DEVICE_FORM);
+    } catch (err) {
+      setBulkError(
+        err instanceof Error ? err.message : "Failed to delete devices.",
       );
     } finally {
       setBulkSaving(false);
@@ -403,6 +479,15 @@ export default function DevicesList() {
                   <X className="size-3.5" />
                   Clear
                 </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={bulkSaving}
+                  onClick={() => void handleBulkDelete()}
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete selected
+                </Button>
               </div>
 
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -491,6 +576,33 @@ export default function DevicesList() {
                   />
                 </BulkField>
                 <BulkField
+                  label="Status"
+                  checked={bulkFields.has("status")}
+                  onChecked={() => toggleBulkField("status")}
+                >
+                  <Select
+                    value={bulkForm.status}
+                    onChange={(value) =>
+                      setBulkForm((prev) => ({ ...prev, status: value }))
+                    }
+                  >
+                    <option value="">Keep current status</option>
+                    {(
+                      [
+                        "online",
+                        "offline",
+                        "warning",
+                        "maintenance",
+                        "unknown",
+                      ] as const
+                    ).map((status) => (
+                      <option key={status} value={status}>
+                        {statusLabel[status]}
+                      </option>
+                    ))}
+                  </Select>
+                </BulkField>
+                <BulkField
                   label="CPU cores"
                   checked={bulkFields.has("cpuCores")}
                   onChecked={() => toggleBulkField("cpuCores")}
@@ -569,7 +681,15 @@ export default function DevicesList() {
                 </div>
               )}
 
-              <div className="flex justify-end">
+              {bulkFields.has("status") && monitoredStatusCount > 0 && (
+                <div className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/8 px-3 py-2 text-xs text-[var(--color-fg-subtle)]">
+                  {monitoredStatusCount} selected monitored device
+                  {monitoredStatusCount === 1 ? "" : "s"} may have this status
+                  overwritten by the next monitor result.
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
                 <Button
                   size="sm"
                   disabled={bulkSaving || bulkFields.size === 0}

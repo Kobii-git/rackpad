@@ -25,20 +25,27 @@ import {
   createIpAssignmentRecord,
   createDeviceImageRecord,
   createDeviceMonitorConfig,
+  createDeviceServiceRecord,
   deleteDevice,
   deleteDeviceImageRecord,
   deleteDeviceMonitorConfig,
+  deleteDeviceServiceRecord,
   loadAll,
   runDeviceMonitorCheck,
   runDeviceMonitorChecksForDevice,
   unassignIp,
   updateDeviceMonitorConfig,
+  updateDeviceServiceRecord,
   useStore,
 } from "@/lib/store";
 import type {
   Device,
   DeviceImage,
   DeviceMonitor,
+  DeviceService,
+  DeviceServiceType,
+  IpAllocationMode,
+  IpAssignment,
   IpAssignmentType,
   Port,
   PortLink,
@@ -89,6 +96,8 @@ type NetworkIpForm = {
   subnetId: string;
   ipAddress: string;
   assignmentType: IpAssignmentType;
+  allocationMode: IpAllocationMode;
+  dhcpScopeId: string;
   portId: string;
   description: string;
 };
@@ -97,11 +106,50 @@ const EMPTY_NETWORK_IP_FORM: NetworkIpForm = {
   subnetId: "",
   ipAddress: "",
   assignmentType: "interface",
+  allocationMode: "static",
+  dhcpScopeId: "",
   portId: "",
   description: "",
 };
 
+type ServiceForm = {
+  name: string;
+  serviceType: DeviceServiceType;
+  ipAssignmentId: string;
+  portId: string;
+  vlanId: string;
+  monitorId: string;
+  url: string;
+  notes: string;
+};
+
+const SERVICE_TYPES: DeviceServiceType[] = [
+  "dhcp",
+  "dns",
+  "vpn",
+  "ntp",
+  "snmp",
+  "syslog",
+  "http",
+  "https",
+  "database",
+  "app",
+  "custom",
+];
+
+const EMPTY_SERVICE_FORM: ServiceForm = {
+  name: "",
+  serviceType: "app",
+  ipAssignmentId: "",
+  portId: "",
+  vlanId: "",
+  monitorId: "",
+  url: "",
+  notes: "",
+};
+
 const NEW_MONITOR_ID = "__new_monitor__";
+const NEW_SERVICE_ID = "__new_service__";
 
 export default function DeviceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -114,10 +162,12 @@ export default function DeviceDetail() {
   const vlans = useStore((s) => s.vlans);
   const ipAssignments = useStore((s) => s.ipAssignments);
   const subnets = useStore((s) => s.subnets);
+  const scopes = useStore((s) => s.scopes);
   const auditLog = useStore((s) => s.auditLog);
   const racks = useStore((s) => s.racks);
   const deviceMonitors = useStore((s) => s.deviceMonitors);
   const deviceImages = useStore((s) => s.deviceImages);
+  const deviceServices = useStore((s) => s.deviceServices);
   const canEdit = canEditInventory(currentUser);
   const canManageMonitoring = currentUser?.role === "admin";
 
@@ -141,6 +191,14 @@ export default function DeviceDetail() {
   const [allMonitorsRunning, setAllMonitorsRunning] = useState(false);
   const [monitorDeleting, setMonitorDeleting] = useState(false);
   const [monitorError, setMonitorError] = useState("");
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(
+    null,
+  );
+  const [serviceForm, setServiceForm] =
+    useState<ServiceForm>(EMPTY_SERVICE_FORM);
+  const [serviceSaving, setServiceSaving] = useState(false);
+  const [serviceDeleting, setServiceDeleting] = useState(false);
+  const [serviceError, setServiceError] = useState("");
   const [activityEntries, setActivityEntries] = useState<typeof auditLog>([]);
   const [activityLimit, setActivityLimit] = useState(500);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -161,9 +219,26 @@ export default function DeviceDetail() {
     () => (id ? deviceImages.filter((entry) => entry.deviceId === id) : []),
     [deviceImages, id],
   );
+  const deviceServiceList = useMemo(
+    () =>
+      id
+        ? deviceServices
+            .filter((entry) => entry.deviceId === id)
+            .sort(
+              (a, b) =>
+                a.serviceType.localeCompare(b.serviceType) ||
+                a.name.localeCompare(b.name),
+            )
+        : [],
+    [deviceServices, id],
+  );
   const selectedMonitor =
     selectedMonitorId && selectedMonitorId !== NEW_MONITOR_ID
       ? deviceMonitorList.find((entry) => entry.id === selectedMonitorId)
+      : undefined;
+  const selectedService =
+    selectedServiceId && selectedServiceId !== NEW_SERVICE_ID
+      ? deviceServiceList.find((entry) => entry.id === selectedServiceId)
       : undefined;
 
   const portsByDeviceId = useMemo(() => {
@@ -206,6 +281,10 @@ export default function DeviceDetail() {
       return acc;
     }, {});
   }, [subnets]);
+  const scopesForNetworkSubnet = useMemo(
+    () => scopes.filter((scope) => scope.subnetId === networkForm.subnetId),
+    [networkForm.subnetId, scopes],
+  );
   const virtualSwitchById = useMemo(() => {
     return virtualSwitches.reduce<
       Record<string, (typeof virtualSwitches)[number]>
@@ -225,6 +304,9 @@ export default function DeviceDetail() {
       subnetId: subnets[0]?.id ?? "",
     });
     setNetworkError("");
+    setSelectedServiceId(null);
+    setServiceForm(EMPTY_SERVICE_FORM);
+    setServiceError("");
   }, [device?.id, subnets]);
 
   useEffect(() => {
@@ -235,6 +317,26 @@ export default function DeviceDetail() {
         : { ...prev, subnetId: subnets[0].id },
     );
   }, [subnets]);
+
+  useEffect(() => {
+    if (networkForm.allocationMode !== "dhcp-reservation") return;
+    if (
+      networkForm.dhcpScopeId &&
+      scopesForNetworkSubnet.some(
+        (scope) => scope.id === networkForm.dhcpScopeId,
+      )
+    ) {
+      return;
+    }
+    setNetworkForm((prev) => ({
+      ...prev,
+      dhcpScopeId: scopesForNetworkSubnet[0]?.id ?? "",
+    }));
+  }, [
+    networkForm.allocationMode,
+    networkForm.dhcpScopeId,
+    scopesForNetworkSubnet,
+  ]);
 
   useEffect(() => {
     if (!device) return;
@@ -263,6 +365,32 @@ export default function DeviceDetail() {
     }
     setMonitorError("");
   }, [device, selectedMonitor, deviceMonitorList.length]);
+
+  useEffect(() => {
+    if (!device) return;
+    if (deviceServiceList.length === 0) {
+      if (selectedServiceId !== NEW_SERVICE_ID) {
+        setSelectedServiceId(NEW_SERVICE_ID);
+      }
+      return;
+    }
+    if (
+      !selectedServiceId ||
+      (selectedServiceId !== NEW_SERVICE_ID &&
+        !deviceServiceList.some((entry) => entry.id === selectedServiceId))
+    ) {
+      setSelectedServiceId(deviceServiceList[0].id);
+    }
+  }, [device, deviceServiceList, selectedServiceId]);
+
+  useEffect(() => {
+    if (selectedService) {
+      setServiceForm(serviceToForm(selectedService));
+    } else {
+      setServiceForm(EMPTY_SERVICE_FORM);
+    }
+    setServiceError("");
+  }, [selectedService]);
 
   const devicePorts = device?.id ? (portsByDeviceId[device.id] ?? []) : [];
   const networkAssignablePorts = devicePorts.filter(
@@ -437,6 +565,11 @@ export default function DeviceDetail() {
         subnetId,
         ipAddress,
         assignmentType: networkForm.assignmentType,
+        allocationMode: networkForm.allocationMode,
+        dhcpScopeId:
+          networkForm.allocationMode === "dhcp-reservation"
+            ? networkForm.dhcpScopeId || undefined
+            : undefined,
         deviceId: device.id,
         portId: networkForm.portId || undefined,
         hostname: device.hostname,
@@ -450,6 +583,8 @@ export default function DeviceDetail() {
         ...EMPTY_NETWORK_IP_FORM,
         subnetId: prev.subnetId,
         assignmentType: prev.assignmentType,
+        allocationMode: prev.allocationMode,
+        dhcpScopeId: prev.dhcpScopeId,
       }));
     } catch (err) {
       setNetworkError(
@@ -625,6 +760,76 @@ export default function DeviceDetail() {
     setSelectedMonitorId(NEW_MONITOR_ID);
     setMonitorForm(buildNewMonitorForm(device, deviceMonitorList.length));
     setMonitorError("");
+  }
+
+  function setServiceField<K extends keyof ServiceForm>(
+    key: K,
+    value: ServiceForm[K],
+  ) {
+    setServiceForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function startNewService() {
+    setSelectedServiceId(NEW_SERVICE_ID);
+    setServiceForm(EMPTY_SERVICE_FORM);
+    setServiceError("");
+  }
+
+  async function handleSaveService() {
+    if (!device || !canManageMonitoring) return;
+    const name = serviceForm.name.trim();
+    if (!name) {
+      setServiceError("Service name is required.");
+      return;
+    }
+
+    setServiceSaving(true);
+    setServiceError("");
+    const payload = {
+      deviceId: device.id,
+      name,
+      serviceType: serviceForm.serviceType,
+      ipAssignmentId: serviceForm.ipAssignmentId || null,
+      portId: serviceForm.portId || null,
+      vlanId: serviceForm.vlanId || null,
+      monitorId: serviceForm.monitorId || null,
+      url: serviceForm.url.trim() || null,
+      notes: serviceForm.notes.trim() || null,
+    };
+
+    try {
+      if (selectedService) {
+        await updateDeviceServiceRecord(selectedService.id, payload);
+      } else {
+        const created = await createDeviceServiceRecord(payload);
+        setSelectedServiceId(created.id);
+      }
+    } catch (err) {
+      setServiceError(
+        err instanceof Error ? err.message : "Failed to save service.",
+      );
+    } finally {
+      setServiceSaving(false);
+    }
+  }
+
+  async function handleDeleteService() {
+    if (!selectedService) return;
+    if (!window.confirm(`Delete service "${selectedService.name}"?`)) return;
+    setServiceDeleting(true);
+    setServiceError("");
+    try {
+      await deleteDeviceServiceRecord(selectedService.id);
+      setSelectedServiceId(
+        deviceServiceList.length > 1 ? null : NEW_SERVICE_ID,
+      );
+    } catch (err) {
+      setServiceError(
+        err instanceof Error ? err.message : "Failed to delete service.",
+      );
+    } finally {
+      setServiceDeleting(false);
+    }
   }
 
   async function handleLoadMoreActivity() {
@@ -817,6 +1022,9 @@ export default function DeviceDetail() {
               Network | {displayedDeviceIpCount}
             </TabsTrigger>
             <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
+            <TabsTrigger value="services">
+              Services | {deviceServiceList.length}
+            </TabsTrigger>
             <TabsTrigger value="images">
               Images | {deviceImageList.length}
             </TabsTrigger>
@@ -1087,7 +1295,7 @@ export default function DeviceDetail() {
                   </CardTitle>
                 </CardHeader>
                 <CardBody className="space-y-3">
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
                     <Field label="Subnet">
                       <Select
                         value={networkForm.subnetId}
@@ -1127,6 +1335,41 @@ export default function DeviceDetail() {
                         <option value="reserved">Reserved</option>
                         <option value="vm">VM</option>
                         <option value="container">Container</option>
+                      </Select>
+                    </Field>
+                    <Field label="Allocation">
+                      <Select
+                        value={networkForm.allocationMode}
+                        onChange={(value) =>
+                          setNetworkField(
+                            "allocationMode",
+                            value as IpAllocationMode,
+                          )
+                        }
+                      >
+                        <option value="static">Static</option>
+                        <option value="dhcp-reservation">
+                          DHCP reservation
+                        </option>
+                      </Select>
+                    </Field>
+                    <Field label="DHCP scope">
+                      <Select
+                        value={networkForm.dhcpScopeId}
+                        onChange={(value) =>
+                          setNetworkField("dhcpScopeId", value)
+                        }
+                        disabled={
+                          networkForm.allocationMode !==
+                          "dhcp-reservation"
+                        }
+                      >
+                        <option value="">Auto / none</option>
+                        {scopesForNetworkSubnet.map((scope) => (
+                          <option key={scope.id} value={scope.id}>
+                            {scope.name}
+                          </option>
+                        ))}
                       </Select>
                     </Field>
                     <Field label="Port">
@@ -1235,6 +1478,9 @@ export default function DeviceDetail() {
                           )}
                         </div>
                         <div className="col-span-2 flex items-center justify-end gap-2">
+                          {ip.allocationMode === "dhcp-reservation" && (
+                            <Badge tone="neutral">DHCP res</Badge>
+                          )}
                           <Badge tone="cyan">{ip.assignmentType}</Badge>
                           <Button
                             variant="ghost"
@@ -1587,6 +1833,242 @@ export default function DeviceDetail() {
                           : "Create target"}
                     </Button>
                   )}
+                </div>
+              </CardBody>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="services" className="pt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  <CardLabel>Service inventory</CardLabel>
+                  <CardHeading>Applications and network services</CardHeading>
+                </CardTitle>
+                {canManageMonitoring && (
+                  <Button variant="outline" size="sm" onClick={startNewService}>
+                    <Plus className="size-3.5" />
+                    Add service
+                  </Button>
+                )}
+              </CardHeader>
+              <CardBody className="space-y-4">
+                <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+                  <div className="space-y-2">
+                    {deviceServiceList.length === 0 ? (
+                      <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-4 text-sm text-[var(--color-fg-subtle)]">
+                        No services documented yet.
+                      </div>
+                    ) : (
+                      deviceServiceList.map((service) => (
+                        <button
+                          key={service.id}
+                          type="button"
+                          onClick={() => setSelectedServiceId(service.id)}
+                          className={[
+                            "w-full rounded-[var(--radius-sm)] border px-3 py-3 text-left transition-colors",
+                            selectedServiceId === service.id
+                              ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10"
+                              : "border-[var(--color-line)] bg-[var(--color-bg)] hover:border-[var(--color-line-strong)]",
+                          ].join(" ")}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="truncate text-sm font-medium text-[var(--color-fg)]">
+                              {service.name}
+                            </div>
+                            <Badge tone="neutral">
+                              {serviceTypeLabel(service.serviceType)}
+                            </Badge>
+                          </div>
+                          <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
+                            {service.url ||
+                              service.notes ||
+                              linkedServiceSummary(
+                                service,
+                                ipAssignments,
+                                portById,
+                                vlanById,
+                                deviceMonitorList,
+                              )}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="space-y-4 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
+                          {selectedService ? "Service editor" : "New service"}
+                        </div>
+                        <div className="text-base font-medium text-[var(--color-fg)]">
+                          {selectedService
+                            ? selectedService.name
+                            : "Document a service on this device"}
+                        </div>
+                      </div>
+                      {selectedService && (
+                        <Badge tone="neutral">
+                          {serviceTypeLabel(selectedService.serviceType)}
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field label="Name">
+                        <Input
+                          value={serviceForm.name}
+                          disabled={!canManageMonitoring}
+                          onChange={(event) =>
+                            setServiceField("name", event.target.value)
+                          }
+                          placeholder="e.g. DHCP, Grafana, Portainer"
+                        />
+                      </Field>
+                      <Field label="Type">
+                        <Select
+                          value={serviceForm.serviceType}
+                          disabled={!canManageMonitoring}
+                          onChange={(value) =>
+                            setServiceField(
+                              "serviceType",
+                              value as DeviceServiceType,
+                            )
+                          }
+                        >
+                          {SERVICE_TYPES.map((type) => (
+                            <option key={type} value={type}>
+                              {serviceTypeLabel(type)}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <Field label="IP">
+                        <Select
+                          value={serviceForm.ipAssignmentId}
+                          disabled={!canManageMonitoring}
+                          onChange={(value) =>
+                            setServiceField("ipAssignmentId", value)
+                          }
+                        >
+                          <option value="">No IP link</option>
+                          {deviceIps.map((assignment) => (
+                            <option key={assignment.id} value={assignment.id}>
+                              {assignment.ipAddress} ·{" "}
+                              {subnetById[assignment.subnetId]?.name ??
+                                assignment.assignmentType}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <Field label="Port">
+                        <Select
+                          value={serviceForm.portId}
+                          disabled={!canManageMonitoring}
+                          onChange={(value) =>
+                            setServiceField("portId", value)
+                          }
+                        >
+                          <option value="">No port link</option>
+                          {devicePorts.map((port) => (
+                            <option key={port.id} value={port.id}>
+                              {formatPortLabel(port, { includeFace: true })}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <Field label="VLAN">
+                        <Select
+                          value={serviceForm.vlanId}
+                          disabled={!canManageMonitoring}
+                          onChange={(value) =>
+                            setServiceField("vlanId", value)
+                          }
+                        >
+                          <option value="">No VLAN link</option>
+                          {vlans.map((vlan) => (
+                            <option key={vlan.id} value={vlan.id}>
+                              VLAN {vlan.vlanId} · {vlan.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <Field label="Monitor">
+                        <Select
+                          value={serviceForm.monitorId}
+                          disabled={!canManageMonitoring}
+                          onChange={(value) =>
+                            setServiceField("monitorId", value)
+                          }
+                        >
+                          <option value="">No monitor link</option>
+                          {deviceMonitorList.map((monitor) => (
+                            <option key={monitor.id} value={monitor.id}>
+                              {monitor.name} · {monitor.type}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                    </div>
+
+                    <Field label="URL">
+                      <Input
+                        value={serviceForm.url}
+                        disabled={!canManageMonitoring}
+                        onChange={(event) =>
+                          setServiceField("url", event.target.value)
+                        }
+                        placeholder="https://host.example:8443/"
+                      />
+                    </Field>
+                    <Field label="Notes">
+                      <textarea
+                        value={serviceForm.notes}
+                        disabled={!canManageMonitoring}
+                        onChange={(event) =>
+                          setServiceField("notes", event.target.value)
+                        }
+                        rows={3}
+                        className="rk-control rk-textarea w-full text-sm"
+                        placeholder="Owner, role, dependencies, or failover notes..."
+                      />
+                    </Field>
+
+                    {serviceError && (
+                      <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-sm text-[var(--color-err)]">
+                        {serviceError}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2">
+                      {canManageMonitoring && selectedService && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => void handleDeleteService()}
+                          disabled={serviceDeleting}
+                        >
+                          <Trash2 className="size-3.5" />
+                          {serviceDeleting ? "Deleting..." : "Delete service"}
+                        </Button>
+                      )}
+                      {canManageMonitoring && (
+                        <Button
+                          size="sm"
+                          onClick={() => void handleSaveService()}
+                          disabled={serviceSaving}
+                        >
+                          <Save className="size-3.5" />
+                          {serviceSaving
+                            ? "Saving..."
+                            : selectedService
+                              ? "Save service"
+                              : "Create service"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </CardBody>
             </Card>
@@ -2106,6 +2588,74 @@ function SummaryPill({ label, value }: { label: string; value: string }) {
       </div>
       <div className="mt-1 text-sm text-[var(--color-fg)]">{value}</div>
     </div>
+  );
+}
+
+function serviceToForm(service: DeviceService): ServiceForm {
+  return {
+    name: service.name,
+    serviceType: service.serviceType,
+    ipAssignmentId: service.ipAssignmentId ?? "",
+    portId: service.portId ?? "",
+    vlanId: service.vlanId ?? "",
+    monitorId: service.monitorId ?? "",
+    url: service.url ?? "",
+    notes: service.notes ?? "",
+  };
+}
+
+function serviceTypeLabel(type: DeviceServiceType) {
+  switch (type) {
+    case "dhcp":
+      return "DHCP";
+    case "dns":
+      return "DNS";
+    case "vpn":
+      return "VPN";
+    case "ntp":
+      return "NTP";
+    case "snmp":
+      return "SNMP";
+    case "syslog":
+      return "Syslog";
+    case "http":
+      return "HTTP";
+    case "https":
+      return "HTTPS";
+    case "database":
+      return "Database";
+    case "app":
+      return "App";
+    default:
+      return "Custom";
+  }
+}
+
+function linkedServiceSummary(
+  service: DeviceService,
+  assignments: IpAssignment[],
+  portsById: Record<string, Port>,
+  vlansById: Record<string, Vlan>,
+  monitors: DeviceMonitor[],
+) {
+  const ip = service.ipAssignmentId
+    ? assignments.find((entry) => entry.id === service.ipAssignmentId)
+    : undefined;
+  const port = service.portId ? portsById[service.portId] : undefined;
+  const vlan = service.vlanId ? vlansById[service.vlanId] : undefined;
+  const monitor = service.monitorId
+    ? monitors.find((entry) => entry.id === service.monitorId)
+    : undefined;
+
+  return (
+    [
+      ip?.ipAddress,
+      port?.name,
+      vlan ? `VLAN ${vlan.vlanId}` : undefined,
+      monitor?.name,
+    ]
+      .filter(Boolean)
+      .join(" | ") || "No linked target"
   );
 }
 

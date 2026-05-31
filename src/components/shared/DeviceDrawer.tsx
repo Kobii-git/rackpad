@@ -38,6 +38,9 @@ interface FormState {
   serial: string;
   managementIp: string;
   macAddress: string;
+  networkMode: NonNullable<Device["networkMode"]>;
+  ipAllocationMode: "static" | "dhcp-reservation";
+  dhcpScopeId: string;
   status: DeviceStatus;
   placement: NonNullable<Device["placement"]>;
   parentDeviceId: string;
@@ -73,6 +76,9 @@ function blankForm(defaults?: Partial<FormState>): FormState {
     serial: "",
     managementIp: "",
     macAddress: "",
+    networkMode: "normal",
+    ipAllocationMode: "static",
+    dhcpScopeId: "",
     status: "unknown",
     placement: defaults?.rackId ? "rack" : "room",
     parentDeviceId: "",
@@ -112,6 +118,9 @@ function deviceToForm(device: Device): FormState {
     serial: device.serial ?? "",
     managementIp: device.managementIp ?? "",
     macAddress: device.macAddress ?? "",
+    networkMode: device.networkMode ?? "normal",
+    ipAllocationMode: "static",
+    dhcpScopeId: "",
     status: device.status,
     placement: device.placement ?? (device.rackId ? "rack" : "room"),
     parentDeviceId: device.parentDeviceId ?? "",
@@ -217,7 +226,8 @@ export function DeviceDrawer({
       ),
     [form.deviceType, portTemplates],
   );
-  const hasRackPlacement = form.placement === "rack";
+  const isRackMounted = form.placement === "rack";
+  const isShelfMounted = form.placement === "shelf";
   const parentCandidates = useMemo(() => {
     return devices
       .filter((entry) => !device || entry.id !== device.id)
@@ -241,6 +251,13 @@ export function DeviceDrawer({
       : form.placement === "shelf"
         ? "Rack shelf / tray"
         : "Host device";
+  const parentHost = form.parentDeviceId
+    ? devices.find((entry) => entry.id === form.parentDeviceId)
+    : undefined;
+  const canUseHostSharedNetworking =
+    form.placement === "virtual" &&
+    (form.deviceType === "vm" || form.deviceType === "container") &&
+    Boolean(form.parentDeviceId);
 
   useEffect(() => {
     if (!form.portTemplateId) return;
@@ -259,7 +276,7 @@ export function DeviceDrawer({
       ...prev,
       rackId: "",
       startU: "",
-      heightU: "1",
+      heightU: form.placement === "shelf" ? prev.heightU || "1" : "1",
       face: "front",
     }));
   }, [form.placement]);
@@ -275,6 +292,12 @@ export function DeviceDrawer({
     if (!form.parentDeviceId) return;
     setForm((prev) => ({ ...prev, parentDeviceId: "" }));
   }, [form.parentDeviceId, showParentSelector]);
+
+  useEffect(() => {
+    if (canUseHostSharedNetworking) return;
+    if (form.networkMode === "normal") return;
+    setForm((prev) => ({ ...prev, networkMode: "normal" }));
+  }, [canUseHostSharedNetworking, form.networkMode]);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -378,7 +401,7 @@ export function DeviceDrawer({
         .map((tag) => tag.trim())
         .filter(Boolean);
 
-      const payload = {
+      const basePayload = {
         hostname: form.hostname.trim(),
         displayName: form.displayName.trim() || undefined,
         deviceType: form.deviceType,
@@ -387,6 +410,9 @@ export function DeviceDrawer({
         serial: form.serial.trim() || undefined,
         managementIp: form.managementIp.trim() || undefined,
         macAddress: form.macAddress.trim() || undefined,
+        networkMode: canUseHostSharedNetworking
+          ? form.networkMode
+          : "normal",
         status: form.status,
         placement: form.placement,
         parentDeviceId:
@@ -403,18 +429,18 @@ export function DeviceDrawer({
           ? Number.parseFloat(form.storageGb)
           : undefined,
         specs: form.specs.trim() || undefined,
-        rackId: hasRackPlacement ? form.rackId : undefined,
-        roomId: !hasRackPlacement && form.roomId ? form.roomId : undefined,
+        rackId: isRackMounted ? form.rackId : undefined,
+        roomId: !isRackMounted && form.roomId ? form.roomId : undefined,
         startU:
-          hasRackPlacement && form.startU
+          isRackMounted && form.startU
             ? Number.parseInt(form.startU, 10)
             : undefined,
-        heightU: hasRackPlacement
+        heightU: isRackMounted || isShelfMounted
           ? form.heightU
             ? Number.parseInt(form.heightU, 10)
             : 1
           : undefined,
-        face: hasRackPlacement ? form.face : undefined,
+        face: isRackMounted ? form.face : undefined,
         portTemplateId:
           canApplyTemplate && form.portTemplateId
             ? form.portTemplateId
@@ -425,8 +451,15 @@ export function DeviceDrawer({
 
       const saved =
         isEdit && device
-          ? await updateDevice(device.id, payload)
-          : await createDevice(payload);
+          ? await updateDevice(device.id, basePayload)
+          : await createDevice({
+              ...basePayload,
+              ipAllocationMode: form.ipAllocationMode,
+              dhcpScopeId:
+                form.ipAllocationMode === "dhcp-reservation"
+                  ? form.dhcpScopeId || undefined
+                  : undefined,
+            });
 
       if (saved) {
         onSaved?.(saved);
@@ -613,6 +646,42 @@ export function DeviceDrawer({
                       placeholder="e.g. 10.0.10.12"
                     />
                   </Field>
+                  {canUseHostSharedNetworking && (
+                    <Field label="Network mode">
+                      <div className="grid grid-cols-2 gap-1">
+                        {(["normal", "host-shared"] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => set("networkMode", mode)}
+                            className={cn(
+                              "rounded-[var(--radius-xs)] border px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-colors",
+                              form.networkMode === mode
+                                ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"
+                                : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]",
+                            )}
+                          >
+                            {mode === "host-shared"
+                              ? "Host shared"
+                              : "Normal"}
+                          </button>
+                        ))}
+                      </div>
+                      {form.networkMode === "host-shared" && (
+                        <p className="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--surface-1)] px-3 py-2 text-[11px] text-[var(--color-fg-subtle)]">
+                          Shares{" "}
+                          <span className="font-medium text-[var(--color-fg)]">
+                            {parentHost?.hostname ?? "the parent host"}
+                          </span>
+                          {parentHost?.managementIp
+                            ? ` at ${parentHost.managementIp}`
+                            : "'s management IP"}
+                          . Rackpad will not create a duplicate IPAM row for
+                          this child.
+                        </p>
+                      )}
+                    </Field>
+                  )}
                   <Field label="MAC address">
                     <Input
                       value={form.macAddress}
@@ -811,7 +880,7 @@ export function DeviceDrawer({
                     </>
                   )}
 
-                  {!hasRackPlacement && (
+                  {!isRackMounted && (
                     <Field label="Room">
                       <Select
                         value={form.roomId}
@@ -878,22 +947,26 @@ export function DeviceDrawer({
 
                 <Separator />
 
-                <Section label="Rack placement">
-                  <Field label="Rack">
-                    <Select
-                      value={form.rackId}
-                      onChange={(value) => set("rackId", value)}
-                    >
-                      <option value="">-- unracked --</option>
-                      {racks.map((rack) => (
-                        <option key={rack.id} value={rack.id}>
-                          {rack.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
+                <Section
+                  label={isShelfMounted ? "Shelf footprint" : "Rack placement"}
+                >
+                  {isRackMounted && (
+                    <Field label="Rack">
+                      <Select
+                        value={form.rackId}
+                        onChange={(value) => set("rackId", value)}
+                      >
+                        <option value="">-- unracked --</option>
+                        {racks.map((rack) => (
+                          <option key={rack.id} value={rack.id}>
+                            {rack.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  )}
 
-                  {hasRackPlacement && (
+                  {isRackMounted && (
                     <div className="grid grid-cols-3 gap-3">
                       <Field label="Start U">
                         <Input
@@ -929,6 +1002,25 @@ export function DeviceDrawer({
                         </Select>
                       </Field>
                     </div>
+                  )}
+
+                  {isShelfMounted && (
+                    <Field label="Device footprint (U)">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={form.heightU}
+                        onChange={(event) =>
+                          set("heightU", event.target.value)
+                        }
+                        placeholder="1"
+                      />
+                      <p className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
+                        Used by rack and visualizer views to size devices inside
+                        multi-U shelves.
+                      </p>
+                    </Field>
                   )}
                 </Section>
 

@@ -136,6 +136,11 @@ const exportBackupSnapshot = db.transaction(
             "SELECT * FROM deviceImages ORDER BY deviceId, createdAt DESC, id",
           )
           .all(),
+        referenceImages: db
+          .prepare(
+            "SELECT * FROM referenceImages ORDER BY entityType, entityId, face, createdAt DESC, id",
+          )
+          .all(),
         auditLog: db
           .prepare("SELECT * FROM auditLog ORDER BY ts DESC, id DESC")
           .all(),
@@ -153,6 +158,9 @@ const exportBackupSnapshot = db.transaction(
           .all(),
         deviceMonitors: db
           .prepare("SELECT * FROM deviceMonitors ORDER BY deviceId, id")
+          .all(),
+        deviceServices: db
+          .prepare("SELECT * FROM deviceServices ORDER BY deviceId, serviceType, name, id")
           .all(),
         wifiControllers: db
           .prepare("SELECT * FROM wifiControllers ORDER BY name, id")
@@ -262,6 +270,10 @@ const restoreBackupSnapshot = db.transaction(
       data.deviceImages ?? [],
       "data.deviceImages",
     );
+    const referenceImages = normalizeArrayRecordArray(
+      data.referenceImages ?? [],
+      "data.referenceImages",
+    );
     const auditLog = normalizeArrayRecordArray(data.auditLog, "data.auditLog");
     const users = normalizeArrayRecordArray(data.users, "data.users");
     const oidcIdentities = normalizeArrayRecordArray(
@@ -271,6 +283,10 @@ const restoreBackupSnapshot = db.transaction(
     const deviceMonitors = normalizeArrayRecordArray(
       data.deviceMonitors,
       "data.deviceMonitors",
+    );
+    const deviceServices = normalizeArrayRecordArray(
+      data.deviceServices ?? [],
+      "data.deviceServices",
     );
     const wifiControllers = normalizeArrayRecordArray(
       data.wifiControllers ?? [],
@@ -316,9 +332,11 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM wifiAccessPoints;
     DELETE FROM wifiSsids;
     DELETE FROM wifiControllers;
+    DELETE FROM deviceServices;
     DELETE FROM deviceMonitors;
     DELETE FROM appSettings;
     DELETE FROM auditLog;
+    DELETE FROM referenceImages;
     DELETE FROM deviceImages;
     DELETE FROM documentationPages;
     DELETE FROM ipAssignments;
@@ -350,8 +368,8 @@ const restoreBackupSnapshot = db.transaction(
     );
     const insertDevice = db.prepare(`
     INSERT INTO devices
-      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, tags, notes, lastSeen)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, tags, notes, lastSeen, networkMode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const updateDeviceParent = db.prepare(`
     UPDATE devices
@@ -359,8 +377,8 @@ const restoreBackupSnapshot = db.transaction(
     WHERE id = ?
   `);
     const insertVirtualSwitch = db.prepare(`
-    INSERT INTO virtualSwitches (id, hostDeviceId, name, kind, notes)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO virtualSwitches (id, hostDeviceId, name, kind, notes, membersShareHostIp)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
     const insertPort = db.prepare(`
     INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId)
@@ -389,13 +407,13 @@ const restoreBackupSnapshot = db.transaction(
       "INSERT INTO ipZones (id, subnetId, kind, startIp, endIp, description) VALUES (?, ?, ?, ?, ?, ?)",
     );
     const insertIpAssignment = db.prepare(`
-    INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, deviceId, portId, vmId, containerId, hostname, description)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, deviceId, portId, vmId, containerId, hostname, description, allocationMode, dhcpScopeId)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDiscoveredDevice = db.prepare(`
     INSERT INTO discoveredDevices
-      (id, labId, ipAddress, hostname, displayName, deviceType, placement, macAddress, vendor, source, status, notes, importedDeviceId, lastSeen, lastScannedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, labId, ipAddress, hostname, displayName, deviceType, placement, macAddress, vendor, source, status, notes, importedDeviceId, lastSeen, lastScannedAt, technicalRole, technicalReason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDocumentationPage = db.prepare(`
     INSERT INTO documentationPages (id, labId, title, content, createdAt, updatedAt)
@@ -404,6 +422,10 @@ const restoreBackupSnapshot = db.transaction(
     const insertDeviceImage = db.prepare(`
     INSERT INTO deviceImages (id, deviceId, label, fileName, mimeType, dataUrl, notes, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertReferenceImage = db.prepare(`
+    INSERT INTO referenceImages (id, labId, entityType, entityId, label, fileName, mimeType, dataUrl, face, notes, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertAudit = db.prepare(
       "INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -419,6 +441,10 @@ const restoreBackupSnapshot = db.transaction(
     const insertDeviceMonitor = db.prepare(`
     INSERT INTO deviceMonitors (id, deviceId, name, type, target, port, path, intervalMs, enabled, sortOrder, lastCheckAt, lastAlertAt, lastResult, lastMessage)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertDeviceService = db.prepare(`
+    INSERT INTO deviceServices (id, deviceId, name, serviceType, ipAssignmentId, portId, vlanId, monitorId, url, notes, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertWifiController = db.prepare(`
     INSERT INTO wifiControllers (id, labId, deviceId, name, vendor, model, managementIp, notes)
@@ -530,6 +556,7 @@ const restoreBackupSnapshot = db.transaction(
         row.tags ? JSON.stringify(row.tags) : null,
         row.notes ?? null,
         row.lastSeen ?? null,
+        row.networkMode ?? "normal",
       );
     }
     const deviceIds = new Set(devices.map((row) => String(row.id)));
@@ -553,6 +580,7 @@ const restoreBackupSnapshot = db.transaction(
         row.name,
         row.kind ?? "external",
         row.notes ?? null,
+        Number(row.membersShareHostIp ?? 0),
       );
     }
     for (const row of vlans) {
@@ -664,6 +692,8 @@ const restoreBackupSnapshot = db.transaction(
         row.containerId ?? null,
         row.hostname ?? null,
         row.description ?? null,
+        row.allocationMode ?? "static",
+        row.dhcpScopeId ?? null,
       );
     }
     for (const row of discoveredDevices) {
@@ -683,6 +713,8 @@ const restoreBackupSnapshot = db.transaction(
         row.importedDeviceId ?? null,
         row.lastSeen ?? null,
         row.lastScannedAt ?? new Date().toISOString(),
+        row.technicalRole ?? null,
+        row.technicalReason ?? null,
       );
     }
     for (const row of documentationPages) {
@@ -692,6 +724,23 @@ const restoreBackupSnapshot = db.transaction(
         row.labId,
         row.title,
         row.content ?? "",
+        row.createdAt ?? now,
+        row.updatedAt ?? row.createdAt ?? now,
+      );
+    }
+    for (const row of referenceImages) {
+      const now = new Date().toISOString();
+      insertReferenceImage.run(
+        row.id,
+        row.labId,
+        row.entityType,
+        row.entityId,
+        row.label,
+        row.fileName,
+        row.mimeType,
+        row.dataUrl,
+        row.face ?? null,
+        row.notes ?? null,
         row.createdAt ?? now,
         row.updatedAt ?? row.createdAt ?? now,
       );
@@ -737,6 +786,23 @@ const restoreBackupSnapshot = db.transaction(
         row.lastAlertAt ?? null,
         row.lastResult ?? null,
         row.lastMessage ?? null,
+      );
+    }
+    for (const row of deviceServices) {
+      const now = new Date().toISOString();
+      insertDeviceService.run(
+        row.id,
+        row.deviceId,
+        row.name,
+        row.serviceType,
+        row.ipAssignmentId ?? null,
+        row.portId ?? null,
+        row.vlanId ?? null,
+        row.monitorId ?? null,
+        row.url ?? null,
+        row.notes ?? null,
+        row.createdAt ?? now,
+        row.updatedAt ?? row.createdAt ?? now,
       );
     }
     for (const row of wifiControllers) {
@@ -835,6 +901,8 @@ const restoreBackupSnapshot = db.transaction(
         discoveredDevices: discoveredDevices.length,
         documentationPages: documentationPages.length,
         deviceImages: deviceImages.length,
+        referenceImages: referenceImages.length,
+        deviceServices: deviceServices.length,
         portTemplates: portTemplates.length,
         wifiControllers: wifiControllers.length,
         wifiSsids: wifiSsids.length,

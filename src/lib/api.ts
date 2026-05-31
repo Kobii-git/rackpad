@@ -5,6 +5,7 @@ import type {
   AuthSession,
   Device,
   DeviceImage,
+  DeviceService,
   DeviceTypeDefinition,
   DeviceMonitor,
   DocumentationPage,
@@ -54,6 +55,20 @@ export class ApiError extends Error {
 
 export type DevicePatch = Nullable<Omit<Device, "id" | "labId">>;
 export type DeviceImagePatch = Nullable<Pick<DeviceImage, "label" | "notes">>;
+export type DeviceServicePatch = Nullable<
+  Pick<
+    DeviceService,
+    | "deviceId"
+    | "name"
+    | "serviceType"
+    | "ipAssignmentId"
+    | "portId"
+    | "vlanId"
+    | "monitorId"
+    | "url"
+    | "notes"
+  >
+>;
 export type ReferenceImagePatch = Nullable<
   Pick<ReferenceImage, "label" | "notes" | "face">
 >;
@@ -71,7 +86,7 @@ export type VlanPatch = Nullable<Omit<Vlan, "id" | "labId">>;
 export type VlanRangePatch = Nullable<Omit<VlanRange, "id" | "labId">>;
 export type PortPatch = Nullable<Omit<Port, "id" | "deviceId" | "position">>;
 export type VirtualSwitchPatch = Nullable<
-  Pick<VirtualSwitch, "name" | "kind" | "notes">
+  Pick<VirtualSwitch, "name" | "kind" | "membersShareHostIp" | "notes">
 >;
 export type PortLinkPatch = Nullable<Omit<PortLink, "id">>;
 export type PortTemplatePatch = Nullable<
@@ -495,6 +510,34 @@ export const api = {
 
   deleteDeviceImage(id: string) {
     return request<void>(`/device-images/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  getDeviceServices(params?: { deviceId?: string }) {
+    return request<DeviceService[]>("/device-services", undefined, params);
+  },
+
+  createDeviceService(
+    body: Omit<DeviceService, "id" | "createdAt" | "updatedAt"> & {
+      id?: string;
+    },
+  ) {
+    return request<DeviceService>("/device-services", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateDeviceService(id: string, body: DeviceServicePatch) {
+    return request<DeviceService>(`/device-services/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteDeviceService(id: string) {
+    return request<void>(`/device-services/${id}`, {
       method: "DELETE",
     });
   },

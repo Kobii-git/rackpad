@@ -7,12 +7,17 @@ import {
   ensureIpv4,
   optionalString,
   optionalStringArray,
+  optionalEnum,
   requiredEnum,
   requiredString,
+  ValidationError,
 } from '../lib/validation.js'
 
 const IP_ZONE_KINDS = ['static', 'dhcp', 'reserved', 'infrastructure'] as const
 const ASSIGNMENT_TYPES = ['device', 'interface', 'vm', 'container', 'reserved', 'infrastructure'] as const
+const ALLOCATION_MODES = ['static', 'dhcp-reservation'] as const
+const TECHNICAL_ASSIGNMENT_TYPES = new Set<string>(['reserved', 'infrastructure'])
+const HOST_ASSIGNMENT_TYPES = new Set<string>(['device', 'interface', 'vm', 'container'])
 
 function parseScope(row: Record<string, unknown>) {
   return parseRow(row, ['dnsServers'])
@@ -35,6 +40,11 @@ function subnetContainsIp(cidr: string, ipAddress: string) {
   return target >= network && target <= broadcast
 }
 
+function ipInRange(ipAddress: string, startIp: string, endIp: string) {
+  const target = ipv4ToInt(ipAddress)
+  return target >= ipv4ToInt(startIp) && target <= ipv4ToInt(endIp)
+}
+
 function assertAssignmentSubnet(subnetId: string, ipAddress: string) {
   const subnet = db.prepare('SELECT cidr FROM subnets WHERE id = ?').get(subnetId) as { cidr?: string } | undefined
   if (!subnet?.cidr) {
@@ -42,6 +52,96 @@ function assertAssignmentSubnet(subnetId: string, ipAddress: string) {
   }
   if (!subnetContainsIp(subnet.cidr, ipAddress)) {
     throw new Error(`IP ${ipAddress} does not belong to subnet ${subnet.cidr}.`)
+  }
+}
+
+function dhcpScopeForIp(subnetId: string, ipAddress: string) {
+  return (db.prepare('SELECT * FROM dhcpScopes WHERE subnetId = ?').all(subnetId) as Array<{
+    id: string
+    name: string
+    startIp: string
+    endIp: string
+    gateway: string | null
+    dnsServers: string | null
+  }>).find((scope) => ipInRange(ipAddress, scope.startIp, scope.endIp))
+}
+
+function dhcpTechnicalRole(subnetId: string, ipAddress: string) {
+  const scopes = db.prepare('SELECT name, gateway, dnsServers FROM dhcpScopes WHERE subnetId = ?').all(subnetId) as Array<{
+    name: string
+    gateway: string | null
+    dnsServers: string | null
+  }>
+
+  for (const scope of scopes) {
+    if (scope.gateway === ipAddress) {
+      return { role: 'gateway', reason: `${scope.name} gateway` }
+    }
+    if (!scope.dnsServers) continue
+    try {
+      const dnsServers = JSON.parse(scope.dnsServers) as unknown
+      if (Array.isArray(dnsServers) && dnsServers.some((entry) => String(entry) === ipAddress)) {
+        return { role: 'dns', reason: `${scope.name} DNS server` }
+      }
+    } catch {
+      // Ignore malformed legacy DNS JSON.
+    }
+  }
+
+  return null
+}
+
+function validateAssignmentSemantics(input: {
+  existingId?: string
+  subnetId: string
+  ipAddress: string
+  assignmentType: (typeof ASSIGNMENT_TYPES)[number]
+  allocationMode: (typeof ALLOCATION_MODES)[number]
+  dhcpScopeId?: string | null
+}) {
+  assertAssignmentSubnet(input.subnetId, input.ipAddress)
+
+  const technical = dhcpTechnicalRole(input.subnetId, input.ipAddress)
+  if (technical && !TECHNICAL_ASSIGNMENT_TYPES.has(input.assignmentType)) {
+    throw new ValidationError(
+      `${input.ipAddress} is ${technical.reason}; keep it as reserved or infrastructure instead of assigning it as a normal endpoint.`,
+    )
+  }
+
+  const existingTechnical = db.prepare(`
+    SELECT assignmentType
+    FROM ipAssignments
+    WHERE subnetId = ?
+      AND ipAddress = ?
+      AND id != ?
+      AND assignmentType IN ('reserved', 'infrastructure')
+  `).get(input.subnetId, input.ipAddress, input.existingId ?? '') as { assignmentType?: string } | undefined
+  if (existingTechnical && !TECHNICAL_ASSIGNMENT_TYPES.has(input.assignmentType)) {
+    throw new ValidationError(
+      `${input.ipAddress} is already documented as ${existingTechnical.assignmentType}; edit that technical assignment instead of overwriting it.`,
+    )
+  }
+
+  const containingScope = dhcpScopeForIp(input.subnetId, input.ipAddress)
+  if (input.allocationMode === 'dhcp-reservation') {
+    if (!input.dhcpScopeId) {
+      throw new ValidationError('DHCP reservation assignments must reference a DHCP scope.')
+    }
+    const scope = db.prepare('SELECT subnetId, startIp, endIp FROM dhcpScopes WHERE id = ?').get(input.dhcpScopeId) as
+      | { subnetId: string; startIp: string; endIp: string }
+      | undefined
+    if (!scope || scope.subnetId !== input.subnetId) {
+      throw new ValidationError('Selected DHCP scope does not belong to this subnet.')
+    }
+    if (!ipInRange(input.ipAddress, scope.startIp, scope.endIp)) {
+      throw new ValidationError('DHCP reservation IP must be inside the selected DHCP scope.')
+    }
+  } else if (input.dhcpScopeId) {
+    throw new ValidationError('Static assignments cannot reference a DHCP scope.')
+  } else if (containingScope && HOST_ASSIGNMENT_TYPES.has(input.assignmentType)) {
+    throw new ValidationError(
+      'Device, interface, VM, and container IPs inside a DHCP scope must be marked as DHCP reservations.',
+    )
   }
 }
 
@@ -269,22 +369,31 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const containerId = optionalString(body, 'containerId', { maxLength: 80 })
     const hostname = optionalString(body, 'hostname', { maxLength: 120 })
     const description = optionalString(body, 'description', { maxLength: 500 })
+    const dhcpScopeId = optionalString(body, 'dhcpScopeId', { maxLength: 80 })
+    const allocationMode = optionalEnum(body, 'allocationMode', ALLOCATION_MODES) ?? (dhcpScopeId ? 'dhcp-reservation' : 'static')
     try {
-      assertAssignmentSubnet(subnetId, ipAddress)
+      validateAssignmentSemantics({
+        subnetId,
+        ipAddress,
+        assignmentType,
+        allocationMode,
+        dhcpScopeId,
+      })
     } catch (error) {
       return reply.status(400).send({ error: error instanceof Error ? error.message : 'Invalid subnet assignment.' })
     }
     db.prepare(
-      'INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, deviceId, portId, vmId, containerId, hostname, description) VALUES (?,?,?,?,?,?,?,?,?,?)'
+      'INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, allocationMode, dhcpScopeId, deviceId, portId, vmId, containerId, hostname, description) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
     ).run(id, subnetId, ipAddress, assignmentType,
+      allocationMode, dhcpScopeId ?? null,
       deviceId ?? null, portId ?? null, vmId ?? null, containerId ?? null,
       hostname ?? null, description ?? null)
     return reply.status(201).send(db.prepare('SELECT * FROM ipAssignments WHERE id = ?').get(id))
   })
 
   app.patch<{ Params: { id: string } }>('/ip-assignments/:id', async (req, reply) => {
-    const existing = db.prepare('SELECT subnetId, ipAddress FROM ipAssignments WHERE id = ?').get(req.params.id) as
-      | { subnetId: string; ipAddress: string }
+    const existing = db.prepare('SELECT * FROM ipAssignments WHERE id = ?').get(req.params.id) as
+      | { subnetId: string; ipAddress: string; assignmentType: (typeof ASSIGNMENT_TYPES)[number]; allocationMode?: string | null; dhcpScopeId?: string | null }
       | undefined
     if (!existing) return reply.status(404).send({ error: 'IP assignment not found' })
     const body = asObject(req.body)
@@ -299,19 +408,37 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const containerId = optionalString(body, 'containerId', { maxLength: 80 })
     const hostname = optionalString(body, 'hostname', { maxLength: 120 })
     const description = optionalString(body, 'description', { maxLength: 500 })
+    const dhcpScopeId = optionalString(body, 'dhcpScopeId', { maxLength: 80 })
+    const allocationMode = optionalEnum(body, 'allocationMode', ALLOCATION_MODES)
+    const assignmentType = 'assignmentType' in body
+      ? requiredEnum(body, 'assignmentType', ASSIGNMENT_TYPES)
+      : existing.assignmentType
 
     const effectiveSubnetId = subnetId ?? existing.subnetId
     const effectiveIpAddress = ipAddress ?? existing.ipAddress
+    const effectiveAllocationMode =
+      allocationMode ??
+      (existing.allocationMode === 'dhcp-reservation' ? 'dhcp-reservation' : 'static')
+    const effectiveDhcpScopeId =
+      dhcpScopeId !== undefined
+        ? dhcpScopeId
+        : existing.dhcpScopeId
+          ? String(existing.dhcpScopeId)
+          : null
 
-    if (subnetId !== undefined || ipAddress !== undefined) {
+    if (subnetId !== undefined || ipAddress !== undefined || allocationMode !== undefined || dhcpScopeId !== undefined || 'assignmentType' in body) {
       if (ipAddress !== undefined && !ipAddress) {
         return reply.status(400).send({ error: 'ipAddress cannot be empty.' })
       }
       try {
-        assertAssignmentSubnet(
-          effectiveSubnetId,
-          ipAddress !== undefined ? ensureIpv4(ipAddress) : effectiveIpAddress,
-        )
+        validateAssignmentSemantics({
+          existingId: req.params.id,
+          assignmentType,
+          allocationMode: effectiveAllocationMode,
+          dhcpScopeId: effectiveDhcpScopeId,
+          subnetId: effectiveSubnetId,
+          ipAddress: ipAddress !== undefined ? ensureIpv4(ipAddress) : effectiveIpAddress,
+        })
       } catch (error) {
         return reply.status(400).send({ error: error instanceof Error ? error.message : 'Invalid subnet assignment.' })
       }
@@ -319,7 +446,9 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
 
     if (subnetId !== undefined) { updates.push('subnetId = ?'); values.push(subnetId) }
     if (ipAddress !== undefined) { updates.push('ipAddress = ?'); values.push(ensureIpv4(ipAddress)) }
-    if ('assignmentType' in body) { updates.push('assignmentType = ?'); values.push(requiredEnum(body, 'assignmentType', ASSIGNMENT_TYPES)) }
+    if ('assignmentType' in body) { updates.push('assignmentType = ?'); values.push(assignmentType) }
+    if (allocationMode !== undefined) { updates.push('allocationMode = ?'); values.push(allocationMode ?? 'static') }
+    if (dhcpScopeId !== undefined) { updates.push('dhcpScopeId = ?'); values.push(dhcpScopeId) }
     if (deviceId !== undefined) { updates.push('deviceId = ?'); values.push(deviceId) }
     if (portId !== undefined) { updates.push('portId = ?'); values.push(portId) }
     if (vmId !== undefined) { updates.push('vmId = ?'); values.push(vmId) }

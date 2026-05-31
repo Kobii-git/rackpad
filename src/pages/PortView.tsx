@@ -58,6 +58,7 @@ const PORT_KINDS: Port["kind"][] = [
   "console",
   "usb",
   "virtual",
+  "wifi",
 ];
 const PORT_MODES: NonNullable<Port["mode"]>[] = ["access", "trunk"];
 type PortLinkFilter = "all" | "linked" | "unlinked" | "up" | "down";

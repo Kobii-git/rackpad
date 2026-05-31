@@ -36,6 +36,7 @@ const DEVICE_PLACEMENTS = [
   'shelf',
 ] as const
 const DEVICE_FACES = ['front', 'rear'] as const
+const DEVICE_NETWORK_MODES = ['normal', 'host-shared'] as const
 const JSON_COLS = ['tags'] as const
 
 function parseDevice(row: Record<string, unknown>) {
@@ -102,7 +103,7 @@ function normalizePlacement(input: {
       placement,
       rackId: parent.rackId,
       startU: null,
-      heightU: null,
+      heightU: input.heightU ?? 1,
       face: parent.face ?? null,
     }
   }
@@ -186,6 +187,21 @@ function normalizeMacAddress(value: string | null | undefined) {
   return compact.match(/.{2}/g)?.join(':') ?? null
 }
 
+function validateNetworkMode(input: {
+  networkMode: (typeof DEVICE_NETWORK_MODES)[number]
+  deviceType: string
+  parentDeviceId?: string | null
+}) {
+  if (input.networkMode !== 'host-shared') return input.networkMode
+  if (!input.parentDeviceId) {
+    throw new ValidationError('Host-shared networking requires a parent host device.')
+  }
+  if (input.deviceType !== 'vm' && input.deviceType !== 'container') {
+    throw new ValidationError('Host-shared networking is only available for VMs and containers.')
+  }
+  return input.networkMode
+}
+
 export const devicesRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { rackId?: string; labId?: string } }>(
     '/',
@@ -232,6 +248,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
       optionalString(body, 'macAddress', { maxLength: 32 }),
     )
     const status = optionalEnum(body, 'status', DEVICE_STATUSES) ?? 'unknown'
+    const networkMode = optionalEnum(body, 'networkMode', DEVICE_NETWORK_MODES) ?? 'normal'
     const placement = optionalEnum(body, 'placement', DEVICE_PLACEMENTS)
     const parentDeviceId = optionalString(body, 'parentDeviceId', {
       maxLength: 80,
@@ -275,6 +292,11 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
       parentDevice,
     })
     const normalizedParentDeviceId = parentDevice?.id ?? null
+    const normalizedNetworkMode = validateNetworkMode({
+      networkMode,
+      deviceType,
+      parentDeviceId: normalizedParentDeviceId,
+    })
 
     const template = portTemplateId ? getPortTemplate(portTemplateId) : null
     if (portTemplateId && !template) {
@@ -285,9 +307,9 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const insertDevice = db.prepare(`
       INSERT INTO devices
         (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model,
-         serial, managementIp, macAddress, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs,
+         serial, managementIp, macAddress, status, placement, parentDeviceId, networkMode, roomId, cpuCores, memoryGb, storageGb, specs,
          startU, heightU, face, tags, notes, lastSeen)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `)
     const insertPort = db.prepare(`
       INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId)
@@ -310,6 +332,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         status,
         normalizedPlacement.placement,
         normalizedParentDeviceId,
+        normalizedNetworkMode,
         roomId,
         cpuCores ?? null,
         memoryGb ?? null,
@@ -360,7 +383,12 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const parentDeviceId = optionalString(body, 'parentDeviceId', {
       maxLength: 80,
     })
+    const networkMode = optionalEnum(body, 'networkMode', DEVICE_NETWORK_MODES)
     const roomId = optionalString(body, 'roomId', { maxLength: 80 })
+
+    let normalizedParentForNetwork = existing.parentDeviceId
+      ? String(existing.parentDeviceId)
+      : null
 
     if (
       rackId !== undefined ||
@@ -418,6 +446,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         parentDevice,
       })
       const normalizedParentDeviceId = parentDevice?.id ?? null
+      normalizedParentForNetwork = normalizedParentDeviceId
 
       updates.push(
         'placement = ?',
@@ -434,6 +463,20 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         normalizedPlacement.startU,
         normalizedPlacement.heightU,
         normalizedPlacement.face,
+      )
+    }
+
+    if (networkMode !== undefined || 'deviceType' in body || parentDeviceId !== undefined) {
+      const nextNetworkMode =
+        networkMode ??
+        (existing.networkMode === 'host-shared' ? 'host-shared' : 'normal')
+      updates.push('networkMode = ?')
+      values.push(
+        validateNetworkMode({
+          networkMode: nextNetworkMode,
+          deviceType: nextDeviceType,
+          parentDeviceId: normalizedParentForNetwork,
+        }),
       )
     }
 

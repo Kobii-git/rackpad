@@ -812,13 +812,18 @@ function buildRackPanel(input: {
     const availableWidth = parentNode.width - 12;
     const columns = children.length > 3 ? 2 : Math.max(1, children.length);
     const rows = Math.ceil(children.length / columns);
+    const sortedChildren = [...children].sort(compareDeviceName);
+    const childRows = Array.from({ length: rows }, (_, rowIndex) =>
+      sortedChildren.slice(rowIndex * columns, rowIndex * columns + columns),
+    );
+    const rowWeights = childRows.map((row) =>
+      Math.max(1, ...row.map((device) => device.heightU ?? 1)),
+    );
+    const totalRowWeight = rowWeights.reduce((sum, value) => sum + value, 0);
+    const availableHeight = Math.max(24, parentBounds.height - 8);
     const childWidth = Math.max(
       useDualFaceLayout ? 78 : 88,
       Math.floor((availableWidth - gap * (columns - 1)) / columns),
-    );
-    const childHeight = Math.max(
-      22,
-      Math.min(30, (parentBounds.height - 8 - gap * (rows - 1)) / rows),
     );
     const startX =
       parentNode.x +
@@ -827,16 +832,25 @@ function buildRackPanel(input: {
         0,
         (availableWidth - (childWidth * columns + gap * (columns - 1))) / 2,
       );
-    children.sort(compareDeviceName).forEach((device, index) => {
+    let rowOffset = 0;
+    sortedChildren.forEach((device, index) => {
       const col = index % columns;
       const row = Math.floor(index / columns);
+      const rowHeight = Math.max(
+        22,
+        Math.floor(
+          ((availableHeight - gap * Math.max(0, rows - 1)) *
+            rowWeights[row]) /
+            totalRowWeight,
+        ),
+      );
       nodes.push(
         createNode({
           device,
           x: startX + col * (childWidth + gap),
-          y: parentNode.y + 4 + row * (childHeight + gap),
+          y: parentNode.y + 4 + rowOffset,
           width: childWidth,
-          height: childHeight,
+          height: Math.min(rowHeight, availableHeight - rowOffset),
           zoneId: input.room
             ? `room:${input.room.id}:rack:${input.rack.id}`
             : `rack:${input.rack.id}`,
@@ -857,6 +871,9 @@ function buildRackPanel(input: {
           ),
         }),
       );
+      if (col === columns - 1 || index === sortedChildren.length - 1) {
+        rowOffset += rowHeight + gap;
+      }
     });
   }
   const panelHeight = bodyY - input.y + bodyHeight + 48;
@@ -1040,6 +1057,33 @@ function buildRoomGroups(input: {
     );
     const roomKey = room ? `room:${room.id}` : "room:unassigned";
     const roomPrefix = room ? room.name : "Unassigned";
+    if (isWirelessClientDevice(device)) {
+      const parent = device.parentDeviceId
+        ? input.deviceById[device.parentDeviceId]
+        : undefined;
+      const key = parent
+        ? `${roomKey}:wifi-ap:${parent.id}`
+        : `${roomKey}:wifi-ap:unassigned`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.devices.push(device);
+      } else {
+        groups.set(key, {
+          name: parent
+            ? `${roomPrefix} / WiFi clients on ${parent.hostname}`
+            : `${roomPrefix} / Unassigned WiFi clients`,
+          subtitle: parent
+            ? `Wireless clients${formatDeviceAddress(parent) ? ` | ${formatDeviceAddress(parent)}` : ""}`
+            : "Wireless devices missing an AP link",
+          color: typeColor("ap"),
+          groupType: "virtual-host",
+          devices: [device],
+          room,
+        });
+      }
+      continue;
+    }
+
     if (isVirtualInventoryDevice(device)) {
       const parent = device.parentDeviceId
         ? input.deviceById[device.parentDeviceId]
@@ -1190,6 +1234,14 @@ function isVirtualInventoryDevice(device: Device) {
     device.placement === "virtual" ||
     device.deviceType === "vm" ||
     device.deviceType === "container"
+  );
+}
+
+function isWirelessClientDevice(device: Device) {
+  return (
+    device.placement === "wireless" &&
+    device.deviceType !== "ap" &&
+    Boolean(device.parentDeviceId)
   );
 }
 

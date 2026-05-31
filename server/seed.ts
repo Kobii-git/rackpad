@@ -597,7 +597,12 @@ export function seedIfEmpty() {
   const insertSubnet = db.prepare('INSERT INTO subnets VALUES (@id, @labId, @cidr, @name, @description, @vlanId)')
   const insertDhcpScope = db.prepare('INSERT INTO dhcpScopes VALUES (@id, @subnetId, @name, @startIp, @endIp, @gateway, @dnsServers, @description)')
   const insertIpZone = db.prepare('INSERT INTO ipZones VALUES (@id, @subnetId, @kind, @startIp, @endIp, @description)')
-  const insertIpAssignment = db.prepare('INSERT INTO ipAssignments VALUES (@id, @subnetId, @ipAddress, @assignmentType, @deviceId, @portId, @vmId, @containerId, @hostname, @description)')
+  const insertIpAssignment = db.prepare(`
+    INSERT INTO ipAssignments
+      (id, subnetId, ipAddress, assignmentType, deviceId, portId, vmId, containerId, hostname, description, allocationMode, dhcpScopeId)
+    VALUES
+      (@id, @subnetId, @ipAddress, @assignmentType, @deviceId, @portId, @vmId, @containerId, @hostname, @description, @allocationMode, @dhcpScopeId)
+  `)
   const insertDiscoveredDevice = db.prepare(`
     INSERT INTO discoveredDevices (
       id,
@@ -684,7 +689,13 @@ export function seedIfEmpty() {
     for (const s of subnets) insertSubnet.run(s)
     for (const sc of dhcpScopes) insertDhcpScope.run(sc)
     for (const iz of ipZones) insertIpZone.run(iz)
-    for (const ip of ipAssignments) insertIpAssignment.run(ip)
+    for (const ip of ipAssignments) {
+      insertIpAssignment.run({
+        ...ip,
+        allocationMode: 'static',
+        dhcpScopeId: null,
+      })
+    }
     for (const discovered of discoveredDevices) insertDiscoveredDevice.run(discovered)
     for (const monitor of deviceMonitors) insertDeviceMonitor.run(monitor)
     for (const controller of wifiControllers) insertWifiController.run(controller)

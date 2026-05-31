@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 17;
+const CURRENT_SCHEMA_VERSION = 18;
 
 export const db = new Database(DB_PATH);
 
@@ -656,6 +656,40 @@ const SCHEMA_MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS idx_discovered_devices_lab_technical
         ON discoveredDevices (labId, technicalRole);
+    `,
+  },
+  {
+    version: 18,
+    sql: `
+      ALTER TABLE ipAssignments ADD COLUMN allocationMode TEXT NOT NULL DEFAULT 'static';
+      ALTER TABLE ipAssignments ADD COLUMN dhcpScopeId TEXT REFERENCES dhcpScopes(id) ON DELETE SET NULL;
+
+      ALTER TABLE devices ADD COLUMN networkMode TEXT NOT NULL DEFAULT 'normal';
+      ALTER TABLE virtualSwitches ADD COLUMN membersShareHostIp INTEGER NOT NULL DEFAULT 0;
+
+      CREATE TABLE IF NOT EXISTS deviceServices (
+        id             TEXT PRIMARY KEY,
+        deviceId       TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        name           TEXT NOT NULL,
+        serviceType    TEXT NOT NULL,
+        ipAssignmentId TEXT REFERENCES ipAssignments(id) ON DELETE SET NULL,
+        portId         TEXT REFERENCES ports(id) ON DELETE SET NULL,
+        vlanId         TEXT REFERENCES vlans(id) ON DELETE SET NULL,
+        monitorId      TEXT REFERENCES deviceMonitors(id) ON DELETE SET NULL,
+        url            TEXT,
+        notes          TEXT,
+        createdAt      TEXT NOT NULL,
+        updatedAt      TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ip_assignments_dhcp_scope_id
+        ON ipAssignments (dhcpScopeId);
+
+      CREATE INDEX IF NOT EXISTS idx_device_services_device_id
+        ON deviceServices (deviceId);
+
+      CREATE INDEX IF NOT EXISTS idx_device_services_type
+        ON deviceServices (serviceType);
     `,
   },
 ] as const;

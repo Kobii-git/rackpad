@@ -19,7 +19,8 @@ export type PortKind =
   | "power"
   | "console"
   | "usb"
-  | "virtual";
+  | "virtual"
+  | "wifi";
 
 export type RackFace = "front" | "rear";
 export type LinkState = "up" | "down" | "disabled" | "unknown";
@@ -44,11 +45,25 @@ export type IpAssignmentType =
   | "reserved"
   | "infrastructure";
 export type IpZoneKind = "static" | "dhcp" | "reserved" | "infrastructure";
+export type IpAllocationMode = "static" | "dhcp-reservation";
 export type UserRole = "admin" | "editor" | "viewer";
 export type MonitorType = "none" | "icmp" | "tcp" | "http" | "https";
 export type DiscoveryStatus = "new" | "imported" | "dismissed";
 export type WifiBand = "2.4ghz" | "5ghz" | "6ghz";
 export type VirtualSwitchKind = "external" | "internal" | "private";
+export type DeviceNetworkMode = "normal" | "host-shared";
+export type DeviceServiceType =
+  | "dhcp"
+  | "dns"
+  | "vpn"
+  | "ntp"
+  | "snmp"
+  | "syslog"
+  | "http"
+  | "https"
+  | "database"
+  | "app"
+  | "custom";
 
 export interface AlertSettings {
   enabled: boolean;
@@ -111,6 +126,7 @@ export interface Device {
   status: DeviceStatus;
   placement?: DevicePlacement;
   parentDeviceId?: ID;
+  networkMode?: DeviceNetworkMode;
   cpuCores?: number;
   memoryGb?: number;
   storageGb?: number;
@@ -182,6 +198,7 @@ export interface VirtualSwitch {
   hostDeviceId: ID;
   name: string;
   kind: VirtualSwitchKind;
+  membersShareHostIp?: boolean;
   notes?: string | null;
 }
 
@@ -220,12 +237,29 @@ export interface IpAssignment {
   subnetId: ID;
   ipAddress: string;
   assignmentType: IpAssignmentType;
+  allocationMode?: IpAllocationMode;
+  dhcpScopeId?: ID | null;
   deviceId?: ID;
   portId?: ID;
   vmId?: ID;
   containerId?: ID;
   hostname?: string;
   description?: string;
+}
+
+export interface DeviceService {
+  id: ID;
+  deviceId: ID;
+  name: string;
+  serviceType: DeviceServiceType;
+  ipAssignmentId?: ID | null;
+  portId?: ID | null;
+  vlanId?: ID | null;
+  monitorId?: ID | null;
+  url?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Vlan {

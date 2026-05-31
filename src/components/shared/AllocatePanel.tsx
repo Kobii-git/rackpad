@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion } from "motion/react";
 import { AlertCircle, Plus, Sparkles } from "lucide-react";
 import {
@@ -21,7 +21,7 @@ import {
   previewNextVlanId,
   useStore,
 } from "@/lib/store";
-import type { IpAssignmentType } from "@/lib/types";
+import type { IpAllocationMode, IpAssignmentType } from "@/lib/types";
 
 interface AllocatePanelProps {
   defaultTab?: "ip" | "vlan";
@@ -136,13 +136,44 @@ function AllocateIpForm({
   const [description, setDescription] = useState("");
   const [assignmentType, setAssignmentType] =
     useState<IpAssignmentType>("device");
+  const [allocationMode, setAllocationMode] =
+    useState<IpAllocationMode>("static");
+  const [dhcpScopeId, setDhcpScopeId] = useState("");
   const [saving, setSaving] = useState(false);
   const [deviceDrawerOpen, setDeviceDrawerOpen] = useState(false);
 
+  const scopesForSubnet = useMemo(
+    () => scopes.filter((scope) => scope.subnetId === subnetId),
+    [scopes, subnetId],
+  );
+  const effectiveDhcpScopeId =
+    allocationMode === "dhcp-reservation"
+      ? dhcpScopeId || scopesForSubnet[0]?.id || ""
+      : "";
+
+  useEffect(() => {
+    if (allocationMode !== "dhcp-reservation") return;
+    if (dhcpScopeId && scopesForSubnet.some((scope) => scope.id === dhcpScopeId))
+      return;
+    setDhcpScopeId(scopesForSubnet[0]?.id ?? "");
+  }, [allocationMode, dhcpScopeId, scopesForSubnet]);
+
   const preview = useMemo(() => {
     if (!subnetId) return null;
-    return previewNextIpAllocation(subnetId, assignmentType);
-  }, [assignmentType, ipAssignments, ipZones, scopes, subnets, subnetId]);
+    return previewNextIpAllocation(subnetId, assignmentType, {
+      allocationMode,
+      dhcpScopeId: effectiveDhcpScopeId || null,
+    });
+  }, [
+    allocationMode,
+    assignmentType,
+    effectiveDhcpScopeId,
+    ipAssignments,
+    ipZones,
+    scopes,
+    subnets,
+    subnetId,
+  ]);
   const previewIp = preview?.ipAddress ?? null;
 
   const subnet = subnets.find((entry) => entry.id === subnetId);
@@ -156,7 +187,7 @@ function AllocateIpForm({
       assignmentType === "container");
 
   async function submit() {
-    if (!canSubmit) return;
+    if (!canSubmit || !preview) return;
 
     setSaving(true);
     try {
@@ -165,6 +196,9 @@ function AllocateIpForm({
         hostname: hostname.trim(),
         description: description.trim() || undefined,
         assignmentType,
+        allocationMode,
+        dhcpScopeId:
+          (preview.dhcpScopeId ?? effectiveDhcpScopeId) || undefined,
       });
       if (result) {
         onAllocated?.("ip", result.id);
@@ -201,11 +235,43 @@ function AllocateIpForm({
           .join(" ")}
       />
 
-      {preview?.source === "dhcp-reservation" && (
-        <div className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/8 px-3 py-2 text-[11px] text-[var(--color-fg-subtle)]">
-          This subnet has no static slot left, so Rackpad will record the next
-          DHCP address as a reservation.
+      <Field label="Allocation">
+        <div className="grid grid-cols-2 gap-1">
+          {(["static", "dhcp-reservation"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setAllocationMode(mode)}
+              className={cn(
+                "rounded-[var(--radius-xs)] border px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-colors",
+                allocationMode === mode
+                  ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"
+                  : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]",
+              )}
+            >
+              {mode === "dhcp-reservation" ? "DHCP reservation" : "Static"}
+            </button>
+          ))}
         </div>
+      </Field>
+
+      {allocationMode === "dhcp-reservation" && (
+        <Field label="DHCP scope">
+          <Select value={effectiveDhcpScopeId} onChange={setDhcpScopeId}>
+            {scopesForSubnet.length === 0 && (
+              <option value="">No DHCP scope in this subnet</option>
+            )}
+            {scopesForSubnet.map((scope) => (
+              <option key={scope.id} value={scope.id}>
+                {scope.name} · {scope.startIp}-{scope.endIp}
+              </option>
+            ))}
+          </Select>
+          <p className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
+            The address keeps its real assignment type and is marked as a DHCP
+            reservation.
+          </p>
+        </Field>
       )}
 
       <Field label="Type">
@@ -249,7 +315,7 @@ function AllocateIpForm({
         <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        {canRegisterDevice && preview?.source !== "dhcp-reservation" && (
+        {canRegisterDevice && (
           <Button
             type="button"
             variant="outline"
@@ -271,13 +337,15 @@ function AllocateIpForm({
           )}
         </Button>
       </div>
-      {previewIp && (
+      {preview && previewIp && (
         <DeviceDrawer
           open={deviceDrawerOpen}
           onClose={() => setDeviceDrawerOpen(false)}
           defaults={{
             hostname: hostname.trim(),
             managementIp: previewIp,
+            ipAllocationMode: preview.allocationMode,
+            dhcpScopeId: preview.dhcpScopeId ?? "",
             deviceType:
               assignmentType === "vm"
                 ? "vm"

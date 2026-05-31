@@ -22,6 +22,7 @@ import {
   createDevice,
   createDeviceMonitorConfig,
   deleteDiscoveredDeviceRecord,
+  runDeviceMonitorCheck,
   scanDiscoveredSubnet,
   updateDiscoveredDeviceRecord,
   useStore,
@@ -400,12 +401,13 @@ export default function DiscoveryView() {
           notes: discovered.notes ?? undefined,
         });
         if (autoMapIcmpMonitors && canManageDiscovery) {
-          await createDeviceMonitorConfig(created.id, {
+          const monitor = await createDeviceMonitorConfig(created.id, {
             name: "ICMP",
             type: "icmp",
             target: discovered.ipAddress,
             enabled: true,
           });
+          await runDeviceMonitorCheck(monitor.id);
           monitorsCreated += 1;
         }
         await updateDiscoveredDeviceRecord(discovered.id, {

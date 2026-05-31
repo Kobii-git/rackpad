@@ -131,6 +131,7 @@
     --color-port-console: #f29d38;
     --color-port-usb: #59c36a;
     --color-port-virtual: #7f92ff;
+    --color-port-wifi: #41c7b5;
 
     --type-switch: var(--accent-secondary);
     --type-router: var(--accent-secondary);

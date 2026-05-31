@@ -15,7 +15,7 @@ import {
   ValidationError,
 } from '../lib/validation.js'
 
-const PORT_KINDS = ['rj45', 'sfp', 'sfp_plus', 'qsfp', 'fiber', 'power', 'console', 'usb', 'virtual'] as const
+const PORT_KINDS = ['rj45', 'sfp', 'sfp_plus', 'qsfp', 'fiber', 'power', 'console', 'usb', 'virtual', 'wifi'] as const
 const LINK_STATES = ['up', 'down', 'disabled', 'unknown'] as const
 const PORT_FACES = ['front', 'rear'] as const
 const PORT_MODES = ['access', 'trunk'] as const

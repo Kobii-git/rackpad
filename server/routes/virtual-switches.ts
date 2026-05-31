@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import { createId } from '../lib/ids.js'
-import { asObject, optionalEnum, optionalString, requiredString, ValidationError } from '../lib/validation.js'
+import { asObject, optionalBoolean, optionalEnum, optionalString, requiredString, ValidationError } from '../lib/validation.js'
 
 const VIRTUAL_SWITCH_KINDS = ['external', 'internal', 'private'] as const
 
@@ -20,6 +20,7 @@ function parseVirtualSwitch(row: Record<string, unknown>) {
     hostDeviceId: String(row.hostDeviceId),
     name: String(row.name),
     kind: row.kind ? String(row.kind) : 'external',
+    membersShareHostIp: Boolean(row.membersShareHostIp),
     notes: row.notes ? String(row.notes) : null,
   }
 }
@@ -105,14 +106,15 @@ export const virtualSwitchesRoutes: FastifyPluginAsync = async (app) => {
     const hostDeviceId = requiredString(body, 'hostDeviceId', { maxLength: 80 })
     const name = requiredString(body, 'name', { maxLength: 120 })
     const kind = optionalEnum(body, 'kind', VIRTUAL_SWITCH_KINDS) ?? 'external'
+    const membersShareHostIp = optionalBoolean(body, 'membersShareHostIp') ?? false
     const notes = optionalString(body, 'notes', { maxLength: 2000 })
 
     requireHostDevice(hostDeviceId)
 
     db.prepare(`
-      INSERT INTO virtualSwitches (id, hostDeviceId, name, kind, notes)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(id, hostDeviceId, name, kind, notes ?? null)
+      INSERT INTO virtualSwitches (id, hostDeviceId, name, kind, membersShareHostIp, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, hostDeviceId, name, kind, membersShareHostIp ? 1 : 0, notes ?? null)
 
     return reply.status(201).send(parseVirtualSwitch(getVirtualSwitchRow(id)!))
   })
@@ -129,6 +131,7 @@ export const virtualSwitchesRoutes: FastifyPluginAsync = async (app) => {
 
     const name = optionalString(body, 'name', { maxLength: 120 })
     const kind = optionalEnum(body, 'kind', VIRTUAL_SWITCH_KINDS)
+    const membersShareHostIp = optionalBoolean(body, 'membersShareHostIp')
     const notes = optionalString(body, 'notes', { maxLength: 2000 })
 
     if (name !== undefined) {
@@ -142,6 +145,11 @@ export const virtualSwitchesRoutes: FastifyPluginAsync = async (app) => {
     if (kind !== undefined) {
       updates.push('kind = ?')
       values.push(kind ?? 'external')
+    }
+
+    if (membersShareHostIp !== undefined) {
+      updates.push('membersShareHostIp = ?')
+      values.push(membersShareHostIp ? 1 : 0)
     }
 
     if (notes !== undefined) {

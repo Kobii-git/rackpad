@@ -1090,6 +1090,138 @@ test("virtual switches can be attached to shelf-mounted physical hosts", async (
   assert.match(vmBridgeRes.body, /physical host/i);
 });
 
+test("shelf-mounted child devices keep their own footprint", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const rackRes = await app.inject({
+    method: "POST",
+    url: "/api/racks",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      name: "Shelf Footprint Rack",
+      totalU: 12,
+    },
+  });
+  assert.equal(rackRes.statusCode, 201);
+  const rack = readJson(rackRes) as { id: string };
+
+  const shelfRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      rackId: rack.id,
+      hostname: "wide-shelf",
+      deviceType: "rack_shelf",
+      status: "unknown",
+      startU: 4,
+      heightU: 4,
+      face: "front",
+    },
+  });
+  assert.equal(shelfRes.statusCode, 201);
+  const shelf = readJson(shelfRes) as { id: string };
+
+  const childRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "two-u-nas",
+      deviceType: "storage",
+      status: "online",
+      placement: "shelf",
+      parentDeviceId: shelf.id,
+      heightU: 2,
+    },
+  });
+  assert.equal(childRes.statusCode, 201);
+  const child = readJson(childRes) as {
+    placement: string;
+    parentDeviceId: string;
+    heightU: number;
+  };
+  assert.equal(child.placement, "shelf");
+  assert.equal(child.parentDeviceId, shelf.id);
+  assert.equal(child.heightU, 2);
+});
+
+test("host-shared virtual devices can share parent management IP", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const hostRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "raspberrypi",
+      deviceType: "server",
+      status: "online",
+      managementIp: "192.168.80.10",
+    },
+  });
+  assert.equal(hostRes.statusCode, 201);
+  const host = readJson(hostRes) as { id: string };
+
+  const invalidHostSharedRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "bad-host-share",
+      deviceType: "server",
+      status: "online",
+      parentDeviceId: host.id,
+      networkMode: "host-shared",
+      managementIp: "192.168.80.10",
+    },
+  });
+  assert.equal(invalidHostSharedRes.statusCode, 400);
+  assert.match(invalidHostSharedRes.body, /VMs and containers/i);
+
+  const childRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "rackpad-container",
+      deviceType: "container",
+      status: "online",
+      placement: "virtual",
+      parentDeviceId: host.id,
+      networkMode: "host-shared",
+      managementIp: "192.168.80.10",
+    },
+  });
+  assert.equal(childRes.statusCode, 201);
+  const child = readJson(childRes) as {
+    parentDeviceId: string;
+    networkMode: string;
+    managementIp: string;
+  };
+  assert.equal(child.parentDeviceId, host.id);
+  assert.equal(child.networkMode, "host-shared");
+  assert.equal(child.managementIp, "192.168.80.10");
+});
+
 test("monitoring endpoints validate config, persist results, and stay admin-only", async () => {
   const adminToken = await bootstrapAdmin();
 
@@ -1184,6 +1316,122 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   assert.equal(result.type, "tcp");
   assert.ok(result.lastCheckAt);
   assert.ok(result.lastResult === "online" || result.lastResult === "offline");
+});
+
+test("wifi ports and device services can be managed", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "wifi-client",
+      deviceType: "endpoint",
+      status: "online",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const portRes = await app.inject({
+    method: "POST",
+    url: "/api/ports",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: device.id,
+      name: "WiFi",
+      kind: "wifi",
+      linkState: "up",
+      speed: "5GHz",
+    },
+  });
+  assert.equal(portRes.statusCode, 201);
+  const port = readJson(portRes) as { id: string; kind: string };
+  assert.equal(port.kind, "wifi");
+
+  const monitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: device.id,
+      name: "HTTPS",
+      type: "https",
+      target: "192.168.80.20",
+      port: 443,
+      path: "/",
+      enabled: true,
+    },
+  });
+  assert.equal(monitorRes.statusCode, 200);
+  const monitor = readJson(monitorRes) as { id: string };
+
+  const serviceRes = await app.inject({
+    method: "POST",
+    url: "/api/device-services",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: device.id,
+      name: "Web UI",
+      serviceType: "https",
+      portId: port.id,
+      monitorId: monitor.id,
+      url: "https://192.168.80.20/",
+    },
+  });
+  assert.equal(serviceRes.statusCode, 201);
+  const service = readJson(serviceRes) as {
+    id: string;
+    serviceType: string;
+    portId: string;
+    monitorId: string;
+  };
+  assert.equal(service.serviceType, "https");
+  assert.equal(service.portId, port.id);
+  assert.equal(service.monitorId, monitor.id);
+
+  const servicesRes = await app.inject({
+    method: "GET",
+    url: `/api/device-services?deviceId=${device.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(servicesRes.statusCode, 200);
+  assert.equal((readJson(servicesRes) as unknown[]).length, 1);
+
+  const updateRes = await app.inject({
+    method: "PATCH",
+    url: `/api/device-services/${service.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      name: "Secure Web UI",
+      serviceType: "app",
+    },
+  });
+  assert.equal(updateRes.statusCode, 200);
+  assert.equal((readJson(updateRes) as { serviceType: string }).serviceType, "app");
+
+  const deleteRes = await app.inject({
+    method: "DELETE",
+    url: `/api/device-services/${service.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(deleteRes.statusCode, 204);
 });
 
 test("discovery scans are restricted to administrators", async () => {
@@ -1320,6 +1568,155 @@ test("ip assignment patch rejects empty ips and subnet mismatches", async () => 
   assert.match(mismatchRes.body, /does not belong/i);
 });
 
+test("ip assignments support DHCP reservations and protect technical IPs", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const subnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      cidr: "192.168.50.0/24",
+      name: "Reservation LAN",
+    },
+  });
+  assert.equal(subnetRes.statusCode, 201);
+  const subnet = readJson(subnetRes) as { id: string };
+
+  const scopeRes = await app.inject({
+    method: "POST",
+    url: "/api/dhcp-scopes",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      name: "Main",
+      startIp: "192.168.50.10",
+      endIp: "192.168.50.20",
+      gateway: "192.168.50.1",
+      dnsServers: ["192.168.50.2"],
+    },
+  });
+  assert.equal(scopeRes.statusCode, 201);
+  const scope = readJson(scopeRes) as { id: string };
+
+  const staticInDhcpRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      ipAddress: "192.168.50.10",
+      assignmentType: "device",
+      hostname: "static-inside-dhcp",
+    },
+  });
+  assert.equal(staticInDhcpRes.statusCode, 400);
+  assert.match(staticInDhcpRes.body, /DHCP reservations/i);
+
+  const reservationRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      ipAddress: "192.168.50.10",
+      assignmentType: "device",
+      allocationMode: "dhcp-reservation",
+      dhcpScopeId: scope.id,
+      hostname: "reserved-device",
+    },
+  });
+  assert.equal(reservationRes.statusCode, 201);
+  const reservation = readJson(reservationRes) as {
+    assignmentType: string;
+    allocationMode: string;
+    dhcpScopeId: string;
+  };
+  assert.equal(reservation.assignmentType, "device");
+  assert.equal(reservation.allocationMode, "dhcp-reservation");
+  assert.equal(reservation.dhcpScopeId, scope.id);
+
+  const gatewayDeviceRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      ipAddress: "192.168.50.1",
+      assignmentType: "device",
+      hostname: "gateway-overwrite",
+    },
+  });
+  assert.equal(gatewayDeviceRes.statusCode, 400);
+  assert.match(gatewayDeviceRes.body, /gateway/i);
+
+  const dnsInterfaceRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      ipAddress: "192.168.50.2",
+      assignmentType: "interface",
+      hostname: "dns-overwrite",
+    },
+  });
+  assert.equal(dnsInterfaceRes.statusCode, 400);
+  assert.match(dnsInterfaceRes.body, /DNS/i);
+
+  const firewallRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "gateway-firewall",
+      deviceType: "firewall",
+      status: "online",
+    },
+  });
+  assert.equal(firewallRes.statusCode, 201);
+  const firewall = readJson(firewallRes) as { id: string };
+
+  const technicalLinkedRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      ipAddress: "192.168.50.1",
+      assignmentType: "infrastructure",
+      deviceId: firewall.id,
+      hostname: "gateway-firewall",
+      description: "Main gateway",
+    },
+  });
+  assert.equal(technicalLinkedRes.statusCode, 201);
+  const technicalLinked = readJson(technicalLinkedRes) as {
+    assignmentType: string;
+    deviceId: string;
+  };
+  assert.equal(technicalLinked.assignmentType, "infrastructure");
+  assert.equal(technicalLinked.deviceId, firewall.id);
+});
+
 function resetDatabase() {
   db.exec(`
     DELETE FROM userSessions;
@@ -1330,9 +1727,11 @@ function resetDatabase() {
     DELETE FROM wifiAccessPoints;
     DELETE FROM wifiSsids;
     DELETE FROM wifiControllers;
+    DELETE FROM deviceServices;
     DELETE FROM deviceMonitors;
     DELETE FROM appSettings;
     DELETE FROM auditLog;
+    DELETE FROM referenceImages;
     DELETE FROM deviceImages;
     DELETE FROM documentationPages;
     DELETE FROM ipAssignments;
@@ -1348,6 +1747,7 @@ function resetDatabase() {
     DELETE FROM portTemplates;
     DELETE FROM devices;
     DELETE FROM racks;
+    DELETE FROM rooms;
     DELETE FROM users;
     DELETE FROM labs;
   `);

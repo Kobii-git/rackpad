@@ -5,6 +5,7 @@ import type {
   AuditEntry,
   Device,
   DeviceImage,
+  DeviceService,
   DeviceTypeDefinition,
   DeviceMonitor,
   DiscoveredDevice,
@@ -12,6 +13,7 @@ import type {
   DocumentationPage,
   DhcpScope,
   IpAssignment,
+  IpAllocationMode,
   IpAssignmentType,
   IpZone,
   Lab,
@@ -37,6 +39,7 @@ import type {
 import type {
   DevicePatch,
   DeviceImagePatch,
+  DeviceServicePatch,
   DocumentationPagePatch,
   DiscoveredDevicePatch,
   DhcpScopePatch,
@@ -91,6 +94,7 @@ interface State {
   racks: Rack[];
   devices: Device[];
   deviceImages: DeviceImage[];
+  deviceServices: DeviceService[];
   referenceImages: ReferenceImage[];
   documentationPages: DocumentationPage[];
   deviceTypes: DeviceTypeDefinition[];
@@ -121,6 +125,7 @@ const EMPTY_DATA = {
   racks: [] as Rack[],
   devices: [] as Device[],
   deviceImages: [] as DeviceImage[],
+  deviceServices: [] as DeviceService[],
   referenceImages: [] as ReferenceImage[],
   documentationPages: [] as DocumentationPage[],
   deviceTypes: [] as DeviceTypeDefinition[],
@@ -260,6 +265,15 @@ function sortDeviceImages(images: DeviceImage[]) {
     (a, b) =>
       Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
       a.label.localeCompare(b.label),
+  );
+}
+
+function sortDeviceServices(services: DeviceService[]) {
+  return [...services].sort(
+    (a, b) =>
+      a.deviceId.localeCompare(b.deviceId) ||
+      a.serviceType.localeCompare(b.serviceType) ||
+      a.name.localeCompare(b.name),
   );
 }
 
@@ -469,6 +483,7 @@ function filterAuditForLab(
     discoveredIds: Set<string>;
     documentationPageIds: Set<string>;
     deviceImageIds: Set<string>;
+    deviceServiceIds: Set<string>;
     referenceImageIds: Set<string>;
     wifiControllerIds: Set<string>;
     wifiSsidIds: Set<string>;
@@ -514,6 +529,8 @@ function filterAuditForLab(
           return context.documentationPageIds.has(entry.entityId);
         case "DeviceImage":
           return context.deviceImageIds.has(entry.entityId);
+        case "DeviceService":
+          return context.deviceServiceIds.has(entry.entityId);
         case "ReferenceImage":
           return context.referenceImageIds.has(entry.entityId);
         case "WifiController":
@@ -559,7 +576,12 @@ function normalizeDeviceChanges(
     "notes",
     "lastSeen",
   ] as const;
-  const requiredKeys = ["hostname", "deviceType", "status"] as const;
+  const requiredKeys = [
+    "hostname",
+    "deviceType",
+    "status",
+    "networkMode",
+  ] as const;
 
   for (const key of nullableKeys) {
     if (Object.prototype.hasOwnProperty.call(changes, key)) {
@@ -613,6 +635,7 @@ function validateManagementIp(
   options: {
     existingAssignmentId?: string;
     parentDeviceId?: string | null;
+    allowParentShare?: boolean;
   } = {},
 ) {
   const ipAddress = managementIp?.trim();
@@ -642,7 +665,11 @@ function validateManagementIp(
         device.managementIp === ipAddress,
     );
   if (conflict) {
-    if (parentSharesAddress && conflict.deviceId === options.parentDeviceId) {
+    if (
+      options.allowParentShare &&
+      parentSharesAddress &&
+      conflict.deviceId === options.parentDeviceId
+    ) {
       return {
         ipAddress,
         subnet,
@@ -651,7 +678,7 @@ function validateManagementIp(
     }
     throw new Error(`IP ${ipAddress} is already assigned.`);
   }
-  if (parentSharesAddress) {
+  if (options.allowParentShare && parentSharesAddress) {
     return {
       ipAddress,
       subnet,
@@ -710,15 +737,25 @@ async function recordAudit(
 async function syncDeviceManagementAssignment(
   device: Device,
   previousManagementIp?: string,
+  options: {
+    allocationMode?: IpAllocationMode;
+    dhcpScopeId?: string | null;
+  } = {},
 ): Promise<{ upserted?: IpAssignment; deletedId?: string }> {
   const existingAssignment = findManagementAssignment(
     device.id,
     previousManagementIp,
     device.managementIp,
   );
+  if (device.networkMode === "host-shared") {
+    if (!existingAssignment) return {};
+    await api.deleteIpAssignment(existingAssignment.id);
+    return { deletedId: existingAssignment.id };
+  }
   const validated = validateManagementIp(device.managementIp, {
     existingAssignmentId: existingAssignment?.id,
     parentDeviceId: device.parentDeviceId,
+    allowParentShare: false,
   });
 
   if (!validated) {
@@ -737,6 +774,8 @@ async function syncDeviceManagementAssignment(
     subnetId: validated.subnet.id,
     ipAddress: validated.ipAddress,
     assignmentType: "device" as const,
+    allocationMode: options.allocationMode ?? "static",
+    dhcpScopeId: options.dhcpScopeId ?? null,
     deviceId: device.id,
     hostname: device.hostname,
     description: existingAssignment?.description ?? "Management IP",
@@ -1025,6 +1064,7 @@ export async function loadAll(
         discoveredDevices: api.getDiscoveredDevices(),
         documentationPages: api.getDocumentationPages(),
         deviceImages: api.getDeviceImages(),
+        deviceServices: api.getDeviceServices(),
         referenceImages: api.getReferenceImages(),
         wifiControllers: api.getWifiControllers(),
         wifiSsids: api.getWifiSsids(),
@@ -1191,6 +1231,16 @@ export async function loadAll(
       );
       const deviceImageIds = new Set(allDeviceImages.map((image) => image.id));
 
+      const allDeviceServices = sortDeviceServices(
+        (
+          (resolved.get("deviceServices") as DeviceService[] | undefined) ??
+          []
+        ).filter((service) => deviceIds.has(service.deviceId)),
+      );
+      const deviceServiceIds = new Set(
+        allDeviceServices.map((service) => service.id),
+      );
+
       const referenceImageTargets = new Set([...rackIds, ...roomIds]);
       const allReferenceImages = sortReferenceImages(
         (
@@ -1279,6 +1329,7 @@ export async function loadAll(
           discoveredIds,
           documentationPageIds,
           deviceImageIds,
+          deviceServiceIds,
           referenceImageIds,
           wifiControllerIds,
           wifiSsidIds,
@@ -1317,6 +1368,7 @@ export async function loadAll(
         discoveredDevices: allDiscoveredDevices,
         documentationPages: allDocumentationPages,
         deviceImages: allDeviceImages,
+        deviceServices: allDeviceServices,
         referenceImages: allReferenceImages,
         wifiControllers: allWifiControllers,
         wifiSsids: allWifiSsids,
@@ -1461,7 +1513,9 @@ export async function restoreAdminBackupSnapshot(snapshot: unknown) {
 export interface IpAllocationPreview {
   ipAddress: string;
   assignmentType: IpAssignmentType;
-  source: "static" | "dhcp-reservation";
+  source: IpAllocationMode;
+  allocationMode: IpAllocationMode;
+  dhcpScopeId?: string | null;
 }
 
 export function previewNextStaticIp(subnetId: string): string | null {
@@ -1471,6 +1525,10 @@ export function previewNextStaticIp(subnetId: string): string | null {
 export function previewNextIpAllocation(
   subnetId: string,
   requestedType: IpAssignmentType = "device",
+  options: {
+    allocationMode?: IpAllocationMode;
+    dhcpScopeId?: string | null;
+  } = {},
 ): IpAllocationPreview | null {
   const subnet = state.subnets.find((entry) => entry.id === subnetId);
   if (!subnet) return null;
@@ -1497,7 +1555,9 @@ export function previewNextIpAllocation(
     }
   }
 
-  if (staticZones.length > 0) {
+  const allocationMode = options.allocationMode ?? "static";
+
+  if (allocationMode === "static" && staticZones.length > 0) {
     for (const zone of staticZones) {
       const start = ipToInt(zone.startIp);
       const end = ipToInt(zone.endIp);
@@ -1507,13 +1567,15 @@ export function previewNextIpAllocation(
             ipAddress: intToIp(candidate),
             assignmentType: requestedType,
             source: "static",
+            allocationMode: "static",
+            dhcpScopeId: null,
           };
         }
       }
     }
   }
 
-  const staticCandidate = nextFreeStaticIp(
+  const staticCandidate = allocationMode === "static" ? nextFreeStaticIp(
     subnet.cidr,
     dhcpScopes,
     reservedZones,
@@ -1522,27 +1584,44 @@ export function previewNextIpAllocation(
       skipDhcp: true,
       skipReserved: false,
     },
-  );
+  ) : null;
   if (staticCandidate) {
     return {
       ipAddress: staticCandidate,
       assignmentType: requestedType,
       source: "static",
+      allocationMode: "static",
+      dhcpScopeId: null,
     };
   }
 
+  if (allocationMode === "static") return null;
+
   const dhcpReservationCandidate = nextFreeDhcpReservationIp(
     subnet.cidr,
-    dhcpScopes,
+    options.dhcpScopeId
+      ? dhcpScopes.filter((scope) => scope.id === options.dhcpScopeId)
+      : dhcpScopes,
     assignedSet,
   );
   if (!dhcpReservationCandidate) return null;
 
+  const dhcpScope = dhcpScopes.find((scope) =>
+    ipInRange(dhcpReservationCandidate, scope.startIp, scope.endIp),
+  );
+
   return {
     ipAddress: dhcpReservationCandidate,
-    assignmentType: "reserved",
+    assignmentType: requestedType,
     source: "dhcp-reservation",
+    allocationMode: "dhcp-reservation",
+    dhcpScopeId: dhcpScope?.id ?? options.dhcpScopeId ?? null,
   };
+}
+
+function ipInRange(ipAddress: string, startIp: string, endIp: string) {
+  const target = ipToInt(ipAddress);
+  return target >= ipToInt(startIp) && target <= ipToInt(endIp);
 }
 
 function addDhcpTechnicalAddress(target: Set<number>, ipAddress?: string | null) {
@@ -2083,6 +2162,9 @@ export interface CreateDeviceInput {
   status?: Device["status"];
   placement?: Device["placement"];
   parentDeviceId?: string;
+  networkMode?: Device["networkMode"];
+  ipAllocationMode?: IpAllocationMode;
+  dhcpScopeId?: string | null;
   cpuCores?: number;
   memoryGb?: number;
   storageGb?: number;
@@ -2099,11 +2181,19 @@ export interface CreateDeviceInput {
 
 export async function createDevice(input: CreateDeviceInput): Promise<Device> {
   const trimmedHostname = input.hostname.trim();
-  const trimmedManagementIp = input.managementIp?.trim() || undefined;
+  const parentDevice = input.parentDeviceId
+    ? state.devices.find((device) => device.id === input.parentDeviceId)
+    : undefined;
+  const trimmedManagementIp =
+    input.managementIp?.trim() ||
+    (input.networkMode === "host-shared"
+      ? parentDevice?.managementIp
+      : undefined);
   const trimmedMacAddress = input.macAddress?.trim() || undefined;
 
   validateManagementIp(trimmedManagementIp, {
     parentDeviceId: input.parentDeviceId,
+    allowParentShare: input.networkMode === "host-shared",
   });
 
   const created = await api.createDevice({
@@ -2119,6 +2209,7 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
     status: input.status ?? "unknown",
     placement: input.placement,
     parentDeviceId: input.parentDeviceId,
+    networkMode: input.networkMode,
     cpuCores: input.cpuCores,
     memoryGb: input.memoryGb,
     storageGb: input.storageGb,
@@ -2137,7 +2228,10 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
   let syncResult: { upserted?: IpAssignment; deletedId?: string } = {};
 
   try {
-    syncResult = await syncDeviceManagementAssignment(created);
+    syncResult = await syncDeviceManagementAssignment(created, undefined, {
+      allocationMode: input.ipAllocationMode,
+      dhcpScopeId: input.dhcpScopeId,
+    });
   } catch (error) {
     await api.deleteDevice(created.id);
     throw error;
@@ -2187,6 +2281,12 @@ export async function updateDevice(
   )
     ? (changes.parentDeviceId ?? null)
     : (existing.parentDeviceId ?? null);
+  const nextNetworkMode = Object.prototype.hasOwnProperty.call(
+    changes,
+    "networkMode",
+  )
+    ? changes.networkMode
+    : existing.networkMode;
 
   validateManagementIp(nextManagementIp, {
     existingAssignmentId: findManagementAssignment(
@@ -2195,6 +2295,7 @@ export async function updateDevice(
       nextManagementIp,
     )?.id,
     parentDeviceId: nextParentDeviceId,
+    allowParentShare: nextNetworkMode === "host-shared",
   });
 
   const updated = await api.updateDevice(id, {
@@ -2209,6 +2310,23 @@ export async function updateDevice(
     existing.managementIp,
   );
 
+  const updatedHostSharedChildren: Device[] = [];
+  if (updated.managementIp !== existing.managementIp) {
+    const hostSharedChildren = state.devices.filter(
+      (device) =>
+        device.parentDeviceId === id &&
+        device.networkMode === "host-shared" &&
+        device.managementIp !== updated.managementIp,
+    );
+    for (const child of hostSharedChildren) {
+      updatedHostSharedChildren.push(
+        await api.updateDevice(child.id, {
+          managementIp: updated.managementIp ?? null,
+        }),
+      );
+    }
+  }
+
   let nextPorts = state.ports;
   if (changes.portTemplateId) {
     const refreshedPorts = await api.getPorts({ deviceId: id });
@@ -2220,10 +2338,16 @@ export async function updateDevice(
 
   setState((prev) => ({
     ...prev,
-    devices: replaceById(prev.devices, updated, sortDevices),
+    devices: updatedHostSharedChildren.reduce(
+      (devices, child) => replaceById(devices, child, sortDevices),
+      replaceById(prev.devices, updated, sortDevices),
+    ),
     deviceTypes: sortDeviceTypes(
       mergeDeviceTypeDefinitions(prev.deviceTypes, {
-        devices: replaceById(prev.devices, updated, sortDevices),
+        devices: updatedHostSharedChildren.reduce(
+          (devices, child) => replaceById(devices, child, sortDevices),
+          replaceById(prev.devices, updated, sortDevices),
+        ),
         portTemplates: prev.portTemplates,
       }),
     ),
@@ -2299,6 +2423,9 @@ export async function deleteDevice(id: string): Promise<boolean> {
       (monitor) => monitor.deviceId !== id,
     ),
     deviceImages: prev.deviceImages.filter((image) => image.deviceId !== id),
+    deviceServices: prev.deviceServices.filter(
+      (service) => service.deviceId !== id,
+    ),
     discoveredDevices: prev.discoveredDevices.map((entry) =>
       entry.importedDeviceId === id
         ? { ...entry, importedDeviceId: null, status: "new" }
@@ -2481,6 +2608,77 @@ export async function deleteDeviceImageRecord(id: string): Promise<boolean> {
   return true;
 }
 
+export async function createDeviceServiceRecord(
+  input: Omit<DeviceService, "id" | "createdAt" | "updatedAt">,
+): Promise<DeviceService> {
+  const created = await api.createDeviceService(input);
+  setState((prev) => ({
+    ...prev,
+    deviceServices: replaceById(
+      prev.deviceServices,
+      created,
+      sortDeviceServices,
+    ),
+  }));
+
+  const device = state.devices.find((entry) => entry.id === created.deviceId);
+  void recordAudit(
+    "device.service.create",
+    "DeviceService",
+    created.id,
+    `Added ${created.serviceType} service ${created.name} on ${device?.hostname ?? created.deviceId}`,
+  );
+
+  return created;
+}
+
+export async function updateDeviceServiceRecord(
+  id: string,
+  changes: DeviceServicePatch,
+): Promise<DeviceService | null> {
+  const existing = state.deviceServices.find((service) => service.id === id);
+  if (!existing) return null;
+
+  const updated = await api.updateDeviceService(id, changes);
+  setState((prev) => ({
+    ...prev,
+    deviceServices: replaceById(
+      prev.deviceServices,
+      updated,
+      sortDeviceServices,
+    ),
+  }));
+
+  void recordAudit(
+    "device.service.update",
+    "DeviceService",
+    id,
+    `Updated service ${updated.name}`,
+  );
+
+  return updated;
+}
+
+export async function deleteDeviceServiceRecord(id: string): Promise<boolean> {
+  const existing = state.deviceServices.find((service) => service.id === id);
+  if (!existing) return false;
+
+  await api.deleteDeviceService(id);
+  setState((prev) => ({
+    ...prev,
+    deviceServices: removeById(prev.deviceServices, id),
+  }));
+
+  void recordAudit(
+    "device.service.delete",
+    "DeviceService",
+    id,
+    `Deleted service ${existing.name}`,
+  );
+
+  return true;
+}
+
 export async function createReferenceImageRecord(input: {
   entityType: ReferenceImage["entityType"];
   entityId: string;
@@ -2574,13 +2772,18 @@ export interface AllocateIpInput {
   hostname: string;
   description?: string;
   assignmentType: IpAssignmentType;
+  allocationMode?: IpAllocationMode;
+  dhcpScopeId?: string | null;
   deviceId?: string;
 }
 
 export async function allocateIp(
   input: AllocateIpInput,
 ): Promise<IpAssignment | null> {
-  const preview = previewNextIpAllocation(input.subnetId, input.assignmentType);
+  const preview = previewNextIpAllocation(input.subnetId, input.assignmentType, {
+    allocationMode: input.allocationMode,
+    dhcpScopeId: input.dhcpScopeId,
+  });
   if (!preview) return null;
 
   const subnet = state.subnets.find((entry) => entry.id === input.subnetId);
@@ -2588,6 +2791,8 @@ export async function allocateIp(
     subnetId: input.subnetId,
     ipAddress: preview.ipAddress,
     assignmentType: preview.assignmentType,
+    allocationMode: preview.allocationMode,
+    dhcpScopeId: preview.dhcpScopeId ?? null,
     deviceId: input.deviceId,
     hostname: input.hostname,
     description: input.description,
@@ -3360,6 +3565,36 @@ export async function saveWifiClientAssociationRecord(
   await loadAll(true);
   const client = state.devices.find((entry) => entry.id === clientDeviceId);
   const ap = state.devices.find((entry) => entry.id === updated.apDeviceId);
+  const ssid = updated.ssidId
+    ? state.wifiSsids.find((entry) => entry.id === updated.ssidId)
+    : undefined;
+  const clientPorts = state.ports.filter(
+    (port) => port.deviceId === clientDeviceId,
+  );
+  if (!clientPorts.some((port) => port.kind === "wifi")) {
+    await createPortRecord({
+      deviceId: clientDeviceId,
+      name: "WiFi",
+      position:
+        clientPorts.reduce((max, port) => Math.max(max, port.position), 0) + 1,
+      kind: "wifi",
+      speed: updated.band ?? undefined,
+      linkState: "up",
+      mode: "access",
+      vlanId: ssid?.vlanId ?? undefined,
+      allowedVlanIds: undefined,
+      virtualSwitchId: null,
+      description: [
+        ap ? `AP ${ap.hostname}` : undefined,
+        ssid ? `SSID ${ssid.name}` : undefined,
+        updated.band ? `band ${updated.band}` : undefined,
+        updated.channel ? `channel ${updated.channel}` : undefined,
+      ]
+        .filter(Boolean)
+        .join(" | "),
+      face: undefined,
+    });
+  }
   void recordAudit(
     "wifi.client.link",
     "WifiClientAssociation",

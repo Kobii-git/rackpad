@@ -1,6 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Activity, LayoutGrid, List, RefreshCcw, Search } from "lucide-react";
+import {
+  Activity,
+  LayoutGrid,
+  List,
+  Plus,
+  RefreshCcw,
+  Search,
+} from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
 import { Button } from "@/components/ui/Button";
 import {
@@ -19,11 +26,12 @@ import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import {
   createDeviceMonitorConfig,
   runAllDeviceMonitorChecks,
+  runDeviceMonitorCheck,
   runDeviceMonitorChecksForDevice,
   updateDeviceMonitorConfig,
   useStore,
 } from "@/lib/store";
-import type { Device, DeviceMonitor } from "@/lib/types";
+import type { Device, DeviceMonitor, MonitorType } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { relativeTime, statusLabel } from "@/lib/utils";
 import {
@@ -45,6 +53,7 @@ type MonitorFilter =
 type MonitorRollupStatus = Exclude<MonitorFilter, "all">;
 type MonitorSortKey = "hostname" | "status" | "targets" | "lastCheck";
 type MonitorLayout = "cards" | "compact";
+type BulkMonitorType = Exclude<MonitorType, "none">;
 
 const monitorStatusLabel: Record<MonitorRollupStatus, string> = {
   offline: "Offline",
@@ -70,6 +79,12 @@ export default function MonitoringView() {
   const [runningAll, setRunningAll] = useState(false);
   const [runningDeviceId, setRunningDeviceId] = useState<string | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkMonitorType, setBulkMonitorType] =
+    useState<BulkMonitorType>("icmp");
+  const [bulkMonitorName, setBulkMonitorName] = useState("");
+  const [bulkMonitorPort, setBulkMonitorPort] = useState("");
+  const [bulkMonitorPath, setBulkMonitorPath] = useState("/");
+  const [bulkRunFirstCheck, setBulkRunFirstCheck] = useState(false);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -305,6 +320,78 @@ export default function MonitoringView() {
     }
   }
 
+  async function handleBulkCreateMonitoring() {
+    if (selectedDevices.length === 0) return;
+    setBulkRunning(true);
+    setError("");
+    setBulkMessage("");
+
+    let updated = 0;
+    let skipped = 0;
+    const monitorName = bulkMonitorName.trim();
+    const parsedPort = bulkMonitorPort.trim()
+      ? Number.parseInt(bulkMonitorPort.trim(), 10)
+      : defaultMonitorPort(bulkMonitorType);
+    const monitorPath =
+      bulkMonitorType === "http" || bulkMonitorType === "https"
+        ? bulkMonitorPath.trim() || "/"
+        : undefined;
+
+    try {
+      for (const device of selectedDevices) {
+        if (!device.managementIp) {
+          skipped += 1;
+          continue;
+        }
+        const existing = (allDeviceMonitorMap[device.id] ?? []).find(
+          (monitor) =>
+            monitor.type === bulkMonitorType &&
+            monitor.target === device.managementIp &&
+            (bulkMonitorType === "icmp" ||
+              Number(monitor.port ?? defaultMonitorPort(bulkMonitorType)) ===
+                parsedPort) &&
+            (bulkMonitorType !== "http" && bulkMonitorType !== "https"
+              ? true
+              : (monitor.path ?? "/") === monitorPath),
+        );
+        const payload = {
+          name:
+            monitorName ||
+            defaultMonitorName(bulkMonitorType, parsedPort, monitorPath),
+          type: bulkMonitorType,
+          target: device.managementIp,
+          port: bulkMonitorType === "icmp" ? undefined : parsedPort,
+          path: monitorPath,
+          enabled: true,
+        };
+        const monitor = existing
+          ? await updateDeviceMonitorConfig(existing.id, payload)
+          : await createDeviceMonitorConfig(device.id, payload);
+        if (!monitor) {
+          skipped += 1;
+          continue;
+        }
+        if (bulkRunFirstCheck) {
+          await runDeviceMonitorCheck(monitor.id);
+        }
+        updated += 1;
+      }
+      setBulkMessage(
+        `Added or enabled ${updated} ${bulkMonitorType.toUpperCase()} target${
+          updated === 1 ? "" : "s"
+        }${skipped > 0 ? `; skipped ${skipped} without management IP` : ""}.`,
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to create selected monitor targets.",
+      );
+    } finally {
+      setBulkRunning(false);
+    }
+  }
+
   async function handleBulkDisableMonitoring() {
     if (selectedDevices.length === 0) return;
     setBulkRunning(true);
@@ -509,7 +596,7 @@ export default function MonitoringView() {
 
         {canManageMonitoring && (
           <Card>
-            <CardBody className="flex flex-wrap items-center justify-between gap-3 p-3">
+            <CardBody className="space-y-3 p-3">
               <div className="min-w-0">
                 <div className="rk-kicker">Bulk monitoring</div>
                 <div className="mt-1 text-xs text-[var(--text-tertiary)]">
@@ -517,7 +604,79 @@ export default function MonitoringView() {
                   configured target{selectedMonitorCount === 1 ? "" : "s"}
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="grid gap-3 lg:grid-cols-[0.8fr_1fr_0.55fr_0.8fr_auto]">
+                <label className="block">
+                  <span className="rk-field-label">Type</span>
+                  <Select
+                    value={bulkMonitorType}
+                    onChange={(value) =>
+                      setBulkMonitorType(value as BulkMonitorType)
+                    }
+                  >
+                    <option value="icmp">ICMP</option>
+                    <option value="tcp">TCP</option>
+                    <option value="http">HTTP</option>
+                    <option value="https">HTTPS</option>
+                  </Select>
+                </label>
+                <label className="block">
+                  <span className="rk-field-label">Name</span>
+                  <Input
+                    value={bulkMonitorName}
+                    onChange={(event) =>
+                      setBulkMonitorName(event.target.value)
+                    }
+                    placeholder={defaultMonitorName(
+                      bulkMonitorType,
+                      defaultMonitorPort(bulkMonitorType),
+                    )}
+                  />
+                </label>
+                {bulkMonitorType !== "icmp" ? (
+                  <label className="block">
+                    <span className="rk-field-label">Port</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={bulkMonitorPort}
+                      onChange={(event) =>
+                        setBulkMonitorPort(event.target.value)
+                      }
+                      placeholder={String(defaultMonitorPort(bulkMonitorType))}
+                    />
+                  </label>
+                ) : (
+                  <div />
+                )}
+                {bulkMonitorType === "http" ||
+                bulkMonitorType === "https" ? (
+                  <label className="block">
+                    <span className="rk-field-label">Path</span>
+                    <Input
+                      value={bulkMonitorPath}
+                      onChange={(event) =>
+                        setBulkMonitorPath(event.target.value)
+                      }
+                      placeholder="/"
+                    />
+                  </label>
+                ) : (
+                  <div />
+                )}
+                <label className="flex items-end gap-2 pb-2 text-xs text-[var(--text-tertiary)]">
+                  <input
+                    type="checkbox"
+                    checked={bulkRunFirstCheck}
+                    onChange={(event) =>
+                      setBulkRunFirstCheck(event.target.checked)
+                    }
+                    className="accent-[var(--color-accent)]"
+                  />
+                  Run first check
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -533,6 +692,15 @@ export default function MonitoringView() {
                   disabled={selectedDevices.length === 0 || bulkRunning}
                 >
                   Clear
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleBulkCreateMonitoring()}
+                  disabled={selectedDevices.length === 0 || bulkRunning}
+                >
+                  <Plus className="size-3.5" />
+                  Add / enable target
                 </Button>
                 <Button
                   variant="outline"
@@ -971,6 +1139,44 @@ function MonitorStat({
       </div>
       <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">{hint}</div>
     </div>
+  );
+}
+
+function defaultMonitorPort(type: BulkMonitorType) {
+  if (type === "https") return 443;
+  if (type === "http") return 80;
+  if (type === "tcp") return 22;
+  return undefined;
+}
+
+function defaultMonitorName(
+  type: BulkMonitorType,
+  port?: number,
+  path?: string,
+) {
+  if (type === "icmp") return "Management ICMP";
+  if (type === "tcp") return `TCP ${port ?? 22}`;
+  if (type === "http") return `HTTP ${path ?? "/"}`;
+  return `HTTPS ${path ?? "/"}`;
+}
+
+function Select({
+  value,
+  onChange,
+  children,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="rk-control h-8 w-full px-2 text-sm text-[var(--text-primary)]"
+    >
+      {children}
+    </select>
   );
 }
 
