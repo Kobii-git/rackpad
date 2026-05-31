@@ -6,9 +6,10 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
-## [1.5.0-beta] - 2026-05-31
+## [1.5.0] - 2026-05-31
 
-Beta feature preview for the next Rackpad release.
+Rackpad 1.5.0 promotes the beta topology, discovery, monitoring, and IPAM
+work into the main release.
 
 ### Added
 
