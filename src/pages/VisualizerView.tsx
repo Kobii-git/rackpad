@@ -309,6 +309,7 @@ export default function VisualizerView() {
           wifiSsids={wifiSsids}
           wifiAccessPoints={wifiAccessPoints}
           wifiClientAssociations={wifiClientAssociations}
+          virtualSwitches={virtualSwitches}
         />
       ) : (
         <VisualizerCanvas

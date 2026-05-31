@@ -490,7 +490,12 @@
   }
 
   .visualizer-diagram .react-flow__node-section {
-    pointer-events: none;
+    cursor: move;
+    pointer-events: all;
+  }
+
+  .visualizer-diagram .react-flow__node-section:hover .diagram-section-card {
+    border-color: var(--border-strong);
   }
 
   .visualizer-diagram .react-flow__node-device {
@@ -532,14 +537,22 @@
   }
 
   .visualizer-diagram-controls button {
+    border-color: var(--border-subtle);
     border-bottom-color: var(--border-subtle);
-    background: var(--surface-2);
-    color: var(--text-secondary);
+    background: var(--surface-2) !important;
+    color: var(--text-secondary) !important;
   }
 
   .visualizer-diagram-controls button:hover {
-    background: var(--surface-hover);
-    color: var(--text-primary);
+    background: var(--surface-hover) !important;
+    color: var(--text-primary) !important;
+  }
+
+  .visualizer-diagram-controls button svg,
+  .visualizer-diagram-controls button svg path {
+    color: currentColor;
+    fill: currentColor;
+    stroke: currentColor;
   }
 
   .visualizer-diagram-minimap {

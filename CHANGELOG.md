@@ -14,9 +14,16 @@ Beta feature preview for the next Rackpad release.
 
 - Added a React Flow diagram visualizer with draggable saved device placement,
   grouped topology sections, minimap, and direct device/cable inspection.
+- Added Diagram controls for filtering by device type, matching the normal
+  visualizer type-filter workflow.
+- Added whole-section dragging in Diagram view so racks, rooms, WiFi groups,
+  and hosted/shelf groups can be moved together instead of only moving one
+  device at a time.
 - Added WiFi AP/SSID-aware sections to the Diagram visualizer so associated
   wireless clients are grouped by their documented AP and SSID instead of
   falling into loose inventory.
+- Added virtual NIC/vSwitch details to the Diagram inspector, including direct
+  links to guest devices and the specific NIC in the ports workspace.
 - Added monitoring bulk actions for selecting devices and enabling or disabling
   ICMP checks.
 - Added an optional ICMP monitor toggle when auto-mapping discovery clients.
@@ -30,6 +37,7 @@ Beta feature preview for the next Rackpad release.
 - Improved visualizer scrolling, dense rack/shelf readability, Diagram card
   sizing, edge routing, edge highlighting, and connected-cable inspection for
   larger rack documentation views.
+- Fixed Diagram zoom controls so their icons follow the app theme in dark mode.
 - Improved device sorting for IP-like hostnames so discovered devices order by
   numeric IP address instead of plain text.
 - Added build-channel badges and GHCR publishing for dev builds.

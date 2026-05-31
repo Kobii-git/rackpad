@@ -54,7 +54,8 @@ Reviewed against GitHub issues on 2026-05-31.
 - What was done: v1.4 separated front/rear and shelf devices. The 1.5 beta
   Diagram view adds larger nodes, wider spacing, better edge routing, stacked
   shelf/hosted child sections, selectable edge focus, connected-cable lists, and
-  saved draggable node positions.
+  saved draggable node positions. The follow-up Diagram pass also lets a whole
+  rack, room, WiFi, shelf, or hosted-device section move as one group.
 - Still open: the older grouped rack layout still needs more refinement for
   extremely dense physical views. Shelf child height greater than 1U is tracked
   separately in #31.
@@ -68,7 +69,8 @@ Reviewed against GitHub issues on 2026-05-31.
 - What was done: v1.4 added Pyramid. The 1.5 beta adds a React Flow Diagram
   view as the better long-term draw.io-style direction, with draggable saved
   positions, grouped sections, minimap, edge highlighting, and inspector
-  details.
+  details. Diagram now also supports device-type filtering and whole-section
+  movement, which covers the first pass of custom reordering.
 - Still open: VLAN/service grouping inside Diagram is not complete yet.
   Services per device are deferred under #28.
 
@@ -163,7 +165,9 @@ Reviewed against GitHub issues on 2026-05-31.
   Cytoscape, React Flow, GoJS, or D3, with grouped VLAN/device/service areas.
 - What was done: 1.5 beta uses React Flow for the new Diagram view. It includes
   grouped sections, draggable/saved positions, minimap, cable highlighting, and
-  direct device/cable inspection.
+  direct device/cable inspection. The latest pass adds device-type filters,
+  theme-correct zoom controls, group dragging for whole rooms/racks/sections,
+  and virtual NIC/vSwitch links in the inspector.
 - Still open: more draw.io-like grouping, VLAN coloring, and manual group
   management remain future improvements.
 
@@ -215,8 +219,13 @@ Reviewed against GitHub issues on 2026-05-31.
 - React Flow Diagram visualizer foundation.
 - Larger readable Diagram cards and improved dense topology spacing.
 - Draggable node positions saved per device.
+- Whole-section Diagram dragging for racks, rooms, shelves, WiFi groups, and
+  hosted-device groups.
+- Diagram device-type filters.
 - WiFi AP/SSID-aware Diagram grouping for associated wireless clients.
 - Shelf/hosted child grouping in Diagram.
+- Virtual NIC/vSwitch inspection with links to guest devices and specific NICs.
+- Dark-mode Diagram zoom-control color fix.
 - Better cable edge routing, edge focus, and selected-node highlighting.
 - Scrollable Diagram inspector with connected-cable details.
 - IP-like hostname sorting in visualizer.

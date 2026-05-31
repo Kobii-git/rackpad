@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  type MouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link } from "react-router-dom";
 import {
   Background,
@@ -25,11 +31,14 @@ import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import type {
+  Device,
+  Port,
+  VirtualSwitch,
   WifiAccessPoint,
   WifiClientAssociation,
   WifiSsid,
 } from "@/lib/types";
-import { cn, normalizeColorToCss } from "@/lib/utils";
+import { cn, formatPortLabel, normalizeColorToCss } from "@/lib/utils";
 import { nodeStripeColor, typeColor, typeLabel } from "./model";
 import type {
   VisualizerCable,
@@ -39,6 +48,8 @@ import type {
 } from "./types";
 
 const DIAGRAM_POSITIONS_STORAGE_KEY = "rackpad.visualizer.diagram-positions";
+const DIAGRAM_SECTION_POSITIONS_STORAGE_KEY =
+  "rackpad.visualizer.diagram-section-positions";
 const SECTION_PADDING_X = 24;
 const SECTION_PADDING_BOTTOM = 30;
 const SECTION_HEADER_HEIGHT = 84;
@@ -62,6 +73,7 @@ interface DiagramCanvasProps {
   wifiSsids: WifiSsid[];
   wifiAccessPoints: WifiAccessPoint[];
   wifiClientAssociations: WifiClientAssociation[];
+  virtualSwitches: VirtualSwitch[];
 }
 
 interface DiagramPortData {
@@ -127,7 +139,25 @@ interface DiagramLayoutResult {
   flowNodes: DiagramFlowNode[];
   flowEdges: DiagramFlowEdge[];
   sections: DiagramSection[];
+  visibleDeviceCount: number;
+  hiddenDeviceCount: number;
+  visibleDeviceIds: Set<string>;
   visibleCableCount: number;
+}
+
+interface DiagramDragOrigin {
+  sectionId: string;
+  sectionStart: XYPosition;
+  deviceStarts: Record<string, XYPosition>;
+}
+
+interface VirtualNetworkRow {
+  id: string;
+  device?: Device;
+  host?: Device;
+  port?: Port;
+  role: string;
+  virtualSwitch?: VirtualSwitch;
 }
 
 const nodeTypes = {
@@ -143,12 +173,18 @@ export function DiagramCanvas({
   wifiSsids,
   wifiAccessPoints,
   wifiClientAssociations,
+  virtualSwitches,
 }: DiagramCanvasProps) {
   const [savedPositions, setSavedPositions] = useState<
     Record<string, XYPosition>
   >(() => readDiagramPositions(DIAGRAM_POSITIONS_STORAGE_KEY));
+  const [savedSectionPositions, setSavedSectionPositions] = useState<
+    Record<string, XYPosition>
+  >(() => readDiagramPositions(DIAGRAM_SECTION_POSITIONS_STORAGE_KEY));
+  const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set());
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [selectedCableId, setSelectedCableId] = useState<string | null>(null);
+  const sectionDragOriginRef = useRef<DiagramDragOrigin | null>(null);
   const wifiContext = useMemo(
     () =>
       buildDiagramWifiContext(
@@ -158,16 +194,34 @@ export function DiagramCanvas({
       ),
     [wifiSsids, wifiAccessPoints, wifiClientAssociations],
   );
-  const { flowNodes, flowEdges, sections, visibleCableCount } = useMemo(
+  const {
+    flowNodes,
+    flowEdges,
+    sections,
+    visibleDeviceCount,
+    hiddenDeviceCount,
+    visibleDeviceIds,
+    visibleCableCount,
+  } = useMemo(
     () =>
       buildDiagramLayout(
         model,
         cableType,
         healthOverlay,
+        typeFilters,
         savedPositions,
+        savedSectionPositions,
         wifiContext,
       ),
-    [model, cableType, healthOverlay, savedPositions, wifiContext],
+    [
+      model,
+      cableType,
+      healthOverlay,
+      typeFilters,
+      savedPositions,
+      savedSectionPositions,
+      wifiContext,
+    ],
   );
   const [nodes, setNodes, onNodesChange] =
     useNodesState<DiagramFlowNode>(flowNodes);
@@ -182,6 +236,26 @@ export function DiagramCanvas({
     setEdges(flowEdges);
   }, [flowEdges, setEdges]);
 
+  useEffect(() => {
+    if (selectedDeviceId && !visibleDeviceIds.has(selectedDeviceId)) {
+      setSelectedDeviceId(null);
+    }
+    if (selectedCableId && !flowEdges.some((edge) => edge.id === selectedCableId)) {
+      setSelectedCableId(null);
+    }
+  }, [flowEdges, selectedCableId, selectedDeviceId, visibleDeviceIds]);
+
+  const sectionDeviceIdsById = useMemo(
+    () =>
+      Object.fromEntries(
+        sections.map((section) => [
+          section.id,
+          new Set(section.nodes.map((node) => node.device.id)),
+        ]),
+      ) as Record<string, Set<string>>,
+    [sections],
+  );
+
   const selectedNode = selectedDeviceId
     ? model.nodesByDeviceId[selectedDeviceId]
     : null;
@@ -192,6 +266,7 @@ export function DiagramCanvas({
     ? model.cables.filter(
         (cable) =>
           cableIsVisible(cable, cableType) &&
+          cableHasVisibleEndpoints(cable, visibleDeviceIds) &&
           (cable.fromDevice?.id === selectedNode.device.id ||
             cable.toDevice?.id === selectedNode.device.id),
       )
@@ -229,7 +304,99 @@ export function DiagramCanvas({
     setSelectedCableId(null);
   };
 
+  const handleNodeDragStart: OnNodeDrag<DiagramFlowNode> = (_, node) => {
+    if (node.type !== "section") {
+      sectionDragOriginRef.current = null;
+      return;
+    }
+    const childIds = sectionDeviceIdsById[node.id] ?? new Set<string>();
+    const deviceStarts = Object.fromEntries(
+      nodes
+        .filter((entry) => childIds.has(entry.id))
+        .map((entry) => [entry.id, { ...entry.position }]),
+    );
+    sectionDragOriginRef.current = {
+      sectionId: node.id,
+      sectionStart: { ...node.position },
+      deviceStarts,
+    };
+    setSelectedDeviceId(null);
+    setSelectedCableId(null);
+  };
+
+  const handleNodeDrag: OnNodeDrag<DiagramFlowNode> = (_, node) => {
+    const origin = sectionDragOriginRef.current;
+    if (!origin || node.type !== "section" || node.id !== origin.sectionId) {
+      return;
+    }
+    const delta = {
+      x: node.position.x - origin.sectionStart.x,
+      y: node.position.y - origin.sectionStart.y,
+    };
+    const childIds = sectionDeviceIdsById[node.id] ?? new Set<string>();
+    setNodes((current) =>
+      current.map((entry) => {
+        if (entry.id === node.id) {
+          return {
+            ...entry,
+            position: {
+              x: Math.round(node.position.x),
+              y: Math.round(node.position.y),
+            },
+          };
+        }
+        if (!childIds.has(entry.id)) return entry;
+        const start = origin.deviceStarts[entry.id];
+        if (!start) return entry;
+        return {
+          ...entry,
+          position: {
+            x: Math.round(start.x + delta.x),
+            y: Math.round(start.y + delta.y),
+          },
+        };
+      }),
+    );
+  };
+
   const handleNodeDragStop: OnNodeDrag<DiagramFlowNode> = (_, node) => {
+    if (node.type === "section") {
+      const origin = sectionDragOriginRef.current;
+      if (!origin || origin.sectionId !== node.id) return;
+      const delta = {
+        x: node.position.x - origin.sectionStart.x,
+        y: node.position.y - origin.sectionStart.y,
+      };
+      const nextSectionPositions = {
+        ...savedSectionPositions,
+        [node.id]: {
+          x: Math.round(node.position.x),
+          y: Math.round(node.position.y),
+        },
+      };
+      const movedDevicePositions = Object.fromEntries(
+        Object.entries(origin.deviceStarts).map(([deviceId, start]) => [
+          deviceId,
+          {
+            x: Math.round(start.x + delta.x),
+            y: Math.round(start.y + delta.y),
+          },
+        ]),
+      );
+      const nextPositions = {
+        ...savedPositions,
+        ...movedDevicePositions,
+      };
+      setSavedSectionPositions(nextSectionPositions);
+      setSavedPositions(nextPositions);
+      writeDiagramPositions(
+        DIAGRAM_SECTION_POSITIONS_STORAGE_KEY,
+        nextSectionPositions,
+      );
+      writeDiagramPositions(DIAGRAM_POSITIONS_STORAGE_KEY, nextPositions);
+      sectionDragOriginRef.current = null;
+      return;
+    }
     if (node.type !== "device") return;
     setSavedPositions((current) => {
       const next = {
@@ -246,7 +413,18 @@ export function DiagramCanvas({
 
   function resetPositions() {
     setSavedPositions({});
+    setSavedSectionPositions({});
     writeDiagramPositions(DIAGRAM_POSITIONS_STORAGE_KEY, {});
+    writeDiagramPositions(DIAGRAM_SECTION_POSITIONS_STORAGE_KEY, {});
+  }
+
+  function toggleTypeFilter(type: string, shift: boolean) {
+    setTypeFilters((current) => {
+      const next = new Set(shift ? current : []);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
   }
 
   if (loading) {
@@ -283,6 +461,8 @@ export function DiagramCanvas({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
+        onNodeDragStart={handleNodeDragStart}
+        onNodeDrag={handleNodeDrag}
         onNodeDragStop={handleNodeDragStop}
         onEdgeClick={(_, edge) => {
           setSelectedCableId(edge.id);
@@ -329,24 +509,46 @@ export function DiagramCanvas({
         />
         <Panel
           position="top-left"
-          className="rk-panel flex max-w-[calc(100vw-28rem)] items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-xs shadow-[var(--shadow-card)]"
+          className="rk-panel flex max-w-[calc(100vw-28rem)] flex-col gap-2 rounded-[var(--radius-md)] px-3 py-2 text-xs shadow-[var(--shadow-card)]"
         >
-          <span className="grid size-8 place-items-center rounded-[var(--radius-sm)] border border-[var(--accent-secondary-border)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary)]">
-            <GitBranch className="size-4" />
-          </span>
-          <div className="min-w-0">
-            <div className="rk-kicker">Diagram view</div>
-            <div className="truncate text-[11px] text-[var(--text-secondary)]">
-              {sections.length} sections | {model.counts.devices} devices |{" "}
-              {visibleCableCount} visible cables
+          <div className="flex w-full items-center gap-3">
+            <span className="grid size-8 place-items-center rounded-[var(--radius-sm)] border border-[var(--accent-secondary-border)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary)]">
+              <GitBranch className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="rk-kicker">Diagram view</div>
+              <div className="truncate text-[11px] text-[var(--text-secondary)]">
+                {sections.length} sections | {visibleDeviceCount} shown
+                {hiddenDeviceCount > 0 ? ` / ${hiddenDeviceCount} hidden` : ""} |{" "}
+                {visibleCableCount} visible cables
+              </div>
             </div>
+            {Object.keys(savedPositions).length +
+              Object.keys(savedSectionPositions).length >
+              0 && (
+              <Button variant="ghost" size="sm" onClick={resetPositions}>
+                <RotateCcw className="size-3.5" />
+                Reset positions
+              </Button>
+            )}
           </div>
-          {Object.keys(savedPositions).length > 0 && (
-            <Button variant="ghost" size="sm" onClick={resetPositions}>
-              <RotateCcw className="size-3.5" />
-              Reset positions
-            </Button>
-          )}
+          <div className="flex w-full max-w-full items-center gap-1.5 overflow-x-auto pb-0.5">
+            <DiagramTypeChip
+              active={typeFilters.size === 0}
+              label={`All ${model.counts.devices}`}
+              onClick={() => setTypeFilters(new Set())}
+            />
+            {model.deviceTypes.map((entry) => (
+              <DiagramTypeChip
+                key={entry.type}
+                active={typeFilters.has(entry.type)}
+                label={`${entry.label} ${entry.count}`}
+                onClick={(event) =>
+                  toggleTypeFilter(entry.type, event.shiftKey)
+                }
+              />
+            ))}
+          </div>
         </Panel>
         {(selectedNode || selectedCable) && (
           <Panel
@@ -356,7 +558,9 @@ export function DiagramCanvas({
             {selectedNode && (
               <DiagramDeviceInspector
                 node={selectedNode}
+                model={model}
                 connectedCables={connectedCables}
+                virtualSwitches={virtualSwitches}
               />
             )}
             {selectedCable && <DiagramCableInspector cable={selectedCable} />}
@@ -481,7 +685,7 @@ function DiagramHandles() {
 function DiagramSectionCard({ data }: NodeProps<DiagramSectionNode>) {
   return (
     <div
-      className="h-full w-full rounded-[var(--radius-lg)] border bg-[color-mix(in_srgb,var(--surface-2)_58%,transparent)] shadow-[0_1px_0_var(--edge-highlight)_inset]"
+      className="diagram-section-card h-full w-full rounded-[var(--radius-lg)] border bg-[color-mix(in_srgb,var(--surface-2)_58%,transparent)] shadow-[0_1px_0_var(--edge-highlight)_inset]"
       style={{
         borderColor: "var(--border-default)",
         boxShadow: `0 0 0 1px var(--edge-highlight) inset, 0 0 0 1px ${data.accent}22`,
@@ -509,13 +713,43 @@ function DiagramSectionCard({ data }: NodeProps<DiagramSectionNode>) {
   );
 }
 
+function DiagramTypeChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "nodrag nopan h-7 shrink-0 rounded-[var(--radius-sm)] border px-2.5 font-mono text-[9px] uppercase tracking-[0.1em] transition-colors",
+        active
+          ? "border-[var(--accent-primary-border)] bg-[var(--accent-primary-soft)] text-[var(--accent-primary)]"
+          : "border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_68%,transparent)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
 function DiagramDeviceInspector({
   node,
+  model,
   connectedCables,
+  virtualSwitches,
 }: {
   node: VisualizerNode;
+  model: VisualizerModel;
   connectedCables: VisualizerCable[];
+  virtualSwitches: VirtualSwitch[];
 }) {
+  const virtualRows = buildVirtualNetworkRows(node, model, virtualSwitches);
   return (
     <div>
       <div className="rk-kicker">Device</div>
@@ -544,6 +778,73 @@ function DiagramDeviceInspector({
         <InspectorValue label="Rack" value={node.rackName || "Loose"} />
         <InspectorValue label="Room" value={node.roomName || "Unassigned"} />
       </div>
+      {virtualRows.length > 0 && (
+        <div className="mt-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-1)]">
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-3 py-2">
+            <div className="rk-kicker">Virtual NICs</div>
+            <span className="font-mono text-[10px] text-[var(--text-muted)]">
+              {virtualRows.length}
+            </span>
+          </div>
+          <div className="max-h-64 overflow-y-auto p-2">
+            <div className="space-y-1.5">
+              {virtualRows.map((row) => (
+                <div
+                  key={row.id}
+                  className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-2)] px-2.5 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--text-primary)]">
+                      {row.device ? (
+                        <Link
+                          to={`/devices/${row.device.id}`}
+                          className="transition-colors hover:text-[var(--accent-primary)]"
+                        >
+                          {row.device.hostname}
+                        </Link>
+                      ) : (
+                        node.device.hostname
+                      )}
+                    </span>
+                    <span className="font-mono text-[9px] uppercase text-[var(--text-muted)]">
+                      {row.role}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex min-w-0 items-center gap-1.5 font-mono text-[10px] text-[var(--text-tertiary)]">
+                    {row.port ? (
+                      <Link
+                        to={`/ports?deviceId=${row.port.deviceId}&portId=${row.port.id}`}
+                        className="min-w-0 truncate text-[var(--accent-secondary)] transition-colors hover:text-[var(--accent-secondary-hover)]"
+                      >
+                        {formatPortLabel(row.port, { includeFace: true })}
+                      </Link>
+                    ) : (
+                      <span className="text-[var(--text-muted)]">
+                        no NIC documented
+                      </span>
+                    )}
+                    <span className="text-[var(--text-muted)]">{"->"}</span>
+                    <span className="min-w-0 truncate text-[var(--text-primary)]">
+                      {row.virtualSwitch?.name ?? "No vSwitch"}
+                    </span>
+                  </div>
+                  {row.host && row.host.id !== node.device.id && (
+                    <div className="mt-1 truncate text-[10px] text-[var(--text-muted)]">
+                      Host{" "}
+                      <Link
+                        to={`/devices/${row.host.id}`}
+                        className="text-[var(--text-secondary)] transition-colors hover:text-[var(--accent-primary)]"
+                      >
+                        {row.host.hostname}
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="mt-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-1)]">
         <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-3 py-2">
           <div className="rk-kicker">Connected cables</div>
@@ -669,14 +970,27 @@ function buildDiagramLayout(
   model: VisualizerModel,
   cableType: string,
   healthOverlay: boolean,
+  typeFilters: Set<string>,
   savedPositions: Record<string, XYPosition>,
+  savedSectionPositions: Record<string, XYPosition>,
   wifiContext: DiagramWifiContext,
 ): DiagramLayoutResult {
+  const visibleNodes = model.nodes.filter(
+    (node) =>
+      typeFilters.size === 0 || typeFilters.has(node.device.deviceType),
+  );
+  const visibleDeviceIds = new Set(
+    visibleNodes.map((node) => node.device.id),
+  );
   const visibleCables = model.cables
     .filter((cable) => cableIsVisible(cable, cableType))
-    .filter((cable) => cable.fromDevice && cable.toDevice);
+    .filter((cable) => cable.fromDevice && cable.toDevice)
+    .filter((cable) => cableHasVisibleEndpoints(cable, visibleDeviceIds));
   const connectionCountByDeviceId = buildConnectionCounts(visibleCables);
-  const sections = positionSections(buildSections(model, wifiContext));
+  const sections = positionSections(
+    buildSections(model, wifiContext, visibleNodes),
+    savedSectionPositions,
+  );
   const flowNodes: DiagramFlowNode[] = [];
   const nodeGeometryById = new Map<
     string,
@@ -697,7 +1011,7 @@ function buildDiagramLayout(
         title: section.title,
       },
       selectable: false,
-      draggable: false,
+      draggable: true,
       zIndex: 0,
       style: {
         width: section.width,
@@ -800,14 +1114,21 @@ function buildDiagramLayout(
     flowNodes,
     flowEdges,
     sections,
+    visibleDeviceCount: visibleNodes.length,
+    hiddenDeviceCount: model.nodes.length - visibleNodes.length,
+    visibleDeviceIds,
     visibleCableCount: flowEdges.length,
   };
 }
 
-function buildSections(model: VisualizerModel, wifiContext: DiagramWifiContext) {
+function buildSections(
+  model: VisualizerModel,
+  wifiContext: DiagramWifiContext,
+  nodes: VisualizerNode[],
+) {
   const sectionsById = new Map<string, DiagramSection>();
 
-  for (const node of [...model.nodes].sort(compareNodes)) {
+  for (const node of [...nodes].sort(compareNodes)) {
     const descriptor = describeSection(node, model, wifiContext);
     const existing = sectionsById.get(descriptor.id);
     if (existing) {
@@ -918,7 +1239,10 @@ function describeSection(
   };
 }
 
-function positionSections(sections: DiagramSection[]) {
+function positionSections(
+  sections: DiagramSection[],
+  savedSectionPositions: Record<string, XYPosition>,
+) {
   let x = SECTION_START_X;
   let y = SECTION_START_Y;
   let rowHeight = 0;
@@ -944,10 +1268,11 @@ function positionSections(sections: DiagramSection[]) {
       rowHeight = 0;
     }
 
+    const savedPosition = savedSectionPositions[section.id];
     const positioned = {
       ...section,
-      x,
-      y,
+      x: savedPosition?.x ?? x,
+      y: savedPosition?.y ?? y,
       width,
       height,
       columns,
@@ -990,6 +1315,85 @@ function buildConnectionCounts(cables: VisualizerCable[]) {
     }
     return acc;
   }, {});
+}
+
+function buildVirtualNetworkRows(
+  node: VisualizerNode,
+  model: VisualizerModel,
+  virtualSwitches: VirtualSwitch[],
+): VirtualNetworkRow[] {
+  const switchesById = Object.fromEntries(
+    virtualSwitches.map((virtualSwitch) => [virtualSwitch.id, virtualSwitch]),
+  );
+  const hostSwitchIds = new Set(
+    virtualSwitches
+      .filter((virtualSwitch) => virtualSwitch.hostDeviceId === node.device.id)
+      .map((virtualSwitch) => virtualSwitch.id),
+  );
+  const rows: VirtualNetworkRow[] = [];
+  const selectedPorts = model.portsByDeviceId[node.device.id] ?? [];
+
+  selectedPorts
+    .filter((port) => port.virtualSwitchId)
+    .forEach((port) => {
+      const virtualSwitch = port.virtualSwitchId
+        ? switchesById[port.virtualSwitchId]
+        : undefined;
+      rows.push({
+        id: `own:${port.id}`,
+        device: node.device,
+        host: virtualSwitch
+          ? model.deviceById[virtualSwitch.hostDeviceId]
+          : undefined,
+        port,
+        role: ["vm", "container"].includes(node.device.deviceType)
+          ? "guest nic"
+          : "uplink",
+        virtualSwitch,
+      });
+    });
+
+  const childDevices = Object.values(model.deviceById)
+    .filter((device) => device.parentDeviceId === node.device.id)
+    .filter((device) => ["vm", "container"].includes(device.deviceType))
+    .sort((a, b) =>
+      a.hostname.localeCompare(b.hostname, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      }),
+    );
+
+  for (const child of childDevices) {
+    const childPorts = (model.portsByDeviceId[child.id] ?? []).filter(
+      (port) =>
+        port.kind === "virtual" ||
+        (port.virtualSwitchId && hostSwitchIds.has(port.virtualSwitchId)),
+    );
+    if (childPorts.length === 0) {
+      rows.push({
+        id: `child:${child.id}:missing`,
+        device: child,
+        host: node.device,
+        role: child.deviceType,
+      });
+      continue;
+    }
+    childPorts.forEach((port) => {
+      const virtualSwitch = port.virtualSwitchId
+        ? switchesById[port.virtualSwitchId]
+        : undefined;
+      rows.push({
+        id: `child:${child.id}:${port.id}`,
+        device: child,
+        host: node.device,
+        port,
+        role: child.deviceType,
+        virtualSwitch,
+      });
+    });
+  }
+
+  return rows;
 }
 
 function chooseEdgeHandles(
@@ -1084,6 +1488,18 @@ function sectionColumnCount(section: DiagramSection) {
 function cableIsVisible(cable: VisualizerCable, cableType: string) {
   return (
     cableType === "all" || (cable.link.cableType || "Unknown") === cableType
+  );
+}
+
+function cableHasVisibleEndpoints(
+  cable: VisualizerCable,
+  visibleDeviceIds: Set<string>,
+) {
+  return Boolean(
+    cable.fromDevice &&
+      cable.toDevice &&
+      visibleDeviceIds.has(cable.fromDevice.id) &&
+      visibleDeviceIds.has(cable.toDevice.id),
   );
 }
 
