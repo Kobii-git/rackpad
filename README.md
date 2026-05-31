@@ -1,17 +1,32 @@
 # Rackpad
 
-Rackpad is a self-hosted infrastructure inventory and operations app for racks, devices, ports, cables, VLANs, IP address management, WiFi, compute, discovery, monitoring, labs, and users.
+Rackpad is a self-hosted infrastructure inventory and operations workspace for homelabs, small racks, network rooms, and lab environments. It brings racks, devices, ports, cables, VLANs, IPAM, WiFi, compute, discovery, monitoring, docs, images, labs, and users into one clean app.
 
-Current release: `v1.5.1`
+**Current release:** `v1.5.2`
 
-It is a full-stack app:
+Built with:
 
 - React + Vite frontend
 - Fastify API
 - SQLite persistence through `better-sqlite3`
 - session-based authentication with admin/editor/viewer roles
-- per-device health checks with multi-target ICMP, TCP, HTTP, and HTTPS monitor support
-- Docker support for a single-container test deployment
+- per-device health checks with ICMP, TCP, HTTP, and HTTPS monitor targets
+- Docker support for a single-container deployment
+
+## Release highlights
+
+Rackpad `1.5.2` is the biggest documentation and topology release so far:
+
+- React Flow diagram view for a cleaner, movable network map
+- Light and dark UI themes
+- IPAM DHCP zones, DHCP reservations, gateway/DNS protection, and technical IP handling
+- Multi-IP device records, including device-level and port/interface-level assignments
+- Host-shared networking for VMs/containers that reuse the parent host IP
+- WiFi AP, SSID, radio, client, and `wifi` port support
+- Device services inventory for DHCP, DNS, VPN, NTP, SNMP, Syslog, HTTP/S, databases, apps, and custom services
+- Bulk device updates, bulk delete flow, and broader bulk monitoring creation
+- Better discovery reconciliation, natural IP sorting, and imported/dismissed review handling
+- Rack shelf improvements for multi-device and multi-U shelf layouts
 
 ## Quick links
 
@@ -30,56 +45,78 @@ If `rackpad.co.za` is unavailable, the repo still contains the core material you
 - [MIT license](./LICENSE)
 - [Support notes](./SUPPORT.md)
 
-## Screenshots
+## Preview
 
-These are 1920x1200 live captures from the working Rackpad demo environment,
-embedded directly in the GitHub repo.
+Fresh 1920x1200 light-mode captures are kept in [`docs/screenshots`](./docs/screenshots). They are shown full-width here so GitHub does not crush them into blurry thumbnails.
 
-### Overview and physical inventory
+### Operations dashboard
 
-| Dashboard                                              | Racks                                               |
-| ------------------------------------------------------ | --------------------------------------------------- |
-| ![Rackpad dashboard](./docs/screenshots/dashboard.png) | ![Rackpad racks view](./docs/screenshots/racks.png) |
+<img src="./docs/screenshots/dashboard.png" alt="Rackpad operations dashboard" width="100%">
 
-| Devices                                                      | Ports                                                            |
-| ------------------------------------------------------------ | ---------------------------------------------------------------- |
-| ![Rackpad devices inventory](./docs/screenshots/devices.png) | ![Rackpad ports and patching view](./docs/screenshots/ports.png) |
+### Diagram visualizer
 
-| Cables                                                   | IPAM                                                   |
-| -------------------------------------------------------- | ------------------------------------------------------ |
-| ![Rackpad cables workspace](./docs/screenshots/cables.png) | ![Rackpad IPAM workspace](./docs/screenshots/ipam.png) |
+<img src="./docs/screenshots/visualizer.png" alt="Rackpad React Flow diagram visualizer" width="100%">
 
-### Visualizer cable mapping
+### IPAM, DHCP zones, and reservations
 
-| Topology and cable paths                                       | Selected cable inspector                                                |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| ![Rackpad visualizer workspace](./docs/screenshots/visualizer.png) | ![Rackpad visualizer selected cable](./docs/screenshots/visualizer-cables.png) |
+<img src="./docs/screenshots/ipam.png" alt="Rackpad IPAM workspace with zones, scopes, and address utilization" width="100%">
 
-| Health overlay                                                        | Trace mode                                                        |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| ![Rackpad visualizer health overlay](./docs/screenshots/visualizer-health.png) | ![Rackpad visualizer trace mode](./docs/screenshots/visualizer-trace.png) |
+### WiFi inventory
 
-| Loose devices below racks                                             |
-| --------------------------------------------------------------------- |
-| ![Rackpad visualizer loose-device layout](./docs/screenshots/visualizer-layout.png) |
+<img src="./docs/screenshots/wifi.png" alt="Rackpad WiFi controller, SSID, AP, radio, and client inventory" width="100%">
 
-### Operations and documentation
+<details>
+<summary>More workspace screenshots</summary>
 
-| Monitoring                                                         | Compute                                                      |
-| ------------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![Rackpad monitoring workspace](./docs/screenshots/monitoring.png) | ![Rackpad compute workspace](./docs/screenshots/compute.png) |
+### Racks and rooms
 
-| Documentation                                                      |
-| ------------------------------------------------------------------ |
-| ![Rackpad documentation workspace](./docs/screenshots/documentation.png) |
+<img src="./docs/screenshots/racks.png" alt="Rackpad racks and rooms workspace" width="100%">
 
-### Wireless, discovery, and address management
+### Devices
 
-| WiFi                                                   | Discovery                                                        |
-| ------------------------------------------------------ | ---------------------------------------------------------------- |
-| ![Rackpad WiFi workspace](./docs/screenshots/wifi.png) | ![Rackpad discovery workspace](./docs/screenshots/discovery.png) |
+<img src="./docs/screenshots/devices.png" alt="Rackpad device inventory" width="100%">
 
-These are enough to see the app before installing it, and the full screenshot set used for GitHub previews lives in [`docs/screenshots`](./docs/screenshots).
+### Ports
+
+<img src="./docs/screenshots/ports.png" alt="Rackpad ports workspace" width="100%">
+
+### Cables
+
+<img src="./docs/screenshots/cables.png" alt="Rackpad cables workspace" width="100%">
+
+### Visualizer rack layout
+
+<img src="./docs/screenshots/visualizer-cables.png" alt="Rackpad grouped visualizer layout" width="100%">
+
+### Visualizer health overlay
+
+<img src="./docs/screenshots/visualizer-health.png" alt="Rackpad visualizer health overlay" width="100%">
+
+### Visualizer pyramid view
+
+<img src="./docs/screenshots/visualizer-trace.png" alt="Rackpad pyramid visualizer view" width="100%">
+
+### Loose device layout
+
+<img src="./docs/screenshots/visualizer-layout.png" alt="Rackpad visualizer loose device layout" width="100%">
+
+### Monitoring
+
+<img src="./docs/screenshots/monitoring.png" alt="Rackpad monitoring workspace" width="100%">
+
+### Compute
+
+<img src="./docs/screenshots/compute.png" alt="Rackpad compute workspace" width="100%">
+
+### Discovery
+
+<img src="./docs/screenshots/discovery.png" alt="Rackpad discovery workspace" width="100%">
+
+### Documentation
+
+<img src="./docs/screenshots/documentation.png" alt="Rackpad documentation workspace" width="100%">
+
+</details>
 
 ## What you can see before install
 
@@ -93,11 +130,11 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - WiFi for controllers, SSIDs, radios, clients, and signal context
 - Discovery for staged imports, MAC/vendor hints, and duplicate detection
 - Monitoring for multi-target ICMP, TCP, HTTP, and HTTPS checks
-- IPAM for subnets, DHCP scopes, IP zones, and linked assignments
+- IPAM for subnets, DHCP scopes, DHCP reservations, IP zones, and linked assignments
 - Documentation for Markdown notes, runbooks, and inline pictures
 - Imports for review-first Hyper-V and Proxmox host, VM, and container onboarding
 - Reports for printable/PDF, Excel-compatible, and CSV exports
-- Visualizer for rack, loose-room, port, and cable relationship maps
+- Visualizer for rack, pyramid, diagram, loose-room, port, WiFi, and cable relationship maps
 
 ## What works
 
@@ -108,21 +145,28 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - MAC address fields, search, sort, import, and display beside IP context
 - Device placement modes for rack, room, wireless, and virtual inventory
 - Parent-child device relationships for hosted VMs and AP-linked wireless clients
+- Host-shared networking for VMs and containers that intentionally reuse a parent host IP
+- Multiple IP assignments per device, with device-level and port/interface-level context
 - Compute workspace for virtualization hosts and VMs
 - Capacity tracking for hosts and VMs with CPU, memory, storage, and specs fields
 - Port templates for new devices
 - Manual port create, edit, and delete
+- WiFi port kind across device types, templates, selectors, labels, visualizer views, and reports
 - Create, edit, and delete cables
 - VLAN allocation and VLAN deletion
 - VLAN range create, edit, and delete
-- IPAM subnet, DHCP scope, and IP zone CRUD
+- IPAM subnet, DHCP scope, DHCP reservation, and IP zone CRUD
+- Gateway, DNS, reserved, infrastructure, and technical IP protection during allocation, discovery, and reconcile
 - Controller-aware WiFi workspace for controllers, SSIDs, AP radios, and wireless clients
 - Wireless client telemetry with AP, SSID, band, channel, signal, last-seen, and roam context
+- WiFi client grouping by AP/SSID in visualizer views when association or VLAN/IPAM context is available
 - Discovery inbox with subnet scan, duplicate awareness, review, and import into inventory
-- Discovery enrichment with MAC/vendor capture and direct linking to existing inventory
+- Discovery enrichment with MAC/vendor capture, technical IP preservation, natural IP sorting, and direct linking to existing inventory
 - Management IP synchronization between device records and IPAM
 - Next-free IP allocation and IP release
+- DHCP reservation allocation from IP zones instead of treating the whole DHCP scope as assignable
 - Direct links between devices, ports, IPAM assignments, racks, rooms, dashboard cards, reports, and visualizer inspector entries
+- Bulk device status edits and bulk delete with dependency cleanup
 - Audit log writes for the main workflows
 - User bootstrap, login, logout, and user management
 - Optional OIDC login with PKCE, role mapping, and Authentik-style issuer/debug guidance
@@ -130,9 +174,12 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - Backup exports preserve password hashes, documentation pages, device images, MACs, and parent-linked devices for restore, but redact stored alert-delivery secrets before download
 - Device health-check configuration, alert destinations, repeat-alert controls, and on-demand monitor runs
 - Multiple monitor targets per device so servers, firewalls, and multi-NIC systems can track separate management, service, storage, or VIP endpoints
+- Bulk ICMP, TCP, HTTP, and HTTPS monitor creation from selected devices
+- Device service inventory for DHCP, DNS, VPN, NTP, SNMP, Syslog, HTTP/S, databases, apps, and custom services
 - SMTP/email alert delivery beside Discord and Telegram, plus recent alert activity in the admin area
 - Reports workspace with printable/PDF-friendly inventory summaries plus Excel-compatible and CSV exports
-- Visualizer workspace for rack, room-tech, port, and cable relationship mapping, with Health mode, Trace mode, loose-device layout toggles, and room-only rack-zone toggles
+- Visualizer workspace for grouped rack layout, pyramid view, and React Flow diagram mapping, with Health mode, Trace mode, multi-select filters, loose-device layout toggles, room-only rack-zone toggles, and saved diagram positions
+- Rack shelves with proportional child-device footprints for multi-device and multi-U shelf documentation
 - Markdown Documentation workspace for runbooks and notes, including inline image insertion
 - Device image attachments with labels and notes on device detail pages
 - Hyper-V import wizard for staging hosts, VMs, power state, guest OS, virtual switches, virtual NICs, VLANs, IPs, CPU, memory, and disk data from a local PowerShell export, with editable host mapping before import
@@ -174,7 +221,7 @@ Recommended workflow:
 
 - test new work from `beta`
 - merge validated fixes and features into `main`
-- create version tags like `v1.5.1` from `main`
+- create version tags like `v1.5.2` from `main`
 
 If you want the newest testing build instead of the latest stable tag:
 
@@ -327,12 +374,12 @@ curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/inst
 ```
 
 Use `RACKPAD_TAG=latest` if you want the newest stable GHCR image,
-`RACKPAD_TAG=1.5.1` if you want this exact release, or `RACKPAD_TAG=beta` if
+`RACKPAD_TAG=1.5.2` if you want this exact release, or `RACKPAD_TAG=beta` if
 you want the newest testing image:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
-RACKPAD_TAG=1.5.1 bash /tmp/install-rackpad.sh
+RACKPAD_TAG=1.5.2 bash /tmp/install-rackpad.sh
 ```
 
 Open:
@@ -349,7 +396,7 @@ cd /opt/rackpad
 sudo curl -fsSLo compose.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.release.yml
 sudo tee .env >/dev/null <<'EOF'
 RACKPAD_IMAGE=ghcr.io/kobii-git/rackpad
-RACKPAD_TAG=1.5.1
+RACKPAD_TAG=1.5.2
 RACKPAD_PORT=3000
 MONITOR_INTERVAL_MS=300000
 TRUST_PROXY=0
