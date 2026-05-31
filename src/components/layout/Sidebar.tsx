@@ -23,7 +23,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { selectLab, useStore } from "@/lib/store";
-import { APP_IS_BETA, APP_VERSION_TAG } from "@/lib/version";
+import {
+  APP_CHANNEL_LABEL,
+  APP_IS_DEV,
+  APP_VERSION_TAG,
+} from "@/lib/version";
 
 const baseNavItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -92,9 +96,16 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
             {APP_VERSION_TAG}
           </span>
-          {APP_IS_BETA && (
-            <span className="rounded-full border border-[var(--color-warn)]/35 bg-[var(--color-warn)]/10 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.16em] text-[var(--color-warn)]">
-              beta
+          {APP_CHANNEL_LABEL && (
+            <span
+              className={cn(
+                "rounded-full border px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.16em]",
+                APP_IS_DEV
+                  ? "border-[var(--color-info)]/40 bg-[var(--color-info)]/10 text-[var(--color-info)]"
+                  : "border-[var(--color-warn)]/35 bg-[var(--color-warn)]/10 text-[var(--color-warn)]",
+              )}
+            >
+              {APP_CHANNEL_LABEL}
             </span>
           )}
         </div>

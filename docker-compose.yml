@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        RACKPAD_BUILD_CHANNEL: ${RACKPAD_TAG:-local}
     container_name: rackpad
     init: true
     restart: unless-stopped

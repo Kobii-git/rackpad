@@ -7,10 +7,13 @@ import path from 'node:path'
 const packageJson = JSON.parse(
   readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
 ) as { version?: string }
+const appBuildChannel =
+  process.env.RACKPAD_BUILD_CHANNEL ?? process.env.GITHUB_REF_NAME ?? ''
 
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version ?? '0.0.0'),
+    __APP_BUILD_CHANNEL__: JSON.stringify(appBuildChannel),
   },
   plugins: [react(), tailwindcss()],
   build: {

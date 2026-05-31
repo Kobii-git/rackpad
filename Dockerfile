@@ -8,6 +8,8 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci
 
 FROM deps AS build
 WORKDIR /app
+ARG RACKPAD_BUILD_CHANNEL=
+ENV RACKPAD_BUILD_CHANNEL=$RACKPAD_BUILD_CHANNEL
 
 COPY . .
 RUN npm run build

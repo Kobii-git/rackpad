@@ -2,7 +2,7 @@ name: docker-publish
 
 on:
   push:
-    branches: [main, beta]
+    branches: [main, beta, dev]
     tags: ["v*.*.*"]
   pull_request:
     branches: [main]
@@ -57,5 +57,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            RACKPAD_BUILD_CHANNEL=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
