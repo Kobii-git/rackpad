@@ -48,7 +48,9 @@ const ZONE_PADDING = 24;
 const ZONE_GAP = 44;
 const ZONE_HEADER = 76;
 const RACK_PANEL_WIDTH = 360;
+const RACK_PANEL_READABLE_WIDTH = 560;
 const RACK_PANEL_DUAL_FACE_WIDTH = 588;
+const RACK_PANEL_DUAL_FACE_READABLE_WIDTH = 760;
 const RACK_PANEL_GAP = 22;
 const RACK_LOOSE_GROUP_WIDTH = 360;
 const RACK_SECTION_GAP = 28;
@@ -59,6 +61,7 @@ const RACK_UNIT_MEDIUM_HEIGHT = 36;
 const RACK_UNIT_DENSE_HEIGHT = 44;
 const RACK_UNIT_ULTRA_DENSE_HEIGHT = 52;
 const RACK_NODE_WIDTH = 252;
+const RACK_NODE_READABLE_WIDTH = 420;
 const NODE_HEIGHT = 40;
 const ROOM_ZONE_WIDTH = 430;
 const ROOM_NODE_WIDTH = 360;
@@ -66,9 +69,13 @@ const ROOM_ROW_HEIGHT = 54;
 const PYRAMID_ZONE_X = 28;
 const PYRAMID_ZONE_Y = 28;
 const PYRAMID_NODE_WIDTH = 264;
+const PYRAMID_NODE_READABLE_WIDTH = 360;
 const PYRAMID_NODE_HEIGHT = 50;
+const PYRAMID_NODE_READABLE_HEIGHT = 64;
 const PYRAMID_NODE_GAP_X = 72;
+const PYRAMID_NODE_READABLE_GAP_X = 96;
 const PYRAMID_LAYER_GAP_Y = 116;
+const PYRAMID_LAYER_READABLE_GAP_Y = 132;
 const PYRAMID_COMPONENT_GAP = 120;
 const GROUP_HEADER_HEIGHT = 48;
 const GROUP_GAP = 14;
@@ -78,6 +85,7 @@ const DEFAULT_LAYOUT_OPTIONS: VisualizerLayoutOptions = {
   looseDevicePlacement: "beside-racks",
   includeRoomOnlySections: false,
   rackFaceMode: "front",
+  readableLabels: false,
   customNodePositions: {},
 };
 
@@ -230,8 +238,12 @@ export function buildVisualizerModel(
   const rackSectionY = ZONE_Y + ZONE_HEADER;
   const rackPanelWidth =
     layout.rackFaceMode === "both"
-      ? RACK_PANEL_DUAL_FACE_WIDTH
-      : RACK_PANEL_WIDTH;
+      ? layout.readableLabels
+        ? RACK_PANEL_DUAL_FACE_READABLE_WIDTH
+        : RACK_PANEL_DUAL_FACE_WIDTH
+      : layout.readableLabels
+        ? RACK_PANEL_READABLE_WIDTH
+        : RACK_PANEL_WIDTH;
   for (const sectionInput of rackRoomInputs) {
     const sectionLooseDevices = sectionInput.room
       ? looseDevices.filter(
@@ -277,6 +289,7 @@ export function buildVisualizerModel(
         y: rackPanelY,
         width: rackPanelWidth,
         rackFaceMode: layout.rackFaceMode,
+        readableLabels: layout.readableLabels,
         portsByDeviceId,
         portLinkByPortId,
         virtualSwitchById,
@@ -501,6 +514,18 @@ function buildPyramidVisualizerModel(
   input: BuildVisualizerInput,
   layout: VisualizerLayoutOptions,
 ): VisualizerModel {
+  const nodeWidth = layout.readableLabels
+    ? PYRAMID_NODE_READABLE_WIDTH
+    : PYRAMID_NODE_WIDTH;
+  const nodeHeight = layout.readableLabels
+    ? PYRAMID_NODE_READABLE_HEIGHT
+    : PYRAMID_NODE_HEIGHT;
+  const nodeGapX = layout.readableLabels
+    ? PYRAMID_NODE_READABLE_GAP_X
+    : PYRAMID_NODE_GAP_X;
+  const layerGapY = layout.readableLabels
+    ? PYRAMID_LAYER_READABLE_GAP_Y
+    : PYRAMID_LAYER_GAP_Y;
   const deviceById = indexById(input.devices);
   const portById = indexById(input.ports);
   const vlanById = indexById(input.vlans);
@@ -542,17 +567,16 @@ function buildPyramidVisualizerModel(
   const nodes: VisualizerNode[] = [];
   let cursorX = PYRAMID_ZONE_X + ZONE_PADDING + 18;
   const contentY = PYRAMID_ZONE_Y + ZONE_HEADER + 42;
-  let maxBottom = contentY + PYRAMID_NODE_HEIGHT;
+  let maxBottom = contentY + nodeHeight;
 
   const components = buildPyramidComponents(input.devices, adjacency);
   for (const component of components) {
     const layers = buildPyramidLayers(component, adjacency, deviceById);
     const layerWidths = layers.map(
       (layer) =>
-        layer.length * PYRAMID_NODE_WIDTH +
-        Math.max(0, layer.length - 1) * PYRAMID_NODE_GAP_X,
+        layer.length * nodeWidth + Math.max(0, layer.length - 1) * nodeGapX,
     );
-    const componentWidth = Math.max(PYRAMID_NODE_WIDTH, ...layerWidths);
+    const componentWidth = Math.max(nodeWidth, ...layerWidths);
     const zoneId =
       component.length === 1 && (adjacency[component[0]]?.size ?? 0) === 0
         ? "pyramid:unlinked"
@@ -563,10 +587,10 @@ function buildPyramidVisualizerModel(
         comparePyramidDevices(deviceById[a], deviceById[b], adjacency),
       );
       const layerWidth =
-        sortedLayer.length * PYRAMID_NODE_WIDTH +
-        Math.max(0, sortedLayer.length - 1) * PYRAMID_NODE_GAP_X;
+        sortedLayer.length * nodeWidth +
+        Math.max(0, sortedLayer.length - 1) * nodeGapX;
       const layerX = cursorX + Math.max(0, (componentWidth - layerWidth) / 2);
-      const y = contentY + depth * (PYRAMID_NODE_HEIGHT + PYRAMID_LAYER_GAP_Y);
+      const y = contentY + depth * (nodeHeight + layerGapY);
       sortedLayer.forEach((deviceId, index) => {
         const device = deviceById[deviceId];
         if (!device) return;
@@ -575,10 +599,10 @@ function buildPyramidVisualizerModel(
         nodes.push(
           createNode({
             device,
-            x: layerX + index * (PYRAMID_NODE_WIDTH + PYRAMID_NODE_GAP_X),
+            x: layerX + index * (nodeWidth + nodeGapX),
             y,
-            width: PYRAMID_NODE_WIDTH,
-            height: PYRAMID_NODE_HEIGHT,
+            width: nodeWidth,
+            height: nodeHeight,
             zoneId,
             rackId: rack?.id,
             rackName: rack?.name,
@@ -598,7 +622,7 @@ function buildPyramidVisualizerModel(
           }),
         );
       });
-      maxBottom = Math.max(maxBottom, y + PYRAMID_NODE_HEIGHT);
+      maxBottom = Math.max(maxBottom, y + nodeHeight);
     });
 
     cursorX += componentWidth + PYRAMID_COMPONENT_GAP;
@@ -688,6 +712,7 @@ function buildRackPanel(input: {
   portsByDeviceId: Record<string, Port[]>;
   portLinkByPortId: Record<string, PortLink>;
   virtualSwitchById: Record<string, VirtualSwitch>;
+  readableLabels: boolean;
   discoveredByDeviceId: Map<string, DiscoveredDevice>;
   discoveredByIp: Map<string, DiscoveredDevice>;
   subnetRanges: Array<SubnetRange | null>;
@@ -700,6 +725,7 @@ function buildRackPanel(input: {
   const rackUnitHeight = rackUnitHeightForDevices(
     input.devices,
     input.portsByDeviceId,
+    input.readableLabels,
   );
   const allMountedDevices = input.devices.filter(
     (device) => device.startU != null,
@@ -722,16 +748,25 @@ function buildRackPanel(input: {
   ].filter((face): face is "front" | "rear" => Boolean(face));
   const useDualFaceLayout =
     input.rackFaceMode === "both" && mountedRearCount > 0;
+  const baseRackNodeWidth = input.readableLabels
+    ? RACK_NODE_READABLE_WIDTH
+    : RACK_NODE_WIDTH;
+  const mountedNodeWidth = useDualFaceLayout
+    ? 0
+    : Math.min(baseRackNodeWidth, Math.max(168, bodyWidth - 64));
   const nodeAreaX = useDualFaceLayout ? bodyX + 12 : bodyX + 32;
   const nodeAreaWidth = useDualFaceLayout
     ? input.rack.totalU <= 12
       ? bodyWidth - 18
       : bodyWidth - 24
-    : RACK_NODE_WIDTH;
+    : mountedNodeWidth;
   const faceGap = 8;
   const faceNodeWidth = useDualFaceLayout
-    ? Math.max(150, Math.floor((nodeAreaWidth - faceGap) / 2))
-    : RACK_NODE_WIDTH;
+    ? Math.max(
+        input.readableLabels ? 230 : 150,
+        Math.floor((nodeAreaWidth - faceGap) / 2),
+      )
+    : mountedNodeWidth;
   const mountedDeviceIds = new Set(mountedDevices.map((device) => device.id));
   const shelfChildrenByParent = groupBy(
     input.devices.filter(
@@ -782,7 +817,7 @@ function buildRackPanel(input: {
       device,
       x: nodeX,
       y: top + 2,
-      width: useDualFaceLayout ? faceNodeWidth : RACK_NODE_WIDTH,
+      width: useDualFaceLayout ? faceNodeWidth : mountedNodeWidth,
       height: Math.max(Math.max(24, rackUnitHeight - 4), bottom - top - 4),
       zoneId: input.room
         ? `room:${input.room.id}:rack:${input.rack.id}`
@@ -808,9 +843,19 @@ function buildRackPanel(input: {
     const parentBounds = rackNodeBounds.get(parentId);
     const parentNode = nodes.find((node) => node.device.id === parentId);
     if (!parentBounds || !parentNode) continue;
-    const gap = 4;
-    const availableWidth = parentNode.width - 12;
-    const columns = children.length > 3 ? 2 : Math.max(1, children.length);
+    const gap = input.readableLabels ? 8 : 4;
+    const headerReserve =
+      input.readableLabels && parentNode.device.deviceType === "rack_shelf"
+        ? 34
+        : 4;
+    const availableWidth = parentNode.width - (input.readableLabels ? 18 : 12);
+    const columns = input.readableLabels
+      ? children.length >= 4
+        ? 2
+        : 1
+      : children.length > 3
+        ? 2
+        : Math.max(1, children.length);
     const rows = Math.ceil(children.length / columns);
     const sortedChildren = [...children].sort(compareDeviceName);
     const childRows = Array.from({ length: rows }, (_, rowIndex) =>
@@ -820,9 +865,12 @@ function buildRackPanel(input: {
       Math.max(1, ...row.map((device) => device.heightU ?? 1)),
     );
     const totalRowWeight = rowWeights.reduce((sum, value) => sum + value, 0);
-    const availableHeight = Math.max(24, parentBounds.height - 8);
+    const availableHeight = Math.max(
+      input.readableLabels ? 44 : 24,
+      parentBounds.height - headerReserve - 6,
+    );
     const childWidth = Math.max(
-      useDualFaceLayout ? 78 : 88,
+      input.readableLabels ? 168 : useDualFaceLayout ? 78 : 88,
       Math.floor((availableWidth - gap * (columns - 1)) / columns),
     );
     const startX =
@@ -837,7 +885,7 @@ function buildRackPanel(input: {
       const col = index % columns;
       const row = Math.floor(index / columns);
       const rowHeight = Math.max(
-        22,
+        input.readableLabels ? 44 : 22,
         Math.floor(
           ((availableHeight - gap * Math.max(0, rows - 1)) *
             rowWeights[row]) /
@@ -848,7 +896,7 @@ function buildRackPanel(input: {
         createNode({
           device,
           x: startX + col * (childWidth + gap),
-          y: parentNode.y + 4 + rowOffset,
+          y: parentNode.y + headerReserve + rowOffset,
           width: childWidth,
           height: Math.min(rowHeight, availableHeight - rowOffset),
           zoneId: input.room
@@ -931,7 +979,40 @@ function buildRackBands(
 function rackUnitHeightForDevices(
   devices: Device[],
   portsByDeviceId: Record<string, Port[]>,
+  readableLabels = false,
 ) {
+  const childrenByParent = groupBy(
+    devices.filter((device) => device.parentDeviceId),
+    (device) => device.parentDeviceId ?? "",
+  );
+  if (readableLabels) {
+    const maxShelfDemand = Math.max(
+      0,
+      ...Object.values(childrenByParent).map((children) => {
+        const columns = children.length >= 4 ? 2 : 1;
+        const rows = Math.ceil(children.length / columns);
+        const rowWeights = Array.from({ length: rows }, (_, rowIndex) => {
+          const row = children.slice(
+            rowIndex * columns,
+            rowIndex * columns + columns,
+          );
+          return Math.max(1, ...row.map((device) => device.heightU ?? 1));
+        });
+        return (
+          44 +
+          rowWeights.reduce(
+            (sum, weight) => sum + Math.min(3, weight) * 44,
+            0,
+          ) +
+          Math.max(0, rows - 1) * 8
+        );
+      }),
+    );
+    if (maxShelfDemand > 0) {
+      return clampNumber(maxShelfDemand, 96, 220);
+    }
+  }
+
   const childCountByParent = devices.reduce<Record<string, number>>(
     (acc, device) => {
       if (device.parentDeviceId) {
@@ -2123,6 +2204,10 @@ function maxOf<T>(items: T[], getValue: (item: T) => number, fallback: number) {
   return items.length === 0
     ? fallback
     : Math.max(...items.map((item) => getValue(item)));
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function roomGroupsHeight(groups: RoomGroup[], startY: number) {

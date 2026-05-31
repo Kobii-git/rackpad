@@ -19,6 +19,7 @@ const LOOSE_PLACEMENT_STORAGE_KEY = "rackpad.visualizer.loose-placement";
 const ROOM_ONLY_SECTIONS_STORAGE_KEY = "rackpad.visualizer.room-only-sections";
 const LAYOUT_MODE_STORAGE_KEY = "rackpad.visualizer.layout-mode";
 const RACK_FACE_MODE_STORAGE_KEY = "rackpad.visualizer.rack-face-mode";
+const READABLE_LABELS_STORAGE_KEY = "rackpad.visualizer.readable-labels";
 const CUSTOM_NODE_POSITIONS_STORAGE_KEY =
   "rackpad.visualizer.custom-node-positions";
 
@@ -54,6 +55,9 @@ export default function VisualizerView() {
   );
   const [rackFaceMode, setRackFaceMode] = useState<VisualizerRackFaceMode>(() =>
     readRackFaceMode(RACK_FACE_MODE_STORAGE_KEY),
+  );
+  const [readableLabels, setReadableLabels] = useState(() =>
+    readBoolean(READABLE_LABELS_STORAGE_KEY, false),
   );
   const [customNodePositions, setCustomNodePositions] = useState<
     Record<string, VisualizerPoint>
@@ -95,6 +99,7 @@ export default function VisualizerView() {
           looseDevicePlacement,
           includeRoomOnlySections,
           rackFaceMode,
+          readableLabels,
           customNodePositions,
         },
       }),
@@ -113,6 +118,7 @@ export default function VisualizerView() {
       collapsedGroups,
       layoutMode,
       rackFaceMode,
+      readableLabels,
       customNodePositions,
       looseDevicePlacement,
       includeRoomOnlySections,
@@ -159,6 +165,14 @@ export default function VisualizerView() {
     setIncludeRoomOnlySections((current) => {
       const next = !current;
       writeBoolean(ROOM_ONLY_SECTIONS_STORAGE_KEY, next);
+      return next;
+    });
+  }
+
+  function toggleReadableLabels() {
+    setReadableLabels((current) => {
+      const next = !current;
+      writeBoolean(READABLE_LABELS_STORAGE_KEY, next);
       return next;
     });
   }
@@ -252,6 +266,14 @@ export default function VisualizerView() {
                 Reset nodes
               </Button>
             )}
+            {layoutMode !== "diagram" && (
+              <VisualizerToggle
+                checked={readableLabels}
+                label="Readable labels"
+                ariaLabel="Use wider visualizer cards with larger labels"
+                onChange={toggleReadableLabels}
+              />
+            )}
             <select
               value={cableType}
               onChange={(event) => setCableType(event.target.value)}
@@ -327,6 +349,7 @@ export default function VisualizerView() {
           }}
           onToggleRackRun={toggleRackRun}
           onToggleGroup={toggleGroup}
+          readableLabels={readableLabels}
           onNodePositionChange={updateCustomNodePosition}
         />
       )}

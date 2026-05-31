@@ -6,10 +6,19 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.5.3-beta] - 2026-06-01
+
+### Added
+
+- Added a persisted Visualizer "Readable labels" toggle for grouped and
+  pyramid layouts.
+
 ### Changed
 
 - Refreshed README and install documentation for the `1.5.2` release with
   light-mode screenshots and current Docker tag examples.
+- Readable-label mode widens rack and pyramid device cards, allows larger
+  two-line device names, and gives shelf child devices more room.
 
 ## [1.5.2] - 2026-05-31
 

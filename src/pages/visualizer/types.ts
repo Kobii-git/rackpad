@@ -21,6 +21,7 @@ export interface VisualizerLayoutOptions {
   looseDevicePlacement: VisualizerLooseDevicePlacement;
   includeRoomOnlySections: boolean;
   rackFaceMode: VisualizerRackFaceMode;
+  readableLabels: boolean;
   customNodePositions: Record<string, VisualizerPoint>;
 }
 

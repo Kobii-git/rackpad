@@ -82,6 +82,7 @@ interface VisualizerCanvasProps {
   onDismissNoCableBanner: () => void;
   onToggleRackRun: (key: string) => void;
   onToggleGroup: (key: string) => void;
+  readableLabels: boolean;
   onNodePositionChange?: (deviceId: string, position: VisualizerPoint) => void;
 }
 
@@ -103,6 +104,7 @@ export function VisualizerCanvas({
   onDismissNoCableBanner,
   onToggleRackRun,
   onToggleGroup,
+  readableLabels,
   onNodePositionChange,
 }: VisualizerCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -708,6 +710,7 @@ export function VisualizerCanvas({
                         }
                         onSelect={() => selectDevice(node.device.id)}
                         onPortClick={(port) => handlePortClick(node, port)}
+                        readableLabels={readableLabels}
                         draggable={Boolean(
                           model.layoutMode === "pyramid" &&
                           onNodePositionChange,
@@ -1164,6 +1167,7 @@ function DeviceCard({
   traceFirstPortId,
   onSelect,
   onPortClick,
+  readableLabels,
   draggable,
   dragging,
   onPointerDown,
@@ -1180,6 +1184,7 @@ function DeviceCard({
   traceFirstPortId: string | null;
   onSelect: () => void;
   onPortClick: (port: VisualizerPort) => void;
+  readableLabels: boolean;
   draggable: boolean;
   dragging: boolean;
   onPointerDown: (event: PointerEvent<HTMLDivElement>) => void;
@@ -1187,7 +1192,20 @@ function DeviceCard({
   onPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
 }) {
   const stripe = nodeStripeColor(node, healthOverlay);
-  const compactRackNode = Boolean(node.rackId && node.height < 34);
+  const compactRackNode = Boolean(
+    node.rackId && node.height < (readableLabels ? 30 : 34),
+  );
+  const showSecondaryLabel = readableLabels
+    ? node.height >= 48
+    : !compactRackNode;
+  const readableNameStyle = readableLabels
+    ? {
+        display: "-webkit-box",
+        WebkitBoxOrient: "vertical" as const,
+        WebkitLineClamp: node.height >= 58 ? 2 : 1,
+        overflow: "hidden",
+      }
+    : undefined;
   return (
     <div
       data-visualizer-interactive="true"
@@ -1205,7 +1223,13 @@ function DeviceCard({
         dragging
           ? "transition-none"
           : "transition-[opacity,background-color,border-color,box-shadow,transform] duration-150"
-      } ${compactRackNode ? "px-2 py-1 pr-10" : "px-2.5 py-2 pr-12"} ${
+      } ${
+        readableLabels
+          ? "px-3 py-2.5 pr-14"
+          : compactRackNode
+            ? "px-2 py-1 pr-10"
+            : "px-2.5 py-2 pr-12"
+      } ${
         selected
           ? "border-[var(--accent-primary-border)] shadow-[var(--shadow-selected)]"
           : "border-[var(--border-default)] hover:-translate-y-px hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
@@ -1227,10 +1251,18 @@ function DeviceCard({
           <DeviceTypeIcon type={node.device.deviceType} className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-semibold text-[var(--text-primary)]">
+          <div
+            className={`font-semibold text-[var(--text-primary)] ${
+              readableLabels
+                ? "text-[13px] leading-[1.15]"
+                : "truncate text-xs"
+            }`}
+            style={readableNameStyle}
+            title={node.device.hostname}
+          >
             {node.device.hostname}
           </div>
-          {!compactRackNode && (
+          {showSecondaryLabel && (
             <div className="truncate font-mono text-[9px] text-[var(--text-tertiary)]">
               {formatDeviceAddress(
                 {
