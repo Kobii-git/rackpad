@@ -6,6 +6,11 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Changed
+
+- Normal Visualizer and Pyramid device-type filters now multi-select by default:
+  click categories to toggle them together, and click All to reset.
+
 ## [1.5.0] - 2026-05-31
 
 Rackpad 1.5.0 promotes the beta topology, discovery, monitoring, and IPAM
