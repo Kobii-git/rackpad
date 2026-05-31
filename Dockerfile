@@ -3,6 +3,10 @@
 FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS deps
 WORKDIR /app
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci
 
@@ -16,6 +20,10 @@ RUN npm run build
 
 FROM --platform=$TARGETPLATFORM node:22-bookworm-slim AS prod-deps
 WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci --omit=dev
