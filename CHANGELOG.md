@@ -6,6 +6,25 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.5.4-beta] - 2026-06-01
+
+### Added
+
+- Added Visualizer rack width and shelf layout controls so dense racks can be
+  expanded for readable device names without changing rack inventory data.
+- Discovery scans can now target an existing IPAM subnet, all IPAM subnets, or
+  a manually typed CIDR.
+
+### Fixed
+
+- Host-shared VM/container devices now inherit and explain the parent host IP
+  without forcing a duplicate IPAM assignment.
+- IPAM now allows interface assignments to use an address that is also marked
+  as a DHCP gateway or DNS server, covering firewall VLAN interface IPs.
+- Discovery auto-map now imports DHCP-scope addresses as DHCP reservations.
+- Deleting an imported device now resets linked discovery rows back to `new`
+  instead of leaving stale `imported` entries.
+
 ## [1.5.3-beta] - 2026-06-01
 
 ### Added

@@ -28,10 +28,14 @@ import {
   useStore,
 } from "@/lib/store";
 import type {
+  DhcpScope,
   Device,
   DiscoveredDevice,
   DiscoveryScanResult,
+  IpAllocationMode,
+  Subnet,
 } from "@/lib/types";
+import { ipToInt } from "@/lib/utils";
 import {
   applySortDirection,
   compareDate,
@@ -68,6 +72,7 @@ type DiscoverySortKey =
   | "match"
   | "status"
   | "lastSeen";
+type DiscoveryScanTarget = "all" | "manual" | string;
 
 export default function DiscoveryView() {
   const currentUser = useStore((s) => s.currentUser);
@@ -75,10 +80,14 @@ export default function DiscoveryView() {
   const devices = useStore((s) => s.devices);
   const deviceTypes = useStore((s) => s.deviceTypes);
   const subnets = useStore((s) => s.subnets);
+  const scopes = useStore((s) => s.scopes);
   const discoveredDevices = useStore((s) => s.discoveredDevices);
   const canEdit = canEditInventory(currentUser);
   const canManageDiscovery = currentUser?.role === "admin";
   const [scanCidr, setScanCidr] = useState("");
+  const [scanTarget, setScanTarget] = useState<DiscoveryScanTarget>(
+    subnets[0]?.id ?? "manual",
+  );
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [draft, setDraft] = useState<DiscoveryDraft | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -231,6 +240,7 @@ export default function DiscoveryView() {
 
   const drawerDefaults = useMemo(() => {
     if (!selected) return undefined;
+    const ipPlan = ipPlanForDiscoveredHost(selected.ipAddress, subnets, scopes);
     return {
       hostname:
         selected.hostname ??
@@ -241,17 +251,30 @@ export default function DiscoveryView() {
       manufacturer: selected.vendor ?? "",
       managementIp: selected.ipAddress,
       macAddress: selected.macAddress ?? "",
+      ipSubnetId: ipPlan.subnet?.id ?? "",
+      ipAllocationMode: ipPlan.allocationMode,
+      dhcpScopeId: ipPlan.dhcpScope?.id ?? "",
       placement: selected.placement ?? "room",
       notes: selected.notes ?? "",
       status: "online" as const,
     };
-  }, [selected]);
+  }, [scopes, selected, subnets]);
 
   useEffect(() => {
-    if (!scanCidr) {
+    if (scanTarget === "manual" && !scanCidr && subnets[0]?.id) {
+      setScanTarget(subnets[0].id);
+      return;
+    }
+    if (scanTarget === "manual" && !scanCidr) {
       setScanCidr(subnets[0]?.cidr ?? "");
     }
-  }, [scanCidr, subnets]);
+  }, [scanCidr, scanTarget, subnets]);
+
+  useEffect(() => {
+    if (scanTarget === "manual" || scanTarget === "all") return;
+    if (subnets.some((subnet) => subnet.id === scanTarget)) return;
+    setScanTarget(subnets[0]?.id ?? "manual");
+  }, [scanTarget, subnets]);
 
   useEffect(() => {
     if (!filteredDevices.length) {
@@ -283,13 +306,24 @@ export default function DiscoveryView() {
   }, [selected]);
 
   async function handleScan() {
-    if (!scanCidr.trim()) return;
+    const scanCidrs =
+      scanTarget === "all"
+        ? subnets.map((subnet) => subnet.cidr)
+        : scanTarget === "manual"
+          ? [scanCidr.trim()].filter(Boolean)
+          : subnets
+              .filter((subnet) => subnet.id === scanTarget)
+              .map((subnet) => subnet.cidr);
+    if (scanCidrs.length === 0) return;
     setScanning(true);
     setError("");
     setAutoMapMessage("");
     try {
-      const result = await scanDiscoveredSubnet(scanCidr.trim());
-      setLastScanResult(result);
+      const results: DiscoveryScanResult[] = [];
+      for (const cidr of scanCidrs) {
+        results.push(await scanDiscoveredSubnet(cidr));
+      }
+      setLastScanResult(mergeScanResults(results));
       setFilter("all");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to scan subnet.");
@@ -386,6 +420,11 @@ export default function DiscoveryView() {
 
     for (const discovered of autoMapCandidates) {
       try {
+        const ipPlan = ipPlanForDiscoveredHost(
+          discovered.ipAddress,
+          subnets,
+          scopes,
+        );
         const created = await createDevice({
           hostname:
             discovered.hostname?.trim() ||
@@ -396,6 +435,8 @@ export default function DiscoveryView() {
           manufacturer: discovered.vendor ?? undefined,
           managementIp: discovered.ipAddress,
           macAddress: discovered.macAddress ?? undefined,
+          ipAllocationMode: ipPlan.allocationMode,
+          dhcpScopeId: ipPlan.dhcpScope?.id ?? null,
           placement: autoMapPlacement(discovered),
           status: "online",
           notes: discovered.notes ?? undefined,
@@ -474,22 +515,50 @@ export default function DiscoveryView() {
         }
         actions={
           canEdit ? (
-            <div className="flex items-center gap-2">
-              <Input
-                value={scanCidr}
-                onChange={(event) => setScanCidr(event.target.value)}
-                placeholder="10.0.21.0/24"
-                className="w-40"
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={scanTarget}
+                onChange={(event) => setScanTarget(event.target.value)}
+                className="rk-control h-8 w-56 px-2 text-xs text-[var(--text-primary)]"
                 disabled={!canManageDiscovery}
-              />
+                aria-label="Discovery scan target"
+              >
+                {subnets.length > 0 && (
+                  <option value="all">All IPAM subnets</option>
+                )}
+                {subnets.map((subnet) => (
+                  <option key={subnet.id} value={subnet.id}>
+                    {subnet.cidr} · {subnet.name}
+                  </option>
+                ))}
+                <option value="manual">Manual CIDR</option>
+              </select>
+              {scanTarget === "manual" && (
+                <Input
+                  value={scanCidr}
+                  onChange={(event) => setScanCidr(event.target.value)}
+                  placeholder="10.0.21.0/24"
+                  className="w-40"
+                  disabled={!canManageDiscovery}
+                />
+              )}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => void handleScan()}
-                disabled={!canManageDiscovery || scanning}
+                disabled={
+                  !canManageDiscovery ||
+                  scanning ||
+                  (scanTarget === "manual" && !scanCidr.trim()) ||
+                  (scanTarget === "all" && subnets.length === 0)
+                }
               >
                 <Search className="size-3.5" />
-                {scanning ? "Scanning..." : "Scan subnet"}
+                {scanning
+                  ? "Scanning..."
+                  : scanTarget === "all"
+                    ? "Scan all"
+                    : "Scan subnet"}
               </Button>
             </div>
           ) : undefined
@@ -1184,6 +1253,75 @@ function autoMapPlacement(
     return discovered.placement;
   }
   return "room";
+}
+
+function ipPlanForDiscoveredHost(
+  ipAddress: string,
+  subnets: Subnet[],
+  scopes: DhcpScope[],
+): {
+  subnet?: Subnet;
+  allocationMode: IpAllocationMode;
+  dhcpScope?: DhcpScope;
+} {
+  const subnet = subnets.find((entry) => cidrContainsIp(entry.cidr, ipAddress));
+  const dhcpScope = subnet
+    ? scopes.find(
+        (scope) =>
+          scope.subnetId === subnet.id &&
+          ipInRange(ipAddress, scope.startIp, scope.endIp),
+      )
+    : undefined;
+  return {
+    subnet,
+    allocationMode: dhcpScope ? "dhcp-reservation" : "static",
+    dhcpScope,
+  };
+}
+
+function mergeScanResults(results: DiscoveryScanResult[]): DiscoveryScanResult {
+  const rowsById = new Map<string, DiscoveredDevice>();
+  for (const result of results) {
+    for (const row of result.rows) {
+      rowsById.set(row.id, row);
+    }
+  }
+  return {
+    scannedHostCount: results.reduce(
+      (sum, result) => sum + result.scannedHostCount,
+      0,
+    ),
+    discoveredCount: results.reduce(
+      (sum, result) => sum + result.discoveredCount,
+      0,
+    ),
+    macAddressCount: results.reduce(
+      (sum, result) => sum + result.macAddressCount,
+      0,
+    ),
+    vendorCount: results.reduce((sum, result) => sum + result.vendorCount, 0),
+    technicalCount: results.reduce(
+      (sum, result) => sum + result.technicalCount,
+      0,
+    ),
+    diagnostics: results.flatMap((result) => result.diagnostics),
+    rows: [...rowsById.values()],
+  };
+}
+
+function cidrContainsIp(cidr: string, ipAddress: string) {
+  const [networkAddress, prefixRaw] = cidr.split("/");
+  const prefix = Number.parseInt(prefixRaw, 10);
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) return false;
+  const ip = ipToInt(ipAddress);
+  const network = ipToInt(networkAddress);
+  const size = 2 ** (32 - prefix);
+  return ip >= network && ip <= network + size - 1;
+}
+
+function ipInRange(ipAddress: string, startIp: string, endIp: string) {
+  const target = ipToInt(ipAddress);
+  return target >= ipToInt(startIp) && target <= ipToInt(endIp);
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

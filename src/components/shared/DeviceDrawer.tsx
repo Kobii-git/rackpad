@@ -476,6 +476,8 @@ export function DeviceDrawer({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
+    const usesHostSharedNetworking =
+      canUseHostSharedNetworking && form.networkMode === "host-shared";
 
     if (!form.hostname.trim()) {
       setError("Hostname is required.");
@@ -483,6 +485,7 @@ export function DeviceDrawer({
     }
     if (
       !isEdit &&
+      !usesHostSharedNetworking &&
       managementIp &&
       managementIpInDhcpPool &&
       form.ipAllocationMode !== "dhcp-reservation"
@@ -494,6 +497,7 @@ export function DeviceDrawer({
     }
     if (
       !isEdit &&
+      !usesHostSharedNetworking &&
       managementIp &&
       form.ipAllocationMode === "dhcp-reservation" &&
       !effectiveDhcpScopeId
@@ -508,6 +512,8 @@ export function DeviceDrawer({
         .split(",")
         .map((tag) => tag.trim())
         .filter(Boolean);
+      const nextNetworkMode: NonNullable<Device["networkMode"]> =
+        usesHostSharedNetworking ? "host-shared" : "normal";
 
       const basePayload = {
         hostname: form.hostname.trim(),
@@ -516,9 +522,11 @@ export function DeviceDrawer({
         manufacturer: form.manufacturer.trim() || undefined,
         model: form.model.trim() || undefined,
         serial: form.serial.trim() || undefined,
-        managementIp: form.managementIp.trim() || undefined,
+        managementIp: usesHostSharedNetworking
+          ? form.managementIp.trim() || parentHost?.managementIp || undefined
+          : form.managementIp.trim() || undefined,
         macAddress: form.macAddress.trim() || undefined,
-        networkMode: canUseHostSharedNetworking ? form.networkMode : "normal",
+        networkMode: nextNetworkMode,
         status: form.status,
         placement: form.placement,
         parentDeviceId:
@@ -882,7 +890,17 @@ export function DeviceDrawer({
                           <button
                             key={mode}
                             type="button"
-                            onClick={() => set("networkMode", mode)}
+                            onClick={() =>
+                              setForm((prev) => ({
+                                ...prev,
+                                networkMode: mode,
+                                managementIp:
+                                  mode === "host-shared" &&
+                                  parentHost?.managementIp
+                                    ? parentHost.managementIp
+                                    : prev.managementIp,
+                              }))
+                            }
                             className={cn(
                               "rounded-[var(--radius-xs)] border px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-colors",
                               form.networkMode === mode
@@ -903,8 +921,8 @@ export function DeviceDrawer({
                           {parentHost?.managementIp
                             ? ` at ${parentHost.managementIp}`
                             : "'s management IP"}
-                          . Rackpad will not create a duplicate IPAM row for
-                          this child.
+                          . Leave the inherited IP here or blank; Rackpad will
+                          not create a duplicate IPAM row for this child.
                         </p>
                       )}
                     </Field>

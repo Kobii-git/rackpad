@@ -15,12 +15,16 @@ export type VisualizerColumnKind = "rack" | "room";
 export type VisualizerLooseDevicePlacement = "beside-racks" | "below-racks";
 export type VisualizerLayoutMode = "grouped" | "pyramid" | "diagram";
 export type VisualizerRackFaceMode = "front" | "rear" | "both";
+export type VisualizerRackScale = "compact" | "normal" | "wide" | "xwide";
+export type VisualizerShelfLayout = "auto" | "stacked" | "expanded";
 
 export interface VisualizerLayoutOptions {
   topologyLayout: VisualizerLayoutMode;
   looseDevicePlacement: VisualizerLooseDevicePlacement;
   includeRoomOnlySections: boolean;
   rackFaceMode: VisualizerRackFaceMode;
+  rackScale: VisualizerRackScale;
+  shelfLayout: VisualizerShelfLayout;
   readableLabels: boolean;
   customNodePositions: Record<string, VisualizerPoint>;
 }

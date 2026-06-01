@@ -40,6 +40,8 @@ import type {
   VisualizerNode,
   VisualizerPort,
   VisualizerRackFaceMode,
+  VisualizerRackScale,
+  VisualizerShelfLayout,
 } from "./types";
 
 const RACK_ZONE_X = 28;
@@ -85,8 +87,53 @@ const DEFAULT_LAYOUT_OPTIONS: VisualizerLayoutOptions = {
   looseDevicePlacement: "beside-racks",
   includeRoomOnlySections: false,
   rackFaceMode: "front",
+  rackScale: "normal",
+  shelfLayout: "auto",
   readableLabels: false,
   customNodePositions: {},
+};
+
+const RACK_SINGLE_WIDTH_BY_SCALE: Record<VisualizerRackScale, number> = {
+  compact: RACK_PANEL_WIDTH,
+  normal: RACK_PANEL_WIDTH,
+  wide: 680,
+  xwide: 900,
+};
+
+const RACK_SINGLE_READABLE_WIDTH_BY_SCALE: Record<VisualizerRackScale, number> =
+  {
+    compact: RACK_PANEL_READABLE_WIDTH,
+    normal: RACK_PANEL_READABLE_WIDTH,
+    wide: 760,
+    xwide: 980,
+  };
+
+const RACK_DUAL_WIDTH_BY_SCALE: Record<VisualizerRackScale, number> = {
+  compact: RACK_PANEL_DUAL_FACE_WIDTH,
+  normal: RACK_PANEL_DUAL_FACE_WIDTH,
+  wide: 940,
+  xwide: 1180,
+};
+
+const RACK_DUAL_READABLE_WIDTH_BY_SCALE: Record<VisualizerRackScale, number> = {
+  compact: RACK_PANEL_DUAL_FACE_READABLE_WIDTH,
+  normal: RACK_PANEL_DUAL_FACE_READABLE_WIDTH,
+  wide: 1040,
+  xwide: 1280,
+};
+
+const RACK_NODE_WIDTH_BY_SCALE: Record<VisualizerRackScale, number> = {
+  compact: RACK_NODE_WIDTH,
+  normal: RACK_NODE_WIDTH,
+  wide: 360,
+  xwide: 460,
+};
+
+const RACK_NODE_READABLE_WIDTH_BY_SCALE: Record<VisualizerRackScale, number> = {
+  compact: RACK_NODE_READABLE_WIDTH,
+  normal: RACK_NODE_READABLE_WIDTH,
+  wide: 520,
+  xwide: 640,
 };
 
 const NATURAL_COLLATOR = new Intl.Collator(undefined, {
@@ -236,14 +283,11 @@ export function buildVisualizerModel(
   const rackPanels: RackPanel[] = [];
   let rackSectionX = RACK_ZONE_X + ZONE_PADDING;
   const rackSectionY = ZONE_Y + ZONE_HEADER;
-  const rackPanelWidth =
-    layout.rackFaceMode === "both"
-      ? layout.readableLabels
-        ? RACK_PANEL_DUAL_FACE_READABLE_WIDTH
-        : RACK_PANEL_DUAL_FACE_WIDTH
-      : layout.readableLabels
-        ? RACK_PANEL_READABLE_WIDTH
-        : RACK_PANEL_WIDTH;
+  const rackPanelWidth = rackPanelWidthForLayout(
+    layout.rackFaceMode,
+    layout.rackScale,
+    layout.readableLabels,
+  );
   for (const sectionInput of rackRoomInputs) {
     const sectionLooseDevices = sectionInput.room
       ? looseDevices.filter(
@@ -289,6 +333,8 @@ export function buildVisualizerModel(
         y: rackPanelY,
         width: rackPanelWidth,
         rackFaceMode: layout.rackFaceMode,
+        rackScale: layout.rackScale,
+        shelfLayout: layout.shelfLayout,
         readableLabels: layout.readableLabels,
         portsByDeviceId,
         portLinkByPortId,
@@ -709,6 +755,8 @@ function buildRackPanel(input: {
   y: number;
   width: number;
   rackFaceMode: VisualizerRackFaceMode;
+  rackScale: VisualizerRackScale;
+  shelfLayout: VisualizerShelfLayout;
   portsByDeviceId: Record<string, Port[]>;
   portLinkByPortId: Record<string, PortLink>;
   virtualSwitchById: Record<string, VirtualSwitch>;
@@ -726,6 +774,8 @@ function buildRackPanel(input: {
     input.devices,
     input.portsByDeviceId,
     input.readableLabels,
+    input.shelfLayout,
+    input.rackScale,
   );
   const allMountedDevices = input.devices.filter(
     (device) => device.startU != null,
@@ -749,8 +799,8 @@ function buildRackPanel(input: {
   const useDualFaceLayout =
     input.rackFaceMode === "both" && mountedRearCount > 0;
   const baseRackNodeWidth = input.readableLabels
-    ? RACK_NODE_READABLE_WIDTH
-    : RACK_NODE_WIDTH;
+    ? RACK_NODE_READABLE_WIDTH_BY_SCALE[input.rackScale]
+    : RACK_NODE_WIDTH_BY_SCALE[input.rackScale];
   const mountedNodeWidth = useDualFaceLayout
     ? 0
     : Math.min(baseRackNodeWidth, Math.max(168, bodyWidth - 64));
@@ -849,13 +899,14 @@ function buildRackPanel(input: {
         ? 34
         : 4;
     const availableWidth = parentNode.width - (input.readableLabels ? 18 : 12);
-    const columns = input.readableLabels
-      ? children.length >= 4
-        ? 2
-        : 1
-      : children.length > 3
-        ? 2
-        : Math.max(1, children.length);
+    const columns = shelfColumnCount({
+      childCount: children.length,
+      availableWidth,
+      readableLabels: input.readableLabels,
+      rackScale: input.rackScale,
+      shelfLayout: input.shelfLayout,
+      useDualFaceLayout,
+    });
     const rows = Math.ceil(children.length / columns);
     const sortedChildren = [...children].sort(compareDeviceName);
     const childRows = Array.from({ length: rows }, (_, rowIndex) =>
@@ -887,8 +938,7 @@ function buildRackPanel(input: {
       const rowHeight = Math.max(
         input.readableLabels ? 44 : 22,
         Math.floor(
-          ((availableHeight - gap * Math.max(0, rows - 1)) *
-            rowWeights[row]) /
+          ((availableHeight - gap * Math.max(0, rows - 1)) * rowWeights[row]) /
             totalRowWeight,
         ),
       );
@@ -980,6 +1030,8 @@ function rackUnitHeightForDevices(
   devices: Device[],
   portsByDeviceId: Record<string, Port[]>,
   readableLabels = false,
+  shelfLayout: VisualizerShelfLayout = "auto",
+  rackScale: VisualizerRackScale = "normal",
 ) {
   const childrenByParent = groupBy(
     devices.filter((device) => device.parentDeviceId),
@@ -989,7 +1041,14 @@ function rackUnitHeightForDevices(
     const maxShelfDemand = Math.max(
       0,
       ...Object.values(childrenByParent).map((children) => {
-        const columns = children.length >= 4 ? 2 : 1;
+        const columns = shelfColumnCount({
+          childCount: children.length,
+          availableWidth: RACK_NODE_READABLE_WIDTH_BY_SCALE[rackScale] - 18,
+          readableLabels,
+          rackScale,
+          shelfLayout,
+          useDualFaceLayout: false,
+        });
         const rows = Math.ceil(children.length / columns);
         const rowWeights = Array.from({ length: rows }, (_, rowIndex) => {
           const row = children.slice(
@@ -2163,7 +2222,8 @@ function deviceSortLabel(device: Device) {
 
 function deviceSortIpValue(device: Device) {
   return (
-    parseSortableIp(device.managementIp) ?? parseSortableIp(deviceSortLabel(device))
+    parseSortableIp(device.managementIp) ??
+    parseSortableIp(deviceSortLabel(device))
   );
 }
 
@@ -2176,10 +2236,7 @@ function parseSortableIp(value?: string | null) {
   const octets = match.slice(1, 5).map(Number);
   if (octets.some((octet) => octet < 0 || octet > 255)) return null;
   return (
-    octets[0] * 256 ** 3 +
-    octets[1] * 256 ** 2 +
-    octets[2] * 256 +
-    octets[3]
+    octets[0] * 256 ** 3 + octets[1] * 256 ** 2 + octets[2] * 256 + octets[3]
   );
 }
 
@@ -2204,6 +2261,54 @@ function maxOf<T>(items: T[], getValue: (item: T) => number, fallback: number) {
   return items.length === 0
     ? fallback
     : Math.max(...items.map((item) => getValue(item)));
+}
+
+function rackPanelWidthForLayout(
+  rackFaceMode: VisualizerRackFaceMode,
+  rackScale: VisualizerRackScale,
+  readableLabels: boolean,
+) {
+  if (rackFaceMode === "both") {
+    return readableLabels
+      ? RACK_DUAL_READABLE_WIDTH_BY_SCALE[rackScale]
+      : RACK_DUAL_WIDTH_BY_SCALE[rackScale];
+  }
+  return readableLabels
+    ? RACK_SINGLE_READABLE_WIDTH_BY_SCALE[rackScale]
+    : RACK_SINGLE_WIDTH_BY_SCALE[rackScale];
+}
+
+function shelfColumnCount(input: {
+  childCount: number;
+  availableWidth: number;
+  readableLabels: boolean;
+  rackScale: VisualizerRackScale;
+  shelfLayout: VisualizerShelfLayout;
+  useDualFaceLayout: boolean;
+}) {
+  if (input.childCount <= 1) return 1;
+  const minChildWidth = input.readableLabels
+    ? 168
+    : input.useDualFaceLayout
+      ? 78
+      : 88;
+  const fitColumns = Math.max(
+    1,
+    Math.floor((input.availableWidth + 8) / (minChildWidth + 8)),
+  );
+
+  if (input.shelfLayout === "stacked") return 1;
+  if (input.shelfLayout === "expanded") {
+    const maxExpandedColumns = input.rackScale === "xwide" ? 4 : 3;
+    return Math.max(
+      1,
+      Math.min(input.childCount, fitColumns, maxExpandedColumns),
+    );
+  }
+  if (input.readableLabels) {
+    return Math.min(input.childCount, Math.max(1, Math.min(fitColumns, 2)));
+  }
+  return input.childCount > 3 ? 2 : Math.max(1, input.childCount);
 }
 
 function clampNumber(value: number, min: number, max: number) {

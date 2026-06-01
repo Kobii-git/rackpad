@@ -627,6 +627,12 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
           )
         }
 
+        db.prepare(`
+          UPDATE discoveredDevices
+          SET importedDeviceId = NULL, status = 'new'
+          WHERE importedDeviceId = ?
+        `).run(deviceId)
+
         db.prepare('DELETE FROM devices WHERE id = ?').run(deviceId)
       },
     )

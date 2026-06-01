@@ -82,6 +82,29 @@ function parseDiscoveredDevice(row: Record<string, unknown>) {
   };
 }
 
+function resetStaleImportedDiscoveryRows(labId?: string) {
+  if (labId) {
+    db.prepare(`
+      UPDATE discoveredDevices
+      SET importedDeviceId = NULL, status = 'new'
+      WHERE labId = ?
+        AND importedDeviceId IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM devices WHERE devices.id = discoveredDevices.importedDeviceId
+        )
+    `).run(labId);
+    return;
+  }
+  db.prepare(`
+    UPDATE discoveredDevices
+    SET importedDeviceId = NULL, status = 'new'
+    WHERE importedDeviceId IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM devices WHERE devices.id = discoveredDevices.importedDeviceId
+      )
+  `).run();
+}
+
 function ipToInt(ipAddress: string) {
   return (
     ipAddress
@@ -648,6 +671,7 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { labId?: string; status?: string } }>(
     "/",
     async (req) => {
+      resetStaleImportedDiscoveryRows(req.query.labId);
       let sql = "SELECT * FROM discoveredDevices WHERE 1=1";
       const params: unknown[] = [];
 
@@ -688,6 +712,7 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     if (!lab) {
       return reply.status(404).send({ error: "Lab not found." });
     }
+    resetStaleImportedDiscoveryRows(labId);
 
     const scannedAt = new Date().toISOString();
     const hosts = cidrHosts(cidr);

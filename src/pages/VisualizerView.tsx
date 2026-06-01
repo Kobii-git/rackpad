@@ -11,6 +11,8 @@ import type {
   VisualizerLooseDevicePlacement,
   VisualizerPoint,
   VisualizerRackFaceMode,
+  VisualizerRackScale,
+  VisualizerShelfLayout,
 } from "./visualizer/types";
 
 const HEALTH_STORAGE_KEY = "rackpad.visualizer.health";
@@ -19,6 +21,8 @@ const LOOSE_PLACEMENT_STORAGE_KEY = "rackpad.visualizer.loose-placement";
 const ROOM_ONLY_SECTIONS_STORAGE_KEY = "rackpad.visualizer.room-only-sections";
 const LAYOUT_MODE_STORAGE_KEY = "rackpad.visualizer.layout-mode";
 const RACK_FACE_MODE_STORAGE_KEY = "rackpad.visualizer.rack-face-mode";
+const RACK_SCALE_STORAGE_KEY = "rackpad.visualizer.rack-scale";
+const SHELF_LAYOUT_STORAGE_KEY = "rackpad.visualizer.shelf-layout";
 const READABLE_LABELS_STORAGE_KEY = "rackpad.visualizer.readable-labels";
 const CUSTOM_NODE_POSITIONS_STORAGE_KEY =
   "rackpad.visualizer.custom-node-positions";
@@ -55,6 +59,12 @@ export default function VisualizerView() {
   );
   const [rackFaceMode, setRackFaceMode] = useState<VisualizerRackFaceMode>(() =>
     readRackFaceMode(RACK_FACE_MODE_STORAGE_KEY),
+  );
+  const [rackScale, setRackScale] = useState<VisualizerRackScale>(() =>
+    readRackScale(RACK_SCALE_STORAGE_KEY),
+  );
+  const [shelfLayout, setShelfLayout] = useState<VisualizerShelfLayout>(() =>
+    readShelfLayout(SHELF_LAYOUT_STORAGE_KEY),
   );
   const [readableLabels, setReadableLabels] = useState(() =>
     readBoolean(READABLE_LABELS_STORAGE_KEY, false),
@@ -99,6 +109,8 @@ export default function VisualizerView() {
           looseDevicePlacement,
           includeRoomOnlySections,
           rackFaceMode,
+          rackScale,
+          shelfLayout,
           readableLabels,
           customNodePositions,
         },
@@ -118,6 +130,8 @@ export default function VisualizerView() {
       collapsedGroups,
       layoutMode,
       rackFaceMode,
+      rackScale,
+      shelfLayout,
       readableLabels,
       customNodePositions,
       looseDevicePlacement,
@@ -241,6 +255,35 @@ export default function VisualizerView() {
                   <option value="front">Front</option>
                   <option value="rear">Rear</option>
                   <option value="both">Both</option>
+                </select>
+                <select
+                  value={rackScale}
+                  onChange={(event) => {
+                    const next = event.target.value as VisualizerRackScale;
+                    setRackScale(next);
+                    writeString(RACK_SCALE_STORAGE_KEY, next);
+                  }}
+                  className="rk-control h-8 w-32 px-2 text-xs text-[var(--text-primary)]"
+                  aria-label="Rack visual width"
+                >
+                  <option value="compact">Compact rack</option>
+                  <option value="normal">Normal rack</option>
+                  <option value="wide">Wide rack</option>
+                  <option value="xwide">Extra wide</option>
+                </select>
+                <select
+                  value={shelfLayout}
+                  onChange={(event) => {
+                    const next = event.target.value as VisualizerShelfLayout;
+                    setShelfLayout(next);
+                    writeString(SHELF_LAYOUT_STORAGE_KEY, next);
+                  }}
+                  className="rk-control h-8 w-32 px-2 text-xs text-[var(--text-primary)]"
+                  aria-label="Shelf device layout"
+                >
+                  <option value="auto">Auto shelf</option>
+                  <option value="stacked">Stacked shelf</option>
+                  <option value="expanded">Expanded shelf</option>
                 </select>
                 <VisualizerToggle
                   checked={looseDevicePlacement === "below-racks"}
@@ -430,6 +473,26 @@ function readRackFaceMode(key: string): VisualizerRackFaceMode {
     return value === "rear" || value === "both" ? value : "front";
   } catch {
     return "front";
+  }
+}
+
+function readRackScale(key: string): VisualizerRackScale {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value === "compact" || value === "wide" || value === "xwide"
+      ? value
+      : "normal";
+  } catch {
+    return "normal";
+  }
+}
+
+function readShelfLayout(key: string): VisualizerShelfLayout {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value === "stacked" || value === "expanded" ? value : "auto";
+  } catch {
+    return "auto";
   }
 }
 

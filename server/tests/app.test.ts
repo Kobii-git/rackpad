@@ -1222,6 +1222,70 @@ test("host-shared virtual devices can share parent management IP", async () => {
   assert.equal(child.managementIp, "192.168.80.10");
 });
 
+test("deleting imported devices resets linked discovery rows", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "discovered-switch",
+      deviceType: "switch",
+      status: "online",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  db.prepare(`
+    INSERT INTO discoveredDevices
+      (id, labId, ipAddress, hostname, displayName, deviceType, placement, macAddress, vendor, source, status, notes, importedDeviceId, technicalRole, technicalReason, lastSeen, lastScannedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    "disc_delete_reset",
+    "lab_home",
+    "192.168.88.20",
+    "discovered-switch",
+    null,
+    "switch",
+    "room",
+    null,
+    null,
+    "test",
+    "imported",
+    null,
+    device.id,
+    null,
+    null,
+    new Date().toISOString(),
+    new Date().toISOString(),
+  );
+
+  const deleteRes = await app.inject({
+    method: "DELETE",
+    url: `/api/devices/${device.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(deleteRes.statusCode, 204);
+
+  const row = db
+    .prepare(
+      "SELECT status, importedDeviceId FROM discoveredDevices WHERE id = ?",
+    )
+    .get("disc_delete_reset") as {
+    status: string;
+    importedDeviceId: string | null;
+  };
+  assert.equal(row.status, "new");
+  assert.equal(row.importedDeviceId, null);
+});
+
 test("monitoring endpoints validate config, persist results, and stay admin-only", async () => {
   const adminToken = await bootstrapAdmin();
 
@@ -1708,8 +1772,13 @@ test("ip assignments support DHCP reservations and protect technical IPs", async
       hostname: "dns-overwrite",
     },
   });
-  assert.equal(dnsInterfaceRes.statusCode, 400);
-  assert.match(dnsInterfaceRes.body, /DNS/i);
+  assert.equal(dnsInterfaceRes.statusCode, 201);
+  const dnsInterface = readJson(dnsInterfaceRes) as {
+    assignmentType: string;
+    ipAddress: string;
+  };
+  assert.equal(dnsInterface.assignmentType, "interface");
+  assert.equal(dnsInterface.ipAddress, "192.168.50.2");
 
   const firewallRes = await app.inject({
     method: "POST",

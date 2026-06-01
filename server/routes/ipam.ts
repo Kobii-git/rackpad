@@ -17,6 +17,11 @@ const IP_ZONE_KINDS = ['static', 'dhcp', 'reserved', 'infrastructure'] as const
 const ASSIGNMENT_TYPES = ['device', 'interface', 'vm', 'container', 'reserved', 'infrastructure'] as const
 const ALLOCATION_MODES = ['static', 'dhcp-reservation'] as const
 const TECHNICAL_ASSIGNMENT_TYPES = new Set<string>(['reserved', 'infrastructure'])
+const TECHNICAL_OVERLAY_ASSIGNMENT_TYPES = new Set<string>([
+  'interface',
+  'reserved',
+  'infrastructure',
+])
 const HOST_ASSIGNMENT_TYPES = new Set<string>(['device', 'interface', 'vm', 'container'])
 
 function parseScope(row: Record<string, unknown>) {
@@ -112,9 +117,9 @@ function validateAssignmentSemantics(input: {
   assertAssignmentSubnet(input.subnetId, input.ipAddress)
 
   const technical = dhcpTechnicalRole(input.subnetId, input.ipAddress)
-  if (technical && !TECHNICAL_ASSIGNMENT_TYPES.has(input.assignmentType)) {
+  if (technical && !TECHNICAL_OVERLAY_ASSIGNMENT_TYPES.has(input.assignmentType)) {
     throw new ValidationError(
-      `${input.ipAddress} is ${technical.reason}; keep it as reserved or infrastructure instead of assigning it as a normal endpoint.`,
+      `${input.ipAddress} is ${technical.reason}; document it as an interface, reserved, or infrastructure address instead of assigning it as a normal endpoint.`,
     )
   }
 
