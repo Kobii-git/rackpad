@@ -6,6 +6,14 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.5.6-beta] - 2026-06-04
+
+### Fixed
+
+- Visualizer shelf child devices now respect their own `heightU` footprint and
+  reserve enough rack height for multi-U shelf devices instead of compressing
+  every child into the parent shelf height.
+
 ## [1.5.5-beta] - 2026-06-04
 
 ### Added

@@ -912,10 +912,18 @@ function buildRackPanel(input: {
     const childRows = Array.from({ length: rows }, (_, rowIndex) =>
       sortedChildren.slice(rowIndex * columns, rowIndex * columns + columns),
     );
-    const rowWeights = childRows.map((row) =>
-      Math.max(1, ...row.map((device) => device.heightU ?? 1)),
+    const rowHeights = childRows.map((row) =>
+      Math.max(
+        input.readableLabels ? 44 : NODE_HEIGHT,
+        ...row.map((device) =>
+          shelfChildHeightForDevice(
+            device,
+            input.readableLabels,
+            input.rackScale,
+          ),
+        ),
+      ),
     );
-    const totalRowWeight = rowWeights.reduce((sum, value) => sum + value, 0);
     const availableHeight = Math.max(
       input.readableLabels ? 44 : 24,
       parentBounds.height - headerReserve - 6,
@@ -935,11 +943,16 @@ function buildRackPanel(input: {
     sortedChildren.forEach((device, index) => {
       const col = index % columns;
       const row = Math.floor(index / columns);
-      const rowHeight = Math.max(
+      const rowHeight = rowHeights[row] ?? (input.readableLabels ? 44 : 22);
+      const childHeight = Math.max(
         input.readableLabels ? 44 : 22,
-        Math.floor(
-          ((availableHeight - gap * Math.max(0, rows - 1)) * rowWeights[row]) /
-            totalRowWeight,
+        Math.min(
+          rowHeight,
+          shelfChildHeightForDevice(
+            device,
+            input.readableLabels,
+            input.rackScale,
+          ),
         ),
       );
       nodes.push(
@@ -948,7 +961,10 @@ function buildRackPanel(input: {
           x: startX + col * (childWidth + gap),
           y: parentNode.y + headerReserve + rowOffset,
           width: childWidth,
-          height: Math.min(rowHeight, availableHeight - rowOffset),
+          height: Math.max(
+            input.readableLabels ? 44 : 22,
+            Math.min(childHeight, availableHeight - rowOffset),
+          ),
           zoneId: input.room
             ? `room:${input.room.id}:rack:${input.rack.id}`
             : `rack:${input.rack.id}`,
@@ -1037,67 +1053,65 @@ function rackUnitHeightForDevices(
     devices.filter((device) => device.parentDeviceId),
     (device) => device.parentDeviceId ?? "",
   );
-  if (readableLabels) {
-    const maxShelfDemand = Math.max(
-      0,
-      ...Object.values(childrenByParent).map((children) => {
-        const columns = shelfColumnCount({
-          childCount: children.length,
-          availableWidth: RACK_NODE_READABLE_WIDTH_BY_SCALE[rackScale] - 18,
-          readableLabels,
-          rackScale,
-          shelfLayout,
-          useDualFaceLayout: false,
-        });
-        const rows = Math.ceil(children.length / columns);
-        const rowWeights = Array.from({ length: rows }, (_, rowIndex) => {
-          const row = children.slice(
-            rowIndex * columns,
-            rowIndex * columns + columns,
-          );
-          return Math.max(1, ...row.map((device) => device.heightU ?? 1));
-        });
-        return (
-          44 +
-          rowWeights.reduce(
-            (sum, weight) => sum + Math.min(3, weight) * 44,
-            0,
-          ) +
-          Math.max(0, rows - 1) * 8
+  const deviceById = indexById(devices);
+  const maxShelfUnitDemand = Math.max(
+    0,
+    ...Object.entries(childrenByParent).map(([parentId, children]) => {
+      const parentHeightU = Math.max(1, deviceById[parentId]?.heightU ?? 1);
+      const demandWidth = readableLabels
+        ? RACK_NODE_READABLE_WIDTH_BY_SCALE[rackScale] - 18
+        : RACK_NODE_WIDTH_BY_SCALE[rackScale] - 12;
+      const columns = shelfColumnCount({
+        childCount: children.length,
+        availableWidth: demandWidth,
+        readableLabels,
+        rackScale,
+        shelfLayout,
+        useDualFaceLayout: false,
+      });
+      const sortedChildren = [...children].sort(compareDeviceName);
+      const rows = Math.ceil(sortedChildren.length / columns);
+      const rowHeights = Array.from({ length: rows }, (_, rowIndex) => {
+        const row = sortedChildren.slice(
+          rowIndex * columns,
+          rowIndex * columns + columns,
         );
-      }),
-    );
-    if (maxShelfDemand > 0) {
-      return clampNumber(maxShelfDemand, 96, 220);
-    }
-  }
-
-  const childCountByParent = devices.reduce<Record<string, number>>(
-    (acc, device) => {
-      if (device.parentDeviceId) {
-        acc[device.parentDeviceId] = (acc[device.parentDeviceId] ?? 0) + 1;
-      }
-      return acc;
-    },
-    {},
+        return Math.max(
+          readableLabels ? 44 : NODE_HEIGHT,
+          ...row.map((device) =>
+            shelfChildHeightForDevice(device, readableLabels, rackScale),
+          ),
+        );
+      });
+      const childDemand =
+        (readableLabels ? 44 : 10) +
+        rowHeights.reduce((sum, height) => sum + height, 0) +
+        Math.max(0, rows - 1) * (readableLabels ? 8 : 4);
+      return Math.ceil(childDemand / parentHeightU);
+    }),
   );
-  const maxShelfChildren = devices.reduce((max, device) => {
-    if ((device.heightU ?? 1) > 1) return max;
-    return Math.max(max, childCountByParent[device.id] ?? 0);
-  }, 0);
-  if (maxShelfChildren >= 5) return 92;
-  if (maxShelfChildren >= 3) return 74;
-  if (maxShelfChildren >= 2) return 58;
+
+  if (readableLabels && maxShelfUnitDemand > 0) {
+    return clampNumber(maxShelfUnitDemand, 96, 220);
+  }
 
   const maxOneUPorts = devices.reduce((max, device) => {
     const heightU = device.heightU ?? 1;
     if (heightU > 1) return max;
     return Math.max(max, portsByDeviceId[device.id]?.length ?? 0);
   }, 0);
-  if (maxOneUPorts >= 36) return RACK_UNIT_ULTRA_DENSE_HEIGHT;
-  if (maxOneUPorts >= 18) return RACK_UNIT_DENSE_HEIGHT;
-  if (maxOneUPorts >= 8) return RACK_UNIT_MEDIUM_HEIGHT;
-  return RACK_UNIT_BASE_HEIGHT;
+  const portDrivenUnitHeight =
+    maxOneUPorts >= 36
+      ? RACK_UNIT_ULTRA_DENSE_HEIGHT
+      : maxOneUPorts >= 18
+        ? RACK_UNIT_DENSE_HEIGHT
+        : maxOneUPorts >= 8
+          ? RACK_UNIT_MEDIUM_HEIGHT
+          : RACK_UNIT_BASE_HEIGHT;
+  return Math.max(
+    portDrivenUnitHeight,
+    clampNumber(maxShelfUnitDemand, 0, 220),
+  );
 }
 
 function buildRackRoomInputs(input: {
@@ -2309,6 +2323,24 @@ function shelfColumnCount(input: {
     return Math.min(input.childCount, Math.max(1, Math.min(fitColumns, 2)));
   }
   return input.childCount > 3 ? 2 : Math.max(1, input.childCount);
+}
+
+function shelfChildHeightForDevice(
+  device: Device,
+  readableLabels: boolean,
+  rackScale: VisualizerRackScale,
+) {
+  const heightU = Math.max(1, Math.ceil(device.heightU ?? 1));
+  const unitHeight = readableLabels
+    ? rackScale === "compact"
+      ? 48
+      : 54
+    : rackScale === "compact"
+      ? 34
+      : rackScale === "normal"
+        ? NODE_HEIGHT
+        : 44;
+  return Math.max(readableLabels ? 44 : NODE_HEIGHT, heightU * unitHeight);
 }
 
 function clampNumber(value: number, min: number, max: number) {
