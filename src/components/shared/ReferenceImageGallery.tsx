@@ -2,7 +2,14 @@ import { useRef, useState } from "react";
 import { Download, ExternalLink, ImagePlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Card, CardBody, CardHeader, CardHeading, CardLabel, CardTitle } from "@/components/ui/Card";
+import {
+  Card,
+  CardBody,
+  CardHeader,
+  CardHeading,
+  CardLabel,
+  CardTitle,
+} from "@/components/ui/Card";
 import { Mono } from "@/components/shared/Mono";
 import {
   createReferenceImageRecord,
@@ -14,6 +21,7 @@ import {
   imageSizeLimitLabel,
   readImageFileAsDataUrl,
 } from "@/lib/image-data-url";
+import { downloadImageAsset, openImageAsset } from "@/lib/image-actions";
 import { relativeTime } from "@/lib/utils";
 
 interface ReferenceImageGalleryProps {
@@ -107,7 +115,9 @@ export function ReferenceImageGallery({
           type="file"
           accept="image/png,image/jpeg,image/webp,image/gif"
           className="hidden"
-          onChange={(event) => void handleImageSelected(event.target.files?.[0])}
+          onChange={(event) =>
+            void handleImageSelected(event.target.files?.[0])
+          }
         />
 
         {error && (
@@ -161,7 +171,11 @@ export function ReferenceImageGallery({
                 <img
                   src={image.dataUrl}
                   alt={image.label}
-                  className={compact ? "h-48 w-full bg-black/20 object-contain" : "h-56 w-full bg-black/20 object-contain"}
+                  className={
+                    compact
+                      ? "h-48 w-full bg-black/20 object-contain"
+                      : "h-56 w-full bg-black/20 object-contain"
+                  }
                   loading="lazy"
                 />
                 <div className="space-y-2 border-t border-[var(--color-line)] p-3">
@@ -178,13 +192,7 @@ export function ReferenceImageGallery({
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() =>
-                          window.open(
-                            image.dataUrl,
-                            "_blank",
-                            "noopener,noreferrer",
-                          )
-                        }
+                        onClick={() => openImageAsset(image)}
                         aria-label={`Open ${image.label} larger`}
                       >
                         <ExternalLink />
@@ -192,7 +200,7 @@ export function ReferenceImageGallery({
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => downloadImage(image)}
+                        onClick={() => downloadImageAsset(image)}
                         aria-label={`Download ${image.label}`}
                       >
                         <Download />
@@ -223,15 +231,6 @@ export function ReferenceImageGallery({
       </CardBody>
     </Card>
   );
-}
-
-function downloadImage(image: ReferenceImage) {
-  const anchor = document.createElement("a");
-  anchor.href = image.dataUrl;
-  anchor.download = image.fileName || `${image.label}.image`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
 }
 
 function capitalize(value: string) {

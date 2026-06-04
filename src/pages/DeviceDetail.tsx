@@ -71,6 +71,7 @@ import {
   imageSizeLimitLabel,
   readImageFileAsDataUrl,
 } from "@/lib/image-data-url";
+import { downloadImageAsset, openImageAsset } from "@/lib/image-actions";
 
 type MonitorForm = {
   name: string;
@@ -637,16 +638,11 @@ export default function DeviceDetail() {
   }
 
   function handleOpenImage(image: DeviceImage) {
-    window.open(image.dataUrl, "_blank", "noopener,noreferrer");
+    openImageAsset(image);
   }
 
   function handleDownloadImage(image: DeviceImage) {
-    const anchor = document.createElement("a");
-    anchor.href = image.dataUrl;
-    anchor.download = image.fileName || `${image.label}.image`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
+    downloadImageAsset(image);
   }
 
   async function handleSaveMonitor() {
@@ -1360,8 +1356,7 @@ export default function DeviceDetail() {
                           setNetworkField("dhcpScopeId", value)
                         }
                         disabled={
-                          networkForm.allocationMode !==
-                          "dhcp-reservation"
+                          networkForm.allocationMode !== "dhcp-reservation"
                         }
                       >
                         <option value="">Auto / none</option>
@@ -1454,46 +1449,48 @@ export default function DeviceDetail() {
                           }),
                         )
                         .map((ip) => (
-                      <div
-                        key={ip.id}
-                        className="grid grid-cols-12 items-center gap-3 px-4 py-2"
-                      >
-                        <Mono className="col-span-3 text-[var(--color-fg)]">
-                          {ip.ipAddress}
-                        </Mono>
-                        <div className="col-span-3 text-xs">
-                          {subnetById[ip.subnetId]?.name ?? ip.hostname ?? "-"}
-                          <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">
-                            {subnetById[ip.subnetId]?.cidr ?? ""}
-                          </Mono>
-                        </div>
-                        <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">
-                          <div>{ip.description ?? "-"}</div>
-                          {ip.portId && portById[ip.portId] && (
-                            <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">
-                              {formatPortLabel(portById[ip.portId], {
-                                includeFace: true,
-                              })}
-                            </Mono>
-                          )}
-                        </div>
-                        <div className="col-span-2 flex items-center justify-end gap-2">
-                          {ip.allocationMode === "dhcp-reservation" && (
-                            <Badge tone="neutral">DHCP res</Badge>
-                          )}
-                          <Badge tone="cyan">{ip.assignmentType}</Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={releasingId === ip.id || !canEdit}
-                            onClick={() => void handleUnassignIp(ip.id)}
+                          <div
+                            key={ip.id}
+                            className="grid grid-cols-12 items-center gap-3 px-4 py-2"
                           >
-                            {releasingId === ip.id
-                              ? "Releasing..."
-                              : "Unassign"}
-                          </Button>
-                        </div>
-                      </div>
+                            <Mono className="col-span-3 text-[var(--color-fg)]">
+                              {ip.ipAddress}
+                            </Mono>
+                            <div className="col-span-3 text-xs">
+                              {subnetById[ip.subnetId]?.name ??
+                                ip.hostname ??
+                                "-"}
+                              <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">
+                                {subnetById[ip.subnetId]?.cidr ?? ""}
+                              </Mono>
+                            </div>
+                            <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">
+                              <div>{ip.description ?? "-"}</div>
+                              {ip.portId && portById[ip.portId] && (
+                                <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">
+                                  {formatPortLabel(portById[ip.portId], {
+                                    includeFace: true,
+                                  })}
+                                </Mono>
+                              )}
+                            </div>
+                            <div className="col-span-2 flex items-center justify-end gap-2">
+                              {ip.allocationMode === "dhcp-reservation" && (
+                                <Badge tone="neutral">DHCP res</Badge>
+                              )}
+                              <Badge tone="cyan">{ip.assignmentType}</Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={releasingId === ip.id || !canEdit}
+                                onClick={() => void handleUnassignIp(ip.id)}
+                              >
+                                {releasingId === ip.id
+                                  ? "Releasing..."
+                                  : "Unassign"}
+                              </Button>
+                            </div>
+                          </div>
                         ))}
                     </>
                   )}
@@ -1966,9 +1963,7 @@ export default function DeviceDetail() {
                         <Select
                           value={serviceForm.portId}
                           disabled={!canManageMonitoring}
-                          onChange={(value) =>
-                            setServiceField("portId", value)
-                          }
+                          onChange={(value) => setServiceField("portId", value)}
                         >
                           <option value="">No port link</option>
                           {devicePorts.map((port) => (
@@ -1982,9 +1977,7 @@ export default function DeviceDetail() {
                         <Select
                           value={serviceForm.vlanId}
                           disabled={!canManageMonitoring}
-                          onChange={(value) =>
-                            setServiceField("vlanId", value)
-                          }
+                          onChange={(value) => setServiceField("vlanId", value)}
                         >
                           <option value="">No VLAN link</option>
                           {vlans.map((vlan) => (

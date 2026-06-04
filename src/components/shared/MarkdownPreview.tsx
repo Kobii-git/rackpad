@@ -60,6 +60,13 @@ function parseBlocks(content: string) {
       continue;
     }
 
+    const table = parseTable(lines, index);
+    if (table) {
+      blocks.push(renderTable(table, index));
+      index = table.nextIndex;
+      continue;
+    }
+
     if (/^>\s?/.test(line)) {
       const quoteLines: string[] = [];
       while (index < lines.length && /^>\s?/.test(lines[index])) {
@@ -124,6 +131,7 @@ function parseBlocks(content: string) {
       lines[index].trim() &&
       !lines[index].trimStart().startsWith("```") &&
       !/^(#{1,4})\s+/.test(lines[index]) &&
+      !parseTable(lines, index) &&
       !/^>\s?/.test(lines[index]) &&
       !/^\s*[-*]\s+/.test(lines[index]) &&
       !/^\s*\d+\.\s+/.test(lines[index])
@@ -142,6 +150,97 @@ function parseBlocks(content: string) {
   }
 
   return blocks;
+}
+
+type MarkdownTable = {
+  headers: string[];
+  rows: string[][];
+  nextIndex: number;
+};
+
+function parseTable(lines: string[], index: number): MarkdownTable | null {
+  if (index + 1 >= lines.length) return null;
+  if (!isTableSeparator(lines[index + 1])) return null;
+
+  const headers = splitTableRow(lines[index]);
+  if (headers.length < 2) return null;
+
+  const rows: string[][] = [];
+  let nextIndex = index + 2;
+  while (nextIndex < lines.length && isTableRow(lines[nextIndex])) {
+    rows.push(
+      normalizeTableRow(splitTableRow(lines[nextIndex]), headers.length),
+    );
+    nextIndex += 1;
+  }
+
+  return { headers, rows, nextIndex };
+}
+
+function isTableRow(line: string) {
+  const trimmed = line.trim();
+  return trimmed.includes("|") && trimmed !== "" && !trimmed.startsWith("```");
+}
+
+function isTableSeparator(line: string) {
+  const cells = splitTableRow(line);
+  return (
+    cells.length > 1 &&
+    cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s+/g, "")))
+  );
+}
+
+function splitTableRow(line: string) {
+  const trimmed = line.trim();
+  const withoutLeading = trimmed.startsWith("|") ? trimmed.slice(1) : trimmed;
+  const withoutTrailing = withoutLeading.endsWith("|")
+    ? withoutLeading.slice(0, -1)
+    : withoutLeading;
+  return withoutTrailing.split("|").map((cell) => cell.trim());
+}
+
+function normalizeTableRow(cells: string[], size: number) {
+  if (cells.length === size) return cells;
+  if (cells.length > size) return cells.slice(0, size);
+  return [...cells, ...Array.from({ length: size - cells.length }, () => "")];
+}
+
+function renderTable(table: MarkdownTable, index: number) {
+  return (
+    <div
+      key={`table-${index}`}
+      className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--color-line)]"
+    >
+      <table className="min-w-full border-collapse text-left text-sm text-[var(--color-fg)]">
+        <thead className="bg-[var(--color-bg)]">
+          <tr>
+            {table.headers.map((header, headerIndex) => (
+              <th
+                key={headerIndex}
+                className="border-b border-[var(--color-line)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-fg-subtle)]"
+              >
+                {renderInline(header)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row, rowIndex) => (
+            <tr
+              key={rowIndex}
+              className="border-t border-[var(--color-line)] first:border-t-0"
+            >
+              {row.map((cell, cellIndex) => (
+                <td key={cellIndex} className="px-3 py-2 align-top">
+                  {renderInline(cell)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function renderHeading(

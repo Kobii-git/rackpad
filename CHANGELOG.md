@@ -6,6 +6,20 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.5.5-beta] - 2026-06-04
+
+### Added
+
+- Documentation markdown preview now renders GitHub-style pipe tables.
+
+### Fixed
+
+- Image expand buttons now open Blob URLs instead of direct `data:` URLs, so
+  larger image views work in Chrome, Safari, and Firefox.
+- Discovery technical addresses such as gateways, DNS, reserved, and
+  infrastructure IPs now stay out of normal discovery filters and cannot be
+  imported or linked as devices.
+
 ## [1.5.4-beta] - 2026-06-01
 
 ### Added

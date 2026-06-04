@@ -1241,11 +1241,13 @@ test("deleting imported devices resets linked discovery rows", async () => {
   assert.equal(deviceRes.statusCode, 201);
   const device = readJson(deviceRes) as { id: string };
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO discoveredDevices
       (id, labId, ipAddress, hostname, displayName, deviceType, placement, macAddress, vendor, source, status, notes, importedDeviceId, technicalRole, technicalReason, lastSeen, lastScannedAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     "disc_delete_reset",
     "lab_home",
     "192.168.88.20",
@@ -1284,6 +1286,82 @@ test("deleting imported devices resets linked discovery rows", async () => {
   };
   assert.equal(row.status, "new");
   assert.equal(row.importedDeviceId, null);
+});
+
+test("technical discovery rows cannot be imported", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "gateway-firewall",
+      deviceType: "firewall",
+      status: "online",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  db.prepare(
+    `
+    INSERT INTO discoveredDevices
+      (id, labId, ipAddress, hostname, displayName, deviceType, placement, macAddress, vendor, source, status, notes, importedDeviceId, technicalRole, technicalReason, lastSeen, lastScannedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+  ).run(
+    "disc_technical_protected",
+    "lab_home",
+    "192.168.88.1",
+    "gateway",
+    null,
+    "router",
+    "room",
+    null,
+    null,
+    "test",
+    "dismissed",
+    null,
+    null,
+    "gateway",
+    "Main DHCP gateway",
+    new Date().toISOString(),
+    new Date().toISOString(),
+  );
+
+  const importRes = await app.inject({
+    method: "PATCH",
+    url: "/api/discovery/disc_technical_protected",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      status: "imported",
+      importedDeviceId: device.id,
+    },
+  });
+  assert.equal(importRes.statusCode, 400);
+  assert.match(importRes.body, /technical addresses/i);
+
+  const notesRes = await app.inject({
+    method: "PATCH",
+    url: "/api/discovery/disc_technical_protected",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      status: "dismissed",
+      notes: "Confirmed as a technical IP.",
+    },
+  });
+  assert.equal(notesRes.statusCode, 200);
+  const updated = readJson(notesRes) as { status: string; notes: string };
+  assert.equal(updated.status, "dismissed");
+  assert.equal(updated.notes, "Confirmed as a technical IP.");
 });
 
 test("monitoring endpoints validate config, persist results, and stay admin-only", async () => {
@@ -1486,7 +1564,10 @@ test("wifi ports and device services can be managed", async () => {
     },
   });
   assert.equal(updateRes.statusCode, 200);
-  assert.equal((readJson(updateRes) as { serviceType: string }).serviceType, "app");
+  assert.equal(
+    (readJson(updateRes) as { serviceType: string }).serviceType,
+    "app",
+  );
 
   const deleteRes = await app.inject({
     method: "DELETE",

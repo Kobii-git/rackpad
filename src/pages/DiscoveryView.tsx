@@ -171,7 +171,9 @@ export default function DiscoveryView() {
   const duplicateCount = useMemo(
     () =>
       discoveredDevices.filter(
-        (device) => (duplicateMatchesById[device.id] ?? []).length > 0,
+        (device) =>
+          !device.technicalRole &&
+          (duplicateMatchesById[device.id] ?? []).length > 0,
       ).length,
     [discoveredDevices, duplicateMatchesById],
   );
@@ -184,13 +186,14 @@ export default function DiscoveryView() {
           filter === "active"
             ? device.status === "new" && !device.technicalRole
             : filter === "all"
-              ? true
+              ? !device.technicalRole
               : filter === "technical"
                 ? Boolean(device.technicalRole)
                 : filter === "duplicates"
                   ? device.status === "new" &&
+                    !device.technicalRole &&
                     (duplicateMatchesById[device.id] ?? []).length > 0
-                  : device.status === filter;
+                  : device.status === filter && !device.technicalRole;
         if (!matchesFilter) return false;
         if (!normalizedQuery) return true;
         const haystack = [
@@ -234,8 +237,11 @@ export default function DiscoveryView() {
   const selected = selectedId
     ? discoveredDevices.find((device) => device.id === selectedId)
     : undefined;
+  const selectedIsTechnical = Boolean(selected?.technicalRole);
   const selectedMatches = selected
-    ? (duplicateMatchesById[selected.id] ?? [])
+    ? selectedIsTechnical
+      ? []
+      : (duplicateMatchesById[selected.id] ?? [])
     : [];
 
   const drawerDefaults = useMemo(() => {
@@ -334,6 +340,7 @@ export default function DiscoveryView() {
 
   async function handleSave() {
     if (!selected || !draft) return;
+    const status = selected.technicalRole ? selected.status : draft.status;
     setSaving(true);
     setError("");
     try {
@@ -343,7 +350,7 @@ export default function DiscoveryView() {
         deviceType: draft.deviceType,
         placement: draft.placement,
         notes: draft.notes.trim() || null,
-        status: draft.status,
+        status,
       });
     } catch (err) {
       setError(
@@ -376,7 +383,7 @@ export default function DiscoveryView() {
   }
 
   async function handleLinkExisting(deviceId: string) {
-    if (!selected) return;
+    if (!selected || selected.technicalRole) return;
     const device = deviceById[deviceId];
     setLinkingId(deviceId);
     setError("");
@@ -401,7 +408,7 @@ export default function DiscoveryView() {
   }
 
   async function handleImported(saved: Device) {
-    if (!selected) return;
+    if (!selected || selected.technicalRole) return;
     await updateDiscoveredDeviceRecord(selected.id, {
       status: "imported",
       importedDeviceId: saved.id,
@@ -887,6 +894,11 @@ export default function DiscoveryView() {
                               {selected.technicalReason ??
                                 selected.technicalRole}
                             </div>
+                            <div className="mt-2 text-xs leading-5 text-[var(--color-fg-subtle)]">
+                              Technical addresses stay out of the normal import
+                              flow. Update the related IPAM scope, zone, or
+                              assignment if this address changes.
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1024,6 +1036,7 @@ export default function DiscoveryView() {
                     <Field label="Status">
                       <Select
                         value={draft.status}
+                        disabled={selectedIsTechnical}
                         onChange={(value) =>
                           setDraft((prev) =>
                             prev
@@ -1039,6 +1052,11 @@ export default function DiscoveryView() {
                         <option value="imported">imported</option>
                         <option value="dismissed">dismissed</option>
                       </Select>
+                      {selectedIsTechnical && (
+                        <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
+                          Status is locked for IPAM technical addresses.
+                        </div>
+                      )}
                     </Field>
                     <Field label="Notes">
                       <textarea
@@ -1096,17 +1114,19 @@ export default function DiscoveryView() {
                         </Button>
                       </div>
                       <div className="flex items-center gap-2">
-                        {canEdit && selected.status !== "imported" && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => setDrawerOpen(true)}
-                          >
-                            {selectedMatches.length > 0
-                              ? "Import anyway"
-                              : "Import"}
-                          </Button>
-                        )}
+                        {canEdit &&
+                          !selectedIsTechnical &&
+                          selected.status !== "imported" && (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => setDrawerOpen(true)}
+                            >
+                              {selectedMatches.length > 0
+                                ? "Import anyway"
+                                : "Import"}
+                            </Button>
+                          )}
                         {canEdit && (
                           <Button
                             variant="destructive"
@@ -1128,7 +1148,7 @@ export default function DiscoveryView() {
         </div>
       </div>
 
-      {selected && canEdit && (
+      {selected && canEdit && !selectedIsTechnical && (
         <DeviceDrawer
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
@@ -1337,14 +1357,17 @@ function Select({
   value,
   onChange,
   children,
+  disabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   children: ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <select
       value={value}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
       className="rk-control h-8 w-full px-2 text-sm text-[var(--text-primary)]"
     >

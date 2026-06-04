@@ -84,7 +84,8 @@ function parseDiscoveredDevice(row: Record<string, unknown>) {
 
 function resetStaleImportedDiscoveryRows(labId?: string) {
   if (labId) {
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE discoveredDevices
       SET importedDeviceId = NULL, status = 'new'
       WHERE labId = ?
@@ -92,17 +93,20 @@ function resetStaleImportedDiscoveryRows(labId?: string) {
         AND NOT EXISTS (
           SELECT 1 FROM devices WHERE devices.id = discoveredDevices.importedDeviceId
         )
-    `).run(labId);
+    `,
+    ).run(labId);
     return;
   }
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE discoveredDevices
     SET importedDeviceId = NULL, status = 'new'
     WHERE importedDeviceId IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM devices WHERE devices.id = discoveredDevices.importedDeviceId
       )
-  `).run();
+  `,
+  ).run();
 }
 
 function ipToInt(ipAddress: string) {
@@ -783,6 +787,11 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
         END,
         technicalRole = excluded.technicalRole,
         technicalReason = excluded.technicalReason,
+        importedDeviceId = CASE
+          WHEN excluded.technicalRole IS NOT NULL
+            THEN NULL
+          ELSE discoveredDevices.importedDeviceId
+        END,
         status = CASE
           WHEN excluded.technicalRole IS NOT NULL
             THEN 'dismissed'
@@ -863,8 +872,25 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
       maxLength: 80,
     });
     const lastSeen = optionalString(body, "lastSeen", { maxLength: 80 });
+    const existingTechnicalRole =
+      typeof existing.technicalRole === "string" &&
+      existing.technicalRole.trim()
+        ? existing.technicalRole
+        : null;
 
     if (lastSeen) ensureIsoDate(lastSeen, "lastSeen");
+    if (existingTechnicalRole) {
+      if (status !== undefined && status !== existing.status) {
+        throw new ValidationError(
+          "IPAM technical addresses cannot be moved into normal discovery statuses.",
+        );
+      }
+      if (importedDeviceId) {
+        throw new ValidationError(
+          "IPAM technical addresses cannot be linked or imported as devices.",
+        );
+      }
+    }
 
     const stringFields = [
       ["hostname", hostname],
