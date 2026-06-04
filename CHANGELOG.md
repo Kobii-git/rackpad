@@ -6,6 +6,13 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.5.8-beta] - 2026-06-04
+
+### Added
+
+- Added a persisted Visualizer cable route selector for grouped and pyramid
+  views with `Auto`, `Concave`, and `Convex` modes.
+
 ## [1.5.7-beta] - 2026-06-04
 
 ### Fixed

@@ -7,6 +7,7 @@ import { DiagramCanvas } from "./visualizer/DiagramCanvas";
 import { VisualizerCanvas } from "./visualizer/VisualizerCanvas";
 import type {
   TraceModeState,
+  VisualizerCableLayout,
   VisualizerLayoutMode,
   VisualizerLooseDevicePlacement,
   VisualizerPoint,
@@ -24,6 +25,7 @@ const RACK_FACE_MODE_STORAGE_KEY = "rackpad.visualizer.rack-face-mode";
 const RACK_SCALE_STORAGE_KEY = "rackpad.visualizer.rack-scale";
 const SHELF_LAYOUT_STORAGE_KEY = "rackpad.visualizer.shelf-layout";
 const READABLE_LABELS_STORAGE_KEY = "rackpad.visualizer.readable-labels";
+const CABLE_LAYOUT_STORAGE_KEY = "rackpad.visualizer.cable-layout";
 const CUSTOM_NODE_POSITIONS_STORAGE_KEY =
   "rackpad.visualizer.custom-node-positions";
 
@@ -68,6 +70,9 @@ export default function VisualizerView() {
   );
   const [readableLabels, setReadableLabels] = useState(() =>
     readBoolean(READABLE_LABELS_STORAGE_KEY, false),
+  );
+  const [cableLayout, setCableLayout] = useState<VisualizerCableLayout>(() =>
+    readCableLayout(CABLE_LAYOUT_STORAGE_KEY),
   );
   const [customNodePositions, setCustomNodePositions] = useState<
     Record<string, VisualizerPoint>
@@ -330,6 +335,22 @@ export default function VisualizerView() {
                 </option>
               ))}
             </select>
+            {layoutMode !== "diagram" && (
+              <select
+                value={cableLayout}
+                onChange={(event) => {
+                  const next = event.target.value as VisualizerCableLayout;
+                  setCableLayout(next);
+                  writeString(CABLE_LAYOUT_STORAGE_KEY, next);
+                }}
+                className="rk-control h-8 w-32 px-2 text-xs text-[var(--text-primary)]"
+                aria-label="Cable route layout"
+              >
+                <option value="auto">Auto cables</option>
+                <option value="concave">Concave</option>
+                <option value="convex">Convex</option>
+              </select>
+            )}
             <Button
               variant={healthOverlay ? "secondary" : "outline"}
               size="sm"
@@ -385,6 +406,7 @@ export default function VisualizerView() {
           traceMode={traceMode}
           setTraceMode={setTraceMode}
           cableType={cableType}
+          cableLayout={cableLayout}
           noCableBannerDismissed={noCableBannerDismissed}
           onDismissNoCableBanner={() => {
             setNoCableBannerDismissed(true);
@@ -491,6 +513,15 @@ function readShelfLayout(key: string): VisualizerShelfLayout {
   try {
     const value = window.localStorage.getItem(key);
     return value === "stacked" || value === "expanded" ? value : "auto";
+  } catch {
+    return "auto";
+  }
+}
+
+function readCableLayout(key: string): VisualizerCableLayout {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value === "concave" || value === "convex" ? value : "auto";
   } catch {
     return "auto";
   }

@@ -33,6 +33,7 @@ import type {
   TraceResult,
   TraceSegment,
   VisualizerCable,
+  VisualizerCableLayout,
   VisualizerHealth,
   VisualizerLayoutOptions,
   VisualizerModel,
@@ -1593,7 +1594,7 @@ function buildCable(input: {
     toNode,
     fromPoint,
     toPoint,
-    path: cablePath(fromPoint, toPoint, input.index),
+    path: visualizerCablePath(fromPoint, toPoint, input.index),
     color: normalizeColorToCss(input.link.color) ?? CABLE_FALLBACK_COLOR,
     up,
     bothOnline: fromNode.health === "online" && toNode.health === "online",
@@ -2035,11 +2036,15 @@ export function buildSearchResults(
   return results.sort((a, b) => b.score - a.score).slice(0, 24);
 }
 
-function cablePath(
+export function visualizerCablePath(
   from: { x: number; y: number },
   to: { x: number; y: number },
   index: number,
+  layout: VisualizerCableLayout = "auto",
 ) {
+  if (layout !== "auto") {
+    return curvedCablePath(from, to, index, layout);
+  }
   const dx = Math.abs(to.x - from.x);
   const dy = Math.abs(to.y - from.y);
   const laneOffset = ((index % 17) - 8) * 7;
@@ -2066,6 +2071,28 @@ function cablePath(
   } ${from.y + laneOffset}, ${to.x - curve} ${to.y - laneOffset}, ${
     to.x
   } ${to.y - laneOffset}`;
+}
+
+function curvedCablePath(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  index: number,
+  layout: Exclude<VisualizerCableLayout, "auto">,
+) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const distance = Math.max(1, Math.hypot(dx, dy));
+  const normalX = -dy / distance;
+  const normalY = dx / distance;
+  const laneOffset = ((index % 17) - 8) * 5;
+  const curve = Math.min(280, Math.max(86, distance * 0.32));
+  const direction = layout === "concave" ? 1 : -1;
+  const offset = direction * curve + laneOffset;
+  const c1x = from.x + dx * 0.34 + normalX * offset;
+  const c1y = from.y + dy * 0.34 + normalY * offset;
+  const c2x = from.x + dx * 0.66 + normalX * offset;
+  const c2y = from.y + dy * 0.66 + normalY * offset;
+  return `M ${from.x} ${from.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${to.x} ${to.y}`;
 }
 
 function portPoint(node: VisualizerNode, portId: string, peer: VisualizerNode) {

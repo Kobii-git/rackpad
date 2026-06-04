@@ -53,6 +53,7 @@ import {
   traceFromPort,
   tracePorts,
   typeLabel,
+  visualizerCablePath,
 } from "./model";
 import type {
   RackBand,
@@ -62,6 +63,7 @@ import type {
   SearchResult,
   TraceModeState,
   TraceResult,
+  VisualizerCableLayout,
   VisualizerCable,
   VisualizerModel,
   VisualizerNode,
@@ -78,6 +80,7 @@ interface VisualizerCanvasProps {
   traceMode: TraceModeState;
   setTraceMode: Dispatch<SetStateAction<TraceModeState>>;
   cableType: string;
+  cableLayout: VisualizerCableLayout;
   noCableBannerDismissed: boolean;
   onDismissNoCableBanner: () => void;
   onToggleRackRun: (key: string) => void;
@@ -100,6 +103,7 @@ export function VisualizerCanvas({
   traceMode,
   setTraceMode,
   cableType,
+  cableLayout,
   noCableBannerDismissed,
   onDismissNoCableBanner,
   onToggleRackRun,
@@ -497,6 +501,23 @@ export function VisualizerCanvas({
   }
 
   const visibleCables = model.cables.filter(cableIsVisible);
+  const visibleCableEntries = visibleCables
+    .map((cable, index) => ({
+      cable,
+      path:
+        cable.fromPoint && cable.toPoint
+          ? visualizerCablePath(
+              cable.fromPoint,
+              cable.toPoint,
+              index,
+              cableLayout,
+            )
+          : cable.path,
+    }))
+    .filter(
+      (entry): entry is { cable: VisualizerCable; path: string } =>
+        Boolean(entry.path),
+    );
   const activeNeighborIds = new Set(
     isolatedDeviceId
       ? (model.directNeighborsByDeviceId[isolatedDeviceId] ?? []).map(
@@ -648,10 +669,11 @@ export function VisualizerCanvas({
                         </feMerge>
                       </filter>
                     </defs>
-                    {visibleCables.map((cable) => (
+                    {visibleCableEntries.map(({ cable, path }) => (
                       <CableSvg
                         key={cable.link.id}
                         cable={cable}
+                        path={path}
                         active={isCableActive(cable)}
                         dimmed={isCableDimmed(cable)}
                         traceActive={Boolean(
@@ -667,11 +689,11 @@ export function VisualizerCanvas({
                     height={model.height}
                     aria-hidden
                   >
-                    {visibleCables.map((cable) => (
+                    {visibleCableEntries.map(({ cable, path }) => (
                       <path
                         key={`${cable.link.id}-hit`}
                         data-visualizer-interactive="true"
-                        d={cable.path ?? undefined}
+                        d={path}
                         fill="none"
                         stroke="transparent"
                         strokeWidth={20}
@@ -1365,18 +1387,20 @@ function PortSquare({
 
 function CableSvg({
   cable,
+  path,
   active,
   dimmed,
   traceActive,
   healthOverlay,
 }: {
   cable: VisualizerCable;
+  path: string;
   active: boolean;
   dimmed: boolean;
   traceActive: boolean;
   healthOverlay: boolean;
 }) {
-  if (!cable.path || !cable.fromPoint || !cable.toPoint) return null;
+  if (!path || !cable.fromPoint || !cable.toPoint) return null;
   const downPair =
     healthOverlay &&
     cable.fromNode?.health === "offline" &&
@@ -1392,7 +1416,7 @@ function CableSvg({
     <g>
       {(active || traceActive) && (
         <path
-          d={cable.path}
+          d={path}
           fill="none"
           stroke="var(--bg-page)"
           strokeWidth={strokeWidth + 6}
@@ -1402,7 +1426,7 @@ function CableSvg({
         />
       )}
       <path
-        d={cable.path}
+        d={path}
         fill="none"
         stroke={color}
         strokeWidth={strokeWidth}
