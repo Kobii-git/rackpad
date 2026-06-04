@@ -6,6 +6,14 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.5.7-beta] - 2026-06-04
+
+### Fixed
+
+- Discovery now resets orphaned `imported` rows back to `new` before listing or
+  scanning, so devices deleted through bulk actions do not leave future
+  discovery results stuck as imported.
+
 ## [1.5.6-beta] - 2026-06-04
 
 ### Fixed

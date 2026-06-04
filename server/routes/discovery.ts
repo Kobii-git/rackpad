@@ -89,9 +89,14 @@ function resetStaleImportedDiscoveryRows(labId?: string) {
       UPDATE discoveredDevices
       SET importedDeviceId = NULL, status = 'new'
       WHERE labId = ?
-        AND importedDeviceId IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM devices WHERE devices.id = discoveredDevices.importedDeviceId
+        AND (
+          (
+            importedDeviceId IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM devices WHERE devices.id = discoveredDevices.importedDeviceId
+            )
+          )
+          OR (status = 'imported' AND importedDeviceId IS NULL)
         )
     `,
     ).run(labId);
@@ -101,10 +106,13 @@ function resetStaleImportedDiscoveryRows(labId?: string) {
     `
     UPDATE discoveredDevices
     SET importedDeviceId = NULL, status = 'new'
-    WHERE importedDeviceId IS NOT NULL
-      AND NOT EXISTS (
-        SELECT 1 FROM devices WHERE devices.id = discoveredDevices.importedDeviceId
+    WHERE (
+        importedDeviceId IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM devices WHERE devices.id = discoveredDevices.importedDeviceId
+        )
       )
+      OR (status = 'imported' AND importedDeviceId IS NULL)
   `,
   ).run();
 }

@@ -1288,6 +1288,74 @@ test("deleting imported devices resets linked discovery rows", async () => {
   assert.equal(row.importedDeviceId, null);
 });
 
+test("orphaned imported discovery rows reset before listing", async () => {
+  const adminToken = await bootstrapAdmin();
+  const now = new Date().toISOString();
+  const insertDiscovery = db.prepare(`
+    INSERT INTO discoveredDevices
+      (id, labId, ipAddress, hostname, displayName, deviceType, placement, macAddress, vendor, source, status, notes, importedDeviceId, technicalRole, technicalReason, lastSeen, lastScannedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  insertDiscovery.run(
+    "disc_orphan_imported",
+    "lab_home",
+    "192.168.88.21",
+    "orphan-imported",
+    null,
+    "switch",
+    "room",
+    null,
+    null,
+    "test",
+    "imported",
+    null,
+    null,
+    null,
+    null,
+    now,
+    now,
+  );
+  const listRes = await app.inject({
+    method: "GET",
+    url: "/api/discovery?labId=lab_home&status=imported",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(listRes.statusCode, 200);
+  assert.deepEqual(readJson(listRes), []);
+
+  const rows = db
+    .prepare(
+      `
+      SELECT id, status, importedDeviceId
+      FROM discoveredDevices
+      WHERE id = ?
+      ORDER BY id ASC
+    `,
+    )
+    .all("disc_orphan_imported") as Array<{
+    id: string;
+    status: string;
+    importedDeviceId: string | null;
+  }>;
+  assert.deepEqual(
+    rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      importedDeviceId: row.importedDeviceId,
+    })),
+    [
+      {
+        id: "disc_orphan_imported",
+        status: "new",
+        importedDeviceId: null,
+      },
+    ],
+  );
+});
+
 test("technical discovery rows cannot be imported", async () => {
   const adminToken = await bootstrapAdmin();
 
