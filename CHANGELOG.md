@@ -6,6 +6,32 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.5.8] - 2026-06-05
+
+### Added
+
+- Promoted the 1.5 beta Visualizer updates to main, including readable labels,
+  wider rack scales, shelf layout controls, multi-select device-type filters,
+  and cable route modes for `Auto`, `Concave`, and `Convex` paths.
+- Added Discovery subnet targeting with IPAM subnet selection, all-subnet
+  scanning, and manual CIDR scanning.
+
+### Changed
+
+- Improved dense rack and shelf rendering so shelf child devices have more room
+  for names and multi-U shelf devices respect their own rack footprint.
+
+### Fixed
+
+- Fixed manual CIDR discovery scans so choosing `Manual CIDR` no longer snaps
+  back to the first IPAM subnet.
+- Fixed Discovery handling for gateway, DNS, reserved, dismissed, linked, and
+  deleted imported rows so technical addresses stay out of the normal import
+  workflow and stale imported rows return to `new`.
+- Fixed IPAM and device networking edge cases for DHCP reservations, gateway
+  interface IPs, host-shared containers, and duplicate address validation.
+- Fixed documentation markdown table previews and cross-browser image expansion.
+
 ## [1.5.8-beta] - 2026-06-04
 
 ### Added

@@ -267,16 +267,6 @@ export default function DiscoveryView() {
   }, [scopes, selected, subnets]);
 
   useEffect(() => {
-    if (scanTarget === "manual" && !scanCidr && subnets[0]?.id) {
-      setScanTarget(subnets[0].id);
-      return;
-    }
-    if (scanTarget === "manual" && !scanCidr) {
-      setScanCidr(subnets[0]?.cidr ?? "");
-    }
-  }, [scanCidr, scanTarget, subnets]);
-
-  useEffect(() => {
     if (scanTarget === "manual" || scanTarget === "all") return;
     if (subnets.some((subnet) => subnet.id === scanTarget)) return;
     setScanTarget(subnets[0]?.id ?? "manual");
