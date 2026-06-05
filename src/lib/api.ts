@@ -157,7 +157,17 @@ export type UserPatch = Nullable<
 export type MonitorPatch = Nullable<
   Pick<
     DeviceMonitor,
-    "name" | "type" | "target" | "port" | "path" | "intervalMs" | "enabled"
+    | "name"
+    | "type"
+    | "target"
+    | "port"
+    | "path"
+    | "snmpVersion"
+    | "snmpCommunity"
+    | "snmpOid"
+    | "snmpExpectedValue"
+    | "intervalMs"
+    | "enabled"
   >
 >;
 

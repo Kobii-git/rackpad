@@ -88,8 +88,8 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
           <div className="text-[15px] font-semibold tracking-normal text-[var(--text-primary)]">
             Rackpad
           </div>
-          <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
-            infra control
+          <div className="text-[11px] text-[var(--text-muted)]">
+            Homelab inventory
           </div>
         </div>
         <div className="ml-auto flex flex-col items-end gap-1">
@@ -217,23 +217,24 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
         <div className="mx-4 mt-4 border-t border-[var(--border-subtle)]" />
       )}
 
-      <div className="mt-auto space-y-2 border-t border-[var(--border-subtle)] px-4 py-3">
-        <div className="flex items-center gap-2 text-[11px]">
-          <span className="size-1.5 rounded-full bg-[var(--success)] shadow-[0_0_0_2px_var(--success-soft)]" />
-          <span className="font-mono uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-            Authenticated
-          </span>
-        </div>
+      <div className="mt-auto border-t border-[var(--border-subtle)] px-4 py-3">
         {currentUser && (
-          <div className="space-y-1 text-[11px] text-[var(--color-fg-subtle)]">
-            <div className="text-[var(--text-secondary)]">
-              {currentUser.displayName}
-            </div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-              {currentUser.role}
-              {authExpiresAt
-                ? ` | expires ${new Date(authExpiresAt).toLocaleDateString()}`
-                : ""}
+          <div
+            className="flex items-center gap-2.5"
+            title={
+              authExpiresAt
+                ? `Session expires ${new Date(authExpiresAt).toLocaleDateString()}`
+                : undefined
+            }
+          >
+            <span className="size-1.5 shrink-0 rounded-full bg-[var(--success)] shadow-[0_0_0_2px_var(--success-soft)]" />
+            <div className="min-w-0 leading-tight">
+              <div className="truncate text-[12px] text-[var(--text-secondary)]">
+                {currentUser.displayName}
+              </div>
+              <div className="text-[11px] capitalize text-[var(--text-muted)]">
+                {currentUser.role}
+              </div>
             </div>
           </div>
         )}
@@ -244,31 +245,36 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
 
 function Logo() {
   return (
-    <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden>
-      <rect x="6" y="6" width="20" height="3" fill="var(--color-accent)" />
+    <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden fill="none">
+      {/* rack frame */}
       <rect
-        x="6"
-        y="11"
-        width="20"
-        height="3"
+        x="5.5"
+        y="4.5"
+        width="21"
+        height="23"
+        rx="3"
+        stroke="var(--color-accent)"
+        strokeWidth="2"
+      />
+      {/* rack-mounted units */}
+      <rect x="9" y="8.5" width="14" height="3.4" rx="1" fill="var(--color-accent)" />
+      <rect
+        x="9"
+        y="14.3"
+        width="14"
+        height="3.4"
+        rx="1"
         fill="var(--color-accent)"
-        opacity="0.7"
+        opacity="0.65"
       />
       <rect
-        x="6"
-        y="16"
-        width="20"
-        height="3"
+        x="9"
+        y="20.1"
+        width="14"
+        height="3.4"
+        rx="1"
         fill="var(--color-accent)"
-        opacity="0.5"
-      />
-      <rect
-        x="6"
-        y="21"
-        width="20"
-        height="3"
-        fill="var(--color-accent)"
-        opacity="0.3"
+        opacity="0.4"
       />
     </svg>
   );

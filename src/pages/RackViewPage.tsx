@@ -40,7 +40,7 @@ import {
   useStore,
 } from "@/lib/store";
 import type { Device, Port, RackFace, ReferenceImage, Room } from "@/lib/types";
-import { statusLabel } from "@/lib/utils";
+import { cn, statusLabel } from "@/lib/utils";
 import { formatDeviceAddress } from "@/lib/network-labels";
 
 const UNRACKED_VIEW_ID = "__unracked__";
@@ -676,7 +676,12 @@ export default function RackViewPage() {
                   </Tabs>
                 </div>
 
-                <div className="flex items-start gap-6">
+                <div
+                  className={cn(
+                    "flex items-start gap-6",
+                    face === "both" && "flex-col",
+                  )}
+                >
                   <RackView
                     rack={rack}
                     devices={rackDevices}
@@ -690,7 +695,7 @@ export default function RackViewPage() {
                   />
 
                   {face === "both" ? (
-                    <div className="grid w-96 shrink-0 gap-4">
+                    <div className="grid w-full max-w-3xl gap-4 sm:grid-cols-2">
                       <ReferenceImageGallery
                         entityType="rack"
                         entityId={rack.id}

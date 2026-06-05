@@ -576,7 +576,7 @@ export default function IpamView() {
   return (
     <>
       <TopBar
-        subtitle="Address management and VLAN-linked IP ranges"
+        subtitle="Network"
         title="IPAM"
         meta={
           <>

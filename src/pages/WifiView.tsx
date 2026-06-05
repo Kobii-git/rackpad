@@ -237,7 +237,7 @@ export default function WifiView() {
   return (
     <>
       <TopBar
-        subtitle="Controller-aware wireless inventory"
+        subtitle="Wireless"
         title="WiFi"
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">

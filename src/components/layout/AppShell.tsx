@@ -55,12 +55,8 @@ export function AppShell() {
               showLoadingCard ? (
                 <CenteredStatus
                   eyebrow="Rackpad"
-                  title={
-                    authLoading
-                      ? "Checking authentication"
-                      : "Preparing Rackpad"
-                  }
-                  body="Loading session state and verifying whether the server already has an admin account."
+                  title={authLoading ? "Signing in…" : "Starting up…"}
+                  body="One moment."
                 />
               ) : (
                 <AuthScreen />
@@ -68,16 +64,11 @@ export function AppShell() {
             ) : !loaded ? (
               <CenteredStatus
                 eyebrow="Rackpad"
-                title={
-                  loading
-                    ? "Loading infrastructure data"
-                    : "Unable to load data"
-                }
+                title={loading ? "Loading your lab…" : "Couldn't load data"}
                 body={
                   loading
-                    ? "Syncing racks, devices, ports, VLANs, IPAM, monitors, and audit history from the API."
-                    : (error ??
-                      "Something went wrong while contacting the API.")
+                    ? "Fetching your inventory."
+                    : (error ?? "Something went wrong. Try again.")
                 }
                 action={
                   !loading ? (

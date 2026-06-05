@@ -638,7 +638,25 @@ export function seedIfEmpty() {
       @vendor
     )
   `)
-  const insertDeviceMonitor = db.prepare('INSERT INTO deviceMonitors VALUES (@id, @deviceId, @name, @type, @target, @port, @path, @intervalMs, @enabled, @sortOrder, @lastCheckAt, @lastResult, @lastMessage, @lastAlertAt)')
+  const insertDeviceMonitor = db.prepare(`
+    INSERT INTO deviceMonitors (
+      id,
+      deviceId,
+      name,
+      type,
+      target,
+      port,
+      path,
+      intervalMs,
+      enabled,
+      sortOrder,
+      lastCheckAt,
+      lastResult,
+      lastMessage,
+      lastAlertAt
+    )
+    VALUES (@id, @deviceId, @name, @type, @target, @port, @path, @intervalMs, @enabled, @sortOrder, @lastCheckAt, @lastResult, @lastMessage, @lastAlertAt)
+  `)
   const insertWifiController = db.prepare('INSERT INTO wifiControllers VALUES (@id, @labId, @deviceId, @name, @vendor, @model, @managementIp, @notes)')
   const insertWifiSsid = db.prepare('INSERT INTO wifiSsids VALUES (@id, @labId, @name, @purpose, @security, @hidden, @vlanId, @color)')
   const insertWifiAccessPoint = db.prepare('INSERT INTO wifiAccessPoints VALUES (@deviceId, @controllerId, @location, @firmwareVersion, @notes)')

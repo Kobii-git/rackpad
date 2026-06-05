@@ -439,8 +439,27 @@ const restoreBackupSnapshot = db.transaction(
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDeviceMonitor = db.prepare(`
-    INSERT INTO deviceMonitors (id, deviceId, name, type, target, port, path, intervalMs, enabled, sortOrder, lastCheckAt, lastAlertAt, lastResult, lastMessage)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO deviceMonitors (
+      id,
+      deviceId,
+      name,
+      type,
+      target,
+      port,
+      path,
+      snmpVersion,
+      snmpCommunity,
+      snmpOid,
+      snmpExpectedValue,
+      intervalMs,
+      enabled,
+      sortOrder,
+      lastCheckAt,
+      lastAlertAt,
+      lastResult,
+      lastMessage
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDeviceService = db.prepare(`
     INSERT INTO deviceServices (id, deviceId, name, serviceType, ipAssignmentId, portId, vlanId, monitorId, url, notes, createdAt, updatedAt)
@@ -779,6 +798,10 @@ const restoreBackupSnapshot = db.transaction(
         row.target ?? null,
         row.port ?? null,
         row.path ?? null,
+        row.snmpVersion ?? null,
+        row.snmpCommunity ?? null,
+        row.snmpOid ?? null,
+        row.snmpExpectedValue ?? null,
         row.intervalMs ?? null,
         Number(row.enabled ?? 0),
         row.sortOrder ?? 0,

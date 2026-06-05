@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.5.8",
+  "version": "1.5.9-beta.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -23,6 +23,8 @@
   "dependencies": {
     "@fastify/cors": "^10.0.1",
     "@fastify/static": "^9.1.3",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
     "@radix-ui/react-dialog": "^1.1.6",
     "@radix-ui/react-popover": "^1.1.6",
     "@radix-ui/react-separator": "^1.1.2",

@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 18;
+const CURRENT_SCHEMA_VERSION = 19;
 
 export const db = new Database(DB_PATH);
 
@@ -690,6 +690,15 @@ const SCHEMA_MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS idx_device_services_type
         ON deviceServices (serviceType);
+    `,
+  },
+  {
+    version: 19,
+    sql: `
+      ALTER TABLE deviceMonitors ADD COLUMN snmpVersion TEXT;
+      ALTER TABLE deviceMonitors ADD COLUMN snmpCommunity TEXT;
+      ALTER TABLE deviceMonitors ADD COLUMN snmpOid TEXT;
+      ALTER TABLE deviceMonitors ADD COLUMN snmpExpectedValue TEXT;
     `,
   },
 ] as const;

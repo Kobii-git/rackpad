@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import dgram from "node:dgram";
 
 const tempDir = mkdtempSync(path.join(os.tmpdir(), "rackpad-tests-"));
 const spaDistDir = path.resolve(process.cwd(), "dist");
@@ -1489,6 +1490,101 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   assert.equal(invalidMonitorRes.statusCode, 400);
   assert.match(invalidMonitorRes.body, /target/i);
 
+  const invalidSnmpMonitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: device.id,
+      type: "snmp",
+      target: "127.0.0.1",
+      enabled: true,
+    },
+  });
+  assert.equal(invalidSnmpMonitorRes.statusCode, 400);
+  assert.match(invalidSnmpMonitorRes.body, /snmp oid/i);
+
+  const validSnmpMonitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: device.id,
+      name: "Interface 1",
+      type: "snmp",
+      target: "127.0.0.1",
+      snmpVersion: "2c",
+      snmpCommunity: "public",
+      snmpOid: ".1.3.6.1.2.1.2.2.1.8.1",
+      snmpExpectedValue: "1",
+      enabled: true,
+    },
+  });
+  assert.equal(validSnmpMonitorRes.statusCode, 200);
+  const snmpMonitor = readJson(validSnmpMonitorRes) as {
+    type: string;
+    port: number;
+    snmpVersion: string;
+    snmpCommunity: string;
+    snmpOid: string;
+    snmpExpectedValue: string;
+  };
+  assert.equal(snmpMonitor.type, "snmp");
+  assert.equal(snmpMonitor.port, 161);
+  assert.equal(snmpMonitor.snmpVersion, "2c");
+  assert.equal(snmpMonitor.snmpCommunity, "public");
+  assert.equal(snmpMonitor.snmpOid, ".1.3.6.1.2.1.2.2.1.8.1");
+  assert.equal(snmpMonitor.snmpExpectedValue, "1");
+
+  const snmpServer = await createSnmpIntegerResponder(1);
+  try {
+    const snmpAddress = snmpServer.address();
+    if (typeof snmpAddress === "string") {
+      throw new Error("SNMP test server did not expose a UDP port.");
+    }
+    const polledSnmpMonitorRes = await app.inject({
+      method: "POST",
+      url: "/api/device-monitors",
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+      },
+      payload: {
+        deviceId: device.id,
+        name: "SNMP poll",
+        type: "snmp",
+        target: "127.0.0.1",
+        port: snmpAddress.port,
+        snmpOid: "1.3.6.1.2.1.1.3.0",
+        snmpExpectedValue: "1",
+        enabled: true,
+      },
+    });
+    assert.equal(polledSnmpMonitorRes.statusCode, 200);
+    const polledSnmpMonitor = readJson(polledSnmpMonitorRes) as {
+      id: string;
+    };
+    const snmpRunRes = await app.inject({
+      method: "POST",
+      url: `/api/device-monitors/${polledSnmpMonitor.id}/run`,
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+      },
+    });
+    assert.equal(snmpRunRes.statusCode, 200);
+    const snmpRun = readJson(snmpRunRes) as {
+      lastResult?: string;
+      lastMessage?: string;
+    };
+    assert.equal(snmpRun.lastResult, "online");
+    assert.match(snmpRun.lastMessage ?? "", /matched expected value/i);
+  } finally {
+    await closeUdpServer(snmpServer);
+  }
+
   const validMonitorRes = await app.inject({
     method: "POST",
     url: "/api/device-monitors",
@@ -2023,6 +2119,153 @@ async function bootstrapAdmin() {
 
 function readJson(response: { body: string }) {
   return JSON.parse(response.body);
+}
+
+async function createSnmpIntegerResponder(value: number) {
+  const server = dgram.createSocket("udp4");
+  server.on("message", (packet, remote) => {
+    try {
+      const response = buildSnmpIntegerResponse(packet, value);
+      server.send(response, remote.port, remote.address);
+    } catch {
+      // Ignore malformed SNMP packets in the test responder.
+    }
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.off("listening", onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off("error", onError);
+      resolve();
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.bind(0, "127.0.0.1");
+  });
+
+  return server;
+}
+
+function closeUdpServer(server: dgram.Socket) {
+  return new Promise<void>((resolve) => {
+    server.close(() => resolve());
+  });
+}
+
+function buildSnmpIntegerResponse(request: Buffer, value: number) {
+  const parsed = parseSnmpRequest(request);
+  const variableBinding = testBerSequence(
+    Buffer.concat([testBerTlv(0x06, parsed.oid), testBerInteger(value)]),
+  );
+  const variableBindings = testBerSequence(variableBinding);
+  const pdu = testBerTlv(
+    0xa2,
+    Buffer.concat([
+      testBerTlv(0x02, parsed.requestId),
+      testBerInteger(0),
+      testBerInteger(0),
+      variableBindings,
+    ]),
+  );
+
+  return testBerSequence(
+    Buffer.concat([
+      testBerTlv(0x02, parsed.version),
+      testBerTlv(0x04, parsed.community),
+      pdu,
+    ]),
+  );
+}
+
+function parseSnmpRequest(packet: Buffer) {
+  const root = readTestTlv(packet, 0);
+  if (root.tag !== 0x30) throw new Error("SNMP request root was invalid.");
+  let offset = root.valueStart;
+  const version = readTestTlv(packet, offset);
+  offset = version.nextOffset;
+  const community = readTestTlv(packet, offset);
+  offset = community.nextOffset;
+  const pdu = readTestTlv(packet, offset);
+  offset = pdu.valueStart;
+  const requestId = readTestTlv(packet, offset);
+  offset = requestId.nextOffset;
+  offset = readTestTlv(packet, offset).nextOffset;
+  offset = readTestTlv(packet, offset).nextOffset;
+  const variableBindings = readTestTlv(packet, offset);
+  const variableBinding = readTestTlv(packet, variableBindings.valueStart);
+  const oid = readTestTlv(packet, variableBinding.valueStart);
+  return {
+    version: version.value,
+    community: community.value,
+    requestId: requestId.value,
+    oid: oid.value,
+  };
+}
+
+function testBerInteger(value: number) {
+  if (value === 0) return testBerTlv(0x02, Buffer.from([0]));
+  const bytes: number[] = [];
+  let next = value;
+  while (next > 0) {
+    bytes.unshift(next & 0xff);
+    next >>= 8;
+  }
+  if (bytes[0] >= 0x80) bytes.unshift(0);
+  return testBerTlv(0x02, Buffer.from(bytes));
+}
+
+function testBerSequence(value: Buffer) {
+  return testBerTlv(0x30, value);
+}
+
+function testBerTlv(tag: number, value: Buffer) {
+  return Buffer.concat([Buffer.from([tag]), testBerLength(value.length), value]);
+}
+
+function testBerLength(length: number) {
+  if (length < 0x80) return Buffer.from([length]);
+  const bytes: number[] = [];
+  let next = length;
+  while (next > 0) {
+    bytes.unshift(next & 0xff);
+    next >>= 8;
+  }
+  return Buffer.from([0x80 | bytes.length, ...bytes]);
+}
+
+function readTestTlv(packet: Buffer, offset: number) {
+  const tag = packet[offset];
+  const lengthByte = packet[offset + 1];
+  if (tag == null || lengthByte == null) {
+    throw new Error("SNMP test packet was truncated.");
+  }
+
+  let length = lengthByte;
+  let valueStart = offset + 2;
+  if (lengthByte & 0x80) {
+    const byteCount = lengthByte & 0x7f;
+    length = 0;
+    for (let index = 0; index < byteCount; index += 1) {
+      const byte = packet[valueStart + index];
+      if (byte == null) throw new Error("SNMP test packet length was truncated.");
+      length = (length << 8) | byte;
+    }
+    valueStart += byteCount;
+  }
+
+  const nextOffset = valueStart + length;
+  if (nextOffset > packet.length) {
+    throw new Error("SNMP test packet value was truncated.");
+  }
+  return {
+    tag,
+    valueStart,
+    nextOffset,
+    value: packet.subarray(valueStart, nextOffset),
+  };
 }
 
 async function createUserAndLogin(

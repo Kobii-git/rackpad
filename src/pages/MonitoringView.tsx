@@ -53,7 +53,7 @@ type MonitorFilter =
 type MonitorRollupStatus = Exclude<MonitorFilter, "all">;
 type MonitorSortKey = "hostname" | "status" | "targets" | "lastCheck";
 type MonitorLayout = "cards" | "compact";
-type BulkMonitorType = Exclude<MonitorType, "none">;
+type BulkMonitorType = Exclude<MonitorType, "none" | "snmp">;
 
 const monitorStatusLabel: Record<MonitorRollupStatus, string> = {
   offline: "Offline",
@@ -1065,6 +1065,9 @@ function formatMonitorTarget(monitor: DeviceMonitor) {
   }
   if (monitor.type === "tcp") {
     return `${monitor.target}:${monitor.port ?? 22}`;
+  }
+  if (monitor.type === "snmp") {
+    return `snmp://${monitor.target}:${monitor.port ?? 161} ${monitor.snmpOid ?? ""}`.trim();
   }
   return monitor.target;
 }

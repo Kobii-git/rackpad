@@ -153,7 +153,7 @@ export default function LabsPage() {
 
       <div className="flex flex-1 gap-6 overflow-hidden px-6 py-5">
         <div className="min-w-0 flex-1 overflow-y-auto">
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {labs.map((lab) => {
               const active = lab.id === currentLab.id;
               const editing = lab.id === editingLabId;

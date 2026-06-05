@@ -5,7 +5,6 @@ import {
   CardBody,
   CardHeader,
   CardHeading,
-  CardLabel,
   CardTitle,
 } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -59,23 +58,20 @@ export function AuthScreen() {
   return (
     <div className="flex flex-1 items-center justify-center px-6 py-10">
       <Card className="w-full max-w-lg overflow-hidden">
-        <div className="h-1 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-cyan)] to-[var(--color-ok)]" />
+        <div className="h-0.5 bg-[var(--accent-primary)] opacity-80" />
         <CardHeader className="border-b border-[var(--color-line)]">
           <CardTitle>
-            <CardLabel>
-              {mode === "bootstrap" ? "First Run" : "Authentication"}
-            </CardLabel>
-            <CardHeading>
+            <CardHeading className="text-[15px]">
               {mode === "bootstrap"
-                ? "Create the initial admin account"
+                ? "Create your admin account"
                 : "Sign in to Rackpad"}
             </CardHeading>
+            <p className="text-[13px] text-[var(--text-tertiary)]">
+              {mode === "bootstrap"
+                ? "Set up the first account to get started."
+                : "Welcome back."}
+            </p>
           </CardTitle>
-          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-faint)]">
-            {mode === "bootstrap"
-              ? "SQLite is ready. The app needs its first operator."
-              : "All inventory changes require an authenticated session."}
-          </div>
         </CardHeader>
         <CardBody>
           <form
@@ -243,11 +239,9 @@ export function AuthScreen() {
               <button
                 type="button"
                 onClick={() => void initializeApp(true)}
-                className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)] hover:text-[var(--color-fg)]"
+                className="text-[13px] text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-primary)]"
               >
-                {mode === "bootstrap"
-                  ? "Go to sign in"
-                  : "Recheck server state"}
+                {mode === "bootstrap" ? "Go to sign in" : "Refresh"}
               </button>
               <Button type="submit" disabled={authLoading}>
                 {authLoading

@@ -18,7 +18,6 @@ import {
   CardBody,
   CardHeader,
   CardHeading,
-  CardLabel,
   CardTitle,
 } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -171,7 +170,6 @@ export default function Dashboard() {
           <Card className="col-span-12 xl:col-span-5">
             <CardHeader>
               <CardTitle>
-                <CardLabel>Action queue</CardLabel>
                 <CardHeading>Device status issues</CardHeading>
               </CardTitle>
               <Badge tone={attentionDevices.length > 0 ? "warn" : "ok"}>
@@ -215,8 +213,7 @@ export default function Dashboard() {
           <Card className="col-span-12 xl:col-span-4">
             <CardHeader>
               <CardTitle>
-                <CardLabel>Monitoring</CardLabel>
-                <CardHeading>Monitor targets to review</CardHeading>
+                <CardHeading>Monitor targets</CardHeading>
               </CardTitle>
               <Badge tone={monitorIssues.length > 0 ? "warn" : "ok"}>
                 {enabledMonitors.length} enabled
@@ -259,8 +256,7 @@ export default function Dashboard() {
           <Card className="col-span-12 xl:col-span-3">
             <CardHeader>
               <CardTitle>
-                <CardLabel>Recent activity</CardLabel>
-                <CardHeading>Last 5 changes</CardHeading>
+                <CardHeading>Recent activity</CardHeading>
               </CardTitle>
               <Link
                 to="/audit-log"
@@ -299,7 +295,6 @@ export default function Dashboard() {
           <Card className="col-span-12 lg:col-span-4">
             <CardHeader>
               <CardTitle>
-                <CardLabel>Inventory shape</CardLabel>
                 <CardHeading>Placement coverage</CardHeading>
               </CardTitle>
             </CardHeader>
@@ -337,7 +332,6 @@ export default function Dashboard() {
           <Card className="col-span-12 lg:col-span-4">
             <CardHeader>
               <CardTitle>
-                <CardLabel>By type</CardLabel>
                 <CardHeading>Device mix</CardHeading>
               </CardTitle>
             </CardHeader>
@@ -371,7 +365,6 @@ export default function Dashboard() {
           <Card className="col-span-12 lg:col-span-4">
             <CardHeader>
               <CardTitle>
-                <CardLabel>Network docs</CardLabel>
                 <CardHeading>Coverage gaps</CardHeading>
               </CardTitle>
             </CardHeader>

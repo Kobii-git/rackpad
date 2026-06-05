@@ -47,7 +47,7 @@ export type IpAssignmentType =
 export type IpZoneKind = "static" | "dhcp" | "reserved" | "infrastructure";
 export type IpAllocationMode = "static" | "dhcp-reservation";
 export type UserRole = "admin" | "editor" | "viewer";
-export type MonitorType = "none" | "icmp" | "tcp" | "http" | "https";
+export type MonitorType = "none" | "icmp" | "tcp" | "http" | "https" | "snmp";
 export type DiscoveryStatus = "new" | "imported" | "dismissed";
 export type WifiBand = "2.4ghz" | "5ghz" | "6ghz";
 export type VirtualSwitchKind = "external" | "internal" | "private";
@@ -331,6 +331,10 @@ export interface DeviceMonitor {
   target?: string | null;
   port?: number | null;
   path?: string | null;
+  snmpVersion?: "1" | "2c" | null;
+  snmpCommunity?: string | null;
+  snmpOid?: string | null;
+  snmpExpectedValue?: string | null;
   intervalMs?: number | null;
   enabled: boolean;
   sortOrder: number;

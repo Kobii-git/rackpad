@@ -2,11 +2,11 @@
 
 @theme {
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+    "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono:
-    ui-monospace, "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono",
-    Menlo, monospace;
+    "IBM Plex Mono", ui-monospace, "SFMono-Regular", "SF Mono", Consolas,
+    "Liberation Mono", Menlo, monospace;
 
   --radius-xs: 4px;
   --radius-sm: 6px;
@@ -33,12 +33,12 @@
     --surface-selected: #171f2b;
     --surface-disabled: #10151d;
 
-    --border-subtle: rgb(167 183 205 / 0.07);
-    --border-default: rgb(167 183 205 / 0.12);
-    --border-strong: rgb(167 183 205 / 0.19);
+    --border-subtle: rgb(167 183 205 / 0.09);
+    --border-default: rgb(167 183 205 / 0.16);
+    --border-strong: rgb(167 183 205 / 0.24);
     --border-focus: rgb(233 161 63 / 0.5);
     --border-selected: rgb(233 161 63 / 0.36);
-    --edge-highlight: rgb(255 255 255 / 0.055);
+    --edge-highlight: rgb(255 255 255 / 0.06);
 
     --text-primary: #edf2f7;
     --text-secondary: #bdc7d2;
@@ -65,9 +65,9 @@
     --success-soft: rgb(89 195 106 / 0.14);
     --success-border: rgb(89 195 106 / 0.28);
 
-    --warning: #d7b04c;
-    --warning-soft: rgb(215 176 76 / 0.14);
-    --warning-border: rgb(215 176 76 / 0.28);
+    --warning: #ddc04a;
+    --warning-soft: rgb(221 192 74 / 0.14);
+    --warning-border: rgb(221 192 74 / 0.28);
 
     --danger: #de6666;
     --danger-soft: rgb(222 102 102 / 0.14);
@@ -167,9 +167,9 @@
     --surface-selected: #fdf3e5;
     --surface-disabled: #e8edf3;
 
-    --border-subtle: rgb(15 23 42 / 0.06);
-    --border-default: rgb(15 23 42 / 0.1);
-    --border-strong: rgb(15 23 42 / 0.16);
+    --border-subtle: rgb(15 23 42 / 0.08);
+    --border-default: rgb(15 23 42 / 0.13);
+    --border-strong: rgb(15 23 42 / 0.2);
     --border-focus: rgb(216 134 32 / 0.55);
     --border-selected: rgb(216 134 32 / 0.28);
     --edge-highlight: rgb(255 255 255 / 0.9);
@@ -199,9 +199,9 @@
     --success-soft: rgb(47 143 70 / 0.12);
     --success-border: rgb(47 143 70 / 0.22);
 
-    --warning: #a57a11;
-    --warning-soft: rgb(165 122 17 / 0.12);
-    --warning-border: rgb(165 122 17 / 0.22);
+    --warning: #98810e;
+    --warning-soft: rgb(152 129 14 / 0.13);
+    --warning-border: rgb(152 129 14 / 0.24);
 
     --danger: #ba4141;
     --danger-soft: rgb(186 65 65 / 0.12);
@@ -384,7 +384,7 @@
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     font-size: 10px;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
   }
 
@@ -440,7 +440,7 @@
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     font-size: 10px;
-    letter-spacing: 0.13em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
   }
 
@@ -633,7 +633,7 @@
     font-family: var(--font-mono);
     font-size: 10px;
     font-weight: 500;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.08em;
     text-align: left;
     text-transform: uppercase;
   }

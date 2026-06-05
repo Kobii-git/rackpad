@@ -49,11 +49,26 @@ export function VlanRangeBar({
     [vlans],
   );
 
+  // Linear 1-4094 scaling makes small low-numbered ranges invisible, so give
+  // every defined range a minimum width floor and renormalize. Unallocated
+  // gaps keep their proportional share of whatever space is left.
+  const widths = useMemo(() => {
+    const MIN_RANGE_PCT = 6;
+    const raw = segments.map(
+      (segment) => ((segment.end - segment.start + 1) / TOTAL_VLANS) * 100,
+    );
+    const adjusted = segments.map((segment, index) =>
+      segment.range ? Math.max(raw[index], MIN_RANGE_PCT) : raw[index],
+    );
+    const sum = adjusted.reduce((total, value) => total + value, 0) || 1;
+    return adjusted.map((value) => (value / sum) * 100);
+  }, [segments]);
+
   return (
     <div className="space-y-3">
       <div className="flex h-10 w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[linear-gradient(180deg,rgb(255_255_255_/_0.025),transparent_34%),var(--surface-1)] shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)]">
         {segments.map((segment, index) => {
-          const width = ((segment.end - segment.start + 1) / TOTAL_VLANS) * 100;
+          const width = widths[index];
           const inRangeUsed = vlans.filter(
             (vlan) =>
               vlan.vlanId >= segment.start && vlan.vlanId <= segment.end,
@@ -158,11 +173,11 @@ export function VlanRangeBar({
         })}
       </div>
 
-      <div className="flex justify-between px-1 font-mono text-[9px] text-[var(--text-muted)]">
-        <span>1</span>
-        <span>1024</span>
-        <span>2048</span>
-        <span>3072</span>
+      <div className="flex items-center justify-between px-1 font-mono text-[9px] text-[var(--text-muted)]">
+        <span>VLAN 1</span>
+        <span className="normal-case tracking-normal">
+          defined ranges sized for visibility
+        </span>
         <span>4094</span>
       </div>
 

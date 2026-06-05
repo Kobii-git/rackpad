@@ -42,8 +42,14 @@ coverage
 .eslintcache
 .turbo
 
+# local database
+*.db
+*.db-shm
+*.db-wal
+
 # local release / ops artifacts
 CODEX_REVIEW.md
+UI_REVIEW.md
 COWORK_SESSION_HANDOFF.md
 website/
 Website/

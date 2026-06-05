@@ -80,6 +80,10 @@ type MonitorForm = {
   target: string;
   port: string;
   path: string;
+  snmpVersion: "1" | "2c";
+  snmpCommunity: string;
+  snmpOid: string;
+  snmpExpectedValue: string;
   intervalMinutes: string;
 };
 
@@ -90,6 +94,10 @@ const EMPTY_MONITOR_FORM: MonitorForm = {
   target: "",
   port: "",
   path: "",
+  snmpVersion: "2c",
+  snmpCommunity: "public",
+  snmpOid: "",
+  snmpExpectedValue: "",
   intervalMinutes: "5",
 };
 
@@ -653,9 +661,11 @@ export default function DeviceDetail() {
       const usesPort =
         monitorForm.type === "tcp" ||
         monitorForm.type === "http" ||
-        monitorForm.type === "https";
+        monitorForm.type === "https" ||
+        monitorForm.type === "snmp";
       const usesPath =
         monitorForm.type === "http" || monitorForm.type === "https";
+      const usesSnmp = monitorForm.type === "snmp";
       const payload = {
         name: monitorForm.name.trim() || null,
         enabled: monitorForm.enabled,
@@ -666,6 +676,14 @@ export default function DeviceDetail() {
             ? Number.parseInt(monitorForm.port, 10)
             : null,
         path: usesPath ? monitorForm.path.trim() || null : null,
+        snmpVersion: usesSnmp ? monitorForm.snmpVersion : null,
+        snmpCommunity: usesSnmp
+          ? monitorForm.snmpCommunity.trim() || "public"
+          : null,
+        snmpOid: usesSnmp ? monitorForm.snmpOid.trim() || null : null,
+        snmpExpectedValue: usesSnmp
+          ? monitorForm.snmpExpectedValue.trim() || null
+          : null,
         intervalMs:
           Math.max(1, Number.parseInt(monitorForm.intervalMinutes, 10) || 5) *
           60 *
@@ -854,9 +872,11 @@ export default function DeviceDetail() {
   const showMonitorPortField =
     monitorForm.type === "tcp" ||
     monitorForm.type === "http" ||
-    monitorForm.type === "https";
+    monitorForm.type === "https" ||
+    monitorForm.type === "snmp";
   const showMonitorPathField =
     monitorForm.type === "http" || monitorForm.type === "https";
+  const showMonitorSnmpFields = monitorForm.type === "snmp";
   const monitorTypeDescription = describeMonitorType(monitorForm.type);
   const monitorStateTone =
     device.status === "online"
@@ -1685,6 +1705,7 @@ export default function DeviceDetail() {
                           <option value="tcp">tcp</option>
                           <option value="http">http</option>
                           <option value="https">https</option>
+                          <option value="snmp">snmp</option>
                         </Select>
                       </Field>
                       <Field label="Target">
@@ -1732,7 +1753,9 @@ export default function DeviceDetail() {
                                 ? "22, 443, 8006"
                                 : monitorForm.type === "https"
                                   ? "443"
-                                  : "80"
+                                  : monitorForm.type === "snmp"
+                                    ? "161"
+                                    : "80"
                             }
                           />
                         </Field>
@@ -1753,6 +1776,65 @@ export default function DeviceDetail() {
                         </Field>
                       )}
                     </div>
+
+                    {showMonitorSnmpFields && (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Field label="SNMP version">
+                          <Select
+                            value={monitorForm.snmpVersion}
+                            disabled={!canManageMonitoring}
+                            onChange={(value) =>
+                              setMonitorForm((prev) => ({
+                                ...prev,
+                                snmpVersion: value as MonitorForm["snmpVersion"],
+                              }))
+                            }
+                          >
+                            <option value="2c">v2c</option>
+                            <option value="1">v1</option>
+                          </Select>
+                        </Field>
+                        <Field label="Community">
+                          <Input
+                            value={monitorForm.snmpCommunity}
+                            disabled={!canManageMonitoring}
+                            onChange={(event) =>
+                              setMonitorForm((prev) => ({
+                                ...prev,
+                                snmpCommunity: event.target.value,
+                              }))
+                            }
+                            placeholder="public"
+                          />
+                        </Field>
+                        <Field label="OID">
+                          <Input
+                            value={monitorForm.snmpOid}
+                            disabled={!canManageMonitoring}
+                            onChange={(event) =>
+                              setMonitorForm((prev) => ({
+                                ...prev,
+                                snmpOid: event.target.value,
+                              }))
+                            }
+                            placeholder=".1.3.6.1.2.1.2.2.1.8.1"
+                          />
+                        </Field>
+                        <Field label="Expected value">
+                          <Input
+                            value={monitorForm.snmpExpectedValue}
+                            disabled={!canManageMonitoring}
+                            onChange={(event) =>
+                              setMonitorForm((prev) => ({
+                                ...prev,
+                                snmpExpectedValue: event.target.value,
+                              }))
+                            }
+                            placeholder="Optional, e.g. 1 for ifOperStatus up"
+                          />
+                        </Field>
+                      </div>
+                    )}
 
                     <div className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4 md:grid-cols-3">
                       <MonitorStat
@@ -2664,6 +2746,10 @@ function buildNewMonitorForm(
     target: defaultTarget,
     port: "",
     path: "",
+    snmpVersion: "2c",
+    snmpCommunity: "public",
+    snmpOid: "",
+    snmpExpectedValue: "",
     intervalMinutes: "5",
   };
 }
@@ -2676,6 +2762,10 @@ function monitorToForm(monitor: DeviceMonitor, device: Device): MonitorForm {
     target: monitor.target ?? device.managementIp ?? "",
     port: monitor.port != null ? String(monitor.port) : "",
     path: monitor.path ?? "",
+    snmpVersion: monitor.snmpVersion ?? "2c",
+    snmpCommunity: monitor.snmpCommunity ?? "public",
+    snmpOid: monitor.snmpOid ?? "",
+    snmpExpectedValue: monitor.snmpExpectedValue ?? "",
     intervalMinutes:
       monitor.intervalMs != null
         ? String(Math.max(1, Math.round(monitor.intervalMs / 60000)))
@@ -2693,6 +2783,8 @@ function describeMonitorType(type: MonitorForm["type"]) {
       return "HTTP checks fetch a URL from the Rackpad server and expect a successful response.";
     case "https":
       return "HTTPS checks fetch a secure URL from the Rackpad server and expect a successful response.";
+    case "snmp":
+      return "SNMP polls one OID from the Rackpad server. Use an expected value for interface checks, such as ifOperStatus = 1 for up.";
     default:
       return "Choose a monitor type to enable automated health checks for this device.";
   }

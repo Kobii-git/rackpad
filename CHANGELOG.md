@@ -6,6 +6,40 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.5.9-beta.0] - 2026-06-05
+
+### Added
+
+- SNMP device monitoring (SNMP v1/v2c) with OID polling alongside the existing
+  ICMP/TCP/HTTP probes, plus expanded monitoring tests.
+- Self-hosted IBM Plex Sans / IBM Plex Mono fonts bundled with the app. The
+  typeface is now actually applied to the UI (previously it was fetched from the
+  Google Fonts CDN but never referenced), and there is no longer a runtime CDN
+  dependency, so Rackpad renders correctly offline / air-gapped.
+
+### Changed
+
+- Visual overhaul pass for a more crafted, less templated feel:
+  - Removed redundant duplicate section eyebrows on the Dashboard and tightened
+    the uppercase-label letter-spacing app-wide.
+  - Rewrote loading, error, login, and sidebar copy to be terse and human.
+  - Replaced the login card's multi-color gradient with a single brand hairline.
+  - Reworked the sidebar footer to a clean identity (session expiry moved to a
+    tooltip) and refreshed the wordmark logo to read as a rack, not a menu.
+  - Firmer panel separation in both themes and a clearer split between the brand
+    amber and the warning yellow so calls-to-action no longer read as cautions.
+  - Shortened verbose page subtitles (IPAM, VLANs, WiFi).
+
+### Fixed
+
+- Rack "Both" face view now shows the front and rear elevations side-by-side
+  instead of pushing the rear face off-screen.
+- The VLAN reserved-space bar now sizes defined ranges so small low-numbered
+  ranges stay visible and clickable instead of collapsing to a sliver.
+- Constrained the Labs grid so workspaces no longer stretch across empty space.
+- Removed two stale duplicate source files (`ReferenceImageGallery 2.tsx`,
+  `reference-images 2.ts`).
+
 ## [1.5.8] - 2026-06-05
 
 ### Added

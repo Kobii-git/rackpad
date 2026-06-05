@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import { requireAdmin, requireAuth } from '../lib/auth.js'
 import { createId } from '../lib/ids.js'
-import { listMonitors, MONITOR_TYPES, reconcileDeviceMonitorRollup, runDeviceChecks, runMonitorCheck } from '../lib/monitoring.js'
+import { listMonitors, MONITOR_TYPES, reconcileDeviceMonitorRollup, runDeviceChecks, runMonitorCheck, SNMP_VERSIONS } from '../lib/monitoring.js'
 import {
   asObject,
   optionalBoolean,
@@ -42,6 +42,10 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     const target = optionalString(body, 'target', { maxLength: 200 })
     const path = optionalString(body, 'path', { maxLength: 200 })
     const port = optionalInteger(body, 'port', { min: 1, max: 65535 })
+    const snmpVersion = optionalEnum(body, 'snmpVersion', SNMP_VERSIONS) ?? '2c'
+    const snmpCommunity = optionalString(body, 'snmpCommunity', { maxLength: 120 }) ?? 'public'
+    const snmpOid = optionalString(body, 'snmpOid', { maxLength: 160 })
+    const snmpExpectedValue = optionalString(body, 'snmpExpectedValue', { maxLength: 200 })
     const intervalMs = optionalInteger(body, 'intervalMs', { min: 1000, max: 1000 * 60 * 60 * 24 })
     const requestedEnabled = optionalBoolean(body, 'enabled')
     const enabled = type === 'none' ? false : (requestedEnabled ?? true)
@@ -50,12 +54,49 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     if (type !== 'none' && !normalizedTarget) {
       throw new ValidationError('Target is required when health checks are enabled.')
     }
+    if (type === 'snmp' && !snmpOid) {
+      throw new ValidationError('SNMP OID is required for SNMP health checks.')
+    }
+    validateSnmpOid(snmpOid)
 
     const id = createId('mon')
     db.prepare(`
-      INSERT INTO deviceMonitors (id, deviceId, name, type, target, port, path, intervalMs, enabled, sortOrder, lastCheckAt, lastResult, lastMessage)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
-    `).run(id, deviceId, name, type, normalizedTarget, port ?? null, path ?? null, intervalMs ?? null, enabled ? 1 : 0, nextSortOrder)
+      INSERT INTO deviceMonitors (
+        id,
+        deviceId,
+        name,
+        type,
+        target,
+        port,
+        path,
+        snmpVersion,
+        snmpCommunity,
+        snmpOid,
+        snmpExpectedValue,
+        intervalMs,
+        enabled,
+        sortOrder,
+        lastCheckAt,
+        lastResult,
+        lastMessage
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
+    `).run(
+      id,
+      deviceId,
+      name,
+      type,
+      normalizedTarget,
+      type === 'snmp' ? port ?? 161 : port ?? null,
+      type === 'snmp' ? null : path ?? null,
+      type === 'snmp' ? snmpVersion : null,
+      type === 'snmp' ? snmpCommunity : null,
+      type === 'snmp' ? snmpOid : null,
+      type === 'snmp' ? snmpExpectedValue ?? null : null,
+      intervalMs ?? null,
+      enabled ? 1 : 0,
+      nextSortOrder,
+    )
 
     return listMonitors(deviceId).find((monitor) => monitor.id === id) ?? null
   })
@@ -75,14 +116,42 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     const target = optionalString(body, 'target', { maxLength: 200 })
     const path = optionalString(body, 'path', { maxLength: 200 })
     const port = optionalInteger(body, 'port', { min: 1, max: 65535 })
+    const snmpVersion = optionalEnum(body, 'snmpVersion', SNMP_VERSIONS)
+    const snmpCommunity = optionalString(body, 'snmpCommunity', { maxLength: 120 })
+    const snmpOid = optionalString(body, 'snmpOid', { maxLength: 160 })
+    const snmpExpectedValue = optionalString(body, 'snmpExpectedValue', { maxLength: 200 })
     const intervalMs = optionalInteger(body, 'intervalMs', { min: 1000, max: 1000 * 60 * 60 * 24 })
     const requestedEnabled = optionalBoolean(body, 'enabled')
 
     const nextType = (type ?? String(current.type)) as (typeof MONITOR_TYPES)[number]
     const nextTarget = target === undefined ? (current.target == null ? null : String(current.target)) : target
     const nextName = name === undefined ? (current.name ? String(current.name) : 'Primary') : (name ?? 'Primary')
-    const nextPath = path === undefined ? (current.path == null ? null : String(current.path)) : path
+    const nextPath = nextType === 'snmp'
+      ? null
+      : path === undefined
+        ? (current.path == null ? null : String(current.path))
+        : path
     const nextPort = port === undefined ? (current.port == null ? null : Number(current.port)) : port
+    const nextSnmpVersion = nextType === 'snmp'
+      ? snmpVersion === undefined
+        ? (current.snmpVersion ? String(current.snmpVersion) as (typeof SNMP_VERSIONS)[number] : '2c')
+        : snmpVersion ?? '2c'
+      : null
+    const nextSnmpCommunity = nextType === 'snmp'
+      ? snmpCommunity === undefined
+        ? (current.snmpCommunity == null ? 'public' : String(current.snmpCommunity))
+        : snmpCommunity ?? 'public'
+      : null
+    const nextSnmpOid = nextType === 'snmp'
+      ? snmpOid === undefined
+        ? (current.snmpOid == null ? null : String(current.snmpOid))
+        : snmpOid
+      : null
+    const nextSnmpExpectedValue = nextType === 'snmp'
+      ? snmpExpectedValue === undefined
+        ? (current.snmpExpectedValue == null ? null : String(current.snmpExpectedValue))
+        : snmpExpectedValue
+      : null
     const nextIntervalMs = intervalMs === undefined ? (current.intervalMs == null ? null : Number(current.intervalMs)) : intervalMs
     const nextEnabled = nextType === 'none'
       ? false
@@ -93,12 +162,40 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     if (nextType !== 'none' && !nextTarget) {
       throw new ValidationError('Target is required when health checks are enabled.')
     }
+    if (nextType === 'snmp' && !nextSnmpOid) {
+      throw new ValidationError('SNMP OID is required for SNMP health checks.')
+    }
+    validateSnmpOid(nextSnmpOid)
 
     db.prepare(`
       UPDATE deviceMonitors
-      SET name = ?, type = ?, target = ?, port = ?, path = ?, intervalMs = ?, enabled = ?
+      SET
+        name = ?,
+        type = ?,
+        target = ?,
+        port = ?,
+        path = ?,
+        snmpVersion = ?,
+        snmpCommunity = ?,
+        snmpOid = ?,
+        snmpExpectedValue = ?,
+        intervalMs = ?,
+        enabled = ?
       WHERE id = ?
-    `).run(nextName, nextType, nextTarget, nextPort ?? null, nextPath ?? null, nextIntervalMs ?? null, nextEnabled ? 1 : 0, req.params.id)
+    `).run(
+      nextName,
+      nextType,
+      nextTarget,
+      nextType === 'snmp' ? nextPort ?? 161 : nextPort ?? null,
+      nextPath ?? null,
+      nextSnmpVersion,
+      nextSnmpCommunity,
+      nextSnmpOid,
+      nextSnmpExpectedValue,
+      nextIntervalMs ?? null,
+      nextEnabled ? 1 : 0,
+      req.params.id,
+    )
     reconcileDeviceMonitorRollup(String(current.deviceId))
 
     return listMonitors(String(current.deviceId)).find((monitor) => monitor.id === req.params.id) ?? null
@@ -146,4 +243,18 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     }
     return result
   })
+}
+
+function validateSnmpOid(value: string | null | undefined) {
+  if (!value) return
+  const parts = value.replace(/^\./, '').split('.')
+  if (parts.length < 2 || parts.some((part) => !/^\d+$/.test(part))) {
+    throw new ValidationError('SNMP OID must be a dotted numeric object identifier.')
+  }
+  const [rootRaw, branchRaw] = parts
+  const root = Number.parseInt(rootRaw, 10)
+  const branch = Number.parseInt(branchRaw, 10)
+  if (root < 0 || root > 2 || branch < 0 || (root < 2 && branch > 39)) {
+    throw new ValidationError('SNMP OID root is invalid.')
+  }
 }

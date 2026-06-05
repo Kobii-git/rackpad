@@ -302,7 +302,7 @@ export default function VlansView() {
   return (
     <>
       <TopBar
-        subtitle="Layer 2 segmentation and VLAN ID ranges"
+        subtitle="Network"
         title="VLANs"
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">

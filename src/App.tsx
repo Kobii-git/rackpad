@@ -253,12 +253,11 @@ class RouteErrorBoundary extends Component<
             Workspace error
           </div>
           <h2 className="mt-2 text-lg font-semibold text-[var(--text-primary)]">
-            This Rackpad workspace could not load.
+            This page didn't load.
           </h2>
           <p className="mt-2 text-sm text-[var(--text-tertiary)]">
-            The rest of the app is still available. Reloading usually clears a
-            stale browser chunk after an update; if it repeats, the message
-            below tells us exactly where to look.
+            The rest of the app still works. A reload usually fixes it after an
+            update — the details below help if it keeps happening.
           </p>
           <pre className="mt-3 max-h-36 overflow-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.24)] p-3 font-mono text-[11px] text-[var(--text-secondary)]">
             {this.state.error.message}
@@ -279,10 +278,10 @@ function RouteLoading() {
     <div className="flex flex-1 items-center justify-center px-6">
       <div className="w-full max-w-sm rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-bg-2)] p-5 text-center shadow-[var(--shadow-elev)]">
         <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-          Loading route
+          Loading
         </div>
         <div className="mt-2 text-sm text-[var(--color-fg-subtle)]">
-          Pulling the next Rackpad workspace into view.
+          One moment…
         </div>
       </div>
     </div>
