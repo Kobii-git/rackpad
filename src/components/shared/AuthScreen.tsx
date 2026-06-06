@@ -16,10 +16,12 @@ import {
   startOidcLogin,
   useStore,
 } from "@/lib/store";
+import { LanguageSelector, useI18n } from "@/i18n";
 
 type Mode = "login" | "bootstrap";
 
 export function AuthScreen() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const needsBootstrap = useStore((s) => s.needsBootstrap);
   const authLoading = useStore((s) => s.authLoading);
@@ -63,15 +65,16 @@ export function AuthScreen() {
           <CardTitle>
             <CardHeading className="text-[15px]">
               {mode === "bootstrap"
-                ? "Create your admin account"
-                : "Sign in to Rackpad"}
+                ? t("Create your admin account")
+                : t("Sign in to Rackpad")}
             </CardHeading>
             <p className="text-[13px] text-[var(--text-tertiary)]">
               {mode === "bootstrap"
-                ? "Set up the first account to get started."
-                : "Welcome back."}
+                ? t("Set up the first account to get started.")
+                : t("Welcome back.")}
             </p>
           </CardTitle>
+          <LanguageSelector className="w-36" />
         </CardHeader>
         <CardBody>
           <form
@@ -80,7 +83,7 @@ export function AuthScreen() {
           >
             {mode === "bootstrap" ? (
               <>
-                <Field label="Username">
+                <Field label={t("Username")}>
                   <Input
                     autoFocus
                     value={bootstrapForm.username}
@@ -93,7 +96,7 @@ export function AuthScreen() {
                     placeholder="admin"
                   />
                 </Field>
-                <Field label="Display name">
+                <Field label={t("Display name")}>
                   <Input
                     value={bootstrapForm.displayName}
                     onChange={(event) =>
@@ -102,10 +105,10 @@ export function AuthScreen() {
                         displayName: event.target.value,
                       }))
                     }
-                    placeholder="Home Lab Admin"
+                    placeholder={t("Home Lab Admin")}
                   />
                 </Field>
-                <Field label="Password">
+                <Field label={t("Password")}>
                   <Input
                     type="password"
                     value={bootstrapForm.password}
@@ -115,10 +118,10 @@ export function AuthScreen() {
                         password: event.target.value,
                       }))
                     }
-                    placeholder="At least 10 characters"
+                    placeholder={t("At least 10 characters")}
                   />
                 </Field>
-                <Field label="Initial data">
+                <Field label={t("Initial data")}>
                   <div className="grid gap-2 md:grid-cols-2">
                     <button
                       type="button"
@@ -134,10 +137,11 @@ export function AuthScreen() {
                           : "border-[var(--color-line)] bg-[var(--color-bg)] text-[var(--color-fg-subtle)] hover:border-[var(--color-line-strong)]"
                       }`}
                     >
-                      <div className="font-medium">Start empty</div>
+                      <div className="font-medium">{t("Start empty")}</div>
                       <div className="mt-1 text-xs">
-                        Create a clean lab with no sample racks, devices, VLANs,
-                        or IPAM data.
+                        {t(
+                          "Create a clean lab with no sample racks, devices, VLANs, or IPAM data.",
+                        )}
                       </div>
                     </button>
                     <button
@@ -154,11 +158,11 @@ export function AuthScreen() {
                           : "border-[var(--color-line)] bg-[var(--color-bg)] text-[var(--color-fg-subtle)] hover:border-[var(--color-line-strong)]"
                       }`}
                     >
-                      <div className="font-medium">Load demo data</div>
+                      <div className="font-medium">{t("Load demo data")}</div>
                       <div className="mt-1 text-xs">
-                        Preload a complete sample environment with multiple
-                        labs, racks, WiFi, discovery findings, VMs, and
-                        monitoring targets.
+                        {t(
+                          "Preload a complete sample environment with multiple labs, racks, WiFi, discovery findings, VMs, and monitoring targets.",
+                        )}
                       </div>
                     </button>
                   </div>
@@ -167,7 +171,7 @@ export function AuthScreen() {
                   <>
                     <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-faint)]">
                       <div className="h-px flex-1 bg-[var(--color-line)]" />
-                      <span>or</span>
+                      <span>{t("or")}</span>
                       <div className="h-px flex-1 bg-[var(--color-line)]" />
                     </div>
                     <Button
@@ -176,7 +180,7 @@ export function AuthScreen() {
                       className="w-full"
                       onClick={() => startOidcLogin("/")}
                     >
-                      Continue with {oidc.label}
+                      {t("Continue with {label}", { label: oidc.label })}
                     </Button>
                   </>
                 )}
@@ -191,16 +195,16 @@ export function AuthScreen() {
                       className="w-full"
                       onClick={() => startOidcLogin("/")}
                     >
-                      Continue with {oidc.label}
+                      {t("Continue with {label}", { label: oidc.label })}
                     </Button>
                     <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-faint)]">
                       <div className="h-px flex-1 bg-[var(--color-line)]" />
-                      <span>or</span>
+                      <span>{t("or")}</span>
                       <div className="h-px flex-1 bg-[var(--color-line)]" />
                     </div>
                   </>
                 )}
-                <Field label="Username">
+                <Field label={t("Username")}>
                   <Input
                     autoFocus
                     value={loginForm.username}
@@ -213,7 +217,7 @@ export function AuthScreen() {
                     placeholder="admin"
                   />
                 </Field>
-                <Field label="Password">
+                <Field label={t("Password")}>
                   <Input
                     type="password"
                     value={loginForm.password}
@@ -223,7 +227,7 @@ export function AuthScreen() {
                         password: event.target.value,
                       }))
                     }
-                    placeholder="Your account password"
+                    placeholder={t("Your account password")}
                   />
                 </Field>
               </>
@@ -241,16 +245,16 @@ export function AuthScreen() {
                 onClick={() => void initializeApp(true)}
                 className="text-[13px] text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-primary)]"
               >
-                {mode === "bootstrap" ? "Go to sign in" : "Refresh"}
+                {mode === "bootstrap" ? t("Go to sign in") : t("Refresh")}
               </button>
               <Button type="submit" disabled={authLoading}>
                 {authLoading
                   ? mode === "bootstrap"
-                    ? "Creating account..."
-                    : "Signing in..."
+                    ? t("Creating account...")
+                    : t("Signing in...")
                   : mode === "bootstrap"
-                    ? "Create admin account"
-                    : "Sign in"}
+                    ? t("Create admin account")
+                    : t("Sign in")}
               </Button>
             </div>
           </form>

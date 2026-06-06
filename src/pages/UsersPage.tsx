@@ -18,13 +18,22 @@ import {
   downloadAdminBackup,
   isAdmin,
   restoreAdminBackupSnapshot,
+  updateUiSettings,
   updateUserAccount,
   useStore,
 } from "@/lib/store";
-import type { AlertSettings, AuditEntry, AppUser, UserRole } from "@/lib/types";
+import type {
+  AlertSettings,
+  AuditEntry,
+  AppUser,
+  SupportedLanguage,
+  UserRole,
+} from "@/lib/types";
 import { APP_VERSION_LABEL } from "@/lib/version";
+import { LanguageSelector, useI18n } from "@/i18n";
 import {
   Download,
+  Languages,
   Plus,
   Save,
   Shield,
@@ -69,7 +78,9 @@ const DEFAULT_ALERT_SETTINGS: AlertSettings = {
 };
 
 export default function UsersPage() {
+  const { language, t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
+  const uiSettings = useStore((s) => s.uiSettings);
   const users = useStore((s) => s.users);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -94,6 +105,16 @@ export default function UsersPage() {
   const [alertHistoryLoading, setAlertHistoryLoading] = useState(true);
   const [alertHistoryError, setAlertHistoryError] = useState("");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [defaultLanguage, setDefaultLanguage] = useState<SupportedLanguage>(
+    uiSettings.defaultLanguage,
+  );
+  const [languageSaving, setLanguageSaving] = useState(false);
+  const [languageError, setLanguageError] = useState("");
+  const [languageSuccess, setLanguageSuccess] = useState("");
+
+  useEffect(() => {
+    setDefaultLanguage(uiSettings.defaultLanguage);
+  }, [uiSettings.defaultLanguage]);
 
   useEffect(() => {
     if (!users.length) {
@@ -210,17 +231,17 @@ export default function UsersPage() {
   if (!isAdmin(currentUser)) {
     return (
       <>
-        <TopBar subtitle="Administration" title="Users" />
+        <TopBar subtitle={t("Administration")} title={t("Admin")} />
         <div className="flex flex-1 items-center justify-center px-6">
           <Card className="w-full max-w-lg">
             <CardHeader>
               <CardTitle>
-                <CardLabel>Restricted</CardLabel>
-                <CardHeading>Administrator access required</CardHeading>
+                <CardLabel>{t("Restricted")}</CardLabel>
+                <CardHeading>{t("Administrator access required")}</CardHeading>
               </CardTitle>
             </CardHeader>
             <CardBody className="text-sm text-[var(--color-fg-subtle)]">
-              This page is only available to administrator accounts.
+              {t("This page is only available to administrator accounts.")}
             </CardBody>
           </Card>
         </div>
@@ -364,14 +385,32 @@ export default function UsersPage() {
     }
   }
 
+  async function handleSaveLanguage() {
+    setLanguageSaving(true);
+    setLanguageError("");
+    setLanguageSuccess("");
+    try {
+      await updateUiSettings({ defaultLanguage });
+      setLanguageSuccess(t("Language settings saved."));
+    } catch (err) {
+      setLanguageError(
+        err instanceof Error
+          ? err.message
+          : t("Failed to save language settings."),
+      );
+    } finally {
+      setLanguageSaving(false);
+    }
+  }
+
   return (
     <>
       <TopBar
-        subtitle="Administration"
-        title="Users"
+        subtitle={t("Administration")}
+        title={t("Admin")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {users.length} accounts
+            {t("{count} accounts", { count: users.length })}
           </span>
         }
         actions={
@@ -384,7 +423,7 @@ export default function UsersPage() {
             }}
           >
             <Plus className="size-3.5" />
-            Add user
+            {t("Add user")}
           </Button>
         }
       />
@@ -449,6 +488,64 @@ export default function UsersPage() {
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
           <div className="max-w-3xl space-y-5">
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  <CardLabel>{t("Admin")}</CardLabel>
+                  <CardHeading>{t("Language & regional settings")}</CardHeading>
+                </CardTitle>
+                <Badge tone="info">
+                  <Languages className="size-3" />
+                  {language === "fr" ? t("French") : t("English")}
+                </Badge>
+              </CardHeader>
+              <CardBody className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <LanguageSelector label={t("This browser")} />
+                  <Field label={t("Instance default")}>
+                    <select
+                      value={defaultLanguage}
+                      onChange={(event) =>
+                        setDefaultLanguage(
+                          event.target.value as SupportedLanguage,
+                        )
+                      }
+                      className="rk-control h-8 w-full rounded-[var(--radius-sm)] px-2.5 text-sm text-[var(--text-primary)] focus-visible:outline-none"
+                      aria-label={t("Default language")}
+                    >
+                      <option value="en">{t("English")}</option>
+                      <option value="fr">{t("French")}</option>
+                    </select>
+                  </Field>
+                </div>
+                <div className="text-sm text-[var(--color-fg-subtle)]">
+                  {t(
+                    "This browser changes immediately. The instance default is used for new browsers before they choose a language.",
+                  )}
+                </div>
+                {languageError && (
+                  <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-sm text-[var(--color-err)]">
+                    {languageError}
+                  </div>
+                )}
+                {languageSuccess && (
+                  <div className="rounded-[var(--radius-sm)] border border-[var(--color-ok)]/30 bg-[var(--color-ok)]/10 px-3 py-2 text-sm text-[var(--color-ok)]">
+                    {languageSuccess}
+                  </div>
+                )}
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={() => void handleSaveLanguage()}
+                    disabled={languageSaving}
+                  >
+                    <Save className="size-3.5" />
+                    {languageSaving ? t("Saving...") : t("Save language")}
+                  </Button>
+                </div>
+              </CardBody>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>

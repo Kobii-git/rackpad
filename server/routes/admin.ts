@@ -12,6 +12,11 @@ import {
 } from "../lib/alerts.js";
 import { createId } from "../lib/ids.js";
 import {
+  loadUiSettings,
+  normalizeLanguage,
+  saveUiSettings,
+} from "../lib/ui-settings.js";
+import {
   asObject,
   optionalBoolean,
   optionalInteger,
@@ -940,6 +945,34 @@ const restoreBackupSnapshot = db.transaction(
 );
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
+  app.get("/ui-settings", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    return loadUiSettings();
+  });
+
+  app.put("/ui-settings", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const body = asObject(req.body);
+    const saved = saveUiSettings({
+      defaultLanguage: normalizeLanguage(body.defaultLanguage),
+    });
+    db.prepare(
+      `
+      INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+    ).run(
+      createId("a"),
+      new Date().toISOString(),
+      req.authUser.username,
+      "admin.ui_settings.update",
+      "UiSettings",
+      "ui-settings",
+      `Updated default language to ${saved.defaultLanguage}.`,
+    );
+    return saved;
+  });
+
   app.get("/alert-settings", async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     return loadAlertSettings();

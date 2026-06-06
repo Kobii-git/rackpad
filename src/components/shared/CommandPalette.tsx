@@ -23,6 +23,7 @@ import {
   FileText,
   ScrollText,
   Route,
+  Shield,
   UploadCloud,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -144,6 +145,14 @@ const PAGES: SearchResult[] = [
     subtitle: "Markdown notes",
     href: "/documentation",
     Icon: BookOpen,
+  },
+  {
+    id: "p-admin",
+    group: "Pages",
+    title: "Admin",
+    subtitle: "Accounts and settings",
+    href: "/admin",
+    Icon: Shield,
   },
 ];
 

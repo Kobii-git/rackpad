@@ -6,6 +6,24 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.5.9-beta.1] - 2026-06-06
+
+### Added
+
+- Added a lightweight typed localization layer with English as the fallback
+  language and French as the first translated locale.
+- Added a language selector to the setup/sign-in screen and an Admin language
+  settings card for saving the instance default language.
+- Added public `/api/auth/status` UI settings and admin-only
+  `/api/admin/ui-settings` read/update endpoints.
+
+### Changed
+
+- Renamed the user-facing Users area to Admin, moved navigation to `/admin`,
+  and kept `/users` as a backwards-compatible redirect.
+- The app now resolves language by browser preference first, then instance
+  default, then English, and updates the document language for English/French.
+
 ## [1.5.9-beta.0] - 2026-06-05
 
 ### Added

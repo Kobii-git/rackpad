@@ -65,6 +65,12 @@ export type DeviceServiceType =
   | "app"
   | "custom";
 
+export type SupportedLanguage = "en" | "fr";
+
+export interface UiSettings {
+  defaultLanguage: SupportedLanguage;
+}
+
 export interface AlertSettings {
   enabled: boolean;
   notifyOnDown: boolean;

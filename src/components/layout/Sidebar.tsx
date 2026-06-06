@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { selectLab, useStore } from "@/lib/store";
+import { useI18n } from "@/i18n";
 import {
   APP_CHANNEL_LABEL,
   APP_IS_DEV,
@@ -54,6 +55,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onOpenSearch }: SidebarProps) {
+  const { t } = useI18n();
   const [labMenuOpen, setLabMenuOpen] = useState(false);
   const [pendingLabId, setPendingLabId] = useState<string | null>(null);
   const labs = useStore((s) => s.labs);
@@ -65,7 +67,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
     currentUser?.role === "admin"
       ? ([
           ...baseNavItems,
-          { to: "/users", icon: Shield, label: "Users" },
+          { to: "/admin", icon: Shield, label: "Admin" },
         ] as const)
       : baseNavItems;
 
@@ -89,7 +91,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
             Rackpad
           </div>
           <div className="text-[11px] text-[var(--text-muted)]">
-            Homelab inventory
+            {t("Homelab inventory")}
           </div>
         </div>
         <div className="ml-auto flex flex-col items-end gap-1">
@@ -119,7 +121,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
         >
           <div className="min-w-0 flex flex-col leading-tight">
             <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
-              Lab
+              {t("Lab")}
             </span>
             <span className="truncate text-sm font-medium text-[var(--text-primary)]">
               {lab.name}
@@ -153,8 +155,8 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
                     {pendingLabId === entry.id
                       ? "..."
                       : entry.id === lab.id
-                        ? "active"
-                        : "use"}
+                        ? t("active")
+                        : t("use")}
                   </span>
                 </button>
               ))}
@@ -164,7 +166,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
               onClick={() => setLabMenuOpen(false)}
               className="mt-2 flex items-center justify-between rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[rgb(255_255_255_/_0.015)] px-2.5 py-2 text-xs text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
             >
-              <span>Manage labs</span>
+              <span>{t("Manage labs")}</span>
               <Building2 className="size-3.5" />
             </Link>
           </div>
@@ -176,7 +178,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
         className="mx-3 mb-3 flex w-[calc(100%-1.5rem)] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[rgb(255_255_255_/_0.012)] px-3 py-2 text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)]"
       >
         <Search className="size-3.5" />
-        <span className="text-xs">Search...</span>
+        <span className="text-xs">{t("Search...")}</span>
         <kbd className="ml-auto rounded-[6px] border border-[var(--border-default)] bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)]">
           Ctrl+K
         </kbd>
@@ -206,7 +208,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
                   )}
                 />
                 <item.icon className="size-4 shrink-0" />
-                <span>{item.label}</span>
+                <span>{t(item.label)}</span>
               </>
             )}
           </NavLink>
@@ -233,7 +235,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
                 {currentUser.displayName}
               </div>
               <div className="text-[11px] capitalize text-[var(--text-muted)]">
-                {currentUser.role}
+                {t(currentUser.role)}
               </div>
             </div>
           </div>

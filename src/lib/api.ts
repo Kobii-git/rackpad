@@ -24,6 +24,7 @@ import type {
   ReferenceImageEntityType,
   Room,
   Subnet,
+  UiSettings,
   UserRole,
   Vlan,
   VlanRange,
@@ -174,6 +175,7 @@ export type MonitorPatch = Nullable<
 export interface AuthStatus {
   needsBootstrap: boolean;
   oidc: OidcPublicConfig;
+  uiSettings: UiSettings;
 }
 
 let authToken = readStoredToken();
@@ -413,6 +415,17 @@ export const api = {
       channels: Array<{ channel: string; delivered: boolean }>;
     }>("/admin/alert-settings/test", {
       method: "POST",
+    });
+  },
+
+  getUiSettings() {
+    return request<UiSettings>("/admin/ui-settings");
+  },
+
+  updateUiSettings(body: UiSettings) {
+    return request<UiSettings>("/admin/ui-settings", {
+      method: "PUT",
+      body: JSON.stringify(body),
     });
   },
 

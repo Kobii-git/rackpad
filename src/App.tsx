@@ -27,7 +27,7 @@ const ReportsView = lazy(() => import("@/pages/ReportsView"));
 const AuditLogView = lazy(() => import("@/pages/AuditLogView"));
 const VisualizerView = lazy(() => import("@/pages/VisualizerView"));
 const DocumentationView = lazy(() => import("@/pages/DocumentationView"));
-const UsersPage = lazy(() => import("@/pages/UsersPage"));
+const AdminPage = lazy(() => import("@/pages/UsersPage"));
 const OidcCallback = lazy(() => import("@/pages/OidcCallback"));
 
 export default function App() {
@@ -187,13 +187,14 @@ export default function App() {
           }
         />
         <Route
-          path="/users"
+          path="/admin"
           element={
             <RouteFrame>
-              <UsersPage />
+              <AdminPage />
             </RouteFrame>
           }
         />
+        <Route path="/users" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

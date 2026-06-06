@@ -6,8 +6,10 @@ import { CommandPalette } from "@/components/shared/CommandPalette";
 import { AuthScreen } from "@/components/shared/AuthScreen";
 import { Button } from "@/components/ui/Button";
 import { initializeApp, loadAll, useStore } from "@/lib/store";
+import { useI18n } from "@/i18n";
 
 export function AppShell() {
+  const { t } = useI18n();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const authReady = useStore((s) => s.authReady);
   const authLoading = useStore((s) => s.authLoading);
@@ -55,8 +57,8 @@ export function AppShell() {
               showLoadingCard ? (
                 <CenteredStatus
                   eyebrow="Rackpad"
-                  title={authLoading ? "Signing in…" : "Starting up…"}
-                  body="One moment."
+                  title={authLoading ? t("Signing in…") : t("Starting up…")}
+                  body={t("One moment.")}
                 />
               ) : (
                 <AuthScreen />
@@ -64,16 +66,16 @@ export function AppShell() {
             ) : !loaded ? (
               <CenteredStatus
                 eyebrow="Rackpad"
-                title={loading ? "Loading your lab…" : "Couldn't load data"}
+                title={loading ? t("Loading your lab…") : t("Couldn't load data")}
                 body={
                   loading
-                    ? "Fetching your inventory."
-                    : (error ?? "Something went wrong. Try again.")
+                    ? t("Fetching your inventory.")
+                    : (error ?? t("Something went wrong. Try again."))
                 }
                 action={
                   !loading ? (
                     <Button size="sm" onClick={() => void loadAll(true)}>
-                      Retry
+                      {t("Retry")}
                     </Button>
                   ) : undefined
                 }

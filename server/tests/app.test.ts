@@ -52,6 +52,7 @@ test("bootstrap creates the first admin account and session", async () => {
   assert.deepEqual(readJson(statusRes), {
     needsBootstrap: true,
     oidc: { enabled: false, label: "OIDC" },
+    uiSettings: { defaultLanguage: "en" },
   });
 
   const bootstrapRes = await app.inject({
@@ -84,6 +85,50 @@ test("bootstrap creates the first admin account and session", async () => {
   assert.equal(meRes.statusCode, 200);
   const me = readJson(meRes) as { user: { username: string } };
   assert.equal(me.user.username, "admin");
+});
+
+test("admin UI settings expose and update the instance language default", async () => {
+  const initialStatusRes = await app.inject({
+    method: "GET",
+    url: "/api/auth/status",
+  });
+  assert.equal(initialStatusRes.statusCode, 200);
+  assert.deepEqual(
+    (readJson(initialStatusRes) as { uiSettings: { defaultLanguage: string } })
+      .uiSettings,
+    { defaultLanguage: "en" },
+  );
+
+  const adminToken = await bootstrapAdmin();
+
+  const unauthorizedRes = await app.inject({
+    method: "PUT",
+    url: "/api/admin/ui-settings",
+    payload: { defaultLanguage: "fr" },
+  });
+  assert.equal(unauthorizedRes.statusCode, 401);
+
+  const updateRes = await app.inject({
+    method: "PUT",
+    url: "/api/admin/ui-settings",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: { defaultLanguage: "fr" },
+  });
+  assert.equal(updateRes.statusCode, 200);
+  assert.deepEqual(readJson(updateRes), { defaultLanguage: "fr" });
+
+  const statusRes = await app.inject({
+    method: "GET",
+    url: "/api/auth/status",
+  });
+  assert.equal(statusRes.statusCode, 200);
+  assert.deepEqual(
+    (readJson(statusRes) as { uiSettings: { defaultLanguage: string } })
+      .uiSettings,
+    { defaultLanguage: "fr" },
+  );
 });
 
 test("non-api app routes serve the SPA index on refresh", async () => {

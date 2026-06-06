@@ -26,6 +26,7 @@ import type {
   ReferenceImage,
   Room,
   Subnet,
+  UiSettings,
   UserRole,
   Vlan,
   VlanRange,
@@ -76,6 +77,9 @@ const DEFAULT_LAB: Lab = {
 };
 
 const ACTIVE_LAB_STORAGE_KEY = "rackpad.active.lab";
+const DEFAULT_UI_SETTINGS: UiSettings = {
+  defaultLanguage: "en",
+};
 
 interface State {
   authReady: boolean;
@@ -83,6 +87,7 @@ interface State {
   authError: string | null;
   needsBootstrap: boolean;
   oidc: OidcPublicConfig;
+  uiSettings: UiSettings;
   currentUser: AppUser | null;
   authExpiresAt: string | null;
   loading: boolean;
@@ -156,6 +161,7 @@ let state: State = {
   authError: null,
   needsBootstrap: false,
   oidc: { enabled: false, label: "OIDC" },
+  uiSettings: DEFAULT_UI_SETTINGS,
   currentUser: null,
   authExpiresAt: null,
   loading: false,
@@ -844,6 +850,7 @@ export async function initializeApp(force = false): Promise<void> {
           authError: null,
           needsBootstrap: true,
           oidc: status.oidc,
+          uiSettings: status.uiSettings,
           currentUser: null,
           authExpiresAt: null,
           ...resetData(),
@@ -860,6 +867,7 @@ export async function initializeApp(force = false): Promise<void> {
           authError: null,
           needsBootstrap: false,
           oidc: status.oidc,
+          uiSettings: status.uiSettings,
           currentUser: null,
           authExpiresAt: null,
           ...resetData(),
@@ -875,6 +883,7 @@ export async function initializeApp(force = false): Promise<void> {
         authError: null,
         needsBootstrap: false,
         oidc: status.oidc,
+        uiSettings: status.uiSettings,
         currentUser: session.user,
         authExpiresAt: session.expiresAt,
       }));
@@ -1408,6 +1417,17 @@ export async function refreshUsers(): Promise<void> {
     ...prev,
     users: sortUsers(users),
   }));
+}
+
+export async function updateUiSettings(
+  input: UiSettings,
+): Promise<UiSettings> {
+  const saved = await api.updateUiSettings(input);
+  setState((prev) => ({
+    ...prev,
+    uiSettings: saved,
+  }));
+  return saved;
 }
 
 export async function selectLab(labId: string): Promise<void> {

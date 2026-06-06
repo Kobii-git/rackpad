@@ -19,6 +19,7 @@ import {
   getOidcPublicConfig,
   handleOidcCallback,
 } from '../lib/oidc.js'
+import { loadUiSettings } from '../lib/ui-settings.js'
 import {
   asObject,
   optionalBoolean,
@@ -103,6 +104,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     return {
       needsBootstrap: needsBootstrap(),
       oidc: getOidcPublicConfig(),
+      uiSettings: loadUiSettings(),
     }
   })
 
