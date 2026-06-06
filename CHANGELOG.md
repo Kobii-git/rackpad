@@ -8,6 +8,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.5.11-beta] - 2026-06-06
+
 ### Added
 
 - SNMP monitoring suite (v1/v2c/v3) alongside ICMP/TCP/HTTP/HTTPS checks:
