@@ -101,6 +101,20 @@ sudo docker compose ps
 If this is a quick lab install and you want Rackpad to follow the newest stable
 published image, set `RACKPAD_TAG=latest` in `.env` instead of a fixed version.
 
+If subnet discovery returns no hosts or no MAC addresses in Docker, especially
+inside a Proxmox LXC, use the host-network discovery compose variant:
+
+```bash
+cd /opt/rackpad
+sudo curl -fsSLo compose.host-discovery.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.host-discovery.yml
+sudo docker compose -f compose.host-discovery.yml pull
+sudo docker compose -f compose.host-discovery.yml up -d
+```
+
+For manual/Arcane-managed compose stacks, the service needs host networking,
+`NET_RAW`, `NET_ADMIN`, and sometimes root inside the container. See
+[`docs/DOCKER_DISCOVERY.md`](./docs/DOCKER_DISCOVERY.md).
+
 Open:
 
 ```text

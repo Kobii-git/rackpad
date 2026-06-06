@@ -628,7 +628,7 @@ function macUnavailableDiagnostic(
     severity: "warning",
     message: `No MAC addresses were visible for ${reachableCount} reachable host${reachableCount === 1 ? "" : "s"}.`,
     detail:
-      "MAC discovery needs layer-2 visibility. Docker bridge networking, Docker Desktop, routed VLANs, VPNs, or missing NET_RAW/CAP_NET_RAW access can hide MAC addresses from Rackpad.",
+      "MAC discovery needs layer-2 visibility. Docker bridge networking, Docker Desktop, routed VLANs, VPNs, or missing NET_RAW/CAP_NET_RAW access can hide MAC addresses from Rackpad. On Linux or Proxmox LXC installs, use the host-discovery compose variant or run Rackpad with host networking plus NET_RAW/NET_ADMIN.",
   };
 }
 

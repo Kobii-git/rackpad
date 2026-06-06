@@ -426,6 +426,19 @@ sudo docker compose pull
 sudo docker compose up -d
 ```
 
+If Rackpad runs in Docker on Linux or inside a Proxmox LXC and **Discovery**
+cannot see the local subnet, use the host-network discovery compose variant:
+
+```bash
+sudo curl -fsSLo compose.host-discovery.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.host-discovery.yml
+sudo docker compose -f compose.host-discovery.yml pull
+sudo docker compose -f compose.host-discovery.yml up -d
+```
+
+That variant runs with host networking plus the raw-network capabilities needed
+by ICMP/ARP-style scans. See [Docker network discovery](./docs/DOCKER_DISCOVERY.md)
+for the security trade-offs and manual compose snippet.
+
 Build locally from a cloned repo only if you want to build from source:
 
 ```bash

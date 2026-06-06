@@ -1,0 +1,65 @@
+services:
+  rackpad:
+    image: ${RACKPAD_IMAGE:-ghcr.io/kobii-git/rackpad}:${RACKPAD_TAG:-1.5.11}
+    container_name: rackpad
+    user: "0:0"
+    init: true
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+      - NET_BIND_SERVICE
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: ${RACKPAD_PORT:-3000}
+      DATABASE_PATH: /data/rackpad.db
+      MONITOR_INTERVAL_MS: ${MONITOR_INTERVAL_MS:-300000}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-}
+      TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+      APP_URL: ${APP_URL:-}
+      OIDC_ENABLED: ${OIDC_ENABLED:-0}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+      OIDC_LABEL: ${OIDC_LABEL:-OIDC}
+      OIDC_DEFAULT_ROLE: ${OIDC_DEFAULT_ROLE:-viewer}
+      OIDC_DEBUG: ${OIDC_DEBUG:-0}
+      OIDC_ADMIN_USERS: ${OIDC_ADMIN_USERS:-}
+      OIDC_EDITOR_USERS: ${OIDC_EDITOR_USERS:-}
+      OIDC_VIEWER_USERS: ${OIDC_VIEWER_USERS:-}
+      OIDC_ADMIN_GROUPS: ${OIDC_ADMIN_GROUPS:-}
+      OIDC_EDITOR_GROUPS: ${OIDC_EDITOR_GROUPS:-}
+      OIDC_VIEWER_GROUPS: ${OIDC_VIEWER_GROUPS:-}
+      OUI_AUTO_UPDATE: ${OUI_AUTO_UPDATE:-1}
+      DISCOVERY_MAC_SCAN_MODE: ${DISCOVERY_MAC_SCAN_MODE:-auto}
+      RACKPAD_SECRET_KEY: ${RACKPAD_SECRET_KEY:-}
+      SNMP_INVENTORY_SYNC: ${SNMP_INVENTORY_SYNC:-0}
+      SNMP_TRAP_ENABLED: ${SNMP_TRAP_ENABLED:-1}
+      SNMP_TRAP_PORT: ${SNMP_TRAP_PORT:-1162}
+      SNMP_TRAP_BIND: ${SNMP_TRAP_BIND:-0.0.0.0}
+    volumes:
+      - rackpad_data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:' + (process.env.PORT || '3000') + '/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  rackpad_data:

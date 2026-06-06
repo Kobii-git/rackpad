@@ -58,6 +58,27 @@ Open Rackpad at:
 http://LXC_IP:3000
 ```
 
+## Network discovery in an LXC
+
+If Rackpad opens normally but **Discovery** cannot see the local subnet, the
+container probably does not have enough layer-2 visibility. This is common with
+Docker bridge networking inside an unprivileged LXC.
+
+Use the host-network discovery compose variant inside the LXC:
+
+```bash
+cd /opt/rackpad
+curl -fsSLo compose.host-discovery.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.host-discovery.yml
+docker compose -f compose.host-discovery.yml pull
+docker compose -f compose.host-discovery.yml up -d
+```
+
+That variant keeps the same `rackpad_data` volume but runs Rackpad with host
+networking, root inside the container, and the `NET_RAW`, `NET_ADMIN`, and
+`NET_BIND_SERVICE` capabilities needed by ICMP/ARP-style discovery tools. See
+the full [Docker network discovery guide](./DOCKER_DISCOVERY.md) before exposing
+this outside a trusted LAN or VPN.
+
 ## Install a specific version or port
 
 The script defaults to the current stable release. To install the current beta:

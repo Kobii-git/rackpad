@@ -25,11 +25,16 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   Hebrew, and Persian.
 - `docs/SNMP.md` operator guide for SNMP monitoring, v3 credentials, trap
   forwarding (162→1162), and inventory sync.
+- Host-network Docker compose variant plus a Docker discovery guide for Linux
+  and Proxmox LXC installs that need raw-socket and layer-2 visibility for
+  subnet discovery.
 
 ### Changed
 
 - Documented the new SNMP and secret-key environment variables
   (`RACKPAD_SECRET_KEY`, `SNMP_INVENTORY_SYNC`, `SNMP_TRAP_*`) in `.env.example`.
+- Discovery diagnostics now point Docker/LXC users toward the host-network
+  compose/capability fix when MAC addresses are hidden by container networking.
 
 ### Fixed
 
