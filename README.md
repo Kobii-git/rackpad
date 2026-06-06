@@ -1,8 +1,14 @@
 # Rackpad
 
-Rackpad is a self-hosted infrastructure inventory and operations workspace for homelabs, small racks, network rooms, and lab environments. It brings racks, devices, ports, cables, VLANs, IPAM, WiFi, compute, discovery, monitoring, docs, images, labs, and users into one clean app.
+[![Release](https://img.shields.io/github/v/tag/Kobii-git/rackpad?sort=semver&label=release&color=2f81f7)](https://github.com/Kobii-git/rackpad/tags)
+[![Build](https://img.shields.io/github/actions/workflow/status/Kobii-git/rackpad/docker-publish.yml?branch=main&label=build)](https://github.com/Kobii-git/rackpad/actions/workflows/docker-publish.yml)
+[![Container](https://img.shields.io/badge/ghcr.io-rackpad-2496ed?logo=docker&logoColor=white)](https://github.com/Kobii-git/rackpad/pkgs/container/rackpad)
+[![License](https://img.shields.io/github/license/Kobii-git/rackpad?color=success)](./LICENSE)
+[![Stars](https://img.shields.io/github/stars/Kobii-git/rackpad?style=flat)](https://github.com/Kobii-git/rackpad/stargazers)
 
-**Current release:** `v1.5.2`
+Rackpad is a self-hosted infrastructure inventory and operations workspace for homelabs, small racks, network rooms, and lab environments. It brings racks, devices, ports, cables, VLANs, IPAM, WiFi, compute, discovery, monitoring, docs, images, labs, and an admin area into one clean app.
+
+See the [changelog](./CHANGELOG.md) for release history; the badge above tracks the latest tag.
 
 Built with:
 
@@ -10,23 +16,21 @@ Built with:
 - Fastify API
 - SQLite persistence through `better-sqlite3`
 - session-based authentication with admin/editor/viewer roles
-- per-device health checks with ICMP, TCP, HTTP, and HTTPS monitor targets
+- per-device health checks with ICMP, TCP, HTTP/HTTPS, and SNMP (v1/v2c) monitor targets
 - Docker support for a single-container deployment
 
-## Release highlights
+## Highlights
 
-Rackpad `1.5.2` is the biggest documentation and topology release so far:
+- **Visual topology** — a movable React Flow network map with cable routes, health overlays, and rack/pyramid layouts
+- **Racks, devices, ports & cables** — dense rack elevations, switch-panel port maps, and full cable patching
+- **IPAM** — subnets, DHCP zones and reservations, gateway/DNS protection, and multi-IP device records (device- and interface-level)
+- **Monitoring** — per-device ICMP, TCP, HTTP/HTTPS, and SNMP health checks with email/Discord/Telegram alerting
+- **Discovery** — IPAM-subnet, all-subnet, and manual-CIDR scanning with import reconciliation
+- **WiFi, compute & docs** — controller/SSID/AP/radio/client inventory, virtualization hosts, and markdown docs with images
+- **Light & dark themes**, self-hosted fonts (works offline / air-gapped), and English/French localization
+- **Self-hosted** — single Docker container, SQLite persistence, session auth with admin/editor/viewer roles, optional OIDC
 
-- React Flow diagram view for a cleaner, movable network map
-- Light and dark UI themes
-- IPAM DHCP zones, DHCP reservations, gateway/DNS protection, and technical IP handling
-- Multi-IP device records, including device-level and port/interface-level assignments
-- Host-shared networking for VMs/containers that reuse the parent host IP
-- WiFi AP, SSID, radio, client, and `wifi` port support
-- Device services inventory for DHCP, DNS, VPN, NTP, SNMP, Syslog, HTTP/S, databases, apps, and custom services
-- Bulk device updates, bulk delete flow, and broader bulk monitoring creation
-- Better discovery reconciliation, natural IP sorting, and imported/dismissed review handling
-- Rack shelf improvements for multi-device and multi-U shelf layouts
+See the [changelog](./CHANGELOG.md) for what landed in each release.
 
 ## Quick links
 
@@ -47,15 +51,15 @@ If `rackpad.co.za` is unavailable, the repo still contains the core material you
 
 ## Preview
 
-Fresh 1920x1200 light-mode captures are kept in [`docs/screenshots`](./docs/screenshots). They are shown full-width here so GitHub does not crush them into blurry thumbnails.
+Rackpad ships **light and dark themes**. Full-resolution 1920x1200 captures live in [`docs/screenshots`](./docs/screenshots) and are shown full-width here so GitHub keeps them sharp.
 
 ### Operations dashboard
 
-<img src="./docs/screenshots/dashboard.png" alt="Rackpad operations dashboard" width="100%">
+<img src="./docs/screenshots/dashboard-dark.png" alt="Rackpad operations dashboard" width="100%">
 
 ### Diagram visualizer
 
-<img src="./docs/screenshots/visualizer.png" alt="Rackpad React Flow diagram visualizer" width="100%">
+<img src="./docs/screenshots/visualizer-dark.png" alt="Rackpad React Flow diagram visualizer" width="100%">
 
 ### IPAM, DHCP zones, and reservations
 
@@ -67,6 +71,14 @@ Fresh 1920x1200 light-mode captures are kept in [`docs/screenshots`](./docs/scre
 
 <details>
 <summary>More workspace screenshots</summary>
+
+### Operations dashboard (light theme)
+
+<img src="./docs/screenshots/dashboard.png" alt="Rackpad operations dashboard in light theme" width="100%">
+
+### Diagram visualizer (light theme)
+
+<img src="./docs/screenshots/visualizer.png" alt="Rackpad React Flow diagram visualizer in light theme" width="100%">
 
 ### Racks and rooms
 
@@ -374,12 +386,12 @@ curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/inst
 ```
 
 Use `RACKPAD_TAG=latest` if you want the newest stable GHCR image,
-`RACKPAD_TAG=1.5.2` if you want this exact release, or `RACKPAD_TAG=beta` if
+`RACKPAD_TAG=1.5.10` if you want a specific release, or `RACKPAD_TAG=beta` if
 you want the newest testing image:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
-RACKPAD_TAG=1.5.2 bash /tmp/install-rackpad.sh
+RACKPAD_TAG=1.5.10 bash /tmp/install-rackpad.sh
 ```
 
 Open:
@@ -396,7 +408,7 @@ cd /opt/rackpad
 sudo curl -fsSLo compose.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.release.yml
 sudo tee .env >/dev/null <<'EOF'
 RACKPAD_IMAGE=ghcr.io/kobii-git/rackpad
-RACKPAD_TAG=1.5.2
+RACKPAD_TAG=1.5.10
 RACKPAD_PORT=3000
 MONITOR_INTERVAL_MS=300000
 TRUST_PROXY=0
