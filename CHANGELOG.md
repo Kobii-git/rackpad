@@ -6,16 +6,20 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
-## [1.5.10-beta.0] - 2026-06-06
+## [1.5.10] - 2026-06-06
 
 ### Added
 
+- Added SNMP device monitoring (SNMP v1/v2c) with OID polling alongside the
+  existing ICMP/TCP/HTTP probes, plus expanded monitoring tests.
 - Added a lightweight typed localization layer with English as the fallback
   language and French as the first translated locale.
 - Added a language selector to the setup/sign-in screen and an Admin language
   settings card for saving the instance default language.
 - Added public `/api/auth/status` UI settings and admin-only
   `/api/admin/ui-settings` read/update endpoints.
+- Added self-hosted IBM Plex Sans / IBM Plex Mono fonts so Rackpad renders
+  correctly offline / air-gapped without a Google Fonts runtime dependency.
 
 ### Changed
 
@@ -23,18 +27,25 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   and kept `/users` as a backwards-compatible redirect.
 - The app now resolves language by browser preference first, then instance
   default, then English, and updates the document language for English/French.
+- Refined the visual design pass with cleaner sidebar/footer treatment, tighter
+  page copy, improved panel separation, and clearer brand/warning colors.
 
 ### Fixed
 
 - Fixed a language selector freeze by preventing the translation observer from
   rewriting already-translated text/attributes and leaving native select option
   text alone.
+- Fixed the Rack "Both" face view so front and rear elevations render
+  side-by-side instead of pushing the rear face off-screen.
+- Fixed VLAN reserved-space bars so small low-numbered ranges remain visible and
+  clickable.
+- Constrained the Labs grid so workspaces no longer stretch across empty space.
 
 ## [1.5.9-beta.1] - 2026-06-06
 
 ### Changed
 
-- Superseded by `1.5.10-beta.0` so the Admin/French localization work is
+- Superseded by `1.5.10` so the Admin/French localization work is
   versioned as a feature beta and includes the language selector freeze fix.
 
 ## [1.5.9-beta.0] - 2026-06-05
