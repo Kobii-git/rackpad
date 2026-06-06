@@ -53,6 +53,7 @@ interface I18nContextValue {
   language: SupportedLanguage;
   setLanguage: (language: SupportedLanguage) => void;
   t: (key: TranslationKey, values?: TranslationValues) => string;
+  formatRelativeTime: (iso: string | undefined) => string;
 }
 
 const LANGUAGE_STORAGE_KEY = "rackpad.language";
@@ -109,6 +110,11 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     document.documentElement.dir = RTL_LANGUAGES.has(language) ? "rtl" : "ltr";
   }, [language]);
 
+  const formatRelativeTime = useCallback(
+    (iso: string | undefined) => formatRelativeTimeForLocale(language, iso),
+    [language],
+  );
+
   const t = useCallback(
     (key: TranslationKey, values?: TranslationValues) =>
       interpolate(dictionaries[language][key] ?? en[key], values),
@@ -121,8 +127,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ language, setLanguage, t }),
-    [language, setLanguage, t],
+    () => ({ language, setLanguage, t, formatRelativeTime }),
+    [language, setLanguage, t, formatRelativeTime],
   );
 
   useEffect(() => {
@@ -197,13 +203,44 @@ function interpolate(text: string, values?: TranslationValues) {
   });
 }
 
+function formatRelativeTimeForLocale(
+  language: SupportedLanguage,
+  iso: string | undefined,
+) {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  const timestamp = date.getTime();
+  if (!Number.isFinite(timestamp)) return "—";
+  const diffMs = Date.now() - timestamp;
+  const seconds = Math.round(diffMs / 1000);
+  const rtf = new Intl.RelativeTimeFormat(LANGUAGE_BCP47[language], {
+    numeric: "auto",
+  });
+
+  const absSeconds = Math.abs(seconds);
+  if (absSeconds < 60) return rtf.format(-seconds, "second");
+  const minutes = Math.round(seconds / 60);
+  if (Math.abs(minutes) < 60) return rtf.format(-minutes, "minute");
+  const hours = Math.round(minutes / 60);
+  if (Math.abs(hours) < 24) return rtf.format(-hours, "hour");
+  const days = Math.round(hours / 24);
+  if (Math.abs(days) < 30) return rtf.format(-days, "day");
+  const months = Math.round(days / 30);
+  if (Math.abs(months) < 12) return rtf.format(-months, "month");
+  const years = Math.round(months / 12);
+  return rtf.format(-years, "year");
+}
+
 function readStoredLanguage(): SupportedLanguage | null {
   const value = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
   return isSupportedLanguage(value) ? value : null;
 }
 
 function isSupportedLanguage(value: unknown): value is SupportedLanguage {
-  return typeof value === "string" && SUPPORTED_LANGUAGES.includes(value as SupportedLanguage);
+  return (
+    typeof value === "string" &&
+    SUPPORTED_LANGUAGES.includes(value as SupportedLanguage)
+  );
 }
 
 function translateStaticDom(language: SupportedLanguage) {

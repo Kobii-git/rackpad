@@ -11,6 +11,10 @@ import {
   resolveLabIdsForList,
 } from "../lib/lab-access.js";
 import { optionalDeviceType } from "../lib/device-types.js";
+import {
+  applyWifiDiscoveryPlacementToDevice,
+  inferDiscoveryPlacement,
+} from "../lib/discovery-placement.js";
 import { createId } from "../lib/ids.js";
 import { runIcmpProbe } from "../lib/monitoring.js";
 import { lookupOuiVendor } from "../lib/oui.js";
@@ -336,7 +340,26 @@ function inferDeviceType(hostname: string | null) {
   return "endpoint" as const;
 }
 
-function inferPlacement(deviceType: string) {
+function inferPlacement(
+  deviceType: string,
+  context?: {
+    labId: string;
+    ipAddress: string;
+    hostname?: string | null;
+    displayName?: string | null;
+    macAddress?: string | null;
+  },
+) {
+  if (context) {
+    return inferDiscoveryPlacement({
+      labId: context.labId,
+      ipAddress: context.ipAddress,
+      deviceType,
+      hostname: context.hostname,
+      displayName: context.displayName,
+      macAddress: context.macAddress,
+    });
+  }
   if (deviceType === "ap") return "wireless" as const;
   if (deviceType === "vm" || deviceType === "container")
     return "virtual" as const;
@@ -632,7 +655,11 @@ function macUnavailableDiagnostic(
   };
 }
 
-async function scanHost(ipAddress: string, macByIp: Map<string, string>) {
+async function scanHost(
+  ipAddress: string,
+  macByIp: Map<string, string>,
+  labId: string,
+) {
   const result = await runIcmpProbe(ipAddress);
   if (result.result !== "online") return null;
 
@@ -653,7 +680,13 @@ async function scanHost(ipAddress: string, macByIp: Map<string, string>) {
     hostname,
     displayName,
     deviceType,
-    placement: inferPlacement(deviceType),
+    placement: inferPlacement(deviceType, {
+      labId,
+      ipAddress,
+      hostname,
+      displayName,
+      macAddress,
+    }),
     macAddress,
     vendor,
     source: "icmp-scan",
@@ -664,6 +697,7 @@ async function scanHost(ipAddress: string, macByIp: Map<string, string>) {
 async function scanHosts(
   hosts: string[],
   macByIp: Map<string, string>,
+  labId: string,
   concurrency = 24,
 ) {
   const results: Array<Awaited<ReturnType<typeof scanHost>>> = [];
@@ -673,7 +707,7 @@ async function scanHosts(
     while (index < hosts.length) {
       const current = hosts[index];
       index += 1;
-      const result = await scanHost(current, macByIp);
+      const result = await scanHost(current, macByIp, labId);
       if (result) results.push(result);
     }
   }
@@ -739,7 +773,7 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     const hosts = cidrHosts(cidr);
     const macScan = await collectSubnetMacAddresses(cidr);
     const technicalAddresses = collectTechnicalAddresses(labId);
-    const reachableHosts = (await scanHosts(hosts, macScan.macByIp)).map(
+    const reachableHosts = (await scanHosts(hosts, macScan.macByIp, labId)).map(
       (record) => {
         if (!record) return record;
         const technical = technicalAddressForIp(

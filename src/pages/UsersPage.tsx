@@ -64,6 +64,12 @@ const EMPTY_FORM: FormState = {
   labRoles: {},
 };
 
+function roleChipLabel(role: UserRole, t: ReturnType<typeof useI18n>["t"]) {
+  if (role === "admin") return t("Administrator");
+  if (role === "editor") return t("Editor");
+  return t("Viewer");
+}
+
 function defaultLabRoles(labs: Lab[], role: UserRole): Record<string, LabRole | "none"> {
   if (role === "admin") return {};
   const labRole: LabRole = role === "viewer" ? "viewer" : "editor";
@@ -502,7 +508,7 @@ export default function UsersPage() {
                             : "neutral"
                       }
                     >
-                      {user.role}
+                      {roleChipLabel(user.role, t)}
                     </Badge>
                   </div>
                   <div className="mt-1 flex items-center gap-2">
@@ -609,7 +615,7 @@ export default function UsersPage() {
                           : "neutral"
                     }
                   >
-                    {form.role}
+                    {roleChipLabel(form.role, t)}
                   </Badge>
                   {selectedUser && (
                     <>
@@ -1317,6 +1323,7 @@ function RolePicker({
   value: UserRole;
   onChange: (value: UserRole) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="grid grid-cols-3 gap-2">
       {(["viewer", "editor", "admin"] as const).map((role) => (
@@ -1332,7 +1339,7 @@ function RolePicker({
         >
           <span className="inline-flex items-center gap-1">
             <Shield className="size-3.5" />
-            {role}
+            {roleChipLabel(role, t)}
           </span>
         </button>
       ))}

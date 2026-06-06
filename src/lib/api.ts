@@ -669,6 +669,16 @@ export const api = {
     });
   },
 
+  bulkUpdateDevices(body: {
+    deviceIds: string[];
+    changes: Record<string, unknown>;
+  }) {
+    return request<{ updated: number; devices: Device[] }>("/devices/bulk", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
   deleteDevice(id: string) {
     return request<void>(`/devices/${id}`, {
       method: "DELETE",

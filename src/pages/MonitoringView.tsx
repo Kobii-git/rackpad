@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
+import type { TranslationKey } from "@/i18n/translations";
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -42,7 +43,7 @@ import type {
   SnmpTrapReceiverStatus,
 } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
-import { relativeTime, statusLabel } from "@/lib/utils";
+import { statusLabel } from "@/lib/utils";
 import {
   applySortDirection,
   compareDate,
@@ -258,7 +259,7 @@ export default function MonitoringView() {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to run all monitor checks.",
+          : t("Failed to run all monitor checks."),
       );
     } finally {
       setRunningAll(false);
@@ -274,7 +275,7 @@ export default function MonitoringView() {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to run device monitor checks.",
+          : t("Failed to run device monitor checks."),
       );
     } finally {
       setRunningDeviceId(null);
@@ -333,16 +334,12 @@ export default function MonitoringView() {
         }
         updated += 1;
       }
-      setBulkMessage(
-        `Enabled ICMP monitoring for ${updated} device${
-          updated === 1 ? "" : "s"
-        }${skipped > 0 ? `; skipped ${skipped} without management IP` : ""}.`,
-      );
+      setBulkMessage(t("Enabled ICMP on {count} device(s).", { count: updated }));
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to enable ICMP monitoring.",
+          : t("Failed to enable ICMP monitoring."),
       );
     } finally {
       setBulkRunning(false);
@@ -406,15 +403,13 @@ export default function MonitoringView() {
         updated += 1;
       }
       setBulkMessage(
-        `Added or enabled ${updated} ${bulkMonitorType.toUpperCase()} target${
-          updated === 1 ? "" : "s"
-        }${skipped > 0 ? `; skipped ${skipped} without management IP` : ""}.`,
+        t("Created or updated {count} monitor target(s).", { count: updated }),
       );
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to create selected monitor targets.",
+          : t("Failed to create selected monitor targets."),
       );
     } finally {
       setBulkRunning(false);
@@ -437,13 +432,13 @@ export default function MonitoringView() {
         }
       }
       setBulkMessage(
-        `Disabled ${updated} monitor target${updated === 1 ? "" : "s"}.`,
+        t("Disabled {count} monitor target(s).", { count: updated }),
       );
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to disable selected monitor targets.",
+          : t("Failed to disable selected monitor targets."),
       );
     } finally {
       setBulkRunning(false);
@@ -461,8 +456,11 @@ export default function MonitoringView() {
         title={t("Monitoring")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {stats.monitoredDevices}/{stats.inventoryDevices} monitored devices
-            in {lab.name}
+            {t("{monitored} of {total} monitored devices in {lab}", {
+              monitored: stats.monitoredDevices,
+              total: stats.inventoryDevices,
+              lab: lab.name,
+            })}
           </span>
         }
         actions={
@@ -487,12 +485,14 @@ export default function MonitoringView() {
           <MonitorStat
             label={t("Devices")}
             value={String(stats.inventoryDevices)}
-            hint={`${stats.monitoredDevices} with active targets`}
+            hint={t("{count} with active targets", {
+              count: stats.monitoredDevices,
+            })}
           />
           <MonitorStat
             label={t("Targets")}
             value={String(stats.monitorTargets)}
-            hint="Enabled ICMP/TCP/HTTP probes"
+            hint={t("Enabled ICMP/TCP/HTTP probes")}
           />
           <MonitorStat
             label={t("Online")}
@@ -524,35 +524,45 @@ export default function MonitoringView() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <div className="text-sm font-medium text-[var(--color-fg)]">
-                SNMP traps
+                {t("SNMP traps")}
               </div>
               <div className="text-xs text-[var(--color-fg-subtle)]">
-                Forward traps to UDP port{" "}
-                {trapStatus?.port ?? 1162}
-                {trapStatus?.listening ? " (receiver active)" : ""}
-                {trapStatus?.lastTrapAt
-                  ? ` · last trap ${new Date(trapStatus.lastTrapAt).toLocaleString()}`
-                  : ""}
+                {t("Forward traps to UDP port {port}{status}", {
+                  port: trapStatus?.port ?? 1162,
+                  status: [
+                    trapStatus?.listening ? ` (${t("Receiver active")})` : "",
+                    trapStatus?.lastTrapAt
+                      ? ` · ${t("Last trap {date}", {
+                          date: new Date(
+                            trapStatus.lastTrapAt,
+                          ).toLocaleString(),
+                        })}`
+                      : "",
+                  ].join(""),
+                })}
               </div>
             </div>
             <Badge tone={trapStatus?.listening ? "ok" : "neutral"}>
-              {trapStatus?.trapsReceived ?? 0} received
+              {t("{count} received", {
+                count: trapStatus?.trapsReceived ?? 0,
+              })}
             </Badge>
           </div>
           {trapLog.length === 0 ? (
             <div className="mt-3 text-sm text-[var(--color-fg-subtle)]">
-              No traps logged for this lab yet. Map device management IPs and
-              enable interface monitors with ifIndex to react to linkUp/linkDown.
+              {t(
+                "No traps logged for this lab yet. Map device management IPs and enable interface monitors with ifIndex to react to linkUp/linkDown.",
+              )}
             </div>
           ) : (
             <div className="mt-3 overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="text-xs uppercase tracking-wide text-[var(--color-fg-subtle)]">
                   <tr>
-                    <th className="px-2 py-1">When</th>
-                    <th className="px-2 py-1">Source</th>
-                    <th className="px-2 py-1">Action</th>
-                    <th className="px-2 py-1">Message</th>
+                    <th className="px-2 py-1">{t("When")}</th>
+                    <th className="px-2 py-1">{t("Source")}</th>
+                    <th className="px-2 py-1">{t("Action")}</th>
+                    <th className="px-2 py-1">{t("Message")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -586,7 +596,7 @@ export default function MonitoringView() {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search device, target, or message..."
+              placeholder={t("Search device, target, or message...")}
               className="pl-8"
             />
           </div>
@@ -597,20 +607,20 @@ export default function MonitoringView() {
               size="sm"
               onClick={() => setLayout("cards")}
               className="h-8"
-              aria-label="Show monitor cards"
+              aria-label={t("Show monitor cards")}
             >
               <LayoutGrid className="size-3.5" />
-              Box
+              {t("Box")}
             </Button>
             <Button
               variant={layout === "compact" ? "secondary" : "outline"}
               size="sm"
               onClick={() => setLayout("compact")}
               className="h-8"
-              aria-label="Show compact monitor rows"
+              aria-label={t("Show compact monitor rows")}
             >
               <List className="size-3.5" />
-              Compact
+              {t("Compact")}
             </Button>
             <span className="rk-kicker">{t("Sort")}</span>
             <SortButton
@@ -618,7 +628,7 @@ export default function MonitoringView() {
               direction={sort.direction}
               onClick={() => handleSort("hostname")}
             >
-              Host
+              {t("Host")}
             </SortButton>
             <SortButton
               active={sort.key === "status"}
@@ -649,7 +659,7 @@ export default function MonitoringView() {
             active={filter === "all"}
             onClick={() => setFilter("all")}
           >
-            All
+            {t("All")}
           </FilterButton>
           <FilterButton
             active={filter === "offline"}
@@ -687,15 +697,17 @@ export default function MonitoringView() {
           <Card>
             <CardBody className="space-y-3 p-3">
               <div className="min-w-0">
-                <div className="rk-kicker">Bulk monitoring</div>
+                <div className="rk-kicker">{t("Bulk monitoring")}</div>
                 <div className="mt-1 text-xs text-[var(--text-tertiary)]">
-                  {selectedDevices.length} selected | {selectedMonitorCount}{" "}
-                  configured target{selectedMonitorCount === 1 ? "" : "s"}
+                  {t("{selected} selected | {targets} configured target(s)", {
+                    selected: selectedDevices.length,
+                    targets: selectedMonitorCount,
+                  })}
                 </div>
               </div>
               <div className="grid gap-3 lg:grid-cols-[0.8fr_1fr_0.55fr_0.8fr_auto]">
                 <label className="block">
-                  <span className="rk-field-label">Type</span>
+                  <span className="rk-field-label">{t("Type")}</span>
                   <Select
                     value={bulkMonitorType}
                     onChange={(value) =>
@@ -709,7 +721,7 @@ export default function MonitoringView() {
                   </Select>
                 </label>
                 <label className="block">
-                  <span className="rk-field-label">Name</span>
+                  <span className="rk-field-label">{t("Name")}</span>
                   <Input
                     value={bulkMonitorName}
                     onChange={(event) =>
@@ -723,7 +735,7 @@ export default function MonitoringView() {
                 </label>
                 {bulkMonitorType !== "icmp" ? (
                   <label className="block">
-                    <span className="rk-field-label">Port</span>
+                    <span className="rk-field-label">{t("Port")}</span>
                     <Input
                       type="number"
                       min={1}
@@ -741,7 +753,7 @@ export default function MonitoringView() {
                 {bulkMonitorType === "http" ||
                 bulkMonitorType === "https" ? (
                   <label className="block">
-                    <span className="rk-field-label">Path</span>
+                    <span className="rk-field-label">{t("Path")}</span>
                     <Input
                       value={bulkMonitorPath}
                       onChange={(event) =>
@@ -762,7 +774,7 @@ export default function MonitoringView() {
                     }
                     className="accent-[var(--color-accent)]"
                   />
-                  Run first check
+                  {t("Run first check")}
                 </label>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
@@ -772,7 +784,7 @@ export default function MonitoringView() {
                   onClick={selectFilteredDevices}
                   disabled={filteredDevices.length === 0 || bulkRunning}
                 >
-                  Select filtered
+                  {t("Select filtered")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -780,7 +792,7 @@ export default function MonitoringView() {
                   onClick={() => setSelectedDeviceIds(new Set())}
                   disabled={selectedDevices.length === 0 || bulkRunning}
                 >
-                  Clear
+                  {t("Clear")}
                 </Button>
                 <Button
                   variant="outline"
@@ -789,7 +801,7 @@ export default function MonitoringView() {
                   disabled={selectedDevices.length === 0 || bulkRunning}
                 >
                   <Plus className="size-3.5" />
-                  Add / enable target
+                  {t("Add / enable target")}
                 </Button>
                 <Button
                   variant="outline"
@@ -797,7 +809,7 @@ export default function MonitoringView() {
                   onClick={() => void handleBulkEnableIcmp()}
                   disabled={selectedDevices.length === 0 || bulkRunning}
                 >
-                  Enable ICMP
+                  {t("Enable ICMP")}
                 </Button>
                 <Button
                   variant="outline"
@@ -809,7 +821,7 @@ export default function MonitoringView() {
                     bulkRunning
                   }
                 >
-                  Disable targets
+                  {t("Disable targets")}
                 </Button>
               </div>
               {bulkMessage && (
@@ -830,12 +842,12 @@ export default function MonitoringView() {
         <Card className="min-h-0 flex flex-1 flex-col">
           <CardHeader>
             <CardTitle>
-              <CardLabel>Overview</CardLabel>
-              <CardHeading>Inventory monitoring</CardHeading>
+              <CardLabel>{t("Overview")}</CardLabel>
+              <CardHeading>{t("Inventory monitoring")}</CardHeading>
             </CardTitle>
             <div className="inline-flex items-center gap-2 text-[11px] text-[var(--color-fg-subtle)]">
               <Search className="size-3.5" />
-              Filter by host, target, or latest monitor message
+              {t("Filter by host, target, or latest monitor message")}
             </div>
           </CardHeader>
           <CardBody className="min-h-0 flex-1 space-y-3 overflow-y-auto">
@@ -843,13 +855,17 @@ export default function MonitoringView() {
               <div className="rk-empty">
                 <div className="rk-empty-title">
                   {stats.inventoryDevices === 0
-                    ? "No devices in this lab yet"
-                    : "No devices match the current filter"}
+                    ? t("No devices in this lab yet")
+                    : t("No devices match the current filter")}
                 </div>
                 <div className="rk-empty-copy">
                   {stats.inventoryDevices === 0
-                    ? "Add inventory devices first, then enable monitoring from here or from a device page."
-                    : "Try a broader filter or search to bring matching monitor targets back into view."}
+                    ? t(
+                        "Add inventory devices first, then enable monitoring from here or from a device page.",
+                      )
+                    : t(
+                        "Try a broader filter or search to bring matching monitor targets back into view.",
+                      )}
                 </div>
               </div>
             ) : (
@@ -911,7 +927,7 @@ function DeviceMonitorCard({
   onRun: () => void;
   canManageMonitoring: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, formatRelativeTime } = useI18n();
   const monitorStatusLabel = useMemo(
     (): Record<MonitorRollupStatus, string> => ({
       offline: t("Offline"),
@@ -972,14 +988,20 @@ function DeviceMonitorCard({
               )}
               {device.status !== rollupStatus && (
                 <span>
-                  inventory {statusLabel[device.status].toLowerCase()}
+                  {t("inventory {status}", {
+                    status: t(statusLabel[device.status] as TranslationKey),
+                  })}
                 </span>
               )}
               <span>
-                {monitors.length} target{monitors.length === 1 ? "" : "s"}
+                {t("{count} target(s)", { count: monitors.length })}
               </span>
               {latestCheckAt && (
-                <span>last checked {relativeTime(latestCheckAt)}</span>
+                <span>
+                  {t("Last checked {time}", {
+                    time: formatRelativeTime(latestCheckAt),
+                  })}
+                </span>
               )}
             </div>
           </div>
@@ -987,10 +1009,14 @@ function DeviceMonitorCard({
 
         <div className="flex items-center gap-2">
           {failingMonitors.length > 0 && (
-            <Badge tone="err">{failingMonitors.length} failing</Badge>
+            <Badge tone="err">
+              {t("{count} failing", { count: failingMonitors.length })}
+            </Badge>
           )}
           {unknownMonitors.length > 0 && (
-            <Badge tone="neutral">{unknownMonitors.length} unknown</Badge>
+            <Badge tone="neutral">
+              {t("{count} unknown", { count: unknownMonitors.length })}
+            </Badge>
           )}
           {monitors.length > 0 && (
             <Button
@@ -1000,7 +1026,7 @@ function DeviceMonitorCard({
               disabled={!canManageMonitoring || running}
             >
               <Activity className="size-3.5" />
-              {running ? "Checking..." : "Check now"}
+              {running ? t("Checking...") : t("Check now")}
             </Button>
           )}
         </div>
@@ -1008,8 +1034,9 @@ function DeviceMonitorCard({
 
       {monitors.length === 0 ? (
         <div className="mt-4 rounded-[var(--radius-sm)] border border-dashed border-[var(--border-default)] px-3 py-2 text-xs text-[var(--text-tertiary)]">
-          No active monitor targets. Select this device and use Enable ICMP to
-          add one in bulk.
+          {t(
+            "No active monitor targets. Select this device and use Enable ICMP to add one in bulk.",
+          )}
         </div>
       ) : (
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -1041,17 +1068,19 @@ function DeviceMonitorCard({
               </div>
               <div className="mt-2 space-y-1 text-[11px] text-[var(--text-tertiary)]">
                 <div>
-                  <span className="text-[var(--text-muted)]">Target:</span>{" "}
+                  <span className="text-[var(--text-muted)]">{t("Target")}:</span>{" "}
                   <Mono>{formatMonitorTarget(monitor)}</Mono>
                 </div>
                 <div>
-                  <span className="text-[var(--text-muted)]">Last check:</span>{" "}
+                  <span className="text-[var(--text-muted)]">
+                    {t("Last check")}:
+                  </span>{" "}
                   {monitor.lastCheckAt
-                    ? relativeTime(monitor.lastCheckAt)
-                    : "never"}
+                    ? formatRelativeTime(monitor.lastCheckAt)
+                    : t("never")}
                 </div>
                 <div className="text-[var(--text-secondary)]">
-                  {monitor.lastMessage ?? "No result yet."}
+                  {monitor.lastMessage ?? t("No result yet.")}
                 </div>
               </div>
             </div>
@@ -1081,7 +1110,7 @@ function DeviceMonitorRow({
   onRun: () => void;
   canManageMonitoring: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, formatRelativeTime } = useI18n();
   const monitorStatusLabel = useMemo(
     (): Record<MonitorRollupStatus, string> => ({
       offline: t("Offline"),
@@ -1134,19 +1163,23 @@ function DeviceMonitorRow({
         </Badge>
       </div>
       <Mono className="col-span-4 text-[10px] text-[var(--text-tertiary)] md:col-span-2">
-        {monitors.length} targets
+        {t("{count} targets", { count: monitors.length })}
       </Mono>
       <div className="col-span-12 truncate text-xs text-[var(--text-tertiary)] md:col-span-3">
-        {targetSummary || formatDeviceAddress(device) || "No target summary"}
+        {targetSummary || formatDeviceAddress(device) || t("No target summary")}
       </div>
       <div className="col-span-8 flex items-center gap-2 md:col-span-1">
-        {failingCount > 0 && <Badge tone="err">{failingCount} failing</Badge>}
+        {failingCount > 0 && (
+          <Badge tone="err">{t("{count} failing", { count: failingCount })}</Badge>
+        )}
         {unknownCount > 0 && (
-          <Badge tone="neutral">{unknownCount} unknown</Badge>
+          <Badge tone="neutral">
+            {t("{count} unknown", { count: unknownCount })}
+          </Badge>
         )}
         {latestCheckAt && (
           <span className="text-[11px] text-[var(--text-tertiary)]">
-            {relativeTime(latestCheckAt)}
+            {formatRelativeTime(latestCheckAt)}
           </span>
         )}
       </div>
@@ -1159,7 +1192,7 @@ function DeviceMonitorRow({
             disabled={!canManageMonitoring || running}
           >
             <Activity className="size-3.5" />
-            {running ? "Checking..." : "Check"}
+            {running ? t("Checking...") : t("Check")}
           </Button>
         )}
       </div>

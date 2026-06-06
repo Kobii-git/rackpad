@@ -108,13 +108,16 @@ export function SnmpCredentialsPanel({
           form.version === "3" && form.v3PrivProto === "AES128"
             ? form.v3PrivPassword.trim()
             : undefined,
-        v3Context: form.version === "3" ? form.v3Context.trim() || undefined : undefined,
+        v3Context:
+          form.version === "3" ? form.v3Context.trim() || undefined : undefined,
       });
       setForm(EMPTY_FORM);
-      setMessage("SNMP credential saved.");
+      setMessage(t("SNMP credential saved."));
       await onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save credential.");
+      setError(
+        err instanceof Error ? err.message : t("Failed to save credential."),
+      );
     } finally {
       setSaving(false);
     }
@@ -127,10 +130,12 @@ export function SnmpCredentialsPanel({
     try {
       await api.deleteSnmpCredential(id);
       if (selectedId === id) setSelectedId("");
-      setMessage("SNMP credential deleted.");
+      setMessage(t("SNMP credential deleted."));
       await onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete credential.");
+      setError(
+        err instanceof Error ? err.message : t("Failed to delete credential."),
+      );
     } finally {
       setSaving(false);
     }
@@ -138,7 +143,7 @@ export function SnmpCredentialsPanel({
 
   async function handleTest(id: string) {
     if (!testTarget.trim()) {
-      setError("Enter a target IP or hostname to test SNMP.");
+      setError(t("Enter a target IP or hostname to test SNMP."));
       return;
     }
     setTestingId(id);
@@ -148,9 +153,14 @@ export function SnmpCredentialsPanel({
       const result = await api.testSnmpCredential(id, {
         target: testTarget.trim(),
       });
-      setMessage(`SNMP test OK: ${result.target} sysUpTime.0 = ${result.value}`);
+      setMessage(
+        t("SNMP test OK: {target} sysUpTime.0 = {value}", {
+          target: result.target,
+          value: result.value,
+        }),
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "SNMP test failed.");
+      setError(err instanceof Error ? err.message : t("SNMP test failed."));
     } finally {
       setTestingId(null);
     }
@@ -160,12 +170,13 @@ export function SnmpCredentialsPanel({
     <div className="grid gap-4 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
       <div>
         <div className="text-sm font-medium text-[var(--color-fg)]">
-          Lab SNMP credentials
+          {t("Lab SNMP credentials")}
         </div>
         <div className="text-sm text-[var(--color-fg-subtle)]">
-          Shared per lab. Secrets are encrypted at rest when{" "}
-          <code className="text-xs">RACKPAD_SECRET_KEY</code> is configured on
-          the server.
+          {t(
+            "Shared per lab. Secrets are encrypted at rest when {secretKey} is configured on the server.",
+            { secretKey: "RACKPAD_SECRET_KEY" },
+          )}
         </div>
       </div>
 
@@ -186,7 +197,7 @@ export function SnmpCredentialsPanel({
                     ? ` · ${credential.v3User}`
                     : ""}
                   {credential.version !== "3" && credential.hasCommunity
-                    ? " · community stored"
+                    ? ` · ${t("community stored")}`
                     : ""}
                 </div>
               </div>
@@ -197,7 +208,7 @@ export function SnmpCredentialsPanel({
                   disabled={disabled || testingId === credential.id}
                   onClick={() => handleTest(credential.id)}
                 >
-                  {testingId === credential.id ? "Testing…" : "Test SNMP"}
+                  {testingId === credential.id ? t("Testing…") : t("Test SNMP")}
                 </Button>
                 <Button
                   type="button"
@@ -214,7 +225,7 @@ export function SnmpCredentialsPanel({
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Test target">
+        <Field label={t("Test target")}>
           <Input
             value={testTarget}
             disabled={disabled}
@@ -222,7 +233,7 @@ export function SnmpCredentialsPanel({
             placeholder="10.0.0.1"
           />
         </Field>
-        <Field label="New credential name">
+        <Field label={t("New credential name")}>
           <Input
             value={form.name}
             disabled={disabled || saving}
@@ -232,7 +243,7 @@ export function SnmpCredentialsPanel({
             placeholder="Core switch RO"
           />
         </Field>
-        <Field label="Version">
+        <Field label={t("Version")}>
           <Select
             value={form.version}
             disabled={disabled || saving}
@@ -259,7 +270,7 @@ export function SnmpCredentialsPanel({
                 }
               />
             </Field>
-            <Field label="Auth protocol">
+            <Field label={t("Auth protocol")}>
               <Select
                 value={form.v3AuthProto}
                 disabled={disabled || saving}
@@ -274,7 +285,7 @@ export function SnmpCredentialsPanel({
                 <option value="MD5">MD5</option>
               </Select>
             </Field>
-            <Field label="Auth password">
+            <Field label={t("Auth password")}>
               <Input
                 type="password"
                 value={form.v3AuthPassword}
@@ -287,7 +298,7 @@ export function SnmpCredentialsPanel({
                 }
               />
             </Field>
-            <Field label="Privacy">
+            <Field label={t("Privacy")}>
               <Select
                 value={form.v3PrivProto}
                 disabled={disabled || saving}
@@ -303,7 +314,7 @@ export function SnmpCredentialsPanel({
               </Select>
             </Field>
             {form.v3PrivProto === "AES128" && (
-              <Field label="Privacy password">
+              <Field label={t("Privacy password")}>
                 <Input
                   type="password"
                   value={form.v3PrivPassword}
@@ -317,14 +328,14 @@ export function SnmpCredentialsPanel({
                 />
               </Field>
             )}
-            <Field label="Context">
+            <Field label={t("Context")}>
               <Input
                 value={form.v3Context}
                 disabled={disabled || saving}
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, v3Context: event.target.value }))
                 }
-                placeholder="Optional"
+                placeholder={t("Optional")}
               />
             </Field>
           </>
@@ -347,7 +358,7 @@ export function SnmpCredentialsPanel({
           disabled={disabled || saving || !form.name.trim()}
           onClick={handleCreate}
         >
-          {saving ? t("Saving...") : "Add credential"}
+          {saving ? t("Saving...") : t("Add credential")}
         </Button>
       </div>
 
@@ -362,7 +373,8 @@ export function SnmpCredentialsPanel({
 export function snmpCredentialLabel(
   credentials: SnmpCredential[],
   credentialId?: string | null,
+  translate?: (key: "Inline community") => string,
 ) {
-  if (!credentialId) return "Inline community";
+  if (!credentialId) return translate?.("Inline community") ?? "Inline community";
   return credentials.find((entry) => entry.id === credentialId)?.name ?? credentialId;
 }

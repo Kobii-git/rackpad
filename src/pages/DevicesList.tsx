@@ -12,9 +12,9 @@ import { SortableHeader } from "@/components/shared/SortableHeader";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import {
+  bulkUpdateDevices,
   canEditInventory,
   deleteDevice,
-  updateDevice,
   useStore,
 } from "@/lib/store";
 import type {
@@ -49,7 +49,9 @@ type SortKey =
 
 interface BulkDeviceForm {
   tags: string;
+  placement: "" | "room" | "wireless";
   roomId: string;
+  parentDeviceId: string;
   deviceType: string;
   manufacturer: string;
   model: string;
@@ -62,7 +64,9 @@ interface BulkDeviceForm {
 
 const EMPTY_BULK_DEVICE_FORM: BulkDeviceForm = {
   tags: "",
+  placement: "",
   roomId: "",
+  parentDeviceId: "",
   deviceType: "",
   manufacturer: "",
   model: "",
@@ -77,9 +81,9 @@ export default function DevicesList() {
   const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useStore((s) => s.currentUser);
-  const devices = useStore((s) => s.devices);
   const deviceTypes = useStore((s) => s.deviceTypes);
   const rooms = useStore((s) => s.rooms);
+  const devices = useStore((s) => s.devices);
   const racks = useStore((s) => s.racks);
   const ports = useStore((s) => s.ports);
   const deviceMonitors = useStore((s) => s.deviceMonitors);
@@ -129,6 +133,14 @@ export default function DevicesList() {
       return acc;
     }, {});
   }, [rooms]);
+
+  const accessPointCandidates = useMemo(
+    () =>
+      devices
+        .filter((device) => device.deviceType === "ap")
+        .sort((a, b) => a.hostname.localeCompare(b.hostname)),
+    [devices],
+  );
 
   const deviceById = useMemo(() => {
     return devices.reduce<Record<string, Device>>((acc, device) => {
@@ -261,26 +273,36 @@ export default function DevicesList() {
 
   async function handleBulkSave() {
     if (selectedDeviceIds.size === 0 || bulkFields.size === 0) return;
-    const changes: Partial<Omit<Device, "id" | "labId">> = {};
+    const changes: Record<string, unknown> = {};
     if (bulkFields.has("tags")) {
       changes.tags = bulkForm.tags
         .split(",")
         .map((tag) => tag.trim())
         .filter(Boolean);
     }
-    if (bulkFields.has("roomId")) {
+    if (bulkFields.has("placement")) {
+      if (bulkForm.placement === "wireless") {
+        changes.placement = "wireless";
+        changes.parentDeviceId = bulkForm.parentDeviceId || null;
+        changes.roomId = null;
+      } else if (bulkForm.placement === "room") {
+        changes.placement = "room";
+        changes.roomId = bulkForm.roomId || null;
+        changes.parentDeviceId = null;
+      }
+    } else if (bulkFields.has("roomId")) {
       changes.placement = "room";
-      changes.roomId = bulkForm.roomId || undefined;
-      changes.parentDeviceId = undefined;
+      changes.roomId = bulkForm.roomId || null;
+      changes.parentDeviceId = null;
     }
     if (bulkFields.has("deviceType") && bulkForm.deviceType) {
       changes.deviceType = bulkForm.deviceType;
     }
     if (bulkFields.has("manufacturer")) {
-      changes.manufacturer = bulkForm.manufacturer.trim() || undefined;
+      changes.manufacturer = bulkForm.manufacturer.trim() || null;
     }
     if (bulkFields.has("model")) {
-      changes.model = bulkForm.model.trim() || undefined;
+      changes.model = bulkForm.model.trim() || null;
     }
     if (bulkFields.has("status") && bulkForm.status) {
       changes.status = bulkForm.status as DeviceStatus;
@@ -288,34 +310,35 @@ export default function DevicesList() {
     if (bulkFields.has("cpuCores")) {
       changes.cpuCores = bulkForm.cpuCores
         ? Number.parseInt(bulkForm.cpuCores, 10)
-        : undefined;
+        : null;
     }
     if (bulkFields.has("memoryGb")) {
       changes.memoryGb = bulkForm.memoryGb
         ? Number.parseFloat(bulkForm.memoryGb)
-        : undefined;
+        : null;
     }
     if (bulkFields.has("storageGb")) {
       changes.storageGb = bulkForm.storageGb
         ? Number.parseFloat(bulkForm.storageGb)
-        : undefined;
+        : null;
     }
     if (bulkFields.has("specs")) {
-      changes.specs = bulkForm.specs.trim() || undefined;
+      changes.specs = bulkForm.specs.trim() || null;
     }
 
     setBulkSaving(true);
     setBulkError("");
     try {
-      for (const deviceId of selectedDeviceIds) {
-        await updateDevice(deviceId, changes);
-      }
+      await bulkUpdateDevices({
+        deviceIds: [...selectedDeviceIds],
+        changes,
+      });
       setSelectedDeviceIds(new Set());
       setBulkFields(new Set());
       setBulkForm(EMPTY_BULK_DEVICE_FORM);
     } catch (err) {
       setBulkError(
-        err instanceof Error ? err.message : "Failed to update devices.",
+        err instanceof Error ? err.message : t("Failed to update devices."),
       );
     } finally {
       setBulkSaving(false);
@@ -479,7 +502,7 @@ export default function DevicesList() {
                   onClick={() => setSelectedDeviceIds(new Set())}
                 >
                   <X className="size-3.5" />
-                  Clear
+                  {t("Clear")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -488,7 +511,7 @@ export default function DevicesList() {
                   onClick={() => void handleBulkDelete()}
                 >
                   <Trash2 className="size-3.5" />
-                  Delete selected
+                  {t("Delete selected")}
                 </Button>
               </div>
 
@@ -510,26 +533,62 @@ export default function DevicesList() {
                   />
                 </BulkField>
                 <BulkField
-                  label="Room"
-                  checked={bulkFields.has("roomId")}
-                  onChecked={() => toggleBulkField("roomId")}
+                  label={t("Placement")}
+                  checked={bulkFields.has("placement")}
+                  onChecked={() => toggleBulkField("placement")}
                 >
                   <Select
-                    value={bulkForm.roomId}
+                    value={bulkForm.placement}
                     onChange={(value) =>
-                      setBulkForm((prev) => ({ ...prev, roomId: value }))
+                      setBulkForm((prev) => ({
+                        ...prev,
+                        placement: value as BulkDeviceForm["placement"],
+                        parentDeviceId:
+                          value === "wireless" ? prev.parentDeviceId : "",
+                        roomId: value === "room" ? prev.roomId : "",
+                      }))
                     }
                   >
-                    <option value="">Loose / no room</option>
-                    {rooms.map((room) => (
-                      <option key={room.id} value={room.id}>
-                        {room.name}
-                      </option>
-                    ))}
+                    <option value="">{t("Keep current placement")}</option>
+                    <option value="room">{t("Loose / room tech")}</option>
+                    <option value="wireless">{t("WiFi / AP linked")}</option>
                   </Select>
+                  {bulkForm.placement === "room" && (
+                    <Select
+                      value={bulkForm.roomId}
+                      onChange={(value) =>
+                        setBulkForm((prev) => ({ ...prev, roomId: value }))
+                      }
+                    >
+                      <option value="">{t("Loose / no room")}</option>
+                      {rooms.map((room) => (
+                        <option key={room.id} value={room.id}>
+                          {room.name}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                  {bulkForm.placement === "wireless" && (
+                    <Select
+                      value={bulkForm.parentDeviceId}
+                      onChange={(value) =>
+                        setBulkForm((prev) => ({
+                          ...prev,
+                          parentDeviceId: value,
+                        }))
+                      }
+                    >
+                      <option value="">{t("No AP selected")}</option>
+                      {accessPointCandidates.map((entry) => (
+                        <option key={entry.id} value={entry.id}>
+                          {entry.hostname}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
                 </BulkField>
                 <BulkField
-                  label="Device type"
+                  label={t("Device type")}
                   checked={bulkFields.has("deviceType")}
                   onChecked={() => toggleBulkField("deviceType")}
                 >
@@ -539,7 +598,7 @@ export default function DevicesList() {
                       setBulkForm((prev) => ({ ...prev, deviceType: value }))
                     }
                   >
-                    <option value="">Keep current type</option>
+                    <option value="">{t("Keep current type")}</option>
                     {deviceTypes.map((entry) => (
                       <option key={entry.id} value={entry.id}>
                         {entry.label}
@@ -698,7 +757,7 @@ export default function DevicesList() {
                   onClick={() => void handleBulkSave()}
                 >
                   <Save className="size-3.5" />
-                  {bulkSaving ? "Saving..." : "Apply changes"}
+                  {bulkSaving ? t("Saving...") : t("Apply changes")}
                 </Button>
               </div>
             </CardBody>

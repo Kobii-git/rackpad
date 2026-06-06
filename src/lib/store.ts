@@ -2438,6 +2438,38 @@ export async function updateDevice(
   return updated;
 }
 
+export async function bulkUpdateDevices(input: {
+  deviceIds: string[];
+  changes: Record<string, unknown>;
+}): Promise<{ updated: number; devices: Device[] }> {
+  const result = await api.bulkUpdateDevices(input);
+  const nextDevices = result.devices.reduce(
+    (devices, updated) => replaceById(devices, updated, sortDevices),
+    state.devices,
+  );
+  setState((prev) => ({
+    ...prev,
+    devices: nextDevices,
+    deviceTypes: sortDeviceTypes(
+      mergeDeviceTypeDefinitions(prev.deviceTypes, {
+        devices: nextDevices,
+        portTemplates: prev.portTemplates,
+      }),
+    ),
+  }));
+
+  for (const device of result.devices) {
+    void recordAudit(
+      "device.update",
+      "Device",
+      device.id,
+      `Updated device ${device.hostname} (bulk)`,
+    );
+  }
+
+  return result;
+}
+
 export async function deleteDevice(id: string): Promise<boolean> {
   const device = state.devices.find((entry) => entry.id === id);
   if (!device) return false;

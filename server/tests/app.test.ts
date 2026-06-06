@@ -1033,6 +1033,282 @@ test("custom device types can be created and used by devices and templates", asy
   );
 });
 
+test("bulk device updates accept custom types and wireless placement", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const typeRes = await app.inject({
+    method: "POST",
+    url: "/api/device-types",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      label: "IoT",
+    },
+  });
+  assert.equal(typeRes.statusCode, 201);
+  const iotType = readJson(typeRes) as { id: string };
+
+  const apRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "bulk-ap",
+      deviceType: "ap",
+      status: "online",
+      placement: "wireless",
+    },
+  });
+  assert.equal(apRes.statusCode, 201);
+  const ap = readJson(apRes) as { id: string };
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "bulk-client-a",
+      deviceType: "endpoint",
+      status: "online",
+      placement: "room",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const bulkTypeRes = await app.inject({
+    method: "POST",
+    url: "/api/devices/bulk",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceIds: [device.id],
+      changes: {
+        deviceType: iotType.id,
+      },
+    },
+  });
+  assert.equal(bulkTypeRes.statusCode, 200);
+  const bulkTyped = readJson(bulkTypeRes) as {
+    devices: Array<{ deviceType: string; placement: string }>;
+  };
+  assert.equal(bulkTyped.devices[0]?.deviceType, iotType.id);
+  assert.equal(bulkTyped.devices[0]?.placement, "room");
+
+  const bulkWirelessRes = await app.inject({
+    method: "POST",
+    url: "/api/devices/bulk",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceIds: [device.id],
+      changes: {
+        placement: "wireless",
+        parentDeviceId: ap.id,
+      },
+    },
+  });
+  assert.equal(bulkWirelessRes.statusCode, 200);
+  const bulkWireless = readJson(bulkWirelessRes) as {
+    devices: Array<{ placement: string; parentDeviceId: string | null }>;
+  };
+  assert.equal(bulkWireless.devices[0]?.placement, "wireless");
+  assert.equal(bulkWireless.devices[0]?.parentDeviceId, ap.id);
+
+  const associationRes = await app.inject({
+    method: "GET",
+    url: "/api/wifi/associations",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(associationRes.statusCode, 200);
+  const associations = readJson(associationRes) as Array<{
+    clientDeviceId: string;
+    apDeviceId: string;
+  }>;
+  assert.ok(
+    associations.some(
+      (entry) =>
+        entry.clientDeviceId === device.id && entry.apDeviceId === ap.id,
+    ),
+  );
+});
+
+test("bulk device updates roll back earlier writes when a later device fails validation", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const createLabRes = await app.inject({
+    method: "POST",
+    url: "/api/labs",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      id: "lab_bulk_atomic",
+      name: "Bulk Atomic Lab",
+    },
+  });
+  assert.equal(createLabRes.statusCode, 201);
+
+  const apRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "bulk-atomic-ap",
+      deviceType: "ap",
+      status: "online",
+      placement: "wireless",
+    },
+  });
+  assert.equal(apRes.statusCode, 201);
+  const ap = readJson(apRes) as { id: string };
+
+  const homeDeviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "bulk-atomic-home",
+      deviceType: "endpoint",
+      status: "online",
+      placement: "room",
+      manufacturer: "Before",
+    },
+  });
+  assert.equal(homeDeviceRes.statusCode, 201);
+  const homeDevice = readJson(homeDeviceRes) as { id: string };
+
+  const otherLabDeviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_bulk_atomic",
+      hostname: "bulk-atomic-other",
+      deviceType: "endpoint",
+      status: "online",
+      placement: "room",
+      manufacturer: "Before",
+    },
+  });
+  assert.equal(otherLabDeviceRes.statusCode, 201);
+  const otherLabDevice = readJson(otherLabDeviceRes) as { id: string };
+
+  const bulkRes = await app.inject({
+    method: "POST",
+    url: "/api/devices/bulk",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceIds: [homeDevice.id, otherLabDevice.id],
+      changes: {
+        manufacturer: "After",
+        placement: "wireless",
+        parentDeviceId: ap.id,
+      },
+    },
+  });
+  assert.equal(bulkRes.statusCode, 400);
+  assert.match(bulkRes.body, /valid access point/i);
+
+  const rolledBackHomeDevice = db
+    .prepare(
+      "SELECT manufacturer, placement, parentDeviceId FROM devices WHERE id = ?",
+    )
+    .get(homeDevice.id) as {
+    manufacturer: string | null;
+    placement: string | null;
+    parentDeviceId: string | null;
+  };
+  assert.equal(rolledBackHomeDevice.manufacturer, "Before");
+  assert.equal(rolledBackHomeDevice.placement, "room");
+  assert.equal(rolledBackHomeDevice.parentDeviceId, null);
+
+  const rolledBackAssociations = db
+    .prepare(
+      "SELECT COUNT(*) AS count FROM wifiClientAssociations WHERE clientDeviceId = ?",
+    )
+    .get(homeDevice.id) as { count: number };
+  assert.equal(rolledBackAssociations.count, 0);
+});
+
+test("device import auto-places wireless clients on WiFi VLAN subnets", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  db.prepare(`
+    INSERT INTO vlans (id, labId, vlanId, name, description, color)
+    VALUES ('vlan_wifi_bulk', 'lab_home', 31, 'Guest VLAN', NULL, NULL)
+  `).run();
+  db.prepare(`
+    INSERT INTO subnets (id, labId, cidr, name, description, vlanId)
+    VALUES ('subnet_wifi_bulk', 'lab_home', '192.168.31.0/24', 'Guest subnet', NULL, 'vlan_wifi_bulk')
+  `).run();
+  db.prepare(`
+    INSERT INTO wifiSsids (id, labId, name, purpose, security, hidden, vlanId, color)
+    VALUES ('ssid_guest_bulk', 'lab_home', 'GuestNet', NULL, NULL, 0, 'vlan_wifi_bulk', NULL)
+  `).run();
+  db.prepare(`
+    INSERT INTO devices
+      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model,
+       serial, managementIp, macAddress, status, placement, parentDeviceId, networkMode, roomId, cpuCores, memoryGb, storageGb, specs,
+       startU, heightU, face, tags, notes, lastSeen)
+    VALUES ('ap_guest_bulk', 'lab_home', NULL, 'guest-ap', NULL, 'ap', NULL, NULL,
+       NULL, '192.168.1.50', NULL, 'online', 'wireless', NULL, 'normal', NULL, NULL, NULL, NULL, NULL,
+       NULL, NULL, NULL, NULL, NULL, NULL)
+  `).run();
+  db.prepare(`
+    INSERT INTO wifiRadios (id, apDeviceId, slotName, band, channel, channelWidth, txPower, notes)
+    VALUES ('radio_guest_bulk', 'ap_guest_bulk', 'radio0', '5GHz', '36', NULL, NULL, NULL)
+  `).run();
+  db.prepare(`
+    INSERT INTO wifiRadioSsids (radioId, ssidId)
+    VALUES ('radio_guest_bulk', 'ssid_guest_bulk')
+  `).run();
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "guest-phone",
+      deviceType: "endpoint",
+      status: "online",
+      managementIp: "192.168.31.44",
+      placement: "room",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as {
+    placement: string;
+    parentDeviceId: string | null;
+  };
+  assert.equal(device.placement, "wireless");
+  assert.equal(device.parentDeviceId, "ap_guest_bulk");
+});
+
 test("container is a built-in virtual workload device type", async () => {
   const adminToken = await bootstrapAdmin();
 

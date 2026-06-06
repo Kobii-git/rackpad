@@ -107,7 +107,9 @@ export function SnmpSyncPanel({
 
   async function handlePreview() {
     if (!target?.trim()) {
-      setError("Set a management IP or SNMP target before previewing sync.");
+      setError(
+        t("Set a management IP or SNMP target before previewing sync."),
+      );
       return;
     }
     setPreviewLoading(true);
@@ -191,7 +193,7 @@ export function SnmpSyncPanel({
           onClick={() => void handlePreview()}
         >
           <RefreshCcw className="size-3.5" />
-          {previewLoading ? "Previewing..." : "Preview sync"}
+          {previewLoading ? t("Previewing...") : t("Preview sync")}
         </Button>
       </div>
 
@@ -290,7 +292,7 @@ export function SnmpSyncPanel({
           ))}
 
           {preview.vlans.length > 0 ? (
-            <DiffSection title="VLANs" rows={preview.vlans.map((entry) => ({
+            <DiffSection title={t("VLANs")} rows={preview.vlans.map((entry) => ({
               key: String(entry.vlanNumber),
               label: `VLAN ${entry.vlanNumber}`,
               detail: entry.name,
@@ -301,7 +303,7 @@ export function SnmpSyncPanel({
 
           {preview.subnets.length > 0 ? (
             <DiffSection
-              title="Subnets"
+              title={t("Subnets")}
               rows={preview.subnets.map((entry) => ({
                 key: entry.cidr,
                 label: entry.cidr,
@@ -343,7 +345,7 @@ export function SnmpSyncPanel({
                 onClick={() => void handleApply()}
               >
                 <ShieldCheck className="size-3.5" />
-                {applyLoading ? "Applying..." : `${t("Apply")} preview`}
+                {applyLoading ? t("Applying...") : t("Apply preview")}
               </Button>
             </div>
           ) : (
