@@ -17,6 +17,7 @@ interface PortListProps {
   devicesById: Record<string, Device>;
   vlansById?: Record<string, Vlan>;
   virtualSwitchesById?: Record<string, VirtualSwitch>;
+  snmpVerifiedPortIds?: Set<string>;
   onSelectPort?: (portId: string) => void;
   selectedPortId?: string;
   selectedPortIds?: Set<string>;
@@ -30,6 +31,7 @@ export function PortList({
   devicesById,
   vlansById = {},
   virtualSwitchesById = {},
+  snmpVerifiedPortIds,
   onSelectPort,
   selectedPortId,
   selectedPortIds,
@@ -209,7 +211,14 @@ export function PortList({
                 </Td>
                 <Td>
                   <Mono className="text-[var(--text-primary)]">
-                    {formatPortLabel(port)}
+                    <span className="inline-flex items-center gap-2">
+                      {formatPortLabel(port)}
+                      {snmpVerifiedPortIds?.has(port.id) ? (
+                        <span className="rounded border border-[var(--accent-primary)]/35 bg-[var(--accent-primary)]/10 px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--accent-primary)]">
+                          SNMP
+                        </span>
+                      ) : null}
+                    </span>
                   </Mono>
                 </Td>
                 <Td>

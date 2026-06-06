@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -28,8 +28,11 @@ import { AllocatePanel } from "@/components/shared/AllocatePanel";
 import { canEditInventory, useStore } from "@/lib/store";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { cidrSize, relativeTime, statusLabel } from "@/lib/utils";
+import { buildSnmpVerifiedPortIds } from "@/lib/snmp-port-status";
+import { useI18n } from "@/i18n";
 
 export default function Dashboard() {
+  const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
   const rooms = useStore((s) => s.rooms);
@@ -61,6 +64,10 @@ export default function Dashboard() {
       : Math.round((ipAssignments.length / totalUsableIps) * 100);
   const uncabledPorts = Math.max(0, ports.length - cabledPortIds.size);
   const portsWithoutSpeed = ports.filter((port) => !port.speed).length;
+  const snmpVerifiedPortIds = useMemo(
+    () => buildSnmpVerifiedPortIds(deviceMonitors, ports),
+    [deviceMonitors, ports],
+  );
   const enabledMonitors = deviceMonitors.filter(
     (monitor) => monitor.enabled && monitor.type !== "none",
   );
@@ -109,12 +116,12 @@ export default function Dashboard() {
   return (
     <>
       <TopBar
-        subtitle="Operations overview"
-        title="Dashboard"
+        subtitle={t("Operations overview")}
+        title={t("Dashboard")}
         meta={
           <>
             <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-              Lab
+              {t("Lab")}
             </span>
             <span className="text-[13px] font-medium text-[var(--text-primary)]">
               {lab.name}
@@ -153,7 +160,7 @@ export default function Dashboard() {
             icon={Cable}
             label="Ports cabled"
             value={`${cabledPortIds.size}/${ports.length}`}
-            hint={`${uncabledPorts} uncabled, ${portsWithoutSpeed} missing speed`}
+            hint={`${uncabledPorts} uncabled, ${snmpVerifiedPortIds.size} SNMP verified`}
             tone={uncabledPorts > 0 ? "neutral" : "ok"}
           />
           <DashboardMetric
@@ -371,6 +378,11 @@ export default function Dashboard() {
             <CardBody className="space-y-2">
               <GapRow
                 to="/ports"
+                label="SNMP verified ports"
+                value={snmpVerifiedPortIds.size}
+              />
+              <GapRow
+                to="/ports"
                 label="Ports without speed"
                 value={portsWithoutSpeed}
               />
@@ -380,7 +392,7 @@ export default function Dashboard() {
                 value={uncabledPorts}
               />
               <GapRow to="/ipam" label="Subnets" value={subnets.length} />
-              <GapRow to="/vlans" label="VLANs" value={vlans.length} />
+              <GapRow to="/vlans" label={t("VLANs")} value={vlans.length} />
             </CardBody>
           </Card>
         </div>

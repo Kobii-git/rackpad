@@ -4,7 +4,12 @@ import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
-import { requireAdmin } from "../lib/auth.js";
+import {
+  appendLabFilter,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from "../lib/lab-access.js";
 import { optionalDeviceType } from "../lib/device-types.js";
 import { createId } from "../lib/ids.js";
 import { runIcmpProbe } from "../lib/monitoring.js";
@@ -682,15 +687,20 @@ async function scanHosts(
 export const discoveryRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { labId?: string; status?: string } }>(
     "/",
-    async (req) => {
-      resetStaleImportedDiscoveryRows(req.query.labId);
-      let sql = "SELECT * FROM discoveredDevices WHERE 1=1";
-      const params: unknown[] = [];
-
-      if (req.query.labId) {
-        sql += " AND labId = ?";
-        params.push(req.query.labId);
+    async (req, reply) => {
+      if (!req.authUser) {
+        return reply.status(401).send({ error: "Authentication required." });
       }
+
+      const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId);
+      if (!filter.ok) {
+        return reply.status(filter.status).send({ error: filter.error });
+      }
+
+      resetStaleImportedDiscoveryRows(req.query.labId);
+      const filtered = appendLabFilter("SELECT * FROM discoveredDevices WHERE 1=1", [], filter.labIds);
+      let sql = filtered.sql;
+      const params: unknown[] = [...filtered.params];
       if (req.query.status) {
         const body = { status: req.query.status };
         const status = optionalEnum(body, "status", DISCOVERY_STATUSES);
@@ -707,8 +717,6 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.post("/scan", async (req, reply) => {
-    if (!requireAdmin(req, reply)) return;
-
     const body = asObject(req.body);
     const labId = optionalString(body, "labId", { maxLength: 80 });
     const cidr = optionalString(body, "cidr", { maxLength: 80 });
@@ -716,6 +724,7 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     if (!labId) {
       throw new ValidationError("labId is required.");
     }
+    if (!assertLabWrite(req, reply, labId)) return;
     if (!cidr) {
       throw new ValidationError("cidr is required.");
     }
@@ -862,9 +871,8 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     const existing = db
       .prepare("SELECT * FROM discoveredDevices WHERE id = ?")
       .get(req.params.id) as Record<string, unknown> | undefined;
-    if (!existing) {
-      return reply.status(404).send({ error: "Discovered device not found." });
-    }
+    if (!assertLabWriteFromRow(req, reply, existing)) return;
+    const discovered = existing!;
 
     const body = asObject(req.body);
     const updates: string[] = [];
@@ -881,14 +889,14 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     });
     const lastSeen = optionalString(body, "lastSeen", { maxLength: 80 });
     const existingTechnicalRole =
-      typeof existing.technicalRole === "string" &&
-      existing.technicalRole.trim()
-        ? existing.technicalRole
+      typeof discovered.technicalRole === "string" &&
+      discovered.technicalRole.trim()
+        ? discovered.technicalRole
         : null;
 
     if (lastSeen) ensureIsoDate(lastSeen, "lastSeen");
     if (existingTechnicalRole) {
-      if (status !== undefined && status !== existing.status) {
+      if (status !== undefined && status !== discovered.status) {
         throw new ValidationError(
           "IPAM technical addresses cannot be moved into normal discovery statuses.",
         );
@@ -953,7 +961,7 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
         if (!importedDevice) {
           throw new ValidationError("Imported device does not exist.");
         }
-        if (importedDevice.labId !== String(existing.labId)) {
+        if (importedDevice.labId !== String(discovered.labId)) {
           throw new ValidationError(
             "Imported device must belong to the same lab.",
           );
@@ -1000,7 +1008,7 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
       `UPDATE discoveredDevices SET ${updates.join(", ")} WHERE id = ?`,
     ).run(...values);
     const linkedMacAddress =
-      typeof existing.macAddress === "string" ? existing.macAddress : "";
+      typeof discovered.macAddress === "string" ? discovered.macAddress : "";
     if (importedDeviceId && linkedMacAddress) {
       db.prepare(
         `
@@ -1018,11 +1026,9 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
     const existing = db
-      .prepare("SELECT id FROM discoveredDevices WHERE id = ?")
-      .get(req.params.id);
-    if (!existing) {
-      return reply.status(404).send({ error: "Discovered device not found." });
-    }
+      .prepare("SELECT * FROM discoveredDevices WHERE id = ?")
+      .get(req.params.id) as Record<string, unknown> | undefined;
+    if (!assertLabWriteFromRow(req, reply, existing)) return;
 
     db.prepare("DELETE FROM discoveredDevices WHERE id = ?").run(req.params.id);
     return reply.status(204).send();

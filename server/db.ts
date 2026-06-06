@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 19;
+const CURRENT_SCHEMA_VERSION = 23;
 
 export const db = new Database(DB_PATH);
 
@@ -699,6 +699,108 @@ const SCHEMA_MIGRATIONS = [
       ALTER TABLE deviceMonitors ADD COLUMN snmpCommunity TEXT;
       ALTER TABLE deviceMonitors ADD COLUMN snmpOid TEXT;
       ALTER TABLE deviceMonitors ADD COLUMN snmpExpectedValue TEXT;
+    `,
+  },
+  {
+    version: 20,
+    sql: `
+      CREATE TABLE IF NOT EXISTS userLabAccess (
+        userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        labId  TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        role   TEXT NOT NULL,
+        PRIMARY KEY (userId, labId)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_user_lab_access_lab_id
+        ON userLabAccess (labId);
+
+      INSERT OR IGNORE INTO userLabAccess (userId, labId, role)
+      SELECT u.id, l.id, CASE WHEN u.role = 'viewer' THEN 'viewer' ELSE 'editor' END
+      FROM users u
+      CROSS JOIN labs l
+      WHERE u.role != 'admin';
+    `,
+  },
+  {
+    version: 21,
+    sql: `
+      ALTER TABLE deviceMonitors ADD COLUMN portId TEXT REFERENCES ports(id) ON DELETE SET NULL;
+      ALTER TABLE deviceMonitors ADD COLUMN snmpIfIndex INTEGER;
+      ALTER TABLE deviceMonitors ADD COLUMN snmpMatchMode TEXT NOT NULL DEFAULT 'equals';
+
+      ALTER TABLE ports ADD COLUMN snmpIfIndex INTEGER;
+
+      CREATE INDEX IF NOT EXISTS idx_device_monitors_port_id
+        ON deviceMonitors (portId);
+
+      CREATE INDEX IF NOT EXISTS idx_ports_snmp_if_index
+        ON ports (deviceId, snmpIfIndex);
+    `,
+  },
+  {
+    version: 22,
+    sql: `
+      CREATE TABLE IF NOT EXISTS snmpCredentials (
+        id             TEXT PRIMARY KEY,
+        labId          TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        name           TEXT NOT NULL,
+        version        TEXT NOT NULL,
+        communityEnc   TEXT,
+        v3User         TEXT,
+        v3AuthProto    TEXT,
+        v3AuthPassEnc  TEXT,
+        v3PrivProto    TEXT,
+        v3PrivPassEnc  TEXT,
+        v3Context      TEXT,
+        createdAt      TEXT NOT NULL,
+        updatedAt      TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_snmp_credentials_lab_id
+        ON snmpCredentials (labId);
+
+      ALTER TABLE devices ADD COLUMN snmpCredentialId TEXT REFERENCES snmpCredentials(id) ON DELETE SET NULL;
+      ALTER TABLE deviceMonitors ADD COLUMN snmpCredentialId TEXT REFERENCES snmpCredentials(id) ON DELETE SET NULL;
+    `,
+  },
+  {
+    version: 23,
+    sql: `
+      CREATE TABLE IF NOT EXISTS snmpTrapSources (
+        id           TEXT PRIMARY KEY,
+        labId        TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        deviceId     TEXT REFERENCES devices(id) ON DELETE SET NULL,
+        sourceIp     TEXT NOT NULL,
+        community    TEXT,
+        credentialId TEXT REFERENCES snmpCredentials(id) ON DELETE SET NULL,
+        lastTrapAt   TEXT,
+        UNIQUE(labId, sourceIp)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_snmp_trap_sources_lab_id
+        ON snmpTrapSources (labId);
+
+      CREATE INDEX IF NOT EXISTS idx_snmp_trap_sources_source_ip
+        ON snmpTrapSources (sourceIp);
+
+      CREATE TABLE IF NOT EXISTS snmpTrapLog (
+        id           TEXT PRIMARY KEY,
+        labId        TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        deviceId     TEXT REFERENCES devices(id) ON DELETE SET NULL,
+        sourceIp     TEXT NOT NULL,
+        trapOid      TEXT,
+        ifIndex      INTEGER,
+        varbindsJson TEXT,
+        resultAction TEXT NOT NULL,
+        message      TEXT NOT NULL,
+        receivedAt   TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_snmp_trap_log_lab_received
+        ON snmpTrapLog (labId, receivedAt DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_snmp_trap_log_device_received
+        ON snmpTrapLog (deviceId, receivedAt DESC);
     `,
   },
 ] as const;

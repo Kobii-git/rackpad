@@ -1,13 +1,20 @@
 import { spawn } from 'node:child_process'
-import dgram from 'node:dgram'
 import net from 'node:net'
 import { db } from '../db.js'
 import { sendMonitorTransitionAlert } from './alerts.js'
+import { snmpGet, SNMP_VERSIONS, type SnmpVersion } from './snmp.js'
+import { resolveMonitorSnmpSession } from './snmp-session.js'
+import {
+  evaluateSnmpMatch,
+  isIfOperStatusOid,
+  operStatusToLinkState,
+  SNMP_MATCH_MODES,
+  type SnmpMatchMode,
+} from './snmp-match.js'
 
 export const MONITOR_TYPES = ['none', 'icmp', 'tcp', 'http', 'https', 'snmp'] as const
 export type MonitorType = (typeof MONITOR_TYPES)[number]
-export const SNMP_VERSIONS = ['1', '2c'] as const
-export type SnmpVersion = (typeof SNMP_VERSIONS)[number]
+export { SNMP_VERSIONS, type SnmpVersion, SNMP_MATCH_MODES, type SnmpMatchMode }
 export type MonitorResult = { result: 'online' | 'offline' | 'unknown'; message: string }
 
 export interface DeviceMonitor {
@@ -22,6 +29,10 @@ export interface DeviceMonitor {
   snmpCommunity?: string | null
   snmpOid?: string | null
   snmpExpectedValue?: string | null
+  snmpMatchMode?: SnmpMatchMode | null
+  portId?: string | null
+  snmpIfIndex?: number | null
+  snmpCredentialId?: string | null
   intervalMs?: number | null
   enabled: boolean
   sortOrder: number
@@ -46,6 +57,12 @@ export function parseMonitor(row: Record<string, unknown>): DeviceMonitor {
     snmpCommunity: row.snmpCommunity ? String(row.snmpCommunity) : null,
     snmpOid: row.snmpOid ? String(row.snmpOid) : null,
     snmpExpectedValue: row.snmpExpectedValue ? String(row.snmpExpectedValue) : null,
+    snmpMatchMode: row.snmpMatchMode
+      ? (String(row.snmpMatchMode) as SnmpMatchMode)
+      : null,
+    portId: row.portId ? String(row.portId) : null,
+    snmpIfIndex: row.snmpIfIndex == null ? null : Number(row.snmpIfIndex),
+    snmpCredentialId: row.snmpCredentialId ? String(row.snmpCredentialId) : null,
     intervalMs: row.intervalMs == null ? null : Number(row.intervalMs),
     enabled: Number(row.enabled ?? 0) === 1,
     sortOrder: row.sortOrder == null ? 0 : Number(row.sortOrder),
@@ -140,6 +157,8 @@ async function persistMonitorResult(
     | undefined
   if (!currentDevice) return
 
+  syncMonitorPortState(monitor, payload.result)
+
   refreshDeviceMonitorRollup(monitor.deviceId, currentDevice.status, payload.checkedAt)
 
   await sendMonitorTransitionAlert(monitor.lastResult, monitor.lastAlertAt, {
@@ -156,6 +175,23 @@ async function persistMonitorResult(
     message: payload.message,
     checkedAt: payload.checkedAt,
   })
+}
+
+export async function recordMonitorResult(
+  monitorId: string,
+  payload: { result: 'online' | 'offline' | 'unknown'; message: string },
+) {
+  const row = db.prepare('SELECT * FROM deviceMonitors WHERE id = ?').get(monitorId) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return null
+
+  const monitor = parseMonitor(row)
+  const checkedAt = new Date().toISOString()
+  await persistMonitorResult(monitor, { checkedAt, ...payload })
+  return parseMonitor(
+    db.prepare('SELECT * FROM deviceMonitors WHERE id = ?').get(monitorId) as Record<string, unknown>,
+  )
 }
 
 export function reconcileDeviceMonitorRollup(deviceId: string) {
@@ -359,326 +395,61 @@ async function snmpCheck(monitor: DeviceMonitor): Promise<MonitorResult> {
   }
 
   const port = monitor.port ?? 161
-  const response = await snmpGet({
-    host: monitor.target,
-    port,
-    version: monitor.snmpVersion ?? '2c',
-    community: monitor.snmpCommunity?.trim() || 'public',
-    oid: monitor.snmpOid,
-    timeoutMs: 5000,
-  })
-  const expected = monitor.snmpExpectedValue?.trim()
-  const message = `SNMP ${monitor.target}:${port} ${response.oid} = ${response.value}`
-
-  if (!expected) {
-    return { result: 'online', message }
+  const device = db
+    .prepare('SELECT labId, snmpCredentialId FROM devices WHERE id = ?')
+    .get(monitor.deviceId) as { labId: string; snmpCredentialId?: string | null } | undefined
+  if (!device) {
+    return { result: 'unknown', message: 'Device not found for SNMP monitor.' }
   }
 
-  if (response.value === expected) {
-    return { result: 'online', message: `${message} (matched expected value).` }
+  const session = resolveMonitorSnmpSession(monitor, device)
+  const response = await snmpGet(session, monitor.snmpOid)
+  const expected = monitor.snmpExpectedValue?.trim()
+  const message = `SNMP ${monitor.target}:${port} ${response.oid} = ${response.value}`
+  const matchMode = monitor.snmpMatchMode ?? (expected ? 'equals' : 'any')
+  const matched = evaluateSnmpMatch(matchMode, response.value, expected)
+
+  if (matched) {
+    const suffix =
+      matchMode === 'any'
+        ? ''
+        : matchMode === 'in'
+          ? ` (matched allowed values ${expected}).`
+          : ` (matched expected value${matchMode === 'notEquals' ? ' not' : ''}).`
+    return {
+      result: 'online',
+      message: `${message}${suffix || ' (matched expected value).'}`,
+    }
   }
 
   return {
     result: 'offline',
-    message: `${message} (expected ${expected}).`,
+    message: `${message} (expected ${expected || 'match'} via ${matchMode}).`,
   }
 }
 
-function snmpGet(input: {
-  host: string
-  port: number
-  version: SnmpVersion
-  community: string
-  oid: string
-  timeoutMs: number
-}): Promise<{ oid: string; value: string; type: string }> {
-  const socket = dgram.createSocket('udp4')
-  const requestId = Math.floor(Math.random() * 0x7fffffff)
-  const message = buildSnmpGetRequest(input.version, input.community, input.oid, requestId)
+function syncMonitorPortState(
+  monitor: DeviceMonitor,
+  result: 'online' | 'offline' | 'unknown',
+) {
+  if (monitor.type !== 'snmp' || !isIfOperStatusOid(monitor.snmpOid)) return
 
-  return new Promise((resolve, reject) => {
-    let settled = false
-    const finish = (callback: () => void) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timeout)
-      socket.close()
-      callback()
-    }
+  const linkState = operStatusToLinkState(result)
 
-    const timeout = setTimeout(() => {
-      finish(() => {
-        reject(new Error(`SNMP ${input.host}:${input.port} timed out from the Rackpad server.`))
-      })
-    }, input.timeoutMs)
-
-    socket.once('error', (error) => {
-      finish(() => reject(error))
-    })
-
-    socket.once('message', (packet) => {
-      finish(() => {
-        try {
-          resolve(parseSnmpResponse(packet, requestId))
-        } catch (error) {
-          reject(error)
-        }
-      })
-    })
-
-    socket.send(message, input.port, input.host, (error) => {
-      if (error) {
-        finish(() => reject(error))
-      }
-    })
-  })
-}
-
-function buildSnmpGetRequest(version: SnmpVersion, community: string, oid: string, requestId: number) {
-  const variableBinding = berSequence(Buffer.concat([berObjectIdentifier(oid), Buffer.from([0x05, 0x00])]))
-  const variableBindings = berSequence(variableBinding)
-  const pdu = berTlv(0xa0, Buffer.concat([
-    berInteger(requestId),
-    berInteger(0),
-    berInteger(0),
-    variableBindings,
-  ]))
-
-  return berSequence(Buffer.concat([
-    berInteger(version === '1' ? 0 : 1),
-    berOctetString(community),
-    pdu,
-  ]))
-}
-
-function parseSnmpResponse(packet: Buffer, expectedRequestId: number) {
-  const root = readTlv(packet, 0)
-  if (root.tag !== 0x30) throw new Error('SNMP response was not a sequence.')
-
-  let offset = root.valueStart
-  const version = readTlv(packet, offset)
-  offset = version.nextOffset
-  const community = readTlv(packet, offset)
-  offset = community.nextOffset
-  if (version.tag !== 0x02 || community.tag !== 0x04) {
-    throw new Error('SNMP response header was invalid.')
+  if (monitor.portId) {
+    db.prepare('UPDATE ports SET linkState = ? WHERE id = ?').run(
+      linkState,
+      monitor.portId,
+    )
+    return
   }
 
-  const pdu = readTlv(packet, offset)
-  if (pdu.tag !== 0xa2) throw new Error('SNMP response did not contain a response PDU.')
-
-  offset = pdu.valueStart
-  const requestId = readTlv(packet, offset)
-  offset = requestId.nextOffset
-  const errorStatus = readTlv(packet, offset)
-  offset = errorStatus.nextOffset
-  const errorIndex = readTlv(packet, offset)
-  offset = errorIndex.nextOffset
-
-  if (decodeInteger(requestId.value) !== expectedRequestId) {
-    throw new Error('SNMP response request id did not match.')
-  }
-
-  const status = decodeInteger(errorStatus.value)
-  if (status !== 0) {
-    throw new Error(`SNMP agent returned error status ${status} at index ${decodeInteger(errorIndex.value)}.`)
-  }
-
-  const variableBindings = readTlv(packet, offset)
-  if (variableBindings.tag !== 0x30) throw new Error('SNMP response did not include variable bindings.')
-  const variableBinding = readTlv(packet, variableBindings.valueStart)
-  if (variableBinding.tag !== 0x30) throw new Error('SNMP variable binding was invalid.')
-
-  const oid = readTlv(packet, variableBinding.valueStart)
-  if (oid.tag !== 0x06) throw new Error('SNMP variable binding did not include an OID.')
-  const value = readTlv(packet, oid.nextOffset)
-  if (value.tag === 0x80 || value.tag === 0x81 || value.tag === 0x82) {
-    throw new Error(`SNMP agent returned ${snmpValueType(value.tag)} for ${decodeObjectIdentifier(oid.value)}.`)
-  }
-
-  return {
-    oid: decodeObjectIdentifier(oid.value),
-    value: decodeSnmpValue(value.tag, value.value),
-    type: snmpValueType(value.tag),
-  }
-}
-
-function berTlv(tag: number, value: Buffer) {
-  return Buffer.concat([Buffer.from([tag]), berLength(value.length), value])
-}
-
-function berSequence(value: Buffer) {
-  return berTlv(0x30, value)
-}
-
-function berInteger(value: number) {
-  if (value === 0) return berTlv(0x02, Buffer.from([0]))
-  const bytes: number[] = []
-  let next = value
-  while (next > 0) {
-    bytes.unshift(next & 0xff)
-    next >>= 8
-  }
-  if (bytes[0] >= 0x80) bytes.unshift(0)
-  return berTlv(0x02, Buffer.from(bytes))
-}
-
-function berOctetString(value: string) {
-  return berTlv(0x04, Buffer.from(value, 'utf8'))
-}
-
-function berObjectIdentifier(value: string) {
-  const parts = value
-    .replace(/^\./, '')
-    .split('.')
-    .map((part) => Number.parseInt(part, 10))
-
-  if (parts.length < 2 || parts.some((part) => !Number.isInteger(part) || part < 0)) {
-    throw new Error('SNMP OID must be a dotted numeric object identifier.')
-  }
-  if (parts[0] > 2 || (parts[0] < 2 && parts[1] > 39)) {
-    throw new Error('SNMP OID root is invalid.')
-  }
-
-  const bytes = [parts[0] * 40 + parts[1]]
-  for (const part of parts.slice(2)) {
-    bytes.push(...encodeBase128(part))
-  }
-  return berTlv(0x06, Buffer.from(bytes))
-}
-
-function encodeBase128(value: number) {
-  if (value === 0) return [0]
-  const bytes: number[] = []
-  let next = value
-  while (next > 0) {
-    bytes.unshift(next & 0x7f)
-    next >>= 7
-  }
-  for (let index = 0; index < bytes.length - 1; index += 1) {
-    bytes[index] |= 0x80
-  }
-  return bytes
-}
-
-function berLength(length: number) {
-  if (length < 0x80) return Buffer.from([length])
-  const bytes: number[] = []
-  let next = length
-  while (next > 0) {
-    bytes.unshift(next & 0xff)
-    next >>= 8
-  }
-  return Buffer.from([0x80 | bytes.length, ...bytes])
-}
-
-function readTlv(packet: Buffer, offset: number) {
-  if (offset >= packet.length) throw new Error('SNMP packet ended unexpectedly.')
-  const tag = packet[offset]
-  const lengthByte = packet[offset + 1]
-  if (lengthByte == null) throw new Error('SNMP packet length was missing.')
-
-  let length = lengthByte
-  let valueStart = offset + 2
-  if (lengthByte & 0x80) {
-    const byteCount = lengthByte & 0x7f
-    if (byteCount === 0 || byteCount > 4) throw new Error('SNMP packet used an unsupported BER length.')
-    length = 0
-    for (let index = 0; index < byteCount; index += 1) {
-      const byte = packet[valueStart + index]
-      if (byte == null) throw new Error('SNMP packet length was truncated.')
-      length = (length << 8) | byte
-    }
-    valueStart += byteCount
-  }
-
-  const nextOffset = valueStart + length
-  if (nextOffset > packet.length) throw new Error('SNMP packet value was truncated.')
-  return {
-    tag,
-    valueStart,
-    nextOffset,
-    value: packet.subarray(valueStart, nextOffset),
-  }
-}
-
-function decodeInteger(value: Buffer) {
-  if (value.length === 0) return 0
-  let result = value[0] & 0x7f
-  for (let index = 1; index < value.length; index += 1) {
-    result = (result << 8) | value[index]
-  }
-  return (value[0] & 0x80) ? result * -1 : result
-}
-
-function decodeUnsigned(value: Buffer) {
-  let result = 0
-  for (const byte of value) {
-    result = (result * 256) + byte
-  }
-  return result
-}
-
-function decodeObjectIdentifier(value: Buffer) {
-  const first = value[0]
-  if (first == null) return ''
-  const parts = [Math.floor(first / 40), first % 40]
-  let current = 0
-  for (const byte of value.subarray(1)) {
-    current = (current << 7) | (byte & 0x7f)
-    if ((byte & 0x80) === 0) {
-      parts.push(current)
-      current = 0
-    }
-  }
-  return parts.join('.')
-}
-
-function decodeSnmpValue(tag: number, value: Buffer) {
-  if (tag === 0x02) return String(decodeInteger(value))
-  if (tag === 0x04) return value.toString('utf8')
-  if (tag === 0x05) return 'null'
-  if (tag === 0x06) return decodeObjectIdentifier(value)
-  if (tag === 0x40) return [...value].join('.')
-  if (tag === 0x41 || tag === 0x42 || tag === 0x43 || tag === 0x47) {
-    return String(decodeUnsigned(value))
-  }
-  if (tag === 0x46) {
-    return value.reduce((total, byte) => (total * 256n) + BigInt(byte), 0n).toString()
-  }
-  return value.toString('hex')
-}
-
-function snmpValueType(tag: number) {
-  switch (tag) {
-    case 0x02:
-      return 'integer'
-    case 0x04:
-      return 'string'
-    case 0x05:
-      return 'null'
-    case 0x06:
-      return 'oid'
-    case 0x40:
-      return 'ipAddress'
-    case 0x41:
-      return 'counter32'
-    case 0x42:
-      return 'gauge32'
-    case 0x43:
-      return 'timeTicks'
-    case 0x46:
-      return 'counter64'
-    case 0x47:
-      return 'uinteger32'
-    case 0x80:
-      return 'noSuchObject'
-    case 0x81:
-      return 'noSuchInstance'
-    case 0x82:
-      return 'endOfMibView'
-    default:
-      return `tag 0x${tag.toString(16)}`
+  if (monitor.snmpIfIndex != null) {
+    db.prepare(`
+      UPDATE ports
+      SET linkState = ?
+      WHERE deviceId = ? AND snmpIfIndex = ?
+    `).run(linkState, monitor.deviceId, monitor.snmpIfIndex)
   }
 }
 

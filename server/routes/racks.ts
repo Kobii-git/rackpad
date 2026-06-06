@@ -1,5 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
+import {
+  appendLabFilter,
+  assertLabReadFromRow,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
 import { asObject, optionalInteger, optionalString, requiredString, ValidationError } from '../lib/validation.js'
 
@@ -16,16 +23,25 @@ function validateRoom(roomId: string | null | undefined, labId: string) {
 }
 
 export const racksRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: { labId?: string } }>('/', async (req) => {
-    if (req.query.labId) {
-      return db.prepare('SELECT * FROM racks WHERE labId = ? ORDER BY name').all(req.query.labId)
+  app.get<{ Querystring: { labId?: string } }>('/', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
     }
-    return db.prepare('SELECT * FROM racks ORDER BY name').all()
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    const { sql, params } = appendLabFilter('SELECT * FROM racks', [], filter.labIds)
+    return db.prepare(`${sql} ORDER BY name`).all(...params)
   })
 
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const row = db.prepare('SELECT * FROM racks WHERE id = ?').get(req.params.id)
-    if (!row) return reply.status(404).send({ error: 'Rack not found' })
+    const row = db.prepare('SELECT * FROM racks WHERE id = ?').get(req.params.id) as
+      | Record<string, unknown>
+      | undefined
+    if (!assertLabReadFromRow(req, reply, row)) return
     return row
   })
 
@@ -33,6 +49,7 @@ export const racksRoutes: FastifyPluginAsync = async (app) => {
     const body = asObject(req.body)
     const rackId = optionalString(body, 'id', { maxLength: 80 }) ?? createId('rack')
     const labId = requiredString(body, 'labId', { maxLength: 80 })
+    if (!assertLabWrite(req, reply, labId)) return
     const name = requiredString(body, 'name', { maxLength: 120 })
     const totalU = optionalInteger(body, 'totalU', { min: 1, max: 100 }) ?? 42
     const description = optionalString(body, 'description', { maxLength: 500 })
@@ -48,7 +65,7 @@ export const racksRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const existing = db.prepare('SELECT * FROM racks WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
-    if (!existing) return reply.status(404).send({ error: 'Rack not found' })
+    if (!assertLabWriteFromRow(req, reply, existing)) return
 
     const body = asObject(req.body)
     const updates: string[] = []
@@ -66,7 +83,7 @@ export const racksRoutes: FastifyPluginAsync = async (app) => {
     if (description !== undefined) { updates.push('description = ?'); values.push(description) }
     if (location !== undefined) { updates.push('location = ?'); values.push(location) }
     if (notes !== undefined) { updates.push('notes = ?'); values.push(notes) }
-    if (roomId !== undefined) { updates.push('roomId = ?'); values.push(validateRoom(roomId, String(existing.labId))) }
+    if (roomId !== undefined) { updates.push('roomId = ?'); values.push(validateRoom(roomId, String(existing!.labId))) }
 
     if (updates.length === 0) return reply.status(400).send({ error: 'No valid fields to update' })
 
@@ -76,8 +93,8 @@ export const racksRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const row = db.prepare('SELECT id FROM racks WHERE id = ?').get(req.params.id)
-    if (!row) return reply.status(404).send({ error: 'Rack not found' })
+    const row = db.prepare('SELECT * FROM racks WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, row)) return
     const removeRack = db.transaction(() => {
       db.prepare("DELETE FROM referenceImages WHERE entityType = 'rack' AND entityId = ?").run(req.params.id)
       db.prepare('DELETE FROM racks WHERE id = ?').run(req.params.id)

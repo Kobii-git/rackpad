@@ -1,6 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import {
+  appendLabFilter,
+  assertLabReadFromRow,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from "../lib/lab-access.js";
+import {
   ensureImageDataUrl,
   MAX_IMAGE_DATA_URL_LENGTH,
 } from "../lib/image-data-url.js";
@@ -44,14 +51,19 @@ export const referenceImagesRoutes: FastifyPluginAsync = async (app) => {
       entityType?: EntityType;
       entityId?: string;
     };
-  }>("/", async (req) => {
-    let sql = "SELECT * FROM referenceImages WHERE 1=1";
-    const params: unknown[] = [];
-
-    if (req.query.labId) {
-      sql += " AND labId = ?";
-      params.push(req.query.labId);
+  }>("/", async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: "Authentication required." });
     }
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId);
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error });
+    }
+
+    const filtered = appendLabFilter("SELECT * FROM referenceImages WHERE 1=1", [], filter.labIds);
+    let sql = filtered.sql;
+    const params: unknown[] = [...filtered.params];
     if (req.query.entityType) {
       sql += " AND entityType = ?";
       params.push(req.query.entityType);
@@ -68,9 +80,8 @@ export const referenceImagesRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { id: string } }>("/:id", async (req, reply) => {
     const row = db
       .prepare("SELECT * FROM referenceImages WHERE id = ?")
-      .get(req.params.id);
-    if (!row)
-      return reply.status(404).send({ error: "Reference image not found" });
+      .get(req.params.id) as Record<string, unknown> | undefined;
+    if (!assertLabReadFromRow(req, reply, row)) return;
     return row;
   });
 
@@ -94,6 +105,7 @@ export const referenceImagesRoutes: FastifyPluginAsync = async (app) => {
         : null;
 
     const target = resolveImageTarget(entityType, entityId);
+    if (!assertLabWrite(req, reply, target.labId)) return;
     ensureImageDataUrl(dataUrl, mimeType);
 
     const now = new Date().toISOString();
@@ -125,11 +137,10 @@ export const referenceImagesRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch<{ Params: { id: string } }>("/:id", async (req, reply) => {
     const existing = db
-      .prepare("SELECT entityType FROM referenceImages WHERE id = ?")
-      .get(req.params.id) as { entityType: EntityType } | undefined;
-    if (!existing) {
-      return reply.status(404).send({ error: "Reference image not found" });
-    }
+      .prepare("SELECT * FROM referenceImages WHERE id = ?")
+      .get(req.params.id) as ({ entityType: EntityType } & Record<string, unknown>) | undefined;
+    if (!assertLabWriteFromRow(req, reply, existing)) return;
+    const image = existing!;
 
     const body = asObject(req.body);
     const updates: string[] = [];
@@ -138,7 +149,7 @@ export const referenceImagesRoutes: FastifyPluginAsync = async (app) => {
     const label = optionalString(body, "label", { maxLength: 160 });
     const notes = optionalString(body, "notes", { maxLength: 1000 });
     const face =
-      existing.entityType === "rack"
+      image.entityType === "rack"
         ? optionalEnum(body, "face", RACK_FACES)
         : undefined;
 
@@ -173,10 +184,9 @@ export const referenceImagesRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
     const row = db
-      .prepare("SELECT id FROM referenceImages WHERE id = ?")
-      .get(req.params.id);
-    if (!row)
-      return reply.status(404).send({ error: "Reference image not found" });
+      .prepare("SELECT * FROM referenceImages WHERE id = ?")
+      .get(req.params.id) as Record<string, unknown> | undefined;
+    if (!assertLabWriteFromRow(req, reply, row)) return;
     db.prepare("DELETE FROM referenceImages WHERE id = ?").run(req.params.id);
     return reply.status(204).send();
   });

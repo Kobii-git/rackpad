@@ -1,6 +1,30 @@
 import { getJsonSetting, putJsonSetting } from './app-settings.js'
 
-export const SUPPORTED_LANGUAGES = ['en', 'fr'] as const
+export const SUPPORTED_LANGUAGES = [
+  'en',
+  'fr',
+  'de',
+  'nl',
+  'es',
+  'pt',
+  'it',
+  'pl',
+  'zh',
+  'zh-TW',
+  'ja',
+  'ko',
+  'hi',
+  'bn',
+  'th',
+  'he',
+  'fa',
+  'ar',
+  'ru',
+  'uk',
+  'tr',
+  'vi',
+  'id',
+] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
 
 export interface UiSettings {
@@ -27,7 +51,13 @@ export function saveUiSettings(value: Partial<UiSettings>) {
 }
 
 export function normalizeLanguage(value: unknown): SupportedLanguage {
-  return value === 'fr' ? 'fr' : 'en'
+  if (
+    typeof value === 'string' &&
+    (SUPPORTED_LANGUAGES as readonly string[]).includes(value)
+  ) {
+    return value as SupportedLanguage
+  }
+  return 'en'
 }
 
 function normalizeUiSettings(value: Partial<UiSettings> | UiSettings): UiSettings {

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
 import { buildVisualizerModel } from "./visualizer/model";
@@ -30,6 +31,7 @@ const CUSTOM_NODE_POSITIONS_STORAGE_KEY =
   "rackpad.visualizer.custom-node-positions";
 
 export default function VisualizerView() {
+  const { t } = useI18n();
   const lab = useStore((s) => s.lab);
   const loading = useStore((s) => s.loading);
   const loaded = useStore((s) => s.loaded);
@@ -222,7 +224,7 @@ export default function VisualizerView() {
     <>
       <TopBar
         subtitle="Topology"
-        title="Visualizer"
+        title={t("Visualizer")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {lab.name} | {model.counts.cables} cables | {model.counts.devices}{" "}

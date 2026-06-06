@@ -1,5 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
+import {
+  appendLabFilter,
+  assertLabReadFromRow,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
 import {
   asObject,
@@ -45,24 +52,66 @@ function getService(id: string) {
     | undefined
 }
 
+function getServiceLabRow(id: string) {
+  return db.prepare(`
+    SELECT deviceServices.id, devices.labId
+    FROM deviceServices
+    JOIN devices ON devices.id = deviceServices.deviceId
+    WHERE deviceServices.id = ?
+  `).get(id) as { id: string; labId: string } | undefined
+}
+
+function getDeviceLabRow(deviceId: string) {
+  return db.prepare('SELECT id, labId FROM devices WHERE id = ?').get(deviceId) as
+    | { id: string; labId: string }
+    | undefined
+}
+
 export const deviceServicesRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: { deviceId?: string } }>('/', async (req) => {
-    const rows = req.query.deviceId
-      ? db.prepare('SELECT * FROM deviceServices WHERE deviceId = ? ORDER BY serviceType, name, id').all(req.query.deviceId)
-      : db.prepare('SELECT * FROM deviceServices ORDER BY deviceId, serviceType, name, id').all()
+  app.get<{ Querystring: { deviceId?: string; labId?: string } }>('/', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
+    }
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    let sql = `
+      SELECT deviceServices.*
+      FROM deviceServices
+      JOIN devices ON devices.id = deviceServices.deviceId
+      WHERE 1=1
+    `
+    const params: unknown[] = []
+    if (req.query.deviceId) {
+      sql += ' AND deviceServices.deviceId = ?'
+      params.push(req.query.deviceId)
+    }
+    const filtered = appendLabFilter(sql, params, filter.labIds, 'devices.labId')
+    const rows = db.prepare(`${filtered.sql} ORDER BY deviceServices.deviceId, deviceServices.serviceType, deviceServices.name, deviceServices.id`).all(...filtered.params)
     return (rows as Record<string, unknown>[]).map(parseService)
   })
 
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const row = getService(req.params.id)
-    if (!row) return reply.status(404).send({ error: 'Device service not found.' })
-    return parseService(row)
+    const row = db.prepare(`
+      SELECT deviceServices.*, devices.labId
+      FROM deviceServices
+      JOIN devices ON devices.id = deviceServices.deviceId
+      WHERE deviceServices.id = ?
+    `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabReadFromRow(req, reply, row)) return
+    return parseService(row!)
   })
 
   app.post('/', async (req, reply) => {
     const body = asObject(req.body)
     const id = optionalString(body, 'id', { maxLength: 80 }) ?? createId('svc')
     const deviceId = requiredString(body, 'deviceId', { maxLength: 80 })
+    const device = getDeviceLabRow(deviceId)
+    if (!device) return reply.status(404).send({ error: 'Device not found.' })
+    if (!assertLabWrite(req, reply, device.labId)) return
     const name = requiredString(body, 'name', { maxLength: 120 })
     const serviceType = requiredEnum(body, 'serviceType', SERVICE_TYPES)
     const ipAssignmentId = optionalString(body, 'ipAssignmentId', { maxLength: 80 })
@@ -96,9 +145,8 @@ export const deviceServicesRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.patch<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    if (!getService(req.params.id)) {
-      return reply.status(404).send({ error: 'Device service not found.' })
-    }
+    const existing = getServiceLabRow(req.params.id)
+    if (!assertLabWriteFromRow(req, reply, existing)) return
 
     const body = asObject(req.body)
     const updates: string[] = []
@@ -126,6 +174,11 @@ export const deviceServicesRoutes: FastifyPluginAsync = async (app) => {
         if (key === 'name' && !value) {
           return reply.status(400).send({ error: 'name cannot be empty.' })
         }
+        if (key === 'deviceId' && value) {
+          const nextDevice = getDeviceLabRow(value)
+          if (!nextDevice) return reply.status(404).send({ error: 'Device not found.' })
+          if (!assertLabWrite(req, reply, nextDevice.labId)) return
+        }
         updates.push(`${key} = ?`)
         values.push(value)
       }
@@ -143,9 +196,8 @@ export const deviceServicesRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    if (!getService(req.params.id)) {
-      return reply.status(404).send({ error: 'Device service not found.' })
-    }
+    const existing = getServiceLabRow(req.params.id)
+    if (!assertLabWriteFromRow(req, reply, existing)) return
     db.prepare('DELETE FROM deviceServices WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
   })

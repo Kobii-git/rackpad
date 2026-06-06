@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import { PortGrid } from "@/components/ports/PortGrid";
 import { PortList } from "@/components/ports/PortList";
 import {
@@ -27,6 +28,7 @@ import {
   updatePortTemplateRecord,
   useStore,
 } from "@/lib/store";
+import { buildSnmpVerifiedPortIdsForDevice } from "@/lib/snmp-port-status";
 import type {
   Device,
   DeviceType,
@@ -249,6 +251,7 @@ function appendTemplatePorts(form: TemplateFormState): TemplateFormState {
 }
 
 export default function PortView() {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useStore((s) => s.currentUser);
   const devices = useStore((s) => s.devices);
@@ -258,6 +261,7 @@ export default function PortView() {
   const deviceTypes = useStore((s) => s.deviceTypes);
   const virtualSwitches = useStore((s) => s.virtualSwitches);
   const vlans = useStore((s) => s.vlans);
+  const deviceMonitors = useStore((s) => s.deviceMonitors);
   const canEdit = canEditInventory(currentUser);
   const portBearingDevices = useMemo(
     () =>
@@ -459,6 +463,17 @@ export default function PortView() {
 
   const device = deviceById[selectedDeviceId];
   const devicePorts = portsByDeviceId[selectedDeviceId] ?? [];
+  const snmpVerifiedPortIds = useMemo(
+    () =>
+      selectedDeviceId
+        ? buildSnmpVerifiedPortIdsForDevice(
+            deviceMonitors,
+            selectedDeviceId,
+            ports,
+          )
+        : new Set<string>(),
+    [deviceMonitors, ports, selectedDeviceId],
+  );
   const visibleDevicePorts = useMemo(() => {
     const query = portQuery.trim().toLowerCase();
     return devicePorts.filter((port) => {
@@ -841,7 +856,7 @@ export default function PortView() {
     <>
       <TopBar
         subtitle="Ports & cabling"
-        title="Ports"
+        title={t("Ports")}
         meta={
           <>
             <Mono className="text-[var(--color-fg-muted)]">{linkedCount}</Mono>
@@ -1036,6 +1051,7 @@ export default function PortView() {
                       devicesById={deviceById}
                       vlansById={vlanById}
                       virtualSwitchesById={virtualSwitchById}
+                      snmpVerifiedPortIds={snmpVerifiedPortIds}
                       onSelectPort={selectPort}
                       selectedPortId={selectedPortId}
                     />
@@ -1054,6 +1070,7 @@ export default function PortView() {
                           devicesById={deviceById}
                           vlansById={vlanById}
                           virtualSwitchesById={virtualSwitchById}
+                          snmpVerifiedPortIds={snmpVerifiedPortIds}
                           onSelectPort={selectPort}
                           selectedPortId={selectedPortId}
                           selectedPortIds={selectedPortIds}
@@ -1080,6 +1097,7 @@ export default function PortView() {
                         devicesById={deviceById}
                         vlansById={vlanById}
                         virtualSwitchesById={virtualSwitchById}
+                        snmpVerifiedPortIds={snmpVerifiedPortIds}
                         onSelectPort={selectPort}
                         selectedPortId={selectedPortId}
                         selectedPortIds={selectedPortIds}

@@ -9,6 +9,7 @@ import {
   Upload,
 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
@@ -392,6 +393,7 @@ const PROVIDER_COPY: Record<
 };
 
 export default function ImportView() {
+  const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
   const devices = useStore((s) => s.devices);
@@ -592,7 +594,7 @@ export default function ImportView() {
     <>
       <TopBar
         subtitle="Import tools"
-        title="Imports"
+        title={t("Imports")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {lab.name} | {importCopy?.label ?? "Hyper-V / Proxmox"} importer

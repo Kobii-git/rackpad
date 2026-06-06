@@ -65,7 +65,9 @@ export type DeviceServiceType =
   | "app"
   | "custom";
 
-export type SupportedLanguage = "en" | "fr";
+import type { SupportedLanguage } from "@/i18n/languages";
+
+export type { SupportedLanguage };
 
 export interface UiSettings {
   defaultLanguage: SupportedLanguage;
@@ -143,6 +145,125 @@ export interface Device {
   tags?: string[];
   notes?: string;
   lastSeen?: string;
+  snmpCredentialId?: ID | null;
+}
+
+export interface SnmpCredential {
+  id: ID;
+  labId: ID;
+  name: string;
+  version: "1" | "2c" | "3";
+  hasCommunity: boolean;
+  v3User?: string | null;
+  v3AuthProto?: "MD5" | "SHA" | null;
+  v3PrivProto?: "none" | "AES128" | null;
+  v3Context?: string | null;
+  hasV3AuthPass: boolean;
+  hasV3PrivPass: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SnmpTrapLogEntry {
+  id: ID;
+  labId: ID;
+  deviceId?: ID | null;
+  sourceIp: string;
+  trapOid?: string | null;
+  ifIndex?: number | null;
+  varbinds: Array<{ oid: string; value: string }>;
+  resultAction: string;
+  message: string;
+  receivedAt: string;
+}
+
+export interface SnmpTrapReceiverStatus {
+  enabled: boolean;
+  listening: boolean;
+  port: number;
+  bind: string;
+  lastTrapAt?: string | null;
+  lastError?: string | null;
+  trapsReceived: number;
+}
+
+export interface SnmpSyncProfile {
+  id: string;
+  label: string;
+  vendor: string;
+  description: string;
+  deviceTypes?: string[];
+  collects: Array<"vlans" | "subnets" | "dhcp">;
+}
+
+export type SnmpSyncDiffAction = "create" | "update" | "delete" | "unchanged";
+export type SnmpSyncPolicy = "merge" | "mirror";
+
+export interface SnmpSyncVlanDiff {
+  action: SnmpSyncDiffAction;
+  vlanNumber: number;
+  name: string;
+  existingId?: string | null;
+  existingName?: string | null;
+  changes?: string[];
+  blockedReason?: string | null;
+}
+
+export interface SnmpSyncSubnetDiff {
+  action: SnmpSyncDiffAction;
+  cidr: string;
+  name: string;
+  vlanNumber?: number | null;
+  existingId?: string | null;
+  existingName?: string | null;
+  changes?: string[];
+  blockedReason?: string | null;
+}
+
+export interface SnmpSyncPreview {
+  profileId: string;
+  deviceId: string;
+  labId: string;
+  target: string;
+  collectedAt: string;
+  policy: SnmpSyncPolicy;
+  vlans: SnmpSyncVlanDiff[];
+  subnets: SnmpSyncSubnetDiff[];
+  dhcp: {
+    supported: boolean;
+    message: string;
+    scopes: Array<{
+      name: string;
+      startIp: string;
+      endIp: string;
+      subnetCidr?: string | null;
+      note?: string | null;
+    }>;
+  };
+  summary: {
+    vlanCreates: number;
+    vlanUpdates: number;
+    vlanDeletes: number;
+    subnetCreates: number;
+    subnetUpdates: number;
+    subnetDeletes: number;
+  };
+  warnings: string[];
+}
+
+export interface SnmpSyncApplyResult {
+  profileId: string;
+  deviceId: string;
+  labId: string;
+  policy: SnmpSyncPolicy;
+  createdVlanIds: string[];
+  updatedVlanIds: string[];
+  deletedVlanIds: string[];
+  createdSubnetIds: string[];
+  updatedSubnetIds: string[];
+  deletedSubnetIds: string[];
+  skippedDeletes: number;
+  warnings: string[];
 }
 
 export interface DeviceImage {
@@ -197,6 +318,7 @@ export interface Port {
   virtualSwitchId?: ID | null;
   description?: string;
   face?: RackFace;
+  snmpIfIndex?: number | null;
 }
 
 export interface VirtualSwitch {
@@ -306,6 +428,13 @@ export interface AuditEntry {
   summary: string;
 }
 
+export type LabRole = "editor" | "viewer";
+
+export interface LabAccessEntry {
+  labId: ID;
+  role: LabRole;
+}
+
 export interface AppUser {
   id: ID;
   username: string;
@@ -316,6 +445,7 @@ export interface AppUser {
   lastLoginAt?: string | null;
   authProvider?: "local" | "oidc";
   oidcIssuer?: string | null;
+  labAccess?: LabAccessEntry[];
 }
 
 export interface AuthSession {
@@ -329,6 +459,19 @@ export interface OidcPublicConfig {
   label: string;
 }
 
+export interface DiscoveredSnmpInterface {
+  ifIndex: number;
+  descr: string;
+  name?: string | null;
+  alias?: string | null;
+  operStatus?: number | null;
+  operStatusLabel?: string | null;
+  operStatusOid: string;
+  highSpeedMbps?: number | null;
+  matchedPortId?: string | null;
+  matchedPortName?: string | null;
+}
+
 export interface DeviceMonitor {
   id: ID;
   deviceId: ID;
@@ -337,10 +480,14 @@ export interface DeviceMonitor {
   target?: string | null;
   port?: number | null;
   path?: string | null;
-  snmpVersion?: "1" | "2c" | null;
+  snmpVersion?: "1" | "2c" | "3" | null;
   snmpCommunity?: string | null;
   snmpOid?: string | null;
   snmpExpectedValue?: string | null;
+  snmpMatchMode?: "any" | "equals" | "notEquals" | "in" | null;
+  portId?: ID | null;
+  snmpIfIndex?: number | null;
+  snmpCredentialId?: ID | null;
   intervalMs?: number | null;
   enabled: boolean;
   sortOrder: number;

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import {
   createLabRecord,
   deleteLabRecord,
@@ -35,6 +36,7 @@ const EMPTY_FORM: LabForm = {
 };
 
 export default function LabsPage() {
+  const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const currentLab = useStore((s) => s.lab);
   const labs = useStore((s) => s.labs);
@@ -126,7 +128,7 @@ export default function LabsPage() {
     <>
       <TopBar
         subtitle="Workspace"
-        title="Labs"
+        title={t("Labs")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {labs.length} total
@@ -166,7 +168,7 @@ export default function LabsPage() {
                 >
                   <CardHeader>
                     <CardTitle>
-                      <CardLabel>{active ? "Current lab" : "Lab"}</CardLabel>
+                      <CardLabel>{active ? "Current lab" : t("Lab")}</CardLabel>
                       <CardHeading>{lab.name}</CardHeading>
                     </CardTitle>
                     {active ? (
@@ -193,7 +195,7 @@ export default function LabsPage() {
                       value={lab.location || "Not set"}
                     />
                     <MetaRow
-                      label="Description"
+                      label={t("Description")}
                       value={lab.description || "No description yet"}
                     />
                     {canManage && (
@@ -208,7 +210,7 @@ export default function LabsPage() {
                           }}
                         >
                           <Pencil className="size-3.5" />
-                          {editing ? "Editing" : "Edit"}
+                          {editing ? "Editing" : t("Edit")}
                         </Button>
                       </div>
                     )}
@@ -254,7 +256,7 @@ export default function LabsPage() {
                     placeholder="Office, garage, Colo row A"
                   />
                 </Field>
-                <Field label="Description">
+                <Field label={t("Description")}>
                   <textarea
                     rows={4}
                     value={form.description}

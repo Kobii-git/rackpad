@@ -1,16 +1,69 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
+import {
+  appendLabFilter,
+  assertLabReadFromRow,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
 import { asObject, optionalString, requiredString } from '../lib/validation.js'
 
+function getPortLabRow(portId: string) {
+  return db.prepare(`
+    SELECT ports.id, devices.labId
+    FROM ports
+    JOIN devices ON devices.id = ports.deviceId
+    WHERE ports.id = ?
+  `).get(portId) as { id: string; labId: string } | undefined
+}
+
+function getLinkLabRow(linkId: string) {
+  return db.prepare(`
+    SELECT portLinks.id, fromDevice.labId
+    FROM portLinks
+    JOIN ports fromPort ON fromPort.id = portLinks.fromPortId
+    JOIN devices fromDevice ON fromDevice.id = fromPort.deviceId
+    WHERE portLinks.id = ?
+  `).get(linkId) as { id: string; labId: string } | undefined
+}
+
 export const cablesRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/', async () => {
-    return db.prepare('SELECT * FROM portLinks').all()
+  app.get<{ Querystring: { labId?: string } }>('/', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
+    }
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    let sql = `
+      SELECT portLinks.*
+      FROM portLinks
+      JOIN ports fromPort ON fromPort.id = portLinks.fromPortId
+      JOIN devices fromDevice ON fromDevice.id = fromPort.deviceId
+      JOIN ports toPort ON toPort.id = portLinks.toPortId
+      JOIN devices toDevice ON toDevice.id = toPort.deviceId
+      WHERE 1=1
+    `
+    const params: unknown[] = []
+    const fromFiltered = appendLabFilter(sql, params, filter.labIds, 'fromDevice.labId')
+    const filtered = appendLabFilter(fromFiltered.sql, fromFiltered.params, filter.labIds, 'toDevice.labId')
+    return db.prepare(filtered.sql).all(...filtered.params)
   })
 
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const row = db.prepare('SELECT * FROM portLinks WHERE id = ?').get(req.params.id)
-    if (!row) return reply.status(404).send({ error: 'Port link not found' })
+    const row = db.prepare(`
+      SELECT portLinks.*, fromDevice.labId
+      FROM portLinks
+      JOIN ports fromPort ON fromPort.id = portLinks.fromPortId
+      JOIN devices fromDevice ON fromDevice.id = fromPort.deviceId
+      WHERE portLinks.id = ?
+    `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabReadFromRow(req, reply, row)) return
     return row
   })
 
@@ -27,11 +80,13 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'A port cannot be linked to itself' })
     }
 
-    const fromPort = db.prepare('SELECT id FROM ports WHERE id = ?').get(fromPortId)
-    const toPort = db.prepare('SELECT id FROM ports WHERE id = ?').get(toPortId)
+    const fromPort = getPortLabRow(fromPortId)
+    const toPort = getPortLabRow(toPortId)
     if (!fromPort || !toPort) {
       return reply.status(400).send({ error: 'Both cable endpoints must exist' })
     }
+    if (!assertLabWrite(req, reply, fromPort.labId)) return
+    if (!assertLabWrite(req, reply, toPort.labId)) return
 
     const existing = db.prepare(`
       SELECT id
@@ -57,7 +112,8 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     const existing = db.prepare('SELECT * FROM portLinks WHERE id = ?').get(req.params.id) as
       | { id: string; fromPortId: string; toPortId: string }
       | undefined
-    if (!existing) return reply.status(404).send({ error: 'Port link not found' })
+    const linkLab = getLinkLabRow(req.params.id)
+    if (!existing || !assertLabWriteFromRow(req, reply, linkLab)) return
 
     const body = asObject(req.body)
     const updates: string[] = []
@@ -77,11 +133,13 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(400).send({ error: 'A port cannot be linked to itself' })
       }
 
-      const fromPort = db.prepare('SELECT id FROM ports WHERE id = ?').get(nextFromPortId)
-      const toPort = db.prepare('SELECT id FROM ports WHERE id = ?').get(nextToPortId)
+      const fromPort = getPortLabRow(nextFromPortId)
+      const toPort = getPortLabRow(nextToPortId)
       if (!fromPort || !toPort) {
         return reply.status(400).send({ error: 'Both cable endpoints must exist' })
       }
+      if (!assertLabWrite(req, reply, fromPort.labId)) return
+      if (!assertLabWrite(req, reply, toPort.labId)) return
 
       const conflicting = db.prepare(`
         SELECT id
@@ -130,7 +188,8 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const link = db.prepare('SELECT * FROM portLinks WHERE id = ?').get(req.params.id) as
       { fromPortId: string; toPortId: string } | undefined
-    if (!link) return reply.status(404).send({ error: 'Port link not found' })
+    const linkLab = getLinkLabRow(req.params.id)
+    if (!link || !assertLabWriteFromRow(req, reply, linkLab)) return
 
     db.prepare('DELETE FROM portLinks WHERE id = ?').run(req.params.id)
 

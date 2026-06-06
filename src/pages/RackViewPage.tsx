@@ -13,6 +13,7 @@ import {
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { ReferenceImageGallery } from "@/components/shared/ReferenceImageGallery";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import { RackView } from "@/components/rack/RackView";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { Button } from "@/components/ui/Button";
@@ -85,6 +86,7 @@ const EMPTY_ROOM_FORM: RoomForm = {
 const RACK_SHELF_TYPE = "rack_shelf";
 
 export default function RackViewPage() {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useStore((s) => s.currentUser);
   const activeLab = useStore((s) => s.lab);
@@ -405,7 +407,7 @@ export default function RackViewPage() {
     <>
       <TopBar
         subtitle={activeLab.name}
-        title="Racks / Rooms"
+        title={t("Racks / Rooms")}
         actions={
           canEdit ? (
             <>
@@ -900,7 +902,10 @@ function UnrackedPanel({
                   />
                 </dl>
                 {device.notes && (
-                  <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-fg-subtle)]">
+                  <div
+                    className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-fg-subtle)]"
+                    data-no-i18n
+                  >
                     {device.notes}
                   </div>
                 )}
@@ -1151,7 +1156,7 @@ function DeviceSummaryCard({
         </dl>
 
         {device.tags && device.tags.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1">
+          <div className="mt-3 flex flex-wrap gap-1" data-no-i18n>
             {device.tags.map((tag) => (
               <Badge key={tag}>{tag}</Badge>
             ))}

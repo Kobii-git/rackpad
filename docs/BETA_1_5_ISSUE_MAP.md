@@ -210,9 +210,15 @@ Reviewed against GitHub issues on 2026-05-31.
 
 - Request: add SNMP-based monitoring for device and individual port/interface
   status, with possible future OID-driven VLAN/IPAM discovery.
-- Current status: open/future milestone. This is larger than the 1.5 beta
-  visualizer pass because it affects polling/traps, OID configuration,
-  interface state, and possible inventory/IPAM synchronization.
+- **Current status (dev branch, 2026-06):** **Partially shipped** — Phases 1–5 v1
+  on `dev`; not yet in a tagged release. See
+  [`docs/SNMP_IMPLEMENTATION_PLAN.md`](SNMP_IMPLEMENTATION_PLAN.md) for full
+  status and **Outstanding work**.
+- **Shipped on dev:** IF-MIB discover/import, SNMPv3 credentials, v1/v2c traps
+  (UDP 1162), port linkState sync, SNMP verified badges, VLAN/subnet sync
+  preview/apply (`SNMP_INVENTORY_SYNC=1`).
+- **Still outstanding:** pfSense/vendor profile, DHCP scope apply, scheduled
+  sync, SNMPv3 traps, docs/CHANGELOG, manual lab validation, Phase 6 scale items.
 
 ## Shipped In 1.5 Beta
 
@@ -243,4 +249,5 @@ Reviewed against GitHub issues on 2026-05-31.
 - Shelf child height greater than 1U (#31).
 - Bulk device delete and status edit (#32).
 - Full WiFi port type and SSID/radio assignment workflow (#34).
-- SNMP monitoring/traps and interface state (#35).
+- SNMP monitoring/traps and interface state (#35) — **partial on dev**; see
+  [`docs/SNMP_IMPLEMENTATION_PLAN.md`](SNMP_IMPLEMENTATION_PLAN.md).

@@ -219,7 +219,10 @@ export function ReferenceImageGallery({
                     </div>
                   </div>
                   {image.notes && (
-                    <div className="text-xs leading-5 text-[var(--color-fg-subtle)]">
+                    <div
+                      className="text-xs leading-5 text-[var(--color-fg-subtle)]"
+                      data-no-i18n
+                    >
                       {image.notes}
                     </div>
                   )}

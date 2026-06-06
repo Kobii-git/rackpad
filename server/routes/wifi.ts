@@ -1,5 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
+import {
+  appendLabFilter,
+  assertLabReadFromRow,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
 import {
   asObject,
@@ -217,21 +224,25 @@ function upsertRadioSsids(radioId: string, ssidIds: string[]) {
 }
 
 export const wifiRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: { labId?: string } }>('/controllers', async (req) => {
-    let sql = 'SELECT * FROM wifiControllers WHERE 1=1'
-    const params: unknown[] = []
-    if (req.query.labId) {
-      sql += ' AND labId = ?'
-      params.push(req.query.labId)
+  app.get<{ Querystring: { labId?: string } }>('/controllers', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
     }
-    sql += ' ORDER BY name, id'
-    const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    const { sql, params } = appendLabFilter('SELECT * FROM wifiControllers WHERE 1=1', [], filter.labIds)
+    const rows = db.prepare(`${sql} ORDER BY name, id`).all(...params) as Record<string, unknown>[]
     return rows.map(parseWifiController)
   })
 
   app.post('/controllers', async (req, reply) => {
     const body = asObject(req.body)
     const labId = requiredString(body, 'labId', { maxLength: 80 })
+    if (!assertLabWrite(req, reply, labId)) return
     const name = requiredString(body, 'name', { maxLength: 120 })
     const deviceId = optionalString(body, 'deviceId', { maxLength: 80 })
     const vendor = optionalString(body, 'vendor', { maxLength: 120 })
@@ -264,14 +275,13 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch<{ Params: { id: string } }>('/controllers/:id', async (req, reply) => {
     const existing = getController(req.params.id)
-    if (!existing) {
-      return reply.status(404).send({ error: 'WiFi controller not found.' })
-    }
+    if (!assertLabWriteFromRow(req, reply, existing)) return
+    const controller = existing!
 
     const body = asObject(req.body)
     const updates: string[] = []
     const values: unknown[] = []
-    const labId = String(existing.labId)
+    const labId = String(controller.labId)
 
     const name = optionalString(body, 'name', { maxLength: 120 })
     const deviceId = optionalString(body, 'deviceId', { maxLength: 80 })
@@ -326,28 +336,30 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>('/controllers/:id', async (req, reply) => {
     const existing = getController(req.params.id)
-    if (!existing) {
-      return reply.status(404).send({ error: 'WiFi controller not found.' })
-    }
+    if (!assertLabWriteFromRow(req, reply, existing)) return
     db.prepare('DELETE FROM wifiControllers WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
   })
 
-  app.get<{ Querystring: { labId?: string } }>('/ssids', async (req) => {
-    let sql = 'SELECT * FROM wifiSsids WHERE 1=1'
-    const params: unknown[] = []
-    if (req.query.labId) {
-      sql += ' AND labId = ?'
-      params.push(req.query.labId)
+  app.get<{ Querystring: { labId?: string } }>('/ssids', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
     }
-    sql += ' ORDER BY name, id'
-    const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    const { sql, params } = appendLabFilter('SELECT * FROM wifiSsids WHERE 1=1', [], filter.labIds)
+    const rows = db.prepare(`${sql} ORDER BY name, id`).all(...params) as Record<string, unknown>[]
     return rows.map(parseWifiSsid)
   })
 
   app.post('/ssids', async (req, reply) => {
     const body = asObject(req.body)
     const labId = requiredString(body, 'labId', { maxLength: 80 })
+    if (!assertLabWrite(req, reply, labId)) return
     const name = requiredString(body, 'name', { maxLength: 120 })
     const purpose = optionalString(body, 'purpose', { maxLength: 500 })
     const security = optionalString(body, 'security', { maxLength: 120 })
@@ -379,14 +391,13 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch<{ Params: { id: string } }>('/ssids/:id', async (req, reply) => {
     const existing = getSsid(req.params.id)
-    if (!existing) {
-      return reply.status(404).send({ error: 'WiFi SSID not found.' })
-    }
+    if (!assertLabWriteFromRow(req, reply, existing)) return
+    const ssid = existing!
 
     const body = asObject(req.body)
     const updates: string[] = []
     const values: unknown[] = []
-    const labId = String(existing.labId)
+    const labId = String(ssid.labId)
 
     const name = optionalString(body, 'name', { maxLength: 120 })
     const purpose = optionalString(body, 'purpose', { maxLength: 500 })
@@ -440,14 +451,21 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>('/ssids/:id', async (req, reply) => {
     const existing = getSsid(req.params.id)
-    if (!existing) {
-      return reply.status(404).send({ error: 'WiFi SSID not found.' })
-    }
+    if (!assertLabWriteFromRow(req, reply, existing)) return
     db.prepare('DELETE FROM wifiSsids WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
   })
 
-  app.get<{ Querystring: { labId?: string } }>('/access-points', async (req) => {
+  app.get<{ Querystring: { labId?: string } }>('/access-points', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
+    }
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
     let sql = `
       SELECT
         d.id AS deviceId,
@@ -460,18 +478,15 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
       WHERE d.deviceType = 'ap'
     `
     const params: unknown[] = []
-    if (req.query.labId) {
-      sql += ' AND d.labId = ?'
-      params.push(req.query.labId)
-    }
-    sql += ' ORDER BY d.hostname, d.id'
-    const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
+    const filtered = appendLabFilter(sql, params, filter.labIds, 'd.labId')
+    const rows = db.prepare(`${filtered.sql} ORDER BY d.hostname, d.id`).all(...filtered.params) as Record<string, unknown>[]
     return rows.map(parseWifiAccessPoint)
   })
 
   app.put<{ Params: { deviceId: string } }>('/access-points/:deviceId', async (req, reply) => {
     const body = asObject(req.body)
     const apDevice = requireApDevice(req.params.deviceId)
+    if (!assertLabWrite(req, reply, apDevice.labId)) return
     const controllerId = optionalString(body, 'controllerId', { maxLength: 80 })
     const location = optionalString(body, 'location', { maxLength: 200 })
     const firmwareVersion = optionalString(body, 'firmwareVersion', { maxLength: 120 })
@@ -492,7 +507,16 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(normalizeAccessPointMetadata(req.params.deviceId))
   })
 
-  app.get<{ Querystring: { labId?: string; apDeviceId?: string } }>('/radios', async (req) => {
+  app.get<{ Querystring: { labId?: string; apDeviceId?: string } }>('/radios', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
+    }
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
     let sql = `
       SELECT r.*
       FROM wifiRadios r
@@ -500,16 +524,12 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
       WHERE 1=1
     `
     const params: unknown[] = []
-    if (req.query.labId) {
-      sql += ' AND d.labId = ?'
-      params.push(req.query.labId)
-    }
     if (req.query.apDeviceId) {
       sql += ' AND r.apDeviceId = ?'
       params.push(req.query.apDeviceId)
     }
-    sql += ' ORDER BY r.apDeviceId, r.band, r.slotName, r.id'
-    const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
+    const filtered = appendLabFilter(sql, params, filter.labIds, 'd.labId')
+    const rows = db.prepare(`${filtered.sql} ORDER BY r.apDeviceId, r.band, r.slotName, r.id`).all(...filtered.params) as Record<string, unknown>[]
     const ssidMap = loadRadioSsidMap(rows.map((row) => String(row.id)))
     return rows.map((row) => parseWifiRadio(row, ssidMap.get(String(row.id)) ?? []))
   })
@@ -526,6 +546,7 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
     const notes = optionalString(body, 'notes', { maxLength: 2000 })
 
     const apDevice = requireApDevice(apDeviceId)
+    if (!assertLabWrite(req, reply, apDevice.labId)) return
     const normalizedSsidIds = validateRadioSsidIds(ssidIds, apDevice.labId)
     const id = createId('wradio')
 
@@ -553,6 +574,7 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
     const updates: string[] = []
     const values: unknown[] = []
     const apDevice = requireApDevice(String(existing.apDeviceId))
+    if (!assertLabWrite(req, reply, apDevice.labId)) return
 
     const slotName = optionalString(body, 'slotName', { maxLength: 80 })
     const band = optionalEnum(body, 'band', WIFI_BANDS)
@@ -615,11 +637,22 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
     if (!existing) {
       return reply.status(404).send({ error: 'WiFi radio not found.' })
     }
+    const apDevice = requireApDevice(String(existing.apDeviceId))
+    if (!assertLabWrite(req, reply, apDevice.labId)) return
     db.prepare('DELETE FROM wifiRadios WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
   })
 
-  app.get<{ Querystring: { labId?: string; apDeviceId?: string } }>('/associations', async (req) => {
+  app.get<{ Querystring: { labId?: string; apDeviceId?: string } }>('/associations', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
+    }
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
     let sql = `
       SELECT a.*
       FROM wifiClientAssociations a
@@ -627,22 +660,19 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
       WHERE 1=1
     `
     const params: unknown[] = []
-    if (req.query.labId) {
-      sql += ' AND d.labId = ?'
-      params.push(req.query.labId)
-    }
     if (req.query.apDeviceId) {
       sql += ' AND a.apDeviceId = ?'
       params.push(req.query.apDeviceId)
     }
-    sql += ' ORDER BY a.apDeviceId, a.clientDeviceId'
-    const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
+    const filtered = appendLabFilter(sql, params, filter.labIds, 'd.labId')
+    const rows = db.prepare(`${filtered.sql} ORDER BY a.apDeviceId, a.clientDeviceId`).all(...filtered.params) as Record<string, unknown>[]
     return rows.map(parseWifiClientAssociation)
   })
 
   app.put<{ Params: { clientDeviceId: string } }>('/associations/:clientDeviceId', async (req, reply) => {
     const body = asObject(req.body)
     const clientDevice = requireClientDevice(req.params.clientDeviceId)
+    if (!assertLabWrite(req, reply, clientDevice.labId)) return
     const apDeviceId = requiredString(body, 'apDeviceId', { maxLength: 80 })
     const radioId = optionalString(body, 'radioId', { maxLength: 80 })
     const ssidId = optionalString(body, 'ssidId', { maxLength: 80 })
@@ -725,10 +755,14 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { clientDeviceId: string } }>('/associations/:clientDeviceId', async (req, reply) => {
-    const existing = db.prepare('SELECT * FROM wifiClientAssociations WHERE clientDeviceId = ?').get(req.params.clientDeviceId) as Record<string, unknown> | undefined
-    if (!existing) {
-      return reply.status(404).send({ error: 'WiFi client association not found.' })
-    }
+    const existing = db.prepare(`
+      SELECT wifiClientAssociations.*, devices.labId
+      FROM wifiClientAssociations
+      JOIN devices ON devices.id = wifiClientAssociations.clientDeviceId
+      WHERE wifiClientAssociations.clientDeviceId = ?
+    `).get(req.params.clientDeviceId) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, existing)) return
+    const association = existing!
 
     db.transaction(() => {
       db.prepare('DELETE FROM wifiClientAssociations WHERE clientDeviceId = ?').run(req.params.clientDeviceId)
@@ -736,7 +770,7 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
         UPDATE devices
         SET parentDeviceId = NULL
         WHERE id = ? AND parentDeviceId = ?
-      `).run(req.params.clientDeviceId, existing.apDeviceId)
+      `).run(req.params.clientDeviceId, association.apDeviceId)
     })()
 
     return reply.status(204).send()

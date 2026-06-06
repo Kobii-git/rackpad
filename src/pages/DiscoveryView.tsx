@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, RefreshCcw, Save, Search, Trash2 } from "lucide-react";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -75,6 +76,7 @@ type DiscoverySortKey =
 type DiscoveryScanTarget = "all" | "manual" | string;
 
 export default function DiscoveryView() {
+  const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
   const devices = useStore((s) => s.devices);
@@ -504,7 +506,7 @@ export default function DiscoveryView() {
     <>
       <TopBar
         subtitle="Discovery inbox"
-        title="Discovery"
+        title={t("Discovery")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {discoveredDevices.length} discovered in {lab.name}
@@ -570,7 +572,7 @@ export default function DiscoveryView() {
             hint="Reachable hosts in the inbox"
           />
           <DiscoveryStat
-            label="New"
+            label={t("New")}
             value={String(newCount)}
             hint="Not reviewed yet"
           />

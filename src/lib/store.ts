@@ -17,6 +17,7 @@ import type {
   IpAssignmentType,
   IpZone,
   Lab,
+  LabAccessEntry,
   OidcPublicConfig,
   Port,
   PortLink,
@@ -820,8 +821,19 @@ function isUnauthorized(error: unknown) {
 let initPromise: Promise<void> | null = null;
 let dataLoadPromise: Promise<void> | null = null;
 
-export function canEditInventory(user: AppUser | null) {
-  return !!user && user.role !== "viewer";
+export function canEditInventory(user: AppUser | null, labId = state.lab.id) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  if (!labId || labId === DEFAULT_LAB.id) return false;
+  return user.labAccess?.some(
+    (entry) => entry.labId === labId && entry.role === "editor",
+  ) ?? false;
+}
+
+export function canReadLab(user: AppUser | null, labId: string) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  return user.labAccess?.some((entry) => entry.labId === labId) ?? false;
 }
 
 export function isAdmin(user: AppUser | null) {
@@ -3237,6 +3249,7 @@ export async function createUserAccount(input: {
   password: string;
   role: UserRole;
   disabled?: boolean;
+  labAccess?: LabAccessEntry[];
 }): Promise<AppUser> {
   const created = await api.createUser(input);
   setState((prev) => ({

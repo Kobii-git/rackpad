@@ -3,6 +3,7 @@ import { Shield, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { logout, useStore } from "@/lib/store";
 
@@ -14,6 +15,7 @@ interface TopBarProps {
 }
 
 export function TopBar({ title, subtitle, meta, actions }: TopBarProps) {
+  const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
 
   return (
@@ -56,7 +58,7 @@ export function TopBar({ title, subtitle, meta, actions }: TopBarProps) {
               }
             >
               <Shield className="size-3" />
-              {currentUser.role}
+              {t(currentUser.role)}
             </Badge>
             <div className="hidden text-right md:block">
               <div className="text-xs font-medium text-[var(--text-primary)]">
@@ -73,14 +75,14 @@ export function TopBar({ title, subtitle, meta, actions }: TopBarProps) {
           <>
             <div
               className="grid size-8 place-items-center rounded-full border border-[var(--border-default)] bg-[var(--surface-3)] font-mono text-[11px] text-[var(--text-primary)] shadow-[0_1px_0_rgb(255_255_255_/_0.05)_inset]"
-              aria-label="Account"
+              aria-label={t("Account")}
               title={currentUser.displayName}
             >
               {initials(currentUser.displayName || currentUser.username)}
             </div>
             <Button variant="ghost" size="sm" onClick={() => void logout()}>
               <LogOut className="size-3.5" />
-              Sign out
+              {t("Sign out")}
             </Button>
           </>
         )}

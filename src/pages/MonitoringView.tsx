@@ -9,6 +9,7 @@ import {
   Search,
 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -23,15 +24,23 @@ import { Badge } from "@/components/ui/Badge";
 import { Mono } from "@/components/shared/Mono";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
+import { api } from "@/lib/api";
 import {
   createDeviceMonitorConfig,
+  canEditInventory,
   runAllDeviceMonitorChecks,
   runDeviceMonitorCheck,
   runDeviceMonitorChecksForDevice,
   updateDeviceMonitorConfig,
   useStore,
 } from "@/lib/store";
-import type { Device, DeviceMonitor, MonitorType } from "@/lib/types";
+import type {
+  Device,
+  DeviceMonitor,
+  MonitorType,
+  SnmpTrapLogEntry,
+  SnmpTrapReceiverStatus,
+} from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { relativeTime, statusLabel } from "@/lib/utils";
 import {
@@ -55,20 +64,23 @@ type MonitorSortKey = "hostname" | "status" | "targets" | "lastCheck";
 type MonitorLayout = "cards" | "compact";
 type BulkMonitorType = Exclude<MonitorType, "none" | "snmp">;
 
-const monitorStatusLabel: Record<MonitorRollupStatus, string> = {
-  offline: "Offline",
-  warning: "Warning",
-  unknown: "Unknown",
-  online: "Online",
-  unmonitored: "Unmonitored",
-};
-
 export default function MonitoringView() {
+  const { t } = useI18n();
+  const monitorStatusLabel = useMemo(
+    (): Record<MonitorRollupStatus, string> => ({
+      offline: t("Offline"),
+      warning: t("Warning"),
+      unknown: t("Unknown"),
+      online: t("Online"),
+      unmonitored: t("Unmonitored"),
+    }),
+    [t],
+  );
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
   const devices = useStore((s) => s.devices);
   const deviceMonitors = useStore((s) => s.deviceMonitors);
-  const canManageMonitoring = currentUser?.role === "admin";
+  const canManageMonitoring = canEditInventory(currentUser, lab.id);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<MonitorFilter>("all");
   const [sort, setSort] = useState<SortState<MonitorSortKey>>({
@@ -90,6 +102,23 @@ export default function MonitoringView() {
   );
   const [bulkMessage, setBulkMessage] = useState("");
   const [error, setError] = useState("");
+  const [trapLog, setTrapLog] = useState<SnmpTrapLogEntry[]>([]);
+  const [trapStatus, setTrapStatus] = useState<SnmpTrapReceiverStatus | null>(
+    null,
+  );
+
+  useEffect(() => {
+    void Promise.all([
+      api.getSnmpTrapLog({ labId: lab.id, limit: 25 }),
+      api.getSnmpTrapStatus(),
+    ]).then(([log, status]) => {
+      setTrapLog(log);
+      setTrapStatus(status);
+    }).catch(() => {
+      setTrapLog([]);
+      setTrapStatus(null);
+    });
+  }, [lab.id]);
 
   const allDeviceMonitorMap = useMemo(() => {
     return deviceMonitors.reduce<Record<string, DeviceMonitor[]>>(
@@ -165,7 +194,7 @@ export default function MonitoringView() {
         return haystack.includes(normalizedQuery);
       })
       .sort((a, b) => compareMonitorEntries(a, b, sort));
-  }, [filter, inventoryDevices, query, sort]);
+  }, [filter, inventoryDevices, monitorStatusLabel, query, sort]);
 
   const stats = useMemo(
     () => ({
@@ -428,8 +457,8 @@ export default function MonitoringView() {
   return (
     <>
       <TopBar
-        subtitle="Operations"
-        title="Monitoring"
+        subtitle={t("Operations")}
+        title={t("Monitoring")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {stats.monitoredDevices}/{stats.inventoryDevices} monitored devices
@@ -447,7 +476,7 @@ export default function MonitoringView() {
               }
             >
               <RefreshCcw className="size-3.5" />
-              {runningAll ? "Running..." : "Run all checks"}
+              {runningAll ? t("Running...") : t("Run all checks")}
             </Button>
           </div>
         }
@@ -456,39 +485,99 @@ export default function MonitoringView() {
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden px-6 py-5">
         <div className="grid gap-3 md:grid-cols-6">
           <MonitorStat
-            label="Devices"
+            label={t("Devices")}
             value={String(stats.inventoryDevices)}
             hint={`${stats.monitoredDevices} with active targets`}
           />
           <MonitorStat
-            label="Targets"
+            label={t("Targets")}
             value={String(stats.monitorTargets)}
             hint="Enabled ICMP/TCP/HTTP probes"
           />
           <MonitorStat
-            label="Online"
+            label={t("Online")}
             value={String(stats.online)}
-            hint="Healthy rollup state"
+            hint={t("Healthy rollup state")}
             tone="ok"
           />
           <MonitorStat
-            label="Offline"
+            label={t("Offline")}
             value={String(stats.offline)}
-            hint="At least one target failed"
+            hint={t("At least one target failed")}
             tone="err"
           />
           <MonitorStat
-            label="Unknown"
+            label={t("Unknown")}
             value={String(stats.unknown)}
-            hint="Configured but not yet confirmed"
+            hint={t("Configured but not yet confirmed")}
             tone="neutral"
           />
           <MonitorStat
-            label="Unmonitored"
+            label={t("Unmonitored")}
             value={String(stats.unmonitored)}
-            hint="No active targets"
+            hint={t("No active targets")}
             tone="neutral"
           />
+        </div>
+
+        <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-medium text-[var(--color-fg)]">
+                SNMP traps
+              </div>
+              <div className="text-xs text-[var(--color-fg-subtle)]">
+                Forward traps to UDP port{" "}
+                {trapStatus?.port ?? 1162}
+                {trapStatus?.listening ? " (receiver active)" : ""}
+                {trapStatus?.lastTrapAt
+                  ? ` · last trap ${new Date(trapStatus.lastTrapAt).toLocaleString()}`
+                  : ""}
+              </div>
+            </div>
+            <Badge tone={trapStatus?.listening ? "ok" : "neutral"}>
+              {trapStatus?.trapsReceived ?? 0} received
+            </Badge>
+          </div>
+          {trapLog.length === 0 ? (
+            <div className="mt-3 text-sm text-[var(--color-fg-subtle)]">
+              No traps logged for this lab yet. Map device management IPs and
+              enable interface monitors with ifIndex to react to linkUp/linkDown.
+            </div>
+          ) : (
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="text-xs uppercase tracking-wide text-[var(--color-fg-subtle)]">
+                  <tr>
+                    <th className="px-2 py-1">When</th>
+                    <th className="px-2 py-1">Source</th>
+                    <th className="px-2 py-1">Action</th>
+                    <th className="px-2 py-1">Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trapLog.map((entry) => (
+                    <tr
+                      key={entry.id}
+                      className="border-t border-[var(--color-line)] text-[var(--color-fg)]"
+                    >
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        {new Date(entry.receivedAt).toLocaleString()}
+                      </td>
+                      <td className="px-2 py-2 font-mono text-xs">
+                        {entry.sourceIp}
+                        {entry.ifIndex != null ? ` · if${entry.ifIndex}` : ""}
+                      </td>
+                      <td className="px-2 py-2">{entry.resultAction}</td>
+                      <td className="px-2 py-2 text-[var(--color-fg-subtle)]">
+                        {entry.message}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -502,7 +591,7 @@ export default function MonitoringView() {
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rk-kicker">Layout</span>
+            <span className="rk-kicker">{t("Layout")}</span>
             <Button
               variant={layout === "cards" ? "secondary" : "outline"}
               size="sm"
@@ -523,7 +612,7 @@ export default function MonitoringView() {
               <List className="size-3.5" />
               Compact
             </Button>
-            <span className="rk-kicker">Sort</span>
+            <span className="rk-kicker">{t("Sort")}</span>
             <SortButton
               active={sort.key === "hostname"}
               direction={sort.direction}
@@ -536,21 +625,21 @@ export default function MonitoringView() {
               direction={sort.direction}
               onClick={() => handleSort("status")}
             >
-              Status
+              {t("Status")}
             </SortButton>
             <SortButton
               active={sort.key === "targets"}
               direction={sort.direction}
               onClick={() => handleSort("targets")}
             >
-              Targets
+              {t("Targets")}
             </SortButton>
             <SortButton
               active={sort.key === "lastCheck"}
               direction={sort.direction}
               onClick={() => handleSort("lastCheck")}
             >
-              Last check
+              {t("Last check")}
             </SortButton>
           </div>
         </div>
@@ -566,31 +655,31 @@ export default function MonitoringView() {
             active={filter === "offline"}
             onClick={() => setFilter("offline")}
           >
-            Offline
+            {t("Offline")}
           </FilterButton>
           <FilterButton
             active={filter === "warning"}
             onClick={() => setFilter("warning")}
           >
-            Warning
+            {t("Warning")}
           </FilterButton>
           <FilterButton
             active={filter === "unknown"}
             onClick={() => setFilter("unknown")}
           >
-            Unknown
+            {t("Unknown")}
           </FilterButton>
           <FilterButton
             active={filter === "online"}
             onClick={() => setFilter("online")}
           >
-            Online
+            {t("Online")}
           </FilterButton>
           <FilterButton
             active={filter === "unmonitored"}
             onClick={() => setFilter("unmonitored")}
           >
-            Unmonitored
+            {t("Unmonitored")}
           </FilterButton>
         </div>
 
@@ -822,6 +911,17 @@ function DeviceMonitorCard({
   onRun: () => void;
   canManageMonitoring: boolean;
 }) {
+  const { t } = useI18n();
+  const monitorStatusLabel = useMemo(
+    (): Record<MonitorRollupStatus, string> => ({
+      offline: t("Offline"),
+      warning: t("Warning"),
+      unknown: t("Unknown"),
+      online: t("Online"),
+      unmonitored: t("Unmonitored"),
+    }),
+    [t],
+  );
   const latestCheckAt = monitors
     .map((monitor) => monitor.lastCheckAt)
     .filter((value): value is string => Boolean(value))
@@ -981,6 +1081,17 @@ function DeviceMonitorRow({
   onRun: () => void;
   canManageMonitoring: boolean;
 }) {
+  const { t } = useI18n();
+  const monitorStatusLabel = useMemo(
+    (): Record<MonitorRollupStatus, string> => ({
+      offline: t("Offline"),
+      warning: t("Warning"),
+      unknown: t("Unknown"),
+      online: t("Online"),
+      unmonitored: t("Unmonitored"),
+    }),
+    [t],
+  );
   const latestCheckAt = latestMonitorCheck(monitors);
   const failingCount = monitors.filter(
     (monitor) => monitor.lastResult === "offline",

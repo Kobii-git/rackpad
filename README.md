@@ -16,7 +16,7 @@ Built with:
 - Fastify API
 - SQLite persistence through `better-sqlite3`
 - session-based authentication with admin/editor/viewer roles
-- per-device health checks with ICMP, TCP, HTTP/HTTPS, and SNMP (v1/v2c) monitor targets
+- per-device health checks with ICMP, TCP, HTTP/HTTPS, and SNMP (v1/v2c/v3) monitor targets; optional trap receiver and VLAN/subnet sync (see [SNMP guide](./docs/SNMP.md))
 - Docker support for a single-container deployment
 
 ## Highlights
@@ -43,6 +43,8 @@ If `rackpad.co.za` is unavailable, the repo still contains the core material you
 - [Reports guide](./docs/REPORTS.md)
 - [Visualizer guide](./docs/VISUALIZER.md)
 - [OIDC login guide](./docs/OIDC.md)
+- [SNMP monitoring, traps & sync guide](./docs/SNMP.md)
+- [SNMP implementation plan & outstanding work](./docs/SNMP_IMPLEMENTATION_PLAN.md)
 - [Documentation and images guide](./docs/DOCUMENTATION.md)
 - [Security policy](./SECURITY.md)
 - [Changelog](./CHANGELOG.md)
@@ -303,6 +305,11 @@ Default environment variables:
 HOST=0.0.0.0
 PORT=3000
 DATABASE_PATH=./rackpad.db
+RACKPAD_SECRET_KEY=
+SNMP_TRAP_ENABLED=1
+SNMP_TRAP_PORT=1162
+SNMP_TRAP_BIND=0.0.0.0
+SNMP_INVENTORY_SYNC=1
 MONITOR_INTERVAL_MS=300000
 NODE_ENV=production
 TRUST_PROXY=0

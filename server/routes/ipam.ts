@@ -1,5 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db, parseRow } from '../db.js'
+import {
+  appendLabFilter,
+  assertLabReadFromRow,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
 import {
   asObject,
@@ -164,17 +171,39 @@ function validateAssignmentSemantics(input: {
   }
 }
 
+function getSubnetLabRow(subnetId: string) {
+  return db.prepare('SELECT id, labId FROM subnets WHERE id = ?').get(subnetId) as
+    | { id: string; labId: string }
+    | undefined
+}
+
+function getAssignmentLabRow(assignmentId: string) {
+  return db.prepare(`
+    SELECT ipAssignments.id, subnets.labId
+    FROM ipAssignments
+    JOIN subnets ON subnets.id = ipAssignments.subnetId
+    WHERE ipAssignments.id = ?
+  `).get(assignmentId) as { id: string; labId: string } | undefined
+}
+
 export const ipamRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: { labId?: string } }>('/subnets', async (req) => {
-    if (req.query.labId) {
-      return db.prepare('SELECT * FROM subnets WHERE labId = ? ORDER BY cidr').all(req.query.labId)
+  app.get<{ Querystring: { labId?: string } }>('/subnets', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
     }
-    return db.prepare('SELECT * FROM subnets ORDER BY cidr').all()
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    const { sql, params } = appendLabFilter('SELECT * FROM subnets', [], filter.labIds)
+    return db.prepare(`${sql} ORDER BY cidr`).all(...params)
   })
 
   app.get<{ Params: { id: string } }>('/subnets/:id', async (req, reply) => {
-    const row = db.prepare('SELECT * FROM subnets WHERE id = ?').get(req.params.id)
-    if (!row) return reply.status(404).send({ error: 'Subnet not found' })
+    const row = db.prepare('SELECT * FROM subnets WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabReadFromRow(req, reply, row)) return
     return row
   })
 
@@ -182,6 +211,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const body = asObject(req.body)
     const id = optionalString(body, 'id', { maxLength: 80 }) ?? createId('s')
     const labId = requiredString(body, 'labId', { maxLength: 80 })
+    if (!assertLabWrite(req, reply, labId)) return
     const cidr = ensureCidr(requiredString(body, 'cidr', { maxLength: 40 }))
     const name = requiredString(body, 'name', { maxLength: 120 })
     const description = optionalString(body, 'description', { maxLength: 500 })
@@ -193,8 +223,8 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.patch<{ Params: { id: string } }>('/subnets/:id', async (req, reply) => {
-    const existing = db.prepare('SELECT id FROM subnets WHERE id = ?').get(req.params.id)
-    if (!existing) return reply.status(404).send({ error: 'Subnet not found' })
+    const existing = db.prepare('SELECT * FROM subnets WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, existing)) return
     const body = asObject(req.body)
     const updates: string[] = []
     const values: unknown[] = []
@@ -221,18 +251,36 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { id: string } }>('/subnets/:id', async (req, reply) => {
-    if (!db.prepare('SELECT id FROM subnets WHERE id = ?').get(req.params.id)) {
-      return reply.status(404).send({ error: 'Subnet not found' })
-    }
+    const row = db.prepare('SELECT * FROM subnets WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, row)) return
     db.prepare('DELETE FROM subnets WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
   })
 
   // ORDER BY added for consistency with all other list endpoints
-  app.get<{ Querystring: { subnetId?: string } }>('/dhcp-scopes', async (req) => {
-    const rows = req.query.subnetId
-      ? db.prepare('SELECT * FROM dhcpScopes WHERE subnetId = ? ORDER BY name').all(req.query.subnetId)
-      : db.prepare('SELECT * FROM dhcpScopes ORDER BY subnetId, name').all()
+  app.get<{ Querystring: { subnetId?: string; labId?: string } }>('/dhcp-scopes', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
+    }
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    let sql = `
+      SELECT dhcpScopes.*
+      FROM dhcpScopes
+      JOIN subnets ON subnets.id = dhcpScopes.subnetId
+      WHERE 1=1
+    `
+    const params: unknown[] = []
+    if (req.query.subnetId) {
+      sql += ' AND dhcpScopes.subnetId = ?'
+      params.push(req.query.subnetId)
+    }
+    const filtered = appendLabFilter(sql, params, filter.labIds, 'subnets.labId')
+    const rows = db.prepare(`${filtered.sql} ORDER BY dhcpScopes.subnetId, dhcpScopes.name`).all(...filtered.params)
     return (rows as Record<string, unknown>[]).map(parseScope)
   })
 
@@ -240,6 +288,9 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const body = asObject(req.body)
     const id = optionalString(body, 'id', { maxLength: 80 }) ?? createId('sc')
     const subnetId = requiredString(body, 'subnetId', { maxLength: 80 })
+    const subnet = getSubnetLabRow(subnetId)
+    if (!subnet) return reply.status(404).send({ error: 'Subnet not found.' })
+    if (!assertLabWrite(req, reply, subnet.labId)) return
     const name = requiredString(body, 'name', { maxLength: 120 })
     const startIp = ensureIpv4(requiredString(body, 'startIp', { maxLength: 40 }), 'startIp')
     const endIp = ensureIpv4(requiredString(body, 'endIp', { maxLength: 40 }), 'endIp')
@@ -257,8 +308,13 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.patch<{ Params: { id: string } }>('/dhcp-scopes/:id', async (req, reply) => {
-    const existing = db.prepare('SELECT id FROM dhcpScopes WHERE id = ?').get(req.params.id)
-    if (!existing) return reply.status(404).send({ error: 'DHCP scope not found' })
+    const existing = db.prepare(`
+      SELECT dhcpScopes.*, subnets.labId
+      FROM dhcpScopes
+      JOIN subnets ON subnets.id = dhcpScopes.subnetId
+      WHERE dhcpScopes.id = ?
+    `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, existing)) return
     const body = asObject(req.body)
     const updates: string[] = []
     const values: unknown[] = []
@@ -295,24 +351,49 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { id: string } }>('/dhcp-scopes/:id', async (req, reply) => {
-    if (!db.prepare('SELECT id FROM dhcpScopes WHERE id = ?').get(req.params.id)) {
-      return reply.status(404).send({ error: 'DHCP scope not found' })
-    }
+    const row = db.prepare(`
+      SELECT dhcpScopes.id, subnets.labId
+      FROM dhcpScopes
+      JOIN subnets ON subnets.id = dhcpScopes.subnetId
+      WHERE dhcpScopes.id = ?
+    `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, row)) return
     db.prepare('DELETE FROM dhcpScopes WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
   })
 
-  app.get<{ Querystring: { subnetId?: string } }>('/ip-zones', async (req) => {
-    if (req.query.subnetId) {
-      return db.prepare('SELECT * FROM ipZones WHERE subnetId = ? ORDER BY startIp').all(req.query.subnetId)
+  app.get<{ Querystring: { subnetId?: string; labId?: string } }>('/ip-zones', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
     }
-    return db.prepare('SELECT * FROM ipZones ORDER BY subnetId, startIp').all()
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    let sql = `
+      SELECT ipZones.*
+      FROM ipZones
+      JOIN subnets ON subnets.id = ipZones.subnetId
+      WHERE 1=1
+    `
+    const params: unknown[] = []
+    if (req.query.subnetId) {
+      sql += ' AND ipZones.subnetId = ?'
+      params.push(req.query.subnetId)
+    }
+    const filtered = appendLabFilter(sql, params, filter.labIds, 'subnets.labId')
+    return db.prepare(`${filtered.sql} ORDER BY ipZones.subnetId, ipZones.startIp`).all(...filtered.params)
   })
 
   app.post('/ip-zones', async (req, reply) => {
     const body = asObject(req.body)
     const id = optionalString(body, 'id', { maxLength: 80 }) ?? createId('iz')
     const subnetId = requiredString(body, 'subnetId', { maxLength: 80 })
+    const subnet = getSubnetLabRow(subnetId)
+    if (!subnet) return reply.status(404).send({ error: 'Subnet not found.' })
+    if (!assertLabWrite(req, reply, subnet.labId)) return
     const kind = requiredEnum(body, 'kind', IP_ZONE_KINDS)
     const startIp = ensureIpv4(requiredString(body, 'startIp', { maxLength: 40 }), 'startIp')
     const endIp = ensureIpv4(requiredString(body, 'endIp', { maxLength: 40 }), 'endIp')
@@ -324,8 +405,13 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.patch<{ Params: { id: string } }>('/ip-zones/:id', async (req, reply) => {
-    const existing = db.prepare('SELECT id FROM ipZones WHERE id = ?').get(req.params.id)
-    if (!existing) return reply.status(404).send({ error: 'IP zone not found' })
+    const existing = db.prepare(`
+      SELECT ipZones.*, subnets.labId
+      FROM ipZones
+      JOIN subnets ON subnets.id = ipZones.subnetId
+      WHERE ipZones.id = ?
+    `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, existing)) return
     const body = asObject(req.body)
     const updates: string[] = []
     const values: unknown[] = []
@@ -354,25 +440,48 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { id: string } }>('/ip-zones/:id', async (req, reply) => {
-    if (!db.prepare('SELECT id FROM ipZones WHERE id = ?').get(req.params.id)) {
-      return reply.status(404).send({ error: 'IP zone not found' })
-    }
+    const row = db.prepare(`
+      SELECT ipZones.id, subnets.labId
+      FROM ipZones
+      JOIN subnets ON subnets.id = ipZones.subnetId
+      WHERE ipZones.id = ?
+    `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, row)) return
     db.prepare('DELETE FROM ipZones WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
   })
 
-  app.get<{ Querystring: { subnetId?: string; deviceId?: string } }>('/ip-assignments', async (req) => {
-    let sql = 'SELECT * FROM ipAssignments WHERE 1=1'
+  app.get<{ Querystring: { subnetId?: string; deviceId?: string; labId?: string } }>('/ip-assignments', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
+    }
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    let sql = `
+      SELECT ipAssignments.*
+      FROM ipAssignments
+      JOIN subnets ON subnets.id = ipAssignments.subnetId
+      WHERE 1=1
+    `
     const params: unknown[] = []
-    if (req.query.subnetId) { sql += ' AND subnetId = ?'; params.push(req.query.subnetId) }
-    if (req.query.deviceId) { sql += ' AND deviceId = ?'; params.push(req.query.deviceId) }
-    sql += ' ORDER BY ipAddress'
-    return db.prepare(sql).all(...params)
+    if (req.query.subnetId) { sql += ' AND ipAssignments.subnetId = ?'; params.push(req.query.subnetId) }
+    if (req.query.deviceId) { sql += ' AND ipAssignments.deviceId = ?'; params.push(req.query.deviceId) }
+    const filtered = appendLabFilter(sql, params, filter.labIds, 'subnets.labId')
+    return db.prepare(`${filtered.sql} ORDER BY ipAssignments.ipAddress`).all(...filtered.params)
   })
 
   app.get<{ Params: { id: string } }>('/ip-assignments/:id', async (req, reply) => {
-    const row = db.prepare('SELECT * FROM ipAssignments WHERE id = ?').get(req.params.id)
-    if (!row) return reply.status(404).send({ error: 'IP assignment not found' })
+    const row = db.prepare(`
+      SELECT ipAssignments.*, subnets.labId
+      FROM ipAssignments
+      JOIN subnets ON subnets.id = ipAssignments.subnetId
+      WHERE ipAssignments.id = ?
+    `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabReadFromRow(req, reply, row)) return
     return row
   })
 
@@ -380,6 +489,9 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const body = asObject(req.body)
     const id = optionalString(body, 'id', { maxLength: 80 }) ?? createId('ip')
     const subnetId = requiredString(body, 'subnetId', { maxLength: 80 })
+    const subnet = getSubnetLabRow(subnetId)
+    if (!subnet) return reply.status(404).send({ error: 'Subnet not found.' })
+    if (!assertLabWrite(req, reply, subnet.labId)) return
     const ipAddress = ensureIpv4(requiredString(body, 'ipAddress', { maxLength: 40 }))
     const assignmentType = requiredEnum(body, 'assignmentType', ASSIGNMENT_TYPES)
     const deviceId = optionalString(body, 'deviceId', { maxLength: 80 })
@@ -411,15 +523,26 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.patch<{ Params: { id: string } }>('/ip-assignments/:id', async (req, reply) => {
-    const existing = db.prepare('SELECT * FROM ipAssignments WHERE id = ?').get(req.params.id) as
-      | { subnetId: string; ipAddress: string; assignmentType: (typeof ASSIGNMENT_TYPES)[number]; allocationMode?: string | null; dhcpScopeId?: string | null }
+    const existing = db.prepare(`
+      SELECT ipAssignments.*, subnets.labId
+      FROM ipAssignments
+      JOIN subnets ON subnets.id = ipAssignments.subnetId
+      WHERE ipAssignments.id = ?
+    `).get(req.params.id) as
+      | ({ subnetId: string; ipAddress: string; assignmentType: (typeof ASSIGNMENT_TYPES)[number]; allocationMode?: string | null; dhcpScopeId?: string | null } & Record<string, unknown>)
       | undefined
-    if (!existing) return reply.status(404).send({ error: 'IP assignment not found' })
+    if (!assertLabWriteFromRow(req, reply, existing)) return
+    const assignment = existing!
     const body = asObject(req.body)
     const updates: string[] = []
     const values: unknown[] = []
 
     const subnetId = optionalString(body, 'subnetId', { maxLength: 80 })
+    if (subnetId) {
+      const nextSubnet = getSubnetLabRow(subnetId)
+      if (!nextSubnet) return reply.status(404).send({ error: 'Subnet not found.' })
+      if (!assertLabWrite(req, reply, nextSubnet.labId)) return
+    }
     const ipAddress = optionalString(body, 'ipAddress', { maxLength: 40 })
     const deviceId = optionalString(body, 'deviceId', { maxLength: 80 })
     const portId = optionalString(body, 'portId', { maxLength: 80 })
@@ -431,18 +554,18 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const allocationMode = optionalEnum(body, 'allocationMode', ALLOCATION_MODES)
     const assignmentType = 'assignmentType' in body
       ? requiredEnum(body, 'assignmentType', ASSIGNMENT_TYPES)
-      : existing.assignmentType
+      : assignment.assignmentType
 
-    const effectiveSubnetId = subnetId ?? existing.subnetId
-    const effectiveIpAddress = ipAddress ?? existing.ipAddress
+    const effectiveSubnetId = subnetId ?? assignment.subnetId
+    const effectiveIpAddress = ipAddress ?? assignment.ipAddress
     const effectiveAllocationMode =
       allocationMode ??
-      (existing.allocationMode === 'dhcp-reservation' ? 'dhcp-reservation' : 'static')
+      (assignment.allocationMode === 'dhcp-reservation' ? 'dhcp-reservation' : 'static')
     const effectiveDhcpScopeId =
       dhcpScopeId !== undefined
         ? dhcpScopeId
-        : existing.dhcpScopeId
-          ? String(existing.dhcpScopeId)
+        : assignment.dhcpScopeId
+          ? String(assignment.dhcpScopeId)
           : null
 
     if (subnetId !== undefined || ipAddress !== undefined || allocationMode !== undefined || dhcpScopeId !== undefined || 'assignmentType' in body) {
@@ -482,12 +605,12 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { id: string } }>('/ip-assignments/:id', async (req, reply) => {
-    const row = db.prepare('SELECT * FROM ipAssignments WHERE id = ?').get(req.params.id) as
+    const row = getAssignmentLabRow(req.params.id)
+    if (!assertLabWriteFromRow(req, reply, row)) return
+
+    const assignment = db.prepare('SELECT deviceId, ipAddress FROM ipAssignments WHERE id = ?').get(req.params.id) as
       | { deviceId?: string | null; ipAddress: string }
       | undefined
-    if (!row) {
-      return reply.status(404).send({ error: 'IP assignment not found' })
-    }
 
     const deleteAssignment = db.transaction((assignmentId: string, deviceId: string | null | undefined, ipAddress: string) => {
       if (deviceId) {
@@ -498,7 +621,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
       db.prepare('DELETE FROM ipAssignments WHERE id = ?').run(assignmentId)
     })
 
-    deleteAssignment(req.params.id, row.deviceId, row.ipAddress)
+    deleteAssignment(req.params.id, assignment?.deviceId, assignment?.ipAddress ?? '')
     return reply.status(204).send()
   })
 }

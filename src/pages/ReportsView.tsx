@@ -10,6 +10,7 @@ import {
   Server,
 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
@@ -58,6 +59,7 @@ const REPORT_DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
 });
 
 export default function ReportsView() {
+  const { t } = useI18n();
   const lab = useStore((s) => s.lab);
   const rooms = useStore((s) => s.rooms);
   const racks = useStore((s) => s.racks);
@@ -299,7 +301,7 @@ export default function ReportsView() {
     <>
       <TopBar
         subtitle="Reporting"
-        title="Reports"
+        title={t("Reports")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {lab.name} | generated {reportStamp}
@@ -359,7 +361,7 @@ export default function ReportsView() {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <ReportMetric
               icon={Server}
-              label="Devices"
+              label={t("Devices")}
               value={devices.length}
               hint={`${model.devicesByStatus.online ?? 0} online | ${model.devicesByStatus.warning ?? 0} warning`}
             />
@@ -386,7 +388,7 @@ export default function ReportsView() {
 
           <div className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
             <ReportSection
-              label="Inventory"
+              label={t("Inventory")}
               title="Device and rack posture"
               action={
                 <ExportButton
@@ -517,7 +519,7 @@ export default function ReportsView() {
             </ReportSection>
 
             <ReportSection
-              label="Operations"
+              label={t("Operations")}
               title="Monitoring posture"
               action={
                 <ExportButton
@@ -616,7 +618,7 @@ export default function ReportsView() {
           </div>
 
           <ReportSection
-            label="Network"
+            label={t("Network")}
             title="Ports, cabling, VLANs, and IPAM"
             action={
               <div className="flex flex-wrap gap-2">

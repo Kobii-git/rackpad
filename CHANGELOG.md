@@ -6,6 +6,35 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+> On the `dev` branch; not yet tagged/released.
+
+### Added
+
+- SNMP monitoring suite (v1/v2c/v3) alongside ICMP/TCP/HTTP/HTTPS checks:
+  IF-MIB interface monitors with per-port link-state, SNMP-verified badges in
+  Ports/Dashboard/Visualizer, encrypted per-lab SNMPv3 credentials, a v1/v2c
+  trap receiver (UDP 1162, with device auto-learn), and opt-in VLAN/subnet
+  inventory sync (preview/apply; DHCP scopes preview-only). Enable sync with
+  `SNMP_INVENTORY_SYNC=1`. See [`docs/SNMP.md`](./docs/SNMP.md).
+- Expanded localization from 2 to 23 languages — added German, Dutch, Spanish,
+  Portuguese, Italian, Polish, Simplified & Traditional Chinese, Japanese,
+  Korean, Hindi, Bengali, Thai, Hebrew, Persian, Arabic, Russian, Ukrainian,
+  Turkish, Vietnamese, and Indonesian, with right-to-left support for Arabic,
+  Hebrew, and Persian.
+- `docs/SNMP.md` operator guide for SNMP monitoring, v3 credentials, trap
+  forwarding (162→1162), and inventory sync.
+
+### Changed
+
+- Documented the new SNMP and secret-key environment variables
+  (`RACKPAD_SECRET_KEY`, `SNMP_INVENTORY_SYNC`, `SNMP_TRAP_*`) in `.env.example`.
+
+### Fixed
+
+- Back-filled the language layer so recently-added strings (the OIDC sign-in
+  flow, lab access/permissions, account/sign-out) are translated across all
+  locales instead of falling back to English.
+
 ## [1.5.10] - 2026-06-06
 
 ### Added

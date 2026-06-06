@@ -20,6 +20,7 @@ interface PortGridProps {
   devicesById: Record<string, Device>;
   vlansById?: Record<string, Vlan>;
   virtualSwitchesById?: Record<string, VirtualSwitch>;
+  snmpVerifiedPortIds?: Set<string>;
   onSelectPort?: (portId: string) => void;
   selectedPortId?: string;
 }
@@ -32,6 +33,7 @@ export function PortGrid({
   devicesById,
   vlansById = {},
   virtualSwitchesById = {},
+  snmpVerifiedPortIds,
   onSelectPort,
   selectedPortId,
 }: PortGridProps) {
@@ -67,6 +69,7 @@ export function PortGrid({
               devicesById={devicesById}
               vlansById={vlansById}
               virtualSwitchesById={virtualSwitchesById}
+              snmpVerifiedPortIds={snmpVerifiedPortIds}
               onSelectPort={onSelectPort}
               selectedPortId={selectedPortId}
             />
@@ -98,6 +101,7 @@ function PortSection({
   devicesById,
   vlansById,
   virtualSwitchesById,
+  snmpVerifiedPortIds,
   onSelectPort,
   selectedPortId,
 }: {
@@ -108,6 +112,7 @@ function PortSection({
   devicesById: Record<string, Device>;
   vlansById: Record<string, Vlan>;
   virtualSwitchesById: Record<string, VirtualSwitch>;
+  snmpVerifiedPortIds?: Set<string>;
   onSelectPort?: (portId: string) => void;
   selectedPortId?: string;
 }) {
@@ -139,6 +144,7 @@ function PortSection({
               devicesById={devicesById}
               vlansById={vlansById}
               virtualSwitchesById={virtualSwitchesById}
+              snmpVerifiedPortIds={snmpVerifiedPortIds}
               onSelect={onSelectPort}
               selected={selectedPortId === port.id}
               delay={index * 0.012}
@@ -175,6 +181,7 @@ function PortCell({
   devicesById,
   vlansById,
   virtualSwitchesById,
+  snmpVerifiedPortIds,
   onSelect,
   selected,
   delay = 0,
@@ -185,11 +192,13 @@ function PortCell({
   devicesById: Record<string, Device>;
   vlansById: Record<string, Vlan>;
   virtualSwitchesById: Record<string, VirtualSwitch>;
+  snmpVerifiedPortIds?: Set<string>;
   onSelect?: (portId: string) => void;
   selected?: boolean;
   delay?: number;
 }) {
   const isLinked = port.linkState === "up";
+  const snmpVerified = snmpVerifiedPortIds?.has(port.id) ?? false;
   const baseColor = portTypeColor[port.kind];
 
   let otherDevice: Device | undefined;
@@ -258,6 +267,14 @@ function PortCell({
             </span>
           )}
 
+          {snmpVerified ? (
+            <span
+              className="absolute right-1 top-1 size-1.5 rounded-full bg-[var(--accent-primary)] shadow-[0_0_6px_var(--accent-primary-glow)]"
+              title="SNMP verified"
+              aria-label="SNMP verified"
+            />
+          ) : null}
+
           <div className="flex items-center gap-1">
             <span
               className={cn(
@@ -295,6 +312,11 @@ function PortCell({
               bridge{" "}
               {virtualSwitchesById[port.virtualSwitchId]?.name ??
                 port.virtualSwitchId}
+            </span>
+          ) : null}
+          {snmpVerified ? (
+            <span className="text-[var(--accent-primary)]">
+              SNMP verified link state
             </span>
           ) : null}
           {isLinked && otherDevice && otherPort ? (

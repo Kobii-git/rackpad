@@ -26,11 +26,14 @@ import type {
   AlertSettings,
   AuditEntry,
   AppUser,
+  Lab,
+  LabAccessEntry,
+  LabRole,
   SupportedLanguage,
   UserRole,
 } from "@/lib/types";
 import { APP_VERSION_LABEL } from "@/lib/version";
-import { LanguageSelector, useI18n } from "@/i18n";
+import { LANGUAGE_NATIVE_NAMES, LANGUAGE_OPTIONS, LanguageSelector, useI18n } from "@/i18n";
 import {
   Download,
   Languages,
@@ -49,6 +52,7 @@ type FormState = {
   role: UserRole;
   disabled: boolean;
   password: string;
+  labRoles: Record<string, LabRole | "none">;
 };
 
 const EMPTY_FORM: FormState = {
@@ -57,7 +61,29 @@ const EMPTY_FORM: FormState = {
   role: "viewer",
   disabled: false,
   password: "",
+  labRoles: {},
 };
+
+function defaultLabRoles(labs: Lab[], role: UserRole): Record<string, LabRole | "none"> {
+  if (role === "admin") return {};
+  const labRole: LabRole = role === "viewer" ? "viewer" : "editor";
+  return Object.fromEntries(labs.map((lab) => [lab.id, labRole]));
+}
+
+function labRolesFromUser(user: AppUser, labs: Lab[]): Record<string, LabRole | "none"> {
+  return Object.fromEntries(
+    labs.map((lab) => {
+      const entry = user.labAccess?.find((access) => access.labId === lab.id);
+      return [lab.id, entry?.role ?? "none"];
+    }),
+  );
+}
+
+function labAccessPayload(labRoles: Record<string, LabRole | "none">): LabAccessEntry[] {
+  return Object.entries(labRoles)
+    .filter((entry): entry is [string, LabRole] => entry[1] === "editor" || entry[1] === "viewer")
+    .map(([labId, role]) => ({ labId, role }));
+}
 
 const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   enabled: false,
@@ -82,6 +108,7 @@ export default function UsersPage() {
   const currentUser = useStore((s) => s.currentUser);
   const uiSettings = useStore((s) => s.uiSettings);
   const users = useStore((s) => s.users);
+  const labs = useStore((s) => s.labs);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -136,7 +163,10 @@ export default function UsersPage() {
 
   useEffect(() => {
     if (creating) {
-      setForm(EMPTY_FORM);
+      setForm({
+        ...EMPTY_FORM,
+        labRoles: defaultLabRoles(labs, EMPTY_FORM.role),
+      });
       setError("");
       return;
     }
@@ -148,10 +178,14 @@ export default function UsersPage() {
         role: selectedUser.role,
         disabled: selectedUser.disabled,
         password: "",
+        labRoles:
+          selectedUser.role === "admin"
+            ? {}
+            : labRolesFromUser(selectedUser, labs),
       });
       setError("");
     }
-  }, [creating, selectedUser]);
+  }, [creating, labs, selectedUser]);
 
   useEffect(() => {
     if (!isAdmin(currentUser)) {
@@ -260,6 +294,8 @@ export default function UsersPage() {
           password: form.password,
           role: form.role,
           disabled: form.disabled,
+          labAccess:
+            form.role === "admin" ? undefined : labAccessPayload(form.labRoles),
         });
         setCreating(false);
         setSelectedUserId(created.id);
@@ -273,6 +309,8 @@ export default function UsersPage() {
         role: form.role,
         disabled: form.disabled,
         password: form.password.trim() ? form.password : undefined,
+        labAccess:
+          form.role === "admin" ? [] : labAccessPayload(form.labRoles),
       });
       setSelectedUserId(updated.id);
       setForm((prev) => ({ ...prev, password: "" }));
@@ -496,7 +534,7 @@ export default function UsersPage() {
                 </CardTitle>
                 <Badge tone="info">
                   <Languages className="size-3" />
-                  {language === "fr" ? t("French") : t("English")}
+                  {LANGUAGE_NATIVE_NAMES[language]}
                 </Badge>
               </CardHeader>
               <CardBody className="space-y-4">
@@ -513,8 +551,11 @@ export default function UsersPage() {
                       className="rk-control h-8 w-full rounded-[var(--radius-sm)] px-2.5 text-sm text-[var(--text-primary)] focus-visible:outline-none"
                       aria-label={t("Default language")}
                     >
-                      <option value="en">{t("English")}</option>
-                      <option value="fr">{t("French")}</option>
+                      {LANGUAGE_OPTIONS.map((option) => (
+                        <option key={option.code} value={option.code}>
+                          {option.nativeName}
+                        </option>
+                      ))}
                     </select>
                   </Field>
                 </div>
@@ -636,15 +677,80 @@ export default function UsersPage() {
                           }
                         />
                       </Field>
-                      <Field label="Role">
+                      <Field label={t("Role")}>
                         <RolePicker
                           value={form.role}
                           onChange={(role) =>
-                            setForm((prev) => ({ ...prev, role }))
+                            setForm((prev) => ({
+                              ...prev,
+                              role,
+                              labRoles:
+                                role === "admin"
+                                  ? {}
+                                  : defaultLabRoles(labs, role),
+                            }))
                           }
                         />
                       </Field>
                     </div>
+
+                    {form.role !== "admin" && labs.length > 0 && (
+                      <div className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
+                        <div>
+                          <div className="text-sm font-medium text-[var(--color-fg)]">
+                            {t("Lab access")}
+                          </div>
+                          <p className="mt-1 text-xs text-[var(--color-fg-subtle)]">
+                            {t(
+                              "Choose which labs this user can access and their role in each lab.",
+                            )}
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          {labs.map((lab) => (
+                            <label
+                              key={lab.id}
+                              className="grid gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] px-3 py-2 md:grid-cols-[minmax(0,1fr)_160px]"
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate text-sm text-[var(--color-fg)]">
+                                  {lab.name}
+                                </div>
+                                {lab.location && (
+                                  <div className="truncate text-xs text-[var(--color-fg-subtle)]">
+                                    {lab.location}
+                                  </div>
+                                )}
+                              </div>
+                              <select
+                                className="h-9 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg-2)] px-2 text-sm text-[var(--color-fg)]"
+                                value={form.labRoles[lab.id] ?? "none"}
+                                onChange={(event) => {
+                                  const value = event.target.value as LabRole | "none";
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    labRoles: {
+                                      ...prev.labRoles,
+                                      [lab.id]: value,
+                                    },
+                                  }));
+                                }}
+                              >
+                                <option value="none">{t("No access")}</option>
+                                <option value="viewer">{t("Can view")}</option>
+                                <option value="editor">{t("Can edit")}</option>
+                              </select>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {form.role === "admin" && (
+                      <p className="text-xs text-[var(--color-fg-subtle)]">
+                        {t("Administrators can access all labs.")}
+                      </p>
+                    )}
 
                     <label className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-fg)]">
                       <input

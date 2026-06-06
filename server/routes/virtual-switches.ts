@@ -1,5 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
+import {
+  appendLabFilter,
+  assertLabReadFromRow,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
 import { asObject, optionalBoolean, optionalEnum, optionalString, requiredString, ValidationError } from '../lib/validation.js'
 
@@ -37,6 +44,15 @@ function getVirtualSwitchRow(id: string) {
   return db.prepare('SELECT * FROM virtualSwitches WHERE id = ?').get(id) as Record<string, unknown> | undefined
 }
 
+function getVirtualSwitchLabRow(id: string) {
+  return db.prepare(`
+    SELECT virtualSwitches.id, host.labId
+    FROM virtualSwitches
+    JOIN devices host ON host.id = virtualSwitches.hostDeviceId
+    WHERE virtualSwitches.id = ?
+  `).get(id) as { id: string; labId: string } | undefined
+}
+
 function requireHostDevice(deviceId: string) {
   const device = getDeviceContext(deviceId)
   if (!device) {
@@ -68,7 +84,16 @@ export function ensurePortVirtualSwitchMembership(portDeviceId: string, virtualS
 }
 
 export const virtualSwitchesRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: { labId?: string; hostDeviceId?: string } }>('/', async (req) => {
+  app.get<{ Querystring: { labId?: string; hostDeviceId?: string } }>('/', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
+    }
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
     let sql = `
       SELECT vs.*
       FROM virtualSwitches vs
@@ -77,27 +102,25 @@ export const virtualSwitchesRoutes: FastifyPluginAsync = async (app) => {
     `
     const params: unknown[] = []
 
-    if (req.query.labId) {
-      sql += ' AND host.labId = ?'
-      params.push(req.query.labId)
-    }
-
     if (req.query.hostDeviceId) {
       sql += ' AND vs.hostDeviceId = ?'
       params.push(req.query.hostDeviceId)
     }
 
-    sql += ' ORDER BY host.hostname, vs.name, vs.id'
-
-    return (db.prepare(sql).all(...params) as Record<string, unknown>[]).map(parseVirtualSwitch)
+    const filtered = appendLabFilter(sql, params, filter.labIds, 'host.labId')
+    const rows = db.prepare(`${filtered.sql} ORDER BY host.hostname, vs.name, vs.id`).all(...filtered.params) as Record<string, unknown>[]
+    return rows.map(parseVirtualSwitch)
   })
 
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const row = getVirtualSwitchRow(req.params.id)
-    if (!row) {
-      return reply.status(404).send({ error: 'Virtual switch not found.' })
-    }
-    return parseVirtualSwitch(row)
+    const row = db.prepare(`
+      SELECT vs.*, host.labId
+      FROM virtualSwitches vs
+      JOIN devices host ON host.id = vs.hostDeviceId
+      WHERE vs.id = ?
+    `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabReadFromRow(req, reply, row)) return
+    return parseVirtualSwitch(row!)
   })
 
   app.post('/', async (req, reply) => {
@@ -109,7 +132,8 @@ export const virtualSwitchesRoutes: FastifyPluginAsync = async (app) => {
     const membersShareHostIp = optionalBoolean(body, 'membersShareHostIp') ?? false
     const notes = optionalString(body, 'notes', { maxLength: 2000 })
 
-    requireHostDevice(hostDeviceId)
+    const hostDevice = requireHostDevice(hostDeviceId)
+    if (!assertLabWrite(req, reply, hostDevice.labId)) return
 
     db.prepare(`
       INSERT INTO virtualSwitches (id, hostDeviceId, name, kind, membersShareHostIp, notes)
@@ -120,10 +144,8 @@ export const virtualSwitchesRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.patch<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const existing = getVirtualSwitchRow(req.params.id)
-    if (!existing) {
-      return reply.status(404).send({ error: 'Virtual switch not found.' })
-    }
+    const existing = getVirtualSwitchLabRow(req.params.id)
+    if (!assertLabWriteFromRow(req, reply, existing)) return
 
     const body = asObject(req.body)
     const updates: string[] = []
@@ -168,10 +190,8 @@ export const virtualSwitchesRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const existing = getVirtualSwitchRow(req.params.id)
-    if (!existing) {
-      return reply.status(404).send({ error: 'Virtual switch not found.' })
-    }
+    const existing = getVirtualSwitchLabRow(req.params.id)
+    if (!assertLabWriteFromRow(req, reply, existing)) return
 
     db.prepare('DELETE FROM virtualSwitches WHERE id = ?').run(req.params.id)
     return reply.status(204).send()

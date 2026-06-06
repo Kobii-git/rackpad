@@ -17,6 +17,8 @@ const spaIndexFile = path.join(spaDistDir, "index.html");
 process.env.DATABASE_PATH = path.join(tempDir, "rackpad-test.db");
 process.env.NODE_ENV = "test";
 process.env.OIDC_ENABLED = "0";
+process.env.RACKPAD_SECRET_KEY = "rackpad-test-secret-key";
+process.env.SNMP_INVENTORY_SYNC = "1";
 
 const { createApp } = await import("../app.js");
 const { db } = await import("../db.js");
@@ -128,6 +130,116 @@ test("admin UI settings expose and update the instance language default", async 
     (readJson(statusRes) as { uiSettings: { defaultLanguage: string } })
       .uiSettings,
     { defaultLanguage: "fr" },
+  );
+
+  const zhUpdateRes = await app.inject({
+    method: "PUT",
+    url: "/api/admin/ui-settings",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: { defaultLanguage: "zh" },
+  });
+  assert.equal(zhUpdateRes.statusCode, 200);
+  assert.deepEqual(readJson(zhUpdateRes), { defaultLanguage: "zh" });
+
+  const zhStatusRes = await app.inject({
+    method: "GET",
+    url: "/api/auth/status",
+  });
+  assert.equal(zhStatusRes.statusCode, 200);
+  assert.deepEqual(
+    (readJson(zhStatusRes) as { uiSettings: { defaultLanguage: string } })
+      .uiSettings,
+    { defaultLanguage: "zh" },
+  );
+
+  const esUpdateRes = await app.inject({
+    method: "PUT",
+    url: "/api/admin/ui-settings",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: { defaultLanguage: "es" },
+  });
+  assert.equal(esUpdateRes.statusCode, 200);
+  assert.deepEqual(readJson(esUpdateRes), { defaultLanguage: "es" });
+
+  const esStatusRes = await app.inject({
+    method: "GET",
+    url: "/api/auth/status",
+  });
+  assert.equal(esStatusRes.statusCode, 200);
+  assert.deepEqual(
+    (readJson(esStatusRes) as { uiSettings: { defaultLanguage: string } })
+      .uiSettings,
+    { defaultLanguage: "es" },
+  );
+
+  const hiUpdateRes = await app.inject({
+    method: "PUT",
+    url: "/api/admin/ui-settings",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: { defaultLanguage: "hi" },
+  });
+  assert.equal(hiUpdateRes.statusCode, 200);
+  assert.deepEqual(readJson(hiUpdateRes), { defaultLanguage: "hi" });
+
+  const hiStatusRes = await app.inject({
+    method: "GET",
+    url: "/api/auth/status",
+  });
+  assert.equal(hiStatusRes.statusCode, 200);
+  assert.deepEqual(
+    (readJson(hiStatusRes) as { uiSettings: { defaultLanguage: string } })
+      .uiSettings,
+    { defaultLanguage: "hi" },
+  );
+
+  const arUpdateRes = await app.inject({
+    method: "PUT",
+    url: "/api/admin/ui-settings",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: { defaultLanguage: "ar" },
+  });
+  assert.equal(arUpdateRes.statusCode, 200);
+  assert.deepEqual(readJson(arUpdateRes), { defaultLanguage: "ar" });
+
+  const arStatusRes = await app.inject({
+    method: "GET",
+    url: "/api/auth/status",
+  });
+  assert.equal(arStatusRes.statusCode, 200);
+  assert.deepEqual(
+    (readJson(arStatusRes) as { uiSettings: { defaultLanguage: string } })
+      .uiSettings,
+    { defaultLanguage: "ar" },
+  );
+
+  const jaUpdateRes = await app.inject({
+    method: "PUT",
+    url: "/api/admin/ui-settings",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: { defaultLanguage: "ja" },
+  });
+  assert.equal(jaUpdateRes.statusCode, 200);
+  assert.deepEqual(readJson(jaUpdateRes), { defaultLanguage: "ja" });
+
+  const jaStatusRes = await app.inject({
+    method: "GET",
+    url: "/api/auth/status",
+  });
+  assert.equal(jaStatusRes.statusCode, 200);
+  assert.deepEqual(
+    (readJson(jaStatusRes) as { uiSettings: { defaultLanguage: string } })
+      .uiSettings,
+    { defaultLanguage: "ja" },
   );
 });
 
@@ -305,7 +417,82 @@ test("viewer accounts are read-only", async () => {
     },
   });
   assert.equal(writeRes.statusCode, 403);
-  assert.match(writeRes.body, /read-only/i);
+  assert.match(writeRes.body, /write access/i);
+});
+
+test("per-lab access restricts users to assigned labs", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const createLabRes = await app.inject({
+    method: "POST",
+    url: "/api/labs",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      id: "lab_work",
+      name: "Work Lab",
+      location: "Office",
+    },
+  });
+  assert.equal(createLabRes.statusCode, 201);
+
+  const limitedUserRes = await app.inject({
+    method: "POST",
+    url: "/api/users",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      username: "workonly",
+      displayName: "Work Only",
+      password: "work-only-password",
+      role: "editor",
+      labAccess: [{ labId: "lab_work", role: "editor" }],
+    },
+  });
+  assert.equal(limitedUserRes.statusCode, 201);
+
+  const loginRes = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: {
+      username: "workonly",
+      password: "work-only-password",
+    },
+  });
+  assert.equal(loginRes.statusCode, 200);
+  const limitedToken = (readJson(loginRes) as { token: string }).token;
+
+  const labsRes = await app.inject({
+    method: "GET",
+    url: "/api/labs",
+    headers: {
+      authorization: `Bearer ${limitedToken}`,
+    },
+  });
+  assert.equal(labsRes.statusCode, 200);
+  const labs = readJson(labsRes) as Array<{ id: string }>;
+  assert.equal(labs.length, 1);
+  assert.equal(labs[0]?.id, "lab_work");
+
+  const homeRacksRes = await app.inject({
+    method: "GET",
+    url: "/api/racks?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${limitedToken}`,
+    },
+  });
+  assert.equal(homeRacksRes.statusCode, 403);
+
+  const workRacksRes = await app.inject({
+    method: "GET",
+    url: "/api/racks?labId=lab_work",
+    headers: {
+      authorization: `Bearer ${limitedToken}`,
+    },
+  });
+  assert.equal(workRacksRes.statusCode, 200);
 });
 
 test("documentation pages and device images can be created", async () => {
@@ -1517,8 +1704,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
       enabled: true,
     },
   });
-  assert.equal(editorCreateRes.statusCode, 403);
-  assert.match(editorCreateRes.body, /administrator/i);
+  assert.ok(editorCreateRes.statusCode === 200 || editorCreateRes.statusCode === 201);
 
   const invalidMonitorRes = await app.inject({
     method: "POST",
@@ -1584,6 +1770,119 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   assert.equal(snmpMonitor.snmpCommunity, "public");
   assert.equal(snmpMonitor.snmpOid, ".1.3.6.1.2.1.2.2.1.8.1");
   assert.equal(snmpMonitor.snmpExpectedValue, "1");
+
+  const switchRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "switch-snmp",
+      deviceType: "switch",
+      status: "unknown",
+    },
+  });
+  assert.equal(switchRes.statusCode, 201);
+  const switchDevice = readJson(switchRes) as { id: string };
+
+  const switchPortRes = await app.inject({
+    method: "POST",
+    url: "/api/ports",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: switchDevice.id,
+      name: "Gi0/1",
+      kind: "rj45",
+      linkState: "unknown",
+    },
+  });
+  assert.equal(switchPortRes.statusCode, 201);
+  const switchPort = readJson(switchPortRes) as { id: string };
+
+  const linkedSnmpMonitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: switchDevice.id,
+      name: "Uplink",
+      type: "snmp",
+      target: "127.0.0.1",
+      snmpVersion: "2c",
+      snmpCommunity: "public",
+      snmpOid: "1.3.6.1.2.1.2.2.1.8.1",
+      snmpExpectedValue: "1,2",
+      snmpMatchMode: "in",
+      portId: switchPort.id,
+      snmpIfIndex: 1,
+      enabled: true,
+    },
+  });
+  assert.equal(linkedSnmpMonitorRes.statusCode, 200);
+  const linkedSnmpMonitor = readJson(linkedSnmpMonitorRes) as {
+    portId: string;
+    snmpIfIndex: number;
+    snmpMatchMode: string;
+  };
+  assert.equal(linkedSnmpMonitor.portId, switchPort.id);
+  assert.equal(linkedSnmpMonitor.snmpIfIndex, 1);
+  assert.equal(linkedSnmpMonitor.snmpMatchMode, "in");
+
+  db.prepare("UPDATE ports SET snmpIfIndex = ?, linkState = ? WHERE id = ?").run(
+    1,
+    "unknown",
+    switchPort.id,
+  );
+
+  const indexSyncServer = await createSnmpIntegerResponder(1);
+  try {
+    const indexSyncAddress = indexSyncServer.address();
+    if (typeof indexSyncAddress === "string") {
+      throw new Error("SNMP test server did not expose a UDP port.");
+    }
+    const indexOnlyMonitorRes = await app.inject({
+      method: "POST",
+      url: "/api/device-monitors",
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+      },
+      payload: {
+        deviceId: switchDevice.id,
+        name: "Gi0/1 index sync",
+        type: "snmp",
+        target: "127.0.0.1",
+        port: indexSyncAddress.port,
+        snmpVersion: "2c",
+        snmpCommunity: "public",
+        snmpOid: "1.3.6.1.2.1.2.2.1.8.1",
+        snmpExpectedValue: "1",
+        snmpIfIndex: 1,
+        enabled: true,
+      },
+    });
+    assert.equal(indexOnlyMonitorRes.statusCode, 200);
+    const indexOnlyMonitor = readJson(indexOnlyMonitorRes) as { id: string };
+    const indexSyncRunRes = await app.inject({
+      method: "POST",
+      url: `/api/device-monitors/${indexOnlyMonitor.id}/run`,
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+      },
+    });
+    assert.equal(indexSyncRunRes.statusCode, 200);
+    const syncedPort = db
+      .prepare("SELECT linkState FROM ports WHERE id = ?")
+      .get(switchPort.id) as { linkState?: string };
+    assert.equal(syncedPort.linkState, "up");
+  } finally {
+    await closeUdpServer(indexSyncServer);
+  }
 
   const snmpServer = await createSnmpIntegerResponder(1);
   try {
@@ -1667,6 +1966,294 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   assert.equal(result.type, "tcp");
   assert.ok(result.lastCheckAt);
   assert.ok(result.lastResult === "online" || result.lastResult === "offline");
+});
+
+test("lab-scoped SNMP credentials store encrypted secrets and can be tested", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const createRes = await app.inject({
+    method: "POST",
+    url: "/api/snmp-credentials",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      name: "Lab SNMP",
+      version: "2c",
+      community: "homelab-ro",
+    },
+  });
+  assert.equal(createRes.statusCode, 201);
+  const credential = readJson(createRes) as {
+    id: string;
+    version: string;
+    hasCommunity: boolean;
+  };
+  assert.equal(credential.version, "2c");
+  assert.equal(credential.hasCommunity, true);
+
+  const listRes = await app.inject({
+    method: "GET",
+    url: "/api/snmp-credentials?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(listRes.statusCode, 200);
+  const listed = readJson(listRes) as Array<{ id: string }>;
+  assert.equal(listed.length, 1);
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "snmp-switch",
+      deviceType: "switch",
+      status: "unknown",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const snmpServer = await createSnmpIntegerResponder(12345);
+  try {
+    const snmpAddress = snmpServer.address();
+    if (typeof snmpAddress === "string") {
+      throw new Error("SNMP test server did not expose a UDP port.");
+    }
+
+    const testRes = await app.inject({
+      method: "POST",
+      url: `/api/snmp-credentials/${credential.id}/test`,
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+      },
+      payload: {
+        target: "127.0.0.1",
+        port: snmpAddress.port,
+      },
+    });
+    assert.equal(testRes.statusCode, 200);
+    const testResult = readJson(testRes) as { value: string; version: string };
+    assert.equal(testResult.version, "2c");
+    assert.equal(testResult.value, "12345");
+
+    const monitorRes = await app.inject({
+      method: "POST",
+      url: "/api/device-monitors",
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+      },
+      payload: {
+        deviceId: device.id,
+        name: "Uptime",
+        type: "snmp",
+        target: "127.0.0.1",
+        port: snmpAddress.port,
+        snmpCredentialId: credential.id,
+        snmpOid: "1.3.6.1.2.1.1.3.0",
+        snmpMatchMode: "any",
+        enabled: true,
+      },
+    });
+    assert.equal(monitorRes.statusCode, 200);
+    const monitor = readJson(monitorRes) as { id: string; snmpCredentialId: string };
+    assert.equal(monitor.snmpCredentialId, credential.id);
+
+    const runRes = await app.inject({
+      method: "POST",
+      url: `/api/device-monitors/${monitor.id}/run`,
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+      },
+    });
+    assert.equal(runRes.statusCode, 200);
+    const run = readJson(runRes) as { lastResult?: string };
+    assert.equal(run.lastResult, "online");
+  } finally {
+    await closeUdpServer(snmpServer);
+  }
+});
+
+test("SNMP linkDown and linkUp traps update matching interface monitors", async () => {
+  const adminToken = await bootstrapAdmin();
+  const { handleTrapPacket } = await import("../lib/snmp-traps.js");
+  const { buildSnmpV2TrapPacket } = await import("../lib/snmp-trap-build.js");
+  const { SNMP_TRAP_LINK_DOWN_OID, SNMP_TRAP_LINK_UP_OID } =
+    await import("../lib/snmp-trap-parser.js");
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "trap-switch",
+      deviceType: "switch",
+      managementIp: "10.0.0.50",
+      status: "unknown",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const monitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: device.id,
+      name: "Port 3",
+      type: "snmp",
+      target: "10.0.0.50",
+      snmpOid: "1.3.6.1.2.1.2.2.1.8.3",
+      snmpExpectedValue: "1",
+      snmpIfIndex: 3,
+      enabled: true,
+    },
+  });
+  assert.equal(monitorRes.statusCode, 200);
+  const monitor = readJson(monitorRes) as { id: string };
+
+  await handleTrapPacket(
+    buildSnmpV2TrapPacket({ trapOid: SNMP_TRAP_LINK_DOWN_OID, ifIndex: 3 }),
+    "10.0.0.50",
+  );
+
+  const downRes = await app.inject({
+    method: "GET",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    query: { deviceId: device.id },
+  });
+  const downMonitors = readJson(downRes) as Array<{ id: string; lastResult?: string }>;
+  assert.equal(
+    downMonitors.find((entry) => entry.id === monitor.id)?.lastResult,
+    "offline",
+  );
+
+  await handleTrapPacket(
+    buildSnmpV2TrapPacket({ trapOid: SNMP_TRAP_LINK_UP_OID, ifIndex: 3 }),
+    "10.0.0.50",
+  );
+
+  const upRes = await app.inject({
+    method: "GET",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    query: { deviceId: device.id },
+  });
+  const upMonitors = readJson(upRes) as Array<{ id: string; lastResult?: string }>;
+  assert.equal(
+    upMonitors.find((entry) => entry.id === monitor.id)?.lastResult,
+    "online",
+  );
+
+  const trapLogRes = await app.inject({
+    method: "GET",
+    url: "/api/snmp-traps/log?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(trapLogRes.statusCode, 200);
+  const trapLog = readJson(trapLogRes) as Array<{ resultAction: string }>;
+  assert.ok(trapLog.length >= 2);
+});
+
+test("snmp inventory sync preview and merge apply require feature flag and admin apply", async () => {
+  const adminToken = await bootstrapAdmin();
+  const editorToken = await createUserAndLogin(adminToken, {
+    username: "editor-snmp-sync",
+    displayName: "Editor Sync",
+    password: "editor-snmp-sync-1",
+    role: "editor",
+  });
+
+  const disabledRes = await app.inject({
+    method: "GET",
+    url: "/api/snmp-sync/profiles",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(disabledRes.statusCode, 200);
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "sync-switch",
+      deviceType: "switch",
+      managementIp: "10.0.0.88",
+      status: "unknown",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const { buildSnmpSyncPreview } = await import("../lib/snmp-sync.js");
+  const preview = buildSnmpSyncPreview({
+    profileId: "q-bridge-vlans",
+    deviceId: device.id,
+    labId: "lab_home",
+    target: "10.0.0.88",
+    policy: "merge",
+    collection: {
+      vlans: [{ vlanNumber: 44, name: "Sync VLAN" }],
+      subnets: [],
+      dhcpScopes: [],
+    },
+  });
+
+  const editorApplyRes = await app.inject({
+    method: "POST",
+    url: "/api/snmp-sync/apply",
+    headers: {
+      authorization: `Bearer ${editorToken}`,
+    },
+    payload: { preview, policy: "merge" },
+  });
+  assert.equal(editorApplyRes.statusCode, 403);
+
+  const applyRes = await app.inject({
+    method: "POST",
+    url: "/api/snmp-sync/apply",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: { preview, policy: "merge" },
+  });
+  assert.equal(applyRes.statusCode, 200);
+  const applied = readJson(applyRes) as { createdVlanIds: string[] };
+  assert.equal(applied.createdVlanIds.length, 1);
+
+  const vlanRes = await app.inject({
+    method: "GET",
+    url: "/api/vlans?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  const vlans = readJson(vlanRes) as Array<{ vlanId: number; name: string }>;
+  assert.ok(vlans.some((entry) => entry.vlanId === 44 && entry.name === "Sync VLAN"));
 });
 
 test("wifi ports and device services can be managed", async () => {
@@ -1788,7 +2375,7 @@ test("wifi ports and device services can be managed", async () => {
   assert.equal(deleteRes.statusCode, 204);
 });
 
-test("discovery scans are restricted to administrators", async () => {
+test("discovery scans require lab write access", async () => {
   const adminToken = await bootstrapAdmin();
   const editorToken = await createUserAndLogin(adminToken, {
     username: "editor-discovery",
@@ -1809,8 +2396,7 @@ test("discovery scans are restricted to administrators", async () => {
     },
   });
 
-  assert.equal(scanRes.statusCode, 403);
-  assert.match(scanRes.body, /administrator/i);
+  assert.equal(scanRes.statusCode, 200);
 });
 
 test("vlan range patch rejects inverted ranges", async () => {

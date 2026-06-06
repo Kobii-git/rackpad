@@ -1,17 +1,36 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import { requireAdmin } from '../lib/auth.js'
+import {
+  assertLabRead,
+  resolveLabIdsForList,
+  appendLabFilter,
+} from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
 import { asObject, optionalString, requiredString } from '../lib/validation.js'
 
 export const labsRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/', async () => {
-    return db.prepare('SELECT * FROM labs ORDER BY name').all()
+  app.get('/', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
+    }
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [])
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    let sql = 'SELECT * FROM labs'
+    const { sql: nextSql, params } = appendLabFilter(sql, [], filter.labIds, 'id')
+    return db.prepare(`${nextSql} ORDER BY name`).all(...params)
   })
 
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const row = db.prepare('SELECT * FROM labs WHERE id = ?').get(req.params.id)
+    const row = db.prepare('SELECT * FROM labs WHERE id = ?').get(req.params.id) as
+      | Record<string, unknown>
+      | undefined
     if (!row) return reply.status(404).send({ error: 'Lab not found.' })
+    if (!assertLabRead(req, reply, req.params.id)) return
     return row
   })
 
@@ -24,10 +43,25 @@ export const labsRoutes: FastifyPluginAsync = async (app) => {
     const description = optionalString(body, 'description', { maxLength: 500 })
     const location = optionalString(body, 'location', { maxLength: 200 })
 
-    db.prepare(`
-      INSERT INTO labs (id, name, description, location)
-      VALUES (?, ?, ?, ?)
-    `).run(id, name, description ?? null, location ?? null)
+    const createLab = db.transaction(() => {
+      db.prepare(`
+        INSERT INTO labs (id, name, description, location)
+        VALUES (?, ?, ?, ?)
+      `).run(id, name, description ?? null, location ?? null)
+
+      const nonAdminUsers = db
+        .prepare("SELECT id, role FROM users WHERE role != 'admin'")
+        .all() as Array<{ id: string; role: string }>
+      const insertAccess = db.prepare(
+        'INSERT INTO userLabAccess (userId, labId, role) VALUES (?, ?, ?)',
+      )
+      for (const user of nonAdminUsers) {
+        const role = user.role === 'viewer' ? 'viewer' : 'editor'
+        insertAccess.run(user.id, id, role)
+      }
+    })
+
+    createLab()
 
     return reply.status(201).send(db.prepare('SELECT * FROM labs WHERE id = ?').get(id))
   })

@@ -42,6 +42,7 @@ import {
   toggleSort,
   type SortState,
 } from "@/lib/sort";
+import { useI18n } from "@/i18n";
 
 interface CableFormState {
   fromPortId: string;
@@ -64,6 +65,7 @@ const EMPTY_FORM: CableFormState = {
 };
 
 export default function CableView() {
+  const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const portLinks = useStore((s) => s.portLinks);
   const ports = useStore((s) => s.ports);
@@ -286,7 +288,7 @@ export default function CableView() {
     <>
       <TopBar
         subtitle="Connections"
-        title="Cables"
+        title={t("Cables")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {portLinks.length} cables | {Object.keys(byType).length} types

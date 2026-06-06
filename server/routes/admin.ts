@@ -164,6 +164,15 @@ const exportBackupSnapshot = db.transaction(
         deviceMonitors: db
           .prepare("SELECT * FROM deviceMonitors ORDER BY deviceId, id")
           .all(),
+        snmpCredentials: db
+          .prepare("SELECT * FROM snmpCredentials ORDER BY labId, name, id")
+          .all(),
+        snmpTrapSources: db
+          .prepare("SELECT * FROM snmpTrapSources ORDER BY labId, sourceIp")
+          .all(),
+        snmpTrapLog: db
+          .prepare("SELECT * FROM snmpTrapLog ORDER BY receivedAt DESC")
+          .all(),
         deviceServices: db
           .prepare("SELECT * FROM deviceServices ORDER BY deviceId, serviceType, name, id")
           .all(),
@@ -289,6 +298,18 @@ const restoreBackupSnapshot = db.transaction(
       data.deviceMonitors,
       "data.deviceMonitors",
     );
+    const snmpCredentials = normalizeArrayRecordArray(
+      data.snmpCredentials ?? [],
+      "data.snmpCredentials",
+    );
+    const snmpTrapSources = normalizeArrayRecordArray(
+      data.snmpTrapSources ?? [],
+      "data.snmpTrapSources",
+    );
+    const snmpTrapLog = normalizeArrayRecordArray(
+      data.snmpTrapLog ?? [],
+      "data.snmpTrapLog",
+    );
     const deviceServices = normalizeArrayRecordArray(
       data.deviceServices ?? [],
       "data.deviceServices",
@@ -339,6 +360,9 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM wifiControllers;
     DELETE FROM deviceServices;
     DELETE FROM deviceMonitors;
+    DELETE FROM snmpTrapLog;
+    DELETE FROM snmpTrapSources;
+    DELETE FROM snmpCredentials;
     DELETE FROM appSettings;
     DELETE FROM auditLog;
     DELETE FROM referenceImages;
@@ -373,8 +397,8 @@ const restoreBackupSnapshot = db.transaction(
     );
     const insertDevice = db.prepare(`
     INSERT INTO devices
-      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, tags, notes, lastSeen, networkMode)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, tags, notes, lastSeen, networkMode, snmpCredentialId)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const updateDeviceParent = db.prepare(`
     UPDATE devices
@@ -386,8 +410,8 @@ const restoreBackupSnapshot = db.transaction(
     VALUES (?, ?, ?, ?, ?, ?)
   `);
     const insertPort = db.prepare(`
-    INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, snmpIfIndex)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertPortLink = db.prepare(
       "INSERT INTO portLinks (id, fromPortId, toPortId, cableType, cableLength, color, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -456,6 +480,10 @@ const restoreBackupSnapshot = db.transaction(
       snmpCommunity,
       snmpOid,
       snmpExpectedValue,
+      snmpMatchMode,
+      portId,
+      snmpIfIndex,
+      snmpCredentialId,
       intervalMs,
       enabled,
       sortOrder,
@@ -464,7 +492,22 @@ const restoreBackupSnapshot = db.transaction(
       lastResult,
       lastMessage
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertSnmpCredential = db.prepare(`
+    INSERT INTO snmpCredentials (
+      id, labId, name, version,
+      communityEnc, v3User, v3AuthProto, v3AuthPassEnc, v3PrivProto, v3PrivPassEnc, v3Context,
+      createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertSnmpTrapSource = db.prepare(`
+    INSERT INTO snmpTrapSources (id, labId, deviceId, sourceIp, community, credentialId, lastTrapAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertSnmpTrapLog = db.prepare(`
+    INSERT INTO snmpTrapLog (id, labId, deviceId, sourceIp, trapOid, ifIndex, varbindsJson, resultAction, message, receivedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDeviceService = db.prepare(`
     INSERT INTO deviceServices (id, deviceId, name, serviceType, ipAssignmentId, portId, vlanId, monitorId, url, notes, createdAt, updatedAt)
@@ -553,6 +596,23 @@ const restoreBackupSnapshot = db.transaction(
         row.roomId ?? null,
       );
     }
+    for (const row of snmpCredentials) {
+      insertSnmpCredential.run(
+        row.id,
+        row.labId,
+        row.name,
+        row.version,
+        row.communityEnc ?? null,
+        row.v3User ?? null,
+        row.v3AuthProto ?? null,
+        row.v3AuthPassEnc ?? null,
+        row.v3PrivProto ?? null,
+        row.v3PrivPassEnc ?? null,
+        row.v3Context ?? null,
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      );
+    }
     for (const row of devices) {
       insertDevice.run(
         row.id,
@@ -581,6 +641,7 @@ const restoreBackupSnapshot = db.transaction(
         row.notes ?? null,
         row.lastSeen ?? null,
         row.networkMode ?? "normal",
+        row.snmpCredentialId ?? null,
       );
     }
     const deviceIds = new Set(devices.map((row) => String(row.id)));
@@ -596,6 +657,31 @@ const restoreBackupSnapshot = db.transaction(
         continue;
       }
       updateDeviceParent.run(parentDeviceId, row.id);
+    }
+    for (const row of snmpTrapSources) {
+      insertSnmpTrapSource.run(
+        row.id,
+        row.labId,
+        row.deviceId ?? null,
+        row.sourceIp,
+        row.community ?? null,
+        row.credentialId ?? null,
+        row.lastTrapAt ?? null,
+      );
+    }
+    for (const row of snmpTrapLog) {
+      insertSnmpTrapLog.run(
+        row.id,
+        row.labId,
+        row.deviceId ?? null,
+        row.sourceIp,
+        row.trapOid ?? null,
+        row.ifIndex ?? null,
+        row.varbindsJson ?? null,
+        row.resultAction ?? "logged",
+        row.message ?? "",
+        row.receivedAt ?? new Date().toISOString(),
+      );
     }
     for (const row of virtualSwitches) {
       insertVirtualSwitch.run(
@@ -653,6 +739,7 @@ const restoreBackupSnapshot = db.transaction(
         row.description ?? null,
         row.face ?? null,
         row.virtualSwitchId ?? null,
+        row.snmpIfIndex ?? null,
       );
     }
     ensurePatchPanelPassThroughPorts(
@@ -807,6 +894,10 @@ const restoreBackupSnapshot = db.transaction(
         row.snmpCommunity ?? null,
         row.snmpOid ?? null,
         row.snmpExpectedValue ?? null,
+        row.snmpMatchMode ?? "equals",
+        row.portId ?? null,
+        row.snmpIfIndex ?? null,
+        row.snmpCredentialId ?? null,
         row.intervalMs ?? null,
         Number(row.enabled ?? 0),
         row.sortOrder ?? 0,

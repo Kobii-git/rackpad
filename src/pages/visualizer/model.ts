@@ -24,6 +24,7 @@ import {
   normalizeDeviceTypeId,
 } from "@/lib/device-types";
 import { formatDeviceAddress } from "@/lib/network-labels";
+import { buildSnmpVerifiedPortIds } from "@/lib/snmp-port-status";
 import type {
   RackBand,
   RackPanel,
@@ -486,6 +487,10 @@ export function buildVisualizerModel(
   const nodesByDeviceId = Object.fromEntries(
     nodes.map((node) => [node.device.id, node]),
   );
+  const snmpVerifiedPortIds = buildSnmpVerifiedPortIds(
+    input.deviceMonitors,
+    input.ports,
+  );
 
   const cables = input.portLinks
     .map((link, index) =>
@@ -495,6 +500,7 @@ export function buildVisualizerModel(
         portById,
         deviceById,
         nodesByDeviceId,
+        snmpVerifiedPortIds,
       }),
     )
     .filter((entry): entry is VisualizerCable => Boolean(entry));
@@ -680,6 +686,10 @@ function buildPyramidVisualizerModel(
   const nodesByDeviceId = Object.fromEntries(
     nodes.map((node) => [node.device.id, node]),
   );
+  const snmpVerifiedPortIds = buildSnmpVerifiedPortIds(
+    input.deviceMonitors,
+    input.ports,
+  );
   const cables = input.portLinks
     .map((link, index) =>
       buildCable({
@@ -688,6 +698,7 @@ function buildPyramidVisualizerModel(
         portById,
         deviceById,
         nodesByDeviceId,
+        snmpVerifiedPortIds,
       }),
     )
     .filter((entry): entry is VisualizerCable => Boolean(entry));
@@ -1554,6 +1565,7 @@ function buildCable(input: {
   portById: Record<string, Port>;
   deviceById: Record<string, Device>;
   nodesByDeviceId: Record<string, VisualizerNode>;
+  snmpVerifiedPortIds: Set<string>;
 }): VisualizerCable | null {
   const fromPort = input.portById[input.link.fromPortId];
   const toPort = input.portById[input.link.toPortId];
@@ -1600,6 +1612,9 @@ function buildCable(input: {
     bothOnline: fromNode.health === "online" && toNode.health === "online",
     unknown,
     crossZone: fromNode.zoneId !== toNode.zoneId,
+    snmpVerified:
+      input.snmpVerifiedPortIds.has(fromPort.id) &&
+      input.snmpVerifiedPortIds.has(toPort.id),
   };
 }
 

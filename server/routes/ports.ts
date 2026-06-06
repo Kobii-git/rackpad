@@ -1,5 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db, parseRow } from '../db.js'
+import {
+  appendLabFilter,
+  assertLabReadFromRow,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from '../lib/lab-access.js'
 import { BUILT_IN_PORT_TEMPLATES, listPortTemplates } from '../lib/port-templates.js'
 import { ensurePortVirtualSwitchMembership } from './virtual-switches.js'
 import { requiredDeviceType } from '../lib/device-types.js'
@@ -61,6 +68,21 @@ function parseTemplateDeviceTypes(body: Record<string, unknown>) {
     throw new ValidationError('deviceTypes must contain at least one device type.')
   }
   return [...new Set(deviceTypes.map((deviceType) => requiredDeviceType({ deviceType })))]
+}
+
+function getDeviceLabRow(deviceId: string) {
+  return db.prepare('SELECT id, labId FROM devices WHERE id = ?').get(deviceId) as
+    | { id: string; labId: string }
+    | undefined
+}
+
+function getPortLabRow(portId: string) {
+  return db.prepare(`
+    SELECT ports.id, devices.labId
+    FROM ports
+    JOIN devices ON devices.id = ports.deviceId
+    WHERE ports.id = ?
+  `).get(portId) as { id: string; labId: string } | undefined
 }
 
 export const portsRoutes: FastifyPluginAsync = async (app) => {
@@ -149,19 +171,41 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(204).send()
   })
 
-  app.get<{ Querystring: { deviceId?: string } }>('/', async (req) => {
-    if (req.query.deviceId) {
-      return (db.prepare('SELECT * FROM ports WHERE deviceId = ? ORDER BY position').all(req.query.deviceId) as Record<string, unknown>[])
-        .map(parsePortRow)
+  app.get<{ Querystring: { deviceId?: string; labId?: string } }>('/', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
     }
-    return (db.prepare('SELECT * FROM ports ORDER BY deviceId, position').all() as Record<string, unknown>[])
-      .map(parsePortRow)
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    let sql = `
+      SELECT ports.*
+      FROM ports
+      JOIN devices ON devices.id = ports.deviceId
+      WHERE 1=1
+    `
+    const params: unknown[] = []
+    if (req.query.deviceId) {
+      sql += ' AND ports.deviceId = ?'
+      params.push(req.query.deviceId)
+    }
+    const filtered = appendLabFilter(sql, params, filter.labIds, 'devices.labId')
+    const rows = db.prepare(`${filtered.sql} ORDER BY ports.deviceId, ports.position`).all(...filtered.params) as Record<string, unknown>[]
+    return rows.map(parsePortRow)
   })
 
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const row = db.prepare('SELECT * FROM ports WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
-    if (!row) return reply.status(404).send({ error: 'Port not found' })
-    return parsePortRow(row)
+    const row = db.prepare(`
+      SELECT ports.*, devices.labId
+      FROM ports
+      JOIN devices ON devices.id = ports.deviceId
+      WHERE ports.id = ?
+    `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabReadFromRow(req, reply, row)) return
+    return parsePortRow(row!)
   })
 
   app.post('/', async (req, reply) => {
@@ -179,10 +223,11 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     const face = optionalEnum(body, 'face', PORT_FACES) ?? 'front'
     const requestedPosition = optionalInteger(body, 'position', { min: 1, max: 500 })
 
-    const device = db.prepare('SELECT id FROM devices WHERE id = ?').get(deviceId)
+    const device = getDeviceLabRow(deviceId)
     if (!device) {
       return reply.status(404).send({ error: 'Device not found.' })
     }
+    if (!assertLabWrite(req, reply, device.labId)) return
     if (virtualSwitchId) {
       ensurePortVirtualSwitchMembership(deviceId, virtualSwitchId)
     }
@@ -215,9 +260,14 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.patch<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const existing = db.prepare('SELECT * FROM ports WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
-    if (!existing) return reply.status(404).send({ error: 'Port not found' })
-    const current = parsePortRow(existing) as Record<string, unknown>
+    const existing = db.prepare(`
+      SELECT ports.*, devices.labId
+      FROM ports
+      JOIN devices ON devices.id = ports.deviceId
+      WHERE ports.id = ?
+    `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, existing)) return
+    const current = parsePortRow(existing!) as Record<string, unknown>
 
     const body = asObject(req.body)
     const updates: string[] = []
@@ -268,10 +318,8 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const port = db.prepare('SELECT id FROM ports WHERE id = ?').get(req.params.id)
-    if (!port) {
-      return reply.status(404).send({ error: 'Port not found.' })
-    }
+    const port = getPortLabRow(req.params.id)
+    if (!assertLabWriteFromRow(req, reply, port)) return
 
     const peers = db.prepare(`
       SELECT CASE WHEN fromPortId = ? THEN toPortId ELSE fromPortId END AS peerPortId

@@ -1069,6 +1069,7 @@ function buildDiagramLayout(
   const flowEdges = visibleCables
     .map((cable): DiagramFlowEdge => {
       const offline = !cable.up || cable.unknown;
+      const snmpUp = cable.snmpVerified && cable.up && !offline;
       const sourceGeometry = cable.fromDevice
         ? nodeGeometryById.get(cable.fromDevice.id)
         : undefined;
@@ -1100,8 +1101,8 @@ function buildDiagramLayout(
         },
         style: {
           stroke: cable.color,
-          strokeWidth: cable.crossZone ? 3 : 2.25,
-          strokeOpacity: offline ? 0.38 : 0.78,
+          strokeWidth: cable.crossZone ? 3 : snmpUp ? 2.75 : 2.25,
+          strokeOpacity: offline ? 0.38 : snmpUp ? 0.92 : 0.78,
           strokeDasharray: offline ? "8 7" : undefined,
         },
       };

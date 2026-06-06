@@ -17,6 +17,9 @@ import { vlansRoutes } from "./routes/vlans.js";
 import { ipamRoutes } from "./routes/ipam.js";
 import { auditRoutes } from "./routes/audit.js";
 import { monitoringRoutes } from "./routes/monitoring.js";
+import { snmpCredentialsRoutes } from "./routes/snmp-credentials.js";
+import { snmpTrapsRoutes } from "./routes/snmp-traps.js";
+import { snmpSyncRoutes } from "./routes/snmp-sync.js";
 import { adminRoutes } from "./routes/admin.js";
 import { discoveryRoutes } from "./routes/discovery.js";
 import { wifiRoutes } from "./routes/wifi.js";
@@ -26,6 +29,7 @@ import { deviceImagesRoutes } from "./routes/device-images.js";
 import { deviceServicesRoutes } from "./routes/device-services.js";
 import { referenceImagesRoutes } from "./routes/reference-images.js";
 import { getAuthToken, lookupSession, needsBootstrap } from "./lib/auth.js";
+import { fetchUserLabAccess } from "./lib/lab-access.js";
 import { ValidationError } from "./lib/validation.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -142,6 +146,7 @@ export async function createApp() {
 
   app.decorateRequest("authUser", null);
   app.decorateRequest("sessionId", null);
+  app.decorateRequest("labAccess", null);
 
   await app.register(cors, {
     origin:
@@ -224,7 +229,10 @@ export async function createApp() {
     reply.status(500).send({ error: "Internal server error." });
   });
 
-  app.get("/api/health", async () => ({ ok: true }));
+  app.get("/api/health", async () => {
+    const { getSnmpTrapReceiverStatus } = await import("./lib/snmp-traps.js");
+    return { ok: true, snmpTraps: getSnmpTrapReceiverStatus() };
+  });
   app.get("/api/imports/hyperv-collector", async (_req, reply) => {
     if (!existsSync(HYPERV_COLLECTOR_PATH)) {
       reply.status(404).send({
@@ -269,8 +277,6 @@ export async function createApp() {
     "/api/auth/oidc/callback",
     "/api/auth/oidc/session",
   ]);
-  const readOnlyMethods = new Set(["GET", "HEAD", "OPTIONS"]);
-  const writeWhitelist = new Set(["/api/auth/logout"]);
 
   app.addHook("onRequest", async (req, reply) => {
     if (process.env.NODE_ENV === "production" && trustedHosts.size > 0) {
@@ -324,18 +330,8 @@ export async function createApp() {
 
     req.authUser = session;
     req.sessionId = session.sessionId;
-
-    const method = req.method.toUpperCase();
-
-    if (
-      !readOnlyMethods.has(method) &&
-      !writeWhitelist.has(urlPath) &&
-      req.authUser.role === "viewer"
-    ) {
-      return reply
-        .status(403)
-        .send({ error: "Viewer accounts are read-only." });
-    }
+    req.labAccess =
+      session.role === "admin" ? [] : fetchUserLabAccess(session.id);
   });
 
   await app.register(authRoutes, { prefix: "/api/auth" });
@@ -351,6 +347,9 @@ export async function createApp() {
   await app.register(ipamRoutes, { prefix: "/api" });
   await app.register(auditRoutes, { prefix: "/api/audit-log" });
   await app.register(monitoringRoutes, { prefix: "/api/device-monitors" });
+  await app.register(snmpCredentialsRoutes, { prefix: "/api/snmp-credentials" });
+  await app.register(snmpTrapsRoutes, { prefix: "/api/snmp-traps" });
+  await app.register(snmpSyncRoutes, { prefix: "/api/snmp-sync" });
   await app.register(discoveryRoutes, { prefix: "/api/discovery" });
   await app.register(wifiRoutes, { prefix: "/api/wifi" });
   await app.register(virtualSwitchesRoutes, {

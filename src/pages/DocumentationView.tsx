@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ImagePlus, Pencil, Plus, Save, Search, Trash2 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -29,6 +30,7 @@ import {
 import { relativeTime } from "@/lib/utils";
 
 export default function DocumentationView() {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
@@ -157,7 +159,7 @@ export default function DocumentationView() {
     <>
       <TopBar
         subtitle={lab.name}
-        title="Documentation"
+        title={t("Documentation")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {pages.length} pages

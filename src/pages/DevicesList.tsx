@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -73,6 +74,7 @@ const EMPTY_BULK_DEVICE_FORM: BulkDeviceForm = {
 };
 
 export default function DevicesList() {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useStore((s) => s.currentUser);
   const devices = useStore((s) => s.devices);
@@ -386,8 +388,8 @@ export default function DevicesList() {
   return (
     <>
       <TopBar
-        subtitle="Inventory"
-        title="Devices"
+        subtitle={t("Inventory")}
+        title={t("Devices")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {devices.length} total
@@ -401,7 +403,7 @@ export default function DevicesList() {
               onClick={() => setDrawerOpen(true)}
             >
               <Plus className="size-3.5" />
-              Add device
+              {t("Add device")}
             </Button>
           ) : undefined
         }
@@ -492,7 +494,7 @@ export default function DevicesList() {
 
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <BulkField
-                  label="Tags"
+                  label={t("Tags")}
                   checked={bulkFields.has("tags")}
                   onChecked={() => toggleBulkField("tags")}
                 >
@@ -576,7 +578,7 @@ export default function DevicesList() {
                   />
                 </BulkField>
                 <BulkField
-                  label="Status"
+                  label={t("Status")}
                   checked={bulkFields.has("status")}
                   onChecked={() => toggleBulkField("status")}
                 >

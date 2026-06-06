@@ -1,6 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import {
+  appendLabFilter,
+  assertLabReadFromRow,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from "../lib/lab-access.js";
+import {
   ensureImageDataUrl,
   MAX_IMAGE_DATA_URL_LENGTH,
 } from "../lib/image-data-url.js";
@@ -12,10 +19,34 @@ import {
   ValidationError,
 } from "../lib/validation.js";
 
+function getDeviceLabRow(deviceId: string) {
+  return db.prepare("SELECT id, labId FROM devices WHERE id = ?").get(deviceId) as
+    | { id: string; labId: string }
+    | undefined;
+}
+
+function getDeviceImageLabRow(imageId: string) {
+  return db.prepare(`
+    SELECT deviceImages.id, devices.labId
+    FROM deviceImages
+    JOIN devices ON devices.id = deviceImages.deviceId
+    WHERE deviceImages.id = ?
+  `).get(imageId) as { id: string; labId: string } | undefined;
+}
+
 export const deviceImagesRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { deviceId?: string; labId?: string } }>(
     "/",
-    async (req) => {
+    async (req, reply) => {
+      if (!req.authUser) {
+        return reply.status(401).send({ error: "Authentication required." });
+      }
+
+      const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId);
+      if (!filter.ok) {
+        return reply.status(filter.status).send({ error: filter.error });
+      }
+
       let sql = `
         SELECT deviceImages.*
         FROM deviceImages
@@ -28,22 +59,22 @@ export const deviceImagesRoutes: FastifyPluginAsync = async (app) => {
         sql += " AND deviceImages.deviceId = ?";
         params.push(req.query.deviceId);
       }
-      if (req.query.labId) {
-        sql += " AND devices.labId = ?";
-        params.push(req.query.labId);
-      }
+      const filtered = appendLabFilter(sql, params, filter.labIds, "devices.labId");
 
-      sql += " ORDER BY deviceImages.createdAt DESC, deviceImages.id";
-      return db.prepare(sql).all(...params);
+      return db.prepare(`${filtered.sql} ORDER BY deviceImages.createdAt DESC, deviceImages.id`).all(...filtered.params);
     },
   );
 
   app.get<{ Params: { id: string } }>("/:id", async (req, reply) => {
     const row = db
-      .prepare("SELECT * FROM deviceImages WHERE id = ?")
-      .get(req.params.id);
-    if (!row)
-      return reply.status(404).send({ error: "Device image not found" });
+      .prepare(`
+        SELECT deviceImages.*, devices.labId
+        FROM deviceImages
+        JOIN devices ON devices.id = deviceImages.deviceId
+        WHERE deviceImages.id = ?
+      `)
+      .get(req.params.id) as Record<string, unknown> | undefined;
+    if (!assertLabReadFromRow(req, reply, row)) return;
     return row;
   });
 
@@ -61,11 +92,10 @@ export const deviceImagesRoutes: FastifyPluginAsync = async (app) => {
       fileName.replace(/\.[^.]+$/, "");
     const notes = optionalString(body, "notes", { maxLength: 1000 });
 
-    const device = db
-      .prepare("SELECT id FROM devices WHERE id = ?")
-      .get(deviceId);
+    const device = getDeviceLabRow(deviceId);
     if (!device)
       throw new ValidationError("Selected device does not exist.", 422);
+    if (!assertLabWrite(req, reply, device.labId)) return;
 
     ensureImageDataUrl(dataUrl, mimeType);
 
@@ -94,12 +124,8 @@ export const deviceImagesRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.patch<{ Params: { id: string } }>("/:id", async (req, reply) => {
-    const existing = db
-      .prepare("SELECT id FROM deviceImages WHERE id = ?")
-      .get(req.params.id);
-    if (!existing) {
-      return reply.status(404).send({ error: "Device image not found" });
-    }
+    const existing = getDeviceImageLabRow(req.params.id);
+    if (!assertLabWriteFromRow(req, reply, existing)) return;
 
     const body = asObject(req.body);
     const updates: string[] = [];
@@ -134,11 +160,8 @@ export const deviceImagesRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
-    const row = db
-      .prepare("SELECT id FROM deviceImages WHERE id = ?")
-      .get(req.params.id);
-    if (!row)
-      return reply.status(404).send({ error: "Device image not found" });
+    const row = getDeviceImageLabRow(req.params.id);
+    if (!assertLabWriteFromRow(req, reply, row)) return;
     db.prepare("DELETE FROM deviceImages WHERE id = ?").run(req.params.id);
     return reply.status(204).send();
   });

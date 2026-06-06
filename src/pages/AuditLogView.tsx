@@ -14,8 +14,10 @@ import { Input } from "@/components/ui/Input";
 import { Mono } from "@/components/shared/Mono";
 import { useStore } from "@/lib/store";
 import { relativeTime } from "@/lib/utils";
+import { useI18n } from "@/i18n";
 
 export default function AuditLogView() {
+  const { t } = useI18n();
   const lab = useStore((s) => s.lab);
   const auditLog = useStore((s) => s.auditLog);
   const [query, setQuery] = useState("");
@@ -50,7 +52,7 @@ export default function AuditLogView() {
     <>
       <TopBar
         subtitle={lab.name}
-        title="Audit log"
+        title={t("Audit log")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {auditLog.length} loaded entries
@@ -61,9 +63,9 @@ export default function AuditLogView() {
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <div className="mb-4 grid gap-3 md:grid-cols-4">
           <AuditStat label="Entries" value={auditLog.length} />
-          <AuditStat label="Devices" value={actionCounts.device ?? 0} />
-          <AuditStat label="Ports" value={actionCounts.port ?? 0} />
-          <AuditStat label="Users" value={actionCounts.user ?? 0} />
+          <AuditStat label={t("Devices")} value={actionCounts.device ?? 0} />
+          <AuditStat label={t("Ports")} value={actionCounts.port ?? 0} />
+          <AuditStat label={t("Users")} value={actionCounts.user ?? 0} />
         </div>
 
         <Card>

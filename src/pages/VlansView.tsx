@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import {
   Card,
   CardBody,
@@ -69,6 +70,7 @@ const EMPTY_SUBNET_FORM: SubnetForm = {
 };
 
 export default function VlansView() {
+  const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const activeLab = useStore((s) => s.lab);
   const ranges = useStore((s) => s.vlanRanges);
@@ -302,8 +304,8 @@ export default function VlansView() {
   return (
     <>
       <TopBar
-        subtitle="Network"
-        title="VLANs"
+        subtitle={t("Network")}
+        title={t("VLANs")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {vlans.length} VLANs | {ranges.length} ranges | {totalReserved} IDs

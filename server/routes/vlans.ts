@@ -1,28 +1,50 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
+import {
+  appendLabFilter,
+  assertLabReadFromRow,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
 import { asObject, optionalInteger, optionalString, requiredInteger, requiredString } from '../lib/validation.js'
 
 export const vlansRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: { labId?: string } }>('/', async (req) => {
-    if (req.query.labId) {
-      return db.prepare('SELECT * FROM vlans WHERE labId = ? ORDER BY vlanId').all(req.query.labId)
+  app.get<{ Querystring: { labId?: string } }>('/', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
     }
-    return db.prepare('SELECT * FROM vlans ORDER BY vlanId').all()
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    const { sql, params } = appendLabFilter('SELECT * FROM vlans', [], filter.labIds)
+    return db.prepare(`${sql} ORDER BY vlanId`).all(...params)
   })
 
-  app.get('/ranges', async (req) => {
-    const labId = (req.query as { labId?: string }).labId
-    if (labId) {
-      return db.prepare('SELECT * FROM vlanRanges WHERE labId = ? ORDER BY startVlan').all(labId)
+  app.get('/ranges', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
     }
-    return db.prepare('SELECT * FROM vlanRanges ORDER BY startVlan').all()
+
+    const labId = (req.query as { labId?: string }).labId
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    const { sql, params } = appendLabFilter('SELECT * FROM vlanRanges', [], filter.labIds)
+    return db.prepare(`${sql} ORDER BY startVlan`).all(...params)
   })
 
   app.post('/ranges', async (req, reply) => {
     const body = asObject(req.body)
     const id = optionalString(body, 'id', { maxLength: 80 }) ?? createId('vr')
     const labId = requiredString(body, 'labId', { maxLength: 80 })
+    if (!assertLabWrite(req, reply, labId)) return
     const name = requiredString(body, 'name', { maxLength: 120 })
     const startVlan = requiredInteger(body, 'startVlan', { min: 1, max: 4094 })
     const endVlan = requiredInteger(body, 'endVlan', { min: startVlan, max: 4094 })
@@ -36,7 +58,7 @@ export const vlansRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch<{ Params: { id: string } }>('/ranges/:id', async (req, reply) => {
     const existing = db.prepare('SELECT * FROM vlanRanges WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
-    if (!existing) return reply.status(404).send({ error: 'VLAN range not found' })
+    if (!assertLabWriteFromRow(req, reply, existing)) return
 
     const body = asObject(req.body)
     const updates: string[] = []
@@ -48,8 +70,9 @@ export const vlansRoutes: FastifyPluginAsync = async (app) => {
     const purpose = optionalString(body, 'purpose', { maxLength: 500 })
     const color = optionalString(body, 'color', { maxLength: 30 })
 
-    const effectiveStart = startVlan ?? Number(existing.startVlan)
-    const effectiveEnd = endVlan ?? Number(existing.endVlan)
+    const range = existing!
+    const effectiveStart = startVlan ?? Number(range.startVlan)
+    const effectiveEnd = endVlan ?? Number(range.endVlan)
     if (effectiveStart > effectiveEnd) {
       return reply.status(400).send({ error: 'startVlan must be <= endVlan.' })
     }
@@ -68,15 +91,15 @@ export const vlansRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { id: string } }>('/ranges/:id', async (req, reply) => {
-    const row = db.prepare('SELECT id FROM vlanRanges WHERE id = ?').get(req.params.id)
-    if (!row) return reply.status(404).send({ error: 'VLAN range not found' })
+    const row = db.prepare('SELECT * FROM vlanRanges WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, row)) return
     db.prepare('DELETE FROM vlanRanges WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
   })
 
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const row = db.prepare('SELECT * FROM vlans WHERE id = ?').get(req.params.id)
-    if (!row) return reply.status(404).send({ error: 'VLAN not found' })
+    const row = db.prepare('SELECT * FROM vlans WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabReadFromRow(req, reply, row)) return
     return row
   })
 
@@ -84,6 +107,7 @@ export const vlansRoutes: FastifyPluginAsync = async (app) => {
     const body = asObject(req.body)
     const id = optionalString(body, 'id', { maxLength: 80 }) ?? createId('v')
     const labId = requiredString(body, 'labId', { maxLength: 80 })
+    if (!assertLabWrite(req, reply, labId)) return
     const vlanId = requiredInteger(body, 'vlanId', { min: 1, max: 4094 })
     const name = requiredString(body, 'name', { maxLength: 120 })
     const description = optionalString(body, 'description', { maxLength: 500 })
@@ -95,8 +119,8 @@ export const vlansRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.patch<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const existing = db.prepare('SELECT id FROM vlans WHERE id = ?').get(req.params.id)
-    if (!existing) return reply.status(404).send({ error: 'VLAN not found' })
+    const existing = db.prepare('SELECT * FROM vlans WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, existing)) return
 
     const body = asObject(req.body)
     const updates: string[] = []
@@ -120,8 +144,8 @@ export const vlansRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const row = db.prepare('SELECT id FROM vlans WHERE id = ?').get(req.params.id)
-    if (!row) return reply.status(404).send({ error: 'VLAN not found' })
+    const row = db.prepare('SELECT * FROM vlans WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, row)) return
     db.prepare('DELETE FROM vlans WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
   })

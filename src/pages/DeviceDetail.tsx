@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import {
   Card,
   CardBody,
@@ -19,7 +20,12 @@ import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { Mono } from "@/components/shared/Mono";
 import { PortGrid } from "@/components/ports/PortGrid";
 import { PortList } from "@/components/ports/PortList";
+import {
+  SnmpCredentialsPanel,
+} from "@/components/shared/SnmpCredentialsPanel";
+import { SnmpSyncPanel } from "@/components/shared/SnmpSyncPanel";
 import { api } from "@/lib/api";
+import { buildSnmpVerifiedPortIdsForDevice } from "@/lib/snmp-port-status";
 import {
   canEditInventory,
   createIpAssignmentRecord,
@@ -44,11 +50,13 @@ import type {
   DeviceMonitor,
   DeviceService,
   DeviceServiceType,
+  DiscoveredSnmpInterface,
   IpAllocationMode,
   IpAssignment,
   IpAssignmentType,
   Port,
   PortLink,
+  SnmpCredential,
   Subnet,
   Vlan,
 } from "@/lib/types";
@@ -84,8 +92,46 @@ type MonitorForm = {
   snmpCommunity: string;
   snmpOid: string;
   snmpExpectedValue: string;
+  snmpMatchMode: NonNullable<DeviceMonitor["snmpMatchMode"]>;
+  portId: string;
+  snmpIfIndex: string;
+  snmpCredentialId: string;
   intervalMinutes: string;
 };
+
+const SNMP_MATCH_MODE_OPTIONS: Array<{
+  value: NonNullable<DeviceMonitor["snmpMatchMode"]>;
+  label: string;
+}> = [
+  { value: "any", label: "Any response" },
+  { value: "equals", label: "Equals" },
+  { value: "notEquals", label: "Not equals" },
+  { value: "in", label: "In list (comma-separated)" },
+];
+
+const SNMP_OID_PRESETS = [
+  {
+    id: "custom",
+    label: "Custom OID",
+    oid: "",
+    expected: "",
+    matchMode: "equals" as const,
+  },
+  {
+    id: "sysUpTime",
+    label: "sysUpTime (uptime)",
+    oid: "1.3.6.1.2.1.1.3.0",
+    expected: "",
+    matchMode: "any" as const,
+  },
+  {
+    id: "ifOperStatus",
+    label: "ifOperStatus (link up)",
+    oid: "1.3.6.1.2.1.2.2.1.8",
+    expected: "1",
+    matchMode: "equals" as const,
+  },
+];
 
 const EMPTY_MONITOR_FORM: MonitorForm = {
   name: "",
@@ -98,6 +144,10 @@ const EMPTY_MONITOR_FORM: MonitorForm = {
   snmpCommunity: "public",
   snmpOid: "",
   snmpExpectedValue: "",
+  snmpMatchMode: "equals",
+  portId: "",
+  snmpIfIndex: "",
+  snmpCredentialId: "",
   intervalMinutes: "5",
 };
 
@@ -161,6 +211,7 @@ const NEW_MONITOR_ID = "__new_monitor__";
 const NEW_SERVICE_ID = "__new_service__";
 
 export default function DeviceDetail() {
+  const { t } = useI18n();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
@@ -177,8 +228,6 @@ export default function DeviceDetail() {
   const deviceMonitors = useStore((s) => s.deviceMonitors);
   const deviceImages = useStore((s) => s.deviceImages);
   const deviceServices = useStore((s) => s.deviceServices);
-  const canEdit = canEditInventory(currentUser);
-  const canManageMonitoring = currentUser?.role === "admin";
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -200,6 +249,13 @@ export default function DeviceDetail() {
   const [allMonitorsRunning, setAllMonitorsRunning] = useState(false);
   const [monitorDeleting, setMonitorDeleting] = useState(false);
   const [monitorError, setMonitorError] = useState("");
+  const [snmpDiscoverLoading, setSnmpDiscoverLoading] = useState(false);
+  const [snmpImportLoading, setSnmpImportLoading] = useState(false);
+  const [snmpInterfaces, setSnmpInterfaces] = useState<DiscoveredSnmpInterface[]>(
+    [],
+  );
+  const [snmpDiscoverError, setSnmpDiscoverError] = useState("");
+  const [snmpCredentials, setSnmpCredentials] = useState<SnmpCredential[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(
     null,
   );
@@ -220,9 +276,30 @@ export default function DeviceDetail() {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const device = id ? devices.find((entry) => entry.id === id) : undefined;
+  const canEdit = canEditInventory(currentUser, device?.labId);
+  const canManageMonitoring = canEditInventory(currentUser, device?.labId);
+
+  useEffect(() => {
+    if (!device?.labId) {
+      setSnmpCredentials([]);
+      return;
+    }
+    void api
+      .getSnmpCredentials({ labId: device.labId })
+      .then(setSnmpCredentials)
+      .catch(() => setSnmpCredentials([]));
+  }, [device?.labId]);
+
   const deviceMonitorList = useMemo(
     () => (id ? deviceMonitors.filter((entry) => entry.deviceId === id) : []),
     [deviceMonitors, id],
+  );
+  const snmpVerifiedPortIds = useMemo(
+    () =>
+      id
+        ? buildSnmpVerifiedPortIdsForDevice(deviceMonitors, id, ports)
+        : new Set<string>(),
+    [deviceMonitors, id, ports],
   );
   const deviceImageList = useMemo(
     () => (id ? deviceImages.filter((entry) => entry.deviceId === id) : []),
@@ -489,7 +566,7 @@ export default function DeviceDetail() {
   if (!device) {
     return (
       <>
-        <TopBar subtitle="Devices" title="Not found" />
+        <TopBar subtitle={t("Devices")} title={t("Not found")} />
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <div className="mb-3 text-sm text-[var(--color-fg-subtle)]">
@@ -653,6 +730,82 @@ export default function DeviceDetail() {
     downloadImageAsset(image);
   }
 
+  function snmpDiscoveryPayload() {
+    if (!device) return null;
+    return {
+      deviceId: device.id,
+      target: monitorForm.target.trim() || device.managementIp || undefined,
+      port: monitorForm.port.trim()
+        ? Number.parseInt(monitorForm.port, 10)
+        : undefined,
+      snmpCredentialId: monitorForm.snmpCredentialId.trim() || undefined,
+      snmpVersion: monitorForm.snmpCredentialId.trim()
+        ? undefined
+        : monitorForm.snmpVersion,
+      snmpCommunity: monitorForm.snmpCredentialId.trim()
+        ? undefined
+        : monitorForm.snmpCommunity.trim() || "public",
+    };
+  }
+
+  async function handleDiscoverSnmpInterfaces() {
+    if (!device) return;
+    const payload = snmpDiscoveryPayload();
+    if (!payload?.target) {
+      setSnmpDiscoverError("Set a management IP or SNMP target first.");
+      return;
+    }
+
+    setSnmpDiscoverLoading(true);
+    setSnmpDiscoverError("");
+    try {
+      const result = await api.discoverSnmpInterfaces(payload);
+      setSnmpInterfaces(result.interfaces);
+    } catch (error) {
+      setSnmpDiscoverError(
+        error instanceof Error ? error.message : "SNMP discovery failed.",
+      );
+      setSnmpInterfaces([]);
+    } finally {
+      setSnmpDiscoverLoading(false);
+    }
+  }
+
+  async function handleImportSnmpInterfaces(ifIndexes?: number[]) {
+    if (!device) return;
+    const payload = snmpDiscoveryPayload();
+    if (!payload?.target) {
+      setSnmpDiscoverError("Set a management IP or SNMP target first.");
+      return;
+    }
+
+    setSnmpImportLoading(true);
+    setSnmpDiscoverError("");
+    try {
+      const result = await api.importSnmpInterfaceMonitors({
+        ...payload,
+        ifIndexes,
+        skipExisting: true,
+        intervalMs:
+          Math.max(1, Number.parseInt(monitorForm.intervalMinutes, 10) || 5) *
+          60 *
+          1000,
+        expectedOperStatus: "1",
+      });
+      await loadAll(true);
+      if (result.created[0]) {
+        setSelectedMonitorId(result.created[0].id);
+      }
+      setSnmpInterfaces([]);
+    } catch (error) {
+      setSnmpDiscoverError(
+        error instanceof Error ? error.message : "Failed to import SNMP monitors.",
+      );
+    } finally {
+      setSnmpImportLoading(false);
+    }
+  }
+
   async function handleSaveMonitor() {
     if (!device) return;
     setMonitorSaving(true);
@@ -683,6 +836,15 @@ export default function DeviceDetail() {
         snmpOid: usesSnmp ? monitorForm.snmpOid.trim() || null : null,
         snmpExpectedValue: usesSnmp
           ? monitorForm.snmpExpectedValue.trim() || null
+          : null,
+        snmpMatchMode: usesSnmp ? monitorForm.snmpMatchMode : null,
+        portId: usesSnmp ? monitorForm.portId.trim() || null : null,
+        snmpIfIndex:
+          usesSnmp && monitorForm.snmpIfIndex.trim()
+            ? Number.parseInt(monitorForm.snmpIfIndex, 10)
+            : null,
+        snmpCredentialId: usesSnmp
+          ? monitorForm.snmpCredentialId.trim() || null
           : null,
         intervalMs:
           Math.max(1, Number.parseInt(monitorForm.intervalMinutes, 10) || 5) *
@@ -903,7 +1065,7 @@ export default function DeviceDetail() {
               </Link>
             </>
           ) : (
-            "Devices"
+            t("Devices")
           )
         }
         title={device.hostname}
@@ -931,7 +1093,7 @@ export default function DeviceDetail() {
                 onClick={() => setDrawerOpen(true)}
               >
                 <Pencil className="size-3.5" />
-                Edit
+                {t("Edit")}
               </Button>
             )}
             <Button
@@ -941,7 +1103,7 @@ export default function DeviceDetail() {
               disabled={refreshing}
             >
               <RefreshCcw className="size-3.5" />
-              {refreshing ? "Refreshing..." : "Refresh"}
+              {refreshing ? "Refreshing..." : t("Refresh")}
             </Button>
             {canEdit && (
               <Button
@@ -951,7 +1113,7 @@ export default function DeviceDetail() {
                 disabled={deleting}
               >
                 <Trash2 className="size-3.5" />
-                {deleting ? "Deleting..." : "Delete"}
+                {deleting ? t("Deleting...") : t("Delete")}
               </Button>
             )}
           </>
@@ -971,7 +1133,7 @@ export default function DeviceDetail() {
           <Button variant="ghost" size="sm" asChild>
             <Link to="/devices">
               <ArrowLeft className="size-3.5" />
-              Devices
+              {t("Devices")}
             </Link>
           </Button>
         </div>
@@ -1016,35 +1178,35 @@ export default function DeviceDetail() {
                 value={formatDeviceAddress(device)}
                 mono
               />
-              <Stat label="Serial" value={device.serial} mono />
-              <Stat label="Last seen" value={relativeTime(device.lastSeen)} />
+              <Stat label={t("Serial")} value={device.serial} mono />
+              <Stat label={t("Last seen")} value={relativeTime(device.lastSeen)} />
               <Stat
-                label="Ports"
+                label={t("Ports")}
                 value={`${linkedCount}/${devicePorts.length} linked`}
               />
               <Stat label="IPs" value={String(displayedDeviceIpCount)} />
-              <Stat label="Tags" value={device.tags?.join(", ") ?? "-"} />
+              <Stat label={t("Tags")} value={device.tags?.join(", ") ?? "-"} />
             </dl>
           </div>
         </Card>
 
         <Tabs defaultValue="overview">
           <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="overview">{t("Overview")}</TabsTrigger>
             <TabsTrigger value="ports">
-              Ports | {devicePorts.length}
+              {t("Ports")} | {devicePorts.length}
             </TabsTrigger>
             <TabsTrigger value="network">
-              Network | {displayedDeviceIpCount}
+              {t("Network")} | {displayedDeviceIpCount}
             </TabsTrigger>
-            <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
+            <TabsTrigger value="monitoring">{t("Monitoring")}</TabsTrigger>
             <TabsTrigger value="services">
               Services | {deviceServiceList.length}
             </TabsTrigger>
             <TabsTrigger value="images">
               Images | {deviceImageList.length}
             </TabsTrigger>
-            <TabsTrigger value="notes">Notes</TabsTrigger>
+            <TabsTrigger value="notes">{t("Notes")}</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
 
@@ -1053,17 +1215,17 @@ export default function DeviceDetail() {
               <Card className="col-span-12 md:col-span-6">
                 <CardHeader>
                   <CardTitle>
-                    <CardLabel>Hardware</CardLabel>
-                    <CardHeading>Specifications</CardHeading>
+                    <CardLabel>{t("Hardware")}</CardLabel>
+                    <CardHeading>{t("Specifications")}</CardHeading>
                   </CardTitle>
                 </CardHeader>
                 <CardBody>
                   <dl className="space-y-2 text-xs">
                     <Row label="Manufacturer" value={device.manufacturer} />
                     <Row label="Model" value={device.model} mono />
-                    <Row label="Serial" value={device.serial} mono />
+                    <Row label={t("Serial")} value={device.serial} mono />
                     <Row
-                      label="Type"
+                      label={t("Type")}
                       value={device.deviceType.replace("_", " ")}
                     />
                     <Row
@@ -1092,8 +1254,8 @@ export default function DeviceDetail() {
               <Card className="col-span-12 md:col-span-6">
                 <CardHeader>
                   <CardTitle>
-                    <CardLabel>Placement</CardLabel>
-                    <CardHeading>Rack position</CardHeading>
+                    <CardLabel>{t("Placement")}</CardLabel>
+                    <CardHeading>{t("Rack position")}</CardHeading>
                   </CardTitle>
                 </CardHeader>
                 <CardBody>
@@ -1135,7 +1297,7 @@ export default function DeviceDetail() {
                 <Card className="col-span-12">
                   <CardHeader>
                     <CardTitle>
-                      <CardLabel>Relationships</CardLabel>
+                      <CardLabel>{t("Relationships")}</CardLabel>
                       <CardHeading>
                         {device.deviceType === "ap"
                           ? "Connected clients"
@@ -1195,12 +1357,12 @@ export default function DeviceDetail() {
                 <Card className="col-span-12">
                   <CardHeader>
                     <CardTitle>
-                      <CardLabel>Metadata</CardLabel>
-                      <CardHeading>Tags</CardHeading>
+                      <CardLabel>{t("Metadata")}</CardLabel>
+                      <CardHeading>{t("Tags")}</CardHeading>
                     </CardTitle>
                   </CardHeader>
                   <CardBody>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-1.5" data-no-i18n>
                       {device.tags.map((tag) => (
                         <Badge key={tag}>{tag}</Badge>
                       ))}
@@ -1218,8 +1380,8 @@ export default function DeviceDetail() {
                   <Card>
                     <CardHeader>
                       <CardTitle>
-                        <CardLabel>Interfaces</CardLabel>
-                        <CardHeading>No ports documented</CardHeading>
+                        <CardLabel>{t("Interfaces")}</CardLabel>
+                        <CardHeading>{t("No ports documented")}</CardHeading>
                       </CardTitle>
                     </CardHeader>
                     <CardBody>
@@ -1239,14 +1401,15 @@ export default function DeviceDetail() {
                       devicesById={deviceById}
                       vlansById={vlanById}
                       virtualSwitchesById={virtualSwitchById}
+                      snmpVerifiedPortIds={snmpVerifiedPortIds}
                       onSelectPort={setSelectedPortId}
                       selectedPortId={selectedPortId}
                     />
                     <Card>
                       <CardHeader>
                         <CardTitle>
-                          <CardLabel>Table</CardLabel>
-                          <CardHeading>All ports</CardHeading>
+                          <CardLabel>{t("Table")}</CardLabel>
+                          <CardHeading>{t("All ports")}</CardHeading>
                         </CardTitle>
                       </CardHeader>
                       <CardBody className="p-0">
@@ -1257,6 +1420,7 @@ export default function DeviceDetail() {
                           devicesById={deviceById}
                           vlansById={vlanById}
                           virtualSwitchesById={virtualSwitchById}
+                          snmpVerifiedPortIds={snmpVerifiedPortIds}
                           onSelectPort={setSelectedPortId}
                           selectedPortId={selectedPortId}
                         />
@@ -1267,7 +1431,7 @@ export default function DeviceDetail() {
                   <Card>
                     <CardHeader>
                       <CardTitle>
-                        <CardLabel>Interfaces</CardLabel>
+                        <CardLabel>{t("Interfaces")}</CardLabel>
                         <CardHeading>{devicePorts.length} ports</CardHeading>
                       </CardTitle>
                     </CardHeader>
@@ -1306,8 +1470,8 @@ export default function DeviceDetail() {
               <Card className="mb-4">
                 <CardHeader>
                   <CardTitle>
-                    <CardLabel>Assign address</CardLabel>
-                    <CardHeading>Add device or interface IP</CardHeading>
+                    <CardLabel>{t("Assign address")}</CardLabel>
+                    <CardHeading>{t("Add device or interface IP")}</CardHeading>
                   </CardTitle>
                 </CardHeader>
                 <CardBody className="space-y-3">
@@ -1335,7 +1499,7 @@ export default function DeviceDetail() {
                         placeholder="192.168.10.1"
                       />
                     </Field>
-                    <Field label="Type">
+                    <Field label={t("Type")}>
                       <Select
                         value={networkForm.assignmentType}
                         onChange={(value) =>
@@ -1402,7 +1566,7 @@ export default function DeviceDetail() {
                     </Field>
                   </div>
                   <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-                    <Field label="Description">
+                    <Field label={t("Description")}>
                       <Input
                         value={networkForm.description}
                         onChange={(event) =>
@@ -1431,8 +1595,8 @@ export default function DeviceDetail() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Addresses</CardLabel>
-                  <CardHeading>IP assignments</CardHeading>
+                  <CardLabel>{t("Addresses")}</CardLabel>
+                  <CardHeading>{t("IP assignments")}</CardHeading>
                 </CardTitle>
               </CardHeader>
               <CardBody className="p-0">
@@ -1523,8 +1687,8 @@ export default function DeviceDetail() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Health checks</CardLabel>
-                  <CardHeading>Automated device monitoring</CardHeading>
+                  <CardLabel>{t("Health checks")}</CardLabel>
+                  <CardHeading>{t("Automated device monitoring")}</CardHeading>
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   <Badge tone={monitorStateTone}>
@@ -1544,8 +1708,39 @@ export default function DeviceDetail() {
                   <span className="mx-1 font-mono text-[var(--color-fg)]">
                     unknown
                   </span>
-                  until at least one enabled target has run.
+                  until at least one enabled target has run. For near-real-time
+                  link events, forward SNMP traps to this Rackpad host on UDP
+                  port 1162 (or map host 162 → container 1162).
                 </div>
+
+                {canManageMonitoring && device?.labId && (
+                  <SnmpCredentialsPanel
+                    labId={device.labId}
+                    credentials={snmpCredentials}
+                    disabled={!canManageMonitoring}
+                    onChanged={async () => {
+                      if (!device.labId) return;
+                      setSnmpCredentials(
+                        await api.getSnmpCredentials({ labId: device.labId }),
+                      );
+                    }}
+                  />
+                )}
+
+                {canManageMonitoring && device?.labId && (
+                  <SnmpSyncPanel
+                    deviceId={device.id}
+                    labId={device.labId}
+                    target={monitorForm.target.trim() || device.managementIp}
+                    snmpCredentialId={device.snmpCredentialId}
+                    credentials={snmpCredentials}
+                    disabled={!canManageMonitoring}
+                    isAdmin={currentUser?.role === "admin"}
+                    onApplied={async () => {
+                      await loadAll(true);
+                    }}
+                  />
+                )}
 
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2">
                   <div className="text-sm text-[var(--color-fg-subtle)]">
@@ -1572,6 +1767,23 @@ export default function DeviceDetail() {
                       <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => void handleDiscoverSnmpInterfaces()}
+                        disabled={
+                          snmpDiscoverLoading ||
+                          snmpImportLoading ||
+                          !(monitorForm.target.trim() || device.managementIp)
+                        }
+                      >
+                        <RefreshCcw className="size-3.5" />
+                        {snmpDiscoverLoading
+                          ? "Discovering..."
+                          : "Discover SNMP interfaces"}
+                      </Button>
+                    )}
+                    {canManageMonitoring && (
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={startNewMonitor}
                       >
                         <Plus className="size-3.5" />
@@ -1580,6 +1792,67 @@ export default function DeviceDetail() {
                     )}
                   </div>
                 </div>
+
+                {(snmpDiscoverError || snmpInterfaces.length > 0) && (
+                  <div className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3">
+                    {snmpDiscoverError && (
+                      <div className="text-sm text-[var(--color-danger)]">
+                        {snmpDiscoverError}
+                      </div>
+                    )}
+                    {snmpInterfaces.length > 0 && (
+                      <>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm text-[var(--color-fg)]">
+                            Found {snmpInterfaces.length} SNMP interface
+                            {snmpInterfaces.length === 1 ? "" : "s"} via IF-MIB.
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => void handleImportSnmpInterfaces()}
+                            disabled={snmpImportLoading}
+                          >
+                            {snmpImportLoading
+                              ? "Creating monitors..."
+                              : "Create ifOperStatus monitors"}
+                          </Button>
+                        </div>
+                        <div className="max-h-48 space-y-1 overflow-y-auto text-xs text-[var(--color-fg-subtle)]">
+                          {snmpInterfaces.map((entry) => (
+                            <div
+                              key={entry.ifIndex}
+                              className="flex items-center justify-between gap-3 rounded border border-[var(--color-line)] px-2 py-1"
+                            >
+                              <span className="min-w-0 flex-1 truncate">
+                                {entry.name || entry.descr} (ifIndex{" "}
+                                {entry.ifIndex})
+                                {entry.matchedPortName ? (
+                                  <span className="ml-2 text-[var(--accent-secondary)]">
+                                    → {entry.matchedPortName}
+                                  </span>
+                                ) : (
+                                  <span className="ml-2 text-[var(--text-muted)]">
+                                    · no port match
+                                  </span>
+                                )}
+                                {entry.highSpeedMbps ? (
+                                  <span className="ml-2 font-mono text-[var(--text-tertiary)]">
+                                    {entry.highSpeedMbps >= 1000
+                                      ? `${entry.highSpeedMbps / 1000}G`
+                                      : `${entry.highSpeedMbps}M`}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="shrink-0 font-mono">
+                                {entry.operStatusLabel ?? "unknown"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
                   <div className="space-y-2">
@@ -1676,7 +1949,7 @@ export default function DeviceDetail() {
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      <Field label="Name">
+                      <Field label={t("Name")}>
                         <Input
                           value={monitorForm.name}
                           disabled={!canManageMonitoring}
@@ -1689,7 +1962,7 @@ export default function DeviceDetail() {
                           placeholder="Management, Storage, WAN, VIP..."
                         />
                       </Field>
-                      <Field label="Type">
+                      <Field label={t("Type")}>
                         <Select
                           value={monitorForm.type}
                           onChange={(value) =>
@@ -1779,10 +2052,139 @@ export default function DeviceDetail() {
 
                     {showMonitorSnmpFields && (
                       <div className="grid gap-4 md:grid-cols-2">
+                        <Field label="OID preset">
+                          <Select
+                            value=""
+                            disabled={!canManageMonitoring}
+                            onChange={(value) => {
+                              const preset = SNMP_OID_PRESETS.find(
+                                (entry) => entry.id === value,
+                              );
+                              if (!preset || preset.id === "custom") return;
+                              setMonitorForm((prev) => {
+                                const ifIndex = prev.snmpIfIndex.trim()
+                                  ? Number.parseInt(prev.snmpIfIndex, 10)
+                                  : null;
+                                const oid =
+                                  preset.id === "ifOperStatus" && ifIndex != null
+                                    ? `${preset.oid}.${ifIndex}`
+                                    : preset.oid;
+                                return {
+                                  ...prev,
+                                  snmpOid: oid,
+                                  snmpExpectedValue: preset.expected,
+                                  snmpMatchMode: preset.matchMode,
+                                };
+                              });
+                            }}
+                          >
+                            <option value="">Apply preset…</option>
+                            {SNMP_OID_PRESETS.filter(
+                              (entry) => entry.id !== "custom",
+                            ).map((preset) => (
+                              <option key={preset.id} value={preset.id}>
+                                {preset.label}
+                              </option>
+                            ))}
+                          </Select>
+                        </Field>
+                        <Field label="Match mode">
+                          <Select
+                            value={monitorForm.snmpMatchMode}
+                            disabled={!canManageMonitoring}
+                            onChange={(value) =>
+                              setMonitorForm((prev) => ({
+                                ...prev,
+                                snmpMatchMode:
+                                  value as MonitorForm["snmpMatchMode"],
+                              }))
+                            }
+                          >
+                            {SNMP_MATCH_MODE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </Select>
+                        </Field>
+                        <Field label="Linked port">
+                          <Select
+                            value={monitorForm.portId}
+                            disabled={!canManageMonitoring}
+                            onChange={(value) => {
+                              const linkedPort = devicePorts.find(
+                                (port) => port.id === value,
+                              );
+                              setMonitorForm((prev) => {
+                                const ifIndex =
+                                  linkedPort?.snmpIfIndex != null
+                                    ? String(linkedPort.snmpIfIndex)
+                                    : prev.snmpIfIndex;
+                                const nextOid =
+                                  prev.snmpOid.startsWith(
+                                    "1.3.6.1.2.1.2.2.1.8",
+                                  ) && linkedPort?.snmpIfIndex != null
+                                    ? `1.3.6.1.2.1.2.2.1.8.${linkedPort.snmpIfIndex}`
+                                    : prev.snmpOid;
+                                return {
+                                  ...prev,
+                                  portId: value,
+                                  snmpIfIndex: ifIndex,
+                                  snmpOid: nextOid,
+                                };
+                              });
+                            }}
+                          >
+                            <option value="">None</option>
+                            {devicePorts.map((port) => (
+                              <option key={port.id} value={port.id}>
+                                {port.name}
+                                {port.snmpIfIndex != null
+                                  ? ` (ifIndex ${port.snmpIfIndex})`
+                                  : ""}
+                              </option>
+                            ))}
+                          </Select>
+                        </Field>
+                        <Field label="ifIndex">
+                          <Input
+                            value={monitorForm.snmpIfIndex}
+                            disabled={!canManageMonitoring}
+                            onChange={(event) =>
+                              setMonitorForm((prev) => ({
+                                ...prev,
+                                snmpIfIndex: event.target.value,
+                              }))
+                            }
+                            placeholder="Optional SNMP ifIndex"
+                          />
+                        </Field>
+                        <Field label="Credential">
+                          <Select
+                            value={monitorForm.snmpCredentialId}
+                            disabled={!canManageMonitoring}
+                            onChange={(value) =>
+                              setMonitorForm((prev) => ({
+                                ...prev,
+                                snmpCredentialId: value,
+                              }))
+                            }
+                          >
+                            <option value="">Inline community / version</option>
+                            {snmpCredentials.map((credential) => (
+                              <option key={credential.id} value={credential.id}>
+                                {credential.name} (v{credential.version})
+                              </option>
+                            ))}
+                          </Select>
+                        </Field>
                         <Field label="SNMP version">
                           <Select
                             value={monitorForm.snmpVersion}
-                            disabled={!canManageMonitoring}
+                            disabled={
+                              !canManageMonitoring ||
+                              Boolean(monitorForm.snmpCredentialId)
+                            }
                             onChange={(value) =>
                               setMonitorForm((prev) => ({
                                 ...prev,
@@ -1797,7 +2199,10 @@ export default function DeviceDetail() {
                         <Field label="Community">
                           <Input
                             value={monitorForm.snmpCommunity}
-                            disabled={!canManageMonitoring}
+                            disabled={
+                              !canManageMonitoring ||
+                              Boolean(monitorForm.snmpCredentialId)
+                            }
                             onChange={(event) =>
                               setMonitorForm((prev) => ({
                                 ...prev,
@@ -1921,8 +2326,8 @@ export default function DeviceDetail() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Service inventory</CardLabel>
-                  <CardHeading>Applications and network services</CardHeading>
+                  <CardLabel>{t("Service inventory")}</CardLabel>
+                  <CardHeading>{t("Applications and network services")}</CardHeading>
                 </CardTitle>
                 {canManageMonitoring && (
                   <Button variant="outline" size="sm" onClick={startNewService}>
@@ -1995,7 +2400,7 @@ export default function DeviceDetail() {
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
-                      <Field label="Name">
+                      <Field label={t("Name")}>
                         <Input
                           value={serviceForm.name}
                           disabled={!canManageMonitoring}
@@ -2005,7 +2410,7 @@ export default function DeviceDetail() {
                           placeholder="e.g. DHCP, Grafana, Portainer"
                         />
                       </Field>
-                      <Field label="Type">
+                      <Field label={t("Type")}>
                         <Select
                           value={serviceForm.serviceType}
                           disabled={!canManageMonitoring}
@@ -2155,8 +2560,8 @@ export default function DeviceDetail() {
                 <Card className="col-span-12 lg:col-span-4">
                   <CardHeader>
                     <CardTitle>
-                      <CardLabel>Reference</CardLabel>
-                      <CardHeading>Add image</CardHeading>
+                      <CardLabel>{t("Reference")}</CardLabel>
+                      <CardHeading>{t("Add image")}</CardHeading>
                     </CardTitle>
                   </CardHeader>
                   <CardBody className="space-y-3">
@@ -2200,7 +2605,7 @@ export default function DeviceDetail() {
               >
                 <CardHeader>
                   <CardTitle>
-                    <CardLabel>Reference</CardLabel>
+                    <CardLabel>{t("Reference")}</CardLabel>
                     <CardHeading>{deviceImageList.length} images</CardHeading>
                   </CardTitle>
                 </CardHeader>
@@ -2265,7 +2670,10 @@ export default function DeviceDetail() {
                               </div>
                             </div>
                             {image.notes && (
-                              <div className="text-xs leading-5 text-[var(--color-fg-subtle)]">
+                              <div
+                                className="text-xs leading-5 text-[var(--color-fg-subtle)]"
+                                data-no-i18n
+                              >
                                 {image.notes}
                               </div>
                             )}
@@ -2283,8 +2691,8 @@ export default function DeviceDetail() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Documentation</CardLabel>
-                  <CardHeading>Device notes</CardHeading>
+                  <CardLabel>{t("Documentation")}</CardLabel>
+                  <CardHeading>{t("Device notes")}</CardHeading>
                 </CardTitle>
                 {canEdit && (
                   <Button
@@ -2299,7 +2707,10 @@ export default function DeviceDetail() {
               </CardHeader>
               <CardBody>
                 {device.notes?.trim() ? (
-                  <div className="whitespace-pre-wrap text-sm leading-6 text-[var(--color-fg)]">
+                  <div
+                    className="whitespace-pre-wrap text-sm leading-6 text-[var(--color-fg)]"
+                    data-no-i18n
+                  >
                     {device.notes}
                   </div>
                 ) : (
@@ -2315,8 +2726,8 @@ export default function DeviceDetail() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>History</CardLabel>
-                  <CardHeading>Audit log</CardHeading>
+                  <CardLabel>{t("History")}</CardLabel>
+                  <CardHeading>{t("Audit log")}</CardHeading>
                 </CardTitle>
                 <Button
                   variant="outline"
@@ -2401,6 +2812,7 @@ function PortInspectorCard({
   virtualSwitchesById: Record<string, { id: string; name: string }>;
   showFaceInHeading?: boolean;
 }) {
+  const { t } = useI18n();
   const primaryVlan = port?.vlanId ? vlansById[port.vlanId] : undefined;
   const allowedVlanLabels =
     port?.allowedVlanIds?.map((vlanId) =>
@@ -2414,7 +2826,7 @@ function PortInspectorCard({
     <Card>
       <CardHeader>
         <CardTitle>
-          <CardLabel>Inspector</CardLabel>
+          <CardLabel>{t("Inspector")}</CardLabel>
           <CardHeading>
             {port
               ? formatPortLabel(port, {
@@ -2479,7 +2891,7 @@ function PortInspectorCard({
                   (port.virtualSwitchId ? port.virtualSwitchId : "None")
                 }
               />
-              <InspectorRow label="Type" value={port.kind.replace("_", " ")} />
+              <InspectorRow label={t("Type")} value={port.kind.replace("_", " ")} />
             </div>
 
             <div className="space-y-1">
@@ -2750,6 +3162,10 @@ function buildNewMonitorForm(
     snmpCommunity: "public",
     snmpOid: "",
     snmpExpectedValue: "",
+    snmpMatchMode: "equals",
+    portId: "",
+    snmpIfIndex: "",
+    snmpCredentialId: "",
     intervalMinutes: "5",
   };
 }
@@ -2762,10 +3178,18 @@ function monitorToForm(monitor: DeviceMonitor, device: Device): MonitorForm {
     target: monitor.target ?? device.managementIp ?? "",
     port: monitor.port != null ? String(monitor.port) : "",
     path: monitor.path ?? "",
-    snmpVersion: monitor.snmpVersion ?? "2c",
+    snmpVersion:
+      monitor.snmpVersion === "1" || monitor.snmpVersion === "2c"
+        ? monitor.snmpVersion
+        : "2c",
     snmpCommunity: monitor.snmpCommunity ?? "public",
     snmpOid: monitor.snmpOid ?? "",
     snmpExpectedValue: monitor.snmpExpectedValue ?? "",
+    snmpMatchMode: monitor.snmpMatchMode ?? "equals",
+    portId: monitor.portId ?? "",
+    snmpIfIndex:
+      monitor.snmpIfIndex != null ? String(monitor.snmpIfIndex) : "",
+    snmpCredentialId: monitor.snmpCredentialId ?? "",
     intervalMinutes:
       monitor.intervalMs != null
         ? String(Math.max(1, Math.round(monitor.intervalMs / 60000)))

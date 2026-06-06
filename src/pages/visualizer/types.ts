@@ -175,6 +175,7 @@ export interface VisualizerCable {
   bothOnline: boolean;
   unknown: boolean;
   crossZone: boolean;
+  snmpVerified: boolean;
 }
 
 export interface VisualizerNeighbor {

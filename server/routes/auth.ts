@@ -12,6 +12,7 @@ import {
   setBootstrapState,
   verifyPassword,
 } from '../lib/auth.js'
+import { fetchUserLabAccess } from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
 import {
   consumeOidcSession,
@@ -321,8 +322,17 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(401).send({ error: 'Session expired or invalid.' })
     }
 
+    const user = getPublicUserById(session.id)
+    if (!user) {
+      return reply.status(401).send({ error: 'Session expired or invalid.' })
+    }
+
     return {
-      user: getPublicUserById(session.id),
+      user: {
+        ...user,
+        labAccess:
+          session.role === 'admin' ? [] : fetchUserLabAccess(session.id),
+      },
       expiresAt: session.expiresAt,
     }
   })

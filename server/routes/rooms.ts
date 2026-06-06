@@ -1,19 +1,35 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
+import {
+  appendLabFilter,
+  assertLabReadFromRow,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
 import { asObject, optionalString, requiredString } from '../lib/validation.js'
 
 export const roomsRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: { labId?: string } }>('/', async (req) => {
-    if (req.query.labId) {
-      return db.prepare('SELECT * FROM rooms WHERE labId = ? ORDER BY name, id').all(req.query.labId)
+  app.get<{ Querystring: { labId?: string } }>('/', async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: 'Authentication required.' })
     }
-    return db.prepare('SELECT * FROM rooms ORDER BY name, id').all()
+
+    const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error })
+    }
+
+    const { sql, params } = appendLabFilter('SELECT * FROM rooms', [], filter.labIds)
+    return db.prepare(`${sql} ORDER BY name, id`).all(...params)
   })
 
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const row = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.id)
-    if (!row) return reply.status(404).send({ error: 'Room not found' })
+    const row = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.id) as
+      | Record<string, unknown>
+      | undefined
+    if (!assertLabReadFromRow(req, reply, row)) return
     return row
   })
 
@@ -21,6 +37,8 @@ export const roomsRoutes: FastifyPluginAsync = async (app) => {
     const body = asObject(req.body)
     const roomId = optionalString(body, 'id', { maxLength: 80 }) ?? createId('room')
     const labId = requiredString(body, 'labId', { maxLength: 80 })
+    if (!assertLabWrite(req, reply, labId)) return
+
     const name = requiredString(body, 'name', { maxLength: 120 })
     const description = optionalString(body, 'description', { maxLength: 500 })
     const location = optionalString(body, 'location', { maxLength: 200 })
@@ -35,8 +53,10 @@ export const roomsRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.patch<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const existing = db.prepare('SELECT id FROM rooms WHERE id = ?').get(req.params.id)
-    if (!existing) return reply.status(404).send({ error: 'Room not found' })
+    const existing = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.id) as
+      | Record<string, unknown>
+      | undefined
+    if (!assertLabWriteFromRow(req, reply, existing)) return
 
     const body = asObject(req.body)
     const updates: string[] = []
@@ -60,8 +80,11 @@ export const roomsRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const row = db.prepare('SELECT id FROM rooms WHERE id = ?').get(req.params.id)
-    if (!row) return reply.status(404).send({ error: 'Room not found' })
+    const row = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.id) as
+      | Record<string, unknown>
+      | undefined
+    if (!assertLabWriteFromRow(req, reply, row)) return
+
     const removeRoom = db.transaction(() => {
       db.prepare("DELETE FROM referenceImages WHERE entityType = 'room' AND entityId = ?").run(req.params.id)
       db.prepare('DELETE FROM rooms WHERE id = ?').run(req.params.id)

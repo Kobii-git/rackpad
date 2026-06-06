@@ -8,6 +8,7 @@ import {
 import { Link } from "react-router-dom";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -101,6 +102,7 @@ function wifiAddressLabel(
 }
 
 export default function WifiView() {
+  const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const activeLab = useStore((s) => s.lab);
   const devices = useStore((s) => s.devices);
@@ -238,7 +240,7 @@ export default function WifiView() {
     <>
       <TopBar
         subtitle="Wireless"
-        title="WiFi"
+        title={t("WiFi")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {wifiControllers.length} controllers | {wifiSsids.length} SSIDs |{" "}

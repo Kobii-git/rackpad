@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Cpu, Network, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import {
@@ -56,6 +57,7 @@ const EMPTY_BRIDGE_FORM: BridgeFormState = {
 };
 
 export default function ComputeView() {
+  const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
@@ -289,7 +291,7 @@ export default function ComputeView() {
     <>
       <TopBar
         subtitle="Virtualization inventory"
-        title="Compute"
+        title={t("Compute")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
             {hosts.length} hosts | {vms.length} VMs

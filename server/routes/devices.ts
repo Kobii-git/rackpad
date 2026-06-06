@@ -1,6 +1,13 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db, parseRow } from '../db.js'
 import { requiredDeviceType } from '../lib/device-types.js'
+import {
+  appendLabFilter,
+  assertLabReadFromRow,
+  assertLabWrite,
+  assertLabWriteFromRow,
+  resolveLabIdsForList,
+} from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
 import {
   createPortsFromTemplate,
@@ -205,19 +212,24 @@ function validateNetworkMode(input: {
 export const devicesRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { rackId?: string; labId?: string } }>(
     '/',
-    async (req) => {
+    async (req, reply) => {
+      if (!req.authUser) {
+        return reply.status(401).send({ error: 'Authentication required.' })
+      }
+
+      const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId)
+      if (!filter.ok) {
+        return reply.status(filter.status).send({ error: filter.error })
+      }
+
       let sql = 'SELECT * FROM devices WHERE 1=1'
       const params: unknown[] = []
       if (req.query.rackId) {
         sql += ' AND rackId = ?'
         params.push(req.query.rackId)
       }
-      if (req.query.labId) {
-        sql += ' AND labId = ?'
-        params.push(req.query.labId)
-      }
-      sql += ' ORDER BY hostname'
-      const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
+      const filtered = appendLabFilter(sql, params, filter.labIds)
+      const rows = db.prepare(`${filtered.sql} ORDER BY hostname`).all(...filtered.params) as Record<string, unknown>[]
       return rows.map(parseDevice)
     },
   )
@@ -226,13 +238,14 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const row = db
       .prepare('SELECT * FROM devices WHERE id = ?')
       .get(req.params.id) as Record<string, unknown> | undefined
-    if (!row) return reply.status(404).send({ error: 'Device not found' })
-    return parseDevice(row)
+    if (!assertLabReadFromRow(req, reply, row)) return
+    return parseDevice(row!)
   })
 
   app.post('/', async (req, reply) => {
     const body = asObject(req.body)
     const labId = requiredString(body, 'labId', { maxLength: 80 })
+    if (!assertLabWrite(req, reply, labId)) return
     const hostname = requiredString(body, 'hostname', { maxLength: 120 })
     const deviceType = requiredDeviceType(body)
     const displayName = optionalString(body, 'displayName', { maxLength: 120 })
@@ -365,7 +378,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const existing = db
       .prepare('SELECT * FROM devices WHERE id = ?')
       .get(req.params.id) as Record<string, unknown> | undefined
-    if (!existing) return reply.status(404).send({ error: 'Device not found' })
+    if (!assertLabWriteFromRow(req, reply, existing)) return
+    const device = existing!
 
     const body = asObject(req.body)
     const updates: string[] = []
@@ -374,7 +388,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const nextDeviceType =
       'deviceType' in body
         ? requiredDeviceType(body)
-        : String(existing.deviceType)
+        : String(device.deviceType)
     const rackId = optionalString(body, 'rackId', { maxLength: 80 })
     const startU = optionalInteger(body, 'startU', { min: 1, max: 100 })
     const heightU = optionalInteger(body, 'heightU', { min: 1, max: 20 })
@@ -386,8 +400,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const networkMode = optionalEnum(body, 'networkMode', DEVICE_NETWORK_MODES)
     const roomId = optionalString(body, 'roomId', { maxLength: 80 })
 
-    let normalizedParentForNetwork = existing.parentDeviceId
-      ? String(existing.parentDeviceId)
+    let normalizedParentForNetwork = device.parentDeviceId
+      ? String(device.parentDeviceId)
       : null
 
     if (
@@ -401,11 +415,11 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     ) {
       const parentDevice = resolveParentDevice(
         parentDeviceId === undefined
-          ? existing.parentDeviceId
-            ? String(existing.parentDeviceId)
+          ? device.parentDeviceId
+            ? String(device.parentDeviceId)
             : null
           : parentDeviceId,
-        String(existing.labId),
+        String(device.labId),
         req.params.id,
       )
       const normalizedPlacement = normalizePlacement({
@@ -413,34 +427,34 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         deviceType: nextDeviceType,
         placement:
           placement === undefined
-            ? existing.placement
+            ? device.placement
               ? (String(
-                  existing.placement,
+                  device.placement,
                 ) as (typeof DEVICE_PLACEMENTS)[number])
               : null
             : placement,
         rackId:
           rackId === undefined
-            ? existing.rackId
-              ? String(existing.rackId)
+            ? device.rackId
+              ? String(device.rackId)
               : null
             : rackId,
         startU:
           startU === undefined
-            ? existing.startU == null
+            ? device.startU == null
               ? null
-              : Number(existing.startU)
+              : Number(device.startU)
             : startU,
         heightU:
           heightU === undefined
-            ? existing.heightU == null
+            ? device.heightU == null
               ? null
-              : Number(existing.heightU)
+              : Number(device.heightU)
             : heightU,
         face:
           face === undefined
-            ? existing.face
-              ? (String(existing.face) as (typeof DEVICE_FACES)[number])
+            ? device.face
+              ? (String(device.face) as (typeof DEVICE_FACES)[number])
               : null
             : face,
         parentDevice,
@@ -469,7 +483,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     if (networkMode !== undefined || 'deviceType' in body || parentDeviceId !== undefined) {
       const nextNetworkMode =
         networkMode ??
-        (existing.networkMode === 'host-shared' ? 'host-shared' : 'normal')
+        (device.networkMode === 'host-shared' ? 'host-shared' : 'normal')
       updates.push('networkMode = ?')
       values.push(
         validateNetworkMode({
@@ -482,7 +496,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
 
     if (roomId !== undefined) {
       updates.push('roomId = ?')
-      values.push(validateRoom(roomId, String(existing.labId)))
+      values.push(validateRoom(roomId, String(device.labId)))
     }
 
     if ('macAddress' in body) {
@@ -491,6 +505,20 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
       )
       updates.push('macAddress = ?')
       values.push(macAddress)
+    }
+
+    if ('snmpCredentialId' in body) {
+      const snmpCredentialId = optionalString(body, 'snmpCredentialId', { maxLength: 80 })
+      if (snmpCredentialId) {
+        const credential = db
+          .prepare('SELECT id FROM snmpCredentials WHERE id = ? AND labId = ?')
+          .get(snmpCredentialId, device.labId) as { id: string } | undefined
+        if (!credential) {
+          throw new ValidationError('SNMP credential must belong to this lab.')
+        }
+      }
+      updates.push('snmpCredentialId = ?')
+      values.push(snmpCredentialId)
     }
 
     const simpleStringKeys = [
@@ -604,9 +632,9 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const row = db
-      .prepare('SELECT id FROM devices WHERE id = ?')
-      .get(req.params.id)
-    if (!row) return reply.status(404).send({ error: 'Device not found' })
+      .prepare('SELECT * FROM devices WHERE id = ?')
+      .get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabWriteFromRow(req, reply, row)) return
 
     const portIds = (
       db

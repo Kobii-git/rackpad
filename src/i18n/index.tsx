@@ -10,7 +10,42 @@ import {
 import type { SupportedLanguage } from "@/lib/types";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { en, fr, type TranslationKey, type TranslationMap } from "./translations";
+import {
+  ar,
+  bn,
+  de,
+  en,
+  es,
+  fa,
+  fr,
+  he,
+  hi,
+  id,
+  it,
+  ja,
+  ko,
+  nl,
+  pl,
+  pt,
+  ru,
+  th,
+  tr,
+  uk,
+  vi,
+  zh,
+  zhTW,
+  type TranslationKey,
+  type TranslationMap,
+} from "./translations";
+import {
+  LANGUAGE_BCP47,
+  LANGUAGE_NATIVE_NAMES,
+  LANGUAGE_OPTIONS,
+  RTL_LANGUAGES,
+  SUPPORTED_LANGUAGES,
+} from "./languages";
+
+export { LANGUAGE_NATIVE_NAMES, LANGUAGE_OPTIONS } from "./languages";
 
 type TranslationValues = Record<string, string | number | null | undefined>;
 
@@ -21,8 +56,33 @@ interface I18nContextValue {
 }
 
 const LANGUAGE_STORAGE_KEY = "rackpad.language";
-const SUPPORTED_LANGUAGES: SupportedLanguage[] = ["en", "fr"];
-const dictionaries: Record<SupportedLanguage, TranslationMap> = { en, fr };
+
+const dictionaries: Record<SupportedLanguage, TranslationMap> = {
+  en,
+  fr,
+  de,
+  nl,
+  es,
+  pt,
+  it,
+  pl,
+  zh,
+  "zh-TW": zhTW,
+  ja,
+  ko,
+  hi,
+  bn,
+  th,
+  he,
+  fa,
+  ar,
+  ru,
+  uk,
+  tr,
+  vi,
+  id,
+};
+
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 const SKIP_TRANSLATION_TAGS = new Set([
@@ -42,10 +102,11 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [browserLanguage, setBrowserLanguage] = useState<SupportedLanguage | null>(
     () => readStoredLanguage(),
   );
-  const language = browserLanguage ?? defaultLanguage ?? "en";
+  const language: SupportedLanguage = browserLanguage ?? defaultLanguage ?? "en";
 
   useEffect(() => {
-    document.documentElement.lang = language === "fr" ? "fr-FR" : "en";
+    document.documentElement.lang = LANGUAGE_BCP47[language];
+    document.documentElement.dir = RTL_LANGUAGES.has(language) ? "rtl" : "ltr";
   }, [language]);
 
   const t = useCallback(
@@ -118,8 +179,11 @@ export function LanguageSelector({
         className="rk-control h-8 w-full rounded-[var(--radius-sm)] px-2.5 text-sm text-[var(--text-primary)] focus-visible:outline-none"
         aria-label={t("Choose language")}
       >
-        <option value="en">{t("English")}</option>
-        <option value="fr">{t("French")}</option>
+        {LANGUAGE_OPTIONS.map((option) => (
+          <option key={option.code} value={option.code}>
+            {option.nativeName}
+          </option>
+        ))}
       </select>
     </label>
   );

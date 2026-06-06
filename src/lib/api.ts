@@ -8,6 +8,7 @@ import type {
   DeviceService,
   DeviceTypeDefinition,
   DeviceMonitor,
+  DiscoveredSnmpInterface,
   DocumentationPage,
   DiscoveredDevice,
   DiscoveryScanResult,
@@ -15,6 +16,7 @@ import type {
   IpAssignment,
   IpZone,
   Lab,
+  LabAccessEntry,
   Port,
   PortLink,
   PortTemplate,
@@ -23,6 +25,12 @@ import type {
   ReferenceImage,
   ReferenceImageEntityType,
   Room,
+  SnmpCredential,
+  SnmpSyncApplyResult,
+  SnmpSyncPreview,
+  SnmpSyncProfile,
+  SnmpTrapLogEntry,
+  SnmpTrapReceiverStatus,
   Subnet,
   UiSettings,
   UserRole,
@@ -154,6 +162,7 @@ export type UserPatch = Nullable<
   Pick<AppUser, "username" | "displayName" | "role" | "disabled">
 > & {
   password?: string | null;
+  labAccess?: LabAccessEntry[];
 };
 export type MonitorPatch = Nullable<
   Pick<
@@ -167,6 +176,10 @@ export type MonitorPatch = Nullable<
     | "snmpCommunity"
     | "snmpOid"
     | "snmpExpectedValue"
+    | "snmpMatchMode"
+    | "portId"
+    | "snmpIfIndex"
+    | "snmpCredentialId"
     | "intervalMs"
     | "enabled"
   >
@@ -363,6 +376,7 @@ export const api = {
     password: string;
     role: UserRole;
     disabled?: boolean;
+    labAccess?: LabAccessEntry[];
   }) {
     return request<AppUser>("/users", {
       method: "POST",
@@ -924,6 +938,61 @@ export const api = {
     });
   },
 
+  discoverSnmpInterfaces(body: {
+    deviceId: string;
+    target?: string;
+    port?: number;
+    snmpVersion?: "1" | "2c";
+    snmpCommunity?: string;
+    timeoutMs?: number;
+  }) {
+    return request<{
+      deviceId: string;
+      target: string;
+      interfaces: DiscoveredSnmpInterface[];
+    }>("/device-monitors/snmp/discover-interfaces", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  importSnmpInterfaceMonitors(body: {
+    deviceId: string;
+    target?: string;
+    port?: number;
+    snmpVersion?: "1" | "2c";
+    snmpCommunity?: string;
+    timeoutMs?: number;
+    ifIndexes?: number[];
+    skipExisting?: boolean;
+    intervalMs?: number;
+    expectedOperStatus?: string;
+  }) {
+    return request<{
+      created: DeviceMonitor[];
+      skippedIfIndexes: number[];
+      createdCount: number;
+      skippedCount: number;
+      linkedPortIds: string[];
+    }>("/device-monitors/snmp/import-interfaces", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  getSnmpTrapStatus() {
+    return request<SnmpTrapReceiverStatus>("/snmp-traps/status");
+  },
+
+  getSnmpTrapLog(params?: {
+    labId?: string;
+    deviceId?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    return request<SnmpTrapLogEntry[]>("/snmp-traps/log", undefined, params);
+  },
+
   runAllDeviceMonitors() {
     return request<{ results: DeviceMonitor[] }>("/device-monitors/run", {
       method: "POST",
@@ -942,6 +1011,103 @@ export const api = {
   runDeviceMonitor(id: string) {
     return request<DeviceMonitor>(`/device-monitors/${id}/run`, {
       method: "POST",
+    });
+  },
+
+  getSnmpCredentials(params?: { labId?: string }) {
+    return request<SnmpCredential[]>("/snmp-credentials", undefined, params);
+  },
+
+  createSnmpCredential(body: {
+    labId: string;
+    name: string;
+    version: "1" | "2c" | "3";
+    community?: string;
+    v3User?: string;
+    v3AuthProto?: "MD5" | "SHA";
+    v3AuthPassword?: string;
+    v3PrivProto?: "none" | "AES128";
+    v3PrivPassword?: string;
+    v3Context?: string;
+  }) {
+    return request<SnmpCredential>("/snmp-credentials", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateSnmpCredential(
+    id: string,
+    body: Partial<{
+      name: string;
+      version: "1" | "2c" | "3";
+      community: string | null;
+      v3User: string | null;
+      v3AuthProto: "MD5" | "SHA" | null;
+      v3AuthPassword: string | null;
+      v3PrivProto: "none" | "AES128" | null;
+      v3PrivPassword: string | null;
+      v3Context: string | null;
+      clearCommunity: boolean;
+      clearV3AuthPassword: boolean;
+      clearV3PrivPassword: boolean;
+    }>,
+  ) {
+    return request<SnmpCredential>(`/snmp-credentials/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteSnmpCredential(id: string) {
+    return request<void>(`/snmp-credentials/${id}`, { method: "DELETE" });
+  },
+
+  testSnmpCredential(
+    id: string,
+    body: { target: string; port?: number; timeoutMs?: number },
+  ) {
+    return request<{
+      oid: string;
+      value: string;
+      type: string;
+      target: string;
+      version: string;
+    }>(`/snmp-credentials/${id}/test`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  getSnmpSyncProfiles() {
+    return request<SnmpSyncProfile[]>("/snmp-sync/profiles");
+  },
+
+  previewSnmpSync(body: {
+    deviceId: string;
+    profileId: string;
+    policy?: SnmpSyncPreview["policy"];
+    target?: string;
+    port?: number;
+    timeoutMs?: number;
+    snmpCredentialId?: string;
+    snmpVersion?: "1" | "2c" | "3";
+    snmpCommunity?: string;
+  }) {
+    return request<SnmpSyncPreview>("/snmp-sync/preview", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  applySnmpSync(body: {
+    preview: SnmpSyncPreview;
+    policy?: SnmpSyncPreview["policy"];
+    allowDeletes?: boolean;
+  }) {
+    return request<SnmpSyncApplyResult>("/snmp-sync/apply", {
+      method: "POST",
+      body: JSON.stringify(body),
     });
   },
 

@@ -30,6 +30,7 @@ import type { LucideIcon } from "lucide-react";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
+import { useI18n } from "@/i18n";
 
 interface SearchResult {
   id: string;
@@ -41,127 +42,13 @@ interface SearchResult {
   accent?: string;
 }
 
-const PAGES: SearchResult[] = [
-  {
-    id: "p-dash",
-    group: "Pages",
-    title: "Dashboard",
-    subtitle: "Overview",
-    href: "/",
-    Icon: LayoutDashboard,
-  },
-  {
-    id: "p-racks",
-    group: "Pages",
-    title: "Racks / Rooms",
-    subtitle: "Physical rooms and racks",
-    href: "/racks",
-    Icon: Server,
-  },
-  {
-    id: "p-devices",
-    group: "Pages",
-    title: "Devices",
-    subtitle: "Inventory",
-    href: "/devices",
-    Icon: Boxes,
-  },
-  {
-    id: "p-monitoring",
-    group: "Pages",
-    title: "Monitoring",
-    subtitle: "Health overview",
-    href: "/monitoring",
-    Icon: Activity,
-  },
-  {
-    id: "p-imports",
-    group: "Pages",
-    title: "Imports",
-    subtitle: "Hyper-V and Proxmox import",
-    href: "/imports",
-    Icon: UploadCloud,
-  },
-  {
-    id: "p-ports",
-    group: "Pages",
-    title: "Ports",
-    subtitle: "Port management",
-    href: "/ports",
-    Icon: Cable,
-  },
-  {
-    id: "p-cables",
-    group: "Pages",
-    title: "Cables",
-    subtitle: "Connections",
-    href: "/cables",
-    Icon: Workflow,
-  },
-  {
-    id: "p-visualizer",
-    group: "Pages",
-    title: "Visualizer",
-    subtitle: "Rack cable map",
-    href: "/visualizer",
-    Icon: Route,
-  },
-  {
-    id: "p-vlans",
-    group: "Pages",
-    title: "VLANs",
-    subtitle: "Layer 2 segmentation",
-    href: "/vlans",
-    Icon: Hash,
-  },
-  {
-    id: "p-ipam",
-    group: "Pages",
-    title: "IPAM",
-    subtitle: "Address management",
-    href: "/ipam",
-    Icon: Network,
-  },
-  {
-    id: "p-reports",
-    group: "Pages",
-    title: "Reports",
-    subtitle: "Export and print",
-    href: "/reports",
-    Icon: FileText,
-  },
-  {
-    id: "p-audit",
-    group: "Pages",
-    title: "Audit log",
-    subtitle: "Recent activity",
-    href: "/audit-log",
-    Icon: ScrollText,
-  },
-  {
-    id: "p-documentation",
-    group: "Pages",
-    title: "Documentation",
-    subtitle: "Markdown notes",
-    href: "/documentation",
-    Icon: BookOpen,
-  },
-  {
-    id: "p-admin",
-    group: "Pages",
-    title: "Admin",
-    subtitle: "Accounts and settings",
-    href: "/admin",
-    Icon: Shield,
-  },
-];
-
 interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
 }
 
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
@@ -173,9 +60,127 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const vlans = useStore((s) => s.vlans);
   const ipAssignments = useStore((s) => s.ipAssignments);
 
+  const pages = useMemo<SearchResult[]>(
+    () => [
+      {
+        id: "p-dash",
+        group: "Pages",
+        title: t("Dashboard"),
+        subtitle: t("Overview"),
+        href: "/",
+        Icon: LayoutDashboard,
+      },
+      {
+        id: "p-racks",
+        group: "Pages",
+        title: t("Racks / Rooms"),
+        subtitle: "Physical rooms and racks",
+        href: "/racks",
+        Icon: Server,
+      },
+      {
+        id: "p-devices",
+        group: "Pages",
+        title: t("Devices"),
+        subtitle: t("Inventory"),
+        href: "/devices",
+        Icon: Boxes,
+      },
+      {
+        id: "p-monitoring",
+        group: "Pages",
+        title: t("Monitoring"),
+        subtitle: "Health overview",
+        href: "/monitoring",
+        Icon: Activity,
+      },
+      {
+        id: "p-imports",
+        group: "Pages",
+        title: t("Imports"),
+        subtitle: "Hyper-V and Proxmox import",
+        href: "/imports",
+        Icon: UploadCloud,
+      },
+      {
+        id: "p-ports",
+        group: "Pages",
+        title: t("Ports"),
+        subtitle: "Port management",
+        href: "/ports",
+        Icon: Cable,
+      },
+      {
+        id: "p-cables",
+        group: "Pages",
+        title: t("Cables"),
+        subtitle: "Connections",
+        href: "/cables",
+        Icon: Workflow,
+      },
+      {
+        id: "p-visualizer",
+        group: "Pages",
+        title: t("Visualizer"),
+        subtitle: "Rack cable map",
+        href: "/visualizer",
+        Icon: Route,
+      },
+      {
+        id: "p-vlans",
+        group: "Pages",
+        title: t("VLANs"),
+        subtitle: "Layer 2 segmentation",
+        href: "/vlans",
+        Icon: Hash,
+      },
+      {
+        id: "p-ipam",
+        group: "Pages",
+        title: t("IPAM"),
+        subtitle: "Address management",
+        href: "/ipam",
+        Icon: Network,
+      },
+      {
+        id: "p-reports",
+        group: "Pages",
+        title: t("Reports"),
+        subtitle: "Export and print",
+        href: "/reports",
+        Icon: FileText,
+      },
+      {
+        id: "p-audit",
+        group: "Pages",
+        title: t("Audit log"),
+        subtitle: "Recent activity",
+        href: "/audit-log",
+        Icon: ScrollText,
+      },
+      {
+        id: "p-documentation",
+        group: "Pages",
+        title: t("Documentation"),
+        subtitle: "Markdown notes",
+        href: "/documentation",
+        Icon: BookOpen,
+      },
+      {
+        id: "p-admin",
+        group: "Pages",
+        title: t("Admin"),
+        subtitle: t("Accounts and settings"),
+        href: "/admin",
+        Icon: Shield,
+      },
+    ],
+    [t],
+  );
+
   const results = useMemo<SearchResult[]>(() => {
     const q = query.toLowerCase().trim();
-    if (!q) return PAGES;
+    if (!q) return pages;
 
     const out: SearchResult[] = [];
 
@@ -263,19 +268,19 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           id: `doc-${page.id}`,
           group: "Pages",
           title: page.title,
-          subtitle: "Documentation",
+          subtitle: t("Documentation"),
           href: `/documentation?pageId=${page.id}`,
           Icon: BookOpen,
         });
       }
     }
 
-    for (const page of PAGES) {
+    for (const page of pages) {
       if (page.title.toLowerCase().includes(q)) out.push(page);
     }
 
     return out;
-  }, [devices, documentationPages, ipAssignments, query, vlans]);
+  }, [devices, documentationPages, ipAssignments, pages, query, t, vlans]);
 
   const grouped = useMemo(() => {
     const groups: {
@@ -379,7 +384,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Search devices, VLANs, IPs, pages..."
+                  placeholder={t("Search commands")}
                   className="flex-1 bg-transparent text-sm text-[var(--color-fg)] placeholder:text-[var(--color-fg-faint)] focus:outline-none"
                 />
                 {query ? (
@@ -402,7 +407,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               <div ref={listRef} className="max-h-[340px] overflow-y-auto">
                 {results.length === 0 ? (
                   <div className="px-4 py-8 text-center text-xs text-[var(--color-fg-subtle)]">
-                    No results for{" "}
+                    {t("No results")}{" "}
                     <span className="text-[var(--color-fg)]">"{query}"</span>
                   </div>
                 ) : (
@@ -411,7 +416,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       <div key={group.label}>
                         <div className="flex items-center gap-2 px-4 pb-1 pt-2">
                           <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
-                            {group.label}
+                            {group.label === "Devices"
+                              ? t("Devices")
+                              : group.label === "VLANs"
+                                ? t("VLANs")
+                                : group.label}
                           </span>
                           <span className="flex-1 border-t border-[var(--color-line)]" />
                         </div>
@@ -479,9 +488,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               </div>
 
               <div className="flex items-center gap-4 border-t border-[var(--color-line)] px-4 py-2">
-                <KbdHint keys="↑↓" label="navigate" />
-                <KbdHint keys="↵" label="open" />
-                <KbdHint keys="esc" label="close" />
+                <KbdHint keys="↑↓" label={t("Navigate")} />
+                <KbdHint keys="↵" label={t("Open")} />
+                <KbdHint keys="esc" label={t("Close")} />
                 <span className="ml-auto font-mono text-[10px] text-[var(--color-fg-faint)]">
                   {results.length} result{results.length !== 1 ? "s" : ""}
                 </span>

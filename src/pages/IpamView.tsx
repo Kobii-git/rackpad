@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
+import { useI18n } from "@/i18n";
 import {
   Card,
   CardBody,
@@ -107,6 +108,7 @@ const EMPTY_ZONE_FORM: ZoneForm = {
 };
 
 export default function IpamView() {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useStore((s) => s.currentUser);
   const activeLab = useStore((s) => s.lab);
@@ -315,7 +317,7 @@ export default function IpamView() {
       <>
         <TopBar
           subtitle="Address management"
-          title="IPAM"
+          title={t("IPAM")}
           actions={
             canEdit ? (
               <Button
@@ -576,8 +578,8 @@ export default function IpamView() {
   return (
     <>
       <TopBar
-        subtitle="Network"
-        title="IPAM"
+        subtitle={t("Network")}
+        title={t("IPAM")}
         meta={
           <>
             <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">

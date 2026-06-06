@@ -9,7 +9,11 @@ export function MarkdownPreview({ content }: { content: string }) {
       </div>
     );
   }
-  return <div className="space-y-3">{blocks}</div>;
+  return (
+    <div className="space-y-3" data-no-i18n>
+      {blocks}
+    </div>
+  );
 }
 
 function parseBlocks(content: string) {
