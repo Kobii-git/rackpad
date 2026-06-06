@@ -6,7 +6,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
-## [1.5.9-beta.1] - 2026-06-06
+## [1.5.10-beta.0] - 2026-06-06
 
 ### Added
 
@@ -23,6 +23,19 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   and kept `/users` as a backwards-compatible redirect.
 - The app now resolves language by browser preference first, then instance
   default, then English, and updates the document language for English/French.
+
+### Fixed
+
+- Fixed a language selector freeze by preventing the translation observer from
+  rewriting already-translated text/attributes and leaving native select option
+  text alone.
+
+## [1.5.9-beta.1] - 2026-06-06
+
+### Changed
+
+- Superseded by `1.5.10-beta.0` so the Admin/French localization work is
+  versioned as a feature beta and includes the language selector freeze fix.
 
 ## [1.5.9-beta.0] - 2026-06-05
 

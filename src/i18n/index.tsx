@@ -29,6 +29,8 @@ const SKIP_TRANSLATION_TAGS = new Set([
   "SCRIPT",
   "STYLE",
   "TEXTAREA",
+  "SELECT",
+  "OPTION",
   "CODE",
   "PRE",
   "KBD",
@@ -180,7 +182,13 @@ function translateTextNodes(
     const trimmed = original.trim();
     const key = phraseMap.get(trimmed);
     if (key) {
-      node.textContent = original.replace(trimmed, dictionary[key]);
+      const translated = dictionary[key];
+      if (translated !== trimmed) {
+        const next = original.replace(trimmed, translated);
+        if (next !== original) {
+          node.textContent = next;
+        }
+      }
     }
     node = walker.nextNode();
   }
@@ -203,7 +211,10 @@ function translateAttributes(
       if (!value) continue;
       const key = phraseMap.get(value.trim());
       if (key) {
-        element.setAttribute(attribute, dictionary[key]);
+        const translated = dictionary[key];
+        if (translated !== value) {
+          element.setAttribute(attribute, translated);
+        }
       }
     }
   }
