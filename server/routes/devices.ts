@@ -425,6 +425,13 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const parentDeviceId = optionalString(changes, "parentDeviceId", {
       maxLength: 80,
     });
+
+    if (placement === "wireless" && !parentDeviceId) {
+      throw new ValidationError(
+        "Wireless placement requires selecting an access point.",
+      );
+    }
+
     const wifiSsidId = optionalString(changes, "wifiSsidId", { maxLength: 80 });
     const roomId = optionalString(changes, "roomId", { maxLength: 80 });
     const status = optionalEnum(changes, "status", DEVICE_STATUSES);

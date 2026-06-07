@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 23;
+const CURRENT_SCHEMA_VERSION = 24;
 
 export const db = new Database(DB_PATH);
 
@@ -801,6 +801,12 @@ const SCHEMA_MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS idx_snmp_trap_log_device_received
         ON snmpTrapLog (deviceId, receivedAt DESC);
+    `,
+  },
+  {
+    version: 24,
+    sql: `
+      ALTER TABLE discoveredDevices ADD COLUMN placementHint TEXT;
     `,
   },
 ] as const;

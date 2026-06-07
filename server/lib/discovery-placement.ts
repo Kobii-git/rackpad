@@ -83,7 +83,23 @@ export function deviceHasDocumentedPorts(deviceId: string) {
   return Number(row.count) > 0
 }
 
-export function resolveWifiClientPlacement(input: {
+export type WifiPlacementHint =
+  | 'wifi-vlan-match'
+  | 'loose-multiple-aps'
+  | 'loose-no-wifi-vlan'
+  | 'loose-wired-device-type'
+  | 'loose-wired-hostname'
+  | 'loose-existing-inventory'
+  | 'loose-documented-ports'
+  | null
+
+export interface WifiPlacementExplanation {
+  placement: 'wireless' | 'room'
+  hint: WifiPlacementHint
+  resolved: WifiClientPlacementResult | null
+}
+
+export function explainWifiClientPlacement(input: {
   labId: string
   ipAddress: string
   deviceType: string
@@ -91,17 +107,24 @@ export function resolveWifiClientPlacement(input: {
   displayName?: string | null
   macAddress?: string | null
   excludeDeviceId?: string
-}): WifiClientPlacementResult | null {
-  if (shouldSkipWifiAutoPlacement(input)) return null
+}): WifiPlacementExplanation {
+  if (shouldSkipWifiAutoPlacement(input)) {
+    if (WIRED_DEVICE_TYPES.has(input.deviceType)) {
+      return { placement: 'room', hint: 'loose-wired-device-type', resolved: null }
+    }
+    return { placement: 'room', hint: 'loose-wired-hostname', resolved: null }
+  }
   if (deviceExistsAtIp(input.labId, input.ipAddress, input.excludeDeviceId)) {
-    return null
+    return { placement: 'room', hint: 'loose-existing-inventory', resolved: null }
   }
 
   const subnets = db
     .prepare('SELECT id, cidr, vlanId FROM subnets WHERE labId = ?')
     .all(input.labId) as Array<{ id: string; cidr: string; vlanId: string | null }>
   const match = subnets.find((entry) => cidrContainsIp(entry.cidr, input.ipAddress))
-  if (!match?.vlanId) return null
+  if (!match?.vlanId) {
+    return { placement: 'room', hint: 'loose-no-wifi-vlan', resolved: null }
+  }
 
   const ssids = db
     .prepare(`
@@ -111,7 +134,9 @@ export function resolveWifiClientPlacement(input: {
       ORDER BY name COLLATE NOCASE, id
     `)
     .all(input.labId, match.vlanId) as Array<{ id: string; name: string }>
-  if (ssids.length === 0) return null
+  if (ssids.length === 0) {
+    return { placement: 'room', hint: 'loose-no-wifi-vlan', resolved: null }
+  }
 
   const apIds = new Set<string>()
   const ssidByAp = new Map<string, string>()
@@ -135,22 +160,44 @@ export function resolveWifiClientPlacement(input: {
     }
   }
 
-  if (apIds.size !== 1) return null
+  if (apIds.size !== 1) {
+    return { placement: 'room', hint: 'loose-multiple-aps', resolved: null }
+  }
 
   const apDeviceId = [...apIds][0]!
   const ssidId = ssidByAp.get(apDeviceId)
-  if (!ssidId) return null
+  if (!ssidId) {
+    return { placement: 'room', hint: 'loose-no-wifi-vlan', resolved: null }
+  }
 
   const apDevice = db
     .prepare('SELECT roomId FROM devices WHERE id = ? AND labId = ?')
     .get(apDeviceId, input.labId) as { roomId: string | null } | undefined
-  if (!apDevice) return null
+  if (!apDevice) {
+    return { placement: 'room', hint: 'loose-multiple-aps', resolved: null }
+  }
 
   return {
-    apDeviceId,
-    ssidId,
-    roomId: apDevice.roomId ?? null,
+    placement: 'wireless',
+    hint: 'wifi-vlan-match',
+    resolved: {
+      apDeviceId,
+      ssidId,
+      roomId: apDevice.roomId ?? null,
+    },
   }
+}
+
+export function resolveWifiClientPlacement(input: {
+  labId: string
+  ipAddress: string
+  deviceType: string
+  hostname?: string | null
+  displayName?: string | null
+  macAddress?: string | null
+  excludeDeviceId?: string
+}): WifiClientPlacementResult | null {
+  return explainWifiClientPlacement(input).resolved
 }
 
 export function upsertWifiClientAssociation(input: {
@@ -237,7 +284,19 @@ export function inferDiscoveryPlacement(input: {
   if (input.deviceType === 'vm' || input.deviceType === 'container') {
     return 'virtual' as const
   }
-  const wifi = resolveWifiClientPlacement(input)
-  if (wifi) return 'wireless' as const
-  return 'room' as const
+  return explainWifiClientPlacement(input).placement
+}
+
+export function inferDiscoveryPlacementHint(input: {
+  labId: string
+  ipAddress: string
+  deviceType: string
+  hostname?: string | null
+  displayName?: string | null
+  macAddress?: string | null
+}): WifiPlacementHint {
+  if (input.deviceType === 'ap' || input.deviceType === 'vm' || input.deviceType === 'container') {
+    return null
+  }
+  return explainWifiClientPlacement(input).hint
 }

@@ -2057,6 +2057,15 @@ export function visualizerCablePath(
   index: number,
   layout: VisualizerCableLayout = "auto",
 ) {
+  if (layout === "straight") {
+    const laneOffset = ((index % 17) - 8) * 4;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const normalX = (-dy / distance) * laneOffset;
+    const normalY = (dx / distance) * laneOffset;
+    return `M ${from.x + normalX} ${from.y + normalY} L ${to.x + normalX} ${to.y + normalY}`;
+  }
   if (layout !== "auto") {
     return curvedCablePath(from, to, index, layout);
   }
@@ -2092,7 +2101,7 @@ function curvedCablePath(
   from: { x: number; y: number },
   to: { x: number; y: number },
   index: number,
-  layout: Exclude<VisualizerCableLayout, "auto">,
+  layout: Exclude<VisualizerCableLayout, "auto" | "straight">,
 ) {
   const dx = to.x - from.x;
   const dy = to.y - from.y;

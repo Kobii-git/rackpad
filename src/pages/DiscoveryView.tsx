@@ -815,6 +815,11 @@ export default function DiscoveryView() {
                           <Td>
                             <div className="flex flex-wrap gap-1">
                               <DiscoveryBadge status={device.status} />
+                              {device.placementHint && (
+                                <Badge tone="info">
+                                  {placementHintLabel(device.placementHint)}
+                                </Badge>
+                              )}
                               {device.technicalRole && (
                                 <Badge tone="neutral">
                                   {device.technicalRole}
@@ -1242,6 +1247,27 @@ function FilterButton({
       {children}
     </Button>
   );
+}
+
+function placementHintLabel(hint: string) {
+  switch (hint) {
+    case "wifi-vlan-match":
+      return "Placed by VLAN/SSID match";
+    case "loose-multiple-aps":
+      return "Left loose: multiple APs";
+    case "loose-no-wifi-vlan":
+      return "Left loose: no WiFi VLAN";
+    case "loose-wired-device-type":
+      return "Left loose: wired device type";
+    case "loose-wired-hostname":
+      return "Left loose: wired hostname";
+    case "loose-existing-inventory":
+      return "Left loose: existing inventory";
+    case "loose-documented-ports":
+      return "Left loose: documented ports";
+    default:
+      return hint;
+  }
 }
 
 function DiscoveryBadge({ status }: { status: DiscoveredDevice["status"] }) {

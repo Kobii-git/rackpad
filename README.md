@@ -44,6 +44,7 @@ If `rackpad.co.za` is unavailable, the repo still contains the core material you
 - [Visualizer guide](./docs/VISUALIZER.md)
 - [OIDC login guide](./docs/OIDC.md)
 - [SNMP monitoring, traps & sync guide](./docs/SNMP.md)
+- [Discovery deployment (Proxmox/LXC/host networking)](./docs/DISCOVERY_DEPLOYMENT.md)
 - [SNMP implementation plan & outstanding work](./docs/SNMP_IMPLEMENTATION_PLAN.md)
 - [Documentation and images guide](./docs/DOCUMENTATION.md)
 - [Security policy](./SECURITY.md)

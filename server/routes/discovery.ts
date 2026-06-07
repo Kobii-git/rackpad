@@ -14,6 +14,7 @@ import { optionalDeviceType } from "../lib/device-types.js";
 import {
   applyWifiDiscoveryPlacementToDevice,
   inferDiscoveryPlacement,
+  inferDiscoveryPlacementHint,
 } from "../lib/discovery-placement.js";
 import { createId } from "../lib/ids.js";
 import { runIcmpProbe } from "../lib/monitoring.js";
@@ -86,6 +87,7 @@ function parseDiscoveredDevice(row: Record<string, unknown>) {
       : null,
     technicalRole: row.technicalRole ? String(row.technicalRole) : null,
     technicalReason: row.technicalReason ? String(row.technicalReason) : null,
+    placementHint: row.placementHint ? String(row.placementHint) : null,
     lastSeen: row.lastSeen ? String(row.lastSeen) : null,
     lastScannedAt: String(row.lastScannedAt),
   };
@@ -687,6 +689,14 @@ async function scanHost(
       displayName,
       macAddress,
     }),
+    placementHint: inferDiscoveryPlacementHint({
+      labId,
+      ipAddress,
+      deviceType,
+      hostname,
+      displayName,
+      macAddress,
+    }),
     macAddress,
     vendor,
     source: "icmp-scan",
@@ -803,8 +813,8 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
 
     const upsert = db.prepare(`
       INSERT INTO discoveredDevices
-        (id, labId, ipAddress, hostname, displayName, deviceType, placement, macAddress, vendor, source, status, notes, importedDeviceId, technicalRole, technicalReason, lastSeen, lastScannedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, labId, ipAddress, hostname, displayName, deviceType, placement, placementHint, macAddress, vendor, source, status, notes, importedDeviceId, technicalRole, technicalReason, lastSeen, lastScannedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(labId, ipAddress) DO UPDATE SET
         hostname = CASE
           WHEN discoveredDevices.importedDeviceId IS NOT NULL
@@ -825,6 +835,11 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
           WHEN discoveredDevices.importedDeviceId IS NOT NULL
             THEN discoveredDevices.placement
           ELSE COALESCE(discoveredDevices.placement, excluded.placement)
+        END,
+        placementHint = CASE
+          WHEN discoveredDevices.importedDeviceId IS NOT NULL
+            THEN discoveredDevices.placementHint
+          ELSE COALESCE(discoveredDevices.placementHint, excluded.placementHint)
         END,
         macAddress = CASE
           WHEN discoveredDevices.importedDeviceId IS NOT NULL
@@ -864,6 +879,7 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
           record.displayName,
           record.deviceType,
           record.placement,
+          record.placementHint,
           record.macAddress,
           record.vendor,
           record.source,

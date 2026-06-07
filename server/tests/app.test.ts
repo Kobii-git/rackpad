@@ -493,6 +493,54 @@ test("per-lab access restricts users to assigned labs", async () => {
     },
   });
   assert.equal(workRacksRes.statusCode, 200);
+
+  const homeDevicesRes = await app.inject({
+    method: "GET",
+    url: "/api/devices?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${limitedToken}`,
+    },
+  });
+  assert.equal(homeDevicesRes.statusCode, 403);
+
+  const workDevicesRes = await app.inject({
+    method: "GET",
+    url: "/api/devices?labId=lab_work",
+    headers: {
+      authorization: `Bearer ${limitedToken}`,
+    },
+  });
+  assert.equal(workDevicesRes.statusCode, 200);
+});
+
+test("bulk wireless placement requires an access point", async () => {
+  const adminToken = await bootstrapAdmin();
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      hostname: "bulk-wireless-client",
+      deviceType: "endpoint",
+      status: "online",
+      placement: "room",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const bulkRes = await app.inject({
+    method: "POST",
+    url: "/api/devices/bulk",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      deviceIds: [device.id],
+      changes: { placement: "wireless" },
+    },
+  });
+  assert.equal(bulkRes.statusCode, 400);
+  assert.match(bulkRes.body, /access point/i);
 });
 
 test("documentation pages and device images can be created", async () => {

@@ -513,6 +513,7 @@ export interface DiscoveredDevice {
   importedDeviceId?: ID | null;
   technicalRole?: string | null;
   technicalReason?: string | null;
+  placementHint?: string | null;
   lastSeen?: string | null;
   lastScannedAt: string;
 }

@@ -49,9 +49,10 @@ type SortKey =
 
 interface BulkDeviceForm {
   tags: string;
-  placement: "" | "room" | "wireless";
+  placement: "" | "loose" | "room" | "wireless";
   roomId: string;
   parentDeviceId: string;
+  wifiSsidId: string;
   deviceType: string;
   manufacturer: string;
   model: string;
@@ -67,6 +68,7 @@ const EMPTY_BULK_DEVICE_FORM: BulkDeviceForm = {
   placement: "",
   roomId: "",
   parentDeviceId: "",
+  wifiSsidId: "",
   deviceType: "",
   manufacturer: "",
   model: "",
@@ -84,6 +86,7 @@ export default function DevicesList() {
   const deviceTypes = useStore((s) => s.deviceTypes);
   const rooms = useStore((s) => s.rooms);
   const devices = useStore((s) => s.devices);
+  const wifiSsids = useStore((s) => s.wifiSsids);
   const racks = useStore((s) => s.racks);
   const ports = useStore((s) => s.ports);
   const deviceMonitors = useStore((s) => s.deviceMonitors);
@@ -271,6 +274,11 @@ export default function DevicesList() {
     });
   }
 
+  const bulkPlacementInvalid =
+    bulkFields.has("placement") &&
+    bulkForm.placement === "wireless" &&
+    !bulkForm.parentDeviceId;
+
   async function handleBulkSave() {
     if (selectedDeviceIds.size === 0 || bulkFields.size === 0) return;
     const changes: Record<string, unknown> = {};
@@ -283,8 +291,14 @@ export default function DevicesList() {
     if (bulkFields.has("placement")) {
       if (bulkForm.placement === "wireless") {
         changes.placement = "wireless";
-        changes.parentDeviceId = bulkForm.parentDeviceId || null;
+        changes.parentDeviceId = bulkForm.parentDeviceId;
+        if (bulkForm.wifiSsidId) {
+          changes.wifiSsidId = bulkForm.wifiSsidId;
+        }
+      } else if (bulkForm.placement === "loose") {
+        changes.placement = "room";
         changes.roomId = null;
+        changes.parentDeviceId = null;
       } else if (bulkForm.placement === "room") {
         changes.placement = "room";
         changes.roomId = bulkForm.roomId || null;
@@ -550,7 +564,8 @@ export default function DevicesList() {
                     }
                   >
                     <option value="">{t("Keep current placement")}</option>
-                    <option value="room">{t("Loose / room tech")}</option>
+                    <option value="loose">{t("Loose / no room")}</option>
+                    <option value="room">{t("Room")}</option>
                     <option value="wireless">{t("WiFi / AP linked")}</option>
                   </Select>
                   {bulkForm.placement === "room" && (
@@ -569,22 +584,43 @@ export default function DevicesList() {
                     </Select>
                   )}
                   {bulkForm.placement === "wireless" && (
-                    <Select
-                      value={bulkForm.parentDeviceId}
-                      onChange={(value) =>
-                        setBulkForm((prev) => ({
-                          ...prev,
-                          parentDeviceId: value,
-                        }))
-                      }
-                    >
-                      <option value="">{t("No AP selected")}</option>
-                      {accessPointCandidates.map((entry) => (
-                        <option key={entry.id} value={entry.id}>
-                          {entry.hostname}
-                        </option>
-                      ))}
-                    </Select>
+                    <>
+                      <Select
+                        value={bulkForm.parentDeviceId}
+                        onChange={(value) =>
+                          setBulkForm((prev) => ({
+                            ...prev,
+                            parentDeviceId: value,
+                            wifiSsidId: "",
+                          }))
+                        }
+                      >
+                        <option value="">{t("No AP selected")}</option>
+                        {accessPointCandidates.map((entry) => (
+                          <option key={entry.id} value={entry.id}>
+                            {entry.hostname}
+                          </option>
+                        ))}
+                      </Select>
+                      {bulkForm.parentDeviceId && (
+                        <Select
+                          value={bulkForm.wifiSsidId}
+                          onChange={(value) =>
+                            setBulkForm((prev) => ({
+                              ...prev,
+                              wifiSsidId: value,
+                            }))
+                          }
+                        >
+                          <option value="">SSID (optional)</option>
+                          {wifiSsids.map((ssid) => (
+                            <option key={ssid.id} value={ssid.id}>
+                              {ssid.name}
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                    </>
                   )}
                 </BulkField>
                 <BulkField
@@ -753,7 +789,11 @@ export default function DevicesList() {
               <div className="flex justify-end gap-2">
                 <Button
                   size="sm"
-                  disabled={bulkSaving || bulkFields.size === 0}
+                  disabled={
+                    bulkSaving ||
+                    bulkFields.size === 0 ||
+                    bulkPlacementInvalid
+                  }
                   onClick={() => void handleBulkSave()}
                 >
                   <Save className="size-3.5" />

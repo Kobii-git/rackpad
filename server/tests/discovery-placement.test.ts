@@ -13,6 +13,7 @@ const { db } = await import('../db.js')
 const {
   applyWifiDiscoveryPlacementToDevice,
   cidrContainsIp,
+  explainWifiClientPlacement,
   inferDiscoveryPlacement,
   resolveWifiClientPlacement,
   shouldSkipWifiAutoPlacement,
@@ -199,6 +200,29 @@ test('applyWifiDiscoveryPlacementToDevice updates device and association', () =>
     .get('client_new') as { apDeviceId: string; ssidId: string }
   assert.equal(association.apDeviceId, 'ap_main')
   assert.equal(association.ssidId, 'ssid_guest')
+})
+
+test('explainWifiClientPlacement reports vlan match and multiple AP ambiguity', () => {
+  seedWifiVlanSubnet()
+  const match = explainWifiClientPlacement({
+    labId: 'lab_home',
+    ipAddress: '192.168.30.55',
+    deviceType: 'endpoint',
+  })
+  assert.equal(match.placement, 'wireless')
+  assert.equal(match.hint, 'wifi-vlan-match')
+  assert.ok(match.resolved)
+})
+
+test('explainWifiClientPlacement leaves loose when multiple APs match', () => {
+  seedWifiVlanSubnet({ secondAp: true })
+  const ambiguous = explainWifiClientPlacement({
+    labId: 'lab_home',
+    ipAddress: '192.168.30.55',
+    deviceType: 'endpoint',
+  })
+  assert.equal(ambiguous.placement, 'room')
+  assert.equal(ambiguous.hint, 'loose-multiple-aps')
 })
 
 test('inferDiscoveryPlacement returns wireless for WiFi VLAN clients', () => {

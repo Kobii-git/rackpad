@@ -351,6 +351,7 @@ export default function VisualizerView() {
                 <option value="auto">Auto cables</option>
                 <option value="concave">Concave</option>
                 <option value="convex">Convex</option>
+                <option value="straight">Straight</option>
               </select>
             )}
             <Button
@@ -523,7 +524,9 @@ function readShelfLayout(key: string): VisualizerShelfLayout {
 function readCableLayout(key: string): VisualizerCableLayout {
   try {
     const value = window.localStorage.getItem(key);
-    return value === "concave" || value === "convex" ? value : "auto";
+    return value === "concave" || value === "convex" || value === "straight"
+      ? value
+      : "auto";
   } catch {
     return "auto";
   }
