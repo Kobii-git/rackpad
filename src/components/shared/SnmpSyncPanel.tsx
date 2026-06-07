@@ -3,6 +3,7 @@ import { RefreshCcw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useI18n } from "@/i18n";
+import type { TranslationKey } from "@/i18n/translations";
 import { api } from "@/lib/api";
 import type {
   SnmpCredential,
@@ -17,6 +18,12 @@ function actionTone(action: string) {
   if (action === "delete") return "warn" as const;
   return "neutral" as const;
 }
+
+const SYNC_ACTION_LABELS: Record<string, TranslationKey> = {
+  create: "Create",
+  update: "Update",
+  delete: "Delete",
+};
 
 export function SnmpSyncPanel({
   deviceId,
@@ -75,7 +82,7 @@ export function SnmpSyncPanel({
         setError(
           err instanceof Error
             ? err.message
-            : "SNMP inventory sync is unavailable.",
+            : t("SNMP inventory sync is unavailable."),
         );
       })
       .finally(() => {
@@ -127,7 +134,9 @@ export function SnmpSyncPanel({
       setAllowDeletes(false);
     } catch (err) {
       setPreview(null);
-      setError(err instanceof Error ? err.message : "SNMP sync preview failed.");
+      setError(
+        err instanceof Error ? err.message : t("SNMP sync preview failed."),
+      );
     } finally {
       setPreviewLoading(false);
     }
@@ -145,12 +154,15 @@ export function SnmpSyncPanel({
         allowDeletes,
       });
       setMessage(
-        `Applied ${result.createdVlanIds.length} VLAN(s) and ${result.createdSubnetIds.length} subnet(s).`,
+        t("Applied {vlanCount} VLAN(s) and {subnetCount} subnet(s).", {
+          vlanCount: result.createdVlanIds.length,
+          subnetCount: result.createdSubnetIds.length,
+        }),
       );
       setPreview(null);
       await onApplied();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "SNMP sync apply failed.");
+      setError(err instanceof Error ? err.message : t("SNMP sync apply failed."));
     } finally {
       setApplyLoading(false);
     }
@@ -159,7 +171,7 @@ export function SnmpSyncPanel({
   if (loadingProfiles) {
     return (
       <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3 text-sm text-[var(--color-fg-subtle)]">
-        Loading SNMP sync profiles...
+        {t("Loading SNMP sync profiles...")}
       </div>
     );
   }
@@ -167,9 +179,9 @@ export function SnmpSyncPanel({
   if (!featureEnabled) {
     return (
       <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3 text-sm text-[var(--color-fg-subtle)]">
-        SNMP inventory sync is disabled on this server. Set{" "}
-        <code className="font-mono text-[11px]">SNMP_INVENTORY_SYNC=1</code> to
-        enable VLAN and subnet preview/apply.
+        {t(
+          "SNMP inventory sync is disabled on this server. Set SNMP_INVENTORY_SYNC=1 to enable VLAN and subnet preview/apply.",
+        )}
       </div>
     );
   }
@@ -179,11 +191,12 @@ export function SnmpSyncPanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-sm font-medium text-[var(--color-fg)]">
-            SNMP inventory sync
+            {t("SNMP inventory sync")}
           </div>
           <div className="text-xs text-[var(--color-fg-subtle)]">
-            Preview VLAN and subnet inventory from this device before applying
-            changes to the lab.
+            {t(
+              "Preview VLAN and subnet inventory from this device before applying changes to the lab.",
+            )}
           </div>
         </div>
         <Button
@@ -199,7 +212,7 @@ export function SnmpSyncPanel({
 
       <div className="grid gap-3 md:grid-cols-3">
         <label className="block text-xs">
-          <span className="rk-field-label">Profile</span>
+          <span className="rk-field-label">{t("Profile")}</span>
           <select
             value={profileId}
             disabled={disabled}
@@ -214,7 +227,7 @@ export function SnmpSyncPanel({
           </select>
         </label>
         <label className="block text-xs">
-          <span className="rk-field-label">Policy</span>
+          <span className="rk-field-label">{t("Policy")}</span>
           <select
             value={policy}
             disabled={disabled}
@@ -223,19 +236,19 @@ export function SnmpSyncPanel({
             }
             className="mt-1 h-8 w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-2 text-sm"
           >
-            <option value="merge">Merge (add missing only)</option>
-            <option value="mirror">Mirror (create, update, delete)</option>
+            <option value="merge">{t("Merge (add missing only)")}</option>
+            <option value="mirror">{t("Mirror (create, update, delete)")}</option>
           </select>
         </label>
         <label className="block text-xs">
-          <span className="rk-field-label">Credential</span>
+          <span className="rk-field-label">{t("Credential")}</span>
           <select
             value={credentialId}
             disabled={disabled}
             onChange={(event) => setCredentialId(event.target.value)}
             className="mt-1 h-8 w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-2 text-sm"
           >
-            <option value="">Inline / device default</option>
+            <option value="">{t("Inline / device default")}</option>
             {credentials.map((credential) => (
               <option key={credential.id} value={credential.id}>
                 {credential.name} ({credential.version})
@@ -247,8 +260,10 @@ export function SnmpSyncPanel({
 
       {selectedProfile ? (
         <div className="text-xs text-[var(--color-fg-subtle)]">
-          {selectedProfile.description} Collects:{" "}
-          {selectedProfile.collects.join(", ")}.
+          {t("{description} Collects: {collects}.", {
+            description: selectedProfile.description,
+            collects: selectedProfile.collects.join(", "),
+          })}
         </div>
       ) : null}
 
@@ -265,19 +280,25 @@ export function SnmpSyncPanel({
             <Badge tone="info">{preview.target}</Badge>
             <Badge tone="neutral">{preview.policy}</Badge>
             <span className="text-[var(--color-fg-subtle)]">
-              +{preview.summary.vlanCreates} VLAN / +
-              {preview.summary.subnetCreates} subnet
+              {t("+{vlanCreates} VLAN / +{subnetCreates} subnet", {
+                vlanCreates: preview.summary.vlanCreates,
+                subnetCreates: preview.summary.subnetCreates,
+              })}
             </span>
             {preview.summary.vlanUpdates + preview.summary.subnetUpdates > 0 ? (
               <span className="text-[var(--color-fg-subtle)]">
-                {preview.summary.vlanUpdates + preview.summary.subnetUpdates}{" "}
-                update(s)
+                {t("{count} update(s)", {
+                  count:
+                    preview.summary.vlanUpdates + preview.summary.subnetUpdates,
+                })}
               </span>
             ) : null}
             {preview.summary.vlanDeletes + preview.summary.subnetDeletes > 0 ? (
               <span className="text-[var(--color-warning)]">
-                {preview.summary.vlanDeletes + preview.summary.subnetDeletes}{" "}
-                delete(s) previewed
+                {t("{count} delete(s) previewed", {
+                  count:
+                    preview.summary.vlanDeletes + preview.summary.subnetDeletes,
+                })}
               </span>
             ) : null}
           </div>
@@ -294,7 +315,7 @@ export function SnmpSyncPanel({
           {preview.vlans.length > 0 ? (
             <DiffSection title={t("VLANs")} rows={preview.vlans.map((entry) => ({
               key: String(entry.vlanNumber),
-              label: `VLAN ${entry.vlanNumber}`,
+              label: t("VLAN {number}", { number: entry.vlanNumber }),
               detail: entry.name,
               action: entry.action,
               note: entry.changes?.join("; ") ?? entry.blockedReason ?? undefined,
@@ -316,7 +337,7 @@ export function SnmpSyncPanel({
 
           {!hasChanges ? (
             <div className="text-sm text-[var(--color-fg-subtle)]">
-              Rackpad already matches the SNMP inventory for this profile.
+              {t("Rackpad already matches the SNMP inventory for this profile.")}
             </div>
           ) : null}
 
@@ -336,7 +357,7 @@ export function SnmpSyncPanel({
                     checked={allowDeletes}
                     onChange={(event) => setAllowDeletes(event.target.checked)}
                   />
-                  Allow deletes for unreferenced VLANs/subnets
+                  {t("Allow deletes for unreferenced VLANs/subnets")}
                 </label>
               ) : null}
               <Button
@@ -350,7 +371,9 @@ export function SnmpSyncPanel({
             </div>
           ) : (
             <div className="text-xs text-[var(--color-fg-subtle)]">
-              Administrator access is required to apply SNMP sync changes.
+              {t(
+                "Administrator access is required to apply SNMP sync changes.",
+              )}
             </div>
           )}
         </div>
@@ -372,6 +395,7 @@ function DiffSection({
     note?: string;
   }>;
 }) {
+  const { t } = useI18n();
   return (
     <div>
       <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
@@ -392,7 +416,11 @@ function DiffSection({
                 {row.note ? ` · ${row.note}` : ""}
               </div>
             </div>
-            <Badge tone={actionTone(row.action)}>{row.action}</Badge>
+            <Badge tone={actionTone(row.action)}>
+              {SYNC_ACTION_LABELS[row.action]
+                ? t(SYNC_ACTION_LABELS[row.action])
+                : row.action}
+            </Badge>
           </div>
         ))}
       </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
+import type { TranslationKey } from "@/i18n/translations";
 import { PortGrid } from "@/components/ports/PortGrid";
 import { PortList } from "@/components/ports/PortList";
 import {
@@ -50,6 +51,12 @@ const NON_PORT_BEARING_TYPES = new Set<Device["deviceType"]>([
 ]);
 
 const LINK_STATES: Port["linkState"][] = ["up", "down", "disabled", "unknown"];
+const LINK_STATE_KEYS: Record<Port["linkState"], TranslationKey> = {
+  up: "Up",
+  down: "Down",
+  disabled: "disabled",
+  unknown: "Unknown",
+};
 const PORT_KINDS: Port["kind"][] = [
   "rj45",
   "sfp",
@@ -63,6 +70,10 @@ const PORT_KINDS: Port["kind"][] = [
   "wifi",
 ];
 const PORT_MODES: NonNullable<Port["mode"]>[] = ["access", "trunk"];
+const PORT_MODE_KEYS: Record<NonNullable<Port["mode"]>, TranslationKey> = {
+  access: "access",
+  trunk: "trunk",
+};
 type PortLinkFilter = "all" | "linked" | "unlinked" | "up" | "down";
 
 interface PortFormState {
@@ -635,7 +646,7 @@ export default function PortView() {
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update port.");
+      setError(err instanceof Error ? err.message : t("Failed to update port."));
     } finally {
       setSaving(false);
     }
@@ -643,7 +654,8 @@ export default function PortView() {
 
   async function handleDelete() {
     if (!selectedPort) return;
-    if (!window.confirm(`Delete port ${selectedPort.name}?`)) return;
+    if (!window.confirm(t("Delete port {name}?", { name: selectedPort.name })))
+      return;
 
     setDeleting(true);
     setError("");
@@ -651,7 +663,7 @@ export default function PortView() {
       await deletePortRecord(selectedPort.id);
       setSelectedPortId(undefined);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete port.");
+      setError(err instanceof Error ? err.message : t("Failed to delete port."));
     } finally {
       setDeleting(false);
     }
@@ -702,19 +714,19 @@ export default function PortView() {
       .filter((port) => port.name);
 
     if (!templateForm.name.trim()) {
-      setTemplateError("Template name is required.");
+      setTemplateError(t("Template name is required."));
       return;
     }
     if (!templateForm.description.trim()) {
-      setTemplateError("Template description is required.");
+      setTemplateError(t("Template description is required."));
       return;
     }
     if (templateForm.deviceTypes.length === 0) {
-      setTemplateError("Select at least one device type.");
+      setTemplateError(t("Select at least one device type."));
       return;
     }
     if (normalizedPorts.length === 0) {
-      setTemplateError("Add at least one named port.");
+      setTemplateError(t("Add at least one named port."));
       return;
     }
 
@@ -737,7 +749,7 @@ export default function PortView() {
       }
 
       if (!selectedTemplate || selectedTemplate.builtIn) {
-        setTemplateError("Built-in templates cannot be modified.");
+        setTemplateError(t("Built-in templates cannot be modified."));
         return;
       }
 
@@ -752,7 +764,7 @@ export default function PortView() {
       });
     } catch (err) {
       setTemplateError(
-        err instanceof Error ? err.message : "Failed to save port template.",
+        err instanceof Error ? err.message : t("Failed to save port template."),
       );
     } finally {
       setTemplateSaving(false);
@@ -761,7 +773,11 @@ export default function PortView() {
 
   async function handleDeleteTemplate() {
     if (!selectedTemplate || selectedTemplate.builtIn) return;
-    if (!window.confirm(`Delete port template ${selectedTemplate.name}?`))
+    if (
+      !window.confirm(
+        t("Delete port template {name}?", { name: selectedTemplate.name }),
+      )
+    )
       return;
 
     setTemplateDeleting(true);
@@ -772,7 +788,7 @@ export default function PortView() {
       setCreatingTemplate(false);
     } catch (err) {
       setTemplateError(
-        err instanceof Error ? err.message : "Failed to delete port template.",
+        err instanceof Error ? err.message : t("Failed to delete port template."),
       );
     } finally {
       setTemplateDeleting(false);
@@ -845,7 +861,7 @@ export default function PortView() {
       setBulkPortForm(EMPTY_BULK_PORT_FORM);
     } catch (err) {
       setBulkError(
-        err instanceof Error ? err.message : "Failed to update selected ports.",
+        err instanceof Error ? err.message : t("Failed to update selected ports."),
       );
     } finally {
       setBulkSaving(false);
@@ -855,13 +871,17 @@ export default function PortView() {
   return (
     <>
       <TopBar
-        subtitle="Ports & cabling"
+        subtitle={t("Ports & cabling")}
         title={t("Ports")}
         meta={
           <>
             <Mono className="text-[var(--color-fg-muted)]">{linkedCount}</Mono>
             <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-              linked / {devicePorts.length} total | {totalCableCount} cables
+              {t("{linked} linked / {total} total | {cables} cables", {
+                linked: linkedCount,
+                total: devicePorts.length,
+                cables: totalCableCount,
+              })}
             </span>
           </>
         }
@@ -877,7 +897,7 @@ export default function PortView() {
               }}
             >
               <Plus className="size-3.5" />
-              Add port
+              {t("Add port")}
             </Button>
           ) : undefined
         }
@@ -887,8 +907,10 @@ export default function PortView() {
         <div className="flex w-64 shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-bg-2)]/40">
           <div className="border-b border-[var(--color-line)] px-4 py-3">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-              {filteredPortBearingDevices.length} / {portBearingDevices.length}{" "}
-              devices
+              {t("{filtered} / {total} devices", {
+                filtered: filteredPortBearingDevices.length,
+                total: portBearingDevices.length,
+              })}
             </span>
             <div className="mt-3 space-y-2">
               <div className="relative">
@@ -896,7 +918,7 @@ export default function PortView() {
                 <Input
                   value={deviceQuery}
                   onChange={(event) => setDeviceQuery(event.target.value)}
-                  placeholder="Filter devices..."
+                  placeholder={t("Filter devices...")}
                   className="h-8 pl-8 text-xs"
                 />
               </div>
@@ -907,7 +929,7 @@ export default function PortView() {
                     setDeviceTypeFilter(value as DeviceType | "all")
                   }
                 >
-                  <option value="all">All types</option>
+                  <option value="all">{t("All types")}</option>
                   {portDeviceTypeOptions.map((deviceType) => (
                     <option key={deviceType.id} value={deviceType.id}>
                       {deviceType.label}
@@ -920,11 +942,11 @@ export default function PortView() {
                     setPortLinkFilter(value as PortLinkFilter)
                   }
                 >
-                  <option value="all">All ports</option>
-                  <option value="linked">Linked</option>
-                  <option value="unlinked">Unlinked</option>
-                  <option value="up">Up</option>
-                  <option value="down">Down</option>
+                  <option value="all">{t("All ports")}</option>
+                  <option value="linked">{t("Linked")}</option>
+                  <option value="unlinked">{t("Unlinked")}</option>
+                  <option value="up">{t("Up")}</option>
+                  <option value="down">{t("Down")}</option>
                 </Select>
               </div>
             </div>
@@ -962,7 +984,10 @@ export default function PortView() {
                     <div className="truncate font-mono text-[10px] text-[var(--color-fg-subtle)]">
                       {entry.macAddress
                         ? entry.macAddress
-                        : `${linked}/${entryPorts.length} linked`}
+                        : t("{linked}/{total} linked", {
+                            linked,
+                            total: entryPorts.length,
+                          })}
                     </div>
                   </div>
                   <StatusDot status={entry.status} />
@@ -971,7 +996,7 @@ export default function PortView() {
             })}
             {filteredPortBearingDevices.length === 0 && (
               <div className="px-4 py-6 text-xs text-[var(--color-fg-subtle)]">
-                No devices match the current filters.
+                {t("No devices match the current filter")}
               </div>
             )}
           </div>
@@ -1020,7 +1045,7 @@ export default function PortView() {
                     <Input
                       value={portQuery}
                       onChange={(event) => setPortQuery(event.target.value)}
-                      placeholder="Filter ports, VLANs, peers, bridges..."
+                      placeholder={t("Filter ports, VLANs, peers, bridges...")}
                       className="h-8 pl-8 text-xs"
                     />
                   </div>
@@ -1032,11 +1057,14 @@ export default function PortView() {
                           checked={allVisiblePortsSelected}
                           onChange={() => toggleAllVisiblePorts()}
                         />
-                        Select shown
+                        {t("Select shown")}
                       </label>
                     )}
                     <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
-                      {visibleDevicePorts.length} / {devicePorts.length} shown
+                      {t("{shown} / {total} shown", {
+                        shown: visibleDevicePorts.length,
+                        total: devicePorts.length,
+                      })}
                     </Mono>
                   </div>
                 </div>
@@ -1058,8 +1086,8 @@ export default function PortView() {
                     <Card>
                       <CardHeader>
                         <CardTitle>
-                          <CardLabel>Table</CardLabel>
-                          <CardHeading>Selectable ports</CardHeading>
+                          <CardLabel>{t("Table")}</CardLabel>
+                          <CardHeading>{t("Selectable ports")}</CardHeading>
                         </CardTitle>
                       </CardHeader>
                       <CardBody className="p-0">
@@ -1083,9 +1111,11 @@ export default function PortView() {
                   <Card>
                     <CardHeader>
                       <CardTitle>
-                        <CardLabel>Interfaces</CardLabel>
+                        <CardLabel>{t("Interfaces")}</CardLabel>
                         <CardHeading>
-                          {visibleDevicePorts.length} ports
+                          {t("{count} ports", {
+                            count: visibleDevicePorts.length,
+                          })}
                         </CardHeading>
                       </CardTitle>
                     </CardHeader>
@@ -1113,9 +1143,11 @@ export default function PortView() {
                   <Card>
                     <CardHeader>
                       <CardTitle>
-                        <CardLabel>Bulk edit</CardLabel>
+                        <CardLabel>{t("Bulk edit")}</CardLabel>
                         <CardHeading>
-                          {selectedBulkPorts.length} selected ports
+                          {t("{count} selected ports", {
+                            count: selectedBulkPorts.length,
+                          })}
                         </CardHeading>
                       </CardTitle>
                       <Button
@@ -1123,12 +1155,12 @@ export default function PortView() {
                         size="sm"
                         onClick={() => setSelectedPortIds(new Set())}
                       >
-                        Clear
+                        {t("Clear")}
                       </Button>
                     </CardHeader>
                     <CardBody className="space-y-3">
                       <BulkField
-                        label="Kind"
+                        label={t("Kind")}
                         checked={bulkPortFields.has("kind")}
                         onChecked={() => toggleBulkPortField("kind")}
                       >
@@ -1149,7 +1181,7 @@ export default function PortView() {
                         </Select>
                       </BulkField>
                       <BulkField
-                        label="Speed"
+                        label={t("Speed")}
                         checked={bulkPortFields.has("speed")}
                         onChecked={() => toggleBulkPortField("speed")}
                       >
@@ -1166,7 +1198,7 @@ export default function PortView() {
                       </BulkField>
                       <div className="grid grid-cols-2 gap-3">
                         <BulkField
-                          label="State"
+                          label={t("State")}
                           checked={bulkPortFields.has("linkState")}
                           onChecked={() => toggleBulkPortField("linkState")}
                         >
@@ -1181,13 +1213,13 @@ export default function PortView() {
                           >
                             {LINK_STATES.map((state) => (
                               <option key={state} value={state}>
-                                {state}
+                                {t(LINK_STATE_KEYS[state])}
                               </option>
                             ))}
                           </Select>
                         </BulkField>
                         <BulkField
-                          label="Mode"
+                          label={t("Mode")}
                           checked={bulkPortFields.has("mode")}
                           onChecked={() => toggleBulkPortField("mode")}
                         >
@@ -1202,7 +1234,7 @@ export default function PortView() {
                           >
                             {PORT_MODES.map((mode) => (
                               <option key={mode} value={mode}>
-                                {mode}
+                                {t(PORT_MODE_KEYS[mode])}
                               </option>
                             ))}
                           </Select>
@@ -1211,8 +1243,8 @@ export default function PortView() {
                       <BulkField
                         label={
                           bulkPortForm.mode === "trunk"
-                            ? "Native VLAN"
-                            : "Access VLAN"
+                            ? t("Native VLAN")
+                            : t("Access VLAN")
                         }
                         checked={bulkPortFields.has("vlanId")}
                         onChecked={() => toggleBulkPortField("vlanId")}
@@ -1226,7 +1258,7 @@ export default function PortView() {
                             }))
                           }
                         >
-                          <option value="">Unassigned</option>
+                          <option value="">{t("Unassigned")}</option>
                           {vlans.map((vlan) => (
                             <option key={vlan.id} value={vlan.id}>
                               {vlan.vlanId} - {vlan.name}
@@ -1246,7 +1278,7 @@ export default function PortView() {
                           onClick={() => void handleBulkPortSave()}
                         >
                           <Save className="size-3.5" />
-                          {bulkSaving ? "Saving..." : "Apply to ports"}
+                          {bulkSaving ? t("Saving...") : t("Apply to ports")}
                         </Button>
                       </div>
                     </CardBody>
@@ -1255,17 +1287,17 @@ export default function PortView() {
                 <Card>
                   <CardHeader>
                     <CardTitle>
-                      <CardLabel>Inspector</CardLabel>
+                      <CardLabel>{t("Inspector")}</CardLabel>
                       <CardHeading>
                         {creating
-                          ? "New port"
+                          ? t("New port")
                           : selectedPort
                             ? formatPortLabel(selectedPort, {
                                 includeFace:
                                   device?.deviceType === "patch_panel" ||
                                   selectedPort.face === "rear",
                               })
-                            : "Select a port"}
+                            : t("Select a port")}
                       </CardHeading>
                     </CardTitle>
                     {(selectedPort || creating) && (
@@ -1275,12 +1307,12 @@ export default function PortView() {
                   <CardBody>
                     {!form ? (
                       <div className="text-xs text-[var(--color-fg-subtle)]">
-                        Select a port to edit its details.
+                        {t("Select a port to edit its details.")}
                       </div>
                     ) : (
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Port name">
+                          <Field label={t("Port name")}>
                             <Input
                               value={form.name}
                               onChange={(event) =>
@@ -1292,7 +1324,7 @@ export default function PortView() {
                               }
                             />
                           </Field>
-                          <Field label="Kind">
+                          <Field label={t("Kind")}>
                             <Select
                               value={form.kind}
                               onChange={(value) =>
@@ -1313,7 +1345,7 @@ export default function PortView() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Speed">
+                          <Field label={t("Speed")}>
                             <Input
                               value={form.speed}
                               onChange={(event) =>
@@ -1326,7 +1358,7 @@ export default function PortView() {
                               placeholder="e.g. 10G"
                             />
                           </Field>
-                          <Field label="Face">
+                          <Field label={t("Face")}>
                             <Select
                               value={form.face}
                               onChange={(value) =>
@@ -1340,14 +1372,14 @@ export default function PortView() {
                                 )
                               }
                             >
-                              <option value="front">Front</option>
-                              <option value="rear">Rear</option>
+                              <option value="front">{t("Front")}</option>
+                              <option value="rear">{t("Rear")}</option>
                             </Select>
                           </Field>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Link state">
+                          <Field label={t("Link state")}>
                             <Select
                               value={form.linkState}
                               onChange={(value) =>
@@ -1363,12 +1395,12 @@ export default function PortView() {
                             >
                               {LINK_STATES.map((state) => (
                                 <option key={state} value={state}>
-                                  {state}
+                                  {t(LINK_STATE_KEYS[state])}
                                 </option>
                               ))}
                             </Select>
                           </Field>
-                          <Field label="Mode">
+                          <Field label={t("Mode")}>
                             <Select
                               value={form.mode}
                               onChange={(value) =>
@@ -1388,7 +1420,7 @@ export default function PortView() {
                             >
                               {PORT_MODES.map((mode) => (
                                 <option key={mode} value={mode}>
-                                  {mode}
+                                  {t(PORT_MODE_KEYS[mode])}
                                 </option>
                               ))}
                             </Select>
@@ -1401,8 +1433,8 @@ export default function PortView() {
                           <Field
                             label={
                               form.mode === "trunk"
-                                ? "Native VLAN"
-                                : "Access VLAN"
+                                ? t("Native VLAN")
+                                : t("Access VLAN")
                             }
                           >
                             <Select
@@ -1415,8 +1447,8 @@ export default function PortView() {
                             >
                               <option value="">
                                 {form.mode === "trunk"
-                                  ? "No native VLAN"
-                                  : "Unassigned"}
+                                  ? t("No native VLAN")
+                                  : t("Unassigned")}
                               </option>
                               {vlans.map((vlan) => (
                                 <option key={vlan.id} value={vlan.id}>
@@ -1426,7 +1458,7 @@ export default function PortView() {
                             </Select>
                           </Field>
                           {form.mode === "trunk" && (
-                            <Field label="Add tagged VLAN">
+                            <Field label={t("Add tagged VLAN")}>
                               <Select
                                 value=""
                                 onChange={(value) => {
@@ -1444,7 +1476,9 @@ export default function PortView() {
                                   );
                                 }}
                               >
-                                <option value="">Add tagged VLAN...</option>
+                                <option value="">
+                                  {t("Add tagged VLAN...")}
+                                </option>
                                 {vlans
                                   .filter(
                                     (vlan) =>
@@ -1463,11 +1497,11 @@ export default function PortView() {
 
                         {form.mode === "trunk" && (
                           <>
-                            <Field label="Tagged VLANs">
+                            <Field label={t("Tagged VLANs")}>
                               <div className="flex flex-wrap gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-2">
                                 {form.allowedVlanIds.length === 0 ? (
                                   <div className="px-1 py-1 text-xs text-[var(--color-fg-subtle)]">
-                                    No tagged VLANs documented yet.
+                                    {t("No tagged VLANs documented yet.")}
                                   </div>
                                 ) : (
                                   form.allowedVlanIds.map((vlanId) => {
@@ -1507,7 +1541,7 @@ export default function PortView() {
                           </>
                         )}
 
-                        <Field label="Virtual switch / bridge">
+                        <Field label={t("Virtual switch / bridge")}>
                           <Select
                             value={form.virtualSwitchId}
                             onChange={(value) =>
@@ -1520,8 +1554,8 @@ export default function PortView() {
                           >
                             <option value="">
                               {candidateVirtualSwitches.length > 0
-                                ? "No bridge membership"
-                                : "No host bridges documented"}
+                                ? t("No bridge membership")
+                                : t("No host bridges documented")}
                             </option>
                             {candidateVirtualSwitches.map((virtualSwitch) => (
                               <option
@@ -1534,12 +1568,16 @@ export default function PortView() {
                           </Select>
                           <div className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
                             {candidateVirtualSwitches.length > 0
-                              ? "Use this to map VM NICs and host uplinks onto the same virtual switch or bridge."
-                              : "Create host bridges from the Compute workspace, then assign VM and host ports here."}
+                              ? t(
+                                  "Use this to map VM NICs and host uplinks onto the same virtual switch or bridge.",
+                                )
+                              : t(
+                                  "Create host bridges from the Compute workspace, then assign VM and host ports here.",
+                                )}
                           </div>
                         </Field>
 
-                        <Field label="Description">
+                        <Field label={t("Description")}>
                           <textarea
                             value={form.description}
                             onChange={(event) =>
@@ -1556,7 +1594,7 @@ export default function PortView() {
 
                         <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-3">
                           <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
-                            Link
+                            {t("Link")}
                           </div>
                           {selectedLink && peerDevice && peerPort ? (
                             <div className="space-y-1 text-xs">
@@ -1573,15 +1611,15 @@ export default function PortView() {
                                 </Mono>
                               </div>
                               <div className="font-mono text-[11px] text-[var(--color-fg-subtle)]">
-                                {selectedLink.cableType ?? "Cable"} |{" "}
-                                {selectedLink.cableLength ?? "length n/a"}
+                                {selectedLink.cableType ?? t("Cable")} |{" "}
+                                {selectedLink.cableLength ?? t("length n/a")}
                               </div>
                             </div>
                           ) : (
                             <div className="text-xs text-[var(--color-fg-subtle)]">
                               {creating
-                                ? "Save the port first before cabling it."
-                                : "No linked cable."}
+                                ? t("Save the port first before cabling it.")
+                                : t("No linked cable.")}
                             </div>
                           )}
                         </div>
@@ -1601,7 +1639,7 @@ export default function PortView() {
                               disabled={deleting}
                             >
                               <Trash2 className="size-3.5" />
-                              {deleting ? "Deleting..." : "Delete port"}
+                              {deleting ? t("Deleting...") : t("Delete port")}
                             </Button>
                           )}
                           <div className="ml-auto flex items-center gap-2">
@@ -1611,7 +1649,7 @@ export default function PortView() {
                                 size="sm"
                                 onClick={() => setCreating(false)}
                               >
-                                Cancel
+                                {t("Cancel")}
                               </Button>
                             )}
                             <Button
@@ -1622,10 +1660,10 @@ export default function PortView() {
                             >
                               <Save className="size-3.5" />
                               {saving
-                                ? "Saving..."
+                                ? t("Saving...")
                                 : creating
-                                  ? "Create port"
-                                  : "Save port"}
+                                  ? t("Create port")
+                                  : t("Save port")}
                             </Button>
                           </div>
                         </div>
@@ -1637,11 +1675,11 @@ export default function PortView() {
                 <Card>
                   <CardHeader>
                     <CardTitle>
-                      <CardLabel>Templates</CardLabel>
+                      <CardLabel>{t("Templates")}</CardLabel>
                       <CardHeading>
                         {creatingTemplate
-                          ? "New template"
-                          : (selectedTemplate?.name ?? "Port templates")}
+                          ? t("New template")
+                          : (selectedTemplate?.name ?? t("Port templates"))}
                       </CardHeading>
                     </CardTitle>
                     <Badge
@@ -1649,10 +1687,10 @@ export default function PortView() {
                     >
                       <Network className="size-3" />
                       {creatingTemplate
-                        ? "custom"
+                        ? t("custom")
                         : selectedTemplate?.builtIn
-                          ? "built-in"
-                          : "custom"}
+                          ? t("built-in")
+                          : t("custom")}
                     </Badge>
                   </CardHeader>
                   <CardBody className="space-y-4">
@@ -1664,7 +1702,7 @@ export default function PortView() {
                           onClick={beginTemplateFromDevice}
                         >
                           <Plus className="size-3.5" />
-                          From device
+                          {t("From device")}
                         </Button>
                         <Button
                           variant="outline"
@@ -1672,7 +1710,7 @@ export default function PortView() {
                           onClick={beginBlankTemplate}
                         >
                           <Plus className="size-3.5" />
-                          Blank template
+                          {t("Blank template")}
                         </Button>
                       </div>
                     )}
@@ -1702,8 +1740,13 @@ export default function PortView() {
                           >
                             <div className="font-medium">{template.name}</div>
                             <div className="font-mono text-[10px] uppercase tracking-[0.12em]">
-                              {template.ports.length} ports
-                              {appliesToCurrent ? " | matches device" : ""}
+                              {appliesToCurrent
+                                ? t("{count} ports | matches device", {
+                                    count: template.ports.length,
+                                  })
+                                : t("{count} ports", {
+                                    count: template.ports.length,
+                                  })}
                             </div>
                           </button>
                         );
@@ -1713,7 +1756,7 @@ export default function PortView() {
                     {creatingTemplate || selectedTemplate ? (
                       <div className="space-y-4 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
                         <div className="grid gap-4 md:grid-cols-2">
-                          <Field label="Template name">
+                          <Field label={t("Template name")}>
                             <Input
                               value={templateForm.name}
                               onChange={(event) =>
@@ -1726,7 +1769,7 @@ export default function PortView() {
                               placeholder="48-port access switch"
                             />
                           </Field>
-                          <Field label="Description">
+                          <Field label={t("Description")}>
                             <Input
                               value={templateForm.description}
                               onChange={(event) =>
@@ -1741,7 +1784,7 @@ export default function PortView() {
                           </Field>
                         </div>
 
-                        <Field label="Applies to">
+                        <Field label={t("Applies to")}>
                           <div className="flex flex-wrap gap-2">
                             {portDeviceTypeOptions.map((deviceType) => {
                               const selected =
@@ -1779,7 +1822,7 @@ export default function PortView() {
                         <div className="space-y-3">
                           <div className="flex items-center justify-between gap-3">
                             <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-                              Port layout
+                              {t("Port layout")}
                             </div>
                             {!selectedTemplate?.builtIn && (
                               <Button
@@ -1793,8 +1836,8 @@ export default function PortView() {
                               >
                                 <Plus className="size-3.5" />
                                 {isPatchPanelTemplate(templateForm)
-                                  ? "Add jack"
-                                  : "Add port"}
+                                  ? t("Add jack")
+                                  : t("Add port")}
                               </Button>
                             )}
                           </div>
@@ -1806,7 +1849,11 @@ export default function PortView() {
                                 className="grid grid-cols-12 gap-2 rounded-[var(--radius-xs)] border border-[var(--color-line)] p-2"
                               >
                                 <div className="col-span-3">
-                                  <Field label={`Port ${index + 1}`}>
+                                  <Field
+                                    label={t("Port {number}", {
+                                      number: index + 1,
+                                    })}
+                                  >
                                     <Input
                                       value={port.name}
                                       disabled={Boolean(
@@ -1831,7 +1878,7 @@ export default function PortView() {
                                   </Field>
                                 </div>
                                 <div className="col-span-2">
-                                  <Field label="Kind">
+                                  <Field label={t("Kind")}>
                                     <Select
                                       value={port.kind}
                                       disabled={Boolean(
@@ -1861,7 +1908,7 @@ export default function PortView() {
                                   </Field>
                                 </div>
                                 <div className="col-span-2">
-                                  <Field label="Speed">
+                                  <Field label={t("Speed")}>
                                     <Input
                                       value={port.speed}
                                       disabled={Boolean(
@@ -1886,7 +1933,7 @@ export default function PortView() {
                                   </Field>
                                 </div>
                                 <div className="col-span-2">
-                                  <Field label="Mode">
+                                  <Field label={t("Mode")}>
                                     <Select
                                       value={port.mode}
                                       disabled={Boolean(
@@ -1909,14 +1956,14 @@ export default function PortView() {
                                     >
                                       {PORT_MODES.map((mode) => (
                                         <option key={mode} value={mode}>
-                                          {mode}
+                                          {t(PORT_MODE_KEYS[mode])}
                                         </option>
                                       ))}
                                     </Select>
                                   </Field>
                                 </div>
                                 <div className="col-span-2">
-                                  <Field label="Face">
+                                  <Field label={t("Face")}>
                                     <Select
                                       value={port.face}
                                       disabled={Boolean(
@@ -1937,8 +1984,8 @@ export default function PortView() {
                                         }))
                                       }
                                     >
-                                      <option value="front">Front</option>
-                                      <option value="rear">Rear</option>
+                                      <option value="front">{t("Front")}</option>
+                                      <option value="rear">{t("Rear")}</option>
                                     </Select>
                                   </Field>
                                 </div>
@@ -1959,7 +2006,7 @@ export default function PortView() {
                                                 ),
                                         }))
                                       }
-                                      aria-label="Remove port"
+                                      aria-label={t("Remove port")}
                                     >
                                       <Trash2 className="size-3.5" />
                                     </Button>
@@ -1979,8 +2026,12 @@ export default function PortView() {
                         <div className="flex items-center justify-between gap-3">
                           <div className="text-xs text-[var(--color-fg-subtle)]">
                             {selectedTemplate?.builtIn
-                              ? "Built-in templates are read-only but can still be applied to devices."
-                              : "Custom templates become available immediately in the device drawer."}
+                              ? t(
+                                  "Built-in templates are read-only but can still be applied to devices.",
+                                )
+                              : t(
+                                  "Custom templates become available immediately in the device drawer.",
+                                )}
                           </div>
                           <div className="flex items-center gap-2">
                             {creatingTemplate && (
@@ -1989,7 +2040,7 @@ export default function PortView() {
                                 size="sm"
                                 onClick={() => setCreatingTemplate(false)}
                               >
-                                Cancel
+                                {t("Cancel")}
                               </Button>
                             )}
                             {!creatingTemplate &&
@@ -2002,7 +2053,9 @@ export default function PortView() {
                                   disabled={templateDeleting}
                                 >
                                   <Trash2 className="size-3.5" />
-                                  {templateDeleting ? "Deleting..." : "Delete"}
+                                  {templateDeleting
+                                    ? t("Deleting...")
+                                    : t("Delete")}
                                 </Button>
                               )}
                             {!selectedTemplate?.builtIn && (
@@ -2013,10 +2066,10 @@ export default function PortView() {
                               >
                                 <Save className="size-3.5" />
                                 {templateSaving
-                                  ? "Saving..."
+                                  ? t("Saving...")
                                   : creatingTemplate
-                                    ? "Create template"
-                                    : "Save template"}
+                                    ? t("Create template")
+                                    : t("Save template")}
                               </Button>
                             )}
                           </div>
@@ -2024,8 +2077,9 @@ export default function PortView() {
                       </div>
                     ) : (
                       <div className="text-xs text-[var(--color-fg-subtle)]">
-                        Select a template to inspect it, or create a custom one
-                        from the current device.
+                        {t(
+                          "Select a template to inspect it, or create a custom one from the current device.",
+                        )}
                       </div>
                     )}
                   </CardBody>
@@ -2164,11 +2218,12 @@ function portSearchHaystack(
 }
 
 function EmptyDevice() {
+  const { t } = useI18n();
   return (
     <div className="flex h-full items-center justify-center">
       <div className="text-center">
         <div className="text-sm text-[var(--color-fg-subtle)]">
-          Select a device
+          {t("Select a device")}
         </div>
       </div>
     </div>

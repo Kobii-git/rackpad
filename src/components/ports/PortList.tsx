@@ -9,6 +9,8 @@ import {
 import { StatusDot } from "@/components/shared/StatusDot";
 import { Mono } from "@/components/shared/Mono";
 import { ArrowRight } from "lucide-react";
+import { useI18n } from "@/i18n";
+import { formatPortModeSummary } from "@/components/ports/port-mode-labels";
 
 interface PortListProps {
   ports: Port[];
@@ -37,6 +39,7 @@ export function PortList({
   selectedPortIds,
   onTogglePortSelection,
 }: PortListProps) {
+  const { t } = useI18n();
   const isPatchPanel =
     ports.length > 0 &&
     devicesById[ports[0].deviceId]?.deviceType === "patch_panel";
@@ -47,14 +50,14 @@ export function PortList({
       <table className="rk-table">
         <thead>
           <tr>
-            {onTogglePortSelection && <Th className="w-1">Select</Th>}
+            {onTogglePortSelection && <Th className="w-1">{t("Select")}</Th>}
             <Th className="w-1">•</Th>
-            <Th>Port</Th>
-            <Th>Type</Th>
-            <Th>Speed</Th>
-            <Th>Mode</Th>
-            <Th>Linked to</Th>
-            <Th>Cable</Th>
+            <Th>{t("Port")}</Th>
+            <Th>{t("Type")}</Th>
+            <Th>{t("Speed")}</Th>
+            <Th>{t("Mode")}</Th>
+            <Th>{t("Linked to")}</Th>
+            <Th>{t("Cable")}</Th>
           </tr>
         </thead>
         <tbody>
@@ -78,6 +81,7 @@ export function PortList({
                                 selectedPortIds?.has(row.front.id),
                               )}
                               onToggle={onTogglePortSelection}
+                              t={t}
                             />
                           )}
                           {row.rear && (
@@ -87,6 +91,7 @@ export function PortList({
                                 selectedPortIds?.has(row.rear.id),
                               )}
                               onToggle={onTogglePortSelection}
+                              t={t}
                             />
                           )}
                         </div>
@@ -105,14 +110,14 @@ export function PortList({
                         <div className="flex flex-wrap gap-1">
                           {row.front ? (
                             <SideSelectChip
-                              label="Front"
+                              label={t("Front")}
                               selected={selectedPortId === row.front.id}
                               onClick={() => onSelectPort?.(row.front!.id)}
                             />
                           ) : null}
                           {row.rear ? (
                             <SideSelectChip
-                              label="Rear"
+                              label={t("Rear")}
                               selected={selectedPortId === row.rear.id}
                               onClick={() => onSelectPort?.(row.rear!.id)}
                             />
@@ -133,36 +138,38 @@ export function PortList({
                     </Td>
                     <Td>
                       <Mono className="text-[var(--text-tertiary)]">
-                        {row.speed ?? "n/a"}
+                        {row.speed ?? t("n/a")}
                       </Mono>
                     </Td>
                     <Td>
                       <div className="space-y-1 text-xs text-[var(--text-secondary)]">
                         {renderPatchPanelSide(
-                          "Front",
+                          t("Front"),
                           row.front,
                           vlansById,
                           virtualSwitchesById,
+                          t,
                         )}
                         {renderPatchPanelSide(
-                          "Rear",
+                          t("Rear"),
                           row.rear,
                           vlansById,
                           virtualSwitchesById,
+                          t,
                         )}
                       </div>
                     </Td>
                     <Td>
                       <div className="space-y-1 text-xs">
                         {renderPatchPanelPeer(
-                          "Front",
+                          t("Front"),
                           row.front,
                           frontLink,
                           portsById,
                           devicesById,
                         )}
                         {renderPatchPanelPeer(
-                          "Rear",
+                          t("Rear"),
                           row.rear,
                           rearLink,
                           portsById,
@@ -172,8 +179,8 @@ export function PortList({
                     </Td>
                     <Td>
                       <div className="space-y-1 font-mono text-[11px] text-[var(--text-tertiary)]">
-                        {renderPatchPanelCable("Front", frontLink)}
-                        {renderPatchPanelCable("Rear", rearLink)}
+                        {renderPatchPanelCable(t("Front"), frontLink, t)}
+                        {renderPatchPanelCable(t("Rear"), rearLink, t)}
                       </div>
                     </Td>
                   </tr>
@@ -203,6 +210,7 @@ export function PortList({
                       port={port}
                       selected={Boolean(selectedPortIds?.has(port.id))}
                       onToggle={onTogglePortSelection}
+                      t={t}
                     />
                   </Td>
                 )}
@@ -234,12 +242,13 @@ export function PortList({
                 </Td>
                 <Td>
                   <Mono className="text-[var(--text-tertiary)]">
-                    {port.speed ?? "n/a"}
+                    {port.speed ?? t("n/a")}
                   </Mono>
                 </Td>
                 <Td>
                   <div className="text-xs text-[var(--text-secondary)]">
                     {formatPortModeSummary(
+                      t,
                       port,
                       vlansById,
                       virtualSwitchesById,
@@ -263,7 +272,7 @@ export function PortList({
                 <Td>
                   {link ? (
                     <span className="font-mono text-[11px] text-[var(--text-tertiary)]">
-                      {link.cableType || "cable"}
+                      {link.cableType || t("Cable")}
                       {link.cableLength ? ` | ${link.cableLength}` : ""}
                     </span>
                   ) : (
@@ -303,10 +312,12 @@ function PortSelectionCheckbox({
   port,
   selected,
   onToggle,
+  t,
 }: {
   port: Port;
   selected: boolean;
   onToggle: (portId: string) => void;
+  t: ReturnType<typeof useI18n>["t"];
 }) {
   return (
     <input
@@ -314,45 +325,32 @@ function PortSelectionCheckbox({
       checked={selected}
       onClick={(event) => event.stopPropagation()}
       onChange={() => onToggle(port.id)}
-      aria-label={`Select port ${formatPortLabel(port, { includeFace: true })}`}
+      aria-label={t("Select port {label}", {
+        label: formatPortLabel(port, { includeFace: true }),
+      })}
     />
   );
 }
 
-function formatPortModeSummary(
-  port: Port,
+function renderPatchPanelSide(
+  label: string,
+  port: Port | undefined,
   vlansById: Record<string, Vlan>,
   virtualSwitchesById: Record<string, VirtualSwitch>,
+  t: ReturnType<typeof useI18n>["t"],
 ) {
-  const virtualSwitchSuffix = port.virtualSwitchId
-    ? ` | bridge ${virtualSwitchesById[port.virtualSwitchId]?.name ?? port.virtualSwitchId}`
-    : "";
-  if (port.mode === "trunk") {
-    const tagged = (port.allowedVlanIds ?? []).map((vlanId) =>
-      formatCompactVlanLabel(vlanId, vlansById),
-    );
-    const nativeLabel = port.vlanId
-      ? `native ${formatCompactVlanLabel(port.vlanId, vlansById)}`
-      : "no native";
-
-    const summary = tagged.length > 0
-      ? `trunk | ${nativeLabel} | tagged ${tagged.join(", ")}`
-      : `trunk | ${nativeLabel}`;
-    return `${summary}${virtualSwitchSuffix}`;
-  }
-
-  const base = port.vlanId
-    ? `access | VLAN ${formatCompactVlanLabel(port.vlanId, vlansById)}`
-    : "access | unassigned";
-
-  return `${base}${virtualSwitchSuffix}`;
-}
-function formatCompactVlanLabel(
-  vlanId: string,
-  vlansById: Record<string, Vlan>,
-) {
-  const vlan = vlansById[vlanId];
-  return vlan ? String(vlan.vlanId) : vlanId;
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+        {label}
+      </span>
+      <span>
+        {port
+          ? formatPortModeSummary(t, port, vlansById, virtualSwitchesById)
+          : t("not documented")}
+      </span>
+    </div>
+  );
 }
 
 type PatchPanelRow = {
@@ -434,26 +432,6 @@ function SideSelectChip({
   );
 }
 
-function renderPatchPanelSide(
-  label: string,
-  port: Port | undefined,
-  vlansById: Record<string, Vlan>,
-  virtualSwitchesById: Record<string, VirtualSwitch>,
-) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-        {label}
-      </span>
-      <span>
-        {port
-          ? formatPortModeSummary(port, vlansById, virtualSwitchesById)
-          : "not documented"}
-      </span>
-    </div>
-  );
-}
-
 function renderPatchPanelPeer(
   label: string,
   port: Port | undefined,
@@ -498,7 +476,11 @@ function renderPatchPanelPeer(
   );
 }
 
-function renderPatchPanelCable(label: string, link: PortLink | undefined) {
+function renderPatchPanelCable(
+  label: string,
+  link: PortLink | undefined,
+  t: ReturnType<typeof useI18n>["t"],
+) {
   return (
     <div className="flex items-center gap-1.5">
       <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
@@ -506,7 +488,7 @@ function renderPatchPanelCable(label: string, link: PortLink | undefined) {
       </span>
       <span>
         {link
-          ? `${link.cableType || "cable"}${link.cableLength ? ` | ${link.cableLength}` : ""}`
+          ? `${link.cableType || t("Cable")}${link.cableLength ? ` | ${link.cableLength}` : ""}`
           : "—"}
       </span>
     </div>

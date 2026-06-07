@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
+import type { TranslationKey } from "@/i18n/translations";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
@@ -240,11 +241,11 @@ export default function ReportsView() {
 
     downloadExcelWorkbook(`${slug(lab.name)}-rackpad-report.xls`, [
       {
-        name: "Summary",
+        name: t("Summary"),
         rows: buildSummaryRows(workbookInput),
       },
       {
-        name: "Devices",
+        name: t("Devices"),
         rows: buildDevicesCsv({
           devices,
           rackById: model.rackById,
@@ -253,7 +254,7 @@ export default function ReportsView() {
         }),
       },
       {
-        name: "Ports Cables",
+        name: t("Ports Cables"),
         rows: buildPortsCsv({
           ports,
           portLinks,
@@ -264,7 +265,7 @@ export default function ReportsView() {
         }),
       },
       {
-        name: "IPAM",
+        name: t("IPAM"),
         rows: buildIpamCsv({
           subnets,
           vlans,
@@ -277,14 +278,14 @@ export default function ReportsView() {
         }),
       },
       {
-        name: "Monitoring",
+        name: t("Monitoring"),
         rows: buildMonitoringCsv({
           monitors: deviceMonitors,
           deviceById: model.deviceById,
         }),
       },
       {
-        name: "WiFi",
+        name: t("WiFi"),
         rows: buildWifiCsv({
           wifiControllers,
           wifiSsids,
@@ -300,11 +301,14 @@ export default function ReportsView() {
   return (
     <>
       <TopBar
-        subtitle="Reporting"
+        subtitle={t("Reporting")}
         title={t("Reports")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {lab.name} | generated {reportStamp}
+            {t("{lab} | generated {stamp}", {
+              lab: lab.name,
+              stamp: reportStamp,
+            })}
           </span>
         }
         actions={
@@ -315,15 +319,15 @@ export default function ReportsView() {
               onClick={downloadReportWorkbook}
             >
               <FileSpreadsheet className="size-3.5" />
-              Excel
+              {t("Excel")}
             </Button>
             <Button variant="outline" size="sm" onClick={downloadReportCsv}>
               <Download className="size-3.5" />
-              Full CSV
+              {t("Full CSV")}
             </Button>
             <Button variant="default" size="sm" onClick={() => window.print()}>
               <Printer className="size-3.5" />
-              Print / PDF
+              {t("Print / PDF")}
             </Button>
           </div>
         }
@@ -335,23 +339,23 @@ export default function ReportsView() {
             <CardBody className="p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <div className="rk-kicker">Rackpad inventory report</div>
+                  <div className="rk-kicker">{t("Rackpad inventory report")}</div>
                   <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
                     {lab.name}
                   </h2>
                   <p className="mt-2 max-w-3xl text-sm text-[var(--text-tertiary)]">
-                    A live report generated from the current Rackpad inventory:
-                    physical placement, network links, IPAM, WiFi, monitoring,
-                    and recent operational context.
+                    {t(
+                      "A live report generated from the current Rackpad inventory: physical placement, network links, IPAM, WiFi, monitoring, and recent operational context.",
+                    )}
                   </p>
                 </div>
                 <div className="rk-panel-inset min-w-52 rounded-[var(--radius-md)] p-3 text-right">
-                  <div className="rk-kicker">Generated</div>
+                  <div className="rk-kicker">{t("Generated")}</div>
                   <div className="mt-1 text-sm font-medium text-[var(--text-primary)]">
                     {reportStamp}
                   </div>
                   <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
-                    Print this page to save a PDF.
+                    {t("Print this page to save a PDF.")}
                   </div>
                 </div>
               </div>
@@ -363,25 +367,35 @@ export default function ReportsView() {
               icon={Server}
               label={t("Devices")}
               value={devices.length}
-              hint={`${model.devicesByStatus.online ?? 0} online | ${model.devicesByStatus.warning ?? 0} warning`}
+              hint={t("{online} online | {warning} warning", {
+                online: model.devicesByStatus.online ?? 0,
+                warning: model.devicesByStatus.warning ?? 0,
+              })}
             />
             <ReportMetric
               icon={Cable}
-              label="Ports linked"
+              label={t("Ports linked")}
               value={`${model.linkedPorts}/${ports.length}`}
-              hint={`${portLinks.length} documented cables`}
+              hint={t("{count} documented cables", {
+                count: portLinks.length,
+              })}
             />
             <ReportMetric
               icon={Network}
-              label="IPs allocated"
+              label={t("IPs allocated")}
               value={`${ipAssignments.length}/${model.usableIpCount}`}
-              hint={`${subnets.length} subnets | ${vlans.length} VLANs`}
+              hint={t("{subnets} subnets | {vlans} VLANs", {
+                subnets: subnets.length,
+                vlans: vlans.length,
+              })}
             />
             <ReportMetric
               icon={Activity}
-              label="Monitor targets"
+              label={t("Monitor targets")}
               value={model.monitorTargets.length}
-              hint={`${model.monitorFailures.length} failing right now`}
+              hint={t("{count} failing right now", {
+                count: model.monitorFailures.length,
+              })}
               tone={model.monitorFailures.length > 0 ? "err" : "ok"}
             />
           </div>
@@ -389,10 +403,10 @@ export default function ReportsView() {
           <div className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
             <ReportSection
               label={t("Inventory")}
-              title="Device and rack posture"
+              title={t("Device and rack posture")}
               action={
                 <ExportButton
-                  label="Devices CSV"
+                  label={t("Devices CSV")}
                   onClick={() =>
                     downloadCsv(
                       `${slug(lab.name)}-devices.csv`,
@@ -409,12 +423,12 @@ export default function ReportsView() {
             >
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">
-                  <div className="rk-kicker">By status</div>
+                  <div className="rk-kicker">{t("By status")}</div>
                   <div className="mt-3 space-y-2">
                     {Object.entries(statusLabel).map(([status, label]) => (
                       <ReportBar
                         key={status}
-                        label={label}
+                        label={t(label as TranslationKey)}
                         value={model.devicesByStatus[status] ?? 0}
                         total={Math.max(1, devices.length)}
                         tone={statusTone(status)}
@@ -424,7 +438,7 @@ export default function ReportsView() {
                 </div>
 
                 <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">
-                  <div className="rk-kicker">By type</div>
+                  <div className="rk-kicker">{t("By type")}</div>
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     {Object.entries(model.devicesByType)
                       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
@@ -453,13 +467,13 @@ export default function ReportsView() {
                 <table className="rk-table">
                   <thead>
                     <tr>
-                      <th>Rack</th>
-                      <th>Room</th>
-                      <th>Location</th>
-                      <th>Devices</th>
-                      <th>Used U</th>
-                      <th>Free U</th>
-                      <th>Utilization</th>
+                      <th>{t("Rack")}</th>
+                      <th>{t("Room")}</th>
+                      <th>{t("Location")}</th>
+                      <th>{t("Devices")}</th>
+                      <th>{t("Used U")}</th>
+                      <th>{t("Free U")}</th>
+                      <th>{t("Utilization")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -513,17 +527,17 @@ export default function ReportsView() {
                   </tbody>
                 </table>
                 {model.rackRows.length === 0 && (
-                  <EmptyReportRow message="No racks documented yet." />
+                  <EmptyReportRow message={t("No racks documented yet.")} />
                 )}
               </div>
             </ReportSection>
 
             <ReportSection
               label={t("Operations")}
-              title="Monitoring posture"
+              title={t("Monitoring posture")}
               action={
                 <ExportButton
-                  label="Monitoring CSV"
+                  label={t("Monitoring CSV")}
                   onClick={() =>
                     downloadCsv(
                       `${slug(lab.name)}-monitoring.csv`,
@@ -540,11 +554,12 @@ export default function ReportsView() {
                 {model.monitorTargets.length === 0 ? (
                   <div className="rk-empty">
                     <div className="rk-empty-title">
-                      No monitor targets configured
+                      {t("No monitor targets configured")}
                     </div>
                     <div className="rk-empty-copy">
-                      Add ICMP, TCP, HTTP, or HTTPS targets to devices to make
-                      this report operationally useful.
+                      {t(
+                        "Add ICMP, TCP, HTTP, or HTTPS targets to devices to make this report operationally useful.",
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -572,12 +587,14 @@ export default function ReportsView() {
                             </Link>
                             <Badge tone={statusBadgeTone(device.status)}>
                               <StatusDot status={device.status} />
-                              {statusLabel[device.status]}
+                              {t(statusLabel[device.status] as TranslationKey)}
                             </Badge>
                           </div>
                           <Mono className="text-[var(--text-tertiary)]">
-                            {(model.monitorsByDeviceId[device.id] ?? []).length}{" "}
-                            targets
+                            {t("{count} targets", {
+                              count: (model.monitorsByDeviceId[device.id] ?? [])
+                                .length,
+                            })}
                           </Mono>
                         </div>
                         <div className="mt-3 grid gap-2">
@@ -604,7 +621,11 @@ export default function ReportsView() {
                                         : "neutral"
                                   }
                                 >
-                                  {monitor.lastResult ?? "unknown"}
+                                  {monitor.lastResult === "online"
+                                    ? t("Online")
+                                    : monitor.lastResult === "offline"
+                                      ? t("Offline")
+                                      : t("Unknown")}
                                 </Badge>
                               </div>
                             ),
@@ -619,11 +640,11 @@ export default function ReportsView() {
 
           <ReportSection
             label={t("Network")}
-            title="Ports, cabling, VLANs, and IPAM"
+            title={t("Ports, cabling, VLANs, and IPAM")}
             action={
               <div className="flex flex-wrap gap-2">
                 <ExportButton
-                  label="Ports CSV"
+                  label={t("Ports CSV")}
                   onClick={() =>
                     downloadCsv(
                       `${slug(lab.name)}-ports-cables.csv`,
@@ -639,7 +660,7 @@ export default function ReportsView() {
                   }
                 />
                 <ExportButton
-                  label="IPAM CSV"
+                  label={t("IPAM CSV")}
                   onClick={() =>
                     downloadCsv(
                       `${slug(lab.name)}-ipam.csv`,
@@ -661,19 +682,24 @@ export default function ReportsView() {
           >
             <div className="grid gap-4 xl:grid-cols-3">
               <NetworkTile
-                label="Configured capacity"
+                label={t("Configured capacity")}
                 value={formatBandwidthMbps(model.capacityMbps)}
-                hint={`${ports.length} ports documented`}
+                hint={t("{count} ports documented", { count: ports.length })}
               />
               <NetworkTile
-                label="Linked capacity"
+                label={t("Linked capacity")}
                 value={formatBandwidthMbps(model.linkedCapacityMbps)}
-                hint={`${model.linkedPorts} ports are linked or cabled`}
+                hint={t("{count} ports are linked or cabled", {
+                  count: model.linkedPorts,
+                })}
               />
               <NetworkTile
-                label="Address utilization"
+                label={t("Address utilization")}
                 value={`${ipAssignments.length}/${model.usableIpCount}`}
-                hint={`${subnets.length} subnets and ${vlanRanges.length} VLAN ranges`}
+                hint={t("{subnets} subnets and {ranges} VLAN ranges", {
+                  subnets: subnets.length,
+                  ranges: vlanRanges.length,
+                })}
               />
             </div>
 
@@ -681,12 +707,12 @@ export default function ReportsView() {
               <table className="rk-table">
                 <thead>
                   <tr>
-                    <th>Subnet</th>
-                    <th>VLAN</th>
-                    <th>Assigned</th>
-                    <th>DHCP</th>
-                    <th>Zones</th>
-                    <th>Utilization</th>
+                    <th>{t("Subnet")}</th>
+                    <th>{t("VLAN")}</th>
+                    <th>{t("Assigned")}</th>
+                    <th>{t("DHCP")}</th>
+                    <th>{t("Zones")}</th>
+                    <th>{t("Utilization")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -711,7 +737,9 @@ export default function ReportsView() {
                         </td>
                         <td>
                           {vlan ? (
-                            <Badge tone="info">VLAN {vlan.vlanId}</Badge>
+                            <Badge tone="info">
+                              {t("VLAN {number}", { number: vlan.vlanId })}
+                            </Badge>
                           ) : (
                             "-"
                           )}
@@ -754,17 +782,17 @@ export default function ReportsView() {
                 </tbody>
               </table>
               {subnets.length === 0 && (
-                <EmptyReportRow message="No subnets documented yet." />
+                <EmptyReportRow message={t("No subnets documented yet")} />
               )}
             </div>
           </ReportSection>
 
           <ReportSection
-            label="Wireless"
-            title="WiFi controllers, SSIDs, and clients"
+            label={t("Wireless")}
+            title={t("WiFi controllers, SSIDs, and clients")}
             action={
               <ExportButton
-                label="WiFi CSV"
+                label={t("WiFi CSV")}
                 onClick={() =>
                   downloadCsv(
                     `${slug(lab.name)}-wifi.csv`,
@@ -783,29 +811,31 @@ export default function ReportsView() {
           >
             <div className="grid gap-3 md:grid-cols-4">
               <NetworkTile
-                label="Controllers"
+                label={t("Controllers")}
                 value={wifiControllers.length}
-                hint="wireless control planes"
+                hint={t("wireless control planes")}
               />
               <NetworkTile
-                label="SSIDs"
+                label={t("SSIDs")}
                 value={wifiSsids.length}
-                hint="broadcast networks"
+                hint={t("broadcast networks")}
               />
               <NetworkTile
-                label="APs"
+                label={t("APs")}
                 value={wifiAccessPoints.length}
-                hint={`${wifiRadios.length} radios documented`}
+                hint={t("{count} radios documented", {
+                  count: wifiRadios.length,
+                })}
               />
               <NetworkTile
-                label="Clients"
+                label={t("Clients")}
                 value={wifiClientAssociations.length}
-                hint="associated wireless devices"
+                hint={t("associated wireless devices")}
               />
             </div>
           </ReportSection>
 
-          <ReportSection label="Activity" title="Recent changes">
+          <ReportSection label={t("Activity")} title={t("Recent changes")}>
             <div className="space-y-2">
               {auditLog.slice(0, 12).map((entry) => (
                 <div
@@ -832,9 +862,11 @@ export default function ReportsView() {
               ))}
               {auditLog.length === 0 && (
                 <div className="rk-empty">
-                  <div className="rk-empty-title">No recent activity</div>
+                  <div className="rk-empty-title">{t("No recent activity")}</div>
                   <div className="rk-empty-copy">
-                    Changes will appear here as Rackpad records audit events.
+                    {t(
+                      "Changes will appear here as Rackpad records audit events.",
+                    )}
                   </div>
                 </div>
               )}
@@ -842,9 +874,10 @@ export default function ReportsView() {
           </ReportSection>
 
           <div className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.015)] px-4 py-3 text-xs text-[var(--text-tertiary)]">
-            This report excludes local user password hashes and notification
-            secrets. Use the admin backup export for full restore snapshots.
-            Discovery inbox rows: <Mono>{discoveredDevices.length}</Mono>.
+            {t(
+              "This report excludes local user password hashes and notification secrets. Use the admin backup export for full restore snapshots. Discovery inbox rows: {count}.",
+              { count: discoveredDevices.length },
+            )}
           </div>
         </div>
       </div>

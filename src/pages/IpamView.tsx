@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
+import type { TranslationKey } from "@/i18n/translations";
 import {
   Card,
   CardBody,
@@ -43,13 +44,35 @@ import { Hash, Network, Plus, Save, Trash2 } from "lucide-react";
 import { cidrSize } from "@/lib/utils";
 import { formatDeviceMac } from "@/lib/network-labels";
 
-const TYPE_LABELS: Record<IpAssignment["assignmentType"], string> = {
+const ASSIGNMENT_HEADING_KEYS: Record<
+  IpAssignment["assignmentType"],
+  TranslationKey
+> = {
   device: "Devices",
   interface: "Interfaces",
   vm: "VMs",
   container: "Containers",
   reserved: "Reservations",
   infrastructure: "Infrastructure",
+};
+
+const ASSIGNMENT_BADGE_KEYS: Record<
+  IpAssignment["assignmentType"],
+  TranslationKey
+> = {
+  device: "Device",
+  interface: "Interface",
+  vm: "VM",
+  container: "Container",
+  reserved: "Reserved",
+  infrastructure: "Infrastructure",
+};
+
+const ZONE_KIND_KEYS: Record<IpZone["kind"], TranslationKey> = {
+  static: "static",
+  dhcp: "dhcp",
+  reserved: "reserved",
+  infrastructure: "infrastructure",
 };
 
 const VISIBLE_ASSIGNMENT_TYPES: IpAssignment["assignmentType"][] = [
@@ -316,7 +339,7 @@ export default function IpamView() {
     return (
       <>
         <TopBar
-          subtitle="Address management"
+          subtitle={t("Address management")}
           title={t("IPAM")}
           actions={
             canEdit ? (
@@ -329,7 +352,7 @@ export default function IpamView() {
                 }}
               >
                 <Plus className="size-3.5" />
-                Add subnet
+                {t("Add subnet")}
               </Button>
             ) : undefined
           }
@@ -338,14 +361,15 @@ export default function IpamView() {
           <Card className="w-full max-w-xl">
             <CardHeader>
               <CardTitle>
-                <CardLabel>IPAM</CardLabel>
-                <CardHeading>No subnets documented yet</CardHeading>
+                <CardLabel>{t("IPAM")}</CardLabel>
+                <CardHeading>{t("No subnets documented yet")}</CardHeading>
               </CardTitle>
             </CardHeader>
             <CardBody className="space-y-4">
               <div className="text-sm text-[var(--color-fg-subtle)]">
-                Create a subnet to start documenting IP allocations, DHCP
-                scopes, and static zones.
+                {t(
+                  "Create a subnet to start documenting IP allocations, DHCP scopes, and static zones.",
+                )}
               </div>
               {canEdit && (
                 <SubnetEditor
@@ -374,7 +398,7 @@ export default function IpamView() {
                       setSubnetError(
                         err instanceof Error
                           ? err.message
-                          : "Failed to create subnet.",
+                          : t("Failed to create subnet."),
                       );
                     } finally {
                       setSubnetSaving(false);
@@ -431,7 +455,7 @@ export default function IpamView() {
       });
     } catch (err) {
       setSubnetError(
-        err instanceof Error ? err.message : "Failed to save subnet.",
+        err instanceof Error ? err.message : t("Failed to save subnet."),
       );
     } finally {
       setSubnetSaving(false);
@@ -442,7 +466,10 @@ export default function IpamView() {
     if (!subnet) return;
     if (
       !window.confirm(
-        `Delete subnet ${subnet.cidr}? This also removes its scopes, zones, and assignments.`,
+        t(
+          "Delete subnet {cidr}? This also removes its scopes, zones, and assignments.",
+          { cidr: subnet.cidr },
+        ),
       )
     ) {
       return;
@@ -454,7 +481,7 @@ export default function IpamView() {
       setSubnetId("");
     } catch (err) {
       setSubnetError(
-        err instanceof Error ? err.message : "Failed to delete subnet.",
+        err instanceof Error ? err.message : t("Failed to delete subnet."),
       );
     } finally {
       setSubnetDeleting(false);
@@ -492,7 +519,7 @@ export default function IpamView() {
       });
     } catch (err) {
       setScopeError(
-        err instanceof Error ? err.message : "Failed to save DHCP scope.",
+        err instanceof Error ? err.message : t("Failed to save DHCP scope."),
       );
     } finally {
       setScopeSaving(false);
@@ -501,7 +528,12 @@ export default function IpamView() {
 
   async function handleDeleteScope() {
     if (!selectedScope) return;
-    if (!window.confirm(`Delete DHCP scope ${selectedScope.name}?`)) return;
+    if (
+      !window.confirm(
+        t("Delete DHCP scope {name}?", { name: selectedScope.name }),
+      )
+    )
+      return;
     setScopeDeleting(true);
     setScopeError("");
     try {
@@ -510,7 +542,7 @@ export default function IpamView() {
       setCreatingScope(false);
     } catch (err) {
       setScopeError(
-        err instanceof Error ? err.message : "Failed to delete DHCP scope.",
+        err instanceof Error ? err.message : t("Failed to delete DHCP scope."),
       );
     } finally {
       setScopeDeleting(false);
@@ -544,7 +576,7 @@ export default function IpamView() {
       });
     } catch (err) {
       setZoneError(
-        err instanceof Error ? err.message : "Failed to save IP zone.",
+        err instanceof Error ? err.message : t("Failed to save IP zone."),
       );
     } finally {
       setZoneSaving(false);
@@ -555,7 +587,11 @@ export default function IpamView() {
     if (!selectedZone) return;
     if (
       !window.confirm(
-        `Delete ${selectedZone.kind} zone ${selectedZone.startIp}-${selectedZone.endIp}?`,
+        t("Delete {kind} zone {startIp}-{endIp}?", {
+          kind: selectedZone.kind,
+          startIp: selectedZone.startIp,
+          endIp: selectedZone.endIp,
+        }),
       )
     ) {
       return;
@@ -568,7 +604,7 @@ export default function IpamView() {
       setCreatingZone(false);
     } catch (err) {
       setZoneError(
-        err instanceof Error ? err.message : "Failed to delete IP zone.",
+        err instanceof Error ? err.message : t("Failed to delete IP zone."),
       );
     } finally {
       setZoneDeleting(false);
@@ -583,10 +619,10 @@ export default function IpamView() {
         meta={
           <>
             <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-              {subnets.length} subnets
+              {t("{count} subnets", { count: subnets.length })}
             </span>
             <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-              | {vlans.length} VLANs
+              | {t("{count} VLANs", { count: vlans.length })}
             </span>
           </>
         }
@@ -602,7 +638,7 @@ export default function IpamView() {
                 }}
               >
                 <Plus className="size-3.5" />
-                Add subnet
+                {t("Add subnet")}
               </Button>
             )}
             <AllocatePanel defaultTab="ip" defaultSubnetId={subnet?.id} />
@@ -614,7 +650,7 @@ export default function IpamView() {
         <div className="flex w-72 shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-bg-2)]/40">
           <div className="border-b border-[var(--color-line)] px-4 py-3">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-              Subnets
+              {t("Subnets")}
             </span>
           </div>
           <div className="flex-1 overflow-y-auto py-1">
@@ -680,7 +716,7 @@ export default function IpamView() {
             <div className="flex items-end justify-between gap-4">
               <div>
                 <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                  Subnet
+                  {t("Subnet")}
                 </div>
                 <h2 className="flex items-center gap-3 text-lg font-semibold tracking-tight">
                   <span className="font-mono">{subnet.cidr}</span>
@@ -699,7 +735,10 @@ export default function IpamView() {
                         color: vlan.color,
                       }}
                     >
-                      VLAN {vlan.vlanId} - {vlan.name}
+                      {t("VLAN {vlanId} - {name}", {
+                        vlanId: vlan.vlanId,
+                        name: vlan.name,
+                      })}
                     </span>
                     {vlan.description && (
                       <span className="text-[11px] text-[var(--color-fg-subtle)]">
@@ -735,8 +774,8 @@ export default function IpamView() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Layout</CardLabel>
-                  <CardHeading>Zone allocation</CardHeading>
+                  <CardLabel>{t("Layout")}</CardLabel>
+                  <CardHeading>{t("Zone allocation")}</CardHeading>
                 </CardTitle>
               </CardHeader>
               <CardBody>
@@ -753,8 +792,8 @@ export default function IpamView() {
           <Card>
             <CardHeader>
               <CardTitle>
-                <CardLabel>Allocation</CardLabel>
-                <CardHeading>Address utilization</CardHeading>
+                <CardLabel>{t("Allocation")}</CardLabel>
+                <CardHeading>{t("Address utilization")}</CardHeading>
               </CardTitle>
             </CardHeader>
             <CardBody>
@@ -807,8 +846,10 @@ export default function IpamView() {
               <Card key={type}>
                 <CardHeader>
                   <CardTitle>
-                    <CardLabel>{TYPE_LABELS[type]}</CardLabel>
-                    <CardHeading>{items.length} assigned</CardHeading>
+                    <CardLabel>{t(ASSIGNMENT_HEADING_KEYS[type])}</CardLabel>
+                    <CardHeading>
+                      {t("{count} assigned", { count: items.length })}
+                    </CardHeading>
                   </CardTitle>
                 </CardHeader>
                 <CardBody className="p-0">
@@ -865,7 +906,9 @@ export default function IpamView() {
                                 : (assignment.description ?? "-")}
                             </div>
                             <div className="col-span-3 flex items-center justify-end gap-2">
-                              <Badge tone={badgeTone(type)}>{type}</Badge>
+                              <Badge tone={badgeTone(type)}>
+                                {t(ASSIGNMENT_BADGE_KEYS[type])}
+                              </Badge>
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -877,8 +920,8 @@ export default function IpamView() {
                                 }
                               >
                                 {releasingId === assignment.id
-                                  ? "Releasing..."
-                                  : "Unassign"}
+                                  ? t("Releasing...")
+                                  : t("Unassign")}
                               </Button>
                             </div>
                           </div>
@@ -920,25 +963,28 @@ function SubnetEditor({
   onDelete: () => void;
   onNew: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card>
       <CardHeader>
         <CardTitle>
-          <CardLabel>{creating ? "New subnet" : "Subnet editor"}</CardLabel>
+          <CardLabel>
+            {creating ? t("New subnet") : t("Subnet editor")}
+          </CardLabel>
           <CardHeading>
-            {creating ? "Create subnet" : "Update subnet details"}
+            {creating ? t("Create subnet") : t("Update subnet details")}
           </CardHeading>
         </CardTitle>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={onNew}>
             <Plus className="size-3.5" />
-            New subnet
+            {t("New subnet")}
           </Button>
         </div>
       </CardHeader>
       <CardBody className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="CIDR">
+          <Field label={t("CIDR")}>
             <Input
               value={form.cidr}
               onChange={(event) =>
@@ -947,7 +993,7 @@ function SubnetEditor({
               placeholder="10.0.10.0/24"
             />
           </Field>
-          <Field label="Name">
+          <Field label={t("Name")}>
             <Input
               value={form.name}
               onChange={(event) =>
@@ -958,14 +1004,14 @@ function SubnetEditor({
           </Field>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Linked VLAN">
+          <Field label={t("Linked VLAN")}>
             <Select
               value={form.vlanId}
               onChange={(value) =>
                 onChange((prev) => ({ ...prev, vlanId: value }))
               }
             >
-              <option value="">Unassigned</option>
+              <option value="">{t("Unassigned")}</option>
               {vlans.map((vlan) => (
                 <option key={vlan.id} value={vlan.id}>
                   {vlan.vlanId} - {vlan.name}
@@ -973,7 +1019,7 @@ function SubnetEditor({
               ))}
             </Select>
           </Field>
-          <Field label="Description">
+          <Field label={t("Description")}>
             <Input
               value={form.description}
               onChange={(event) =>
@@ -996,12 +1042,16 @@ function SubnetEditor({
               disabled={deleting}
             >
               <Trash2 className="size-3.5" />
-              {deleting ? "Deleting..." : "Delete subnet"}
+              {deleting ? t("Deleting...") : t("Delete subnet")}
             </Button>
           )}
           <Button size="sm" onClick={onSave} disabled={saving}>
             <Save className="size-3.5" />
-            {saving ? "Saving..." : creating ? "Create subnet" : "Save subnet"}
+            {saving
+              ? t("Saving...")
+              : creating
+                ? t("Create subnet")
+                : t("Save subnet")}
           </Button>
         </div>
       </CardBody>
@@ -1040,12 +1090,13 @@ function ScopeEditor({
   onSave: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card>
       <CardHeader>
         <CardTitle>
-          <CardLabel>DHCP</CardLabel>
-          <CardHeading>Scopes</CardHeading>
+          <CardLabel>{t("DHCP")}</CardLabel>
+          <CardHeading>{t("Scopes")}</CardHeading>
         </CardTitle>
         {canEdit && (
           <Button
@@ -1057,7 +1108,7 @@ function ScopeEditor({
             }}
           >
             <Plus className="size-3.5" />
-            Add scope
+            {t("Add scope")}
           </Button>
         )}
       </CardHeader>
@@ -1084,10 +1135,14 @@ function ScopeEditor({
           </div>
         ) : (
           <div className="rk-empty">
-            <div className="rk-empty-title">No DHCP scopes documented</div>
+            <div className="rk-empty-title">
+              {t("No DHCP scopes documented")}
+            </div>
             <div className="rk-empty-copy">
-              Add one or more DHCP pools for {subnet.cidr} if this subnet hands
-              out leases dynamically.
+              {t(
+                "Add one or more DHCP pools for {cidr} if this subnet hands out leases dynamically.",
+                { cidr: subnet.cidr },
+              )}
             </div>
           </div>
         )}
@@ -1095,7 +1150,7 @@ function ScopeEditor({
         {(creating || selectedScopeId) && canEdit && (
           <div className="space-y-4 rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Scope name">
+              <Field label={t("Scope name")}>
                 <Input
                   value={form.name}
                   onChange={(event) =>
@@ -1104,7 +1159,7 @@ function ScopeEditor({
                   placeholder="Clients"
                 />
               </Field>
-              <Field label="Gateway">
+              <Field label={t("Gateway")}>
                 <Input
                   value={form.gateway}
                   onChange={(event) =>
@@ -1118,7 +1173,7 @@ function ScopeEditor({
               </Field>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Start IP">
+              <Field label={t("Start IP")}>
                 <Input
                   value={form.startIp}
                   onChange={(event) =>
@@ -1130,7 +1185,7 @@ function ScopeEditor({
                   placeholder="10.0.10.100"
                 />
               </Field>
-              <Field label="End IP">
+              <Field label={t("End IP")}>
                 <Input
                   value={form.endIp}
                   onChange={(event) =>
@@ -1140,7 +1195,7 @@ function ScopeEditor({
                 />
               </Field>
             </div>
-            <Field label="DNS servers">
+            <Field label={t("DNS servers")}>
               <Input
                 value={form.dnsServers}
                 onChange={(event) =>
@@ -1152,7 +1207,7 @@ function ScopeEditor({
                 placeholder="1.1.1.1, 8.8.8.8"
               />
             </Field>
-            <Field label="Description">
+            <Field label={t("Description")}>
               <Input
                 value={form.description}
                 onChange={(event) =>
@@ -1174,16 +1229,16 @@ function ScopeEditor({
                   disabled={deleting}
                 >
                   <Trash2 className="size-3.5" />
-                  {deleting ? "Deleting..." : "Delete scope"}
+                  {deleting ? t("Deleting...") : t("Delete scope")}
                 </Button>
               )}
               <Button size="sm" onClick={onSave} disabled={saving}>
                 <Save className="size-3.5" />
                 {saving
-                  ? "Saving..."
+                  ? t("Saving...")
                   : creating
-                    ? "Create scope"
-                    : "Save scope"}
+                    ? t("Create scope")
+                    : t("Save scope")}
               </Button>
             </div>
           </div>
@@ -1222,12 +1277,15 @@ function ZoneEditor({
   onSave: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card>
       <CardHeader>
         <CardTitle>
-          <CardLabel>IP zones</CardLabel>
-          <CardHeading>Static, DHCP, reserved, infrastructure</CardHeading>
+          <CardLabel>{t("IP zones")}</CardLabel>
+          <CardHeading>
+            {t("Static, DHCP, reserved, infrastructure")}
+          </CardHeading>
         </CardTitle>
         {canEdit && (
           <Button
@@ -1239,7 +1297,7 @@ function ZoneEditor({
             }}
           >
             <Plus className="size-3.5" />
-            Add zone
+            {t("Add zone")}
           </Button>
         )}
       </CardHeader>
@@ -1260,7 +1318,7 @@ function ZoneEditor({
                     : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
                 }`}
               >
-                <span className="font-mono">{zone.kind}</span>
+                <span className="font-mono">{t(ZONE_KIND_KEYS[zone.kind])}</span>
                 <span className="mx-1 text-[var(--color-fg-faint)]">|</span>
                 <span>
                   {zone.startIp}-{zone.endIp}
@@ -1270,10 +1328,13 @@ function ZoneEditor({
           </div>
         ) : (
           <div className="rk-empty">
-            <div className="rk-empty-title">No IP zones documented yet</div>
+            <div className="rk-empty-title">
+              {t("No IP zones documented yet")}
+            </div>
             <div className="rk-empty-copy">
-              Define infrastructure, reserved, static, or DHCP zones to make
-              address ownership easier to scan.
+              {t(
+                "Define infrastructure, reserved, static, or DHCP zones to make address ownership easier to scan.",
+              )}
             </div>
           </div>
         )}
@@ -1281,7 +1342,7 @@ function ZoneEditor({
         {(creating || selectedZoneId) && canEdit && (
           <div className="space-y-4 rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
             <div className="grid gap-4 md:grid-cols-3">
-              <Field label="Kind">
+              <Field label={t("Kind")}>
                 <Select
                   value={form.kind}
                   onChange={(value) =>
@@ -1291,13 +1352,15 @@ function ZoneEditor({
                     }))
                   }
                 >
-                  <option value="static">static</option>
-                  <option value="dhcp">dhcp</option>
-                  <option value="reserved">reserved</option>
-                  <option value="infrastructure">infrastructure</option>
+                  <option value="static">{t("static")}</option>
+                  <option value="dhcp">{t("dhcp")}</option>
+                  <option value="reserved">{t("reserved")}</option>
+                  <option value="infrastructure">
+                    {t("infrastructure")}
+                  </option>
                 </Select>
               </Field>
-              <Field label="Start IP">
+              <Field label={t("Start IP")}>
                 <Input
                   value={form.startIp}
                   onChange={(event) =>
@@ -1309,7 +1372,7 @@ function ZoneEditor({
                   placeholder="10.0.10.10"
                 />
               </Field>
-              <Field label="End IP">
+              <Field label={t("End IP")}>
                 <Input
                   value={form.endIp}
                   onChange={(event) =>
@@ -1319,7 +1382,7 @@ function ZoneEditor({
                 />
               </Field>
             </div>
-            <Field label="Description">
+            <Field label={t("Description")}>
               <Input
                 value={form.description}
                 onChange={(event) =>
@@ -1341,12 +1404,16 @@ function ZoneEditor({
                   disabled={deleting}
                 >
                   <Trash2 className="size-3.5" />
-                  {deleting ? "Deleting..." : "Delete zone"}
+                  {deleting ? t("Deleting...") : t("Delete zone")}
                 </Button>
               )}
               <Button size="sm" onClick={onSave} disabled={saving}>
                 <Save className="size-3.5" />
-                {saving ? "Saving..." : creating ? "Create zone" : "Save zone"}
+                {saving
+                  ? t("Saving...")
+                  : creating
+                    ? t("Create zone")
+                    : t("Save zone")}
               </Button>
             </div>
           </div>

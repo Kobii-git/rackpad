@@ -9,6 +9,7 @@ import { Link } from "react-router-dom";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
+import type { TranslationKey } from "@/i18n/translations";
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -63,7 +64,7 @@ import {
   X,
 } from "lucide-react";
 
-const BAND_LABEL: Record<WifiBand, string> = {
+const BAND_KEYS: Record<WifiBand, TranslationKey> = {
   "2.4ghz": "2.4 GHz",
   "5ghz": "5 GHz",
   "6ghz": "6 GHz",
@@ -239,12 +240,19 @@ export default function WifiView() {
   return (
     <>
       <TopBar
-        subtitle="Wireless"
+        subtitle={t("Wireless")}
         title={t("WiFi")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {wifiControllers.length} controllers | {wifiSsids.length} SSIDs |{" "}
-            {apDevices.length} APs | {wirelessClients.length} clients
+            {t(
+              "{controllers} controllers | {ssids} SSIDs | {aps} APs | {clients} clients",
+              {
+                controllers: wifiControllers.length,
+                ssids: wifiSsids.length,
+                aps: apDevices.length,
+                clients: wirelessClients.length,
+              },
+            )}
           </span>
         }
         actions={
@@ -256,7 +264,7 @@ export default function WifiView() {
                 onClick={() => setEditor({ kind: "controller" })}
               >
                 <Plus className="size-3.5" />
-                Add controller
+                {t("Add controller")}
               </Button>
               <Button
                 variant="outline"
@@ -264,7 +272,7 @@ export default function WifiView() {
                 onClick={() => setEditor({ kind: "ssid" })}
               >
                 <Plus className="size-3.5" />
-                Add SSID
+                {t("Add SSID")}
               </Button>
               <Button
                 variant="outline"
@@ -279,7 +287,7 @@ export default function WifiView() {
                 }}
               >
                 <Plus className="size-3.5" />
-                Add AP
+                {t("Add AP")}
               </Button>
               <Button
                 variant="outline"
@@ -294,7 +302,7 @@ export default function WifiView() {
                 }}
               >
                 <Plus className="size-3.5" />
-                Add client
+                {t("Add client")}
               </Button>
             </div>
           ) : undefined
@@ -304,29 +312,29 @@ export default function WifiView() {
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <WifiStat
-            label="Controllers"
+            label={t("Controllers")}
             value={String(wifiControllers.length)}
-            hint="WiFi control planes in this lab"
+            hint={t("WiFi control planes in this lab")}
           />
           <WifiStat
-            label="SSIDs"
+            label={t("SSIDs")}
             value={String(wifiSsids.length)}
-            hint="Broadcast wireless networks"
+            hint={t("Broadcast wireless networks")}
           />
           <WifiStat
-            label="Access points"
+            label={t("Access points")}
             value={String(apDevices.length)}
-            hint="Managed and standalone APs"
+            hint={t("Managed and standalone APs")}
           />
           <WifiStat
-            label="Clients"
+            label={t("Clients")}
             value={String(wirelessClients.length)}
-            hint="Wireless-linked client devices"
+            hint={t("Wireless-linked client devices")}
           />
           <WifiStat
-            label="Unassigned"
+            label={t("Unassigned")}
             value={String(unassignedClients.length)}
-            hint="Clients missing AP/SSID telemetry"
+            hint={t("Clients missing AP/SSID telemetry")}
           />
         </div>
 
@@ -335,15 +343,17 @@ export default function WifiView() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Controllers</CardLabel>
-                  <CardHeading>Wireless control planes</CardHeading>
+                  <CardLabel>{t("Controllers")}</CardLabel>
+                  <CardHeading>{t("Wireless control planes")}</CardHeading>
                 </CardTitle>
               </CardHeader>
               <CardBody className="space-y-3">
                 {wifiControllers.length === 0 ? (
                   <EmptyState
-                    title="No WiFi controllers documented"
-                    hint="Add a UniFi, Omada, Aruba, or other wireless controller to anchor your AP fleet."
+                    title={t("No WiFi controllers documented")}
+                    hint={t(
+                      "Add a UniFi, Omada, Aruba, or other wireless controller to anchor your AP fleet.",
+                    )}
                   />
                 ) : (
                   wifiControllers.map((controller) => {
@@ -363,12 +373,14 @@ export default function WifiView() {
                             <div className="text-[11px] text-[var(--color-fg-subtle)]">
                               {[controller.vendor, controller.model]
                                 .filter(Boolean)
-                                .join(" | ") || "Standalone controller record"}
+                                .join(" | ") || t("Standalone controller record")}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge tone="accent">
-                              {apCountByControllerId[controller.id] ?? 0} APs
+                              {t("{count} APs", {
+                                count: apCountByControllerId[controller.id] ?? 0,
+                              })}
                             </Badge>
                             {canEdit && (
                               <button
@@ -421,15 +433,17 @@ export default function WifiView() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>SSIDs</CardLabel>
-                  <CardHeading>Broadcast wireless networks</CardHeading>
+                  <CardLabel>{t("SSIDs")}</CardLabel>
+                  <CardHeading>{t("Broadcast wireless networks")}</CardHeading>
                 </CardTitle>
               </CardHeader>
               <CardBody className="space-y-3">
                 {wifiSsids.length === 0 ? (
                   <EmptyState
-                    title="No SSIDs documented"
-                    hint="Create trusted, guest, and IoT SSIDs so wireless clients can be grouped by intent instead of only by AP."
+                    title={t("No SSIDs documented")}
+                    hint={t(
+                      "Create trusted, guest, and IoT SSIDs so wireless clients can be grouped by intent instead of only by AP.",
+                    )}
                   />
                 ) : (
                   wifiSsids.map((ssid) => {
@@ -453,18 +467,24 @@ export default function WifiView() {
                               <span className="text-sm font-semibold text-[var(--color-fg)]">
                                 {ssid.name}
                               </span>
-                              {ssid.hidden && <Badge tone="warn">Hidden</Badge>}
+                              {ssid.hidden && (
+                                <Badge tone="warn">{t("Hidden")}</Badge>
+                              )}
                             </div>
                             <div className="text-[11px] text-[var(--color-fg-subtle)]">
-                              {ssid.security || "Security not documented"}
+                              {ssid.security || t("Security not documented")}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge tone="cyan">
-                              {clientCountBySsidId[ssid.id] ?? 0} clients
+                              {t("{count} clients", {
+                                count: clientCountBySsidId[ssid.id] ?? 0,
+                              })}
                             </Badge>
                             <Badge tone="neutral">
-                              {radioCountBySsidId[ssid.id] ?? 0} radios
+                              {t("{count} radios", {
+                                count: radioCountBySsidId[ssid.id] ?? 0,
+                              })}
                             </Badge>
                             {canEdit && (
                               <button
@@ -483,7 +503,9 @@ export default function WifiView() {
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-fg-subtle)]">
                           {ssid.purpose && <span>{ssid.purpose}</span>}
                           {vlan && (
-                            <Badge tone="info">VLAN {vlan.vlanId}</Badge>
+                            <Badge tone="info">
+                              {t("VLAN {number}", { number: vlan.vlanId })}
+                            </Badge>
                           )}
                         </div>
                       </div>
@@ -498,17 +520,19 @@ export default function WifiView() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Access points</CardLabel>
+                  <CardLabel>{t("Access points")}</CardLabel>
                   <CardHeading>
-                    Controllers, radios, and attached clients
+                    {t("Controllers, radios, and attached clients")}
                   </CardHeading>
                 </CardTitle>
               </CardHeader>
               <CardBody className="space-y-4">
                 {apDevices.length === 0 ? (
                   <EmptyState
-                    title="No APs documented"
-                    hint="Add access points to start mapping radios, channels, and wireless clients."
+                    title={t("No APs documented")}
+                    hint={t(
+                      "Add access points to start mapping radios, channels, and wireless clients.",
+                    )}
                   />
                 ) : (
                   apDevices.map((ap) => {
@@ -541,7 +565,7 @@ export default function WifiView() {
                               </Link>
                               <StatusDot status={ap.status} />
                               <span className="text-[11px] text-[var(--color-fg-subtle)]">
-                                {statusLabel[ap.status]}
+                                {t(statusLabel[ap.status] as TranslationKey)}
                               </span>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-fg-subtle)]">
@@ -553,10 +577,9 @@ export default function WifiView() {
                               )}
                               {controller && (
                                 <span>
-                                  Controller:{" "}
-                                  <span className="text-[var(--color-fg)]">
-                                    {controller.name}
-                                  </span>
+                                  {t("Controller: {name}", {
+                                    name: controller.name,
+                                  })}
                                 </span>
                               )}
                               {accessPoint?.location && (
@@ -583,7 +606,7 @@ export default function WifiView() {
                                 }
                               >
                                 <Pencil className="size-3.5" />
-                                Edit AP
+                                {t("Edit AP")}
                               </Button>
                               <Button
                                 variant="outline"
@@ -596,7 +619,7 @@ export default function WifiView() {
                                 }
                               >
                                 <Plus className="size-3.5" />
-                                Add radio
+                                {t("Add radio")}
                               </Button>
                             </div>
                           )}
@@ -605,10 +628,12 @@ export default function WifiView() {
                         <div className="mt-4 grid gap-3 xl:grid-cols-[1.05fr_1.25fr]">
                           <div className="space-y-2">
                             <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                              Radios
+                              {t("Radios")}
                             </div>
                             {radios.length === 0 ? (
-                              <EmptyInline hint="No radios documented yet." />
+                              <EmptyInline
+                                hint={t("No radios documented yet.")}
+                              />
                             ) : (
                               radios.map((radio) => (
                                 <div
@@ -623,11 +648,13 @@ export default function WifiView() {
                                           {radio.slotName}
                                         </span>
                                         <Badge tone="accent">
-                                          {BAND_LABEL[radio.band]}
+                                          {t(BAND_KEYS[radio.band])}
                                         </Badge>
                                       </div>
                                       <div className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
-                                        Channel {radio.channel}
+                                        {t("Channel {channel}", {
+                                          channel: radio.channel,
+                                        })}
                                         {radio.channelWidth
                                           ? ` | ${radio.channelWidth}`
                                           : ""}
@@ -655,7 +682,9 @@ export default function WifiView() {
 
                                   <div className="mt-3 flex flex-wrap gap-2">
                                     {radio.ssidIds.length === 0 ? (
-                                      <Badge tone="warn">No SSIDs linked</Badge>
+                                      <Badge tone="warn">
+                                        {t("No SSIDs linked")}
+                                      </Badge>
                                     ) : (
                                       radio.ssidIds.map((ssidId) => (
                                         <Badge key={ssidId} tone="info">
@@ -677,10 +706,14 @@ export default function WifiView() {
 
                           <div className="space-y-2">
                             <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                              Attached clients
+                              {t("Attached clients")}
                             </div>
                             {clients.length === 0 ? (
-                              <EmptyInline hint="No wireless clients linked to this AP yet." />
+                              <EmptyInline
+                                hint={t(
+                                  "No wireless clients linked to this AP yet.",
+                                )}
+                              />
                             ) : (
                               clients.map((client) => {
                                 const association =
@@ -716,12 +749,14 @@ export default function WifiView() {
                                           )}
                                           {association?.band && (
                                             <Badge tone="neutral">
-                                              {BAND_LABEL[association.band]}
+                                              {t(BAND_KEYS[association.band])}
                                             </Badge>
                                           )}
                                           {association?.channel && (
                                             <span>
-                                              Ch {association.channel}
+                                              {t("Ch {channel}", {
+                                                channel: association.channel,
+                                              })}
                                             </span>
                                           )}
                                           {association?.signalDbm != null && (
@@ -736,10 +771,11 @@ export default function WifiView() {
                                           )}
                                         </div>
                                         <div className="text-[11px] text-[var(--color-fg-subtle)]">
-                                          Last seen{" "}
-                                          {association?.lastSeen
-                                            ? relativeTime(association.lastSeen)
-                                            : relativeTime(client.lastSeen)}
+                                          {t("Last seen {time}", {
+                                            time: association?.lastSeen
+                                              ? relativeTime(association.lastSeen)
+                                              : relativeTime(client.lastSeen),
+                                          })}
                                         </div>
                                       </div>
 
@@ -775,30 +811,34 @@ export default function WifiView() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Client inventory</CardLabel>
-                  <CardHeading>Association and roaming view</CardHeading>
+                  <CardLabel>{t("Client inventory")}</CardLabel>
+                  <CardHeading>{t("Association and roaming view")}</CardHeading>
                 </CardTitle>
               </CardHeader>
               <CardBody>
                 {wirelessClients.length === 0 ? (
                   <EmptyState
-                    title="No wireless clients documented"
-                    hint="Add phones, laptops, TVs, cameras, or IoT devices and link them to APs and SSIDs."
+                    title={t("No wireless clients documented")}
+                    hint={t(
+                      "Add phones, laptops, TVs, cameras, or IoT devices and link them to APs and SSIDs.",
+                    )}
                   />
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-left text-sm">
                       <thead>
                         <tr className="border-b border-[var(--color-line)] text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                          <th className="pb-2 pr-3 font-medium">Client</th>
-                          <th className="pb-2 pr-3 font-medium">AP</th>
-                          <th className="pb-2 pr-3 font-medium">SSID</th>
-                          <th className="pb-2 pr-3 font-medium">Band</th>
-                          <th className="pb-2 pr-3 font-medium">Signal</th>
-                          <th className="pb-2 pr-3 font-medium">Last seen</th>
+                          <th className="pb-2 pr-3 font-medium">{t("Client")}</th>
+                          <th className="pb-2 pr-3 font-medium">{t("AP")}</th>
+                          <th className="pb-2 pr-3 font-medium">{t("SSID")}</th>
+                          <th className="pb-2 pr-3 font-medium">{t("Band")}</th>
+                          <th className="pb-2 pr-3 font-medium">{t("Signal")}</th>
+                          <th className="pb-2 pr-3 font-medium">
+                            {t("Last seen")}
+                          </th>
                           {canEdit && (
                             <th className="pb-2 text-right font-medium">
-                              Action
+                              {t("Action")}
                             </th>
                           )}
                         </tr>
@@ -833,20 +873,24 @@ export default function WifiView() {
                                     <div className="text-[11px] text-[var(--color-fg-subtle)]">
                                       {client.displayName ||
                                         formatDeviceAddress(client) ||
-                                        statusLabel[client.status]}
+                                        t(
+                                          statusLabel[
+                                            client.status
+                                          ] as TranslationKey,
+                                        )}
                                     </div>
                                   </div>
                                 </div>
                               </td>
                               <td className="py-3 pr-3 text-[var(--color-fg-subtle)]">
-                                {ap ? ap.hostname : "Unassigned"}
+                                {ap ? ap.hostname : t("Unassigned")}
                               </td>
                               <td className="py-3 pr-3 text-[var(--color-fg-subtle)]">
-                                {ssid ? ssid.name : "Unassigned"}
+                                {ssid ? ssid.name : t("Unassigned")}
                               </td>
                               <td className="py-3 pr-3 text-[var(--color-fg-subtle)]">
                                 {association?.band
-                                  ? BAND_LABEL[association.band]
+                                  ? t(BAND_KEYS[association.band])
                                   : "—"}
                               </td>
                               <td className="py-3 pr-3">
@@ -878,7 +922,7 @@ export default function WifiView() {
                                       })
                                     }
                                   >
-                                    {association ? "Edit link" : "Link"}
+                                    {association ? t("Edit link") : t("Link")}
                                   </Button>
                                 </td>
                               )}
@@ -905,8 +949,8 @@ export default function WifiView() {
 
           {editor && (
             <EditorModal
-              title={editorTitle(editor)}
-              subtitle={editorSubtitle(editor, deviceById)}
+              title={editorTitle(editor, t)}
+              subtitle={editorSubtitle(editor, deviceById, t)}
               onClose={() => setEditor(null)}
             >
               {editor.kind === "controller" ? (
@@ -921,7 +965,9 @@ export default function WifiView() {
                       ? async () => {
                           if (
                             !window.confirm(
-                              `Delete controller ${editor.controller!.name}?`,
+                              t("Delete controller {name}?", {
+                                name: editor.controller!.name,
+                              }),
                             )
                           )
                             return;
@@ -957,7 +1003,10 @@ export default function WifiView() {
                       ? async () => {
                           if (
                             !window.confirm(
-                              `Delete SSID ${editor.ssid!.name}? Clients and radios will lose the reference.`,
+                              t(
+                                "Delete SSID {name}? Clients and radios will lose the reference.",
+                                { name: editor.ssid!.name },
+                              ),
                             )
                           )
                             return;
@@ -1000,7 +1049,10 @@ export default function WifiView() {
                       ? async () => {
                           if (
                             !window.confirm(
-                              `Delete radio ${editor.radio!.slotName}? Any client links will be detached from this radio.`,
+                              t(
+                                "Delete radio {slotName}? Any client links will be detached from this radio.",
+                                { slotName: editor.radio!.slotName },
+                              ),
                             )
                           )
                             return;
@@ -1033,7 +1085,9 @@ export default function WifiView() {
                     editor.association
                       ? async () => {
                           if (
-                            !window.confirm("Remove this wireless association?")
+                            !window.confirm(
+                              t("Remove this wireless association?"),
+                            )
                           )
                             return;
                           await deleteWifiClientAssociationRecord(
@@ -1060,36 +1114,60 @@ export default function WifiView() {
   );
 }
 
-function editorTitle(editor: EditorState) {
+function editorTitle(
+  editor: EditorState,
+  t: ReturnType<typeof useI18n>["t"],
+) {
   switch (editor.kind) {
     case "controller":
-      return editor.controller ? "Edit controller" : "Add controller";
+      return editor.controller ? t("Edit controller") : t("Add controller");
     case "ssid":
-      return editor.ssid ? "Edit SSID" : "Add SSID";
+      return editor.ssid ? t("Edit SSID") : t("Add SSID");
     case "accessPoint":
-      return "Access point settings";
+      return t("Access point settings");
     case "radio":
-      return editor.radio ? "Edit radio" : "Add radio";
+      return editor.radio ? t("Edit radio") : t("Add radio");
     case "association":
-      return "Client association";
+      return t("Client association");
   }
 }
 
 function editorSubtitle(
   editor: EditorState,
   deviceById: Record<string, Device | undefined>,
+  t: ReturnType<typeof useI18n>["t"],
 ) {
   switch (editor.kind) {
     case "controller":
-      return "Document the control plane that manages one or more access points.";
+      return t(
+        "Document the control plane that manages one or more access points.",
+      );
     case "ssid":
-      return "Define the wireless network name, security, VLAN, and visual identity.";
+      return t(
+        "Define the wireless network name, security, VLAN, and visual identity.",
+      );
     case "accessPoint":
-      return `Configure controller, location, and firmware for ${deviceById[editor.deviceId]?.hostname ?? editor.deviceId}.`;
+      return t(
+        "Configure controller, location, and firmware for {hostname}.",
+        {
+          hostname:
+            deviceById[editor.deviceId]?.hostname ?? editor.deviceId,
+        },
+      );
     case "radio":
-      return `Document the band, channel, and broadcast SSIDs for ${deviceById[editor.apDeviceId]?.hostname ?? editor.apDeviceId}.`;
+      return t(
+        "Document the band, channel, and broadcast SSIDs for {hostname}.",
+        {
+          hostname:
+            deviceById[editor.apDeviceId]?.hostname ?? editor.apDeviceId,
+        },
+      );
     case "association":
-      return `Link ${deviceById[editor.clientDeviceId]?.hostname ?? editor.clientDeviceId} to an AP, radio, and SSID.`;
+      return t("Link {hostname} to an AP, radio, and SSID.", {
+        hostname:
+          deviceById[editor.clientDeviceId]?.hostname ??
+          editor.clientDeviceId,
+      });
   }
 }
 
@@ -1147,6 +1225,7 @@ function EditorModal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8"
@@ -1159,7 +1238,7 @@ function EditorModal({
         <div className="flex items-start justify-between gap-4 border-b border-[var(--color-line)] px-5 py-4">
           <div>
             <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-              WiFi editor
+              {t("WiFi editor")}
             </div>
             <div className="mt-1 text-base font-semibold text-[var(--color-fg)]">
               {title}
@@ -1204,6 +1283,7 @@ function ControllerEditor({
   onCancel: () => void;
   onDelete?: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     deviceId: controller?.deviceId ?? "",
     name: controller?.name ?? "",
@@ -1230,7 +1310,7 @@ function ControllerEditor({
       });
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to save controller.",
+        err instanceof Error ? err.message : t("Failed to save controller."),
       );
       setSaving(false);
       return;
@@ -1241,7 +1321,7 @@ function ControllerEditor({
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Controller name">
+        <Field label={t("Controller name")}>
           <Input
             value={form.name}
             onChange={(event) =>
@@ -1250,7 +1330,7 @@ function ControllerEditor({
             placeholder="UniFi Network"
           />
         </Field>
-        <Field label="Linked device">
+        <Field label={t("Linked device")}>
           <select
             value={form.deviceId}
             onChange={(event) =>
@@ -1258,7 +1338,7 @@ function ControllerEditor({
             }
             className={SELECT_CLASS}
           >
-            <option value="">Standalone controller record</option>
+            <option value="">{t("Standalone controller record")}</option>
             {devices.map((device) => (
               <option key={device.id} value={device.id}>
                 {device.hostname}
@@ -1266,7 +1346,7 @@ function ControllerEditor({
             ))}
           </select>
         </Field>
-        <Field label="Vendor">
+        <Field label={t("Vendor")}>
           <Input
             value={form.vendor}
             onChange={(event) =>
@@ -1275,7 +1355,7 @@ function ControllerEditor({
             placeholder="Ubiquiti"
           />
         </Field>
-        <Field label="Model">
+        <Field label={t("Model")}>
           <Input
             value={form.model}
             onChange={(event) =>
@@ -1284,7 +1364,7 @@ function ControllerEditor({
             placeholder="Cloud Key Gen2 Plus"
           />
         </Field>
-        <Field label="Management IP">
+        <Field label={t("Management IP")}>
           <Input
             value={form.managementIp}
             onChange={(event) =>
@@ -1295,7 +1375,7 @@ function ControllerEditor({
         </Field>
       </div>
 
-      <Field label="Notes">
+      <Field label={t("Notes")}>
         <textarea
           value={form.notes}
           onChange={(event) =>
@@ -1321,21 +1401,21 @@ function ControllerEditor({
               onClick={() => void onDelete()}
             >
               {" "}
-              <Trash2 className="size-3.5" /> Delete{" "}
+              <Trash2 className="size-3.5" /> {t("Delete")}{" "}
             </Button>
           )}
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" variant="ghost" onClick={onCancel}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button type="submit" disabled={saving || !form.name.trim()}>
             <Save className="size-3.5" />
             {saving
-              ? "Saving..."
+              ? t("Saving...")
               : controller
-                ? "Save controller"
-                : "Create controller"}
+                ? t("Save controller")
+                : t("Create controller")}
           </Button>
         </div>
       </div>
@@ -1356,6 +1436,7 @@ function SsidEditor({
   onCancel: () => void;
   onDelete?: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     name: ssid?.name ?? "",
     purpose: ssid?.purpose ?? "",
@@ -1381,7 +1462,7 @@ function SsidEditor({
         color: form.color.trim() || null,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save SSID.");
+      setError(err instanceof Error ? err.message : t("Failed to save SSID."));
       setSaving(false);
       return;
     }
@@ -1391,7 +1472,7 @@ function SsidEditor({
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="SSID name">
+        <Field label={t("SSID name")}>
           <Input
             value={form.name}
             onChange={(event) =>
@@ -1400,7 +1481,7 @@ function SsidEditor({
             placeholder="Home-Main"
           />
         </Field>
-        <Field label="Security">
+        <Field label={t("Security")}>
           <Input
             value={form.security}
             onChange={(event) =>
@@ -1409,7 +1490,7 @@ function SsidEditor({
             placeholder="WPA2/WPA3 Personal"
           />
         </Field>
-        <Field label="Purpose">
+        <Field label={t("Purpose")}>
           <Input
             value={form.purpose}
             onChange={(event) =>
@@ -1418,7 +1499,7 @@ function SsidEditor({
             placeholder="Primary trusted LAN"
           />
         </Field>
-        <Field label="Linked VLAN">
+        <Field label={t("Linked VLAN")}>
           <select
             value={form.vlanId}
             onChange={(event) =>
@@ -1426,7 +1507,7 @@ function SsidEditor({
             }
             className={SELECT_CLASS}
           >
-            <option value="">Unassigned</option>
+            <option value="">{t("Unassigned")}</option>
             {vlans.map((vlan) => (
               <option key={vlan.id} value={vlan.id}>
                 {vlan.vlanId} · {vlan.name}
@@ -1436,7 +1517,7 @@ function SsidEditor({
         </Field>
       </div>
 
-      <Field label="Color">
+      <Field label={t("Color")}>
         <ColorInput
           value={form.color}
           onChange={(value) => setForm((prev) => ({ ...prev, color: value }))}
@@ -1452,7 +1533,7 @@ function SsidEditor({
             setForm((prev) => ({ ...prev, hidden: event.target.checked }))
           }
         />
-        Hidden SSID
+        {t("Hidden SSID")}
       </label>
 
       {error && (
@@ -1470,17 +1551,17 @@ function SsidEditor({
               onClick={() => void onDelete()}
             >
               <Trash2 className="size-3.5" />
-              Delete
+              {t("Delete")}
             </Button>
           )}
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" variant="ghost" onClick={onCancel}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button type="submit" disabled={saving || !form.name.trim()}>
             <Save className="size-3.5" />
-            {saving ? "Saving..." : ssid ? "Save SSID" : "Create SSID"}
+            {saving ? t("Saving...") : ssid ? t("Save SSID") : t("Create SSID")}
           </Button>
         </div>
       </div>
@@ -1501,6 +1582,7 @@ function AccessPointEditor({
   onSave: (payload: Omit<WifiAccessPoint, "deviceId">) => Promise<void>;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     controllerId: accessPoint?.controllerId ?? "",
     location: accessPoint?.location ?? "",
@@ -1523,7 +1605,7 @@ function AccessPointEditor({
       });
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to save AP settings.",
+        err instanceof Error ? err.message : t("Failed to save AP settings."),
       );
       setSaving(false);
       return;
@@ -1534,14 +1616,13 @@ function AccessPointEditor({
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
       <div className="rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-fg-subtle)]">
-        Editing wireless metadata for{" "}
-        <span className="font-medium text-[var(--color-fg)]">
-          {device?.hostname ?? accessPoint?.deviceId}
-        </span>
+        {t("Editing wireless metadata for {hostname}", {
+          hostname: device?.hostname ?? accessPoint?.deviceId ?? "",
+        })}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Controller">
+        <Field label={t("Controller")}>
           <select
             value={form.controllerId}
             onChange={(event) =>
@@ -1549,7 +1630,7 @@ function AccessPointEditor({
             }
             className={SELECT_CLASS}
           >
-            <option value="">Standalone / unmanaged</option>
+            <option value="">{t("Standalone / unmanaged")}</option>
             {controllers.map((controller) => (
               <option key={controller.id} value={controller.id}>
                 {controller.name}
@@ -1557,7 +1638,7 @@ function AccessPointEditor({
             ))}
           </select>
         </Field>
-        <Field label="Firmware version">
+        <Field label={t("Firmware version")}>
           <Input
             value={form.firmwareVersion}
             onChange={(event) =>
@@ -1569,7 +1650,7 @@ function AccessPointEditor({
             placeholder="6.7.18"
           />
         </Field>
-        <Field label="Location">
+        <Field label={t("Location")}>
           <Input
             value={form.location}
             onChange={(event) =>
@@ -1580,7 +1661,7 @@ function AccessPointEditor({
         </Field>
       </div>
 
-      <Field label="Notes">
+      <Field label={t("Notes")}>
         <textarea
           value={form.notes}
           onChange={(event) =>
@@ -1599,11 +1680,11 @@ function AccessPointEditor({
 
       <div className="flex items-center justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("Cancel")}
         </Button>
         <Button type="submit" disabled={saving}>
           <Save className="size-3.5" />
-          {saving ? "Saving..." : "Save AP settings"}
+          {saving ? t("Saving...") : t("Save AP settings")}
         </Button>
       </div>
     </form>
@@ -1625,6 +1706,7 @@ function RadioEditor({
   onCancel: () => void;
   onDelete?: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     slotName: radio?.slotName ?? "",
     band: (radio?.band ?? "5ghz") as WifiBand,
@@ -1652,7 +1734,7 @@ function RadioEditor({
         notes: form.notes.trim() || null,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save radio.");
+      setError(err instanceof Error ? err.message : t("Failed to save radio."));
       setSaving(false);
       return;
     }
@@ -1671,14 +1753,13 @@ function RadioEditor({
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
       <div className="rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-fg-subtle)]">
-        Radio belongs to{" "}
-        <span className="font-medium text-[var(--color-fg)]">
-          {apDevice?.hostname ?? "selected AP"}
-        </span>
+        {t("Radio belongs to {hostname}", {
+          hostname: apDevice?.hostname ?? t("selected AP"),
+        })}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Slot name">
+        <Field label={t("Slot name")}>
           <Input
             value={form.slotName}
             onChange={(event) =>
@@ -1687,7 +1768,7 @@ function RadioEditor({
             placeholder="radio0"
           />
         </Field>
-        <Field label="Band">
+        <Field label={t("Band")}>
           <select
             value={form.band}
             onChange={(event) =>
@@ -1698,14 +1779,14 @@ function RadioEditor({
             }
             className={SELECT_CLASS}
           >
-            {Object.entries(BAND_LABEL).map(([value, label]) => (
+            {Object.entries(BAND_KEYS).map(([value, key]) => (
               <option key={value} value={value}>
-                {label}
+                {t(key)}
               </option>
             ))}
           </select>
         </Field>
-        <Field label="Channel">
+        <Field label={t("Channel")}>
           <Input
             value={form.channel}
             onChange={(event) =>
@@ -1714,7 +1795,7 @@ function RadioEditor({
             placeholder="44"
           />
         </Field>
-        <Field label="Channel width">
+        <Field label={t("Channel width")}>
           <Input
             value={form.channelWidth}
             onChange={(event) =>
@@ -1723,7 +1804,7 @@ function RadioEditor({
             placeholder="80 MHz"
           />
         </Field>
-        <Field label="Transmit power">
+        <Field label={t("Transmit power")}>
           <Input
             value={form.txPower}
             onChange={(event) =>
@@ -1734,7 +1815,7 @@ function RadioEditor({
         </Field>
       </div>
 
-      <Field label="Broadcast SSIDs">
+      <Field label={t("Broadcast SSIDs")}>
         <div className="grid gap-2 md:grid-cols-2">
           {ssids.map((ssid) => (
             <label
@@ -1751,13 +1832,13 @@ function RadioEditor({
           ))}
           {ssids.length === 0 && (
             <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3 text-sm text-[var(--color-fg-subtle)]">
-              Create one or more SSIDs first.
+              {t("Create one or more SSIDs first.")}
             </div>
           )}
         </div>
       </Field>
 
-      <Field label="Notes">
+      <Field label={t("Notes")}>
         <textarea
           value={form.notes}
           onChange={(event) =>
@@ -1783,20 +1864,20 @@ function RadioEditor({
               onClick={() => void onDelete()}
             >
               <Trash2 className="size-3.5" />
-              Delete
+              {t("Delete")}
             </Button>
           )}
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" variant="ghost" onClick={onCancel}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             type="submit"
             disabled={saving || !form.slotName.trim() || !form.channel.trim()}
           >
             <Save className="size-3.5" />
-            {saving ? "Saving..." : radio ? "Save radio" : "Create radio"}
+            {saving ? t("Saving...") : radio ? t("Save radio") : t("Create radio")}
           </Button>
         </div>
       </div>
@@ -1823,6 +1904,7 @@ function AssociationEditor({
   onCancel: () => void;
   onDelete?: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     apDeviceId: association?.apDeviceId ?? apDevices[0]?.id ?? "",
     radioId: association?.radioId ?? "",
@@ -1903,7 +1985,7 @@ function AssociationEditor({
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to save wireless association.",
+          : t("Failed to save wireless association."),
       );
       setSaving(false);
       return;
@@ -1914,14 +1996,13 @@ function AssociationEditor({
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
       <div className="rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-fg-subtle)]">
-        Linking{" "}
-        <span className="font-medium text-[var(--color-fg)]">
-          {clientDevice?.hostname ?? "wireless client"}
-        </span>
+        {t("Linking {hostname}", {
+          hostname: clientDevice?.hostname ?? t("wireless client"),
+        })}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Access point">
+        <Field label={t("Access point")}>
           <select
             value={form.apDeviceId}
             onChange={(event) =>
@@ -1934,7 +2015,7 @@ function AssociationEditor({
             }
             className={SELECT_CLASS}
           >
-            <option value="">Choose an AP</option>
+            <option value="">{t("Choose an AP")}</option>
             {apDevices.map((device) => (
               <option key={device.id} value={device.id}>
                 {device.hostname}
@@ -1942,7 +2023,7 @@ function AssociationEditor({
             ))}
           </select>
         </Field>
-        <Field label="Radio">
+        <Field label={t("Radio")}>
           <select
             value={form.radioId}
             onChange={(event) =>
@@ -1954,15 +2035,19 @@ function AssociationEditor({
             }
             className={SELECT_CLASS}
           >
-            <option value="">Unspecified</option>
+            <option value="">{t("Unspecified")}</option>
             {availableRadios.map((radio) => (
               <option key={radio.id} value={radio.id}>
-                {radio.slotName} · {BAND_LABEL[radio.band]} · Ch {radio.channel}
+                {t("{slotName} · {band} · Ch {channel}", {
+                  slotName: radio.slotName,
+                  band: t(BAND_KEYS[radio.band]),
+                  channel: radio.channel,
+                })}
               </option>
             ))}
           </select>
         </Field>
-        <Field label="SSID">
+        <Field label={t("SSID")}>
           <select
             value={form.ssidId}
             onChange={(event) =>
@@ -1970,7 +2055,7 @@ function AssociationEditor({
             }
             className={SELECT_CLASS}
           >
-            <option value="">Unspecified</option>
+            <option value="">{t("Unspecified")}</option>
             {availableSsids.map((ssid) => (
               <option key={ssid.id} value={ssid.id}>
                 {ssid.name}
@@ -1978,7 +2063,7 @@ function AssociationEditor({
             ))}
           </select>
         </Field>
-        <Field label="Band">
+        <Field label={t("Band")}>
           <select
             value={form.band ?? ""}
             onChange={(event) =>
@@ -1989,15 +2074,15 @@ function AssociationEditor({
             }
             className={SELECT_CLASS}
           >
-            <option value="">Unspecified</option>
-            {Object.entries(BAND_LABEL).map(([value, label]) => (
+            <option value="">{t("Unspecified")}</option>
+            {Object.entries(BAND_KEYS).map(([value, key]) => (
               <option key={value} value={value}>
-                {label}
+                {t(key)}
               </option>
             ))}
           </select>
         </Field>
-        <Field label="Channel">
+        <Field label={t("Channel")}>
           <Input
             value={form.channel}
             onChange={(event) =>
@@ -2006,7 +2091,7 @@ function AssociationEditor({
             placeholder="44"
           />
         </Field>
-        <Field label="Signal (dBm)">
+        <Field label={t("Signal (dBm)")}>
           <Input
             value={form.signalDbm}
             onChange={(event) =>
@@ -2015,7 +2100,7 @@ function AssociationEditor({
             placeholder="-58"
           />
         </Field>
-        <Field label="Last seen">
+        <Field label={t("Last seen")}>
           <Input
             type="datetime-local"
             value={form.lastSeen}
@@ -2024,7 +2109,7 @@ function AssociationEditor({
             }
           />
         </Field>
-        <Field label="Last roam">
+        <Field label={t("Last roam")}>
           <Input
             type="datetime-local"
             value={form.lastRoamAt}
@@ -2035,7 +2120,7 @@ function AssociationEditor({
         </Field>
       </div>
 
-      <Field label="Notes">
+      <Field label={t("Notes")}>
         <textarea
           value={form.notes}
           onChange={(event) =>
@@ -2061,17 +2146,21 @@ function AssociationEditor({
               onClick={() => void onDelete()}
             >
               <Trash2 className="size-3.5" />
-              Remove link
+              {t("Remove link")}
             </Button>
           )}
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" variant="ghost" onClick={onCancel}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button type="submit" disabled={saving || !form.apDeviceId}>
             <Save className="size-3.5" />
-            {saving ? "Saving..." : association ? "Save link" : "Create link"}
+            {saving
+              ? t("Saving...")
+              : association
+                ? t("Save link")
+                : t("Create link")}
           </Button>
         </div>
       </div>

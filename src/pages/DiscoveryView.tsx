@@ -4,6 +4,7 @@ import { AlertTriangle, RefreshCcw, Save, Search, Trash2 } from "lucide-react";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
+import type { TranslationKey } from "@/i18n/translations";
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -74,6 +75,25 @@ type DiscoverySortKey =
   | "status"
   | "lastSeen";
 type DiscoveryScanTarget = "all" | "manual" | string;
+
+const PLACEMENT_HINT_KEYS: Record<string, TranslationKey> = {
+  "wifi-vlan-match": "Placed by VLAN/SSID match",
+  "loose-multiple-aps": "Left loose: multiple APs",
+  "loose-no-wifi-vlan": "Left loose: no WiFi VLAN",
+  "loose-wired-device-type": "Left loose: wired device type",
+  "loose-wired-hostname": "Left loose: wired hostname",
+  "loose-existing-inventory": "Left loose: existing inventory",
+  "loose-documented-ports": "Left loose: documented ports",
+};
+
+const DISCOVERY_STATUS_KEYS: Record<
+  NonNullable<DiscoveredDevice["status"]>,
+  TranslationKey
+> = {
+  new: "New",
+  imported: "Imported",
+  dismissed: "Dismissed",
+};
 
 export default function DiscoveryView() {
   const { t } = useI18n();
@@ -324,7 +344,7 @@ export default function DiscoveryView() {
       setLastScanResult(mergeScanResults(results));
       setFilter("all");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to scan subnet.");
+      setError(err instanceof Error ? err.message : t("Failed to scan subnet."));
     } finally {
       setScanning(false);
     }
@@ -348,7 +368,7 @@ export default function DiscoveryView() {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to save discovered device.",
+          : t("Failed to save discovered device."),
       );
     } finally {
       setSaving(false);
@@ -367,7 +387,7 @@ export default function DiscoveryView() {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to delete discovered device.",
+          : t("Failed to delete discovered device."),
       );
     } finally {
       setDeleting(false);
@@ -392,7 +412,7 @@ export default function DiscoveryView() {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to link discovered device.",
+          : t("Failed to link discovered device."),
       );
     } finally {
       setLinkingId(null);
@@ -466,19 +486,20 @@ export default function DiscoveryView() {
 
     if (failures.length > 0) {
       setError(
-        `Auto-map imported ${mapped} host${
-          mapped === 1 ? "" : "s"
-        }; ${failures.length} failed. ${failures.slice(0, 3).join(" ")}`,
+        t("Auto-map imported {mapped} host(s); {failedCount} failed. {details}", {
+          mapped,
+          failedCount: failures.length,
+          details: failures.slice(0, 3).join(" "),
+        }),
       );
     } else {
       setAutoMapMessage(
-        `Auto-mapped ${mapped} discovered host${mapped === 1 ? "" : "s"}${
-          monitorsCreated > 0
-            ? ` and added ${monitorsCreated} ICMP monitor${
-                monitorsCreated === 1 ? "" : "s"
-              }`
-            : ""
-        }.`,
+        monitorsCreated > 0
+          ? t(
+              "Auto-mapped {count} discovered host(s) and added {monitors} ICMP monitor(s).",
+              { count: mapped, monitors: monitorsCreated },
+            )
+          : t("Auto-mapped {count} discovered host(s).", { count: mapped }),
       );
       setFilter("imported");
     }
@@ -505,11 +526,14 @@ export default function DiscoveryView() {
   return (
     <>
       <TopBar
-        subtitle="Discovery inbox"
+        subtitle={t("Discovery inbox")}
         title={t("Discovery")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {discoveredDevices.length} discovered in {lab.name}
+            {t("{count} discovered in {lab}", {
+              count: discoveredDevices.length,
+              lab: lab.name,
+            })}
           </span>
         }
         actions={
@@ -520,17 +544,17 @@ export default function DiscoveryView() {
                 onChange={(event) => setScanTarget(event.target.value)}
                 className="rk-control h-8 w-56 px-2 text-xs text-[var(--text-primary)]"
                 disabled={!canManageDiscovery}
-                aria-label="Discovery scan target"
+                aria-label={t("Discovery scan target")}
               >
                 {subnets.length > 0 && (
-                  <option value="all">All IPAM subnets</option>
+                  <option value="all">{t("All IPAM subnets")}</option>
                 )}
                 {subnets.map((subnet) => (
                   <option key={subnet.id} value={subnet.id}>
                     {subnet.cidr} · {subnet.name}
                   </option>
                 ))}
-                <option value="manual">Manual CIDR</option>
+                <option value="manual">{t("Manual CIDR")}</option>
               </select>
               {scanTarget === "manual" && (
                 <Input
@@ -554,10 +578,10 @@ export default function DiscoveryView() {
               >
                 <Search className="size-3.5" />
                 {scanning
-                  ? "Scanning..."
+                  ? t("Scanning...")
                   : scanTarget === "all"
-                    ? "Scan all"
-                    : "Scan subnet"}
+                    ? t("Scan all")
+                    : t("Scan subnet")}
               </Button>
             </div>
           ) : undefined
@@ -567,38 +591,38 @@ export default function DiscoveryView() {
       <div className="flex flex-1 flex-col gap-5 overflow-hidden px-6 py-5">
         <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
           <DiscoveryStat
-            label="Total"
+            label={t("Total")}
             value={String(discoveredDevices.length)}
-            hint="Reachable hosts in the inbox"
+            hint={t("Reachable hosts in the inbox")}
           />
           <DiscoveryStat
             label={t("New")}
             value={String(newCount)}
-            hint="Not reviewed yet"
+            hint={t("Not reviewed yet")}
           />
           <DiscoveryStat
-            label="Duplicates"
+            label={t("Duplicates")}
             value={String(duplicateCount)}
-            hint="Matches existing inventory"
+            hint={t("Matches existing inventory")}
           />
           <DiscoveryStat
-            label="Imported"
+            label={t("Imported")}
             value={String(importedCount)}
-            hint="Already linked to inventory"
+            hint={t("Already linked to inventory")}
           />
           <DiscoveryStat
-            label="Dismissed"
+            label={t("Dismissed")}
             value={String(dismissedCount)}
-            hint="Hidden from the active queue"
+            hint={t("Hidden from the active queue")}
           />
           <DiscoveryStat
-            label="Technical"
+            label={t("Technical")}
             value={String(technicalCount)}
-            hint="IPAM gateway, DNS, reserved, or infra"
+            hint={t("IPAM gateway, DNS, reserved, or infra")}
           />
         </div>
 
-        {lastScanResult && <ScanSummary result={lastScanResult} />}
+        {lastScanResult && <ScanSummary result={lastScanResult} t={t} />}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
@@ -606,43 +630,43 @@ export default function DiscoveryView() {
               active={filter === "active"}
               onClick={() => setFilter("active")}
             >
-              Active
+              {t("Active")}
             </FilterButton>
             <FilterButton
               active={filter === "all"}
               onClick={() => setFilter("all")}
             >
-              All
+              {t("All")}
             </FilterButton>
             <FilterButton
               active={filter === "new"}
               onClick={() => setFilter("new")}
             >
-              New
+              {t("New")}
             </FilterButton>
             <FilterButton
               active={filter === "duplicates"}
               onClick={() => setFilter("duplicates")}
             >
-              Duplicates
+              {t("Duplicates")}
             </FilterButton>
             <FilterButton
               active={filter === "imported"}
               onClick={() => setFilter("imported")}
             >
-              Imported
+              {t("Imported")}
             </FilterButton>
             <FilterButton
               active={filter === "dismissed"}
               onClick={() => setFilter("dismissed")}
             >
-              Dismissed
+              {t("Dismissed")}
             </FilterButton>
             <FilterButton
               active={filter === "technical"}
               onClick={() => setFilter("technical")}
             >
-              Technical
+              {t("Technical")}
             </FilterButton>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -658,7 +682,7 @@ export default function DiscoveryView() {
                     disabled={!canManageDiscovery}
                     className="size-3 accent-[var(--color-accent)]"
                   />
-                  ICMP monitor
+                  {t("ICMP monitor")}
                 </label>
                 <Button
                   variant="outline"
@@ -667,8 +691,10 @@ export default function DiscoveryView() {
                   disabled={autoMapping || autoMapCandidates.length === 0}
                 >
                   {autoMapping
-                    ? "Auto-mapping..."
-                    : `Auto-map ${autoMapCandidates.length}`}
+                    ? t("Auto-mapping...")
+                    : t("Auto-map {count}", {
+                        count: autoMapCandidates.length,
+                      })}
                 </Button>
               </>
             )}
@@ -677,7 +703,7 @@ export default function DiscoveryView() {
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search IP, hostname, MAC..."
+                placeholder={t("Search IP, hostname, MAC...")}
                 className="h-8 pl-8 text-xs"
               />
             </div>
@@ -695,8 +721,8 @@ export default function DiscoveryView() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Inbox</CardLabel>
-                  <CardHeading>Discovered hosts</CardHeading>
+                  <CardLabel>{t("Inbox")}</CardLabel>
+                  <CardHeading>{t("Discovered hosts")}</CardHeading>
                 </CardTitle>
               </CardHeader>
               <CardBody className="overflow-x-auto p-0">
@@ -708,56 +734,56 @@ export default function DiscoveryView() {
                         sort={sort}
                         onSort={handleSort}
                       >
-                        IP
+                        {t("IP")}
                       </SortableHeader>
                       <SortableHeader
                         sortKey="hostname"
                         sort={sort}
                         onSort={handleSort}
                       >
-                        Hostname
+                        {t("Hostname")}
                       </SortableHeader>
                       <SortableHeader
                         sortKey="type"
                         sort={sort}
                         onSort={handleSort}
                       >
-                        Type
+                        {t("Type")}
                       </SortableHeader>
                       <SortableHeader
                         sortKey="placement"
                         sort={sort}
                         onSort={handleSort}
                       >
-                        Placement
+                        {t("Placement")}
                       </SortableHeader>
                       <SortableHeader
                         sortKey="vendor"
                         sort={sort}
                         onSort={handleSort}
                       >
-                        Vendor / MAC
+                        {t("Vendor / MAC")}
                       </SortableHeader>
                       <SortableHeader
                         sortKey="match"
                         sort={sort}
                         onSort={handleSort}
                       >
-                        Match
+                        {t("Match")}
                       </SortableHeader>
                       <SortableHeader
                         sortKey="status"
                         sort={sort}
                         onSort={handleSort}
                       >
-                        Status
+                        {t("Status")}
                       </SortableHeader>
                       <SortableHeader
                         sortKey="lastSeen"
                         sort={sort}
                         onSort={handleSort}
                       >
-                        Last seen
+                        {t("Last seen")}
                       </SortableHeader>
                     </tr>
                   </thead>
@@ -795,7 +821,7 @@ export default function DiscoveryView() {
                             <div className="space-y-0.5 text-[11px] text-[var(--color-fg-subtle)]">
                               <div>{device.vendor ?? "-"}</div>
                               <Mono className="text-[10px] text-[var(--color-fg-faint)]">
-                                {device.macAddress ?? "MAC unavailable"}
+                                {device.macAddress ?? t("MAC unavailable")}
                               </Mono>
                             </div>
                           </Td>
@@ -803,12 +829,15 @@ export default function DiscoveryView() {
                             {matches.length > 0 ? (
                               <Badge tone="warn">
                                 <AlertTriangle className="size-3" />
-                                {matches.length} match
-                                {matches.length === 1 ? "" : "es"}
+                                {matches.length === 1
+                                  ? t("{count} match", { count: matches.length })
+                                  : t("{count} matches", {
+                                      count: matches.length,
+                                    })}
                               </Badge>
                             ) : (
                               <span className="text-[11px] text-[var(--color-fg-faint)]">
-                                clean
+                                {t("clean")}
                               </span>
                             )}
                           </Td>
@@ -817,7 +846,7 @@ export default function DiscoveryView() {
                               <DiscoveryBadge status={device.status} />
                               {device.placementHint && (
                                 <Badge tone="info">
-                                  {placementHintLabel(device.placementHint)}
+                                  {placementHintLabel(device.placementHint, t)}
                                 </Badge>
                               )}
                               {device.technicalRole && (
@@ -839,15 +868,21 @@ export default function DiscoveryView() {
                   <div className="rk-empty m-4 text-center">
                     <div className="rk-empty-title">
                       {discoveredDevices.length === 0
-                        ? "Discovery inbox is empty"
-                        : "No discovered devices match the current filter"}
+                        ? t("Discovery inbox is empty")
+                        : t("No discovered devices match the current filter")}
                     </div>
                     <div className="rk-empty-copy">
                       {discoveredDevices.length === 0
                         ? canManageDiscovery
-                          ? "Run a subnet scan to populate the discovery inbox."
-                          : "An administrator can run subnet scans to populate the discovery inbox."
-                        : "Try a broader filter to bring additional discovered hosts back into view."}
+                          ? t(
+                              "Run a subnet scan to populate the discovery inbox.",
+                            )
+                          : t(
+                              "An administrator can run subnet scans to populate the discovery inbox.",
+                            )
+                        : t(
+                            "Try a broader filter to bring additional discovered hosts back into view.",
+                          )}
                     </div>
                   </div>
                 )}
@@ -859,9 +894,11 @@ export default function DiscoveryView() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Inspector</CardLabel>
+                  <CardLabel>{t("Inspector")}</CardLabel>
                   <CardHeading>
-                    {selected ? selected.ipAddress : "Select a discovered host"}
+                    {selected
+                      ? selected.ipAddress
+                      : t("Select a discovered host")}
                   </CardHeading>
                 </CardTitle>
                 {selected && <DiscoveryBadge status={selected.status} />}
@@ -870,11 +907,12 @@ export default function DiscoveryView() {
                 {!selected || !draft ? (
                   <div className="rk-empty">
                     <div className="rk-empty-title">
-                      Select a discovered host
+                      {t("Select a discovered host")}
                     </div>
                     <div className="rk-empty-copy">
-                      Review metadata, inspect likely matches, and import it
-                      into inventory from here.
+                      {t(
+                        "Review metadata, inspect likely matches, and import it into inventory from here.",
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -885,16 +923,16 @@ export default function DiscoveryView() {
                           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--color-fg-subtle)]" />
                           <div className="min-w-0">
                             <div className="text-sm font-medium text-[var(--color-fg)]">
-                              IPAM technical address
+                              {t("IPAM technical address")}
                             </div>
                             <div className="mt-1 text-sm text-[var(--color-fg-subtle)]">
                               {selected.technicalReason ??
                                 selected.technicalRole}
                             </div>
                             <div className="mt-2 text-xs leading-5 text-[var(--color-fg-subtle)]">
-                              Technical addresses stay out of the normal import
-                              flow. Update the related IPAM scope, zone, or
-                              assignment if this address changes.
+                              {t(
+                                "Technical addresses stay out of the normal import flow. Update the related IPAM scope, zone, or assignment if this address changes.",
+                              )}
                             </div>
                           </div>
                         </div>
@@ -907,12 +945,12 @@ export default function DiscoveryView() {
                           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--color-warn)]" />
                           <div className="min-w-0">
                             <div className="text-sm font-medium text-[var(--color-fg)]">
-                              Possible duplicate inventory match
+                              {t("Possible duplicate inventory match")}
                             </div>
                             <div className="mt-1 text-sm text-[var(--color-fg-subtle)]">
-                              Rackpad found existing devices with the same IP or
-                              hostname. Review these before importing a
-                              duplicate record.
+                              {t(
+                                "Rackpad found existing devices with the same IP or hostname. Review these before importing a duplicate record.",
+                              )}
                             </div>
                             <div className="mt-2 flex flex-wrap gap-2">
                               {selectedMatches.map((match) => (
@@ -941,8 +979,8 @@ export default function DiscoveryView() {
                                       }
                                     >
                                       {linkingId === match.id
-                                        ? "Linking..."
-                                        : "Link existing"}
+                                        ? t("Linking...")
+                                        : t("Link existing")}
                                     </Button>
                                   )}
                                 </div>
@@ -953,7 +991,7 @@ export default function DiscoveryView() {
                       </div>
                     )}
 
-                    <Field label="Hostname">
+                    <Field label={t("Hostname")}>
                       <Input
                         value={draft.hostname}
                         onChange={(event) =>
@@ -965,7 +1003,7 @@ export default function DiscoveryView() {
                         }
                       />
                     </Field>
-                    <Field label="Display name">
+                    <Field label={t("Display name")}>
                       <Input
                         value={draft.displayName}
                         onChange={(event) =>
@@ -978,15 +1016,15 @@ export default function DiscoveryView() {
                       />
                     </Field>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <Field label="MAC address">
+                      <Field label={t("MAC address")}>
                         <Input value={selected.macAddress ?? ""} disabled />
                       </Field>
-                      <Field label="Vendor">
+                      <Field label={t("Vendor")}>
                         <Input value={selected.vendor ?? ""} disabled />
                       </Field>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <Field label="Device type">
+                      <Field label={t("Device type")}>
                         <Select
                           value={draft.deviceType}
                           onChange={(value) =>
@@ -1008,7 +1046,7 @@ export default function DiscoveryView() {
                           ))}
                         </Select>
                       </Field>
-                      <Field label="Placement">
+                      <Field label={t("Placement")}>
                         <Select
                           value={draft.placement}
                           onChange={(value) =>
@@ -1023,14 +1061,16 @@ export default function DiscoveryView() {
                             )
                           }
                         >
-                          <option value="room">room</option>
-                          <option value="wireless">wireless</option>
-                          <option value="virtual">virtual</option>
-                          <option value="rack">rack</option>
+                          <option value="room">{t("Loose / room tech")}</option>
+                          <option value="wireless">
+                            {t("WiFi / AP linked")}
+                          </option>
+                          <option value="virtual">{t("Virtual / hosted")}</option>
+                          <option value="rack">{t("Rack mounted")}</option>
                         </Select>
                       </Field>
                     </div>
-                    <Field label="Status">
+                    <Field label={t("Status")}>
                       <Select
                         value={draft.status}
                         disabled={selectedIsTechnical}
@@ -1045,17 +1085,19 @@ export default function DiscoveryView() {
                           )
                         }
                       >
-                        <option value="new">new</option>
-                        <option value="imported">imported</option>
-                        <option value="dismissed">dismissed</option>
+                        <option value="new">{t("New")}</option>
+                        <option value="imported">{t("Imported")}</option>
+                        <option value="dismissed">{t("Dismissed")}</option>
                       </Select>
                       {selectedIsTechnical && (
                         <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
-                          Status is locked for IPAM technical addresses.
+                          {t(
+                            "Status is locked for IPAM technical addresses.",
+                          )}
                         </div>
                       )}
                     </Field>
-                    <Field label="Notes">
+                    <Field label={t("Notes")}>
                       <textarea
                         rows={4}
                         value={draft.notes}
@@ -1073,7 +1115,7 @@ export default function DiscoveryView() {
                     {selected.importedDeviceId &&
                       deviceById[selected.importedDeviceId] && (
                         <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-fg)]">
-                          Imported as{" "}
+                          {t("Imported as")}{" "}
                           <Link
                             to={`/devices/${selected.importedDeviceId}`}
                             className="text-[var(--color-accent)] hover:underline"
@@ -1098,7 +1140,7 @@ export default function DiscoveryView() {
                           disabled={saving}
                         >
                           <Save className="size-3.5" />
-                          {saving ? "Saving..." : "Save"}
+                          {saving ? t("Saving...") : t("Save")}
                         </Button>
                         <Button
                           variant="outline"
@@ -1107,7 +1149,7 @@ export default function DiscoveryView() {
                           disabled={!canManageDiscovery || scanning}
                         >
                           <RefreshCcw className="size-3.5" />
-                          Rescan
+                          {t("Rescan")}
                         </Button>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1120,8 +1162,8 @@ export default function DiscoveryView() {
                               onClick={() => setDrawerOpen(true)}
                             >
                               {selectedMatches.length > 0
-                                ? "Import anyway"
-                                : "Import"}
+                                ? t("Import anyway")
+                                : t("Import")}
                             </Button>
                           )}
                         {canEdit && (
@@ -1132,7 +1174,7 @@ export default function DiscoveryView() {
                             disabled={deleting}
                           >
                             <Trash2 className="size-3.5" />
-                            {deleting ? "Deleting..." : "Delete"}
+                            {deleting ? t("Deleting...") : t("Delete")}
                           </Button>
                         )}
                       </div>
@@ -1157,10 +1199,37 @@ export default function DiscoveryView() {
   );
 }
 
-function ScanSummary({ result }: { result: DiscoveryScanResult }) {
+function ScanSummary({
+  result,
+  t,
+}: {
+  result: DiscoveryScanResult;
+  t: ReturnType<typeof useI18n>["t"];
+}) {
   const hasWarning = result.diagnostics.some(
     (diagnostic) => diagnostic.severity === "warning",
   );
+  const scanSummaryText =
+    result.technicalCount > 0
+      ? t(
+          "Last scan checked {hostCount} hosts, found {discovered} reachable, saw {macCount} MACs and {vendorCount} vendors, with {technicalCount} technical.",
+          {
+            hostCount: result.scannedHostCount,
+            discovered: result.discoveredCount,
+            macCount: result.macAddressCount,
+            vendorCount: result.vendorCount,
+            technicalCount: result.technicalCount,
+          },
+        )
+      : t(
+          "Last scan checked {hostCount} hosts, found {discovered} reachable, saw {macCount} MACs and {vendorCount} vendors.",
+          {
+            hostCount: result.scannedHostCount,
+            discovered: result.discoveredCount,
+            macCount: result.macAddressCount,
+            vendorCount: result.vendorCount,
+          },
+        );
   return (
     <div
       className={`rounded-[var(--radius-sm)] border px-3 py-3 ${
@@ -1173,21 +1242,7 @@ function ScanSummary({ result }: { result: DiscoveryScanResult }) {
         {hasWarning && (
           <AlertTriangle className="size-4 shrink-0 text-[var(--color-warn)]" />
         )}
-        <span>
-          Last scan checked{" "}
-          <Mono className="text-xs">{result.scannedHostCount}</Mono> hosts,
-          found <Mono className="text-xs">{result.discoveredCount}</Mono>{" "}
-          reachable, saw{" "}
-          <Mono className="text-xs">{result.macAddressCount}</Mono> MACs and{" "}
-          <Mono className="text-xs">{result.vendorCount}</Mono> vendors.
-          {result.technicalCount > 0 && (
-            <>
-              {" "}
-              <Mono className="text-xs">{result.technicalCount}</Mono>{" "}
-              technical.
-            </>
-          )}
-        </span>
+        <span>{scanSummaryText}</span>
       </div>
       {result.diagnostics.length > 0 && (
         <div className="mt-2 space-y-1 text-xs text-[var(--color-fg-subtle)]">
@@ -1249,35 +1304,23 @@ function FilterButton({
   );
 }
 
-function placementHintLabel(hint: string) {
-  switch (hint) {
-    case "wifi-vlan-match":
-      return "Placed by VLAN/SSID match";
-    case "loose-multiple-aps":
-      return "Left loose: multiple APs";
-    case "loose-no-wifi-vlan":
-      return "Left loose: no WiFi VLAN";
-    case "loose-wired-device-type":
-      return "Left loose: wired device type";
-    case "loose-wired-hostname":
-      return "Left loose: wired hostname";
-    case "loose-existing-inventory":
-      return "Left loose: existing inventory";
-    case "loose-documented-ports":
-      return "Left loose: documented ports";
-    default:
-      return hint;
-  }
+function placementHintLabel(
+  hint: string,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  const key = PLACEMENT_HINT_KEYS[hint];
+  return key ? t(key) : hint;
 }
 
 function DiscoveryBadge({ status }: { status: DiscoveredDevice["status"] }) {
+  const { t } = useI18n();
   const tone =
     status === "imported"
       ? "ok"
       : status === "dismissed"
         ? "neutral"
         : "accent";
-  return <Badge tone={tone}>{status}</Badge>;
+  return <Badge tone={tone}>{t(DISCOVERY_STATUS_KEYS[status])}</Badge>;
 }
 
 function autoMapPlacement(

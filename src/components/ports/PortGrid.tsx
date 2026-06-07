@@ -11,6 +11,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/Tooltip";
+import { useI18n } from "@/i18n";
+import { formatPortModeSummary } from "@/components/ports/port-mode-labels";
 
 interface PortGridProps {
   device: Device;
@@ -37,6 +39,7 @@ export function PortGrid({
   onSelectPort,
   selectedPortId,
 }: PortGridProps) {
+  const { t } = useI18n();
   const sections = groupPortsByKind(ports);
 
   return (
@@ -50,11 +53,11 @@ export function PortGrid({
             <span className="text-[10px] text-[var(--text-muted)]">|</span>
             <span className="font-mono text-[10px] text-[var(--text-muted)]">
               {[device.manufacturer, device.model].filter(Boolean).join(" ") ||
-                "device view"}
+                t("device view")}
             </span>
           </div>
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
-            {ports.length} ports
+            {t("{count} ports", { count: ports.length })}
           </span>
         </div>
 
@@ -72,6 +75,7 @@ export function PortGrid({
               snmpVerifiedPortIds={snmpVerifiedPortIds}
               onSelectPort={onSelectPort}
               selectedPortId={selectedPortId}
+              t={t}
             />
           ))}
         </div>
@@ -104,6 +108,7 @@ function PortSection({
   snmpVerifiedPortIds,
   onSelectPort,
   selectedPortId,
+  t,
 }: {
   kind: Port["kind"];
   items: Port[];
@@ -115,6 +120,7 @@ function PortSection({
   snmpVerifiedPortIds?: Set<string>;
   onSelectPort?: (portId: string) => void;
   selectedPortId?: string;
+  t: ReturnType<typeof useI18n>["t"];
 }) {
   const useTwoRows = items.length > 8;
   const top = useTwoRows ? items.filter((_, index) => index % 2 === 0) : items;
@@ -148,6 +154,7 @@ function PortSection({
               onSelect={onSelectPort}
               selected={selectedPortId === port.id}
               delay={index * 0.012}
+              t={t}
             />
           ))}
         </div>
@@ -165,6 +172,7 @@ function PortSection({
                 onSelect={onSelectPort}
                 selected={selectedPortId === port.id}
                 delay={index * 0.012 + 0.05}
+                t={t}
               />
             ))}
           </div>
@@ -185,6 +193,7 @@ function PortCell({
   onSelect,
   selected,
   delay = 0,
+  t,
 }: {
   port: Port;
   link?: PortLink;
@@ -196,6 +205,7 @@ function PortCell({
   onSelect?: (portId: string) => void;
   selected?: boolean;
   delay?: number;
+  t: ReturnType<typeof useI18n>["t"];
 }) {
   const isLinked = port.linkState === "up";
   const snmpVerified = snmpVerifiedPortIds?.has(port.id) ?? false;
@@ -270,8 +280,8 @@ function PortCell({
           {snmpVerified ? (
             <span
               className="absolute right-1 top-1 size-1.5 rounded-full bg-[var(--accent-primary)] shadow-[0_0_6px_var(--accent-primary-glow)]"
-              title="SNMP verified"
-              aria-label="SNMP verified"
+              title={t("SNMP verified")}
+              aria-label={t("SNMP verified")}
             />
           ) : null}
 
@@ -291,7 +301,7 @@ function PortCell({
               }}
             />
             <span className="font-mono text-[9px] text-[var(--text-muted)]">
-              {port.speed ?? "n/a"}
+              {port.speed ?? t("n/a")}
             </span>
           </div>
         </motion.button>
@@ -301,35 +311,39 @@ function PortCell({
           <div className="flex items-center gap-2">
             <span className="font-medium">{port.name}</span>
             <span className="text-[var(--text-tertiary)]">
-              {portTypeLabel[port.kind]} | {port.speed ?? "n/a"}
+              {portTypeLabel[port.kind]} | {port.speed ?? t("n/a")}
             </span>
           </div>
           <span className="text-[var(--text-tertiary)]">
-            {formatPortNetworkSummary(port, vlansById)}
+            {formatPortModeSummary(t, port, vlansById, virtualSwitchesById, false)}
           </span>
           {port.virtualSwitchId ? (
             <span className="text-[var(--accent-secondary)]">
-              bridge{" "}
-              {virtualSwitchesById[port.virtualSwitchId]?.name ??
-                port.virtualSwitchId}
+              {t("bridge {name}", {
+                name:
+                  virtualSwitchesById[port.virtualSwitchId]?.name ??
+                  port.virtualSwitchId,
+              })}
             </span>
           ) : null}
           {snmpVerified ? (
             <span className="text-[var(--accent-primary)]">
-              SNMP verified link state
+              {t("SNMP verified link state")}
             </span>
           ) : null}
           {isLinked && otherDevice && otherPort ? (
             <span className="text-[var(--accent-secondary)]">
-              linked to {otherDevice.hostname}:
-              {formatPortLabel(otherPort, { includeFace: true })}
+              {t("linked to {hostname}:{portLabel}", {
+                hostname: otherDevice.hostname,
+                portLabel: formatPortLabel(otherPort, { includeFace: true }),
+              })}
             </span>
           ) : (
-            <span className="text-[var(--text-muted)]">no link</span>
+            <span className="text-[var(--text-muted)]">{t("no link")}</span>
           )}
           {link && (
             <span className="text-[var(--text-tertiary)]">
-              {link.cableType || "cable"}{" "}
+              {link.cableType || t("Cable")}{" "}
               {link.cableLength ? `| ${link.cableLength}` : ""}
             </span>
           )}
@@ -337,33 +351,4 @@ function PortCell({
       </TooltipContent>
     </Tooltip>
   );
-}
-
-function formatPortNetworkSummary(
-  port: Port,
-  vlansById: Record<string, Vlan>,
-) {
-  if (port.mode === "trunk") {
-    const tagged = (port.allowedVlanIds ?? []).map((vlanId) =>
-      formatCompactVlanLabel(vlanId, vlansById),
-    );
-    const nativeLabel = port.vlanId
-      ? `native ${formatCompactVlanLabel(port.vlanId, vlansById)}`
-      : "no native vlan";
-    return tagged.length > 0
-      ? `Trunk | ${nativeLabel} | tagged ${tagged.join(", ")}`
-      : `Trunk | ${nativeLabel}`;
-  }
-
-  return port.vlanId
-    ? `Access | VLAN ${formatCompactVlanLabel(port.vlanId, vlansById)}`
-    : "Access | unassigned vlan";
-}
-
-function formatCompactVlanLabel(
-  vlanId: string,
-  vlansById: Record<string, Vlan>,
-) {
-  const vlan = vlansById[vlanId];
-  return vlan ? String(vlan.vlanId) : vlanId;
 }

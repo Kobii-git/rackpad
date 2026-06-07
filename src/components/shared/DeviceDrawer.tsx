@@ -19,7 +19,10 @@ import {
   updateDevice,
   useStore,
 } from "@/lib/store";
+import { useI18n } from "@/i18n";
+import type { TranslationKey } from "@/i18n/translations";
 import { deviceTypeLabel } from "@/lib/device-types";
+import { statusLabel } from "@/lib/utils";
 import type {
   Device,
   DeviceStatus,
@@ -167,6 +170,7 @@ export function DeviceDrawer({
   onClose,
   onSaved,
 }: DeviceDrawerProps) {
+  const { t } = useI18n();
   const racks = useStore((s) => s.racks);
   const rooms = useStore((s) => s.rooms);
   const devices = useStore((s) => s.devices);
@@ -258,12 +262,11 @@ export function DeviceDrawer({
     form.placement === "wireless" ||
     form.placement === "virtual" ||
     form.placement === "shelf";
-  const parentLabel =
-    form.placement === "wireless"
-      ? "Connected AP"
-      : form.placement === "shelf"
-        ? "Rack shelf / tray"
-        : "Host device";
+  const parentLabel = useMemo(() => {
+    if (form.placement === "wireless") return t("Connected AP");
+    if (form.placement === "shelf") return t("Rack shelf / tray");
+    return t("Host device");
+  }, [form.placement, t]);
   const parentHost = form.parentDeviceId
     ? devices.find((entry) => entry.id === form.parentDeviceId)
     : undefined;
@@ -407,15 +410,15 @@ export function DeviceDrawer({
     const heightU = Number.parseInt(shelfForm.heightU, 10) || 1;
 
     if (!hostname) {
-      setShelfError("Shelf hostname is required.");
+      setShelfError(t("Shelf hostname is required."));
       return;
     }
     if (!rackId) {
-      setShelfError("Select the rack that contains this shelf / tray.");
+      setShelfError(t("Select the rack that contains this shelf / tray."));
       return;
     }
     if (!Number.isFinite(startU) || startU < 1) {
-      setShelfError("Start U must be 1 or higher.");
+      setShelfError(t("Start U must be 1 or higher."));
       return;
     }
 
@@ -443,7 +446,7 @@ export function DeviceDrawer({
       setShelfError(
         err instanceof Error
           ? err.message
-          : "Failed to create rack shelf / tray.",
+          : t("Failed to create rack shelf / tray."),
       );
     } finally {
       setCreatingShelf(false);
@@ -454,7 +457,7 @@ export function DeviceDrawer({
     setError("");
     const label = customTypeLabel.trim();
     if (!label) {
-      setError("Device type name is required.");
+      setError(t("Device type name is required."));
       return;
     }
 
@@ -466,7 +469,7 @@ export function DeviceDrawer({
       setAddingType(false);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to create device type.",
+        err instanceof Error ? err.message : t("Failed to create device type."),
       );
     } finally {
       setCreatingType(false);
@@ -480,7 +483,7 @@ export function DeviceDrawer({
       canUseHostSharedNetworking && form.networkMode === "host-shared";
 
     if (!form.hostname.trim()) {
-      setError("Hostname is required.");
+      setError(t("Hostname is required."));
       return;
     }
     if (
@@ -491,7 +494,9 @@ export function DeviceDrawer({
       form.ipAllocationMode !== "dhcp-reservation"
     ) {
       setError(
-        "This management IP is inside a DHCP pool. Choose DHCP reservation for the device assignment.",
+        t(
+          "This management IP is inside a DHCP pool. Choose DHCP reservation for the device assignment.",
+        ),
       );
       return;
     }
@@ -502,7 +507,7 @@ export function DeviceDrawer({
       form.ipAllocationMode === "dhcp-reservation" &&
       !effectiveDhcpScopeId
     ) {
-      setError("Select a DHCP pool for this reservation.");
+      setError(t("Select a DHCP pool for this reservation."));
       return;
     }
 
@@ -580,13 +585,13 @@ export function DeviceDrawer({
         onSaved?.(saved);
         onClose();
       } else {
-        setError("Failed to save device. Please try again.");
+        setError(t("Failed to save device. Please try again."));
       }
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to save device. Please try again.",
+          : t("Failed to save device. Please try again."),
       );
     } finally {
       setSaving(false);
@@ -619,17 +624,17 @@ export function DeviceDrawer({
             <div className="flex items-center justify-between border-b border-[var(--border-default)] px-5 py-3.5">
               <div>
                 <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                  {isEdit ? "Edit" : "New"}
+                  {isEdit ? t("Edit") : t("New")}
                 </div>
                 <h2 className="text-sm font-semibold tracking-tight text-[var(--color-fg)]">
-                  {isEdit ? device.hostname : "Add device"}
+                  {isEdit ? device.hostname : t("Add device")}
                 </h2>
               </div>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={onClose}
-                aria-label="Close"
+                aria-label={t("Close")}
               >
                 <X />
               </Button>
@@ -640,8 +645,8 @@ export function DeviceDrawer({
               className="flex flex-1 flex-col overflow-hidden"
             >
               <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
-                <Section label="Identity">
-                  <Field label="Hostname *">
+                <Section label={t("Identity")}>
+                  <Field label={t("Hostname *")}>
                     <Input
                       value={form.hostname}
                       onChange={(event) => set("hostname", event.target.value)}
@@ -649,7 +654,7 @@ export function DeviceDrawer({
                       autoFocus
                     />
                   </Field>
-                  <Field label="Display name">
+                  <Field label={t("Display name")}>
                     <Input
                       value={form.displayName}
                       onChange={(event) =>
@@ -659,7 +664,7 @@ export function DeviceDrawer({
                     />
                   </Field>
                   <div className="block">
-                    <span className="rk-field-label">Device type</span>
+                    <span className="rk-field-label">{t("Device type")}</span>
                     <div className="grid grid-cols-[1fr_auto] gap-2">
                       <Select
                         value={form.deviceType}
@@ -680,7 +685,7 @@ export function DeviceDrawer({
                         onClick={() => setAddingType((value) => !value)}
                       >
                         <Plus className="size-3.5" />
-                        Type
+                        {t("Type")}
                       </Button>
                     </div>
                     {addingType && (
@@ -698,12 +703,12 @@ export function DeviceDrawer({
                           onClick={() => void handleCreateDeviceType()}
                           disabled={creatingType}
                         >
-                          {creatingType ? "Adding..." : "Add"}
+                          {creatingType ? t("Adding...") : t("Add")}
                         </Button>
                       </div>
                     )}
                   </div>
-                  <Field label="Status">
+                  <Field label={t("Status")}>
                     <div className="flex flex-wrap gap-1.5">
                       {STATUS_OPTIONS.map((status) => (
                         <button
@@ -717,7 +722,7 @@ export function DeviceDrawer({
                               : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]",
                           )}
                         >
-                          {status}
+                          {t(statusLabel[status] as TranslationKey)}
                         </button>
                       ))}
                     </div>
@@ -726,9 +731,9 @@ export function DeviceDrawer({
 
                 <Separator />
 
-                <Section label="Hardware">
+                <Section label={t("Hardware")}>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Manufacturer">
+                    <Field label={t("Manufacturer")}>
                       <Input
                         value={form.manufacturer}
                         onChange={(event) =>
@@ -737,7 +742,7 @@ export function DeviceDrawer({
                         placeholder="e.g. Cisco"
                       />
                     </Field>
-                    <Field label="Model">
+                    <Field label={t("Model")}>
                       <Input
                         value={form.model}
                         onChange={(event) => set("model", event.target.value)}
@@ -745,14 +750,14 @@ export function DeviceDrawer({
                       />
                     </Field>
                   </div>
-                  <Field label="Serial number">
+                  <Field label={t("Serial number")}>
                     <Input
                       value={form.serial}
                       onChange={(event) => set("serial", event.target.value)}
                       placeholder="e.g. FOC2134X0AB"
                     />
                   </Field>
-                  <Field label="Management IP">
+                  <Field label={t("Management IP")}>
                     <Input
                       value={form.managementIp}
                       onChange={(event) =>
@@ -789,15 +794,15 @@ export function DeviceDrawer({
                                 )}
                               >
                                 {mode === "dhcp-reservation"
-                                  ? "DHCP reservation"
-                                  : "Static IP"}
+                                  ? t("DHCP reservation")
+                                  : t("Static IP")}
                               </button>
                             ),
                           )}
                         </div>
 
                         <div className="grid gap-3 md:grid-cols-2">
-                          <Field label="Subnet">
+                          <Field label={t("Subnet")}>
                             <Select
                               value={selectedIpSubnetId}
                               onChange={(value) =>
@@ -816,14 +821,14 @@ export function DeviceDrawer({
                             </Select>
                           </Field>
                           {form.ipAllocationMode === "dhcp-reservation" ? (
-                            <Field label="DHCP pool">
+                            <Field label={t("DHCP pool")}>
                               <Select
                                 value={effectiveDhcpScopeId}
                                 onChange={(value) => set("dhcpScopeId", value)}
                                 disabled={scopesForSelectedSubnet.length === 0}
                               >
                                 {scopesForSelectedSubnet.length === 0 ? (
-                                  <option value="">No DHCP pool</option>
+                                  <option value="">{t("No DHCP pool")}</option>
                                 ) : (
                                   scopesForSelectedSubnet.map((scope) => (
                                     <option key={scope.id} value={scope.id}>
@@ -841,26 +846,20 @@ export function DeviceDrawer({
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                           <div className="min-w-0 text-xs text-[var(--color-fg-subtle)]">
                             {managementIp && managementIpInDhcpPool ? (
-                              <>
-                                {managementIp} is in{" "}
-                                <span className="font-medium text-[var(--color-fg)]">
-                                  {matchingDhcpScope?.name}
-                                </span>
-                                .
-                              </>
+                              t("{ip} is in {scope}.", {
+                                ip: managementIp,
+                                scope: matchingDhcpScope?.name ?? "",
+                              })
                             ) : nextIpPreview ? (
-                              <>
-                                Next{" "}
-                                {form.ipAllocationMode === "dhcp-reservation"
-                                  ? "reservation"
-                                  : "static"}{" "}
-                                IP:{" "}
-                                <span className="font-mono text-[var(--color-fg)]">
-                                  {nextIpPreview.ipAddress}
-                                </span>
-                              </>
+                              form.ipAllocationMode === "dhcp-reservation"
+                                ? t("Next reservation IP: {ipAddress}", {
+                                    ipAddress: nextIpPreview.ipAddress,
+                                  })
+                                : t("Next static IP: {ipAddress}", {
+                                    ipAddress: nextIpPreview.ipAddress,
+                                  })
                             ) : (
-                              "No available address for this selection."
+                              t("No available address for this selection.")
                             )}
                           </div>
                           <Button
@@ -878,13 +877,13 @@ export function DeviceDrawer({
                               }));
                             }}
                           >
-                            Use next IP
+                            {t("Use next IP")}
                           </Button>
                         </div>
                       </div>
                     )}
                   {canUseHostSharedNetworking && (
-                    <Field label="Network mode">
+                    <Field label={t("Network mode")}>
                       <div className="grid grid-cols-2 gap-1">
                         {(["normal", "host-shared"] as const).map((mode) => (
                           <button
@@ -908,26 +907,37 @@ export function DeviceDrawer({
                                 : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]",
                             )}
                           >
-                            {mode === "host-shared" ? "Host shared" : "Normal"}
+                            {mode === "host-shared"
+                              ? t("Host shared")
+                              : t("Normal")}
                           </button>
                         ))}
                       </div>
                       {form.networkMode === "host-shared" && (
                         <p className="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--surface-1)] px-3 py-2 text-[11px] text-[var(--color-fg-subtle)]">
-                          Shares{" "}
-                          <span className="font-medium text-[var(--color-fg)]">
-                            {parentHost?.hostname ?? "the parent host"}
-                          </span>
                           {parentHost?.managementIp
-                            ? ` at ${parentHost.managementIp}`
-                            : "'s management IP"}
-                          . Leave the inherited IP here or blank; Rackpad will
-                          not create a duplicate IPAM row for this child.
+                            ? t(
+                                "Shares {hostname} at {ip}. Leave the inherited IP here or blank; Rackpad will not create a duplicate IPAM row for this child.",
+                                {
+                                  hostname:
+                                    parentHost.hostname ??
+                                    t("the parent host"),
+                                  ip: parentHost.managementIp,
+                                },
+                              )
+                            : t(
+                                "Shares {hostname}'s management IP. Leave the inherited IP here or blank; Rackpad will not create a duplicate IPAM row for this child.",
+                                {
+                                  hostname:
+                                    parentHost?.hostname ??
+                                    t("the parent host"),
+                                },
+                              )}
                         </p>
                       )}
                     </Field>
                   )}
-                  <Field label="MAC address">
+                  <Field label={t("MAC address")}>
                     <Input
                       value={form.macAddress}
                       onChange={(event) =>
@@ -940,9 +950,9 @@ export function DeviceDrawer({
 
                 <Separator />
 
-                <Section label="Capacity & specs">
+                <Section label={t("Capacity & specs")}>
                   <div className="grid grid-cols-3 gap-3">
-                    <Field label="CPU cores">
+                    <Field label={t("CPU cores")}>
                       <Input
                         type="number"
                         min={1}
@@ -953,7 +963,7 @@ export function DeviceDrawer({
                         placeholder="e.g. 8"
                       />
                     </Field>
-                    <Field label="Memory (GB)">
+                    <Field label={t("Memory (GB)")}>
                       <Input
                         type="number"
                         min={0}
@@ -965,7 +975,7 @@ export function DeviceDrawer({
                         placeholder="64"
                       />
                     </Field>
-                    <Field label="Storage (GB)">
+                    <Field label={t("Storage (GB)")}>
                       <Input
                         type="number"
                         min={0}
@@ -978,11 +988,13 @@ export function DeviceDrawer({
                       />
                     </Field>
                   </div>
-                  <Field label="Specs">
+                  <Field label={t("Specs")}>
                     <textarea
                       value={form.specs}
                       onChange={(event) => set("specs", event.target.value)}
-                      placeholder="CPU generation, RAID layout, GPU, NIC details, or VM sizing notes..."
+                      placeholder={t(
+                        "CPU generation, RAID layout, GPU, NIC details, or VM sizing notes...",
+                      )}
                       rows={3}
                       className="rk-control rk-textarea w-full text-sm font-sans"
                     />
@@ -991,21 +1003,23 @@ export function DeviceDrawer({
 
                 <Separator />
 
-                <Section label="Placement">
-                  <Field label="Placement">
+                <Section label={t("Placement")}>
+                  <Field label={t("Placement")}>
                     <Select
                       value={form.placement}
                       onChange={(value) =>
                         set("placement", value as FormState["placement"])
                       }
                     >
-                      <option value="rack">Rack mounted</option>
-                      <option value="room">Loose / room tech</option>
+                      <option value="rack">{t("Rack mounted")}</option>
+                      <option value="room">{t("Loose / room tech")}</option>
                       {form.deviceType !== "rack_shelf" && (
-                        <option value="shelf">On rack shelf / tray</option>
+                        <option value="shelf">
+                          {t("On rack shelf / tray")}
+                        </option>
                       )}
-                      <option value="wireless">WiFi / AP linked</option>
-                      <option value="virtual">Virtual / hosted</option>
+                      <option value="wireless">{t("WiFi / AP linked")}</option>
+                      <option value="virtual">{t("Virtual / hosted")}</option>
                     </Select>
                   </Field>
 
@@ -1018,10 +1032,10 @@ export function DeviceDrawer({
                         >
                           <option value="">
                             {form.placement === "wireless"
-                              ? "-- no AP selected --"
+                              ? t("No AP selected")
                               : form.placement === "shelf"
-                                ? "-- no rack shelf selected --"
-                                : "-- no host selected --"}
+                                ? t("No rack shelf selected")
+                                : t("No host selected")}
                           </option>
                           {parentCandidates.map((entry) => (
                             <option key={entry.id} value={entry.id}>
@@ -1036,18 +1050,19 @@ export function DeviceDrawer({
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <div className="text-xs font-semibold text-[var(--color-fg)]">
-                                Need a shelf / tray first?
+                                {t("Need a shelf / tray first?")}
                               </div>
                               <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
-                                Create the rack shelf here, then this device can
-                                be attached to it without closing the drawer.
+                                {t(
+                                  "Create the rack shelf here, then this device can be attached to it without closing the drawer.",
+                                )}
                               </div>
                             </div>
-                            <Badge tone="neutral">Rack device</Badge>
+                            <Badge tone="neutral">{t("Rack device")}</Badge>
                           </div>
 
                           <div className="mt-3 grid grid-cols-2 gap-3">
-                            <Field label="Shelf hostname">
+                            <Field label={t("Shelf hostname")}>
                               <Input
                                 value={shelfForm.hostname}
                                 onChange={(event) =>
@@ -1056,12 +1071,12 @@ export function DeviceDrawer({
                                 placeholder="e.g. cmp-shelf-u32"
                               />
                             </Field>
-                            <Field label="Rack">
+                            <Field label={t("Rack")}>
                               <Select
                                 value={shelfForm.rackId}
                                 onChange={(value) => setShelf("rackId", value)}
                               >
-                                <option value="">Select rack</option>
+                                <option value="">{t("Select rack")}</option>
                                 {racks.map((rack) => (
                                   <option key={rack.id} value={rack.id}>
                                     {rack.name}
@@ -1069,7 +1084,7 @@ export function DeviceDrawer({
                                 ))}
                               </Select>
                             </Field>
-                            <Field label="Start U">
+                            <Field label={t("Start U")}>
                               <Input
                                 type="number"
                                 min={1}
@@ -1080,7 +1095,7 @@ export function DeviceDrawer({
                                 placeholder="e.g. 32"
                               />
                             </Field>
-                            <Field label="Height (U)">
+                            <Field label={t("Height (U)")}>
                               <Input
                                 type="number"
                                 min={1}
@@ -1093,15 +1108,15 @@ export function DeviceDrawer({
                           </div>
 
                           <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-3">
-                            <Field label="Face">
+                            <Field label={t("Face")}>
                               <Select
                                 value={shelfForm.face}
                                 onChange={(value) =>
                                   setShelf("face", value as RackFace)
                                 }
                               >
-                                <option value="front">Front</option>
-                                <option value="rear">Rear</option>
+                                <option value="front">{t("Front")}</option>
+                                <option value="rear">{t("Rear")}</option>
                               </Select>
                             </Field>
                             <Button
@@ -1111,7 +1126,9 @@ export function DeviceDrawer({
                               disabled={creatingShelf}
                             >
                               <Plus className="size-3.5" />
-                              {creatingShelf ? "Creating..." : "Create shelf"}
+                              {creatingShelf
+                                ? t("Creating...")
+                                : t("Create shelf")}
                             </Button>
                           </div>
 
@@ -1126,12 +1143,12 @@ export function DeviceDrawer({
                   )}
 
                   {!isRackMounted && (
-                    <Field label="Room">
+                    <Field label={t("Room")}>
                       <Select
                         value={form.roomId}
                         onChange={(value) => set("roomId", value)}
                       >
-                        <option value="">-- no room selected --</option>
+                        <option value="">{t("No room selected")}</option>
                         {rooms.map((room) => (
                           <option key={room.id} value={room.id}>
                             {room.name}
@@ -1140,8 +1157,9 @@ export function DeviceDrawer({
                       </Select>
                       {rooms.length === 0 && (
                         <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
-                          Create rooms from the Racks workspace to group loose,
-                          wireless, and shelf-adjacent gear.
+                          {t(
+                            "Create rooms from the Racks workspace to group loose, wireless, and shelf-adjacent gear.",
+                          )}
                         </p>
                       )}
                     </Field>
@@ -1150,14 +1168,14 @@ export function DeviceDrawer({
 
                 <Separator />
 
-                <Section label="Ports">
-                  <Field label="Port template">
+                <Section label={t("Ports")}>
+                  <Field label={t("Port template")}>
                     <Select
                       value={form.portTemplateId}
                       onChange={(value) => set("portTemplateId", value)}
                       disabled={!canApplyTemplate}
                     >
-                      <option value="">No template</option>
+                      <option value="">{t("No template")}</option>
                       {compatibleTemplates.map((template) => (
                         <option key={template.id} value={template.id}>
                           {template.name}
@@ -1167,15 +1185,17 @@ export function DeviceDrawer({
                   </Field>
                   {!canApplyTemplate ? (
                     <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-fg-subtle)]">
-                      This device already has {devicePortCount} ports. Templates
-                      can only be applied to empty devices.
+                      {t(
+                        "This device already has {count} ports. Templates can only be applied to empty devices.",
+                        { count: devicePortCount },
+                      )}
                     </div>
                   ) : selectedTemplate ? (
                     <div className="rounded-[var(--radius-sm)] border border-[var(--color-accent-soft)]/30 bg-[var(--color-accent)]/5 p-3">
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
-                            Template preview
+                            {t("Template preview")}
                           </div>
                           <div className="text-sm text-[var(--color-fg)]">
                             {selectedTemplate.description}
@@ -1183,7 +1203,9 @@ export function DeviceDrawer({
                         </div>
                         <Badge tone="accent">
                           <Network className="size-3" />
-                          {selectedTemplate.ports.length} ports
+                          {t("{count} ports", {
+                            count: selectedTemplate.ports.length,
+                          })}
                         </Badge>
                       </div>
                     </div>
@@ -1193,15 +1215,19 @@ export function DeviceDrawer({
                 <Separator />
 
                 <Section
-                  label={isShelfMounted ? "Shelf footprint" : "Rack placement"}
+                  label={
+                    isShelfMounted
+                      ? t("Shelf footprint")
+                      : t("Rack placement")
+                  }
                 >
                   {isRackMounted && (
-                    <Field label="Rack">
+                    <Field label={t("Rack")}>
                       <Select
                         value={form.rackId}
                         onChange={(value) => set("rackId", value)}
                       >
-                        <option value="">-- unracked --</option>
+                        <option value="">{t("Unracked")}</option>
                         {racks.map((rack) => (
                           <option key={rack.id} value={rack.id}>
                             {rack.name}
@@ -1213,7 +1239,7 @@ export function DeviceDrawer({
 
                   {isRackMounted && (
                     <div className="grid grid-cols-3 gap-3">
-                      <Field label="Start U">
+                      <Field label={t("Start U")}>
                         <Input
                           type="number"
                           min={1}
@@ -1225,7 +1251,7 @@ export function DeviceDrawer({
                           placeholder="e.g. 12"
                         />
                       </Field>
-                      <Field label="Height (U)">
+                      <Field label={t("Height (U)")}>
                         <Input
                           type="number"
                           min={1}
@@ -1237,20 +1263,20 @@ export function DeviceDrawer({
                           placeholder="1"
                         />
                       </Field>
-                      <Field label="Face">
+                      <Field label={t("Face")}>
                         <Select
                           value={form.face}
                           onChange={(value) => set("face", value as RackFace)}
                         >
-                          <option value="front">Front</option>
-                          <option value="rear">Rear</option>
+                          <option value="front">{t("Front")}</option>
+                          <option value="rear">{t("Rear")}</option>
                         </Select>
                       </Field>
                     </div>
                   )}
 
                   {isShelfMounted && (
-                    <Field label="Device footprint (U)">
+                    <Field label={t("Device footprint (U)")}>
                       <Input
                         type="number"
                         min={1}
@@ -1260,8 +1286,9 @@ export function DeviceDrawer({
                         placeholder="1"
                       />
                       <p className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
-                        Used by rack and visualizer views to size devices inside
-                        multi-U shelves.
+                        {t(
+                          "Used by rack and visualizer views to size devices inside multi-U shelves.",
+                        )}
                       </p>
                     </Field>
                   )}
@@ -1269,19 +1296,19 @@ export function DeviceDrawer({
 
                 <Separator />
 
-                <Section label="Metadata">
-                  <Field label="Tags (comma-separated)">
+                <Section label={t("Metadata")}>
+                  <Field label={t("Tags (comma-separated)")}>
                     <Input
                       value={form.tags}
                       onChange={(event) => set("tags", event.target.value)}
                       placeholder="e.g. core, managed, poe"
                     />
                   </Field>
-                  <Field label="Notes">
+                  <Field label={t("Notes")}>
                     <textarea
                       value={form.notes}
                       onChange={(event) => set("notes", event.target.value)}
-                      placeholder="Any additional notes..."
+                      placeholder={t("Any additional notes...")}
                       rows={3}
                       className="rk-control rk-textarea w-full text-sm font-sans"
                     />
@@ -1302,7 +1329,7 @@ export function DeviceDrawer({
                     size="sm"
                     onClick={onClose}
                   >
-                    Cancel
+                    {t("Cancel")}
                   </Button>
                   <Button
                     type="submit"
@@ -1311,7 +1338,7 @@ export function DeviceDrawer({
                     disabled={saving}
                   >
                     <Save className="size-3.5" />
-                    {isEdit ? "Save changes" : "Add device"}
+                    {isEdit ? t("Save changes") : t("Add device")}
                   </Button>
                 </div>
               </div>
