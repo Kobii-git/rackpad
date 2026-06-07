@@ -4,13 +4,15 @@ import {
   cn,
   formatPortLabel,
   portTypeColor,
-  portTypeLabel,
 } from "@/lib/utils";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { Mono } from "@/components/shared/Mono";
 import { ArrowRight } from "lucide-react";
 import { useI18n } from "@/i18n";
-import { formatPortModeSummary } from "@/components/ports/port-mode-labels";
+import {
+  formatPortModeSummary,
+  formatPortTypeLabel,
+} from "@/components/ports/port-mode-labels";
 
 interface PortListProps {
   ports: Port[];
@@ -132,7 +134,7 @@ export function PortList({
                           style={{ backgroundColor: portTypeColor[row.kind] }}
                         />
                         <span className="font-mono text-[11px] text-[var(--text-secondary)]">
-                          {portTypeLabel[row.kind]}
+                          {formatPortTypeLabel(t, row.kind)}
                         </span>
                       </span>
                     </Td>
@@ -236,7 +238,7 @@ export function PortList({
                       style={{ backgroundColor: portTypeColor[port.kind] }}
                     />
                     <span className="font-mono text-[11px] text-[var(--text-secondary)]">
-                      {portTypeLabel[port.kind]}
+                      {formatPortTypeLabel(t, port.kind)}
                     </span>
                   </span>
                 </Td>

@@ -1,7 +1,25 @@
 import type { useI18n } from "@/i18n";
-import type { Port, VirtualSwitch, Vlan } from "@/lib/types";
+import type { TranslationKey } from "@/i18n/translations";
+import type { Port, PortKind, VirtualSwitch, Vlan } from "@/lib/types";
 
 type Translate = ReturnType<typeof useI18n>["t"];
+
+export const PORT_TYPE_KEYS: Record<PortKind, TranslationKey> = {
+  rj45: "RJ45",
+  sfp: "SFP",
+  sfp_plus: "SFP+",
+  qsfp: "QSFP",
+  fiber: "Fiber",
+  power: "Power",
+  console: "Console",
+  usb: "USB",
+  virtual: "Virtual NIC",
+  wifi: "WiFi",
+};
+
+export function formatPortTypeLabel(t: Translate, kind: PortKind) {
+  return t(PORT_TYPE_KEYS[kind]);
+}
 
 function formatCompactVlanLabel(
   vlanId: string,

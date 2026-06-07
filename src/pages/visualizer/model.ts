@@ -17,8 +17,9 @@ import {
   formatPortLabel,
   ipToInt,
   normalizeColorToCss,
-  portTypeLabel,
 } from "@/lib/utils";
+import type { useI18n } from "@/i18n";
+import { formatPortTypeLabel } from "@/components/ports/port-mode-labels";
 import {
   defaultDeviceTypeLabel,
   normalizeDeviceTypeId,
@@ -2438,6 +2439,7 @@ function fuzzyScore(haystack: string, needle: string) {
 export function portTooltip(
   visualPort: VisualizerPort,
   model: VisualizerModel,
+  t: ReturnType<typeof useI18n>["t"],
 ) {
   const link = visualPort.linkId ? model.cableById[visualPort.linkId] : null;
   const peer =
@@ -2449,7 +2451,7 @@ export function portTooltip(
         ? `${link.fromDevice.hostname} ${formatPortLabel(link.fromPort)}`
         : null;
   return [
-    `${visualPort.port.name} (${portTypeLabel[visualPort.port.kind]})`,
+    `${visualPort.port.name} (${formatPortTypeLabel(t, visualPort.port.kind)})`,
     visualPort.port.speed ? `Speed: ${visualPort.port.speed}` : null,
     `State: ${visualPort.port.linkState}`,
     `VLAN: ${visualPort.vlanSummary}`,

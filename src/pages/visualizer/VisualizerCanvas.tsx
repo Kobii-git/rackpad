@@ -46,6 +46,7 @@ import { StatusDot } from "@/components/shared/StatusDot";
 import type { Port } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { formatPortEndpointLabel, statusLabel } from "@/lib/utils";
+import { useI18n } from "@/i18n";
 import {
   buildSearchResults,
   nodeStripeColor,
@@ -1337,6 +1338,7 @@ function PortSquare({
   active: boolean | null;
   onClick: () => void;
 }) {
+  const { t } = useI18n();
   const isSlot =
     visualPort.port.kind === "sfp" ||
     visualPort.port.kind === "sfp_plus" ||
@@ -1371,7 +1373,7 @@ function PortSquare({
             }`,
             boxShadow: active ? "0 0 0 2px rgb(242 157 56 / 0.22)" : undefined,
           }}
-          aria-label={portTooltip(visualPort, model)}
+          aria-label={portTooltip(visualPort, model, t)}
         >
           {isSlot && (
             <span className="absolute left-0.5 right-0.5 top-1/2 h-px -translate-y-1/2 bg-[rgb(0_0_0_/_0.35)]" />
@@ -1379,7 +1381,7 @@ function PortSquare({
         </button>
       </TooltipTrigger>
       <TooltipContent className="max-w-72 whitespace-pre-line">
-        {portTooltip(visualPort, model)}
+        {portTooltip(visualPort, model, t)}
       </TooltipContent>
     </Tooltip>
   );

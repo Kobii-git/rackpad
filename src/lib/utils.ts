@@ -60,19 +60,6 @@ export const portTypeColor: Record<PortKind, string> = {
   wifi: "var(--color-port-wifi)",
 };
 
-export const portTypeLabel: Record<PortKind, string> = {
-  rj45: "RJ45",
-  sfp: "SFP",
-  sfp_plus: "SFP+",
-  qsfp: "QSFP",
-  fiber: "Fiber",
-  power: "Power",
-  console: "Console",
-  usb: "USB",
-  virtual: "Virtual NIC",
-  wifi: "WiFi",
-};
-
 // ---------- Link state ----------
 
 export const linkColor: Record<LinkState, string> = {

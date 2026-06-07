@@ -4,7 +4,6 @@ import {
   cn,
   formatPortLabel,
   portTypeColor,
-  portTypeLabel,
 } from "@/lib/utils";
 import {
   Tooltip,
@@ -12,7 +11,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/Tooltip";
 import { useI18n } from "@/i18n";
-import { formatPortModeSummary } from "@/components/ports/port-mode-labels";
+import {
+  formatPortModeSummary,
+  formatPortTypeLabel,
+} from "@/components/ports/port-mode-labels";
 
 interface PortGridProps {
   device: Device;
@@ -129,7 +131,7 @@ function PortSection({
   return (
     <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">
       <div className="mb-3 flex items-center gap-2">
-        <span className="rk-kicker">{portTypeLabel[kind]}</span>
+        <span className="rk-kicker">{formatPortTypeLabel(t, kind)}</span>
         <span
           className="h-px flex-1"
           style={{ backgroundColor: portTypeColor[kind], opacity: 0.26 }}
@@ -311,7 +313,7 @@ function PortCell({
           <div className="flex items-center gap-2">
             <span className="font-medium">{port.name}</span>
             <span className="text-[var(--text-tertiary)]">
-              {portTypeLabel[port.kind]} | {port.speed ?? t("n/a")}
+              {formatPortTypeLabel(t, port.kind)} | {port.speed ?? t("n/a")}
             </span>
           </div>
           <span className="text-[var(--text-tertiary)]">
