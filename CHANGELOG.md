@@ -8,6 +8,30 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.0-beta.0] - 2026-06-08
+
+### Added
+
+- Complete app-wide localization: every user-facing view — including the device
+  add/edit drawer, Discovery, IPAM, WiFi, Reports, Ports, and the Visualizer —
+  is now translatable, and all 23 locales are filled to parity (no English
+  leaks beyond technical tokens like VLAN, IPAM, MAC, and SSID).
+- Discovery now auto-assigns newly discovered devices to the access point / SSID
+  of their subnet's Wi-Fi VLAN instead of leaving them loose (#45). Wired and
+  already-known devices are left untouched, and assignment only happens when a
+  single matching AP is found.
+- Bulk device editing supports custom device types and Wi-Fi placement.
+
+### Changed
+
+- Bulk device updates are now atomic: every selected device is validated before
+  any write, then all changes apply in one transaction, so a mid-list failure
+  rolls back instead of leaving a partial update.
+
+### Docs
+
+- Added a Docker / Proxmox host-network discovery deployment guide.
+
 ## [1.5.11-beta] - 2026-06-06
 
 ### Added
