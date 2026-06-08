@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Activity, Search } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Card,
   CardBody,
@@ -137,12 +138,14 @@ export default function AuditLogView() {
                 </tbody>
               </table>
               {filteredEntries.length === 0 && (
-                <div className="rk-empty m-4">
-                  <div className="rk-empty-title">No matching audit entries</div>
-                  <div className="rk-empty-copy">
-                    Broaden the search to see more of the loaded activity log.
-                  </div>
-                </div>
+                <EmptyState
+                  icon={Search}
+                  className="m-4"
+                  title={t("No matching audit entries")}
+                  description={t(
+                    "Broaden the search to see more of the loaded activity log.",
+                  )}
+                />
               )}
             </div>
           </CardBody>

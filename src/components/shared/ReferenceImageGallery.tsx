@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { Download, ExternalLink, ImagePlus, Trash2 } from "lucide-react";
+import { Download, ExternalLink, Image, ImagePlus, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import {
@@ -23,6 +24,7 @@ import {
 } from "@/lib/image-data-url";
 import { downloadImageAsset, openImageAsset } from "@/lib/image-actions";
 import { relativeTime } from "@/lib/utils";
+import { useI18n } from "@/i18n";
 
 interface ReferenceImageGalleryProps {
   entityType: ReferenceImage["entityType"];
@@ -41,8 +43,10 @@ export function ReferenceImageGallery({
   face,
   canEdit,
   compact = false,
-  emptyText = "No images attached yet.",
+  emptyText,
 }: ReferenceImageGalleryProps) {
+  const { t } = useI18n();
+  const resolvedEmptyText = emptyText ?? t("No images attached yet.");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [label, setLabel] = useState("");
   const [notes, setNotes] = useState("");
@@ -158,9 +162,7 @@ export function ReferenceImageGallery({
         )}
 
         {visibleImages.length === 0 ? (
-          <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] px-3 py-5 text-center text-sm text-[var(--color-fg-subtle)]">
-            {emptyText}
-          </div>
+          <EmptyState icon={Image} title={resolvedEmptyText} />
         ) : (
           <div className={compact ? "space-y-3" : "grid gap-3 md:grid-cols-2"}>
             {visibleImages.map((image) => (

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   Activity,
+  ChevronDown,
   LayoutGrid,
   List,
   Plus,
@@ -9,6 +10,7 @@ import {
   Search,
 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useI18n } from "@/i18n";
 import type { TranslationKey } from "@/i18n/translations";
 import { Button } from "@/components/ui/Button";
@@ -102,6 +104,7 @@ export default function MonitoringView() {
     () => new Set(),
   );
   const [bulkMessage, setBulkMessage] = useState("");
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [error, setError] = useState("");
   const [trapLog, setTrapLog] = useState<SnmpTrapLogEntry[]>([]);
   const [trapStatus, setTrapStatus] = useState<SnmpTrapReceiverStatus | null>(
@@ -112,13 +115,15 @@ export default function MonitoringView() {
     void Promise.all([
       api.getSnmpTrapLog({ labId: lab.id, limit: 25 }),
       api.getSnmpTrapStatus(),
-    ]).then(([log, status]) => {
-      setTrapLog(log);
-      setTrapStatus(status);
-    }).catch(() => {
-      setTrapLog([]);
-      setTrapStatus(null);
-    });
+    ])
+      .then(([log, status]) => {
+        setTrapLog(log);
+        setTrapStatus(status);
+      })
+      .catch(() => {
+        setTrapLog([]);
+        setTrapStatus(null);
+      });
   }, [lab.id]);
 
   const allDeviceMonitorMap = useMemo(() => {
@@ -334,7 +339,9 @@ export default function MonitoringView() {
         }
         updated += 1;
       }
-      setBulkMessage(t("Enabled ICMP on {count} device(s).", { count: updated }));
+      setBulkMessage(
+        t("Enabled ICMP on {count} device(s).", { count: updated }),
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -549,11 +556,12 @@ export default function MonitoringView() {
             </Badge>
           </div>
           {trapLog.length === 0 ? (
-            <div className="mt-3 text-sm text-[var(--color-fg-subtle)]">
-              {t(
+            <EmptyState
+              className="mt-3"
+              title={t(
                 "No traps logged for this lab yet. Map device management IPs and enable interface monitors with ifIndex to react to linkUp/linkDown.",
               )}
-            </div>
+            />
           ) : (
             <div className="mt-3 overflow-x-auto">
               <table className="min-w-full text-left text-sm">
@@ -696,134 +704,149 @@ export default function MonitoringView() {
         {canManageMonitoring && (
           <Card>
             <CardBody className="space-y-3 p-3">
-              <div className="min-w-0">
-                <div className="rk-kicker">{t("Bulk monitoring")}</div>
-                <div className="mt-1 text-xs text-[var(--text-tertiary)]">
-                  {t("{selected} selected | {targets} configured target(s)", {
-                    selected: selectedDevices.length,
-                    targets: selectedMonitorCount,
-                  })}
+              <button
+                type="button"
+                onClick={() => setBulkOpen((value) => !value)}
+                className="flex w-full items-center justify-between gap-2 text-left"
+              >
+                <div className="min-w-0">
+                  <div className="rk-kicker">{t("Bulk monitoring")}</div>
+                  <div className="mt-1 text-xs text-[var(--text-tertiary)]">
+                    {t("{selected} selected | {targets} configured target(s)", {
+                      selected: selectedDevices.length,
+                      targets: selectedMonitorCount,
+                    })}
+                  </div>
                 </div>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-[0.8fr_1fr_0.55fr_0.8fr_auto]">
-                <label className="block">
-                  <span className="rk-field-label">{t("Type")}</span>
-                  <Select
-                    value={bulkMonitorType}
-                    onChange={(value) =>
-                      setBulkMonitorType(value as BulkMonitorType)
-                    }
-                  >
-                    <option value="icmp">ICMP</option>
-                    <option value="tcp">TCP</option>
-                    <option value="http">HTTP</option>
-                    <option value="https">HTTPS</option>
-                  </Select>
-                </label>
-                <label className="block">
-                  <span className="rk-field-label">{t("Name")}</span>
-                  <Input
-                    value={bulkMonitorName}
-                    onChange={(event) =>
-                      setBulkMonitorName(event.target.value)
-                    }
-                    placeholder={defaultMonitorName(
-                      bulkMonitorType,
-                      defaultMonitorPort(bulkMonitorType),
+                <ChevronDown
+                  className={`size-4 shrink-0 text-[var(--text-tertiary)] transition-transform ${bulkOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              {bulkOpen && (
+                <>
+                  <div className="grid gap-3 lg:grid-cols-[0.8fr_1fr_0.55fr_0.8fr_auto]">
+                    <label className="block">
+                      <span className="rk-field-label">{t("Type")}</span>
+                      <Select
+                        value={bulkMonitorType}
+                        onChange={(value) =>
+                          setBulkMonitorType(value as BulkMonitorType)
+                        }
+                      >
+                        <option value="icmp">ICMP</option>
+                        <option value="tcp">TCP</option>
+                        <option value="http">HTTP</option>
+                        <option value="https">HTTPS</option>
+                      </Select>
+                    </label>
+                    <label className="block">
+                      <span className="rk-field-label">{t("Name")}</span>
+                      <Input
+                        value={bulkMonitorName}
+                        onChange={(event) =>
+                          setBulkMonitorName(event.target.value)
+                        }
+                        placeholder={defaultMonitorName(
+                          bulkMonitorType,
+                          defaultMonitorPort(bulkMonitorType),
+                        )}
+                      />
+                    </label>
+                    {bulkMonitorType !== "icmp" ? (
+                      <label className="block">
+                        <span className="rk-field-label">{t("Port")}</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={65535}
+                          value={bulkMonitorPort}
+                          onChange={(event) =>
+                            setBulkMonitorPort(event.target.value)
+                          }
+                          placeholder={String(
+                            defaultMonitorPort(bulkMonitorType),
+                          )}
+                        />
+                      </label>
+                    ) : (
+                      <div />
                     )}
-                  />
-                </label>
-                {bulkMonitorType !== "icmp" ? (
-                  <label className="block">
-                    <span className="rk-field-label">{t("Port")}</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={65535}
-                      value={bulkMonitorPort}
-                      onChange={(event) =>
-                        setBulkMonitorPort(event.target.value)
+                    {bulkMonitorType === "http" ||
+                    bulkMonitorType === "https" ? (
+                      <label className="block">
+                        <span className="rk-field-label">{t("Path")}</span>
+                        <Input
+                          value={bulkMonitorPath}
+                          onChange={(event) =>
+                            setBulkMonitorPath(event.target.value)
+                          }
+                          placeholder="/"
+                        />
+                      </label>
+                    ) : (
+                      <div />
+                    )}
+                    <label className="flex items-end gap-2 pb-2 text-xs text-[var(--text-tertiary)]">
+                      <input
+                        type="checkbox"
+                        checked={bulkRunFirstCheck}
+                        onChange={(event) =>
+                          setBulkRunFirstCheck(event.target.checked)
+                        }
+                        className="accent-[var(--color-accent)]"
+                      />
+                      {t("Run first check")}
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={selectFilteredDevices}
+                      disabled={filteredDevices.length === 0 || bulkRunning}
+                    >
+                      {t("Select filtered")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedDeviceIds(new Set())}
+                      disabled={selectedDevices.length === 0 || bulkRunning}
+                    >
+                      {t("Clear")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleBulkCreateMonitoring()}
+                      disabled={selectedDevices.length === 0 || bulkRunning}
+                    >
+                      <Plus className="size-3.5" />
+                      {t("Add / enable target")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleBulkEnableIcmp()}
+                      disabled={selectedDevices.length === 0 || bulkRunning}
+                    >
+                      {t("Enable ICMP")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleBulkDisableMonitoring()}
+                      disabled={
+                        selectedDevices.length === 0 ||
+                        selectedMonitorCount === 0 ||
+                        bulkRunning
                       }
-                      placeholder={String(defaultMonitorPort(bulkMonitorType))}
-                    />
-                  </label>
-                ) : (
-                  <div />
-                )}
-                {bulkMonitorType === "http" ||
-                bulkMonitorType === "https" ? (
-                  <label className="block">
-                    <span className="rk-field-label">{t("Path")}</span>
-                    <Input
-                      value={bulkMonitorPath}
-                      onChange={(event) =>
-                        setBulkMonitorPath(event.target.value)
-                      }
-                      placeholder="/"
-                    />
-                  </label>
-                ) : (
-                  <div />
-                )}
-                <label className="flex items-end gap-2 pb-2 text-xs text-[var(--text-tertiary)]">
-                  <input
-                    type="checkbox"
-                    checked={bulkRunFirstCheck}
-                    onChange={(event) =>
-                      setBulkRunFirstCheck(event.target.checked)
-                    }
-                    className="accent-[var(--color-accent)]"
-                  />
-                  {t("Run first check")}
-                </label>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={selectFilteredDevices}
-                  disabled={filteredDevices.length === 0 || bulkRunning}
-                >
-                  {t("Select filtered")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedDeviceIds(new Set())}
-                  disabled={selectedDevices.length === 0 || bulkRunning}
-                >
-                  {t("Clear")}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleBulkCreateMonitoring()}
-                  disabled={selectedDevices.length === 0 || bulkRunning}
-                >
-                  <Plus className="size-3.5" />
-                  {t("Add / enable target")}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleBulkEnableIcmp()}
-                  disabled={selectedDevices.length === 0 || bulkRunning}
-                >
-                  {t("Enable ICMP")}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleBulkDisableMonitoring()}
-                  disabled={
-                    selectedDevices.length === 0 ||
-                    selectedMonitorCount === 0 ||
-                    bulkRunning
-                  }
-                >
-                  {t("Disable targets")}
-                </Button>
-              </div>
+                    >
+                      {t("Disable targets")}
+                    </Button>
+                  </div>
+                </>
+              )}
               {bulkMessage && (
                 <div className="basis-full rounded-[var(--radius-sm)] border border-[var(--color-ok)]/30 bg-[var(--color-ok)]/10 px-3 py-2 text-sm text-[var(--color-fg)]">
                   {bulkMessage}
@@ -839,7 +862,7 @@ export default function MonitoringView() {
           </div>
         )}
 
-        <Card className="min-h-0 flex flex-1 flex-col">
+        <Card className="flex min-h-0 flex-1 flex-col">
           <CardHeader>
             <CardTitle>
               <CardLabel>{t("Overview")}</CardLabel>
@@ -852,22 +875,23 @@ export default function MonitoringView() {
           </CardHeader>
           <CardBody className="min-h-0 flex-1 space-y-3 overflow-y-auto">
             {filteredDevices.length === 0 ? (
-              <div className="rk-empty">
-                <div className="rk-empty-title">
-                  {stats.inventoryDevices === 0
+              <EmptyState
+                icon={Search}
+                title={
+                  stats.inventoryDevices === 0
                     ? t("No devices in this lab yet")
-                    : t("No devices match the current filter")}
-                </div>
-                <div className="rk-empty-copy">
-                  {stats.inventoryDevices === 0
+                    : t("No devices match the current filter")
+                }
+                description={
+                  stats.inventoryDevices === 0
                     ? t(
                         "Add inventory devices first, then enable monitoring from here or from a device page.",
                       )
                     : t(
                         "Try a broader filter or search to bring matching monitor targets back into view.",
-                      )}
-                </div>
-              </div>
+                      )
+                }
+              />
             ) : (
               filteredDevices.map(({ device, monitors, rollupStatus }) =>
                 layout === "compact" ? (
@@ -993,9 +1017,7 @@ function DeviceMonitorCard({
                   })}
                 </span>
               )}
-              <span>
-                {t("{count} target(s)", { count: monitors.length })}
-              </span>
+              <span>{t("{count} target(s)", { count: monitors.length })}</span>
               {latestCheckAt && (
                 <span>
                   {t("Last checked {time}", {
@@ -1068,7 +1090,9 @@ function DeviceMonitorCard({
               </div>
               <div className="mt-2 space-y-1 text-[11px] text-[var(--text-tertiary)]">
                 <div>
-                  <span className="text-[var(--text-muted)]">{t("Target")}:</span>{" "}
+                  <span className="text-[var(--text-muted)]">
+                    {t("Target")}:
+                  </span>{" "}
                   <Mono>{formatMonitorTarget(monitor)}</Mono>
                 </div>
                 <div>
@@ -1170,7 +1194,9 @@ function DeviceMonitorRow({
       </div>
       <div className="col-span-8 flex items-center gap-2 md:col-span-1">
         {failingCount > 0 && (
-          <Badge tone="err">{t("{count} failing", { count: failingCount })}</Badge>
+          <Badge tone="err">
+            {t("{count} failing", { count: failingCount })}
+          </Badge>
         )}
         {unknownCount > 0 && (
           <Badge tone="neutral">

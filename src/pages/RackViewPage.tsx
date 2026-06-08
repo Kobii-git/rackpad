@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { ReferenceImageGallery } from "@/components/shared/ReferenceImageGallery";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
@@ -487,34 +488,39 @@ export default function RackViewPage() {
               </CardTitle>
             </CardHeader>
             <CardBody className="space-y-4">
-              <div className="text-sm text-[var(--color-fg-subtle)]">
-                Create your first rack or start by adding loose room tech as
-                unracked gear.
-              </div>
-              {canEdit && (
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    onClick={() => {
-                      setRackForm(EMPTY_FORM);
-                      setRackError("");
-                      setEditorMode("create");
-                    }}
-                  >
-                    <Plus className="size-3.5" />
-                    Create first rack
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedViewId(UNRACKED_VIEW_ID);
-                      setDrawerOpen(true);
-                    }}
-                  >
-                    <Plus className="size-3.5" />
-                    Add loose gear
-                  </Button>
-                </div>
-              )}
+              <EmptyState
+                icon={Server}
+                title={t("No racks documented yet")}
+                description={t(
+                  "Create your first rack or start by adding loose room tech as unracked gear.",
+                )}
+                action={
+                  canEdit ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={() => {
+                          setRackForm(EMPTY_FORM);
+                          setRackError("");
+                          setEditorMode("create");
+                        }}
+                      >
+                        <Plus className="size-3.5" />
+                        Create first rack
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedViewId(UNRACKED_VIEW_ID);
+                          setDrawerOpen(true);
+                        }}
+                      >
+                        <Plus className="size-3.5" />
+                        Add loose gear
+                      </Button>
+                    </div>
+                  ) : undefined
+                }
+              />
             </CardBody>
           </Card>
         </div>
@@ -705,7 +711,7 @@ export default function RackViewPage() {
                         face="front"
                         canEdit={canEdit}
                         compact
-                        emptyText="No front rack picture yet."
+                        emptyText={t("No front rack picture yet.")}
                       />
                       <ReferenceImageGallery
                         entityType="rack"
@@ -714,7 +720,7 @@ export default function RackViewPage() {
                         face="rear"
                         canEdit={canEdit}
                         compact
-                        emptyText="No rear rack picture yet."
+                        emptyText={t("No rear rack picture yet.")}
                       />
                     </div>
                   ) : (
@@ -726,7 +732,7 @@ export default function RackViewPage() {
                         face={face}
                         canEdit={canEdit}
                         compact
-                        emptyText={`No ${face} rack picture yet.`}
+                        emptyText={t("No {face} rack picture yet.", { face })}
                       />
                     </div>
                   )}
@@ -939,6 +945,7 @@ function RoomPanel({
   canEdit: boolean;
   portsByDeviceId: Record<string, Port[]>;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-5">
       <div>
@@ -971,7 +978,7 @@ function RoomPanel({
         entityId={room.id}
         images={images}
         canEdit={canEdit}
-        emptyText="No room picture yet."
+        emptyText={t("No room picture yet.")}
       />
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -988,12 +995,11 @@ function RoomPanel({
           </CardHeader>
           <CardBody className="space-y-2">
             {racks.length === 0 ? (
-              <div className="rk-empty">
-                <div className="rk-empty-title">No racks assigned</div>
-                <div className="rk-empty-copy">
-                  Assign a rack to this room from the rack editor.
-                </div>
-              </div>
+              <EmptyState
+                icon={Server}
+                title={t("No racks assigned")}
+                description={t("Assign a rack to this room from the rack editor.")}
+              />
             ) : (
               racks.map((rack) => (
                 <Link
@@ -1033,12 +1039,13 @@ function RoomPanel({
           </CardHeader>
           <CardBody className="space-y-2">
             {devices.length === 0 ? (
-              <div className="rk-empty">
-                <div className="rk-empty-title">No loose devices assigned</div>
-                <div className="rk-empty-copy">
-                  Add or edit a device and choose this room in Placement.
-                </div>
-              </div>
+              <EmptyState
+                icon={MapPin}
+                title={t("No loose devices assigned")}
+                description={t(
+                  "Add or edit a device and choose this room in Placement.",
+                )}
+              />
             ) : (
               devices.map((device) => (
                 <DeviceRoomRow

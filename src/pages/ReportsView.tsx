@@ -10,6 +10,7 @@ import {
   Server,
 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useI18n } from "@/i18n";
 import type { TranslationKey } from "@/i18n/translations";
 import { Badge } from "@/components/ui/Badge";
@@ -552,16 +553,13 @@ export default function ReportsView() {
             >
               <div className="max-h-[34rem] space-y-3 overflow-y-auto pr-1">
                 {model.monitorTargets.length === 0 ? (
-                  <div className="rk-empty">
-                    <div className="rk-empty-title">
-                      {t("No monitor targets configured")}
-                    </div>
-                    <div className="rk-empty-copy">
-                      {t(
-                        "Add ICMP, TCP, HTTP, or HTTPS targets to devices to make this report operationally useful.",
-                      )}
-                    </div>
-                  </div>
+                  <EmptyState
+                    icon={Activity}
+                    title={t("No monitor targets configured")}
+                    description={t(
+                      "Add ICMP, TCP, HTTP, or HTTPS targets to devices to make this report operationally useful.",
+                    )}
+                  />
                 ) : (
                   devices
                     .filter(
@@ -861,14 +859,13 @@ export default function ReportsView() {
                 </div>
               ))}
               {auditLog.length === 0 && (
-                <div className="rk-empty">
-                  <div className="rk-empty-title">{t("No recent activity")}</div>
-                  <div className="rk-empty-copy">
-                    {t(
-                      "Changes will appear here as Rackpad records audit events.",
-                    )}
-                  </div>
-                </div>
+                <EmptyState
+                  icon={Activity}
+                  title={t("No recent activity")}
+                  description={t(
+                    "Changes will appear here as Rackpad records audit events.",
+                  )}
+                />
               )}
             </div>
           </ReportSection>

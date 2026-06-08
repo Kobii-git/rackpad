@@ -8,6 +8,16 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.0-beta.2] - 2026-06-08
+
+### Changed
+
+- Added a shared empty-state component and applied it across every view for
+  consistent "nothing here yet" placeholders, and localized the remaining
+  hardcoded empty-state strings across all 24 languages.
+- Monitoring: the device list now scrolls on its own with the header and controls
+  fixed, and the bulk-monitoring panel is collapsible so the list has more room.
+
 ## [1.6.0-beta.1] - 2026-06-08
 
 ### Added

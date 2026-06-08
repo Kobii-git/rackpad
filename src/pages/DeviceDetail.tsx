@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
 import {
@@ -2340,9 +2341,7 @@ export default function DeviceDetail() {
                 <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
                   <div className="space-y-2">
                     {deviceServiceList.length === 0 ? (
-                      <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-4 text-sm text-[var(--color-fg-subtle)]">
-                        No services documented yet.
-                      </div>
+                      <EmptyState title={t("No services documented yet.")} />
                     ) : (
                       deviceServiceList.map((service) => (
                         <button
@@ -2611,9 +2610,7 @@ export default function DeviceDetail() {
                 </CardHeader>
                 <CardBody>
                   {deviceImageList.length === 0 ? (
-                    <div className="text-sm text-[var(--color-fg-subtle)]">
-                      No images attached to this device yet.
-                    </div>
+                    <EmptyState title={t("No images attached to this device yet.")} />
                   ) : (
                     <div className="grid gap-4 md:grid-cols-2">
                       {deviceImageList.map((image) => (
@@ -2714,9 +2711,7 @@ export default function DeviceDetail() {
                     {device.notes}
                   </div>
                 ) : (
-                  <div className="text-sm text-[var(--color-fg-subtle)]">
-                    No notes documented for this device yet.
-                  </div>
+                  <EmptyState title={t("No notes documented for this device yet.")} />
                 )}
               </CardBody>
             </Card>
@@ -2747,8 +2742,8 @@ export default function DeviceDetail() {
                 )}
                 <ul className="divide-y divide-[var(--color-line)]">
                   {activityEntries.length === 0 ? (
-                    <li className="px-4 py-6 text-center text-xs text-[var(--color-fg-subtle)]">
-                      No audit entries for this device.
+                    <li className="px-4 py-2">
+                      <EmptyState title={t("No audit entries for this device.")} />
                     </li>
                   ) : (
                     activityEntries.map((entry) => (

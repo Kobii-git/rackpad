@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, RefreshCcw, Save, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Inbox, RefreshCcw, Save, Search, Trash2 } from "lucide-react";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
 import type { TranslationKey } from "@/i18n/translations";
@@ -865,14 +866,16 @@ export default function DiscoveryView() {
                   </tbody>
                 </table>
                 {filteredDevices.length === 0 && (
-                  <div className="rk-empty m-4 text-center">
-                    <div className="rk-empty-title">
-                      {discoveredDevices.length === 0
+                  <EmptyState
+                    icon={Inbox}
+                    className="m-4"
+                    title={
+                      discoveredDevices.length === 0
                         ? t("Discovery inbox is empty")
-                        : t("No discovered devices match the current filter")}
-                    </div>
-                    <div className="rk-empty-copy">
-                      {discoveredDevices.length === 0
+                        : t("No discovered devices match the current filter")
+                    }
+                    description={
+                      discoveredDevices.length === 0
                         ? canManageDiscovery
                           ? t(
                               "Run a subnet scan to populate the discovery inbox.",
@@ -882,9 +885,9 @@ export default function DiscoveryView() {
                             )
                         : t(
                             "Try a broader filter to bring additional discovered hosts back into view.",
-                          )}
-                    </div>
-                  </div>
+                          )
+                    }
+                  />
                 )}
               </CardBody>
             </Card>
@@ -905,16 +908,13 @@ export default function DiscoveryView() {
               </CardHeader>
               <CardBody className="max-h-[22rem] space-y-4 overflow-y-auto">
                 {!selected || !draft ? (
-                  <div className="rk-empty">
-                    <div className="rk-empty-title">
-                      {t("Select a discovered host")}
-                    </div>
-                    <div className="rk-empty-copy">
-                      {t(
-                        "Review metadata, inspect likely matches, and import it into inventory from here.",
-                      )}
-                    </div>
-                  </div>
+                  <EmptyState
+                    icon={Search}
+                    title={t("Select a discovered host")}
+                    description={t(
+                      "Review metadata, inspect likely matches, and import it into inventory from here.",
+                    )}
+                  />
                 ) : (
                   <>
                     {selected.technicalRole && (

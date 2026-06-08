@@ -5,6 +5,7 @@ import { useI18n } from "@/i18n";
 import type { TranslationKey } from "@/i18n/translations";
 import { PortGrid } from "@/components/ports/PortGrid";
 import { PortList } from "@/components/ports/PortList";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Card,
   CardBody,
@@ -1306,9 +1307,9 @@ export default function PortView() {
                   </CardHeader>
                   <CardBody>
                     {!form ? (
-                      <div className="text-xs text-[var(--color-fg-subtle)]">
-                        {t("Select a port to edit its details.")}
-                      </div>
+                      <EmptyState
+                        title={t("Select a port to edit its details.")}
+                      />
                     ) : (
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-3">

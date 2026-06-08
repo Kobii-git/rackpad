@@ -7,6 +7,7 @@ import {
 } from "react";
 import { Link } from "react-router-dom";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
 import type { TranslationKey } from "@/i18n/translations";
@@ -350,8 +351,9 @@ export default function WifiView() {
               <CardBody className="space-y-3">
                 {wifiControllers.length === 0 ? (
                   <EmptyState
+                    icon={Wifi}
                     title={t("No WiFi controllers documented")}
-                    hint={t(
+                    description={t(
                       "Add a UniFi, Omada, Aruba, or other wireless controller to anchor your AP fleet.",
                     )}
                   />
@@ -440,8 +442,9 @@ export default function WifiView() {
               <CardBody className="space-y-3">
                 {wifiSsids.length === 0 ? (
                   <EmptyState
+                    icon={Wifi}
                     title={t("No SSIDs documented")}
-                    hint={t(
+                    description={t(
                       "Create trusted, guest, and IoT SSIDs so wireless clients can be grouped by intent instead of only by AP.",
                     )}
                   />
@@ -529,8 +532,9 @@ export default function WifiView() {
               <CardBody className="space-y-4">
                 {apDevices.length === 0 ? (
                   <EmptyState
+                    icon={Radio}
                     title={t("No APs documented")}
-                    hint={t(
+                    description={t(
                       "Add access points to start mapping radios, channels, and wireless clients.",
                     )}
                   />
@@ -631,8 +635,8 @@ export default function WifiView() {
                               {t("Radios")}
                             </div>
                             {radios.length === 0 ? (
-                              <EmptyInline
-                                hint={t("No radios documented yet.")}
+                              <EmptyState
+                                title={t("No radios documented yet.")}
                               />
                             ) : (
                               radios.map((radio) => (
@@ -709,8 +713,8 @@ export default function WifiView() {
                               {t("Attached clients")}
                             </div>
                             {clients.length === 0 ? (
-                              <EmptyInline
-                                hint={t(
+                              <EmptyState
+                                title={t(
                                   "No wireless clients linked to this AP yet.",
                                 )}
                               />
@@ -818,8 +822,9 @@ export default function WifiView() {
               <CardBody>
                 {wirelessClients.length === 0 ? (
                   <EmptyState
+                    icon={Wifi}
                     title={t("No wireless clients documented")}
-                    hint={t(
+                    description={t(
                       "Add phones, laptops, TVs, cameras, or IoT devices and link them to APs and SSIDs.",
                     )}
                   />
@@ -1191,25 +1196,6 @@ function WifiStat({
       <div className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
         {hint}
       </div>
-    </div>
-  );
-}
-
-function EmptyState({ title, hint }: { title: string; hint: string }) {
-  return (
-    <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-line)] bg-[var(--color-bg)] px-4 py-6 text-center">
-      <div className="text-sm font-medium text-[var(--color-fg)]">{title}</div>
-      <div className="mt-2 text-[12px] text-[var(--color-fg-subtle)]">
-        {hint}
-      </div>
-    </div>
-  );
-}
-
-function EmptyInline({ hint }: { hint: string }) {
-  return (
-    <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-4 text-[12px] text-[var(--color-fg-subtle)]">
-      {hint}
     </div>
   );
 }

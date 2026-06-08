@@ -13,6 +13,7 @@ import {
   Wifi,
 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Card,
   CardBody,
@@ -185,7 +186,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardBody className="max-h-96 space-y-2 overflow-y-auto pr-1">
               {attentionDevices.length === 0 ? (
-                <EmptyLine title="No device status issues" />
+                <EmptyState title={t("No device status issues")} />
               ) : (
                 attentionDevices.map((device) => (
                   <Link
@@ -228,7 +229,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardBody className="max-h-96 space-y-2 overflow-y-auto pr-1">
               {monitorIssues.length === 0 ? (
-                <EmptyLine title="No monitor failures" />
+                <EmptyState title={t("No monitor failures")} />
               ) : (
                 monitorIssues.map((monitor) => {
                   const device = devicesById[monitor.deviceId];
@@ -274,7 +275,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardBody className="space-y-2">
               {recentActivity.length === 0 ? (
-                <EmptyLine title="No audit activity yet" />
+                <EmptyState icon={Activity} title={t("No audit activity yet")} />
               ) : (
                 recentActivity.map((entry) => (
                   <Link
@@ -455,14 +456,6 @@ function DashboardMetric({
         </div>
       </div>
     </Link>
-  );
-}
-
-function EmptyLine({ title }: { title: string }) {
-  return (
-    <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--border-default)] px-3 py-4 text-center text-sm text-[var(--text-tertiary)]">
-      {title}
-    </div>
   );
 }
 

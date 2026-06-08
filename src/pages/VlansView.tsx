@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { Network } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useI18n } from "@/i18n";
 import {
   Card,
@@ -597,13 +599,13 @@ export default function VlansView() {
                   </div>
                 </>
               ) : (
-                <div className="rk-empty">
-                  <div className="rk-empty-title">Select a VLAN range</div>
-                  <div className="rk-empty-copy">
-                    Choose an existing range above or create a new one to manage
-                    reserved ID space.
-                  </div>
-                </div>
+                <EmptyState
+                  icon={Network}
+                  title={t("Select a VLAN range")}
+                  description={t(
+                    "Choose an existing range above or create a new one to manage reserved ID space.",
+                  )}
+                />
               )}
             </CardBody>
           </Card>
@@ -924,15 +926,13 @@ export default function VlansView() {
                 })}
               {filteredVlans.length === 0 && (
                 <div className="px-4 py-6">
-                  <div className="rk-empty text-center">
-                    <div className="rk-empty-title">
-                      No VLANs in this range yet
-                    </div>
-                    <div className="rk-empty-copy">
-                      Use the allocate action to start reserving and documenting
-                      IDs in this range.
-                    </div>
-                  </div>
+                  <EmptyState
+                    icon={Network}
+                    title={t("No VLANs in this range yet")}
+                    description={t(
+                      "Use the allocate action to start reserving and documenting IDs in this range.",
+                    )}
+                  />
                 </div>
               )}
             </div>

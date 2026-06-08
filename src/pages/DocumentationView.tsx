@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ImagePlus, Pencil, Plus, Save, Search, Trash2 } from "lucide-react";
+import { ImagePlus, FileText, Pencil, Plus, Save, Search, Trash2 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/Button";
 import {
@@ -267,14 +268,22 @@ export default function DocumentationView() {
               </CardHeader>
               <CardBody>
                 {canEdit ? (
-                  <Button onClick={() => void handleCreate()}>
-                    <Plus className="size-3.5" />
-                    New page
-                  </Button>
+                  <EmptyState
+                    icon={FileText}
+                    title={t("No pages yet")}
+                    action={
+                      <Button onClick={() => void handleCreate()}>
+                        <Plus className="size-3.5" />
+                        New page
+                      </Button>
+                    }
+                  />
                 ) : (
-                  <div className="text-sm text-[var(--color-fg-subtle)]">
-                    Nothing documented yet.
-                  </div>
+                  <EmptyState
+                    icon={FileText}
+                    title={t("No pages yet")}
+                    description={t("Nothing documented yet.")}
+                  />
                 )}
               </CardBody>
             </Card>

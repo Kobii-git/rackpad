@@ -29,6 +29,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useStore } from "@/lib/store";
 import { useI18n } from "@/i18n";
 
@@ -406,10 +407,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
               <div ref={listRef} className="max-h-[340px] overflow-y-auto">
                 {results.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-xs text-[var(--color-fg-subtle)]">
-                    {t("No results")}{" "}
-                    <span className="text-[var(--color-fg)]">"{query}"</span>
-                  </div>
+                  <EmptyState
+                    icon={Search}
+                    title={t("No results")}
+                    description={`"${query}"`}
+                  />
                 ) : (
                   <div className="py-1.5">
                     {grouped.map((group) => (

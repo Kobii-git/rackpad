@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useI18n } from "@/i18n";
 import type { TranslationKey } from "@/i18n/translations";
 import {
@@ -366,27 +367,28 @@ export default function IpamView() {
               </CardTitle>
             </CardHeader>
             <CardBody className="space-y-4">
-              <div className="text-sm text-[var(--color-fg-subtle)]">
-                {t(
+              <EmptyState
+                title={t("No subnets documented yet")}
+                description={t(
                   "Create a subnet to start documenting IP allocations, DHCP scopes, and static zones.",
                 )}
-              </div>
-              {canEdit && (
-                <SubnetEditor
-                  creating={creatingSubnet}
-                  form={subnetForm}
-                  vlans={vlans}
-                  error={subnetError}
-                  saving={subnetSaving}
-                  deleting={false}
-                  canDelete={false}
-                  onChange={setSubnetForm}
-                  onSave={async () => {
-                    setSubnetSaving(true);
-                    setSubnetError("");
-                    try {
-                      const created = await createSubnetRecord({
-                        labId: activeLab.id,
+                action={
+                  canEdit ? (
+                    <SubnetEditor
+                      creating={creatingSubnet}
+                      form={subnetForm}
+                      vlans={vlans}
+                      error={subnetError}
+                      saving={subnetSaving}
+                      deleting={false}
+                      canDelete={false}
+                      onChange={setSubnetForm}
+                      onSave={async () => {
+                        setSubnetSaving(true);
+                        setSubnetError("");
+                        try {
+                          const created = await createSubnetRecord({
+                            labId: activeLab.id,
                         cidr: subnetForm.cidr.trim(),
                         name: subnetForm.name.trim(),
                         description: subnetForm.description.trim() || undefined,
@@ -409,8 +411,10 @@ export default function IpamView() {
                     setCreatingSubnet(true);
                     setSubnetForm(EMPTY_SUBNET_FORM);
                   }}
-                />
-              )}
+                    />
+                  ) : undefined
+                }
+              />
             </CardBody>
           </Card>
         </div>
@@ -1134,17 +1138,13 @@ function ScopeEditor({
             ))}
           </div>
         ) : (
-          <div className="rk-empty">
-            <div className="rk-empty-title">
-              {t("No DHCP scopes documented")}
-            </div>
-            <div className="rk-empty-copy">
-              {t(
-                "Add one or more DHCP pools for {cidr} if this subnet hands out leases dynamically.",
-                { cidr: subnet.cidr },
-              )}
-            </div>
-          </div>
+          <EmptyState
+            title={t("No DHCP scopes documented")}
+            description={t(
+              "Add one or more DHCP pools for {cidr} if this subnet hands out leases dynamically.",
+              { cidr: subnet.cidr },
+            )}
+          />
         )}
 
         {(creating || selectedScopeId) && canEdit && (
@@ -1327,16 +1327,12 @@ function ZoneEditor({
             ))}
           </div>
         ) : (
-          <div className="rk-empty">
-            <div className="rk-empty-title">
-              {t("No IP zones documented yet")}
-            </div>
-            <div className="rk-empty-copy">
-              {t(
-                "Define infrastructure, reserved, static, or DHCP zones to make address ownership easier to scan.",
-              )}
-            </div>
-          </div>
+          <EmptyState
+            title={t("No IP zones documented yet")}
+            description={t(
+              "Define infrastructure, reserved, static, or DHCP zones to make address ownership easier to scan.",
+            )}
+          />
         )}
 
         {(creating || selectedZoneId) && canEdit && (

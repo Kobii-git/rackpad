@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
@@ -1581,6 +1582,7 @@ function Inspector({
   onSelectDevice: (id: string) => void;
   onSelectCable: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const neighbors = selectedNode
     ? (model.directNeighborsByDeviceId[selectedNode.device.id] ?? [])
     : [];
@@ -1609,12 +1611,13 @@ function Inspector({
         </CardHeader>
         <CardBody className="space-y-4">
           {!selection && !traceResult && (
-            <div className="rk-empty">
-              <div className="rk-empty-title">No item selected</div>
-              <div className="rk-empty-copy">
-                Click a device, cable, or port to inspect its topology context.
-              </div>
-            </div>
+            <EmptyState
+              icon={Network}
+              title={t("No item selected")}
+              description={t(
+                "Click a device, cable, or port to inspect its topology context.",
+              )}
+            />
           )}
           {selectedNode && (
             <DeviceInspector

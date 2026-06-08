@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { TopBar } from "@/components/layout/TopBar";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Card,
   CardBody,
@@ -841,9 +842,11 @@ export default function UsersPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="text-sm text-[var(--color-fg-subtle)]">
-                    Select an account from the left or create a new one.
-                  </div>
+                  <EmptyState
+                    title={t(
+                      "Select an account from the left or create a new one.",
+                    )}
+                  />
                 )}
               </CardBody>
             </Card>
@@ -1267,9 +1270,7 @@ export default function UsersPage() {
                     Loading alert history...
                   </div>
                 ) : alertHistory.length === 0 ? (
-                  <div className="text-sm text-[var(--color-fg-subtle)]">
-                    No alert activity recorded yet.
-                  </div>
+                  <EmptyState title={t("No alert activity recorded yet.")} />
                 ) : (
                   <ul className="divide-y divide-[var(--color-line)] rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)]">
                     {alertHistory.map((entry) => (

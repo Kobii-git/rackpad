@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Cable } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Card,
   CardHeader,
@@ -430,12 +432,13 @@ export default function CableView() {
             </CardHeader>
             <CardBody>
               {!selectedLink ? (
-                <div className="rk-empty">
-                  <div className="rk-empty-title">Select a cable</div>
-                  <div className="rk-empty-copy">
-                    Pick a cable from the inventory table to edit its metadata.
-                  </div>
-                </div>
+                <EmptyState
+                  icon={Cable}
+                  title={t("Select a cable")}
+                  description={t(
+                    "Pick a cable from the inventory table to edit its metadata.",
+                  )}
+                />
               ) : (
                 <div className="space-y-4">
                   <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">

@@ -2,6 +2,7 @@ import { useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Cpu, Network, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/Button";
@@ -369,15 +370,13 @@ export default function ComputeView() {
             </CardHeader>
             <CardBody className="space-y-4">
               {hosts.length === 0 ? (
-                <div className="rk-empty text-center">
-                  <div className="rk-empty-title">
-                    No compute hosts documented yet
-                  </div>
-                  <div className="rk-empty-copy">
-                    Add physical hosts, storage nodes, or hypervisors here to
-                    start tracking guest placement and capacity.
-                  </div>
-                </div>
+                <EmptyState
+                  icon={Cpu}
+                  title={t("No compute hosts documented yet")}
+                  description={t(
+                    "Add physical hosts, storage nodes, or hypervisors here to start tracking guest placement and capacity.",
+                  )}
+                />
               ) : (
                 <>
                   {activeHosts.length > 0 && (
@@ -595,14 +594,12 @@ export default function ComputeView() {
             </CardHeader>
             <CardBody>
               {unassignedVms.length === 0 ? (
-                <div className="rk-empty">
-                  <div className="rk-empty-title">
-                    Every VM is currently linked
-                  </div>
-                  <div className="rk-empty-copy">
-                    All documented guests are already attached to a host record.
-                  </div>
-                </div>
+                <EmptyState
+                  title={t("Every VM is currently linked")}
+                  description={t(
+                    "All documented guests are already attached to a host record.",
+                  )}
+                />
               ) : (
                 <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                   {unassignedVms.map((device) => (
