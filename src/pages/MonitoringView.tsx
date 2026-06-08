@@ -105,6 +105,7 @@ export default function MonitoringView() {
   );
   const [bulkMessage, setBulkMessage] = useState("");
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [trapsOpen, setTrapsOpen] = useState(false);
   const [error, setError] = useState("");
   const [trapLog, setTrapLog] = useState<SnmpTrapLogEntry[]>([]);
   const [trapStatus, setTrapStatus] = useState<SnmpTrapReceiverStatus | null>(
@@ -487,7 +488,7 @@ export default function MonitoringView() {
         }
       />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden px-6 py-5">
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
         <div className="grid gap-3 md:grid-cols-6">
           <MonitorStat
             label={t("Devices")}
@@ -528,7 +529,11 @@ export default function MonitoringView() {
         </div>
 
         <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setTrapsOpen((value) => !value)}
+            className="flex w-full flex-wrap items-center justify-between gap-2 text-left"
+          >
             <div>
               <div className="text-sm font-medium text-[var(--color-fg)]">
                 {t("SNMP traps")}
@@ -549,53 +554,59 @@ export default function MonitoringView() {
                 })}
               </div>
             </div>
-            <Badge tone={trapStatus?.listening ? "ok" : "neutral"}>
-              {t("{count} received", {
-                count: trapStatus?.trapsReceived ?? 0,
-              })}
-            </Badge>
-          </div>
-          {trapLog.length === 0 ? (
-            <EmptyState
-              className="mt-3"
-              title={t(
-                "No traps logged for this lab yet. Map device management IPs and enable interface monitors with ifIndex to react to linkUp/linkDown.",
-              )}
-            />
-          ) : (
-            <div className="mt-3 overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="text-xs uppercase tracking-wide text-[var(--color-fg-subtle)]">
-                  <tr>
-                    <th className="px-2 py-1">{t("When")}</th>
-                    <th className="px-2 py-1">{t("Source")}</th>
-                    <th className="px-2 py-1">{t("Action")}</th>
-                    <th className="px-2 py-1">{t("Message")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trapLog.map((entry) => (
-                    <tr
-                      key={entry.id}
-                      className="border-t border-[var(--color-line)] text-[var(--color-fg)]"
-                    >
-                      <td className="px-2 py-2 whitespace-nowrap">
-                        {new Date(entry.receivedAt).toLocaleString()}
-                      </td>
-                      <td className="px-2 py-2 font-mono text-xs">
-                        {entry.sourceIp}
-                        {entry.ifIndex != null ? ` · if${entry.ifIndex}` : ""}
-                      </td>
-                      <td className="px-2 py-2">{entry.resultAction}</td>
-                      <td className="px-2 py-2 text-[var(--color-fg-subtle)]">
-                        {entry.message}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="flex items-center gap-2">
+              <Badge tone={trapStatus?.listening ? "ok" : "neutral"}>
+                {t("{count} received", {
+                  count: trapStatus?.trapsReceived ?? 0,
+                })}
+              </Badge>
+              <ChevronDown
+                className={`size-4 shrink-0 text-[var(--text-tertiary)] transition-transform ${trapsOpen ? "rotate-180" : ""}`}
+              />
             </div>
-          )}
+          </button>
+          {trapsOpen &&
+            (trapLog.length === 0 ? (
+              <EmptyState
+                className="mt-3"
+                title={t(
+                  "No traps logged for this lab yet. Map device management IPs and enable interface monitors with ifIndex to react to linkUp/linkDown.",
+                )}
+              />
+            ) : (
+              <div className="mt-3 overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="text-xs uppercase tracking-wide text-[var(--color-fg-subtle)]">
+                    <tr>
+                      <th className="px-2 py-1">{t("When")}</th>
+                      <th className="px-2 py-1">{t("Source")}</th>
+                      <th className="px-2 py-1">{t("Action")}</th>
+                      <th className="px-2 py-1">{t("Message")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trapLog.map((entry) => (
+                      <tr
+                        key={entry.id}
+                        className="border-t border-[var(--color-line)] text-[var(--color-fg)]"
+                      >
+                        <td className="px-2 py-2 whitespace-nowrap">
+                          {new Date(entry.receivedAt).toLocaleString()}
+                        </td>
+                        <td className="px-2 py-2 font-mono text-xs">
+                          {entry.sourceIp}
+                          {entry.ifIndex != null ? ` · if${entry.ifIndex}` : ""}
+                        </td>
+                        <td className="px-2 py-2">{entry.resultAction}</td>
+                        <td className="px-2 py-2 text-[var(--color-fg-subtle)]">
+                          {entry.message}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -862,7 +873,7 @@ export default function MonitoringView() {
           </div>
         )}
 
-        <Card className="flex min-h-0 flex-1 flex-col">
+        <Card>
           <CardHeader>
             <CardTitle>
               <CardLabel>{t("Overview")}</CardLabel>
@@ -873,7 +884,7 @@ export default function MonitoringView() {
               {t("Filter by host, target, or latest monitor message")}
             </div>
           </CardHeader>
-          <CardBody className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+          <CardBody className="space-y-3">
             {filteredDevices.length === 0 ? (
               <EmptyState
                 icon={Search}

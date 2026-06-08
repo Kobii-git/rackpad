@@ -8,6 +8,16 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.0-beta.3] - 2026-06-09
+
+### Changed
+
+- Monitoring: reworked the page to be monitoring-first. The whole page now
+  scrolls as one (the device list grows to its natural height instead of being
+  trapped in its own inner scroll box), and the SNMP traps panel collapses to a
+  button — closed by default, with the status line and received-count badge still
+  visible — so the inventory list is the focus.
+
 ## [1.6.0-beta.2] - 2026-06-08
 
 ### Changed
