@@ -11,6 +11,7 @@ import type { SupportedLanguage } from "@/lib/types";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import {
+  af,
   ar,
   bn,
   de,
@@ -82,6 +83,7 @@ const dictionaries: Record<SupportedLanguage, TranslationMap> = {
   tr,
   vi,
   id,
+  af,
 };
 
 const I18nContext = createContext<I18nContextValue | null>(null);

@@ -22,6 +22,7 @@ export const LANGUAGE_OPTIONS = [
   { code: "tr", bcp47: "tr", nativeName: "Türkçe", rtl: false },
   { code: "vi", bcp47: "vi", nativeName: "Tiếng Việt", rtl: false },
   { code: "id", bcp47: "id", nativeName: "Bahasa Indonesia", rtl: false },
+  { code: "af", bcp47: "af", nativeName: "Afrikaans", rtl: false },
 ] as const;
 
 export type SupportedLanguage = (typeof LANGUAGE_OPTIONS)[number]["code"];

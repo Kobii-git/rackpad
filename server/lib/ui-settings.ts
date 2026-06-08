@@ -24,6 +24,7 @@ export const SUPPORTED_LANGUAGES = [
   'tr',
   'vi',
   'id',
+  'af',
 ] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
 

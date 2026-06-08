@@ -8,6 +8,13 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.0-beta.1] - 2026-06-08
+
+### Added
+
+- Afrikaans (`af`) localization — a 24th UI language, translated to parity with
+  the other locales.
+
 ## [1.6.0-beta.0] - 2026-06-08
 
 ### Added

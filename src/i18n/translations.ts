@@ -6182,3 +6182,4 @@ export { th } from "./locales/th";
 export { bn } from "./locales/bn";
 export { he } from "./locales/he";
 export { fa } from "./locales/fa";
+export { af } from "./locales/af";
