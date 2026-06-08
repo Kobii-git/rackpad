@@ -488,7 +488,7 @@ export default function MonitoringView() {
         }
       />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+      <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
         <div className="grid gap-3 md:grid-cols-6">
           <MonitorStat
             label={t("Devices")}

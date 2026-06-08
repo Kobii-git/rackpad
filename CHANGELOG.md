@@ -8,6 +8,15 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.0-beta.4] - 2026-06-09
+
+### Fixed
+
+- Monitoring: restored page scrolling that beta.3 broke. The content area was a
+  flex column, so the device list shrank to fit the viewport instead of
+  overflowing and could not be scrolled. Switched to the standard block-scroll
+  container used by the other views.
+
 ## [1.6.0-beta.3] - 2026-06-09
 
 ### Changed
