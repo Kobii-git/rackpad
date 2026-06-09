@@ -8,10 +8,24 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
-## [1.6.0-beta.5] - 2026-06-09
+## [1.6.0] - 2026-06-09
 
 ### Added
 
+- SNMP monitoring suite (v1/v2c/v3) alongside ICMP/TCP/HTTP/HTTPS checks:
+  IF-MIB interface monitors with per-port link-state, SNMP-verified badges in
+  Ports/Dashboard/Visualizer, encrypted per-lab SNMPv3 credentials, a v1/v2c
+  trap receiver (UDP 1162, with device auto-learn), and opt-in VLAN/subnet
+  inventory sync (preview/apply; DHCP scopes preview-only). Enable sync with
+  `SNMP_INVENTORY_SYNC=1`. See [`docs/SNMP.md`](./docs/SNMP.md).
+- Expanded localization from 2 to 24 languages with right-to-left support for
+  Arabic, Hebrew, and Persian. Rackpad now includes Afrikaans, German, Dutch,
+  Spanish, Portuguese, Italian, Polish, Simplified & Traditional Chinese,
+  Japanese, Korean, Hindi, Bengali, Thai, Hebrew, Persian, Arabic, Russian,
+  Ukrainian, Turkish, Vietnamese, and Indonesian.
+- Complete app-wide localization: every user-facing view — including the device
+  add/edit drawer, Discovery, IPAM, WiFi, Reports, Ports, and the Visualizer —
+  is now translatable.
 - Device Detail: add / edit / delete ports inline, including a custom MAC address per
   port (#48, #56). New `PATCH`/`DELETE` port routes, an additive `ports.macAddress`
   migration, and backup/restore coverage for the new column.
@@ -22,109 +36,42 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Issue templates and a `CONTRIBUTING.md` (#52), and a `check:i18n` script that flags
   wrong-language values in locale files.
 
-### Changed
-
-- Visualizer: shelf devices now bottom-justify, the cable routing modes do real
-  lane-based separation instead of inverted curvature, and the link-line rendering was
-  made more robust (#49, #50, #51).
-- Refreshed the colour tokens so the brand accent (orange) and the warning colour
-  (yellow) are clearly distinct, and firmed up panel separation in dark mode.
-
-### Fixed
-
-- i18n: removed French strings that had leaked into the WiFi/wireless block of several
-  non-French locales (bn, de, fa, he, nl, pl, ru, tr, uk).
-
-## [1.6.0-beta.4] - 2026-06-09
-
-### Fixed
-
-- Monitoring: restored page scrolling that beta.3 broke. The content area was a
-  flex column, so the device list shrank to fit the viewport instead of
-  overflowing and could not be scrolled. Switched to the standard block-scroll
-  container used by the other views.
-
-## [1.6.0-beta.3] - 2026-06-09
-
-### Changed
-
-- Monitoring: reworked the page to be monitoring-first. The whole page now
-  scrolls as one (the device list grows to its natural height instead of being
-  trapped in its own inner scroll box), and the SNMP traps panel collapses to a
-  button — closed by default, with the status line and received-count badge still
-  visible — so the inventory list is the focus.
-
-## [1.6.0-beta.2] - 2026-06-08
-
-### Changed
-
 - Added a shared empty-state component and applied it across every view for
   consistent "nothing here yet" placeholders, and localized the remaining
   hardcoded empty-state strings across all 24 languages.
-- Monitoring: the device list now scrolls on its own with the header and controls
-  fixed, and the bulk-monitoring panel is collapsible so the list has more room.
-
-## [1.6.0-beta.1] - 2026-06-08
-
-### Added
-
-- Afrikaans (`af`) localization — a 24th UI language, translated to parity with
-  the other locales.
-
-## [1.6.0-beta.0] - 2026-06-08
-
-### Added
-
-- Complete app-wide localization: every user-facing view — including the device
-  add/edit drawer, Discovery, IPAM, WiFi, Reports, Ports, and the Visualizer —
-  is now translatable, and all 23 locales are filled to parity (no English
-  leaks beyond technical tokens like VLAN, IPAM, MAC, and SSID).
 - Discovery now auto-assigns newly discovered devices to the access point / SSID
   of their subnet's Wi-Fi VLAN instead of leaving them loose (#45). Wired and
   already-known devices are left untouched, and assignment only happens when a
   single matching AP is found.
 - Bulk device editing supports custom device types and Wi-Fi placement.
+- Docker / Proxmox host-network discovery deployment guide and host-network
+  compose variant for installs that need raw-socket and layer-2 visibility.
 
 ### Changed
 
+- Visualizer: shelf devices now bottom-justify, the cable routing modes do real
+  lane-based separation instead of inverted curvature, and the link-line rendering was
+  made more robust (#49, #50, #51).
+- Monitoring: reworked the page to be monitoring-first. The whole page now
+  scrolls as one, and the SNMP traps panel collapses to a button — closed by default,
+  with the status line and received-count badge still visible — so the inventory list
+  remains the focus.
 - Bulk device updates are now atomic: every selected device is validated before
   any write, then all changes apply in one transaction, so a mid-list failure
   rolls back instead of leaving a partial update.
-
-### Docs
-
-- Added a Docker / Proxmox host-network discovery deployment guide.
-
-## [1.5.11-beta] - 2026-06-06
-
-### Added
-
-- SNMP monitoring suite (v1/v2c/v3) alongside ICMP/TCP/HTTP/HTTPS checks:
-  IF-MIB interface monitors with per-port link-state, SNMP-verified badges in
-  Ports/Dashboard/Visualizer, encrypted per-lab SNMPv3 credentials, a v1/v2c
-  trap receiver (UDP 1162, with device auto-learn), and opt-in VLAN/subnet
-  inventory sync (preview/apply; DHCP scopes preview-only). Enable sync with
-  `SNMP_INVENTORY_SYNC=1`. See [`docs/SNMP.md`](./docs/SNMP.md).
-- Expanded localization from 2 to 23 languages — added German, Dutch, Spanish,
-  Portuguese, Italian, Polish, Simplified & Traditional Chinese, Japanese,
-  Korean, Hindi, Bengali, Thai, Hebrew, Persian, Arabic, Russian, Ukrainian,
-  Turkish, Vietnamese, and Indonesian, with right-to-left support for Arabic,
-  Hebrew, and Persian.
-- `docs/SNMP.md` operator guide for SNMP monitoring, v3 credentials, trap
-  forwarding (162→1162), and inventory sync.
-- Host-network Docker compose variant plus a Docker discovery guide for Linux
-  and Proxmox LXC installs that need raw-socket and layer-2 visibility for
-  subnet discovery.
-
-### Changed
-
 - Documented the new SNMP and secret-key environment variables
   (`RACKPAD_SECRET_KEY`, `SNMP_INVENTORY_SYNC`, `SNMP_TRAP_*`) in `.env.example`.
 - Discovery diagnostics now point Docker/LXC users toward the host-network
   compose/capability fix when MAC addresses are hidden by container networking.
+- Refreshed the colour tokens so the brand accent (orange) and the warning colour
+  (yellow) are clearly distinct, and firmed up panel separation in dark mode.
 
 ### Fixed
 
+- Monitoring: restored page scrolling after the beta regression where the device
+  list shrank to fit the viewport instead of overflowing naturally.
+- i18n: removed French strings that had leaked into the WiFi/wireless block of several
+  non-French locales (bn, de, fa, he, nl, pl, ru, tr, uk).
 - Back-filled the language layer so recently-added strings (the OIDC sign-in
   flow, lab access/permissions, account/sign-out) are translated across all
   locales instead of falling back to English.

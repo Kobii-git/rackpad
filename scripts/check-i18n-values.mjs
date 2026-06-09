@@ -12,18 +12,26 @@ const localesDir = join(root, "src/i18n/locales");
 
 const FRENCH_MARKERS = [
   "sans fil",
+  "diffusé",
   "diffusés",
-  "Réseau",
-  "Câble",
-  "Échec",
-  "Activer",
-  "Désactiver",
+  "réseau",
+  "réseaux",
+  "câble",
+  "échec",
+  "activer",
+  "désactiver",
   "métadonnées",
+  "point d'accès",
   "points d'accès",
   "canaux",
   "associé",
-  "Aucun",
-  "Reçu",
+  "associés",
+  "aucun",
+  "reçu",
+  "rapport d'inventaire",
+  "surveillance",
+  "équipement",
+  "équipements",
 ];
 
 const INLINE_LOCALES = ["en", "fr", "zh", "es", "hi", "ar", "ja"];
@@ -47,7 +55,8 @@ function extractBlock(source, exportName) {
 }
 
 function markerHit(value) {
-  return FRENCH_MARKERS.find((m) => value.includes(m));
+  const normalized = value.toLocaleLowerCase("fr-FR");
+  return FRENCH_MARKERS.find((m) => normalized.includes(m));
 }
 
 const source = readFileSync(translationsPath, "utf8");
@@ -61,7 +70,8 @@ function checkLocale(locale, entries) {
   for (const [key, value] of entries) {
     const enValue = en.get(key);
     const frValue = fr.get(key);
-    if (frValue && value === frValue && value !== enValue) {
+    const exactFrenchHit = frValue && value === frValue && value !== enValue && markerHit(value);
+    if (exactFrenchHit) {
       findings.push({ locale, key, value, reason: "matches-fr" });
       continue;
     }
