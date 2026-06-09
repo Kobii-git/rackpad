@@ -1761,7 +1761,7 @@ function VisualizerSidePanel({
   onSelectCable: (id: string) => void;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
       <VisualizerLayoutPanel
         model={model}
         cableLayout={cableLayout}
