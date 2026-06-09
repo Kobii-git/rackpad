@@ -1,4 +1,5 @@
 import { parse as parseYaml } from "yaml";
+import { db } from "../db.js";
 import type { PortTemplate, PortTemplateKind } from "./port-templates.js";
 import { listPortTemplates } from "./port-templates.js";
 import { ValidationError } from "./validation.js";
@@ -38,10 +39,24 @@ export interface NetBoxImportPreview {
   parsed: ParsedNetBoxDeviceType;
   dedupeKey: string;
   existingTemplate: { id: string; name: string; builtIn?: boolean } | null;
+  existingDevice: { id: string; hostname: string } | null;
   portTemplateDraft: NetBoxPortTemplateDraft;
+  deviceDraft: NetBoxDeviceDraft;
+}
+
+export interface NetBoxDeviceDraft {
+  suggestedHostname: string;
+  manufacturer: string;
+  model: string;
+  heightU: number;
+  deviceType: string;
+  displayName: string;
+  notes: string;
+  portCount: number;
 }
 
 const NETBOX_DESCRIPTION_PREFIX = "netbox:";
+const NETBOX_DEVICE_NOTES_PREFIX = "netbox-device:";
 
 const INTERFACE_TYPE_MAP: Record<
   string,
@@ -291,6 +306,45 @@ export function parseNetBoxDeviceTypeYaml(yamlText: string): ParsedNetBoxDeviceT
   };
 }
 
+export function findExistingNetboxDevice(manufacturer: string, model: string) {
+  const prefix = `${NETBOX_DEVICE_NOTES_PREFIX}${netboxDedupeKey(manufacturer, model)}`;
+  const row = db
+    .prepare("SELECT id, hostname FROM devices WHERE notes LIKE ? LIMIT 1")
+    .get(`${prefix}%`) as { id: string; hostname: string } | undefined;
+  return row ?? null;
+}
+
+function slugifyHostname(value: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "netbox-device"
+  );
+}
+
+export function buildNetboxDeviceNotes(parsed: ParsedNetBoxDeviceType) {
+  const key = netboxDedupeKey(parsed.manufacturer, parsed.model);
+  return `${NETBOX_DEVICE_NOTES_PREFIX}${key} | NetBox device type library import.`;
+}
+
+export function buildNetboxDeviceDraft(
+  parsed: ParsedNetBoxDeviceType,
+): NetBoxDeviceDraft {
+  const templateDraft = buildNetboxPortTemplateDraft(parsed);
+  return {
+    suggestedHostname: slugifyHostname(parsed.slug ?? parsed.model),
+    manufacturer: parsed.manufacturer,
+    model: parsed.model,
+    heightU: parsed.uHeight,
+    deviceType: templateDraft.deviceTypes[0] ?? "server",
+    displayName: `${parsed.manufacturer} ${parsed.model}`.slice(0, 120),
+    notes: buildNetboxDeviceNotes(parsed),
+    portCount: templateDraft.ports.length,
+  };
+}
+
 export function previewNetboxDeviceTypeImport(
   yamlText: string,
   templates: PortTemplate[] = listPortTemplates(),
@@ -314,6 +368,8 @@ export function previewNetboxDeviceTypeImport(
           builtIn: existingTemplate.builtIn,
         }
       : null,
+    existingDevice: findExistingNetboxDevice(parsed.manufacturer, parsed.model),
     portTemplateDraft,
+    deviceDraft: buildNetboxDeviceDraft(parsed),
   };
 }

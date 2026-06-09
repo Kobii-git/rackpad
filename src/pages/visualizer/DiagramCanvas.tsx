@@ -1104,6 +1104,8 @@ function buildDiagramLayout(
           strokeWidth: cable.crossZone ? 3 : snmpUp ? 2.75 : 2.25,
           strokeOpacity: offline ? 0.38 : snmpUp ? 0.92 : 0.78,
           strokeDasharray: offline ? "8 7" : undefined,
+          // Firefox: round caps on dashed strokes balloon each dash; solid edges stay round.
+          strokeLinecap: offline ? "butt" : "round",
         },
       };
     });

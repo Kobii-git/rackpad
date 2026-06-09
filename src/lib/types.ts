@@ -304,6 +304,13 @@ export interface DocumentationPage {
   updatedAt: string;
 }
 
+export interface DocumentationDeviceLink {
+  id: ID;
+  documentationPageId: ID;
+  deviceId: ID;
+  createdAt: string;
+}
+
 export interface Port {
   id: ID;
   deviceId: ID;

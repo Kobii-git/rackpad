@@ -1445,6 +1445,13 @@ function CableSvg({
       : cable.color;
   const opacity = traceActive ? 1 : dimmed ? 0.06 : active ? 1 : 0.5;
   const strokeWidth = traceActive ? 5.5 : active ? 5 : cable.up ? 2.6 : 2;
+  // Firefox: round caps on dashed strokes balloon each dash segment; use butt for dashes only.
+  const strokeDasharray = cable.unknown
+    ? "7 6"
+    : cable.bothOnline
+      ? "12 10"
+      : undefined;
+  const strokeLinecap = strokeDasharray ? "butt" : "round";
   return (
     <g>
       {(active || traceActive) && (
@@ -1464,11 +1471,9 @@ function CableSvg({
         stroke={color}
         strokeWidth={strokeWidth}
         strokeOpacity={opacity}
-        strokeLinecap="round"
+        strokeLinecap={strokeLinecap}
         strokeLinejoin="round"
-        strokeDasharray={
-          cable.unknown ? "7 6" : cable.bothOnline ? "12 10" : undefined
-        }
+        strokeDasharray={strokeDasharray}
         className={
           cable.bothOnline && !cable.unknown
             ? "visualizer-cable-online"

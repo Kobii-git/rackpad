@@ -29,9 +29,13 @@ import {
   canEditInventory,
   createDocumentationPageRecord,
   deleteDocumentationPageRecord,
+  linkDocumentationDeviceRecord,
+  unlinkDocumentationDeviceRecord,
   updateDocumentationPageRecord,
   useStore,
 } from "@/lib/store";
+import { api } from "@/lib/api";
+import type { DocumentationDeviceLink } from "@/lib/types";
 import {
   defaultImageLabel,
   imageSizeLimitLabel,
@@ -50,7 +54,10 @@ export default function DocumentationView() {
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
   const pages = useStore((s) => s.documentationPages);
+  const devices = useStore((s) => s.devices);
   const canEdit = canEditInventory(currentUser);
+  const [pageLinks, setPageLinks] = useState<DocumentationDeviceLink[]>([]);
+  const [linkDeviceId, setLinkDeviceId] = useState("");
   const [query, setQuery] = useState("");
   const [draftTitle, setDraftTitle] = useState("");
   const [draftContent, setDraftContent] = useState("");
@@ -83,6 +90,40 @@ export default function DocumentationView() {
     setDraftContent(selectedPage.content);
     setError("");
   }, [selectedPage, selectedPageId, setSearchParams]);
+
+  useEffect(() => {
+    if (!selectedPage) {
+      setPageLinks([]);
+      return;
+    }
+    void api
+      .getDocumentationLinks({ pageId: selectedPage.id })
+      .then(setPageLinks)
+      .catch(() => setPageLinks([]));
+  }, [selectedPage?.id]);
+
+  const linkableDevices = useMemo(
+    () => devices.filter((device) => device.labId === lab.id),
+    [devices, lab.id],
+  );
+
+  async function handleLinkDevice() {
+    if (!selectedPage || !linkDeviceId || !canEdit) return;
+    const created = await linkDocumentationDeviceRecord(
+      selectedPage.id,
+      linkDeviceId,
+    );
+    setPageLinks((current) => [...current, created]);
+    setLinkDeviceId("");
+  }
+
+  async function handleUnlinkDevice(deviceId: string) {
+    if (!selectedPage || !canEdit) return;
+    await unlinkDocumentationDeviceRecord(selectedPage.id, deviceId);
+    setPageLinks((current) =>
+      current.filter((link) => link.deviceId !== deviceId),
+    );
+  }
 
   async function handleCreate() {
     if (!canEdit) return;
@@ -346,6 +387,70 @@ export default function DocumentationView() {
                       onChange={(event) => setDraftTitle(event.target.value)}
                       disabled={!canEdit}
                     />
+                    {canEdit && (
+                      <div className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] p-3">
+                        <div className="rk-kicker">{t("Linked devices")}</div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {pageLinks.length === 0 ? (
+                            <span className="text-xs text-[var(--text-tertiary)]">
+                              {t("No linked devices yet.")}
+                            </span>
+                          ) : (
+                            pageLinks.map((link) => {
+                              const device = devices.find(
+                                (entry) => entry.id === link.deviceId,
+                              );
+                              return (
+                                <div
+                                  key={link.id}
+                                  className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] px-2 py-1 text-xs"
+                                >
+                                  <span>{device?.hostname ?? link.deviceId}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      void handleUnlinkDevice(link.deviceId)
+                                    }
+                                  >
+                                    {t("Unlink documentation")}
+                                  </Button>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-end gap-2">
+                          <label className="min-w-48 flex-1 space-y-1 text-sm">
+                            <span className="text-[var(--text-secondary)]">
+                              {t("Link device")}
+                            </span>
+                            <select
+                              className="rk-control w-full"
+                              value={linkDeviceId}
+                              onChange={(event) =>
+                                setLinkDeviceId(event.target.value)
+                              }
+                            >
+                              <option value="">{t("Select a device")}</option>
+                              {linkableDevices.map((device) => (
+                                <option key={device.id} value={device.id}>
+                                  {device.hostname}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!linkDeviceId}
+                            onClick={() => void handleLinkDevice()}
+                          >
+                            {t("Link device")}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                     <textarea
                       ref={editorRef}
                       value={draftContent}

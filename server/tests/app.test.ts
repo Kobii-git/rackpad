@@ -2916,6 +2916,79 @@ test("ip assignment patch rejects empty ips and subnet mismatches", async () => 
   assert.match(mismatchRes.body, /does not belong/i);
 });
 
+test("ip assignments can be updated in place for device-linked addresses", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const subnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.0.30.0/24",
+      name: "Device edit LAN",
+    },
+  });
+  assert.equal(subnetRes.statusCode, 201);
+  const subnet = readJson(subnetRes) as { id: string };
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "edit-ip-host",
+      deviceType: "server",
+      status: "online",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const createRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      ipAddress: "10.0.30.40",
+      assignmentType: "device",
+      deviceId: device.id,
+      hostname: "edit-ip-host",
+      description: "Initial management IP",
+    },
+  });
+  assert.equal(createRes.statusCode, 201);
+  const assignment = readJson(createRes) as { id: string; description: string };
+
+  const updateRes = await app.inject({
+    method: "PATCH",
+    url: `/api/ip-assignments/${assignment.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      ipAddress: "10.0.30.41",
+      description: "Updated management IP",
+      assignmentType: "device",
+    },
+  });
+  assert.equal(updateRes.statusCode, 200);
+  const updated = readJson(updateRes) as {
+    ipAddress: string;
+    description: string;
+  };
+  assert.equal(updated.ipAddress, "10.0.30.41");
+  assert.equal(updated.description, "Updated management IP");
+});
+
 test("ip assignments support DHCP reservations and protect technical IPs", async () => {
   const adminToken = await bootstrapAdmin();
 
@@ -3104,6 +3177,98 @@ test("ip assignments support DHCP reservations and protect technical IPs", async
   assert.equal(technicalLinked.deviceId, firewall.id);
 });
 
+test("documentation pages can be linked to devices", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const pageRes = await app.inject({
+    method: "POST",
+    url: "/api/documentation",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      title: "Switch runbook",
+      content: "Console access notes",
+    },
+  });
+  assert.equal(pageRes.statusCode, 201);
+  const page = readJson(pageRes) as { id: string };
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      hostname: "core-switch",
+      deviceType: "switch",
+      status: "online",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const linkRes = await app.inject({
+    method: "POST",
+    url: `/api/documentation/${page.id}/device-links`,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { deviceId: device.id },
+  });
+  assert.equal(linkRes.statusCode, 201);
+
+  const byDeviceRes = await app.inject({
+    method: "GET",
+    url: `/api/documentation/links?deviceId=${device.id}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(byDeviceRes.statusCode, 200);
+  const links = readJson(byDeviceRes) as Array<{ deviceId: string }>;
+  assert.equal(links.length, 1);
+  assert.equal(links[0]?.deviceId, device.id);
+
+  const unlinkRes = await app.inject({
+    method: "DELETE",
+    url: `/api/documentation/${page.id}/device-links/${device.id}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(unlinkRes.statusCode, 204);
+});
+
+test("netbox device import creates a device with ports", async () => {
+  const adminToken = await bootstrapAdmin();
+  const yaml = `
+manufacturer: Cisco
+model: Catalyst 9300-24T
+u_height: 1
+interfaces:
+  - name: GigabitEthernet1/0/1
+    type: 1000base-t
+`.trim();
+
+  const importRes = await app.inject({
+    method: "POST",
+    url: "/api/imports/netbox-device-type/import",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      yaml,
+      mode: "device",
+      labId: "lab_home",
+      hostname: "c9300-lab",
+    },
+  });
+  assert.equal(importRes.statusCode, 201);
+  const imported = readJson(importRes) as {
+    mode: string;
+    device: { hostname: string; heightU: number; manufacturer: string };
+    ports: Array<{ name: string }>;
+  };
+  assert.equal(imported.mode, "device");
+  assert.equal(imported.device.hostname, "c9300-lab");
+  assert.equal(imported.device.heightU, 1);
+  assert.equal(imported.device.manufacturer, "Cisco");
+  assert.equal(imported.ports.length, 1);
+  assert.equal(imported.ports[0]?.name, "GigabitEthernet1/0/1");
+});
+
 function resetDatabase() {
   db.exec(`
     DELETE FROM userSessions;
@@ -3121,6 +3286,7 @@ function resetDatabase() {
     DELETE FROM referenceImages;
     DELETE FROM deviceImages;
     DELETE FROM documentationPages;
+    DELETE FROM documentationDeviceLinks;
     DELETE FROM ipAssignments;
     DELETE FROM discoveredDevices;
     DELETE FROM portLinks;

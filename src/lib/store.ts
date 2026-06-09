@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { api, ApiError, getAuthToken, setAuthToken } from "./api";
+import type { IpAssignmentPatch } from "./api";
 import type {
   AppUser,
   AuditEntry,
@@ -1989,27 +1990,69 @@ export async function createPortTemplateRecord(
   return created;
 }
 
+export async function importNetboxDeviceType(input: {
+  yaml: string;
+  mode: "template" | "device";
+  labId?: string;
+  hostname?: string;
+}): Promise<
+  | { mode: "template"; template: PortTemplate }
+  | { mode: "device"; device: Device; ports: Port[] }
+> {
+  const result = await api.importNetboxDeviceType(input);
+  if (result.mode === "template" && result.template) {
+    setState((prev) => ({
+      ...prev,
+      portTemplates: sortPortTemplates([
+        ...prev.portTemplates,
+        result.template!,
+      ]),
+      deviceTypes: sortDeviceTypes(
+        mergeDeviceTypeDefinitions(prev.deviceTypes, {
+          devices: prev.devices,
+          portTemplates: [...prev.portTemplates, result.template!],
+        }),
+      ),
+    }));
+    void recordAudit(
+      "port.template.create",
+      "PortTemplate",
+      result.template.id,
+      `Imported NetBox port template ${result.template.name}`,
+    );
+    return { mode: "template", template: result.template };
+  }
+
+  if (result.mode === "device" && result.device) {
+    setState((prev) => ({
+      ...prev,
+      devices: sortDevices([...prev.devices, result.device!]),
+      ports: sortPorts([...prev.ports, ...(result.ports ?? [])]),
+    }));
+    void recordAudit(
+      "device.create",
+      "Device",
+      result.device.id,
+      `Imported NetBox device ${result.device.hostname}`,
+    );
+    return {
+      mode: "device",
+      device: result.device,
+      ports: result.ports ?? [],
+    };
+  }
+
+  throw new Error("NetBox import returned an empty result.");
+}
+
 export async function importNetboxDeviceTypeTemplate(
   yaml: string,
 ): Promise<PortTemplate> {
-  const created = await api.importNetboxDeviceTypeTemplate(yaml);
-  setState((prev) => ({
-    ...prev,
-    portTemplates: sortPortTemplates([...prev.portTemplates, created]),
-    deviceTypes: sortDeviceTypes(
-      mergeDeviceTypeDefinitions(prev.deviceTypes, {
-        devices: prev.devices,
-        portTemplates: [...prev.portTemplates, created],
-      }),
-    ),
-  }));
-  void recordAudit(
-    "port.template.create",
-    "PortTemplate",
-    created.id,
-    `Imported NetBox port template ${created.name}`,
-  );
-  return created;
+  const result = await importNetboxDeviceType({ yaml, mode: "template" });
+  if (result.mode !== "template") {
+    throw new Error("Expected a port template import result.");
+  }
+  return result.template;
 }
 
 export async function updatePortTemplateRecord(
@@ -2661,6 +2704,42 @@ export async function deleteDocumentationPageRecord(
   return true;
 }
 
+export async function linkDocumentationDeviceRecord(
+  pageId: string,
+  deviceId: string,
+) {
+  return api.linkDocumentationDevice(pageId, deviceId);
+}
+
+export async function unlinkDocumentationDeviceRecord(
+  pageId: string,
+  deviceId: string,
+) {
+  await api.unlinkDocumentationDevice(pageId, deviceId);
+}
+
+export async function importDockerContainerRecord(input: {
+  endpoint: string;
+  token?: string;
+  containerId: string;
+  labId: string;
+  hostDeviceId: string;
+  hostname?: string;
+}): Promise<Device> {
+  const created = await api.importDockerContainer(input);
+  setState((prev) => ({
+    ...prev,
+    devices: sortDevices([...prev.devices, created]),
+  }));
+  void recordAudit(
+    "device.create",
+    "Device",
+    created.id,
+    `Imported Docker container ${created.hostname}`,
+  );
+  return created;
+}
+
 export async function createDeviceImageRecord(input: {
   deviceId: string;
   label: string;
@@ -2961,6 +3040,28 @@ export async function createIpAssignmentRecord(
   );
 
   return created;
+}
+
+export async function updateIpAssignmentRecord(
+  id: string,
+  changes: IpAssignmentPatch,
+): Promise<IpAssignment> {
+  const updated = await api.updateIpAssignment(id, changes);
+  const subnet = state.subnets.find((entry) => entry.id === updated.subnetId);
+
+  setState((prev) => ({
+    ...prev,
+    ipAssignments: replaceById(prev.ipAssignments, updated, sortIpAssignments),
+  }));
+
+  void recordAudit(
+    "ip.assign",
+    "IpAssignment",
+    id,
+    `Updated ${updated.ipAddress} (${updated.assignmentType}) in ${subnet?.name ?? "subnet"}`,
+  );
+
+  return updated;
 }
 
 export async function unassignIp(id: string): Promise<boolean> {

@@ -72,9 +72,24 @@ export default function Dashboard() {
   const enabledMonitors = deviceMonitors.filter(
     (monitor) => monitor.enabled && monitor.type !== "none",
   );
-  const monitorIssues = enabledMonitors.filter((monitor) =>
-    ["offline", "unknown"].includes(monitor.lastResult ?? "unknown"),
-  );
+  const deviceHasPrimaryAttentionStatus = (status: string) =>
+    ["offline", "warning", "unknown"].includes(status);
+  const deviceHasFailingMonitors = (deviceId: string) =>
+    enabledMonitors.some(
+      (monitor) =>
+        monitor.deviceId === deviceId &&
+        ["offline", "unknown"].includes(monitor.lastResult ?? "unknown"),
+    );
+  const monitorIssues = enabledMonitors.filter((monitor) => {
+    if (!["offline", "unknown"].includes(monitor.lastResult ?? "unknown")) {
+      return false;
+    }
+    const device = devicesById[monitor.deviceId];
+    if (device && deviceHasPrimaryAttentionStatus(device.status)) {
+      return false;
+    }
+    return true;
+  });
   const attentionDevices = devices
     .filter((device) =>
       ["offline", "warning", "unknown"].includes(device.status),
@@ -204,9 +219,12 @@ export default function Dashboard() {
                         {device.hostname}
                       </div>
                       <div className="truncate text-[11px] text-[var(--text-tertiary)]">
-                        {formatDeviceAddress(device) ||
-                          device.displayName ||
-                          device.deviceType.replace("_", " ")}
+                        {device.status === "offline" &&
+                        deviceHasFailingMonitors(device.id)
+                          ? t("Device offline — monitoring failing")
+                          : formatDeviceAddress(device) ||
+                            device.displayName ||
+                            device.deviceType.replace("_", " ")}
                       </div>
                     </div>
                     <span className="shrink-0 text-[11px] text-[var(--text-secondary)]">

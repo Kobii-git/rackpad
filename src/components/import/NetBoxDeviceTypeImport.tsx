@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { CheckCircle2, FileCode2, Upload } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { Badge } from "@/components/ui/Badge";
@@ -11,16 +11,26 @@ import {
   CardLabel,
   CardTitle,
 } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
 import { Mono } from "@/components/shared/Mono";
 import { api, ApiError } from "@/lib/api";
 import type { NetboxDeviceTypeImportPreview } from "@/lib/api";
-import { importNetboxDeviceTypeTemplate, canEditInventory, useStore } from "@/lib/store";
+import {
+  canEditInventory,
+  importNetboxDeviceType,
+  useStore,
+} from "@/lib/store";
+
+type ImportMode = "template" | "device";
 
 export function NetBoxDeviceTypeImport() {
   const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
+  const lab = useStore((s) => s.lab);
   const canEdit = canEditInventory(currentUser);
   const [yamlText, setYamlText] = useState("");
+  const [importMode, setImportMode] = useState<ImportMode>("template");
+  const [hostname, setHostname] = useState("");
   const [preview, setPreview] = useState<NetboxDeviceTypeImportPreview | null>(
     null,
   );
@@ -28,7 +38,18 @@ export function NetBoxDeviceTypeImport() {
   const [importError, setImportError] = useState("");
   const [previewing, setPreviewing] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [importedTemplateName, setImportedTemplateName] = useState("");
+  const [importSuccess, setImportSuccess] = useState("");
+
+  useEffect(() => {
+    if (!preview) return;
+    setHostname(preview.deviceDraft.suggestedHostname);
+  }, [preview]);
+
+  const importBlocked = useMemo(() => {
+    if (!preview) return true;
+    if (importMode === "template") return Boolean(preview.existingTemplate);
+    return Boolean(preview.existingDevice);
+  }, [importMode, preview]);
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -37,7 +58,7 @@ export function NetBoxDeviceTypeImport() {
 
     setParseError("");
     setImportError("");
-    setImportedTemplateName("");
+    setImportSuccess("");
     setPreview(null);
 
     try {
@@ -55,7 +76,7 @@ export function NetBoxDeviceTypeImport() {
     setPreviewing(true);
     setParseError("");
     setImportError("");
-    setImportedTemplateName("");
+    setImportSuccess("");
     try {
       const result = await api.previewNetboxDeviceTypeImport(text);
       setPreview(result);
@@ -74,14 +95,36 @@ export function NetBoxDeviceTypeImport() {
   }
 
   async function handleImport() {
-    if (!yamlText || !preview || preview.existingTemplate || !canEdit) return;
+    if (!yamlText || !preview || importBlocked || !canEdit) return;
+    if (importMode === "device" && !hostname.trim()) {
+      setImportError(t("Hostname is required for device import."));
+      return;
+    }
+
     setImporting(true);
     setImportError("");
     try {
-      const created = await importNetboxDeviceTypeTemplate(yamlText);
-      setImportedTemplateName(created.name);
+      const result = await importNetboxDeviceType({
+        yaml: yamlText,
+        mode: importMode,
+        labId: lab.id,
+        hostname: hostname.trim() || undefined,
+      });
+      if (result.mode === "template") {
+        setImportSuccess(
+          t("Imported port template {name}.", { name: result.template.name }),
+        );
+      } else {
+        setImportSuccess(
+          t("Imported device {name} with {count} ports.", {
+            name: result.device.hostname,
+            count: String(result.ports.length),
+          }),
+        );
+      }
       setPreview(null);
       setYamlText("");
+      setHostname("");
     } catch (error) {
       setImportError(
         error instanceof ApiError
@@ -100,7 +143,7 @@ export function NetBoxDeviceTypeImport() {
       <CardHeader>
         <CardTitle>
           <CardLabel>NetBox device types</CardLabel>
-          <CardHeading>Import YAML as a port template</CardHeading>
+          <CardHeading>{t("Import NetBox YAML")}</CardHeading>
         </CardTitle>
         <Badge tone="cyan">
           <FileCode2 className="size-3" />
@@ -109,10 +152,9 @@ export function NetBoxDeviceTypeImport() {
       </CardHeader>
       <CardBody className="space-y-4">
         <p className="text-sm text-[var(--text-tertiary)]">
-          Upload a NetBox device-type-library YAML file to preview manufacturer,
-          model, rack height, and interfaces before creating a Rackpad port
-          template. This import never changes IPAM, VLANs, or existing templates
-          unless you confirm a new template write.
+          {t(
+            "Upload a NetBox device-type-library YAML file to preview manufacturer, model, U-height, and interfaces before creating a port template or device.",
+          )}
         </p>
 
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]">
@@ -139,9 +181,9 @@ export function NetBoxDeviceTypeImport() {
           </div>
         )}
 
-        {importedTemplateName && (
+        {importSuccess && (
           <div className="rounded-[var(--radius-md)] border border-[var(--success-border)] bg-[var(--success-soft)] px-3 py-2 text-sm text-[var(--success)]">
-            Imported port template {importedTemplateName}.
+            {importSuccess}
           </div>
         )}
 
@@ -150,17 +192,67 @@ export function NetBoxDeviceTypeImport() {
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <PreviewStat label={t("Manufacturer")} value={preview.parsed.manufacturer} />
               <PreviewStat label={t("Model")} value={preview.parsed.model} />
-              <PreviewStat label="U-height" value={String(preview.parsed.uHeight)} />
+              <PreviewStat label={t("U-height")} value={String(preview.parsed.uHeight)} />
               <PreviewStat
                 label={t("Interfaces")}
                 value={String(preview.parsed.interfaces.length)}
               />
             </div>
 
-            {preview.existingTemplate && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span className="text-[var(--text-secondary)]">{t("Import as")}</span>
+                <select
+                  className="rk-control w-full"
+                  value={importMode}
+                  onChange={(event) =>
+                    setImportMode(event.target.value as ImportMode)
+                  }
+                >
+                  <option value="template">{t("Port template only")}</option>
+                  <option value="device">{t("Device with interfaces")}</option>
+                </select>
+              </label>
+              {importMode === "device" ? (
+                <label className="space-y-1 text-sm">
+                  <span className="text-[var(--text-secondary)]">{t("Hostname")}</span>
+                  <Input
+                    value={hostname}
+                    onChange={(event) => setHostname(event.target.value)}
+                    placeholder={preview.deviceDraft.suggestedHostname}
+                  />
+                </label>
+              ) : null}
+            </div>
+
+            {importMode === "template" && preview.existingTemplate && (
               <div className="rounded-[var(--radius-sm)] border border-[var(--warning-border)] bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]">
-                A matching port template already exists: {preview.existingTemplate.name}.
+                {t("A matching port template already exists: {name}.", {
+                  name: preview.existingTemplate.name,
+                })}
               </div>
+            )}
+
+            {importMode === "device" && preview.existingDevice && (
+              <div className="rounded-[var(--radius-sm)] border border-[var(--warning-border)] bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]">
+                {t("A matching device already exists: {name}.", {
+                  name: preview.existingDevice.hostname,
+                })}
+              </div>
+            )}
+
+            {importMode === "device" ? (
+              <Mono className="block text-[10px] text-[var(--text-tertiary)]">
+                {t("Will create a {type} device at {u}U with {count} ports.", {
+                  type: preview.deviceDraft.deviceType,
+                  u: String(preview.deviceDraft.heightU),
+                  count: String(preview.deviceDraft.portCount),
+                })}
+              </Mono>
+            ) : (
+              <Mono className="block text-[10px] text-[var(--text-tertiary)]">
+                {preview.portTemplateDraft.description}
+              </Mono>
             )}
 
             <div className="rk-table-shell">
@@ -169,8 +261,8 @@ export function NetBoxDeviceTypeImport() {
                   <tr>
                     <th>{t("Name")}</th>
                     <th>{t("Type")}</th>
-                    <th>Section</th>
-                    <th>Mapped kind</th>
+                    <th>{t("Section")}</th>
+                    <th>{t("Mapped kind")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -197,22 +289,18 @@ export function NetBoxDeviceTypeImport() {
               </table>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <Mono className="text-[10px] text-[var(--text-tertiary)]">
-                {preview.portTemplateDraft.description}
-              </Mono>
+            <div className="flex justify-end">
               <Button
                 size="sm"
-                disabled={
-                  !canEdit ||
-                  importing ||
-                  previewing ||
-                  Boolean(preview.existingTemplate)
-                }
+                disabled={!canEdit || importing || previewing || importBlocked}
                 onClick={() => void handleImport()}
               >
                 <CheckCircle2 className="size-3.5" />
-                {importing ? "Importing..." : "Import port template"}
+                {importing
+                  ? t("Importing...")
+                  : importMode === "device"
+                    ? t("Import device")
+                    : t("Import port template")}
               </Button>
             </div>
           </div>
@@ -220,7 +308,7 @@ export function NetBoxDeviceTypeImport() {
 
         {previewing && (
           <div className="text-sm text-[var(--text-tertiary)]">
-            Parsing YAML preview...
+            {t("Parsing YAML preview...")}
           </div>
         )}
       </CardBody>

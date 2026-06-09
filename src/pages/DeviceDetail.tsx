@@ -31,6 +31,7 @@ import { buildSnmpVerifiedPortIdsForDevice } from "@/lib/snmp-port-status";
 import {
   canEditInventory,
   createIpAssignmentRecord,
+  updateIpAssignmentRecord,
   createDeviceImageRecord,
   createDeviceMonitorConfig,
   createDeviceServiceRecord,
@@ -51,6 +52,7 @@ import {
 import type {
   Device,
   DeviceImage,
+  DocumentationDeviceLink,
   DeviceMonitor,
   DeviceService,
   DeviceServiceType,
@@ -233,11 +235,15 @@ export default function DeviceDetail() {
   const deviceImages = useStore((s) => s.deviceImages);
   const deviceServices = useStore((s) => s.deviceServices);
   const portTemplates = useStore((s) => s.portTemplates);
+  const documentationPages = useStore((s) => s.documentationPages);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [releasingId, setReleasingId] = useState<string | null>(null);
+  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(
+    null,
+  );
   const [networkForm, setNetworkForm] = useState<NetworkIpForm>(
     EMPTY_NETWORK_IP_FORM,
   );
@@ -249,6 +255,9 @@ export default function DeviceDetail() {
   const [portTemplateApplying, setPortTemplateApplying] = useState(false);
   const [portTemplateSaving, setPortTemplateSaving] = useState(false);
   const [portToolbarError, setPortToolbarError] = useState("");
+  const [linkedDocumentation, setLinkedDocumentation] = useState<
+    DocumentationDeviceLink[]
+  >([]);
   const [selectedMonitorId, setSelectedMonitorId] = useState<string | null>(
     null,
   );
@@ -286,6 +295,30 @@ export default function DeviceDetail() {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const device = id ? devices.find((entry) => entry.id === id) : undefined;
+  useEffect(() => {
+    if (!device) {
+      setLinkedDocumentation([]);
+      return;
+    }
+    void api
+      .getDocumentationLinks({ deviceId: device.id })
+      .then(setLinkedDocumentation)
+      .catch(() => setLinkedDocumentation([]));
+  }, [device?.id]);
+
+  const linkedDocumentationPages = useMemo(
+    () =>
+      linkedDocumentation
+        .map((link) => ({
+          link,
+          page: documentationPages.find(
+            (page) => page.id === link.documentationPageId,
+          ),
+        }))
+        .filter((entry) => entry.page),
+    [documentationPages, linkedDocumentation],
+  );
+
   const canEdit = canEditInventory(currentUser, device?.labId);
   const canManageMonitoring = canEditInventory(currentUser, device?.labId);
 
@@ -723,7 +756,27 @@ export default function DeviceDetail() {
     setNetworkForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleAssignIp() {
+  function startEditingAssignment(assignment: IpAssignment) {
+    setEditingAssignmentId(assignment.id);
+    setNetworkError("");
+    setNetworkForm({
+      subnetId: assignment.subnetId,
+      ipAddress: assignment.ipAddress,
+      assignmentType: assignment.assignmentType,
+      allocationMode: assignment.allocationMode ?? "static",
+      dhcpScopeId: assignment.dhcpScopeId ?? "",
+      portId: assignment.portId ?? "",
+      description: assignment.description ?? "",
+    });
+  }
+
+  function cancelEditingAssignment() {
+    setEditingAssignmentId(null);
+    setNetworkError("");
+    setNetworkForm(EMPTY_NETWORK_IP_FORM);
+  }
+
+  async function handleSaveIpAssignment() {
     if (!device || !canEdit) return;
     setNetworkError("");
 
@@ -740,7 +793,7 @@ export default function DeviceDetail() {
 
     setNetworkSaving(true);
     try {
-      await createIpAssignmentRecord({
+      const payload = {
         subnetId,
         ipAddress,
         assignmentType: networkForm.assignmentType,
@@ -757,17 +810,24 @@ export default function DeviceDetail() {
           (networkForm.portId
             ? `Interface ${portById[networkForm.portId]?.name ?? ""}`.trim()
             : "Device address"),
-      });
-      setNetworkForm((prev) => ({
-        ...EMPTY_NETWORK_IP_FORM,
-        subnetId: prev.subnetId,
-        assignmentType: prev.assignmentType,
-        allocationMode: prev.allocationMode,
-        dhcpScopeId: prev.dhcpScopeId,
-      }));
+      };
+
+      if (editingAssignmentId) {
+        await updateIpAssignmentRecord(editingAssignmentId, payload);
+        cancelEditingAssignment();
+      } else {
+        await createIpAssignmentRecord(payload);
+        setNetworkForm((prev) => ({
+          ...EMPTY_NETWORK_IP_FORM,
+          subnetId: prev.subnetId,
+          assignmentType: prev.assignmentType,
+          allocationMode: prev.allocationMode,
+          dhcpScopeId: prev.dhcpScopeId,
+        }));
+      }
     } catch (err) {
       setNetworkError(
-        err instanceof Error ? err.message : "Failed to assign IP address.",
+        err instanceof Error ? err.message : "Failed to save IP address.",
       );
     } finally {
       setNetworkSaving(false);
@@ -1463,6 +1523,39 @@ export default function DeviceDetail() {
                   </CardBody>
                 </Card>
               )}
+              <Card className="col-span-12">
+                <CardHeader>
+                  <CardTitle>
+                    <CardLabel>{t("Documentation")}</CardLabel>
+                    <CardHeading>{t("Linked documentation")}</CardHeading>
+                  </CardTitle>
+                </CardHeader>
+                <CardBody className="space-y-2">
+                  {linkedDocumentationPages.length === 0 ? (
+                    <EmptyState
+                      title={t("No linked documentation yet.")}
+                      description={t(
+                        "Link pages from the Documentation workspace to this device.",
+                      )}
+                    />
+                  ) : (
+                    linkedDocumentationPages.map(({ link, page }) => (
+                      <Link
+                        key={link.id}
+                        to={`/documentation?pageId=${page!.id}`}
+                        className="rk-list-row flex items-center justify-between gap-3 px-3 py-2"
+                      >
+                        <span className="truncate text-sm text-[var(--text-primary)]">
+                          {page!.title}
+                        </span>
+                        <span className="text-[11px] text-[var(--text-tertiary)]">
+                          {relativeTime(page!.updatedAt)}
+                        </span>
+                      </Link>
+                    ))
+                  )}
+                </CardBody>
+              </Card>
             </div>
           </TabsContent>
 
@@ -1652,8 +1745,21 @@ export default function DeviceDetail() {
                 <CardHeader>
                   <CardTitle>
                     <CardLabel>{t("Assign address")}</CardLabel>
-                    <CardHeading>{t("Add device or interface IP")}</CardHeading>
+                    <CardHeading>
+                      {editingAssignmentId
+                        ? t("Edit IP assignment")
+                        : t("Add device or interface IP")}
+                    </CardHeading>
                   </CardTitle>
+                  {editingAssignmentId ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={cancelEditingAssignment}
+                    >
+                      {t("Cancel")}
+                    </Button>
+                  ) : null}
                 </CardHeader>
                 <CardBody className="space-y-3">
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
@@ -1758,11 +1864,17 @@ export default function DeviceDetail() {
                     </Field>
                     <Button
                       size="sm"
-                      onClick={() => void handleAssignIp()}
+                      onClick={() => void handleSaveIpAssignment()}
                       disabled={networkSaving || subnets.length === 0}
                     >
                       <Plus className="size-3.5" />
-                      {networkSaving ? "Assigning..." : "Assign IP"}
+                      {networkSaving
+                        ? editingAssignmentId
+                          ? t("Saving...")
+                          : "Assigning..."
+                        : editingAssignmentId
+                          ? t("Update IP")
+                          : "Assign IP"}
                     </Button>
                   </div>
                   {networkError && (
@@ -1844,6 +1956,15 @@ export default function DeviceDetail() {
                                 <Badge tone="neutral">DHCP res</Badge>
                               )}
                               <Badge tone="cyan">{ip.assignmentType}</Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={!canEdit || networkSaving}
+                                onClick={() => startEditingAssignment(ip)}
+                              >
+                                <Pencil className="size-3.5" />
+                                {t("Edit")}
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"

@@ -15,6 +15,7 @@ import type {
   DhcpScope,
   IpAssignment,
   IpZone,
+  ID,
   Lab,
   LabAccessEntry,
   Port,
@@ -80,12 +81,38 @@ export interface NetboxDeviceTypeImportPreview {
   };
   dedupeKey: string;
   existingTemplate: { id: string; name: string; builtIn?: boolean } | null;
+  existingDevice: { id: string; hostname: string } | null;
   portTemplateDraft: {
     name: string;
     description: string;
     deviceTypes: string[];
     ports: PortTemplate["ports"];
   };
+  deviceDraft: {
+    suggestedHostname: string;
+    manufacturer: string;
+    model: string;
+    heightU: number;
+    deviceType: string;
+    displayName: string;
+    notes: string;
+    portCount: number;
+  };
+}
+
+export interface DocumentationDeviceLink {
+  id: ID;
+  documentationPageId: ID;
+  deviceId: ID;
+  createdAt: string;
+}
+
+export interface DockerContainerPreview {
+  id: string;
+  name: string;
+  image: string;
+  state: string;
+  status: string;
 }
 
 export type DeviceImagePatch = Nullable<Pick<DeviceImage, "label" | "notes">>;
@@ -746,10 +773,69 @@ export const api = {
     );
   },
 
-  importNetboxDeviceTypeTemplate(yaml: string) {
-    return request<PortTemplate>("/imports/netbox-device-type/import", {
+  importNetboxDeviceType(input: {
+    yaml: string;
+    mode: "template" | "device";
+    labId?: string;
+    hostname?: string;
+  }) {
+    return request<
+      | { mode: "template"; template: PortTemplate | null }
+      | { mode: "device"; device: Device; ports: Port[] }
+    >("/imports/netbox-device-type/import", {
       method: "POST",
-      body: JSON.stringify({ yaml }),
+      body: JSON.stringify(input),
+    });
+  },
+
+  previewDockerImport(input: {
+    endpoint: string;
+    token?: string;
+  }) {
+    return request<{ containers: DockerContainerPreview[] }>(
+      "/imports/docker/preview",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  importDockerContainer(input: {
+    endpoint: string;
+    token?: string;
+    containerId: string;
+    labId: string;
+    hostDeviceId: string;
+    hostname?: string;
+  }) {
+    return request<Device>("/imports/docker/import", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  getDocumentationLinks(params?: { deviceId?: string; pageId?: string }) {
+    return request<DocumentationDeviceLink[]>(
+      "/documentation/links",
+      undefined,
+      params,
+    );
+  },
+
+  linkDocumentationDevice(pageId: string, deviceId: string) {
+    return request<DocumentationDeviceLink>(
+      `/documentation/${pageId}/device-links`,
+      {
+        method: "POST",
+        body: JSON.stringify({ deviceId }),
+      },
+    );
+  },
+
+  unlinkDocumentationDevice(pageId: string, deviceId: string) {
+    return request<void>(`/documentation/${pageId}/device-links/${deviceId}`, {
+      method: "DELETE",
     });
   },
 

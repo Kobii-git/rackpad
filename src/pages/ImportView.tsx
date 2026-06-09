@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
 import { NetBoxDeviceTypeImport } from "@/components/import/NetBoxDeviceTypeImport";
+import { DockerImportPanel } from "@/components/import/DockerImportPanel";
 import { useI18n } from "@/i18n";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -687,6 +688,8 @@ export default function ImportView() {
           <CollectorRunbooks />
 
           <NetBoxDeviceTypeImport />
+
+          <DockerImportPanel />
 
           <Card>
             <CardHeader>

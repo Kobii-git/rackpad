@@ -136,6 +136,11 @@ const exportBackupSnapshot = db.transaction(
             "SELECT * FROM documentationPages ORDER BY labId, updatedAt DESC, title, id",
           )
           .all(),
+        documentationDeviceLinks: db
+          .prepare(
+            "SELECT * FROM documentationDeviceLinks ORDER BY documentationPageId, deviceId, id",
+          )
+          .all(),
         deviceImages: db
           .prepare(
             "SELECT * FROM deviceImages ORDER BY deviceId, createdAt DESC, id",
@@ -280,6 +285,10 @@ const restoreBackupSnapshot = db.transaction(
       data.documentationPages ?? [],
       "data.documentationPages",
     );
+    const documentationDeviceLinks = normalizeArrayRecordArray(
+      data.documentationDeviceLinks ?? [],
+      "data.documentationDeviceLinks",
+    );
     const deviceImages = normalizeArrayRecordArray(
       data.deviceImages ?? [],
       "data.deviceImages",
@@ -367,6 +376,7 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM auditLog;
     DELETE FROM referenceImages;
     DELETE FROM deviceImages;
+    DELETE FROM documentationDeviceLinks;
     DELETE FROM documentationPages;
     DELETE FROM ipAssignments;
     DELETE FROM discoveredDevices;
@@ -447,6 +457,10 @@ const restoreBackupSnapshot = db.transaction(
     const insertDocumentationPage = db.prepare(`
     INSERT INTO documentationPages (id, labId, title, content, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, ?)
+  `);
+    const insertDocumentationDeviceLink = db.prepare(`
+    INSERT INTO documentationDeviceLinks (id, documentationPageId, deviceId, createdAt)
+    VALUES (?, ?, ?, ?)
   `);
     const insertDeviceImage = db.prepare(`
     INSERT INTO deviceImages (id, deviceId, label, fileName, mimeType, dataUrl, notes, createdAt, updatedAt)
@@ -840,6 +854,15 @@ const restoreBackupSnapshot = db.transaction(
         row.updatedAt ?? row.createdAt ?? now,
       );
     }
+    for (const row of documentationDeviceLinks) {
+      const now = new Date().toISOString();
+      insertDocumentationDeviceLink.run(
+        row.id,
+        row.documentationPageId,
+        row.deviceId,
+        row.createdAt ?? now,
+      );
+    }
     for (const row of referenceImages) {
       const now = new Date().toISOString();
       insertReferenceImage.run(
@@ -1020,6 +1043,7 @@ const restoreBackupSnapshot = db.transaction(
         virtualSwitches: virtualSwitches.length,
         discoveredDevices: discoveredDevices.length,
         documentationPages: documentationPages.length,
+        documentationDeviceLinks: documentationDeviceLinks.length,
         deviceImages: deviceImages.length,
         referenceImages: referenceImages.length,
         deviceServices: deviceServices.length,

@@ -8,6 +8,33 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.1-beta.0] - 2026-06-09
+
+### Added
+
+- NetBox device-type import can now create a full device (manufacturer, U-height,
+  interfaces) in one transaction, not just a port template (#53).
+- Link documentation pages to specific devices, with a "Linked documentation" section
+  on the device page (#58).
+- Read-only Docker/Portainer container import (preview + import as `container` devices);
+  no credentials are persisted (Phase 1 foundation, #54).
+
+### Changed
+
+- Device network/IP assignments can now be edited in place instead of deleting and
+  recreating them (#55).
+- Dashboard no longer double-counts an offline device's failing monitor as a separate
+  warning — one offline device shows as a single "device offline — monitoring failing"
+  entry (#57).
+
+### Fixed
+
+- Visualizer cable lines no longer render as fat, broken dashes in Firefox: dashed
+  strokes use `butt` line-caps (round caps + dashes rendered incorrectly in Gecko);
+  solid cables are unchanged (#51).
+- Backup/restore now includes the documentation-to-device links table, so links survive
+  a restore.
+
 ## [1.6.0] - 2026-06-09
 
 ### Added

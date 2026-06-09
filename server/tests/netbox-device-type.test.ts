@@ -102,4 +102,7 @@ test("previewNetboxDeviceTypeImport dedupes by manufacturer and model", () => {
     findExistingNetboxTemplate("Cisco", "Catalyst 9300-24T", templates)?.id,
     "existing-template",
   );
+  assert.equal(preview.existingDevice, null);
+  assert.equal(preview.deviceDraft.heightU, 1);
+  assert.equal(preview.deviceDraft.portCount, 5);
 });

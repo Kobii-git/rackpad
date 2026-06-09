@@ -32,6 +32,79 @@ export const documentationRoutes: FastifyPluginAsync = async (app) => {
     return db.prepare(`${sql} ORDER BY updatedAt DESC, title, id`).all(...params);
   });
 
+  app.get<{ Querystring: { deviceId?: string; pageId?: string } }>(
+    "/links",
+    async (req, reply) => {
+      if (!req.authUser) {
+        return reply.status(401).send({ error: "Authentication required." });
+      }
+
+      const filter = resolveLabIdsForList(
+        req.authUser,
+        req.labAccess ?? [],
+        undefined,
+      );
+      if (!filter.ok) {
+        return reply.status(filter.status).send({ error: filter.error });
+      }
+
+      if (req.query.deviceId) {
+        if (filter.labIds === null) {
+          return db
+            .prepare(
+              `
+              SELECT documentationDeviceLinks.*
+              FROM documentationDeviceLinks
+              JOIN documentationPages ON documentationPages.id = documentationDeviceLinks.documentationPageId
+              WHERE documentationDeviceLinks.deviceId = ?
+              ORDER BY documentationDeviceLinks.createdAt DESC
+            `,
+            )
+            .all(req.query.deviceId);
+        }
+
+        const labPlaceholders = filter.labIds.map(() => "?").join(", ");
+        return db
+          .prepare(
+            `
+            SELECT documentationDeviceLinks.*
+            FROM documentationDeviceLinks
+            JOIN documentationPages ON documentationPages.id = documentationDeviceLinks.documentationPageId
+            JOIN devices ON devices.id = documentationDeviceLinks.deviceId
+            WHERE documentationDeviceLinks.deviceId = ?
+              AND documentationPages.labId IN (${labPlaceholders})
+              AND devices.labId IN (${labPlaceholders})
+            ORDER BY documentationDeviceLinks.createdAt DESC
+          `,
+          )
+          .all(req.query.deviceId, ...filter.labIds, ...filter.labIds);
+      }
+
+      if (req.query.pageId) {
+        const page = db
+          .prepare("SELECT labId FROM documentationPages WHERE id = ?")
+          .get(req.query.pageId) as { labId: string } | undefined;
+        if (!page) {
+          return reply.status(404).send({ error: "Documentation page not found." });
+        }
+        if (filter.labIds !== null && !filter.labIds.includes(page.labId)) {
+          return reply.status(404).send({ error: "Documentation page not found." });
+        }
+        return db
+          .prepare(
+            `
+            SELECT * FROM documentationDeviceLinks
+            WHERE documentationPageId = ?
+            ORDER BY createdAt DESC
+          `,
+          )
+          .all(req.query.pageId);
+      }
+
+      return reply.status(400).send({ error: "deviceId or pageId is required." });
+    },
+  );
+
   app.get<{ Params: { id: string } }>("/:id", async (req, reply) => {
     const row = db
       .prepare("SELECT * FROM documentationPages WHERE id = ?")
@@ -121,4 +194,65 @@ export const documentationRoutes: FastifyPluginAsync = async (app) => {
     );
     return reply.status(204).send();
   });
+
+  app.post<{ Params: { pageId: string } }>(
+    "/:pageId/device-links",
+    async (req, reply) => {
+      const page = db
+        .prepare("SELECT * FROM documentationPages WHERE id = ?")
+        .get(req.params.pageId) as Record<string, unknown> | undefined;
+      if (!assertLabWriteFromRow(req, reply, page)) return;
+
+      const body = asObject(req.body);
+      const deviceId = requiredString(body, "deviceId", { maxLength: 80 });
+      const device = db
+        .prepare("SELECT id, labId FROM devices WHERE id = ?")
+        .get(deviceId) as { id: string; labId: string } | undefined;
+      if (!device || String(page!.labId) !== device.labId) {
+        return reply.status(404).send({ error: "Device not found in this lab." });
+      }
+
+      const existing = db
+        .prepare(
+          "SELECT id FROM documentationDeviceLinks WHERE documentationPageId = ? AND deviceId = ?",
+        )
+        .get(req.params.pageId, deviceId) as { id: string } | undefined;
+      if (existing) {
+        return reply.status(409).send({ error: "Documentation is already linked to this device." });
+      }
+
+      const id = createId("doclink");
+      const now = new Date().toISOString();
+      db.prepare(
+        `
+        INSERT INTO documentationDeviceLinks (id, documentationPageId, deviceId, createdAt)
+        VALUES (?, ?, ?, ?)
+      `,
+      ).run(id, req.params.pageId, deviceId, now);
+
+      return reply.status(201).send(
+        db.prepare("SELECT * FROM documentationDeviceLinks WHERE id = ?").get(id),
+      );
+    },
+  );
+
+  app.delete<{ Params: { pageId: string; deviceId: string } }>(
+    "/:pageId/device-links/:deviceId",
+    async (req, reply) => {
+      const page = db
+        .prepare("SELECT * FROM documentationPages WHERE id = ?")
+        .get(req.params.pageId) as Record<string, unknown> | undefined;
+      if (!assertLabWriteFromRow(req, reply, page)) return;
+
+      const result = db
+        .prepare(
+          "DELETE FROM documentationDeviceLinks WHERE documentationPageId = ? AND deviceId = ?",
+        )
+        .run(req.params.pageId, req.params.deviceId);
+      if (result.changes === 0) {
+        return reply.status(404).send({ error: "Documentation link not found." });
+      }
+      return reply.status(204).send();
+    },
+  );
 };

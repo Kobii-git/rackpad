@@ -17,6 +17,7 @@ Open Rackpad → **Imports** → **NetBox device types**.
 3. The preview maps NetBox interface types to Rackpad port kinds (for example `1000base-t` → RJ45 1G, `10gbase-x-sfpp` → SFP+ 10G).
 4. Before any write, Rackpad checks for an existing template with the same **manufacturer + model** (via a `netbox:` description tag or matching template name).
 5. **Import port template** creates a new custom template through the existing `POST /api/ports/templates` storage path. Built-in templates and unrelated custom templates are never modified.
+6. **Import device** creates a loose device with manufacturer, model, U-height, notes tag, and all parsed interfaces as ports. Dedupe prevents importing the same manufacturer+model twice.
 
 ## Safety Guarantees
 
@@ -28,8 +29,8 @@ Open Rackpad → **Imports** → **NetBox device types**.
 
 The following are intentionally **not** implemented in this foundation pass:
 
-- Creating or updating **device type definitions** with imported U-height and manufacturer metadata.
-- Applying imported templates automatically to devices during import.
+- Creating or updating **device type definitions** with imported U-height and manufacturer metadata beyond the imported device record itself.
+- Applying imported templates automatically to devices during import (device import already creates ports inline).
 - Module bays, inventory items, device bays, and rear/front port pass-through mappings.
 - Bulk directory import from a cloned device-type-library repo.
 - Image/front-panel rendering from NetBox layout data.
@@ -40,7 +41,7 @@ Track follow-up work in issue **#53** before treating NetBox YAML as a full hard
 ## API Endpoints
 
 - `POST /api/imports/netbox-device-type/preview` — parse YAML and return preview + dedupe status.
-- `POST /api/imports/netbox-device-type/import` — create a port template when no duplicate exists.
+- `POST /api/imports/netbox-device-type/import` — create a port template (`mode: "template"`) or device with ports (`mode: "device"`, requires `labId` + `hostname`).
 
 ## Parser Tests
 
