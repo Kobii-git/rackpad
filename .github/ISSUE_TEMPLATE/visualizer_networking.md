@@ -1,0 +1,65 @@
+---
+name: Visualizer & networking
+description: Topology layout, cable tracing, VLAN/IPAM links, or WiFi placement in the visualizer
+title: "[Visualizer]: "
+labels: ["visualizer", "networking"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues with the network visualizer, cable/port linking, or how inventory data appears on the canvas.
+
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      options:
+        - Device / rack layout on canvas
+        - Port links and cable tracing
+        - VLAN or IPAM overlay
+        - WiFi AP / SSID placement
+        - Import / export of topology
+        - Performance (large labs)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What you see vs. what you expect.
+      placeholder: Cables between switch-A port 24 and server-B eth0 show as unlinked in the visualizer even though Ports view shows them connected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: data
+    attributes:
+      label: Relevant inventory context
+      description: Device types, port names, VLAN IDs, or lab size — no need for full exports unless helpful.
+      placeholder: ~25 devices, 2 racks, UniFi controller + 6 APs…
+
+  - type: input
+    id: version
+    attributes:
+      label: Rackpad version
+      placeholder: e.g. 1.6.0-beta.4
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Visualizer canvas, Ports tab, or browser console errors help a lot.
+
+  - type: checkboxes
+    id: repro
+    attributes:
+      label: Reproducibility
+      options:
+        - label: Happens consistently with the same devices/ports
+          required: false
+        - label: I can share a sanitized export or minimal repro steps
+          required: false

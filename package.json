@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.6.0-beta.4",
+  "version": "1.6.0-beta.5",
   "private": true,
   "type": "module",
   "engines": {
@@ -17,6 +17,7 @@
     "start": "node dist-server/index.js",
     "test:server": "node --import tsx --test --test-force-exit server/tests/**/*.test.ts",
     "lint": "eslint .",
+    "check:i18n": "node scripts/check-i18n-values.mjs",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
   },
@@ -46,7 +47,8 @@
     "react-router-dom": "^7.1.1",
     "recharts": "^2.15.0",
     "tailwind-merge": "^2.6.0",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

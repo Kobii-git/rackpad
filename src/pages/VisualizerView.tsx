@@ -247,83 +247,6 @@ export default function VisualizerView() {
               <option value="pyramid">Pyramid</option>
               <option value="diagram">Diagram</option>
             </select>
-            {layoutMode === "grouped" && (
-              <>
-                <select
-                  value={rackFaceMode}
-                  onChange={(event) => {
-                    const next = event.target.value as VisualizerRackFaceMode;
-                    setRackFaceMode(next);
-                    writeString(RACK_FACE_MODE_STORAGE_KEY, next);
-                  }}
-                  className="rk-control h-8 w-28 px-2 text-xs text-[var(--text-primary)]"
-                  aria-label="Rack face"
-                >
-                  <option value="front">Front</option>
-                  <option value="rear">Rear</option>
-                  <option value="both">Both</option>
-                </select>
-                <select
-                  value={rackScale}
-                  onChange={(event) => {
-                    const next = event.target.value as VisualizerRackScale;
-                    setRackScale(next);
-                    writeString(RACK_SCALE_STORAGE_KEY, next);
-                  }}
-                  className="rk-control h-8 w-32 px-2 text-xs text-[var(--text-primary)]"
-                  aria-label="Rack visual width"
-                >
-                  <option value="compact">Compact rack</option>
-                  <option value="normal">Normal rack</option>
-                  <option value="wide">Wide rack</option>
-                  <option value="xwide">Extra wide</option>
-                </select>
-                <select
-                  value={shelfLayout}
-                  onChange={(event) => {
-                    const next = event.target.value as VisualizerShelfLayout;
-                    setShelfLayout(next);
-                    writeString(SHELF_LAYOUT_STORAGE_KEY, next);
-                  }}
-                  className="rk-control h-8 w-32 px-2 text-xs text-[var(--text-primary)]"
-                  aria-label="Shelf device layout"
-                >
-                  <option value="auto">Auto shelf</option>
-                  <option value="stacked">Stacked shelf</option>
-                  <option value="expanded">Expanded shelf</option>
-                </select>
-                <VisualizerToggle
-                  checked={looseDevicePlacement === "below-racks"}
-                  label="Loose below"
-                  ariaLabel="Place loose devices below racks"
-                  onChange={toggleLooseDevicePlacement}
-                />
-                <VisualizerToggle
-                  checked={includeRoomOnlySections}
-                  label="No rack required"
-                  ariaLabel="Place rooms without racks in rack zone"
-                  onChange={toggleRoomOnlySections}
-                />
-              </>
-            )}
-            {layoutMode === "pyramid" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={resetCustomNodePositions}
-                disabled={Object.keys(customNodePositions).length === 0}
-              >
-                Reset nodes
-              </Button>
-            )}
-            {layoutMode !== "diagram" && (
-              <VisualizerToggle
-                checked={readableLabels}
-                label="Readable labels"
-                ariaLabel="Use wider visualizer cards with larger labels"
-                onChange={toggleReadableLabels}
-              />
-            )}
             <select
               value={cableType}
               onChange={(event) => setCableType(event.target.value)}
@@ -337,23 +260,6 @@ export default function VisualizerView() {
                 </option>
               ))}
             </select>
-            {layoutMode !== "diagram" && (
-              <select
-                value={cableLayout}
-                onChange={(event) => {
-                  const next = event.target.value as VisualizerCableLayout;
-                  setCableLayout(next);
-                  writeString(CABLE_LAYOUT_STORAGE_KEY, next);
-                }}
-                className="rk-control h-8 w-32 px-2 text-xs text-[var(--text-primary)]"
-                aria-label="Cable route layout"
-              >
-                <option value="auto">Auto cables</option>
-                <option value="concave">Concave</option>
-                <option value="convex">Convex</option>
-                <option value="straight">Straight</option>
-              </select>
-            )}
             <Button
               variant={healthOverlay ? "secondary" : "outline"}
               size="sm"
@@ -410,6 +316,33 @@ export default function VisualizerView() {
           setTraceMode={setTraceMode}
           cableType={cableType}
           cableLayout={cableLayout}
+          onCableLayoutChange={(next) => {
+            setCableLayout(next);
+            writeString(CABLE_LAYOUT_STORAGE_KEY, next);
+          }}
+          rackFaceMode={rackFaceMode}
+          onRackFaceModeChange={(next) => {
+            setRackFaceMode(next);
+            writeString(RACK_FACE_MODE_STORAGE_KEY, next);
+          }}
+          rackScale={rackScale}
+          onRackScaleChange={(next) => {
+            setRackScale(next);
+            writeString(RACK_SCALE_STORAGE_KEY, next);
+          }}
+          shelfLayout={shelfLayout}
+          onShelfLayoutChange={(next) => {
+            setShelfLayout(next);
+            writeString(SHELF_LAYOUT_STORAGE_KEY, next);
+          }}
+          looseDevicePlacement={looseDevicePlacement}
+          onToggleLooseDevicePlacement={toggleLooseDevicePlacement}
+          includeRoomOnlySections={includeRoomOnlySections}
+          onToggleRoomOnlySections={toggleRoomOnlySections}
+          readableLabels={readableLabels}
+          onToggleReadableLabels={toggleReadableLabels}
+          onResetCustomNodePositions={resetCustomNodePositions}
+          hasCustomNodePositions={Object.keys(customNodePositions).length > 0}
           noCableBannerDismissed={noCableBannerDismissed}
           onDismissNoCableBanner={() => {
             setNoCableBannerDismissed(true);
@@ -417,42 +350,10 @@ export default function VisualizerView() {
           }}
           onToggleRackRun={toggleRackRun}
           onToggleGroup={toggleGroup}
-          readableLabels={readableLabels}
           onNodePositionChange={updateCustomNodePosition}
         />
       )}
     </>
-  );
-}
-
-function VisualizerToggle({
-  checked,
-  label,
-  ariaLabel,
-  onChange,
-}: {
-  checked: boolean;
-  label: string;
-  ariaLabel: string;
-  onChange: () => void;
-}) {
-  return (
-    <label
-      className={`inline-flex h-8 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border px-2.5 text-xs font-medium transition-colors ${
-        checked
-          ? "border-[var(--border-strong)] bg-[var(--surface-3)] text-[var(--text-primary)]"
-          : "border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_32%,transparent)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
-      }`}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={() => onChange()}
-        className="size-3 accent-[var(--accent-primary)]"
-        aria-label={ariaLabel}
-      />
-      <span className="whitespace-nowrap">{label}</span>
-    </label>
   );
 }
 

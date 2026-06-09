@@ -2580,6 +2580,90 @@ test("snmp inventory sync preview and merge apply require feature flag and admin
   assert.ok(vlans.some((entry) => entry.vlanId === 44 && entry.name === "Sync VLAN"));
 });
 
+test("ports can be updated and deleted with a custom MAC address", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "port-mac-test",
+      deviceType: "switch",
+      status: "online",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const createRes = await app.inject({
+    method: "POST",
+    url: "/api/ports",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: device.id,
+      name: "Gi0/1",
+      kind: "rj45",
+      linkState: "down",
+      mode: "access",
+      macAddress: "aa:bb:cc:dd:ee:01",
+    },
+  });
+  assert.equal(createRes.statusCode, 201);
+  const created = readJson(createRes) as { id: string; macAddress?: string | null };
+  assert.equal(created.macAddress, "aa:bb:cc:dd:ee:01");
+
+  const patchRes = await app.inject({
+    method: "PATCH",
+    url: `/api/ports/${created.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      name: "Gi0/1-updated",
+      macAddress: "aabbccddeeff",
+      linkState: "up",
+      speed: "1G",
+    },
+  });
+  assert.equal(patchRes.statusCode, 200);
+  const updated = readJson(patchRes) as {
+    name: string;
+    macAddress?: string | null;
+    linkState: string;
+    speed?: string | null;
+  };
+  assert.equal(updated.name, "Gi0/1-updated");
+  assert.equal(updated.macAddress, "aa:bb:cc:dd:ee:ff");
+  assert.equal(updated.linkState, "up");
+  assert.equal(updated.speed, "1G");
+
+  const deleteRes = await app.inject({
+    method: "DELETE",
+    url: `/api/ports/${created.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(deleteRes.statusCode, 204);
+
+  const listRes = await app.inject({
+    method: "GET",
+    url: `/api/ports?deviceId=${device.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(listRes.statusCode, 200);
+  const ports = readJson(listRes) as Array<{ id: string }>;
+  assert.equal(ports.length, 0);
+});
+
 test("wifi ports and device services can be managed", async () => {
   const adminToken = await bootstrapAdmin();
 

@@ -3,6 +3,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
+  type ReactNode,
   type SetStateAction,
   type WheelEvent,
   useEffect,
@@ -67,11 +68,15 @@ import type {
   TraceResult,
   VisualizerCableLayout,
   VisualizerCable,
+  VisualizerLooseDevicePlacement,
   VisualizerModel,
   VisualizerNode,
   VisualizerPoint,
   VisualizerPort,
+  VisualizerRackFaceMode,
+  VisualizerRackScale,
   VisualizerSelection,
+  VisualizerShelfLayout,
 } from "./types";
 
 interface VisualizerCanvasProps {
@@ -83,6 +88,20 @@ interface VisualizerCanvasProps {
   setTraceMode: Dispatch<SetStateAction<TraceModeState>>;
   cableType: string;
   cableLayout: VisualizerCableLayout;
+  onCableLayoutChange: (layout: VisualizerCableLayout) => void;
+  rackFaceMode: VisualizerRackFaceMode;
+  onRackFaceModeChange: (mode: VisualizerRackFaceMode) => void;
+  rackScale: VisualizerRackScale;
+  onRackScaleChange: (scale: VisualizerRackScale) => void;
+  shelfLayout: VisualizerShelfLayout;
+  onShelfLayoutChange: (layout: VisualizerShelfLayout) => void;
+  looseDevicePlacement: VisualizerLooseDevicePlacement;
+  onToggleLooseDevicePlacement: () => void;
+  includeRoomOnlySections: boolean;
+  onToggleRoomOnlySections: () => void;
+  onToggleReadableLabels: () => void;
+  onResetCustomNodePositions: () => void;
+  hasCustomNodePositions: boolean;
   noCableBannerDismissed: boolean;
   onDismissNoCableBanner: () => void;
   onToggleRackRun: (key: string) => void;
@@ -106,6 +125,20 @@ export function VisualizerCanvas({
   setTraceMode,
   cableType,
   cableLayout,
+  onCableLayoutChange,
+  rackFaceMode,
+  onRackFaceModeChange,
+  rackScale,
+  onRackScaleChange,
+  shelfLayout,
+  onShelfLayoutChange,
+  looseDevicePlacement,
+  onToggleLooseDevicePlacement,
+  includeRoomOnlySections,
+  onToggleRoomOnlySections,
+  onToggleReadableLabels,
+  onResetCustomNodePositions,
+  hasCustomNodePositions,
   noCableBannerDismissed,
   onDismissNoCableBanner,
   onToggleRackRun,
@@ -650,47 +683,27 @@ export function VisualizerCanvas({
                   }}
                 >
                   <svg
-                    className="pointer-events-none absolute inset-0 z-30"
+                    className="absolute inset-0 z-30"
                     width={model.width}
                     height={model.height}
                     role="img"
                     aria-label="Cable links between Rackpad devices"
                   >
-                    <defs>
-                      <filter
-                        id="visualizer-cable-glow"
-                        x="-20%"
-                        y="-20%"
-                        width="140%"
-                        height="140%"
-                      >
-                        <feGaussianBlur stdDeviation="2.2" result="blur" />
-                        <feMerge>
-                          <feMergeNode in="blur" />
-                          <feMergeNode in="SourceGraphic" />
-                        </feMerge>
-                      </filter>
-                    </defs>
-                    {visibleCableEntries.map(({ cable, path }) => (
-                      <CableSvg
-                        key={cable.link.id}
-                        cable={cable}
-                        path={path}
-                        active={isCableActive(cable)}
-                        dimmed={isCableDimmed(cable)}
-                        traceActive={Boolean(
-                          traceMode.result?.cableIds.has(cable.link.id),
-                        )}
-                        healthOverlay={healthOverlay}
-                      />
-                    ))}
-                  </svg>
-                  <svg
-                    className="absolute inset-0 z-40"
-                    width={model.width}
-                    height={model.height}
-                    aria-hidden
-                  >
+                    <g pointerEvents="none">
+                      {visibleCableEntries.map(({ cable, path }) => (
+                        <CableSvg
+                          key={cable.link.id}
+                          cable={cable}
+                          path={path}
+                          active={isCableActive(cable)}
+                          dimmed={isCableDimmed(cable)}
+                          traceActive={Boolean(
+                            traceMode.result?.cableIds.has(cable.link.id),
+                          )}
+                          healthOverlay={healthOverlay}
+                        />
+                      ))}
+                    </g>
                     {visibleCableEntries.map(({ cable, path }) => (
                       <path
                         key={`${cable.link.id}-hit`}
@@ -699,6 +712,7 @@ export function VisualizerCanvas({
                         fill="none"
                         stroke="transparent"
                         strokeWidth={20}
+                        pointerEvents="stroke"
                         className="cursor-pointer"
                         onMouseEnter={() => setHoveredCableId(cable.link.id)}
                         onMouseLeave={() => setHoveredCableId(null)}
@@ -793,6 +807,22 @@ export function VisualizerCanvas({
               <VisualizerSidePanel
                 model={model}
                 visibleCables={visibleCables}
+                cableLayout={cableLayout}
+                onCableLayoutChange={onCableLayoutChange}
+                rackFaceMode={rackFaceMode}
+                onRackFaceModeChange={onRackFaceModeChange}
+                rackScale={rackScale}
+                onRackScaleChange={onRackScaleChange}
+                shelfLayout={shelfLayout}
+                onShelfLayoutChange={onShelfLayoutChange}
+                looseDevicePlacement={looseDevicePlacement}
+                onToggleLooseDevicePlacement={onToggleLooseDevicePlacement}
+                includeRoomOnlySections={includeRoomOnlySections}
+                onToggleRoomOnlySections={onToggleRoomOnlySections}
+                readableLabels={readableLabels}
+                onToggleReadableLabels={onToggleReadableLabels}
+                onResetCustomNodePositions={onResetCustomNodePositions}
+                hasCustomNodePositions={hasCustomNodePositions}
                 typeFilters={typeFilters}
                 setTypeFilters={setTypeFilters}
                 toggleTypeFilter={toggleTypeFilter}
@@ -1442,10 +1472,9 @@ function CableSvg({
         className={
           cable.bothOnline && !cable.unknown
             ? "visualizer-cable-online"
-            : undefined
-        }
-        filter={
-          active || traceActive ? "url(#visualizer-cable-glow)" : undefined
+            : active || traceActive
+              ? "visualizer-cable-active"
+              : undefined
         }
         style={{ transition: "opacity 150ms ease, stroke-width 150ms ease" }}
       />
@@ -1465,9 +1494,229 @@ function CableSvg({
   );
 }
 
+function VisualizerLayoutPanel({
+  model,
+  cableLayout,
+  onCableLayoutChange,
+  rackFaceMode,
+  onRackFaceModeChange,
+  rackScale,
+  onRackScaleChange,
+  shelfLayout,
+  onShelfLayoutChange,
+  looseDevicePlacement,
+  onToggleLooseDevicePlacement,
+  includeRoomOnlySections,
+  onToggleRoomOnlySections,
+  readableLabels,
+  onToggleReadableLabels,
+  onResetCustomNodePositions,
+  hasCustomNodePositions,
+}: {
+  model: VisualizerModel;
+  cableLayout: VisualizerCableLayout;
+  onCableLayoutChange: (layout: VisualizerCableLayout) => void;
+  rackFaceMode: VisualizerRackFaceMode;
+  onRackFaceModeChange: (mode: VisualizerRackFaceMode) => void;
+  rackScale: VisualizerRackScale;
+  onRackScaleChange: (scale: VisualizerRackScale) => void;
+  shelfLayout: VisualizerShelfLayout;
+  onShelfLayoutChange: (layout: VisualizerShelfLayout) => void;
+  looseDevicePlacement: VisualizerLooseDevicePlacement;
+  onToggleLooseDevicePlacement: () => void;
+  includeRoomOnlySections: boolean;
+  onToggleRoomOnlySections: () => void;
+  readableLabels: boolean;
+  onToggleReadableLabels: () => void;
+  onResetCustomNodePositions: () => void;
+  hasCustomNodePositions: boolean;
+}) {
+  return (
+    <Card className="shrink-0">
+      <CardHeader>
+        <CardTitle>
+          <CardLabel>Layout</CardLabel>
+          <CardHeading>View and routing</CardHeading>
+        </CardTitle>
+      </CardHeader>
+      <CardBody className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <LayoutField label="Cable routing">
+            <select
+              value={cableLayout}
+              onChange={(event) =>
+                onCableLayoutChange(event.target.value as VisualizerCableLayout)
+              }
+              className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
+              aria-label="Cable route layout"
+            >
+              <option value="auto">Auto cables</option>
+              <option value="concave">Concave</option>
+              <option value="convex">Convex</option>
+              <option value="straight">Straight</option>
+            </select>
+          </LayoutField>
+          <LayoutField label="Labels">
+            <SidePanelToggle
+              checked={readableLabels}
+              label="Readable"
+              ariaLabel="Use wider visualizer cards with larger labels"
+              onChange={onToggleReadableLabels}
+            />
+          </LayoutField>
+        </div>
+        {model.layoutMode === "grouped" && (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <LayoutField label="Rack face">
+                <select
+                  value={rackFaceMode}
+                  onChange={(event) =>
+                    onRackFaceModeChange(
+                      event.target.value as VisualizerRackFaceMode,
+                    )
+                  }
+                  className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
+                  aria-label="Rack face"
+                >
+                  <option value="front">Front</option>
+                  <option value="rear">Rear</option>
+                  <option value="both">Both</option>
+                </select>
+              </LayoutField>
+              <LayoutField label="Rack width">
+                <select
+                  value={rackScale}
+                  onChange={(event) =>
+                    onRackScaleChange(
+                      event.target.value as VisualizerRackScale,
+                    )
+                  }
+                  className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
+                  aria-label="Rack visual width"
+                >
+                  <option value="compact">Compact</option>
+                  <option value="normal">Normal</option>
+                  <option value="wide">Wide</option>
+                  <option value="xwide">Extra wide</option>
+                </select>
+              </LayoutField>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <LayoutField label="Shelf layout">
+                <select
+                  value={shelfLayout}
+                  onChange={(event) =>
+                    onShelfLayoutChange(
+                      event.target.value as VisualizerShelfLayout,
+                    )
+                  }
+                  className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
+                  aria-label="Shelf device layout"
+                >
+                  <option value="auto">Auto</option>
+                  <option value="stacked">Stacked</option>
+                  <option value="expanded">Expanded</option>
+                </select>
+              </LayoutField>
+              <LayoutField label="Loose devices">
+                <SidePanelToggle
+                  checked={looseDevicePlacement === "below-racks"}
+                  label="Below racks"
+                  ariaLabel="Place loose devices below racks"
+                  onChange={onToggleLooseDevicePlacement}
+                />
+              </LayoutField>
+            </div>
+            <SidePanelToggle
+              checked={includeRoomOnlySections}
+              label="No rack required"
+              ariaLabel="Place rooms without racks in rack zone"
+              onChange={onToggleRoomOnlySections}
+            />
+          </>
+        )}
+        {model.layoutMode === "pyramid" && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={onResetCustomNodePositions}
+            disabled={!hasCustomNodePositions}
+          >
+            Reset node positions
+          </Button>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function LayoutField({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="block space-y-1.5">
+      <span className="rk-kicker">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function SidePanelToggle({
+  checked,
+  label,
+  ariaLabel,
+  onChange,
+}: {
+  checked: boolean;
+  label: string;
+  ariaLabel: string;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      className={`flex h-8 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border px-2.5 text-xs font-medium transition-colors ${
+        checked
+          ? "border-[var(--border-strong)] bg-[var(--surface-3)] text-[var(--text-primary)]"
+          : "border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_32%,transparent)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onChange()}
+        className="size-3 accent-[var(--accent-primary)]"
+        aria-label={ariaLabel}
+      />
+      <span className="truncate">{label}</span>
+    </label>
+  );
+}
+
 function VisualizerSidePanel({
   model,
   visibleCables,
+  cableLayout,
+  onCableLayoutChange,
+  rackFaceMode,
+  onRackFaceModeChange,
+  rackScale,
+  onRackScaleChange,
+  shelfLayout,
+  onShelfLayoutChange,
+  looseDevicePlacement,
+  onToggleLooseDevicePlacement,
+  includeRoomOnlySections,
+  onToggleRoomOnlySections,
+  readableLabels,
+  onToggleReadableLabels,
+  onResetCustomNodePositions,
+  hasCustomNodePositions,
   typeFilters,
   setTypeFilters,
   toggleTypeFilter,
@@ -1480,6 +1729,22 @@ function VisualizerSidePanel({
 }: {
   model: VisualizerModel;
   visibleCables: VisualizerCable[];
+  cableLayout: VisualizerCableLayout;
+  onCableLayoutChange: (layout: VisualizerCableLayout) => void;
+  rackFaceMode: VisualizerRackFaceMode;
+  onRackFaceModeChange: (mode: VisualizerRackFaceMode) => void;
+  rackScale: VisualizerRackScale;
+  onRackScaleChange: (scale: VisualizerRackScale) => void;
+  shelfLayout: VisualizerShelfLayout;
+  onShelfLayoutChange: (layout: VisualizerShelfLayout) => void;
+  looseDevicePlacement: VisualizerLooseDevicePlacement;
+  onToggleLooseDevicePlacement: () => void;
+  includeRoomOnlySections: boolean;
+  onToggleRoomOnlySections: () => void;
+  readableLabels: boolean;
+  onToggleReadableLabels: () => void;
+  onResetCustomNodePositions: () => void;
+  hasCustomNodePositions: boolean;
   typeFilters: Set<string>;
   setTypeFilters: Dispatch<SetStateAction<Set<string>>>;
   toggleTypeFilter: (type: string) => void;
@@ -1492,6 +1757,25 @@ function VisualizerSidePanel({
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+      <VisualizerLayoutPanel
+        model={model}
+        cableLayout={cableLayout}
+        onCableLayoutChange={onCableLayoutChange}
+        rackFaceMode={rackFaceMode}
+        onRackFaceModeChange={onRackFaceModeChange}
+        rackScale={rackScale}
+        onRackScaleChange={onRackScaleChange}
+        shelfLayout={shelfLayout}
+        onShelfLayoutChange={onShelfLayoutChange}
+        looseDevicePlacement={looseDevicePlacement}
+        onToggleLooseDevicePlacement={onToggleLooseDevicePlacement}
+        includeRoomOnlySections={includeRoomOnlySections}
+        onToggleRoomOnlySections={onToggleRoomOnlySections}
+        readableLabels={readableLabels}
+        onToggleReadableLabels={onToggleReadableLabels}
+        onResetCustomNodePositions={onResetCustomNodePositions}
+        hasCustomNodePositions={hasCustomNodePositions}
+      />
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-2">
           <VisualizerRailStat

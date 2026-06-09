@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ImagePlus, FileText, Pencil, Plus, Save, Search, Trash2 } from "lucide-react";
+import {
+  FileText,
+  ImagePlus,
+  Pencil,
+  Plus,
+  Printer,
+  Save,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useI18n } from "@/i18n";
@@ -30,6 +39,11 @@ import {
 } from "@/lib/image-data-url";
 import { relativeTime } from "@/lib/utils";
 
+const DOC_PRINT_DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
 export default function DocumentationView() {
   const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -57,6 +71,7 @@ export default function DocumentationView() {
 
   const selectedPage =
     pages.find((page) => page.id === selectedPageId) ?? pages[0];
+  const printStamp = DOC_PRINT_DATE_FORMAT.format(new Date());
 
   useEffect(() => {
     if (!selectedPage) return;
@@ -167,39 +182,51 @@ export default function DocumentationView() {
           </span>
         }
         actions={
-          canEdit ? (
-            <>
-              {selectedPage && (
+          <>
+            {selectedPage && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => window.print()}
+              >
+                <Printer className="size-3.5" />
+                {t("Print / PDF")}
+              </Button>
+            )}
+            {canEdit ? (
+              <>
+                {selectedPage && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => imageInputRef.current?.click()}
+                  >
+                    <ImagePlus className="size-3.5" />
+                    Insert image
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => imageInputRef.current?.click()}
-                >
-                  <ImagePlus className="size-3.5" />
-                  Insert image
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void handleCreate()}
-                disabled={saving}
-              >
-                <Plus className="size-3.5" />
-                New page
-              </Button>
-              {selectedPage && (
-                <Button
-                  size="sm"
-                  onClick={() => void handleSave()}
+                  onClick={() => void handleCreate()}
                   disabled={saving}
                 >
-                  <Save className="size-3.5" />
-                  {saving ? "Saving..." : "Save"}
+                  <Plus className="size-3.5" />
+                  New page
                 </Button>
-              )}
-            </>
-          ) : undefined
+                {selectedPage && (
+                  <Button
+                    size="sm"
+                    onClick={() => void handleSave()}
+                    disabled={saving}
+                  >
+                    <Save className="size-3.5" />
+                    {saving ? "Saving..." : "Save"}
+                  </Button>
+                )}
+              </>
+            ) : null}
+          </>
         }
       />
 
@@ -211,8 +238,8 @@ export default function DocumentationView() {
         onChange={(event) => void handleImageSelected(event.target.files?.[0])}
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-bg-2)]/40">
+      <div className="docs-page flex flex-1 overflow-hidden">
+        <aside className="screen-only flex w-64 shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-bg-2)]/40">
           <div className="border-b border-[var(--color-line)] p-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
@@ -289,7 +316,7 @@ export default function DocumentationView() {
             </Card>
           ) : (
             <div className="grid h-full min-h-0 grid-cols-12 gap-4">
-              <section className="col-span-12 flex min-h-0 xl:col-span-6">
+              <section className="docs-editor-pane screen-only col-span-12 flex min-h-0 xl:col-span-6">
                 <Card className="flex min-h-0 w-full flex-col">
                   <CardHeader>
                     <CardTitle>
@@ -345,9 +372,9 @@ export default function DocumentationView() {
                 </Card>
               </section>
 
-              <section className="col-span-12 flex min-h-0 xl:col-span-6">
+              <section className="docs-print-preview col-span-12 flex min-h-0 xl:col-span-6">
                 <Card className="flex min-h-0 w-full flex-col">
-                  <CardHeader>
+                  <CardHeader className="screen-only">
                     <CardTitle>
                       <CardLabel>Preview</CardLabel>
                       <CardHeading>
@@ -356,6 +383,15 @@ export default function DocumentationView() {
                     </CardTitle>
                   </CardHeader>
                   <CardBody className="min-h-[640px] flex-1 overflow-y-auto xl:min-h-0">
+                    <div className="docs-print-header print-only">
+                      <h1>{draftTitle || selectedPage.title}</h1>
+                      <p>
+                        {t("{lab} | generated {stamp}", {
+                          lab: lab.name,
+                          stamp: printStamp,
+                        })}
+                      </p>
+                    </div>
                     <MarkdownPreview content={draftContent} />
                   </CardBody>
                 </Card>

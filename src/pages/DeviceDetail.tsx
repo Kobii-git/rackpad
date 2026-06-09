@@ -21,6 +21,7 @@ import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { Mono } from "@/components/shared/Mono";
 import { PortGrid } from "@/components/ports/PortGrid";
 import { PortList } from "@/components/ports/PortList";
+import { DevicePortEditor } from "@/components/ports/DevicePortEditor";
 import {
   SnmpCredentialsPanel,
 } from "@/components/shared/SnmpCredentialsPanel";
@@ -33,6 +34,7 @@ import {
   createDeviceImageRecord,
   createDeviceMonitorConfig,
   createDeviceServiceRecord,
+  createPortTemplateRecord,
   deleteDevice,
   deleteDeviceImageRecord,
   deleteDeviceMonitorConfig,
@@ -41,6 +43,7 @@ import {
   runDeviceMonitorCheck,
   runDeviceMonitorChecksForDevice,
   unassignIp,
+  updateDevice,
   updateDeviceMonitorConfig,
   updateDeviceServiceRecord,
   useStore,
@@ -229,6 +232,7 @@ export default function DeviceDetail() {
   const deviceMonitors = useStore((s) => s.deviceMonitors);
   const deviceImages = useStore((s) => s.deviceImages);
   const deviceServices = useStore((s) => s.deviceServices);
+  const portTemplates = useStore((s) => s.portTemplates);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -240,6 +244,11 @@ export default function DeviceDetail() {
   const [networkSaving, setNetworkSaving] = useState(false);
   const [networkError, setNetworkError] = useState("");
   const [selectedPortId, setSelectedPortId] = useState<string | undefined>();
+  const [creatingPort, setCreatingPort] = useState(false);
+  const [selectedPortTemplateId, setSelectedPortTemplateId] = useState("");
+  const [portTemplateApplying, setPortTemplateApplying] = useState(false);
+  const [portTemplateSaving, setPortTemplateSaving] = useState(false);
+  const [portToolbarError, setPortToolbarError] = useState("");
   const [selectedMonitorId, setSelectedMonitorId] = useState<string | null>(
     null,
   );
@@ -536,22 +545,105 @@ export default function DeviceDetail() {
   ).length;
   const isVisualGrid =
     device?.deviceType === "switch" || device?.deviceType === "router";
+  const compatiblePortTemplates = useMemo(
+    () =>
+      device
+        ? portTemplates.filter((template) =>
+            template.deviceTypes.includes(device.deviceType),
+          )
+        : [],
+    [device, portTemplates],
+  );
   const hardwareMeta = [device?.manufacturer, device?.model]
     .filter(Boolean)
     .join(" ");
 
   useEffect(() => {
     if (!devicePorts.length) {
-      setSelectedPortId(undefined);
+      if (!creatingPort) setSelectedPortId(undefined);
       return;
     }
     if (
-      !selectedPortId ||
-      !devicePorts.some((port) => port.id === selectedPortId)
+      !creatingPort &&
+      (!selectedPortId ||
+        !devicePorts.some((port) => port.id === selectedPortId))
     ) {
       setSelectedPortId(devicePorts[0].id);
     }
-  }, [devicePorts, selectedPortId]);
+  }, [creatingPort, devicePorts, selectedPortId]);
+
+  useEffect(() => {
+    if (!device || compatiblePortTemplates.length === 0) {
+      setSelectedPortTemplateId("");
+      return;
+    }
+    if (
+      !selectedPortTemplateId ||
+      !compatiblePortTemplates.some(
+        (template) => template.id === selectedPortTemplateId,
+      )
+    ) {
+      setSelectedPortTemplateId(compatiblePortTemplates[0]?.id ?? "");
+    }
+  }, [compatiblePortTemplates, device, selectedPortTemplateId]);
+
+  async function applyPortTemplate() {
+    if (!device || !selectedPortTemplateId || devicePorts.length > 0) return;
+    setPortTemplateApplying(true);
+    setPortToolbarError("");
+    try {
+      await updateDevice(device.id, { portTemplateId: selectedPortTemplateId });
+      setCreatingPort(false);
+    } catch (err) {
+      setPortToolbarError(
+        err instanceof Error ? err.message : "Failed to apply port template.",
+      );
+    } finally {
+      setPortTemplateApplying(false);
+    }
+  }
+
+  async function savePortsAsTemplate() {
+    if (!device || devicePorts.length === 0) return;
+    const name = window.prompt(
+      t("Template name"),
+      `${device.hostname} template`,
+    );
+    if (!name?.trim()) return;
+    const description =
+      window.prompt("Template description", `${device.hostname} port layout`) ??
+      "";
+    if (!description.trim()) {
+      setPortToolbarError(t("Template description is required."));
+      return;
+    }
+
+    setPortTemplateSaving(true);
+    setPortToolbarError("");
+    try {
+      await createPortTemplateRecord({
+        name: name.trim(),
+        description: description.trim(),
+        deviceTypes: [device.deviceType],
+        ports: devicePorts.map((port, index) => ({
+          name: port.name,
+          position: port.position ?? index + 1,
+          kind: port.kind,
+          speed: port.speed,
+          mode: port.mode ?? "access",
+          allowedVlanIds:
+            port.mode === "trunk" ? port.allowedVlanIds : undefined,
+          face: port.face ?? "front",
+        })),
+      });
+    } catch (err) {
+      setPortToolbarError(
+        err instanceof Error ? err.message : t("Failed to save port template."),
+      );
+    } finally {
+      setPortTemplateSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (!device) {
@@ -1376,7 +1468,73 @@ export default function DeviceDetail() {
 
           <TabsContent value="ports" className="pt-4">
             <div className="grid grid-cols-12 gap-4">
-              <div className="col-span-12 xl:col-span-8">
+              <div className="col-span-12 xl:col-span-8 space-y-4">
+                {canEdit ? (
+                  <Card>
+                    <CardBody className="space-y-3">
+                      <div className="flex flex-wrap items-end gap-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setCreatingPort(true);
+                            setSelectedPortId(undefined);
+                            setPortToolbarError("");
+                          }}
+                        >
+                          <Plus className="size-3.5" />
+                          {t("Add port")}
+                        </Button>
+                        {devicePorts.length === 0 &&
+                        compatiblePortTemplates.length > 0 ? (
+                          <>
+                            <Field label={t("Port templates")}>
+                              <Select
+                                value={selectedPortTemplateId}
+                                onChange={setSelectedPortTemplateId}
+                              >
+                                {compatiblePortTemplates.map((template) => (
+                                  <option key={template.id} value={template.id}>
+                                    {template.name}
+                                  </option>
+                                ))}
+                              </Select>
+                            </Field>
+                            <Button
+                              size="sm"
+                              onClick={() => void applyPortTemplate()}
+                              disabled={
+                                portTemplateApplying || !selectedPortTemplateId
+                              }
+                            >
+                              {portTemplateApplying
+                                ? t("Saving...")
+                                : "Apply template"}
+                            </Button>
+                          </>
+                        ) : null}
+                        {devicePorts.length > 0 ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void savePortsAsTemplate()}
+                            disabled={portTemplateSaving}
+                          >
+                            {portTemplateSaving
+                              ? t("Saving...")
+                              : t("From device")}
+                          </Button>
+                        ) : null}
+                      </div>
+                      {portToolbarError ? (
+                        <div className="text-xs text-[var(--color-err)]">
+                          {portToolbarError}
+                        </div>
+                      ) : null}
+                    </CardBody>
+                  </Card>
+                ) : null}
+
                 {devicePorts.length === 0 ? (
                   <Card>
                     <CardHeader>
@@ -1386,10 +1544,10 @@ export default function DeviceDetail() {
                       </CardTitle>
                     </CardHeader>
                     <CardBody>
-                      <div className="text-sm text-[var(--color-fg-subtle)]">
-                        Add or template ports for this device to inspect
-                        cabling, VLANs, and interface notes here.
-                      </div>
+                      <EmptyState
+                        title={t("No ports documented")}
+                        description="Add or template ports for this device to inspect cabling, VLANs, and interface notes here."
+                      />
                     </CardBody>
                   </Card>
                 ) : isVisualGrid ? (
@@ -1403,8 +1561,11 @@ export default function DeviceDetail() {
                       vlansById={vlanById}
                       virtualSwitchesById={virtualSwitchById}
                       snmpVerifiedPortIds={snmpVerifiedPortIds}
-                      onSelectPort={setSelectedPortId}
-                      selectedPortId={selectedPortId}
+                      onSelectPort={(portId) => {
+                        setCreatingPort(false);
+                        setSelectedPortId(portId);
+                      }}
+                      selectedPortId={creatingPort ? undefined : selectedPortId}
                     />
                     <Card>
                       <CardHeader>
@@ -1422,8 +1583,11 @@ export default function DeviceDetail() {
                           vlansById={vlanById}
                           virtualSwitchesById={virtualSwitchById}
                           snmpVerifiedPortIds={snmpVerifiedPortIds}
-                          onSelectPort={setSelectedPortId}
-                          selectedPortId={selectedPortId}
+                          onSelectPort={(portId) => {
+                            setCreatingPort(false);
+                            setSelectedPortId(portId);
+                          }}
+                          selectedPortId={creatingPort ? undefined : selectedPortId}
                         />
                       </CardBody>
                     </Card>
@@ -1444,8 +1608,11 @@ export default function DeviceDetail() {
                         devicesById={deviceById}
                         vlansById={vlanById}
                         virtualSwitchesById={virtualSwitchById}
-                        onSelectPort={setSelectedPortId}
-                        selectedPortId={selectedPortId}
+                        onSelectPort={(portId) => {
+                          setCreatingPort(false);
+                          setSelectedPortId(portId);
+                        }}
+                        selectedPortId={creatingPort ? undefined : selectedPortId}
                       />
                     </CardBody>
                   </Card>
@@ -1453,14 +1620,27 @@ export default function DeviceDetail() {
               </div>
 
               <div className="col-span-12 xl:col-span-4">
-                <PortInspectorCard
+                <DevicePortEditor
+                  device={device}
                   port={selectedPort}
+                  creating={creatingPort}
+                  canEdit={canEdit}
+                  devicePorts={devicePorts}
+                  vlans={vlans}
+                  virtualSwitches={virtualSwitches}
                   peerPort={peerPort}
                   peerDevice={peerDevice}
                   link={selectedLink}
-                  vlansById={vlanById}
-                  virtualSwitchesById={virtualSwitchById}
                   showFaceInHeading={device.deviceType === "patch_panel"}
+                  onCancelCreate={() => setCreatingPort(false)}
+                  onSaved={(savedPort) => {
+                    setCreatingPort(false);
+                    setSelectedPortId(savedPort.id);
+                  }}
+                  onDeleted={() => {
+                    setCreatingPort(false);
+                    setSelectedPortId(undefined);
+                  }}
                 />
               </div>
             </div>
@@ -2790,184 +2970,6 @@ export default function DeviceDetail() {
   );
 }
 
-function PortInspectorCard({
-  port,
-  peerPort,
-  peerDevice,
-  link,
-  vlansById,
-  virtualSwitchesById,
-  showFaceInHeading = false,
-}: {
-  port?: Port;
-  peerPort?: Port;
-  peerDevice?: Device;
-  link?: PortLink;
-  vlansById: Record<string, Vlan>;
-  virtualSwitchesById: Record<string, { id: string; name: string }>;
-  showFaceInHeading?: boolean;
-}) {
-  const { t } = useI18n();
-  const primaryVlan = port?.vlanId ? vlansById[port.vlanId] : undefined;
-  const allowedVlanLabels =
-    port?.allowedVlanIds?.map((vlanId) =>
-      formatVlanReference(vlanId, vlansById),
-    ) ?? [];
-  const virtualSwitch = port?.virtualSwitchId
-    ? virtualSwitchesById[port.virtualSwitchId]
-    : undefined;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <CardLabel>{t("Inspector")}</CardLabel>
-          <CardHeading>
-            {port
-              ? formatPortLabel(port, {
-                  includeFace: showFaceInHeading || port.face === "rear",
-                })
-              : "Select a port"}
-          </CardHeading>
-        </CardTitle>
-        {port ? <Badge tone="cyan">{port.kind.replace("_", " ")}</Badge> : null}
-      </CardHeader>
-      <CardBody className="space-y-4">
-        {!port ? (
-          <div className="text-sm text-[var(--color-fg-subtle)]">
-            Click a port to inspect its speed, VLAN, description, and cable
-            peer.
-          </div>
-        ) : (
-          <>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-              <InspectorRow label="State">
-                <span className="inline-flex items-center gap-2 text-sm text-[var(--color-fg)]">
-                  <StatusDot link={port.linkState} />
-                  {formatLinkState(port.linkState)}
-                </span>
-              </InspectorRow>
-              <InspectorRow
-                label="Speed"
-                value={port.speed ?? "Not set"}
-                mono
-              />
-              <InspectorRow label="Mode" value={port.mode ?? "access"} />
-              <InspectorRow label="Face" value={port.face ?? "front"} />
-              <InspectorRow
-                label="Position"
-                value={String(port.position)}
-                mono
-              />
-              <InspectorRow
-                label={port.mode === "trunk" ? "Native VLAN" : "Access VLAN"}
-                value={
-                  primaryVlan
-                    ? formatVlanReference(primaryVlan.id, vlansById)
-                    : port.mode === "trunk"
-                      ? "None (tagged only)"
-                      : "Unassigned"
-                }
-              />
-              {port.mode === "trunk" && (
-                <InspectorRow
-                  label="Tagged VLANs"
-                  value={
-                    allowedVlanLabels.length > 0
-                      ? allowedVlanLabels.join(", ")
-                      : "None documented"
-                  }
-                />
-              )}
-              <InspectorRow
-                label="Virtual switch"
-                value={
-                  virtualSwitch?.name ??
-                  (port.virtualSwitchId ? port.virtualSwitchId : "None")
-                }
-              />
-              <InspectorRow label={t("Type")} value={port.kind.replace("_", " ")} />
-            </div>
-
-            <div className="space-y-1">
-              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-                Description
-              </div>
-              <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-fg)]">
-                {port.description?.trim() || "No description documented."}
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-                Link peer
-              </div>
-              <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2">
-                {peerDevice && peerPort ? (
-                  <div className="space-y-1 text-sm">
-                    <div className="text-[var(--color-fg)]">
-                      {peerDevice.hostname}
-                      <span className="mx-1 text-[var(--color-fg-faint)]">
-                        |
-                      </span>
-                      <Mono className="text-[var(--color-cyan)]">
-                        {formatPortLabel(peerPort, { includeFace: true })}
-                      </Mono>
-                    </div>
-                    <div className="text-[11px] text-[var(--color-fg-subtle)]">
-                      {link?.cableType ?? "Cable"} |{" "}
-                      {link?.cableLength ?? "length n/a"}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-sm text-[var(--color-fg-subtle)]">
-                    No linked cable.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <Button variant="outline" size="sm" asChild>
-                <Link to={`/ports?deviceId=${port.deviceId}&portId=${port.id}`}>
-                  Open in ports workspace
-                </Link>
-              </Button>
-            </div>
-          </>
-        )}
-      </CardBody>
-    </Card>
-  );
-}
-
-function InspectorRow({
-  label,
-  value,
-  mono,
-  children,
-}: {
-  label: string;
-  value?: string;
-  mono?: boolean;
-  children?: ReactNode;
-}) {
-  return (
-    <div>
-      <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-        {label}
-      </div>
-      {children ?? (
-        <div
-          className={`mt-1 text-sm text-[var(--color-fg)] ${mono ? "font-mono" : ""}`}
-        >
-          {value ?? "-"}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
@@ -3207,24 +3209,6 @@ function describeMonitorType(type: MonitorForm["type"]) {
     default:
       return "Choose a monitor type to enable automated health checks for this device.";
   }
-}
-
-function formatLinkState(state: Port["linkState"]) {
-  switch (state) {
-    case "up":
-      return "Up";
-    case "down":
-      return "Down";
-    case "disabled":
-      return "Disabled";
-    default:
-      return "Unknown";
-  }
-}
-
-function formatVlanReference(vlanId: string, vlansById: Record<string, Vlan>) {
-  const vlan = vlansById[vlanId];
-  return vlan ? `${vlan.vlanId} - ${vlan.name}` : vlanId;
 }
 
 function formatPlacement(placement?: Device["placement"]) {

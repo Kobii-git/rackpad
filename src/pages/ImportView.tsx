@@ -9,6 +9,7 @@ import {
   Upload,
 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { NetBoxDeviceTypeImport } from "@/components/import/NetBoxDeviceTypeImport";
 import { useI18n } from "@/i18n";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -684,6 +685,8 @@ export default function ImportView() {
           </Card>
 
           <CollectorRunbooks />
+
+          <NetBoxDeviceTypeImport />
 
           <Card>
             <CardHeader>

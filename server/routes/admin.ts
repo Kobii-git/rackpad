@@ -410,8 +410,8 @@ const restoreBackupSnapshot = db.transaction(
     VALUES (?, ?, ?, ?, ?, ?)
   `);
     const insertPort = db.prepare(`
-    INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, snmpIfIndex)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, snmpIfIndex, macAddress)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertPortLink = db.prepare(
       "INSERT INTO portLinks (id, fromPortId, toPortId, cableType, cableLength, color, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -740,6 +740,7 @@ const restoreBackupSnapshot = db.transaction(
         row.face ?? null,
         row.virtualSwitchId ?? null,
         row.snmpIfIndex ?? null,
+        row.macAddress ?? null,
       );
     }
     ensurePatchPanelPassThroughPorts(

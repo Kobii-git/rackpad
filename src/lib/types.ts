@@ -319,6 +319,7 @@ export interface Port {
   description?: string;
   face?: RackFace;
   snmpIfIndex?: number | null;
+  macAddress?: string | null;
 }
 
 export interface VirtualSwitch {

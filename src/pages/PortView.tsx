@@ -88,6 +88,7 @@ interface PortFormState {
   virtualSwitchId: string;
   description: string;
   face: NonNullable<Port["face"]>;
+  macAddress: string;
 }
 
 interface BulkPortFormState {
@@ -133,6 +134,7 @@ function portToForm(port: Port): PortFormState {
     virtualSwitchId: port.virtualSwitchId ?? "",
     description: port.description ?? "",
     face: port.face ?? "front",
+    macAddress: port.macAddress ?? "",
   };
 }
 
@@ -212,6 +214,7 @@ function blankPortForm(device?: Device): PortFormState {
     virtualSwitchId: "",
     description: "",
     face: "front",
+    macAddress: "",
   };
 }
 
@@ -627,6 +630,7 @@ export default function PortView() {
           description: form.description.trim() || undefined,
           virtualSwitchId: form.virtualSwitchId || undefined,
           face: form.face,
+          macAddress: form.macAddress.trim() || undefined,
           position: (devicePorts.at(-1)?.position ?? 0) + 1,
         });
         setCreating(false);
@@ -644,6 +648,7 @@ export default function PortView() {
           description: form.description.trim() || undefined,
           virtualSwitchId: form.virtualSwitchId || undefined,
           face: form.face,
+          macAddress: form.macAddress.trim() || undefined,
         });
       }
     } catch (err) {
@@ -1359,6 +1364,22 @@ export default function PortView() {
                               placeholder="e.g. 10G"
                             />
                           </Field>
+                          <Field label={t("MAC address")}>
+                            <Input
+                              value={form.macAddress}
+                              onChange={(event) =>
+                                setForm((prev) =>
+                                  prev
+                                    ? { ...prev, macAddress: event.target.value }
+                                    : prev,
+                                )
+                              }
+                              placeholder="aa:bb:cc:dd:ee:ff"
+                            />
+                          </Field>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
                           <Field label={t("Face")}>
                             <Select
                               value={form.face}

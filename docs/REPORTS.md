@@ -29,6 +29,25 @@ metrics or include hidden sample rows.
 The print stylesheet removes navigation chrome and switches the report to a
 light, paper-friendly layout.
 
+Printed reports include two layers of content:
+
+- **On-screen summaries** — metric cards, rack utilization, monitoring posture,
+  subnet allocation, WiFi counts, and recent audit activity (same as the
+  Reports page).
+- **Print-only detail tables** — full device inventory (hostname, type, status,
+  management IP, formatted placement, ports), every documented port and cable
+  link, and the complete IPAM dataset (subnets, VLANs, DHCP scopes, zones, and
+  assignments). These tables are hidden on screen and appear only when printing
+  or saving as PDF.
+
+Detail tables reuse the same column layout as the CSV and Excel exports, so a
+printed PDF lines up with spreadsheet exports for audits and change reviews.
+
+Documentation pages also support `Print / PDF` from the Documentation workspace.
+The print layout hides the sidebar and editor, shows the rendered markdown
+preview full width, and includes the page title with lab name and generation
+timestamp in the print header.
+
 ### Excel Workbook
 
 1. Open `Reports`.

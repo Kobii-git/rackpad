@@ -1,0 +1,65 @@
+---
+name: Deployment help
+description: Docker, reverse proxy, backup, or production setup questions
+title: "[Deploy]: "
+labels: ["deployment", "question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Need help running Rackpad in your environment? Share your setup and what you've already tried.
+
+  - type: dropdown
+    id: method
+    attributes:
+      label: How are you running Rackpad?
+      options:
+        - Docker / docker-compose
+        - Node directly (npm start)
+        - Reverse proxy (nginx, Caddy, Traefik, …)
+        - Behind auth (Authentik, OAuth2 proxy, …)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Rackpad version
+      placeholder: e.g. 1.6.0-beta.4
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node version, proxy config (redact secrets), volume mounts, etc.
+      placeholder: |
+        - Ubuntu 24.04, Docker 27
+        - Caddy reverse proxy to :3000
+        - SQLite volume at /var/lib/rackpad
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What's going wrong?
+      description: Error messages, unexpected behavior, or what you're trying to achieve.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      placeholder: Checked logs, verified NODE_ENV, tested without proxy…
+
+  - type: checkboxes
+    id: secrets
+    attributes:
+      label: Security reminder
+      options:
+        - label: I have redacted passwords, tokens, and private URLs from this report
+          required: true

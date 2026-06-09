@@ -8,6 +8,33 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.0-beta.5] - 2026-06-09
+
+### Added
+
+- Device Detail: add / edit / delete ports inline, including a custom MAC address per
+  port (#48, #56). New `PATCH`/`DELETE` port routes, an additive `ports.macAddress`
+  migration, and backup/restore coverage for the new column.
+- NetBox device-type YAML import foundation: parse + preview (manufacturer, model,
+  U-height, interfaces) and import as a deduplicated port template (#53).
+- Print / PDF support on the Docs page, plus richer, paginated print output for Reports
+  (#47).
+- Issue templates and a `CONTRIBUTING.md` (#52), and a `check:i18n` script that flags
+  wrong-language values in locale files.
+
+### Changed
+
+- Visualizer: shelf devices now bottom-justify, the cable routing modes do real
+  lane-based separation instead of inverted curvature, and the link-line rendering was
+  made more robust (#49, #50, #51).
+- Refreshed the colour tokens so the brand accent (orange) and the warning colour
+  (yellow) are clearly distinct, and firmed up panel separation in dark mode.
+
+### Fixed
+
+- i18n: removed French strings that had leaked into the WiFi/wireless block of several
+  non-French locales (bn, de, fa, he, nl, pl, ru, tr, uk).
+
 ## [1.6.0-beta.4] - 2026-06-09
 
 ### Fixed

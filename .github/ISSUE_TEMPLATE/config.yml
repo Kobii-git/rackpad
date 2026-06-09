@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contributing guide
+    url: https://github.com/your-org/rackpad/blob/main/CONTRIBUTING.md
+    about: Setup, branching, validation, and i18n rules
+  - name: Documentation
+    url: https://github.com/your-org/rackpad#readme
+    about: Project README and deployment notes

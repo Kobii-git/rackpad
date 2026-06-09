@@ -27,6 +27,16 @@ const LINK_STATES = ['up', 'down', 'disabled', 'unknown'] as const
 const PORT_FACES = ['front', 'rear'] as const
 const PORT_MODES = ['access', 'trunk'] as const
 
+function normalizeMacAddress(value: string | null | undefined) {
+  const raw = value?.trim()
+  if (!raw) return null
+  const compact = raw.replace(/[^a-fA-F0-9]/g, '').toLowerCase()
+  if (compact.length !== 12) {
+    throw new ValidationError('MAC address must contain 12 hexadecimal characters.')
+  }
+  return compact.match(/.{2}/g)?.join(':') ?? null
+}
+
 function parseTemplatePorts(value: unknown) {
   if (!Array.isArray(value) || value.length === 0) {
     throw new ValidationError('ports must be a non-empty array.')
@@ -222,6 +232,7 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     const description = optionalString(body, 'description', { maxLength: 500 })
     const face = optionalEnum(body, 'face', PORT_FACES) ?? 'front'
     const requestedPosition = optionalInteger(body, 'position', { min: 1, max: 500 })
+    const macAddress = normalizeMacAddress(optionalString(body, 'macAddress', { maxLength: 32 }))
 
     const device = getDeviceLabRow(deviceId)
     if (!device) {
@@ -237,8 +248,8 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     const id = createId('p')
 
     db.prepare(`
-      INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, macAddress)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       deviceId,
@@ -253,6 +264,7 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
       description ?? null,
       face,
       virtualSwitchId ?? null,
+      macAddress,
     )
 
     const created = db.prepare('SELECT * FROM ports WHERE id = ?').get(id) as Record<string, unknown>
@@ -292,6 +304,10 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     if (vlanId !== undefined) { updates.push('vlanId = ?'); values.push(vlanId) }
     if (virtualSwitchId !== undefined) { updates.push('virtualSwitchId = ?'); values.push(virtualSwitchId) }
     if (description !== undefined) { updates.push('description = ?'); values.push(description) }
+    if ('macAddress' in body) {
+      updates.push('macAddress = ?')
+      values.push(normalizeMacAddress(optionalString(body, 'macAddress', { maxLength: 32 })))
+    }
 
     if ('kind' in body) { updates.push('kind = ?'); values.push(requiredEnum(body, 'kind', PORT_KINDS)) }
     if ('linkState' in body) { updates.push('linkState = ?'); values.push(requiredEnum(body, 'linkState', LINK_STATES)) }

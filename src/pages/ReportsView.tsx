@@ -34,6 +34,7 @@ import type {
   Port,
   PortLink,
   Rack,
+  Room,
   Subnet,
   Vlan,
   VirtualSwitch,
@@ -551,7 +552,7 @@ export default function ReportsView() {
                 />
               }
             >
-              <div className="max-h-[34rem] space-y-3 overflow-y-auto pr-1">
+              <div className="reports-scroll-region max-h-[34rem] space-y-3 overflow-y-auto pr-1">
                 {model.monitorTargets.length === 0 ? (
                   <EmptyState
                     icon={Activity}
@@ -870,6 +871,43 @@ export default function ReportsView() {
             </div>
           </ReportSection>
 
+          <div className="print-only space-y-6">
+            <ReportPrintSection
+              title={t("Devices")}
+              rows={buildDevicesPrintRows({
+                devices,
+                rackById: model.rackById,
+                roomById: model.roomById,
+                deviceById: model.deviceById,
+                portsByDeviceId: model.portsByDeviceId,
+              })}
+            />
+            <ReportPrintSection
+              title={t("Ports Cables")}
+              rows={buildPortsCsv({
+                ports,
+                portLinks,
+                deviceById: model.deviceById,
+                portById: model.portById,
+                vlanById: model.vlanById,
+                virtualSwitchById: model.virtualSwitchById,
+              })}
+            />
+            <ReportPrintSection
+              title={t("IPAM")}
+              rows={buildIpamCsv({
+                subnets,
+                vlans,
+                scopes,
+                ipZones,
+                ipAssignments,
+                deviceById: model.deviceById,
+                subnetById: model.subnetById,
+                vlanById: model.vlanById,
+              })}
+            />
+          </div>
+
           <div className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.015)] px-4 py-3 text-xs text-[var(--text-tertiary)]">
             {t(
               "This report excludes local user password hashes and notification secrets. Use the admin backup export for full restore snapshots. Discovery inbox rows: {count}.",
@@ -1018,6 +1056,117 @@ function EmptyReportRow({ message }: { message: string }) {
       {message}
     </div>
   );
+}
+
+function ReportPrintSection({ title, rows }: { title: string; rows: CsvRows }) {
+  if (rows.length <= 1) return null;
+  const [headers, ...body] = rows;
+
+  return (
+    <section className="report-print-section">
+      <h3>{title}</h3>
+      <div className="rk-table-shell">
+        <table className="rk-table report-print-table">
+          <thead>
+            <tr>
+              {headers.map((header, index) => (
+                <th key={index}>{header == null ? "" : String(header)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {body.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {row.map((cell, cellIndex) => (
+                  <td key={cellIndex}>
+                    {cell == null || cell === "" ? "-" : String(cell)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function formatDevicePlacementLabel(
+  device: Device,
+  rackById: Record<string, Rack>,
+  roomById: Record<string, Room>,
+  deviceById: Record<string, Device>,
+) {
+  const rack = device.rackId ? rackById[device.rackId] : undefined;
+  const room = device.roomId ? roomById[device.roomId] : undefined;
+  const parentDevice = device.parentDeviceId
+    ? deviceById[device.parentDeviceId]
+    : undefined;
+
+  if (device.placement === "virtual") {
+    return parentDevice ? `Virtual | ${parentDevice.hostname}` : "Virtual";
+  }
+
+  if (device.placement === "wireless") {
+    return parentDevice ? `WiFi | ${parentDevice.hostname}` : "WiFi";
+  }
+
+  if (device.placement === "shelf") {
+    return [
+      "Shelf",
+      parentDevice?.hostname,
+      rack?.name,
+      device.startU ? `U${device.startU}` : undefined,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+  }
+
+  if (rack && device.startU) {
+    return `${rack.name} | U${device.startU}`;
+  }
+
+  if (device.placement === "rack") return "Pending placement";
+  return room ? `Room | ${room.name}` : "Loose / room";
+}
+
+function buildDevicesPrintRows({
+  devices,
+  rackById,
+  roomById,
+  deviceById,
+  portsByDeviceId,
+}: {
+  devices: Device[];
+  rackById: Record<string, Rack>;
+  roomById: Record<string, Room>;
+  deviceById: Record<string, Device>;
+  portsByDeviceId: Record<string, Port[]>;
+}): CsvRows {
+  const rows = buildDevicesCsv({
+    devices,
+    rackById,
+    deviceById,
+    portsByDeviceId,
+  });
+  if (rows.length <= 1) return rows;
+
+  const [header, ...body] = rows;
+  const placementIndex = header.indexOf("Placement");
+  const formattedBody = body.map((row, index) => {
+    const device = devices[index];
+    if (!device || placementIndex < 0) return row;
+    const nextRow = [...row];
+    nextRow[placementIndex] = formatDevicePlacementLabel(
+      device,
+      rackById,
+      roomById,
+      deviceById,
+    );
+    return nextRow;
+  });
+
+  return [header, ...formattedBody];
 }
 
 function buildDevicesCsv({

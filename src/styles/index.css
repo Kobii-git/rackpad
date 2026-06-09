@@ -24,20 +24,20 @@
     --bg-shell: #0b1017;
     --bg-grid: rgb(148 163 184 / 0.026);
 
-    --surface-1: #0f1621;
-    --surface-2: #121a26;
-    --surface-3: #172230;
-    --surface-4: #1c2938;
-    --surface-input: #101823;
-    --surface-hover: #172233;
-    --surface-selected: #171f2b;
-    --surface-disabled: #10151d;
+    --surface-1: #0c121b;
+    --surface-2: #141d2c;
+    --surface-3: #1c283c;
+    --surface-4: #23324b;
+    --surface-input: #0f1621;
+    --surface-hover: #1c283d;
+    --surface-selected: #1a2536;
+    --surface-disabled: #0a0f16;
 
-    --border-subtle: rgb(167 183 205 / 0.09);
-    --border-default: rgb(167 183 205 / 0.16);
-    --border-strong: rgb(167 183 205 / 0.24);
-    --border-focus: rgb(233 161 63 / 0.5);
-    --border-selected: rgb(233 161 63 / 0.36);
+    --border-subtle: rgb(167 183 205 / 0.14);
+    --border-default: rgb(167 183 205 / 0.23);
+    --border-strong: rgb(167 183 205 / 0.32);
+    --border-focus: rgb(230 133 31 / 0.5);
+    --border-selected: rgb(230 133 31 / 0.36);
     --edge-highlight: rgb(255 255 255 / 0.06);
 
     --text-primary: #edf2f7;
@@ -47,12 +47,12 @@
     --text-disabled: #4b5563;
     --text-inverse: #09111a;
 
-    --accent-primary: #e69a3b;
-    --accent-primary-hover: #f0aa50;
-    --accent-primary-active: #c97920;
-    --accent-primary-soft: rgb(230 154 59 / 0.12);
-    --accent-primary-border: rgb(230 154 59 / 0.28);
-    --accent-primary-glow: rgb(230 154 59 / 0.1);
+    --accent-primary: #e6851f;
+    --accent-primary-hover: #f0963a;
+    --accent-primary-active: #c76e12;
+    --accent-primary-soft: rgb(230 133 31 / 0.12);
+    --accent-primary-border: rgb(230 133 31 / 0.28);
+    --accent-primary-glow: rgb(230 133 31 / 0.1);
 
     --accent-secondary: #4dc8d7;
     --accent-secondary-hover: #6fd6e3;
@@ -65,9 +65,9 @@
     --success-soft: rgb(89 195 106 / 0.14);
     --success-border: rgb(89 195 106 / 0.28);
 
-    --warning: #ddc04a;
-    --warning-soft: rgb(221 192 74 / 0.14);
-    --warning-border: rgb(221 192 74 / 0.28);
+    --warning: #ead043;
+    --warning-soft: rgb(234 208 67 / 0.14);
+    --warning-border: rgb(234 208 67 / 0.28);
 
     --danger: #de6666;
     --danger-soft: rgb(222 102 102 / 0.14);
@@ -90,7 +90,7 @@
       0 0 0 1px var(--border-selected);
 
     --ring-focus:
-      0 0 0 1px var(--border-focus), 0 0 0 4px rgb(242 157 56 / 0.12);
+      0 0 0 1px var(--border-focus), 0 0 0 4px rgb(230 133 31 / 0.12);
 
     --spacing-panel: 1rem;
 
@@ -170,8 +170,8 @@
     --border-subtle: rgb(15 23 42 / 0.08);
     --border-default: rgb(15 23 42 / 0.13);
     --border-strong: rgb(15 23 42 / 0.2);
-    --border-focus: rgb(216 134 32 / 0.55);
-    --border-selected: rgb(216 134 32 / 0.28);
+    --border-focus: rgb(193 100 19 / 0.55);
+    --border-selected: rgb(193 100 19 / 0.28);
     --edge-highlight: rgb(255 255 255 / 0.9);
 
     --text-primary: #0f1723;
@@ -181,12 +181,12 @@
     --text-disabled: #98a2af;
     --text-inverse: #f8fafc;
 
-    --accent-primary: #c57b1e;
-    --accent-primary-hover: #d98d2e;
-    --accent-primary-active: #aa6511;
-    --accent-primary-soft: rgb(197 123 30 / 0.12);
-    --accent-primary-border: rgb(197 123 30 / 0.28);
-    --accent-primary-glow: rgb(197 123 30 / 0.12);
+    --accent-primary: #c16413;
+    --accent-primary-hover: #d97825;
+    --accent-primary-active: #a1500a;
+    --accent-primary-soft: rgb(193 100 19 / 0.12);
+    --accent-primary-border: rgb(193 100 19 / 0.28);
+    --accent-primary-glow: rgb(193 100 19 / 0.12);
 
     --accent-secondary: #19889a;
     --accent-secondary-hover: #1d99ad;
@@ -199,9 +199,9 @@
     --success-soft: rgb(47 143 70 / 0.12);
     --success-border: rgb(47 143 70 / 0.22);
 
-    --warning: #98810e;
-    --warning-soft: rgb(152 129 14 / 0.13);
-    --warning-border: rgb(152 129 14 / 0.24);
+    --warning: #947c0b;
+    --warning-soft: rgb(148 124 11 / 0.13);
+    --warning-border: rgb(148 124 11 / 0.24);
 
     --danger: #ba4141;
     --danger-soft: rgb(186 65 65 / 0.12);
@@ -840,6 +840,10 @@
   animation: cable-dash-pulse 4s linear infinite;
 }
 
+.visualizer-cable-active {
+  filter: drop-shadow(0 0 4px var(--accent-primary-glow));
+}
+
 .visualizer-pulse {
   animation: visualizer-pulse-ring 900ms ease-out 2;
 }
@@ -864,9 +868,18 @@
   animation: rackpad-shimmer 1.4s ease-in-out infinite;
 }
 
+.print-only {
+  display: none;
+}
+
 @media print {
   @page {
-    margin: 14mm;
+    margin: 12mm;
+    size: auto;
+  }
+
+  html {
+    font-size: 10pt;
   }
 
   html,
@@ -884,40 +897,69 @@
 
   aside,
   header,
+  button,
   .reports-actions,
+  .screen-only,
   .bg-grid,
   .rk-page-ambient::before {
     display: none !important;
   }
 
+  .print-only {
+    display: block !important;
+  }
+
   main,
   .rk-page-ambient,
   .rk-page-ambient > div,
-  .reports-page {
+  .reports-page,
+  .docs-page {
     display: block !important;
     height: auto !important;
     overflow: visible !important;
     background: #ffffff !important;
+    width: 100% !important;
+    max-width: none !important;
   }
 
-  .reports-page {
+  .reports-page,
+  .docs-page {
     padding: 0 !important;
   }
 
-  .reports-page * {
+  .reports-page *,
+  .docs-page * {
     box-shadow: none !important;
     text-shadow: none !important;
+  }
+
+  .reports-scroll-region,
+  .docs-print-preview,
+  .docs-print-preview .overflow-y-auto,
+  .rk-table-shell {
+    max-height: none !important;
+    overflow: visible !important;
   }
 
   .reports-page .rk-panel,
   .reports-page .rk-panel-inset,
   .reports-page .rk-table-shell,
   .reports-page .reports-section,
-  .reports-page .reports-hero {
+  .reports-page .reports-hero,
+  .reports-page .report-print-section,
+  .docs-page .rk-table-shell {
     break-inside: avoid;
+    page-break-inside: avoid;
     border-color: #cbd5e1 !important;
     background: #ffffff !important;
     color: #111827 !important;
+  }
+
+  .reports-page .rk-table tbody tr,
+  .reports-page .report-print-table tbody tr,
+  .docs-page .rk-table tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .reports-page,
@@ -928,21 +970,94 @@
   .reports-page th,
   .reports-page p,
   .reports-page span,
-  .reports-page div {
+  .reports-page div,
+  .docs-page,
+  .docs-page h1,
+  .docs-page h2,
+  .docs-page h3,
+  .docs-page td,
+  .docs-page th,
+  .docs-page p,
+  .docs-page span,
+  .docs-page div {
     color: #111827 !important;
   }
 
   .reports-page .rk-kicker,
   .reports-page .rk-meta,
-  .reports-page .rk-empty-copy {
+  .reports-page .rk-empty-copy,
+  .docs-page .rk-kicker,
+  .docs-page .rk-meta,
+  .docs-print-header {
     color: #475569 !important;
   }
 
-  .reports-page .rk-table thead tr {
+  .reports-page .rk-table,
+  .reports-page .report-print-table,
+  .docs-page .rk-table {
+    width: 100% !important;
+    font-size: 9pt;
+    border-collapse: collapse;
+  }
+
+  .reports-page .rk-table thead tr,
+  .reports-page .report-print-table thead tr,
+  .docs-page .rk-table thead tr {
     background: #f1f5f9 !important;
   }
 
-  .reports-page .rk-table tbody tr:nth-child(even) {
+  .reports-page .rk-table tbody tr:nth-child(even),
+  .reports-page .report-print-table tbody tr:nth-child(even),
+  .docs-page .rk-table tbody tr:nth-child(even) {
     background: #f8fafc !important;
+  }
+
+  .report-print-section {
+    margin-top: 1.5rem;
+    break-before: page;
+    page-break-before: auto;
+  }
+
+  .report-print-section:first-of-type {
+    break-before: auto;
+    page-break-before: auto;
+  }
+
+  .report-print-section h3 {
+    margin: 0 0 0.5rem;
+    font-size: 11pt;
+    font-weight: 600;
+  }
+
+  .docs-page .grid {
+    display: block !important;
+  }
+
+  .docs-page .docs-print-preview {
+    width: 100% !important;
+    min-height: 0 !important;
+  }
+
+  .docs-page .docs-print-preview .rk-card,
+  .docs-page .docs-print-preview [class*="Card"] {
+    border: none !important;
+    background: transparent !important;
+  }
+
+  .docs-print-header {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #cbd5e1;
+  }
+
+  .docs-print-header h1 {
+    margin: 0;
+    font-size: 14pt;
+    font-weight: 600;
+  }
+
+  .docs-print-header p {
+    margin: 0.25rem 0 0;
+    font-size: 9pt;
   }
 }

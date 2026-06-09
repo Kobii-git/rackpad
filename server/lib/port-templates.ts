@@ -245,5 +245,6 @@ export function createPortsFromTemplate(deviceId: string, templateId: string) {
     description: null,
     face: port.face ?? 'front',
     virtualSwitchId: null,
+    macAddress: null,
   }))
 }

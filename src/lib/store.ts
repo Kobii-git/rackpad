@@ -1913,6 +1913,7 @@ export async function updatePort(
     "virtualSwitchId",
     "description",
     "face",
+    "macAddress",
   ] as const;
   for (const key of allowedKeys) {
     if (Object.prototype.hasOwnProperty.call(changes, key)) {
@@ -1984,6 +1985,29 @@ export async function createPortTemplateRecord(
     "PortTemplate",
     created.id,
     `Added port template ${created.name}`,
+  );
+  return created;
+}
+
+export async function importNetboxDeviceTypeTemplate(
+  yaml: string,
+): Promise<PortTemplate> {
+  const created = await api.importNetboxDeviceTypeTemplate(yaml);
+  setState((prev) => ({
+    ...prev,
+    portTemplates: sortPortTemplates([...prev.portTemplates, created]),
+    deviceTypes: sortDeviceTypes(
+      mergeDeviceTypeDefinitions(prev.deviceTypes, {
+        devices: prev.devices,
+        portTemplates: [...prev.portTemplates, created],
+      }),
+    ),
+  }));
+  void recordAudit(
+    "port.template.create",
+    "PortTemplate",
+    created.id,
+    `Imported NetBox port template ${created.name}`,
   );
   return created;
 }

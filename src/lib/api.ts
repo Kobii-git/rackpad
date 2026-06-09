@@ -63,6 +63,31 @@ export class ApiError extends Error {
 }
 
 export type DevicePatch = Nullable<Omit<Device, "id" | "labId">>;
+
+export interface NetboxDeviceTypeImportPreview {
+  parsed: {
+    manufacturer: string;
+    model: string;
+    slug?: string;
+    partNumber?: string;
+    uHeight: number;
+    interfaces: Array<{
+      name: string;
+      type: string;
+      section: "interface" | "console" | "power";
+    }>;
+    sourceLabel: string;
+  };
+  dedupeKey: string;
+  existingTemplate: { id: string; name: string; builtIn?: boolean } | null;
+  portTemplateDraft: {
+    name: string;
+    description: string;
+    deviceTypes: string[];
+    ports: PortTemplate["ports"];
+  };
+}
+
 export type DeviceImagePatch = Nullable<Pick<DeviceImage, "label" | "notes">>;
 export type DeviceServicePatch = Nullable<
   Pick<
@@ -708,6 +733,23 @@ export const api = {
   deletePortTemplate(id: string) {
     return request<void>(`/ports/templates/${id}`, {
       method: "DELETE",
+    });
+  },
+
+  previewNetboxDeviceTypeImport(yaml: string) {
+    return request<NetboxDeviceTypeImportPreview>(
+      "/imports/netbox-device-type/preview",
+      {
+        method: "POST",
+        body: JSON.stringify({ yaml }),
+      },
+    );
+  },
+
+  importNetboxDeviceTypeTemplate(yaml: string) {
+    return request<PortTemplate>("/imports/netbox-device-type/import", {
+      method: "POST",
+      body: JSON.stringify({ yaml }),
     });
   },
 

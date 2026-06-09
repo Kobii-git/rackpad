@@ -1,0 +1,57 @@
+---
+name: Feature request
+description: Suggest an improvement or new capability
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea for Rackpad? We'd love to hear it. Focus on the problem you're solving — implementation details are optional.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What pain point does this address in your homelab or workflow?
+      placeholder: I manage 40+ devices across three VLANs and need a faster way to…
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How would you like Rackpad to behave?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other tools, workarounds, or simpler approaches you've tried.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Dashboard / inventory
+        - WiFi / wireless
+        - Ports / cables / VLANs
+        - IPAM / discovery
+        - Monitoring / SNMP
+        - Visualizer
+        - Reports / audit
+        - i18n / accessibility
+        - Deployment / ops
+        - Other
+
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Contribution
+      options:
+        - label: I'm willing to help implement or test this
+          required: false
