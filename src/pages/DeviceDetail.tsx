@@ -22,9 +22,7 @@ import { Mono } from "@/components/shared/Mono";
 import { PortGrid } from "@/components/ports/PortGrid";
 import { PortList } from "@/components/ports/PortList";
 import { DevicePortEditor } from "@/components/ports/DevicePortEditor";
-import {
-  SnmpCredentialsPanel,
-} from "@/components/shared/SnmpCredentialsPanel";
+import { SnmpCredentialsPanel } from "@/components/shared/SnmpCredentialsPanel";
 import { SnmpSyncPanel } from "@/components/shared/SnmpSyncPanel";
 import { api } from "@/lib/api";
 import { buildSnmpVerifiedPortIdsForDevice } from "@/lib/snmp-port-status";
@@ -270,9 +268,9 @@ export default function DeviceDetail() {
   const [monitorError, setMonitorError] = useState("");
   const [snmpDiscoverLoading, setSnmpDiscoverLoading] = useState(false);
   const [snmpImportLoading, setSnmpImportLoading] = useState(false);
-  const [snmpInterfaces, setSnmpInterfaces] = useState<DiscoveredSnmpInterface[]>(
-    [],
-  );
+  const [snmpInterfaces, setSnmpInterfaces] = useState<
+    DiscoveredSnmpInterface[]
+  >([]);
   const [snmpDiscoverError, setSnmpDiscoverError] = useState("");
   const [snmpCredentials, setSnmpCredentials] = useState<SnmpCredential[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(
@@ -952,7 +950,9 @@ export default function DeviceDetail() {
       setSnmpInterfaces([]);
     } catch (error) {
       setSnmpDiscoverError(
-        error instanceof Error ? error.message : "Failed to import SNMP monitors.",
+        error instanceof Error
+          ? error.message
+          : "Failed to import SNMP monitors.",
       );
     } finally {
       setSnmpImportLoading(false);
@@ -1332,7 +1332,10 @@ export default function DeviceDetail() {
                 mono
               />
               <Stat label={t("Serial")} value={device.serial} mono />
-              <Stat label={t("Last seen")} value={relativeTime(device.lastSeen)} />
+              <Stat
+                label={t("Last seen")}
+                value={relativeTime(device.lastSeen)}
+              />
               <Stat
                 label={t("Ports")}
                 value={`${linkedCount}/${devicePorts.length} linked`}
@@ -1680,7 +1683,9 @@ export default function DeviceDetail() {
                             setCreatingPort(false);
                             setSelectedPortId(portId);
                           }}
-                          selectedPortId={creatingPort ? undefined : selectedPortId}
+                          selectedPortId={
+                            creatingPort ? undefined : selectedPortId
+                          }
                         />
                       </CardBody>
                     </Card>
@@ -1705,7 +1710,9 @@ export default function DeviceDetail() {
                           setCreatingPort(false);
                           setSelectedPortId(portId);
                         }}
-                        selectedPortId={creatingPort ? undefined : selectedPortId}
+                        selectedPortId={
+                          creatingPort ? undefined : selectedPortId
+                        }
                       />
                     </CardBody>
                   </Card>
@@ -2011,8 +2018,10 @@ export default function DeviceDetail() {
                     unknown
                   </span>
                   until at least one enabled target has run. For near-real-time
-                  link events, forward SNMP traps to this Rackpad host on UDP
-                  port 1162 (or map host 162 → container 1162).
+                  link events, forward SNMP v1/v2c traps to this Rackpad host on
+                  UDP port 1162 (or map host 162 → container 1162). SNMPv3
+                  polling is supported through credentials; SNMPv3 traps are
+                  still a roadmap item.
                 </div>
 
                 {canManageMonitoring && device?.labId && (
@@ -2368,7 +2377,8 @@ export default function DeviceDetail() {
                                   ? Number.parseInt(prev.snmpIfIndex, 10)
                                   : null;
                                 const oid =
-                                  preset.id === "ifOperStatus" && ifIndex != null
+                                  preset.id === "ifOperStatus" &&
+                                  ifIndex != null
                                     ? `${preset.oid}.${ifIndex}`
                                     : preset.oid;
                                 return {
@@ -2490,7 +2500,8 @@ export default function DeviceDetail() {
                             onChange={(value) =>
                               setMonitorForm((prev) => ({
                                 ...prev,
-                                snmpVersion: value as MonitorForm["snmpVersion"],
+                                snmpVersion:
+                                  value as MonitorForm["snmpVersion"],
                               }))
                             }
                           >
@@ -2629,7 +2640,9 @@ export default function DeviceDetail() {
               <CardHeader>
                 <CardTitle>
                   <CardLabel>{t("Service inventory")}</CardLabel>
-                  <CardHeading>{t("Applications and network services")}</CardHeading>
+                  <CardHeading>
+                    {t("Applications and network services")}
+                  </CardHeading>
                 </CardTitle>
                 {canManageMonitoring && (
                   <Button variant="outline" size="sm" onClick={startNewService}>
@@ -2911,7 +2924,9 @@ export default function DeviceDetail() {
                 </CardHeader>
                 <CardBody>
                   {deviceImageList.length === 0 ? (
-                    <EmptyState title={t("No images attached to this device yet.")} />
+                    <EmptyState
+                      title={t("No images attached to this device yet.")}
+                    />
                   ) : (
                     <div className="grid gap-4 md:grid-cols-2">
                       {deviceImageList.map((image) => (
@@ -3012,7 +3027,9 @@ export default function DeviceDetail() {
                     {device.notes}
                   </div>
                 ) : (
-                  <EmptyState title={t("No notes documented for this device yet.")} />
+                  <EmptyState
+                    title={t("No notes documented for this device yet.")}
+                  />
                 )}
               </CardBody>
             </Card>
@@ -3044,7 +3061,9 @@ export default function DeviceDetail() {
                 <ul className="divide-y divide-[var(--color-line)]">
                   {activityEntries.length === 0 ? (
                     <li className="px-4 py-2">
-                      <EmptyState title={t("No audit entries for this device.")} />
+                      <EmptyState
+                        title={t("No audit entries for this device.")}
+                      />
                     </li>
                   ) : (
                     activityEntries.map((entry) => (
@@ -3305,8 +3324,7 @@ function monitorToForm(monitor: DeviceMonitor, device: Device): MonitorForm {
     snmpExpectedValue: monitor.snmpExpectedValue ?? "",
     snmpMatchMode: monitor.snmpMatchMode ?? "equals",
     portId: monitor.portId ?? "",
-    snmpIfIndex:
-      monitor.snmpIfIndex != null ? String(monitor.snmpIfIndex) : "",
+    snmpIfIndex: monitor.snmpIfIndex != null ? String(monitor.snmpIfIndex) : "",
     snmpCredentialId: monitor.snmpCredentialId ?? "",
     intervalMinutes:
       monitor.intervalMs != null

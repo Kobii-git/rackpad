@@ -29,10 +29,12 @@ link-state, and (optionally) sync VLANs and subnets from network gear into IPAM.
 ## SNMP versions
 
 ### v1 / v2c
+
 A read-only **community** string per monitor. Simple; the community travels in
 cleartext, so keep SNMP on a trusted management network.
 
 ### v3 (recommended on shared networks)
+
 SNMPv3 adds auth + privacy. Credentials are stored **per lab, encrypted at rest**
 (AES-256-GCM):
 
@@ -64,7 +66,8 @@ Rackpad runs a UDP trap receiver at startup.
 - Incoming v1/v2c `linkUp`/`linkDown` traps update the matching monitor/port; an
   unknown source IP is auto-learned to a device when possible. Duplicate traps are
   de-duplicated within ~30s.
-- SNMPv3 traps are **not** handled yet (v1/v2c only).
+- SNMPv3 credentials are supported for polling. SNMPv3 traps are **not** handled
+  yet (trap receiver is v1/v2c only).
 
 Configure with `SNMP_TRAP_ENABLED`, `SNMP_TRAP_PORT`, `SNMP_TRAP_BIND` (see table).
 Receiver status is reported on `/api/health` and `/api/snmp-traps/status`.
@@ -84,13 +87,13 @@ panel on a device's detail page to preview a diff and apply it.
 
 ## Environment variables
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `RACKPAD_SECRET_KEY` | _(unset)_ | Encrypts SNMPv3 credential secrets. Required **only** to store v3 credentials. Use a long random value (`openssl rand -hex 32`). |
-| `SNMP_INVENTORY_SYNC` | `0` | Set `1` to enable VLAN/subnet sync (DHCP preview-only). |
-| `SNMP_TRAP_ENABLED` | `1` | Enable/disable the trap receiver. |
-| `SNMP_TRAP_PORT` | `1162` | UDP port the trap receiver binds. |
-| `SNMP_TRAP_BIND` | `0.0.0.0` | Interface the trap receiver binds to. |
+| Variable              | Default   | Purpose                                                                                                                          |
+| --------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `RACKPAD_SECRET_KEY`  | _(unset)_ | Encrypts SNMPv3 credential secrets. Required **only** to store v3 credentials. Use a long random value (`openssl rand -hex 32`). |
+| `SNMP_INVENTORY_SYNC` | `0`       | Set `1` to enable VLAN/subnet sync (DHCP preview-only).                                                                          |
+| `SNMP_TRAP_ENABLED`   | `1`       | Enable/disable the trap receiver.                                                                                                |
+| `SNMP_TRAP_PORT`      | `1162`    | UDP port the trap receiver binds.                                                                                                |
+| `SNMP_TRAP_BIND`      | `0.0.0.0` | Interface the trap receiver binds to.                                                                                            |
 
 ## Security notes
 
@@ -103,7 +106,7 @@ panel on a device's detail page to preview a diff and apply it.
 ## Current limitations
 
 Not yet available (tracked in the
-[implementation plan](./SNMP_IMPLEMENTATION_PLAN.md) → *Outstanding work*):
+[implementation plan](./SNMP_IMPLEMENTATION_PLAN.md) → _Outstanding work_):
 
 - pfSense/OPNsense and other vendor-specific profiles
 - DHCP scope sync **apply** (preview only today)

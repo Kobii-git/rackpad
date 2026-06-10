@@ -8,6 +8,19 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.2-beta.0] - 2026-06-10
+
+### Changed
+
+- SNMP docs and in-app monitoring guidance now make the split explicit:
+  SNMPv3 polling is supported through encrypted credentials, while SNMPv3 traps
+  remain a follow-up item.
+
+### Fixed
+
+- SNMP trap source updates now validate that any mapped credential exists in the
+  same lab as the trap source, avoiding stale or cross-lab credential links.
+
 ## [1.6.1] - 2026-06-10
 
 ### Added

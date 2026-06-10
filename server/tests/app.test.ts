@@ -1303,19 +1303,26 @@ test("bulk device updates roll back earlier writes when a later device fails val
 test("device import auto-places wireless clients on WiFi VLAN subnets", async () => {
   const adminToken = await bootstrapAdmin();
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO vlans (id, labId, vlanId, name, description, color)
     VALUES ('vlan_wifi_bulk', 'lab_home', 31, 'Guest VLAN', NULL, NULL)
-  `).run();
-  db.prepare(`
+  `,
+  ).run();
+  db.prepare(
+    `
     INSERT INTO subnets (id, labId, cidr, name, description, vlanId)
     VALUES ('subnet_wifi_bulk', 'lab_home', '192.168.31.0/24', 'Guest subnet', NULL, 'vlan_wifi_bulk')
-  `).run();
-  db.prepare(`
+  `,
+  ).run();
+  db.prepare(
+    `
     INSERT INTO wifiSsids (id, labId, name, purpose, security, hidden, vlanId, color)
     VALUES ('ssid_guest_bulk', 'lab_home', 'GuestNet', NULL, NULL, 0, 'vlan_wifi_bulk', NULL)
-  `).run();
-  db.prepare(`
+  `,
+  ).run();
+  db.prepare(
+    `
     INSERT INTO devices
       (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model,
        serial, managementIp, macAddress, status, placement, parentDeviceId, networkMode, roomId, cpuCores, memoryGb, storageGb, specs,
@@ -1323,15 +1330,20 @@ test("device import auto-places wireless clients on WiFi VLAN subnets", async ()
     VALUES ('ap_guest_bulk', 'lab_home', NULL, 'guest-ap', NULL, 'ap', NULL, NULL,
        NULL, '192.168.1.50', NULL, 'online', 'wireless', NULL, 'normal', NULL, NULL, NULL, NULL, NULL,
        NULL, NULL, NULL, NULL, NULL, NULL)
-  `).run();
-  db.prepare(`
+  `,
+  ).run();
+  db.prepare(
+    `
     INSERT INTO wifiRadios (id, apDeviceId, slotName, band, channel, channelWidth, txPower, notes)
     VALUES ('radio_guest_bulk', 'ap_guest_bulk', 'radio0', '5GHz', '36', NULL, NULL, NULL)
-  `).run();
-  db.prepare(`
+  `,
+  ).run();
+  db.prepare(
+    `
     INSERT INTO wifiRadioSsids (radioId, ssidId)
     VALUES ('radio_guest_bulk', 'ssid_guest_bulk')
-  `).run();
+  `,
+  ).run();
 
   const deviceRes = await app.inject({
     method: "POST",
@@ -2028,7 +2040,9 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
       enabled: true,
     },
   });
-  assert.ok(editorCreateRes.statusCode === 200 || editorCreateRes.statusCode === 201);
+  assert.ok(
+    editorCreateRes.statusCode === 200 || editorCreateRes.statusCode === 201,
+  );
 
   const invalidMonitorRes = await app.inject({
     method: "POST",
@@ -2158,11 +2172,9 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   assert.equal(linkedSnmpMonitor.snmpIfIndex, 1);
   assert.equal(linkedSnmpMonitor.snmpMatchMode, "in");
 
-  db.prepare("UPDATE ports SET snmpIfIndex = ?, linkState = ? WHERE id = ?").run(
-    1,
-    "unknown",
-    switchPort.id,
-  );
+  db.prepare(
+    "UPDATE ports SET snmpIfIndex = ?, linkState = ? WHERE id = ?",
+  ).run(1, "unknown", switchPort.id);
 
   const indexSyncServer = await createSnmpIntegerResponder(1);
   try {
@@ -2386,7 +2398,10 @@ test("lab-scoped SNMP credentials store encrypted secrets and can be tested", as
       },
     });
     assert.equal(monitorRes.statusCode, 200);
-    const monitor = readJson(monitorRes) as { id: string; snmpCredentialId: string };
+    const monitor = readJson(monitorRes) as {
+      id: string;
+      snmpCredentialId: string;
+    };
     assert.equal(monitor.snmpCredentialId, credential.id);
 
     const runRes = await app.inject({
@@ -2461,7 +2476,10 @@ test("SNMP linkDown and linkUp traps update matching interface monitors", async 
     },
     query: { deviceId: device.id },
   });
-  const downMonitors = readJson(downRes) as Array<{ id: string; lastResult?: string }>;
+  const downMonitors = readJson(downRes) as Array<{
+    id: string;
+    lastResult?: string;
+  }>;
   assert.equal(
     downMonitors.find((entry) => entry.id === monitor.id)?.lastResult,
     "offline",
@@ -2480,7 +2498,10 @@ test("SNMP linkDown and linkUp traps update matching interface monitors", async 
     },
     query: { deviceId: device.id },
   });
-  const upMonitors = readJson(upRes) as Array<{ id: string; lastResult?: string }>;
+  const upMonitors = readJson(upRes) as Array<{
+    id: string;
+    lastResult?: string;
+  }>;
   assert.equal(
     upMonitors.find((entry) => entry.id === monitor.id)?.lastResult,
     "online",
@@ -2496,6 +2517,102 @@ test("SNMP linkDown and linkUp traps update matching interface monitors", async 
   assert.equal(trapLogRes.statusCode, 200);
   const trapLog = readJson(trapLogRes) as Array<{ resultAction: string }>;
   assert.ok(trapLog.length >= 2);
+
+  const trapSourcesRes = await app.inject({
+    method: "GET",
+    url: "/api/snmp-traps/sources?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(trapSourcesRes.statusCode, 200);
+  const trapSources = readJson(trapSourcesRes) as Array<{
+    id: string;
+    sourceIp: string;
+    credentialId?: string | null;
+  }>;
+  const trapSource = trapSources.find(
+    (entry) => entry.sourceIp === "10.0.0.50",
+  );
+  assert.ok(trapSource);
+
+  const homeCredentialRes = await app.inject({
+    method: "POST",
+    url: "/api/snmp-credentials",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      name: "Home traps",
+      version: "2c",
+      community: "public",
+    },
+  });
+  assert.equal(homeCredentialRes.statusCode, 201);
+  const homeCredential = readJson(homeCredentialRes) as { id: string };
+
+  const sourceUpdateRes = await app.inject({
+    method: "PATCH",
+    url: `/api/snmp-traps/sources/${trapSource.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      credentialId: homeCredential.id,
+    },
+  });
+  assert.equal(sourceUpdateRes.statusCode, 200);
+  assert.equal(
+    (readJson(sourceUpdateRes) as { credentialId?: string | null })
+      .credentialId,
+    homeCredential.id,
+  );
+
+  const labRes = await app.inject({
+    method: "POST",
+    url: "/api/labs",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      id: "lab_trap_other",
+      name: "Trap Other",
+    },
+  });
+  assert.equal(labRes.statusCode, 201);
+
+  const otherCredentialRes = await app.inject({
+    method: "POST",
+    url: "/api/snmp-credentials",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_trap_other",
+      name: "Other traps",
+      version: "2c",
+      community: "public",
+    },
+  });
+  assert.equal(otherCredentialRes.statusCode, 201);
+  const otherCredential = readJson(otherCredentialRes) as { id: string };
+
+  const crossLabCredentialRes = await app.inject({
+    method: "PATCH",
+    url: `/api/snmp-traps/sources/${trapSource.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      credentialId: otherCredential.id,
+    },
+  });
+  assert.equal(crossLabCredentialRes.statusCode, 400);
+  assert.match(
+    (readJson(crossLabCredentialRes) as { error: string }).error,
+    /same lab/i,
+  );
 });
 
 test("snmp inventory sync preview and merge apply require feature flag and admin apply", async () => {
@@ -2577,7 +2694,9 @@ test("snmp inventory sync preview and merge apply require feature flag and admin
     },
   });
   const vlans = readJson(vlanRes) as Array<{ vlanId: number; name: string }>;
-  assert.ok(vlans.some((entry) => entry.vlanId === 44 && entry.name === "Sync VLAN"));
+  assert.ok(
+    vlans.some((entry) => entry.vlanId === 44 && entry.name === "Sync VLAN"),
+  );
 });
 
 test("ports can be updated and deleted with a custom MAC address", async () => {
@@ -2615,7 +2734,10 @@ test("ports can be updated and deleted with a custom MAC address", async () => {
     },
   });
   assert.equal(createRes.statusCode, 201);
-  const created = readJson(createRes) as { id: string; macAddress?: string | null };
+  const created = readJson(createRes) as {
+    id: string;
+    macAddress?: string | null;
+  };
   assert.equal(created.macAddress, "aa:bb:cc:dd:ee:01");
 
   const patchRes = await app.inject({
@@ -3427,7 +3549,11 @@ function testBerSequence(value: Buffer) {
 }
 
 function testBerTlv(tag: number, value: Buffer) {
-  return Buffer.concat([Buffer.from([tag]), testBerLength(value.length), value]);
+  return Buffer.concat([
+    Buffer.from([tag]),
+    testBerLength(value.length),
+    value,
+  ]);
 }
 
 function testBerLength(length: number) {
@@ -3455,7 +3581,8 @@ function readTestTlv(packet: Buffer, offset: number) {
     length = 0;
     for (let index = 0; index < byteCount; index += 1) {
       const byte = packet[valueStart + index];
-      if (byte == null) throw new Error("SNMP test packet length was truncated.");
+      if (byte == null)
+        throw new Error("SNMP test packet length was truncated.");
       length = (length << 8) | byte;
     }
     valueStart += byteCount;

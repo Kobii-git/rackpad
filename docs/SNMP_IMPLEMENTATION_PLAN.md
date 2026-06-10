@@ -2,89 +2,91 @@
 
 Tracks GitHub issue **#35** and related monitoring/inventory requests.
 
-**Last updated:** 2026-06-04  
-**Current baseline:** Rackpad **dev** branch — SNMP Phases **1–5 (v1)** implemented (schema **v23**). Enable inventory sync with `SNMP_INVENTORY_SYNC=1`. **Not yet released or pushed** as a versioned bundle.
+**Last updated:** 2026-06-10  
+**Current baseline:** Rackpad **1.6.1** on `main` — SNMP Phases **1–5 (v1)**
+implemented (schema **v23**). Enable inventory sync with
+`SNMP_INVENTORY_SYNC=1`.
 
 ---
 
-## Shipped on dev (Phases 1–5 v1)
+## Shipped in 1.6.x (Phases 1–5 v1)
 
-| Phase | Theme | Schema / key paths |
-|-------|--------|-------------------|
-| **1** | IF-MIB monitors, port linkage, match modes, OID presets | v21 — `server/lib/snmp-match.ts`, `monitoring.ts` |
-| **2** | SNMPv3 + per-lab encrypted credentials | v22 — `server/lib/snmp-v3.ts`, `snmp-credentials.ts` |
-| **3** | Trap receiver (v1/v2c), trap log, linkUp/Down actions | v23 — `server/lib/snmp-traps.ts`, `snmp-trap-parser.ts` |
-| **4** | Port/dashboard/visualizer SNMP verified state | — `src/lib/snmp-port-status.ts`, port components |
-| **5 v1** | Profile framework + VLAN/subnet sync preview/apply | — `server/lib/snmp-profiles/`, `server/lib/snmp-sync.ts` |
+| Phase    | Theme                                                   | Schema / key paths                                       |
+| -------- | ------------------------------------------------------- | -------------------------------------------------------- |
+| **1**    | IF-MIB monitors, port linkage, match modes, OID presets | v21 — `server/lib/snmp-match.ts`, `monitoring.ts`        |
+| **2**    | SNMPv3 + per-lab encrypted credentials                  | v22 — `server/lib/snmp-v3.ts`, `snmp-credentials.ts`     |
+| **3**    | Trap receiver (v1/v2c), trap log, linkUp/Down actions   | v23 — `server/lib/snmp-traps.ts`, `snmp-trap-parser.ts`  |
+| **4**    | Port/dashboard/visualizer SNMP verified state           | — `src/lib/snmp-port-status.ts`, port components         |
+| **5 v1** | Profile framework + VLAN/subnet sync preview/apply      | — `server/lib/snmp-profiles/`, `server/lib/snmp-sync.ts` |
 
-**Automated tests:** 45 server tests passing (incl. SNMP match, traps, sync diff, credentials).
+**Automated tests:** 66 server tests passing (incl. SNMP match, traps, sync diff,
+credentials).
 
 ---
 
-## Current State (as of dev branch)
+## Current State (as of 1.6.1)
 
-| Area | Status | Notes |
-|------|--------|-------|
-| SNMP GET (v1/v2c/v3) | **Done** | `server/lib/snmp.ts`, `snmp-v3.ts` |
-| Monitor type `snmp` + match modes | **Done** | `any`, `equals`, `notEquals`, `in` (no `regex` yet) |
-| IF-MIB discover / import | **Done** | `ifHighSpeed` → port speed when empty; port match preview |
-| Monitor ↔ port linkage | **Done** | `portId`, `snmpIfIndex`; `syncMonitorPortState()` |
-| Port `linkState` from SNMP | **Done** | Poll + trap path; badges in Ports/Dashboard/Visualizer |
-| SNMPv3 + credentials | **Done** | Per-lab AES-256-GCM secrets; `RACKPAD_SECRET_KEY` |
-| SNMP traps (UDP) | **Done** | Default **1162**; env `SNMP_TRAP_*`; v1/v2c parse |
-| Trap → monitor / port / alert | **Done** | Dedupe 30s; auto-learn IP→device |
-| Inventory sync (VLAN/subnet) | **Done (v1)** | Feature flag `SNMP_INVENTORY_SYNC=1`; merge + mirror |
-| Vendor profiles (generic) | **Done** | Q-BRIDGE VLANs, IP-MIB subnets, combined profile |
-| Vendor profiles (pfSense/UniFi/…) | **Not started** | Deferred per product decision |
-| DHCP scope sync apply | **Not started** | Preview message only in v1 |
-| Scheduled SNMP / sync cron | **Not started** | Phase 5.3 |
-| Phase 6 (Inform, Prometheus, …) | **Not started** | See below |
+| Area                              | Status          | Notes                                                     |
+| --------------------------------- | --------------- | --------------------------------------------------------- |
+| SNMP GET (v1/v2c/v3)              | **Done**        | `server/lib/snmp.ts`, `snmp-v3.ts`                        |
+| Monitor type `snmp` + match modes | **Done**        | `any`, `equals`, `notEquals`, `in` (no `regex` yet)       |
+| IF-MIB discover / import          | **Done**        | `ifHighSpeed` → port speed when empty; port match preview |
+| Monitor ↔ port linkage            | **Done**        | `portId`, `snmpIfIndex`; `syncMonitorPortState()`         |
+| Port `linkState` from SNMP        | **Done**        | Poll + trap path; badges in Ports/Dashboard/Visualizer    |
+| SNMPv3 + credentials              | **Done**        | Per-lab AES-256-GCM secrets; `RACKPAD_SECRET_KEY`         |
+| SNMP traps (UDP)                  | **Done**        | Default **1162**; env `SNMP_TRAP_*`; v1/v2c parse         |
+| Trap → monitor / port / alert     | **Done**        | Dedupe 30s; auto-learn IP→device                          |
+| Inventory sync (VLAN/subnet)      | **Done (v1)**   | Feature flag `SNMP_INVENTORY_SYNC=1`; merge + mirror      |
+| Vendor profiles (generic)         | **Done**        | Q-BRIDGE VLANs, IP-MIB subnets, combined profile          |
+| Vendor profiles (pfSense/UniFi/…) | **Not started** | Deferred per product decision                             |
+| DHCP scope sync apply             | **Not started** | Preview message only in v1                                |
+| Scheduled SNMP / sync cron        | **Not started** | Phase 5.3                                                 |
+| Phase 6 (Inform, Prometheus, …)   | **Not started** | See below                                                 |
 
 ---
 
 ## Outstanding work
 
-Prioritized backlog. **Nothing below is committed to a release yet** — track here until shipped + documented.
+Prioritized backlog. Track here until shipped + documented.
 
 ### P0 — Close Phase 5 exit criteria & release prep
 
-| Item | Phase | Notes |
-|------|-------|-------|
-| **pfSense / OPNsense profile** | 5.1 | Host MIBs for subnets + DHCP scope *preview*; first vendor-specific profile |
-| **DHCP scope merge apply** | 5.2 | Add missing scopes only; never silent delete assignments |
-| **README admin guide** | Docs | SNMP monitoring, v3 credentials, trap forwarding (162→1162), sync preview |
-| **CHANGELOG** | Docs | Entries for 1.6.0 → 2.0.0 feature bundle |
-| **Update #35 / issue map** | Docs | Mark partial vs complete; link to this plan |
-| **Manual lab matrix** | Test | Linux snmpd, one managed switch, pfSense — preview/apply + traps |
+| Item                             | Phase | Notes                                                                       |
+| -------------------------------- | ----- | --------------------------------------------------------------------------- |
+| **pfSense / OPNsense profile**   | 5.1   | Host MIBs for subnets + DHCP scope _preview_; first vendor-specific profile |
+| **DHCP scope merge apply**       | 5.2   | Add missing scopes only; never silent delete assignments                    |
+| **README/admin guide follow-up** | Docs  | Add more trap forwarding examples (pfSense, UniFi, managed switches)        |
+| **Update #35 / issue map**       | Docs  | Mark 1.6.x shipped scope vs remaining v3 traps/vendor sync                  |
+| **Manual lab matrix**            | Test  | Linux snmpd, one managed switch, pfSense — preview/apply + traps            |
 
 ### P1 — Phase 5 remainder
 
-| Item | Notes |
-|------|-------|
-| Scheduled sync per device | Optional interval (e.g. daily merge) on Monitoring or device row |
+| Item                            | Notes                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------ |
+| Scheduled sync per device       | Optional interval (e.g. daily merge) on Monitoring or device row         |
 | Q-BRIDGE port ↔ VLAN membership | Bridge MIB walk; port `allowedVlanIds` preview (high value for switches) |
-| Subnet ↔ VLAN linking on sync | Tie `ipAdEnt` subnets to Q-BRIDGE VLAN when both profiles run |
-| Mirror policy UX | Lab-level sync history / last preview snapshot (optional) |
+| Subnet ↔ VLAN linking on sync   | Tie `ipAdEnt` subnets to Q-BRIDGE VLAN when both profiles run            |
+| Mirror policy UX                | Lab-level sync history / last preview snapshot (optional)                |
 
 ### P2 — Phase 4 / monitoring polish
 
-| Item | Notes |
-|------|-------|
-| Bridge MIB / MAU for SFP status | Phase 4.3 — devices that expose optics OIDs |
-| `snmpMatchMode: regex` | Phase 1.1 — was spec’d, not implemented |
-| Structured SNMP poll logging | Phase 1.4 — timeout/auth failure log lines |
-| SNMPv3 **traps** | Phase 3 — v1/v2c traps only today |
-| Bulk “Add SNMP interface monitors” | Multi-device discover/import from Devices list |
+| Item                               | Notes                                                                        |
+| ---------------------------------- | ---------------------------------------------------------------------------- |
+| Bridge MIB / MAU for SFP status    | Phase 4.3 — devices that expose optics OIDs                                  |
+| `snmpMatchMode: regex`             | Phase 1.1 — was spec’d, not implemented                                      |
+| Structured SNMP poll logging       | Phase 1.4 — timeout/auth failure log lines                                   |
+| SNMPv3 **traps**                   | Phase 3 follow-up — v1/v2c traps only today; v3 polling is already supported |
+| Bulk “Add SNMP interface monitors” | Multi-device discover/import from Devices list                               |
 
 ### P3 — Phase 6 (enterprise & scale)
 
-| Item | Notes |
-|------|-------|
-| SNMP Inform ack | Reliable traps |
-| Bulk polling queue + concurrency limit | Avoid N simultaneous walks |
-| Per-lab SNMP rate limits | Protect agents and Rackpad |
-| Prometheus metrics | Poll latency, trap rate, failures |
-| i18n for SNMP UI | Monitoring, sync panel, trap log, credentials |
+| Item                                   | Notes                                         |
+| -------------------------------------- | --------------------------------------------- |
+| SNMP Inform ack                        | Reliable traps                                |
+| Bulk polling queue + concurrency limit | Avoid N simultaneous walks                    |
+| Per-lab SNMP rate limits               | Protect agents and Rackpad                    |
+| Prometheus metrics                     | Poll latency, trap rate, failures             |
+| i18n for SNMP UI                       | Monitoring, sync panel, trap log, credentials |
 
 ### P4 — Documentation (still open)
 
@@ -104,13 +106,13 @@ Prioritized backlog. **Nothing below is committed to a release yet** — track h
 
 ## Resolved decisions (2026-06)
 
-| # | Decision | Resolution |
-|---|----------|------------|
-| 1 | Credentials scope | **Per lab** (+ optional per device / per monitor override) |
-| 2 | Trap port default | **1162** in Docker; document host 162 → container 1162 |
-| 3 | First vendor profile | **Generic Q-BRIDGE + IP-MIB** shipped; **pfSense next** |
-| 4 | Sync scope v1 | **VLANs + subnets** apply; **DHCP preview only** (apply outstanding) |
-| 5 | Profile contribution model | **TypeScript profiles in repo** for now; YAML/UI TBD |
+| #   | Decision                   | Resolution                                                           |
+| --- | -------------------------- | -------------------------------------------------------------------- |
+| 1   | Credentials scope          | **Per lab** (+ optional per device / per monitor override)           |
+| 2   | Trap port default          | **1162** in Docker; document host 162 → container 1162               |
+| 3   | First vendor profile       | **Generic Q-BRIDGE + IP-MIB** shipped; **pfSense next**              |
+| 4   | Sync scope v1              | **VLANs + subnets** apply; **DHCP preview only** (apply outstanding) |
+| 5   | Profile contribution model | **TypeScript profiles in repo** for now; YAML/UI TBD                 |
 
 ---
 
@@ -121,7 +123,7 @@ Prioritized backlog. **Nothing below is committed to a release yet** — track h
 3. **README + CHANGELOG** — ship-ready docs for SNMP bundle.
 4. Manual validation on real gear; then tag **2.0.0** candidate.
 
-*(Do not push/release until reviewed — work stays on dev.)*
+_(Do not push/release until reviewed — work stays on dev.)_
 
 ---
 
@@ -372,13 +374,13 @@ flowchart TB
 
 ## Suggested release mapping
 
-| Release | Phases | Theme | Status |
-|---------|--------|-------|--------|
-| **1.6.0** | Phase 1 | Interface monitors + port linkage + presets | ✅ On dev, unreleased |
-| **1.7.0** | Phase 2 | SNMPv3 | ✅ On dev, unreleased |
-| **1.8.0** | Phase 3 | Trap receiver + alerts | ✅ On dev, unreleased |
-| **1.9.0** | Phase 4 | Ports/visualizer integration | ✅ On dev, unreleased |
-| **2.0.0** | Phase 5 | pfSense or full sync + docs | 🟡 v1 on dev; vendor profile + docs outstanding |
+| Release   | Phases  | Theme                                       | Status                                          |
+| --------- | ------- | ------------------------------------------- | ----------------------------------------------- |
+| **1.6.0** | Phase 1 | Interface monitors + port linkage + presets | ✅ On dev, unreleased                           |
+| **1.7.0** | Phase 2 | SNMPv3                                      | ✅ On dev, unreleased                           |
+| **1.8.0** | Phase 3 | Trap receiver + alerts                      | ✅ On dev, unreleased                           |
+| **1.9.0** | Phase 4 | Ports/visualizer integration                | ✅ On dev, unreleased                           |
+| **2.0.0** | Phase 5 | pfSense or full sync + docs                 | 🟡 v1 on dev; vendor profile + docs outstanding |
 
 Adjust based on user demand; traps and v3 can be swapped if community prioritizes v3 first.
 
@@ -386,14 +388,14 @@ Adjust based on user demand; traps and v3 can be swapped if community prioritize
 
 ## Dependencies & risks
 
-| Risk | Mitigation |
-|------|------------|
-| Docker non-root cannot bind 162 | Default 1162 + doc port mapping |
-| SNMP from container can’t reach mgmt VLAN | Doc host networking / macvlan; same as ICMP today |
-| Vendor MIBs undocumented | Start IF-MIB + Q-BRIDGE; profiles contributed via JSON |
-| Sync destroys manual IPAM | Preview-only default; merge mode; no auto-delete v1 |
-| SNMPv3 crypto complexity | Phase 2 scoped to authNoPriv + AES128 authPriv |
-| Secret storage | Instance encryption key; document backup implications |
+| Risk                                      | Mitigation                                             |
+| ----------------------------------------- | ------------------------------------------------------ |
+| Docker non-root cannot bind 162           | Default 1162 + doc port mapping                        |
+| SNMP from container can’t reach mgmt VLAN | Doc host networking / macvlan; same as ICMP today      |
+| Vendor MIBs undocumented                  | Start IF-MIB + Q-BRIDGE; profiles contributed via JSON |
+| Sync destroys manual IPAM                 | Preview-only default; merge mode; no auto-delete v1    |
+| SNMPv3 crypto complexity                  | Phase 2 scoped to authNoPriv + AES128 authPriv         |
+| Secret storage                            | Instance encryption key; document backup implications  |
 
 ---
 
