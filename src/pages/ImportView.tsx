@@ -39,6 +39,7 @@ import {
 import type {
   Device,
   DeviceStatus,
+  DhcpScope,
   IpAssignment,
   Port,
   Subnet,
@@ -403,6 +404,7 @@ export default function ImportView() {
   const virtualSwitches = useStore((s) => s.virtualSwitches);
   const vlans = useStore((s) => s.vlans);
   const subnets = useStore((s) => s.subnets);
+  const scopes = useStore((s) => s.scopes);
   const ipAssignments = useStore((s) => s.ipAssignments);
   const canEdit = canEditInventory(currentUser);
   const [payload, setPayload] = useState<HyperVPayload | null>(null);
@@ -481,7 +483,9 @@ export default function ImportView() {
       const provider = providerForPayload(parsed);
       setPayload(parsed);
       setHostDraft(hostToDraft(parsed, provider));
-      setVmDrafts(parsed.vms.map((vm, index) => vmToDraft(vm, index, provider)));
+      setVmDrafts(
+        parsed.vms.map((vm, index) => vmToDraft(vm, index, provider)),
+      );
     } catch (error) {
       setPayload(null);
       setHostDraft(null);
@@ -533,39 +537,63 @@ export default function ImportView() {
       });
 
       if (options.vms) {
+        let skippedWorkloads = 0;
         for (const draft of vmDrafts.filter((entry) => entry.include)) {
-          const device = await upsertVmDevice({
-            draft,
-            hostDevice,
-            devicesByHostname,
-            ipAssignments,
-            subnets,
-            options,
-            log,
-          });
-
-          if (options.ports) {
-            await upsertVmPorts({
+          try {
+            const device = await upsertVmDevice({
               draft,
-              device,
-              currentPorts: localPortsByDeviceId[device.id] ?? [],
-              vlanMap,
-              switchMap,
-              log,
-            }).then((nextPorts) => {
-              localPortsByDeviceId[device.id] = nextPorts;
-            });
-          }
-
-          if (options.ips) {
-            await importSecondaryIps({
-              draft,
-              device,
+              hostDevice,
+              devicesByHostname,
+              ipAssignments,
+              scopes,
               subnets,
-              existingKeys: localIpKeys,
+              options,
               log,
             });
+
+            if (options.ports) {
+              await upsertVmPorts({
+                draft,
+                device,
+                currentPorts: localPortsByDeviceId[device.id] ?? [],
+                vlanMap,
+                switchMap,
+                log,
+              }).then((nextPorts) => {
+                localPortsByDeviceId[device.id] = nextPorts;
+              });
+            }
+
+            if (options.ips) {
+              await importSecondaryIps({
+                draft,
+                device,
+                scopes,
+                subnets,
+                existingKeys: localIpKeys,
+                log,
+              });
+            }
+          } catch (error) {
+            skippedWorkloads += 1;
+            const label =
+              draft.hostname ||
+              draft.displayName ||
+              draft.source.name ||
+              draft.key;
+            log.push(
+              `Skipped ${label}: ${
+                error instanceof Error ? error.message : "Unknown import error."
+              }`,
+            );
           }
+        }
+        if (skippedWorkloads > 0) {
+          log.push(
+            `Skipped ${skippedWorkloads} workload${
+              skippedWorkloads === 1 ? "" : "s"
+            }; the remaining selected workloads were still processed.`,
+          );
         }
       }
 
@@ -967,7 +995,9 @@ function HostPreview({
         <CardTitle>
           <CardLabel>Host</CardLabel>
           <CardHeading>
-            {value?.displayName || host?.computerName || `Unknown ${copy.hostNoun}`}
+            {value?.displayName ||
+              host?.computerName ||
+              `Unknown ${copy.hostNoun}`}
           </CardHeading>
         </CardTitle>
         <div className="flex flex-wrap justify-end gap-2">
@@ -1442,7 +1472,10 @@ function hostToDraft(
 ): HostDraft {
   const host = payload.host;
   const fallback = PROVIDER_COPY[provider].hostFallback;
-  const hostname = slugHost(host?.computerName || host?.fqdn || fallback, fallback);
+  const hostname = slugHost(
+    host?.computerName || host?.fqdn || fallback,
+    fallback,
+  );
 
   return {
     targetDeviceId: AUTO_HOST_TARGET,
@@ -1459,12 +1492,14 @@ function hostToDraft(
 }
 
 function providerForPayload(payload?: HyperVPayload | null): ImportProvider {
-  const text = `${payload?.provider ?? ""} ${payload?.schema ?? ""}`.toLowerCase();
+  const text =
+    `${payload?.provider ?? ""} ${payload?.schema ?? ""}`.toLowerCase();
   return text.includes("proxmox") ? "proxmox" : "hyperv";
 }
 
 function providerForWorkload(vm: HyperVVm): ImportProvider {
-  const text = `${vm.kind ?? ""} ${vm.vmType ?? ""} ${vm.id ?? ""}`.toLowerCase();
+  const text =
+    `${vm.kind ?? ""} ${vm.vmType ?? ""} ${vm.id ?? ""}`.toLowerCase();
   return text.includes("lxc") || text.includes("qemu") ? "proxmox" : "hyperv";
 }
 
@@ -1556,7 +1591,10 @@ async function upsertHost(
   const host = payload.host;
   const sourceDraft = draft ?? hostToDraft(payload, provider);
   const hostname = slugHost(
-    sourceDraft.hostname || host?.computerName || host?.fqdn || copy.hostFallback,
+    sourceDraft.hostname ||
+      host?.computerName ||
+      host?.fqdn ||
+      copy.hostFallback,
     copy.hostFallback,
   );
   const selected =
@@ -1582,7 +1620,9 @@ async function upsertHost(
       tags: mergeTags(existing.tags, [copy.sourceTag, "imported"]),
       notes: mergeText(existing.notes, sourceDraft.notes),
     });
-    context.log.push(`Updated ${copy.hostNoun} ${updated?.hostname ?? hostname}.`);
+    context.log.push(
+      `Updated ${copy.hostNoun} ${updated?.hostname ?? hostname}.`,
+    );
     return updated ?? existing;
   }
 
@@ -1709,6 +1749,7 @@ async function upsertVmDevice({
   hostDevice,
   devicesByHostname,
   ipAssignments,
+  scopes,
   subnets,
   options,
   log,
@@ -1717,6 +1758,7 @@ async function upsertVmDevice({
   hostDevice: Device | null;
   devicesByHostname: Record<string, Device>;
   ipAssignments: IpAssignment[];
+  scopes: DhcpScope[];
   subnets: Subnet[];
   options: ImportOptions;
   log: string[];
@@ -1748,6 +1790,13 @@ async function upsertVmDevice({
       managementIpConflict.vmId === existing?.id ||
       managementIpConflict.containerId === existing?.id)
       ? candidateManagementIp
+      : undefined;
+  const managementSubnet = managementIp
+    ? findSubnetForIp(subnets, managementIp)
+    : undefined;
+  const managementDhcpScope =
+    managementIp && managementSubnet
+      ? findDhcpScopeForIp(scopes, managementSubnet.id, managementIp)
       : undefined;
   const sourceIps = vmIps(draft.source);
   const guest = getVmGuestInfo(draft.source);
@@ -1790,6 +1839,10 @@ async function upsertVmDevice({
     placement: "virtual" as const,
     parentDeviceId: hostDevice?.id,
     managementIp,
+    ipAllocationMode: managementDhcpScope
+      ? ("dhcp-reservation" as const)
+      : ("static" as const),
+    dhcpScopeId: managementDhcpScope?.id ?? null,
     macAddress,
     model: osName || existing?.model,
     cpuCores: options.specs ? toNumber(draft.cpuCores) : undefined,
@@ -1807,7 +1860,9 @@ async function upsertVmDevice({
       notes: mergeText(existing.notes, notes),
       tags: mergeTags(existing.tags, patch.tags),
     });
-    log.push(`Updated ${workloadLabel} ${updated?.hostname ?? existing.hostname}.`);
+    log.push(
+      `Updated ${workloadLabel} ${updated?.hostname ?? existing.hostname}.`,
+    );
     if (candidateManagementIp && !managementIp) {
       log.push(
         `Skipped primary IP ${candidateManagementIp} for ${hostname}; IPAM already has that address.`,
@@ -1895,12 +1950,14 @@ async function upsertVmPorts({
 async function importSecondaryIps({
   draft,
   device,
+  scopes,
   subnets,
   existingKeys,
   log,
 }: {
   draft: VmDraft;
   device: Device;
+  scopes: DhcpScope[];
   subnets: Subnet[];
   existingKeys: Set<string>;
   log: string[];
@@ -1916,10 +1973,13 @@ async function importSecondaryIps({
     if (!subnet) continue;
     const key = `${subnet.id}|${ipAddress}`;
     if (existingKeys.has(key)) continue;
+    const dhcpScope = findDhcpScopeForIp(scopes, subnet.id, ipAddress);
     const created = await createIpAssignmentRecord({
       subnetId: subnet.id,
       ipAddress,
       assignmentType: isContainer ? "container" : "vm",
+      allocationMode: dhcpScope ? "dhcp-reservation" : "static",
+      dhcpScopeId: dhcpScope?.id ?? null,
       deviceId: device.id,
       vmId: isContainer ? undefined : device.id,
       containerId: isContainer ? device.id : undefined,
@@ -2068,6 +2128,21 @@ function findIpAssignment(
   return ipAssignments.find(
     (assignment) =>
       assignment.subnetId === subnet.id && assignment.ipAddress === ipAddress,
+  );
+}
+
+function findDhcpScopeForIp(
+  scopes: DhcpScope[],
+  subnetId: string,
+  ipAddress: string,
+) {
+  if (!isUsableIpv4(ipAddress)) return undefined;
+  const ipValue = ipToInt(ipAddress);
+  return scopes.find(
+    (scope) =>
+      scope.subnetId === subnetId &&
+      ipValue >= ipToInt(scope.startIp) &&
+      ipValue <= ipToInt(scope.endIp),
   );
 }
 

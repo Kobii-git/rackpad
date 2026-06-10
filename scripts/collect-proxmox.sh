@@ -181,6 +181,32 @@ def parse_pct_list(value):
     return containers
 
 
+def parse_qm_list(value):
+    vms = []
+    for line in str(value or "").splitlines()[1:]:
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        vmid = number(parts[0])
+        if vmid is None:
+            continue
+        vms.append(
+            {
+                "vmid": int(vmid),
+                "name": parts[1],
+                "status": parts[2],
+            }
+        )
+    return vms
+
+
+def qm_list():
+    output, error = run(["qm", "list"])
+    if error:
+        return [], error
+    return parse_qm_list(output), None
+
+
 def pct_list():
     output, error = run(["pct", "list"])
     if error:
@@ -209,15 +235,50 @@ def workload_sort_key(entry):
     return parsed if parsed is not None else 0
 
 
+def workload_merge_key(entry, fallback_index):
+    parsed = number(entry.get("vmid") or entry.get("ctid"))
+    if parsed is not None:
+        return f"vmid:{int(parsed)}"
+    name = str(entry.get("name") or entry.get("id") or "").strip().lower()
+    return f"name:{name}" if name else f"row:{fallback_index}"
+
+
+def merge_workload_lists(primary, fallback):
+    merged = {}
+    for index, entry in enumerate(fallback or []):
+        merged[workload_merge_key(entry, index)] = dict(entry)
+    for index, entry in enumerate(primary or []):
+        key = workload_merge_key(entry, index)
+        merged[key] = {**merged.get(key, {}), **dict(entry)}
+    return list(merged.values())
+
+
+def list_qemu_workloads(node):
+    data, error = pvesh(f"/nodes/{node}/qemu")
+    pvesh_items = normalize_workload_list(data)
+    fallback_items, fallback_error = qm_list()
+    items = merge_workload_lists(pvesh_items, fallback_items)
+    errors = unique(
+        [
+            error if not pvesh_items else None,
+            fallback_error if not fallback_items else None,
+        ]
+    )
+    return items, "; ".join(errors) if errors and not items else error
+
+
 def list_lxc_workloads(node):
     data, error = pvesh(f"/nodes/{node}/lxc")
-    items = normalize_workload_list(data)
-    if items:
-        return items, error
-
+    pvesh_items = normalize_workload_list(data)
     fallback_items, fallback_error = pct_list()
-    errors = unique([error, fallback_error])
-    return fallback_items, "; ".join(errors) if errors and not fallback_items else error
+    items = merge_workload_lists(pvesh_items, fallback_items)
+    errors = unique(
+        [
+            error if not pvesh_items else None,
+            fallback_error if not fallback_items else None,
+        ]
+    )
+    return items, "; ".join(errors) if errors and not items else error
 
 
 def read_text(path):
@@ -824,10 +885,8 @@ def main():
         node = (node_output or socket.gethostname().split(".")[0]).strip()
 
     interfaces = load_ip_address()
-    qemu_items, qemu_error = pvesh(f"/nodes/{node}/qemu")
+    qemu_items, qemu_error = list_qemu_workloads(node)
     lxc_items, lxc_error = list_lxc_workloads(node)
-    qemu_items = normalize_workload_list(qemu_items)
-    lxc_items = normalize_workload_list(lxc_items)
 
     vms = []
     for item in sorted(qemu_items, key=workload_sort_key):

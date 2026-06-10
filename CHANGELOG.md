@@ -8,6 +8,25 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.2-beta.2] - 2026-06-11
+
+### Added
+
+- Add a discovered-host picker to the device drawer so new AP children,
+  Proxmox/compute children, shelf devices, and normal devices can reuse scanned
+  discovery data instead of retyping hostname, IP, MAC, vendor, and device type.
+
+### Fixed
+
+- Proxmox collector now merges `pvesh` workload results with `qm list` and
+  `pct list`, avoiding truncated QEMU/LXC imports on hosts where the API list
+  does not return every workload.
+- Proxmox guest import now continues after a single VM/CT fails validation and
+  logs the skipped workload instead of stopping the entire import batch.
+- Proxmox guest IPs that fall inside a Rackpad DHCP scope are imported as DHCP
+  reservations, matching IPAM validation for device, VM, and container
+  addresses.
+
 ## [1.6.2-beta.1] - 2026-06-11
 
 ### Added

@@ -826,9 +826,11 @@ export function canEditInventory(user: AppUser | null, labId = state.lab.id) {
   if (!user) return false;
   if (user.role === "admin") return true;
   if (!labId || labId === DEFAULT_LAB.id) return false;
-  return user.labAccess?.some(
-    (entry) => entry.labId === labId && entry.role === "editor",
-  ) ?? false;
+  return (
+    user.labAccess?.some(
+      (entry) => entry.labId === labId && entry.role === "editor",
+    ) ?? false
+  );
 }
 
 export function canReadLab(user: AppUser | null, labId: string) {
@@ -1255,8 +1257,7 @@ export async function loadAll(
 
       const allDeviceServices = sortDeviceServices(
         (
-          (resolved.get("deviceServices") as DeviceService[] | undefined) ??
-          []
+          (resolved.get("deviceServices") as DeviceService[] | undefined) ?? []
         ).filter((service) => deviceIds.has(service.deviceId)),
       );
       const deviceServiceIds = new Set(
@@ -1432,9 +1433,7 @@ export async function refreshUsers(): Promise<void> {
   }));
 }
 
-export async function updateUiSettings(
-  input: UiSettings,
-): Promise<UiSettings> {
+export async function updateUiSettings(input: UiSettings): Promise<UiSettings> {
   const saved = await api.updateUiSettings(input);
   setState((prev) => ({
     ...prev,
@@ -1614,16 +1613,19 @@ export function previewNextIpAllocation(
     }
   }
 
-  const staticCandidate = allocationMode === "static" ? nextFreeStaticIp(
-    subnet.cidr,
-    dhcpScopes,
-    reservedZones,
-    [...assignedSet].map(intToIp),
-    {
-      skipDhcp: true,
-      skipReserved: false,
-    },
-  ) : null;
+  const staticCandidate =
+    allocationMode === "static"
+      ? nextFreeStaticIp(
+          subnet.cidr,
+          dhcpScopes,
+          reservedZones,
+          [...assignedSet].map(intToIp),
+          {
+            skipDhcp: true,
+            skipReserved: false,
+          },
+        )
+      : null;
   if (staticCandidate) {
     return {
       ipAddress: staticCandidate,
@@ -1665,7 +1667,10 @@ function ipInRange(ipAddress: string, startIp: string, endIp: string) {
   return target >= ipToInt(startIp) && target <= ipToInt(endIp);
 }
 
-function addDhcpTechnicalAddress(target: Set<number>, ipAddress?: string | null) {
+function addDhcpTechnicalAddress(
+  target: Set<number>,
+  ipAddress?: string | null,
+) {
   if (!ipAddress) return;
   target.add(ipToInt(ipAddress));
 }
@@ -2404,7 +2409,11 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
 
 export async function updateDevice(
   id: string,
-  changes: Partial<Omit<Device, "id" | "labId">> & { portTemplateId?: string },
+  changes: Partial<Omit<Device, "id" | "labId">> & {
+    portTemplateId?: string;
+    ipAllocationMode?: IpAllocationMode;
+    dhcpScopeId?: string | null;
+  },
 ): Promise<Device | null> {
   const existing = state.devices.find((device) => device.id === id);
   if (!existing) return null;
@@ -2448,6 +2457,10 @@ export async function updateDevice(
   const syncResult = await syncDeviceManagementAssignment(
     updated,
     existing.managementIp,
+    {
+      allocationMode: changes.ipAllocationMode,
+      dhcpScopeId: changes.dhcpScopeId,
+    },
   );
 
   const updatedHostSharedChildren: Device[] = [];
@@ -2910,10 +2923,7 @@ export async function createReferenceImageRecord(input: {
 
   setState((prev) => ({
     ...prev,
-    referenceImages: sortReferenceImages([
-      created,
-      ...prev.referenceImages,
-    ]),
+    referenceImages: sortReferenceImages([created, ...prev.referenceImages]),
   }));
 
   void recordAudit(
@@ -2953,9 +2963,7 @@ export async function updateReferenceImageRecord(
   return updated;
 }
 
-export async function deleteReferenceImageRecord(
-  id: string,
-): Promise<boolean> {
+export async function deleteReferenceImageRecord(id: string): Promise<boolean> {
   const existing = state.referenceImages.find((image) => image.id === id);
   if (!existing) return false;
 
@@ -2988,10 +2996,14 @@ export interface AllocateIpInput {
 export async function allocateIp(
   input: AllocateIpInput,
 ): Promise<IpAssignment | null> {
-  const preview = previewNextIpAllocation(input.subnetId, input.assignmentType, {
-    allocationMode: input.allocationMode,
-    dhcpScopeId: input.dhcpScopeId,
-  });
+  const preview = previewNextIpAllocation(
+    input.subnetId,
+    input.assignmentType,
+    {
+      allocationMode: input.allocationMode,
+      dhcpScopeId: input.dhcpScopeId,
+    },
+  );
   if (!preview) return null;
 
   const subnet = state.subnets.find((entry) => entry.id === input.subnetId);

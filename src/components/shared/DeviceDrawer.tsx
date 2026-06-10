@@ -17,6 +17,7 @@ import {
   createDeviceTypeRecord,
   previewNextIpAllocation,
   updateDevice,
+  updateDiscoveredDeviceRecord,
   useStore,
 } from "@/lib/store";
 import { useI18n } from "@/i18n";
@@ -27,6 +28,7 @@ import type {
   Device,
   DeviceStatus,
   DeviceType,
+  DiscoveredDevice,
   IpAllocationMode,
   IpAssignmentType,
   RackFace,
@@ -174,6 +176,7 @@ export function DeviceDrawer({
   const racks = useStore((s) => s.racks);
   const rooms = useStore((s) => s.rooms);
   const devices = useStore((s) => s.devices);
+  const discoveredDevices = useStore((s) => s.discoveredDevices);
   const deviceTypes = useStore((s) => s.deviceTypes);
   const ports = useStore((s) => s.ports);
   const portTemplates = useStore((s) => s.portTemplates);
@@ -195,6 +198,7 @@ export function DeviceDrawer({
   const [shelfForm, setShelfForm] = useState<ShelfFormState>(() =>
     blankShelfForm(defaultRackId),
   );
+  const [selectedDiscoveryId, setSelectedDiscoveryId] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -209,6 +213,7 @@ export function DeviceDrawer({
       setCreatingType(false);
       setCustomTypeLabel("");
       setShelfForm(blankShelfForm(defaultRackId));
+      setSelectedDiscoveryId("");
     }
   }, [defaultRackId, defaults, device, open]);
 
@@ -262,6 +267,16 @@ export function DeviceDrawer({
     form.placement === "wireless" ||
     form.placement === "virtual" ||
     form.placement === "shelf";
+  const discoveryCandidates = useMemo(() => {
+    if (isEdit) return [];
+    return discoveredDevices
+      .filter(
+        (entry) => !entry.importedDeviceId && !entry.technicalRole,
+      )
+      .sort((a, b) =>
+        discoverySortLabel(a).localeCompare(discoverySortLabel(b)),
+      );
+  }, [discoveredDevices, isEdit]);
   const parentLabel = useMemo(() => {
     if (form.placement === "wireless") return t("Connected AP");
     if (form.placement === "shelf") return t("Rack shelf / tray");
@@ -399,6 +414,31 @@ export function DeviceDrawer({
     value: ShelfFormState[K],
   ) {
     setShelfForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function applyDiscoveredHost(discoveryId: string) {
+    setSelectedDiscoveryId(discoveryId);
+    if (!discoveryId) return;
+    const discovered = discoveryCandidates.find(
+      (entry) => entry.id === discoveryId,
+    );
+    if (!discovered) return;
+
+    setForm((prev) => ({
+      ...prev,
+      hostname: discoveredHostname(discovered) || prev.hostname,
+      displayName: discovered.displayName?.trim() || prev.displayName,
+      deviceType: discovered.deviceType ?? prev.deviceType,
+      manufacturer: discovered.vendor?.trim() || prev.manufacturer,
+      managementIp: discovered.ipAddress,
+      macAddress: discovered.macAddress?.trim() || prev.macAddress,
+      status: prev.status === "unknown" ? "online" : prev.status,
+      placement: shouldUseDiscoveryPlacement(defaults, prev, discovered)
+        ? discovered.placement!
+        : prev.placement,
+      tags: mergeTagText(prev.tags, ["discovered", discovered.source]),
+      notes: mergeNoteText(prev.notes, discovered.notes),
+    }));
   }
 
   async function handleCreateShelf() {
@@ -582,6 +622,17 @@ export function DeviceDrawer({
             });
 
       if (saved) {
+        if (!isEdit && selectedDiscoveryId) {
+          await updateDiscoveredDeviceRecord(selectedDiscoveryId, {
+            status: "imported",
+            importedDeviceId: saved.id,
+            hostname: saved.hostname,
+            displayName: saved.displayName ?? null,
+            deviceType: saved.deviceType,
+            placement: saved.placement ?? null,
+            lastSeen: saved.lastSeen ?? new Date().toISOString(),
+          });
+        }
         onSaved?.(saved);
         onClose();
       } else {
@@ -645,6 +696,36 @@ export function DeviceDrawer({
               className="flex flex-1 flex-col overflow-hidden"
             >
               <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+                {!isEdit && discoveryCandidates.length > 0 && (
+                  <>
+                    <Section label={t("Discovery")}>
+                      <Field label={t("Use discovered host")}>
+                        <Select
+                          value={selectedDiscoveryId}
+                          onChange={applyDiscoveredHost}
+                        >
+                          <option value="">{t("Start blank")}</option>
+                          {discoveryCandidates.map((entry) => (
+                            <option key={entry.id} value={entry.id}>
+                              {discoveryOptionLabel(entry)}
+                            </option>
+                          ))}
+                        </Select>
+                        <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-tertiary)]">
+                          {selectedDiscoveryId
+                            ? t(
+                                "Selected discovery data will be marked imported when this device is saved.",
+                              )
+                            : t(
+                                "Populate hostname, IP, MAC, vendor, and device type from a discovered host.",
+                              )}
+                        </p>
+                      </Field>
+                    </Section>
+                    <Separator />
+                  </>
+                )}
+
                 <Section label={t("Identity")}>
                   <Field label={t("Hostname *")}>
                     <Input
@@ -845,22 +926,20 @@ export function DeviceDrawer({
 
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                           <div className="min-w-0 text-xs text-[var(--color-fg-subtle)]">
-                            {managementIp && managementIpInDhcpPool ? (
-                              t("{ip} is in {scope}.", {
-                                ip: managementIp,
-                                scope: matchingDhcpScope?.name ?? "",
-                              })
-                            ) : nextIpPreview ? (
-                              form.ipAllocationMode === "dhcp-reservation"
-                                ? t("Next reservation IP: {ipAddress}", {
-                                    ipAddress: nextIpPreview.ipAddress,
-                                  })
-                                : t("Next static IP: {ipAddress}", {
-                                    ipAddress: nextIpPreview.ipAddress,
-                                  })
-                            ) : (
-                              t("No available address for this selection.")
-                            )}
+                            {managementIp && managementIpInDhcpPool
+                              ? t("{ip} is in {scope}.", {
+                                  ip: managementIp,
+                                  scope: matchingDhcpScope?.name ?? "",
+                                })
+                              : nextIpPreview
+                                ? form.ipAllocationMode === "dhcp-reservation"
+                                  ? t("Next reservation IP: {ipAddress}", {
+                                      ipAddress: nextIpPreview.ipAddress,
+                                    })
+                                  : t("Next static IP: {ipAddress}", {
+                                      ipAddress: nextIpPreview.ipAddress,
+                                    })
+                                : t("No available address for this selection.")}
                           </div>
                           <Button
                             type="button"
@@ -920,8 +999,7 @@ export function DeviceDrawer({
                                 "Shares {hostname} at {ip}. Leave the inherited IP here or blank; Rackpad will not create a duplicate IPAM row for this child.",
                                 {
                                   hostname:
-                                    parentHost.hostname ??
-                                    t("the parent host"),
+                                    parentHost.hostname ?? t("the parent host"),
                                   ip: parentHost.managementIp,
                                 },
                               )
@@ -1216,9 +1294,7 @@ export function DeviceDrawer({
 
                 <Section
                   label={
-                    isShelfMounted
-                      ? t("Shelf footprint")
-                      : t("Rack placement")
+                    isShelfMounted ? t("Shelf footprint") : t("Rack placement")
                   }
                 >
                   {isRackMounted && (
@@ -1386,12 +1462,70 @@ function Select({
       disabled={disabled}
       className={cn(
         "rk-control h-8 w-full px-2 text-sm font-sans",
-        "text-[var(--text-primary)] capitalize",
+        "text-[var(--text-primary)]",
       )}
     >
       {children}
     </select>
   );
+}
+
+function discoverySortLabel(discovered: DiscoveredDevice) {
+  return (
+    discovered.hostname?.trim() ||
+    discovered.displayName?.trim() ||
+    discovered.ipAddress
+  ).toLowerCase();
+}
+
+function discoveryOptionLabel(discovered: DiscoveredDevice) {
+  return [
+    discovered.hostname?.trim() || discovered.displayName?.trim(),
+    discovered.ipAddress,
+    discovered.macAddress?.trim(),
+    discovered.vendor?.trim(),
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
+
+function discoveredHostname(discovered: DiscoveredDevice) {
+  return (
+    discovered.hostname?.trim() ||
+    discovered.displayName?.trim() ||
+    `host-${discovered.ipAddress.replaceAll(".", "-")}`
+  );
+}
+
+function shouldUseDiscoveryPlacement(
+  defaults: Partial<FormState> | undefined,
+  form: FormState,
+  discovered: DiscoveredDevice,
+) {
+  if (defaults?.placement || form.parentDeviceId || form.rackId) return false;
+  return discovered.placement === "room";
+}
+
+function mergeTagText(existing: string, additions: Array<string | null>) {
+  const tags = new Set(
+    existing
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+  );
+  for (const tag of additions) {
+    const value = tag?.trim();
+    if (value) tags.add(value);
+  }
+  return [...tags].join(", ");
+}
+
+function mergeNoteText(existing: string, incoming?: string | null) {
+  const next = incoming?.trim();
+  if (!next) return existing;
+  if (!existing.trim()) return next;
+  if (existing.includes(next)) return existing;
+  return `${existing}\n\n${next}`;
 }
 
 function cidrContainsIp(cidr: string, ipAddress: string) {
