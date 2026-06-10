@@ -8,15 +8,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
-## [1.6.1-beta.1] - 2026-06-10
-
-### Fixed
-
-- Visualizer: the right-hand controls panel scrolls again, so the Filters / Device
-  types section at the bottom is reachable (its scroll container was clipping instead
-  of scrolling).
-
-## [1.6.1-beta.0] - 2026-06-09
+## [1.6.1] - 2026-06-10
 
 ### Added
 
@@ -37,6 +29,9 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Fixed
 
+- Visualizer: the right-hand controls panel scrolls again, so the Filters / Device
+  types section at the bottom is reachable (its scroll container was clipping instead
+  of scrolling).
 - Visualizer cable lines no longer render as fat, broken dashes in Firefox: dashed
   strokes use `butt` line-caps (round caps + dashes rendered incorrectly in Gecko);
   solid cables are unchanged (#51).
