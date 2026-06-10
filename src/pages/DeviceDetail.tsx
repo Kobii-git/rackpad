@@ -2018,10 +2018,10 @@ export default function DeviceDetail() {
                     unknown
                   </span>
                   until at least one enabled target has run. For near-real-time
-                  link events, forward SNMP v1/v2c traps to this Rackpad host on
-                  UDP port 1162 (or map host 162 → container 1162). SNMPv3
-                  polling is supported through credentials; SNMPv3 traps are
-                  still a roadmap item.
+                  link events, forward SNMP v1/v2c or SNMPv3 traps to this
+                  Rackpad host on UDP port 1162 (or map host 162 → container
+                  1162). SNMPv3 traps require a matching lab credential on the
+                  trap source, device, or SNMP monitor.
                 </div>
 
                 {canManageMonitoring && device?.labId && (

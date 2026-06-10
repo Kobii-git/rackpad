@@ -8,6 +8,20 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.2-beta.1] - 2026-06-11
+
+### Added
+
+- SNMP trap receiver now supports authenticated SNMPv3 `linkUp`/`linkDown`
+  traps, including AES128 privacy, when the trap source, device, or SNMP monitor
+  is mapped to the matching lab credential.
+
+### Changed
+
+- Updated SNMP docs, in-app monitoring guidance, and issue tracking notes to
+  mark SNMPv3 traps as beta-supported and keep the remaining #35 work focused
+  on vendor profiles, DHCP scope apply, scheduled sync, and lab validation.
+
 ## [1.6.2-beta.0] - 2026-06-10
 
 ### Changed

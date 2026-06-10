@@ -66,8 +66,9 @@ Rackpad runs a UDP trap receiver at startup.
 - Incoming v1/v2c `linkUp`/`linkDown` traps update the matching monitor/port; an
   unknown source IP is auto-learned to a device when possible. Duplicate traps are
   de-duplicated within ~30s.
-- SNMPv3 credentials are supported for polling. SNMPv3 traps are **not** handled
-  yet (trap receiver is v1/v2c only).
+- SNMPv3 `linkUp`/`linkDown` traps are supported for authenticated and encrypted
+  USM credentials. Map the trap source, device, or SNMP monitor to the matching
+  lab credential so Rackpad can validate and decrypt the packet.
 
 Configure with `SNMP_TRAP_ENABLED`, `SNMP_TRAP_PORT`, `SNMP_TRAP_BIND` (see table).
 Receiver status is reported on `/api/health` and `/api/snmp-traps/status`.

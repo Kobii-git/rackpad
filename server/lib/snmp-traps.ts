@@ -14,6 +14,7 @@ import {
   parseSnmpTrapPacket,
   trapOidToLinkResult,
   type ParsedSnmpTrap,
+  type SnmpV3TrapCredential,
 } from "./snmp-trap-parser.js";
 
 const DEDUPE_WINDOW_MS = 30_000;
@@ -25,6 +26,7 @@ interface TrapSourceMapping {
   deviceId: string | null;
   community: string | null;
   credentialId: string | null;
+  deviceCredentialId: string | null;
 }
 
 export interface SnmpTrapReceiverStatus {
@@ -126,13 +128,15 @@ export async function handleTrapPacket(packet: Buffer, sourceIp: string) {
   status.trapsReceived += 1;
   status.lastTrapAt = new Date().toISOString();
 
-  const trap = parseSnmpTrapPacket(packet);
+  const mapping = resolveTrapSource(sourceIp);
+  const trap = parseSnmpTrapPacket(packet, {
+    v3Credentials: collectSnmpV3TrapCredentials(mapping),
+  });
   if (shouldDedupe(sourceIp, trap)) {
     return { deduped: true };
   }
 
   const linkResult = trapOidToLinkResult(trap.trapOid, trap.genericTrap);
-  const mapping = resolveTrapSource(sourceIp);
   const deviceId = mapping.deviceId;
   const labId = mapping.labId;
 
@@ -184,6 +188,7 @@ export async function handleTrapPacket(packet: Buffer, sourceIp: string) {
     deviceId,
     sourceIp,
     community: trap.community ?? null,
+    credentialId: trap.credentialId ?? null,
   });
 
   db.prepare(
@@ -220,14 +225,19 @@ function resolveTrapSource(sourceIp: string): TrapSourceMapping {
       credentialId: existing.credentialId
         ? String(existing.credentialId)
         : null,
+      deviceCredentialId: existing.deviceId
+        ? resolveDeviceCredentialId(String(existing.deviceId))
+        : null,
     };
   }
 
   const device = db
     .prepare(
-      "SELECT id, labId FROM devices WHERE managementIp = ? ORDER BY hostname LIMIT 1",
+      "SELECT id, labId, snmpCredentialId FROM devices WHERE managementIp = ? ORDER BY hostname LIMIT 1",
     )
-    .get(sourceIp) as { id: string; labId: string } | undefined;
+    .get(sourceIp) as
+    | { id: string; labId: string; snmpCredentialId?: string | null }
+    | undefined;
 
   if (device) {
     return {
@@ -236,6 +246,7 @@ function resolveTrapSource(sourceIp: string): TrapSourceMapping {
       deviceId: device.id,
       community: null,
       credentialId: null,
+      deviceCredentialId: device.snmpCredentialId ?? null,
     };
   }
 
@@ -249,7 +260,68 @@ function resolveTrapSource(sourceIp: string): TrapSourceMapping {
     deviceId: null,
     community: null,
     credentialId: null,
+    deviceCredentialId: null,
   };
+}
+
+function resolveDeviceCredentialId(deviceId: string) {
+  const device = db
+    .prepare("SELECT snmpCredentialId FROM devices WHERE id = ?")
+    .get(deviceId) as { snmpCredentialId?: string | null } | undefined;
+  return device?.snmpCredentialId ?? null;
+}
+
+function collectSnmpV3TrapCredentials(mapping: TrapSourceMapping) {
+  const credentialIds = new Set<string>();
+  if (mapping.credentialId) credentialIds.add(mapping.credentialId);
+  if (mapping.deviceCredentialId) credentialIds.add(mapping.deviceCredentialId);
+
+  if (mapping.deviceId) {
+    const monitorCredentials = db
+      .prepare(
+        `
+        SELECT DISTINCT snmpCredentialId
+        FROM deviceMonitors
+        WHERE deviceId = ? AND type = 'snmp' AND snmpCredentialId IS NOT NULL
+      `,
+      )
+      .all(mapping.deviceId) as Array<{ snmpCredentialId: string }>;
+    for (const row of monitorCredentials) {
+      credentialIds.add(row.snmpCredentialId);
+    }
+  }
+
+  if (credentialIds.size === 0) {
+    const labCredentials = db
+      .prepare(
+        "SELECT id FROM snmpCredentials WHERE labId = ? AND version = '3'",
+      )
+      .all(mapping.labId) as Array<{ id: string }>;
+    for (const row of labCredentials) {
+      credentialIds.add(row.id);
+    }
+  }
+
+  const credentials: SnmpV3TrapCredential[] = [];
+  for (const credentialId of credentialIds) {
+    try {
+      const credential = loadSnmpCredentialSecrets(credentialId, mapping.labId);
+      if (credential.version !== "3" || !credential.v3User?.trim()) continue;
+      credentials.push({
+        id: credential.id,
+        user: credential.v3User.trim(),
+        authProtocol: credential.v3AuthProto ?? "SHA",
+        authPassword: credential.v3AuthPassword ?? "",
+        privProtocol: credential.v3PrivProto ?? "none",
+        privPassword: credential.v3PrivPassword ?? "",
+        context: credential.v3Context ?? "",
+      });
+    } catch {
+      // Ignore stale credential references; source authorization fails later.
+    }
+  }
+
+  return credentials;
 }
 
 function communityMatches(
@@ -266,6 +338,16 @@ function isTrapAuthorizedForMonitor(
   trap: ParsedSnmpTrap,
   mapping: TrapSourceMapping,
 ) {
+  if (trap.snmpVersion === "3") {
+    if (!trap.credentialId) return false;
+    const allowedCredentialIds = [
+      monitor.snmpCredentialId,
+      mapping.credentialId,
+      mapping.deviceCredentialId,
+    ].filter(Boolean);
+    return allowedCredentialIds.includes(trap.credentialId);
+  }
+
   const trapCommunity = trap.community?.trim();
   if (!trapCommunity) return false;
 
@@ -290,16 +372,21 @@ function upsertTrapSource(input: {
   deviceId: string | null;
   sourceIp: string;
   community: string | null;
+  credentialId: string | null;
 }) {
   const now = new Date().toISOString();
   if (input.id) {
     db.prepare(
       `
       UPDATE snmpTrapSources
-      SET deviceId = COALESCE(?, deviceId), community = COALESCE(?, community), lastTrapAt = ?
+      SET
+        deviceId = COALESCE(?, deviceId),
+        community = COALESCE(?, community),
+        credentialId = COALESCE(?, credentialId),
+        lastTrapAt = ?
       WHERE id = ?
     `,
-    ).run(input.deviceId, input.community, now, input.id);
+    ).run(input.deviceId, input.community, input.credentialId, now, input.id);
     return;
   }
 
@@ -307,13 +394,22 @@ function upsertTrapSource(input: {
   db.prepare(
     `
     INSERT INTO snmpTrapSources (id, labId, deviceId, sourceIp, community, credentialId, lastTrapAt)
-    VALUES (?, ?, ?, ?, ?, NULL, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(labId, sourceIp) DO UPDATE SET
       deviceId = COALESCE(excluded.deviceId, snmpTrapSources.deviceId),
       community = COALESCE(excluded.community, snmpTrapSources.community),
+      credentialId = COALESCE(excluded.credentialId, snmpTrapSources.credentialId),
       lastTrapAt = excluded.lastTrapAt
   `,
-  ).run(id, input.labId, input.deviceId, input.sourceIp, input.community, now);
+  ).run(
+    id,
+    input.labId,
+    input.deviceId,
+    input.sourceIp,
+    input.community,
+    input.credentialId,
+    now,
+  );
 }
 
 function findMonitorsForTrap(deviceId: string, ifIndex?: number) {

@@ -2,9 +2,10 @@
 
 Tracks GitHub issue **#35** and related monitoring/inventory requests.
 
-**Last updated:** 2026-06-10  
-**Current baseline:** Rackpad **1.6.1** on `main` — SNMP Phases **1–5 (v1)**
-implemented (schema **v23**). Enable inventory sync with
+**Last updated:** 2026-06-11  
+**Current baseline:** Rackpad **1.6.2 beta** — SNMP Phases **1–5 (v1)**
+implemented plus authenticated/encrypted SNMPv3 traps (schema **v23**).
+Enable inventory sync with
 `SNMP_INVENTORY_SYNC=1`.
 
 ---
@@ -15,7 +16,7 @@ implemented (schema **v23**). Enable inventory sync with
 | -------- | ------------------------------------------------------- | -------------------------------------------------------- |
 | **1**    | IF-MIB monitors, port linkage, match modes, OID presets | v21 — `server/lib/snmp-match.ts`, `monitoring.ts`        |
 | **2**    | SNMPv3 + per-lab encrypted credentials                  | v22 — `server/lib/snmp-v3.ts`, `snmp-credentials.ts`     |
-| **3**    | Trap receiver (v1/v2c), trap log, linkUp/Down actions   | v23 — `server/lib/snmp-traps.ts`, `snmp-trap-parser.ts`  |
+| **3**    | Trap receiver, trap log, linkUp/Down actions            | v23 — `server/lib/snmp-traps.ts`, `snmp-trap-parser.ts`  |
 | **4**    | Port/dashboard/visualizer SNMP verified state           | — `src/lib/snmp-port-status.ts`, port components         |
 | **5 v1** | Profile framework + VLAN/subnet sync preview/apply      | — `server/lib/snmp-profiles/`, `server/lib/snmp-sync.ts` |
 
@@ -24,7 +25,7 @@ credentials).
 
 ---
 
-## Current State (as of 1.6.1)
+## Current State (as of 1.6.2 beta)
 
 | Area                              | Status          | Notes                                                     |
 | --------------------------------- | --------------- | --------------------------------------------------------- |
@@ -34,7 +35,7 @@ credentials).
 | Monitor ↔ port linkage            | **Done**        | `portId`, `snmpIfIndex`; `syncMonitorPortState()`         |
 | Port `linkState` from SNMP        | **Done**        | Poll + trap path; badges in Ports/Dashboard/Visualizer    |
 | SNMPv3 + credentials              | **Done**        | Per-lab AES-256-GCM secrets; `RACKPAD_SECRET_KEY`         |
-| SNMP traps (UDP)                  | **Done**        | Default **1162**; env `SNMP_TRAP_*`; v1/v2c parse         |
+| SNMP traps (UDP)                  | **Done**        | Default **1162**; env `SNMP_TRAP_*`; v1/v2c/v3 link traps |
 | Trap → monitor / port / alert     | **Done**        | Dedupe 30s; auto-learn IP→device                          |
 | Inventory sync (VLAN/subnet)      | **Done (v1)**   | Feature flag `SNMP_INVENTORY_SYNC=1`; merge + mirror      |
 | Vendor profiles (generic)         | **Done**        | Q-BRIDGE VLANs, IP-MIB subnets, combined profile          |
@@ -56,7 +57,7 @@ Prioritized backlog. Track here until shipped + documented.
 | **pfSense / OPNsense profile**   | 5.1   | Host MIBs for subnets + DHCP scope _preview_; first vendor-specific profile |
 | **DHCP scope merge apply**       | 5.2   | Add missing scopes only; never silent delete assignments                    |
 | **README/admin guide follow-up** | Docs  | Add more trap forwarding examples (pfSense, UniFi, managed switches)        |
-| **Update #35 / issue map**       | Docs  | Mark 1.6.x shipped scope vs remaining v3 traps/vendor sync                  |
+| **Update #35 / issue map**       | Docs  | Mark 1.6.x shipped scope vs remaining vendor sync                           |
 | **Manual lab matrix**            | Test  | Linux snmpd, one managed switch, pfSense — preview/apply + traps            |
 
 ### P1 — Phase 5 remainder
@@ -70,13 +71,12 @@ Prioritized backlog. Track here until shipped + documented.
 
 ### P2 — Phase 4 / monitoring polish
 
-| Item                               | Notes                                                                        |
-| ---------------------------------- | ---------------------------------------------------------------------------- |
-| Bridge MIB / MAU for SFP status    | Phase 4.3 — devices that expose optics OIDs                                  |
-| `snmpMatchMode: regex`             | Phase 1.1 — was spec’d, not implemented                                      |
-| Structured SNMP poll logging       | Phase 1.4 — timeout/auth failure log lines                                   |
-| SNMPv3 **traps**                   | Phase 3 follow-up — v1/v2c traps only today; v3 polling is already supported |
-| Bulk “Add SNMP interface monitors” | Multi-device discover/import from Devices list                               |
+| Item                               | Notes                                          |
+| ---------------------------------- | ---------------------------------------------- |
+| Bridge MIB / MAU for SFP status    | Phase 4.3 — devices that expose optics OIDs    |
+| `snmpMatchMode: regex`             | Phase 1.1 — was spec’d, not implemented        |
+| Structured SNMP poll logging       | Phase 1.4 — timeout/auth failure log lines     |
+| Bulk “Add SNMP interface monitors” | Multi-device discover/import from Devices list |
 
 ### P3 — Phase 6 (enterprise & scale)
 
@@ -254,7 +254,7 @@ flowchart TB
 
 ---
 
-## Phase 3 — SNMP traps ✅ (dev, v1/v2c)
+## Phase 3 — SNMP traps ✅ (dev, v1/v2c/v3)
 
 **Goal:** Real-time link/device events; issue title “traps”.
 
@@ -263,8 +263,9 @@ flowchart TB
 - [x] UDP listener — default **1162** (`SNMP_TRAP_PORT`).
 - [x] Env: `SNMP_TRAP_ENABLED`, `SNMP_TRAP_PORT`, `SNMP_TRAP_BIND`.
 - [x] Parse SNMPv1/v2c traps.
+- [x] Parse authenticated SNMPv3 traps.
+- [x] Parse authenticated + encrypted SNMPv3 traps.
 - [x] Dedupe window (30s).
-- [ ] SNMPv3 traps. **Outstanding** (after v3 trap PDU work).
 
 ### 3.2 Trap → inventory mapping
 

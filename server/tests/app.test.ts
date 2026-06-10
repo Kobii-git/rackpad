@@ -2422,7 +2422,8 @@ test("lab-scoped SNMP credentials store encrypted secrets and can be tested", as
 test("SNMP linkDown and linkUp traps update matching interface monitors", async () => {
   const adminToken = await bootstrapAdmin();
   const { handleTrapPacket } = await import("../lib/snmp-traps.js");
-  const { buildSnmpV2TrapPacket } = await import("../lib/snmp-trap-build.js");
+  const { buildSnmpV2TrapPacket, buildSnmpV3TrapPacket } =
+    await import("../lib/snmp-trap-build.js");
   const { SNMP_TRAP_LINK_DOWN_OID, SNMP_TRAP_LINK_UP_OID } =
     await import("../lib/snmp-trap-parser.js");
 
@@ -2612,6 +2613,143 @@ test("SNMP linkDown and linkUp traps update matching interface monitors", async 
   assert.match(
     (readJson(crossLabCredentialRes) as { error: string }).error,
     /same lab/i,
+  );
+
+  const v3AuthCredentialRes = await app.inject({
+    method: "POST",
+    url: "/api/snmp-credentials",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      name: "Home v3 traps",
+      version: "3",
+      v3User: "trap-user",
+      v3AuthProto: "SHA",
+      v3AuthPassword: "authpass123",
+      v3PrivProto: "none",
+    },
+  });
+  assert.equal(v3AuthCredentialRes.statusCode, 201);
+  const v3AuthCredential = readJson(v3AuthCredentialRes) as { id: string };
+
+  const v3MonitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: device.id,
+      name: "Port 4",
+      type: "snmp",
+      target: "10.0.0.50",
+      snmpCredentialId: v3AuthCredential.id,
+      snmpOid: "1.3.6.1.2.1.2.2.1.8.4",
+      snmpExpectedValue: "1",
+      snmpIfIndex: 4,
+      enabled: true,
+    },
+  });
+  assert.equal(v3MonitorRes.statusCode, 200);
+  const v3Monitor = readJson(v3MonitorRes) as { id: string };
+
+  await handleTrapPacket(
+    buildSnmpV3TrapPacket({
+      user: "trap-user",
+      authPassword: "authpass123",
+      trapOid: SNMP_TRAP_LINK_DOWN_OID,
+      ifIndex: 4,
+    }),
+    "10.0.0.50",
+  );
+
+  const v3DownRes = await app.inject({
+    method: "GET",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    query: { deviceId: device.id },
+  });
+  const v3DownMonitors = readJson(v3DownRes) as Array<{
+    id: string;
+    lastResult?: string;
+  }>;
+  assert.equal(
+    v3DownMonitors.find((entry) => entry.id === v3Monitor.id)?.lastResult,
+    "offline",
+  );
+
+  const v3PrivCredentialRes = await app.inject({
+    method: "POST",
+    url: "/api/snmp-credentials",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      name: "Home v3 private traps",
+      version: "3",
+      v3User: "trap-private",
+      v3AuthProto: "SHA",
+      v3AuthPassword: "authpass456",
+      v3PrivProto: "AES128",
+      v3PrivPassword: "privpass456",
+    },
+  });
+  assert.equal(v3PrivCredentialRes.statusCode, 201);
+  const v3PrivCredential = readJson(v3PrivCredentialRes) as { id: string };
+
+  const v3PrivMonitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: device.id,
+      name: "Port 5",
+      type: "snmp",
+      target: "10.0.0.50",
+      snmpCredentialId: v3PrivCredential.id,
+      snmpOid: "1.3.6.1.2.1.2.2.1.8.5",
+      snmpExpectedValue: "1",
+      snmpIfIndex: 5,
+      enabled: true,
+    },
+  });
+  assert.equal(v3PrivMonitorRes.statusCode, 200);
+  const v3PrivMonitor = readJson(v3PrivMonitorRes) as { id: string };
+
+  await handleTrapPacket(
+    buildSnmpV3TrapPacket({
+      user: "trap-private",
+      authPassword: "authpass456",
+      privProtocol: "AES128",
+      privPassword: "privpass456",
+      trapOid: SNMP_TRAP_LINK_UP_OID,
+      ifIndex: 5,
+    }),
+    "10.0.0.50",
+  );
+
+  const v3PrivUpRes = await app.inject({
+    method: "GET",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    query: { deviceId: device.id },
+  });
+  const v3PrivUpMonitors = readJson(v3PrivUpRes) as Array<{
+    id: string;
+    lastResult?: string;
+  }>;
+  assert.equal(
+    v3PrivUpMonitors.find((entry) => entry.id === v3PrivMonitor.id)?.lastResult,
+    "online",
   );
 });
 
