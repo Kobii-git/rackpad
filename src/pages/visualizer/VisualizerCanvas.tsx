@@ -546,12 +546,16 @@ export function VisualizerCanvas({
               cable.toPoint,
               index,
               cableLayout,
+              {
+                fromNode: cable.fromNode,
+                toNode: cable.toNode,
+                rackPanels: model.rackZone.racks,
+              },
             )
           : cable.path,
     }))
-    .filter(
-      (entry): entry is { cable: VisualizerCable; path: string } =>
-        Boolean(entry.path),
+    .filter((entry): entry is { cable: VisualizerCable; path: string } =>
+      Boolean(entry.path),
     );
   const activeNeighborIds = new Set(
     isolatedDeviceId
@@ -1307,9 +1311,7 @@ function DeviceCard({
         <div className="min-w-0 flex-1">
           <div
             className={`font-semibold text-[var(--text-primary)] ${
-              readableLabels
-                ? "text-[13px] leading-[1.15]"
-                : "truncate text-xs"
+              readableLabels ? "text-[13px] leading-[1.15]" : "truncate text-xs"
             }`}
             style={readableNameStyle}
             title={node.device.hostname}
@@ -1556,6 +1558,7 @@ function VisualizerLayoutPanel({
               aria-label="Cable route layout"
             >
               <option value="auto">Auto cables</option>
+              <option value="bundled">Bundled harness</option>
               <option value="concave">Concave</option>
               <option value="convex">Convex</option>
               <option value="straight">Straight</option>
@@ -1593,9 +1596,7 @@ function VisualizerLayoutPanel({
                 <select
                   value={rackScale}
                   onChange={(event) =>
-                    onRackScaleChange(
-                      event.target.value as VisualizerRackScale,
-                    )
+                    onRackScaleChange(event.target.value as VisualizerRackScale)
                   }
                   className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
                   aria-label="Rack visual width"

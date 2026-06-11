@@ -2068,14 +2068,24 @@ function pathPoint(point: { x: number; y: number }) {
   return `${roundPathCoord(point.x)} ${roundPathCoord(point.y)}`;
 }
 
+interface CablePathContext {
+  fromNode?: VisualizerNode;
+  toNode?: VisualizerNode;
+  rackPanels?: RackPanel[];
+}
+
 export function visualizerCablePath(
   from: { x: number; y: number },
   to: { x: number; y: number },
   index: number,
   layout: VisualizerCableLayout = "auto",
+  context: CablePathContext = {},
 ) {
   if (layout === "straight") {
     return straightCablePath(from, to, index);
+  }
+  if (layout === "bundled") {
+    return bundledCablePath(from, to, index, context);
   }
   if (layout === "concave") {
     return concaveCablePath(from, to, index);
@@ -2083,6 +2093,8 @@ export function visualizerCablePath(
   if (layout === "convex") {
     return convexCablePath(from, to, index);
   }
+  const bundled = bundledCablePath(from, to, index, context, true);
+  if (bundled) return bundled;
   return autoCablePath(from, to, index);
 }
 
@@ -2097,10 +2109,12 @@ function straightCablePath(
   const distance = Math.max(1, Math.hypot(dx, dy));
   const normalX = (-dy / distance) * laneOffset;
   const normalY = (dx / distance) * laneOffset;
-  return `M ${pathPoint({ x: from.x + normalX, y: from.y + normalY })} L ${pathPoint({
-    x: to.x + normalX,
-    y: to.y + normalY,
-  })}`;
+  return `M ${pathPoint({ x: from.x + normalX, y: from.y + normalY })} L ${pathPoint(
+    {
+      x: to.x + normalX,
+      y: to.y + normalY,
+    },
+  )}`;
 }
 
 function autoCablePath(
@@ -2113,10 +2127,12 @@ function autoCablePath(
   const laneOffset = ((index % 17) - 8) * 7;
   if (dx < 72) {
     const busX = Math.max(from.x, to.x) + 72 + Math.abs(laneOffset) * 0.8;
-    return `M ${pathPoint(from)} L ${pathPoint({ x: busX, y: from.y })} C ${pathPoint({
-      x: busX + laneOffset,
-      y: from.y,
-    })}, ${pathPoint({ x: busX + laneOffset, y: to.y })}, ${pathPoint({
+    return `M ${pathPoint(from)} L ${pathPoint({ x: busX, y: from.y })} C ${pathPoint(
+      {
+        x: busX + laneOffset,
+        y: from.y,
+      },
+    )}, ${pathPoint({ x: busX + laneOffset, y: to.y })}, ${pathPoint({
       x: busX,
       y: to.y,
     })} L ${pathPoint(to)}`;
@@ -2143,6 +2159,111 @@ function autoCablePath(
     x: to.x,
     y: to.y - laneOffset,
   })}`;
+}
+
+function bundledCablePath(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  index: number,
+  context: CablePathContext,
+  rackOnly = false,
+) {
+  const fromPanel = rackPanelForNode(context.fromNode, context.rackPanels);
+  const toPanel = rackPanelForNode(context.toNode, context.rackPanels);
+  if (!fromPanel && !toPanel) {
+    return rackOnly ? null : autoCablePath(from, to, index);
+  }
+
+  const panels = [fromPanel, toPanel].filter((panel): panel is RackPanel =>
+    Boolean(panel),
+  );
+  const rackRight = Math.max(...panels.map((panel) => panel.x + panel.width));
+  const laneOffset = ((index % 13) - 6) * 4;
+  const gutterX = Math.max(from.x, to.x, rackRight) + 46 + laneOffset;
+  const stub = Math.max(
+    18,
+    Math.min(34, Math.abs(gutterX - Math.max(from.x, to.x)) * 0.35),
+  );
+  const fromStubX =
+    gutterX >= from.x ? Math.min(gutterX - 14, from.x + stub) : from.x - stub;
+  const toStubX =
+    gutterX >= to.x ? Math.min(gutterX - 14, to.x + stub) : to.x - stub;
+
+  return roundedPolylinePath(
+    [
+      from,
+      { x: fromStubX, y: from.y },
+      { x: gutterX, y: from.y },
+      { x: gutterX, y: to.y },
+      { x: toStubX, y: to.y },
+      to,
+    ],
+    22,
+  );
+}
+
+function rackPanelForNode(
+  node: VisualizerNode | undefined,
+  panels: RackPanel[] | undefined,
+) {
+  if (!node || !panels || panels.length === 0) return undefined;
+  if (node.rackId) {
+    const rackPanel = panels.find((panel) => panel.id === node.rackId);
+    if (rackPanel) return rackPanel;
+  }
+  return panels.find(
+    (panel) =>
+      node.x >= panel.x &&
+      node.x + node.width <= panel.x + panel.width &&
+      node.y >= panel.y &&
+      node.y <= panel.y + panel.height,
+  );
+}
+
+function roundedPolylinePath(
+  inputPoints: Array<{ x: number; y: number }>,
+  radius: number,
+) {
+  const points = inputPoints.filter((point, index, all) => {
+    const previous = all[index - 1];
+    return !previous || previous.x !== point.x || previous.y !== point.y;
+  });
+  const start = points[0];
+  if (!start) return "";
+  let path = `M ${pathPoint(start)}`;
+  if (points.length === 1) return path;
+
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1];
+    const current = points[index];
+    const next = points[index + 1];
+    const prevDx = current.x - previous.x;
+    const prevDy = current.y - previous.y;
+    const nextDx = next.x - current.x;
+    const nextDy = next.y - current.y;
+    const prevLength = Math.hypot(prevDx, prevDy);
+    const nextLength = Math.hypot(nextDx, nextDy);
+    if (prevLength < 1 || nextLength < 1) continue;
+    const collinear =
+      (prevDx === 0 && nextDx === 0) || (prevDy === 0 && nextDy === 0);
+    if (collinear) {
+      path += ` L ${pathPoint(current)}`;
+      continue;
+    }
+    const cornerRadius = Math.min(radius, prevLength / 2, nextLength / 2);
+    const before = {
+      x: current.x - (prevDx / prevLength) * cornerRadius,
+      y: current.y - (prevDy / prevLength) * cornerRadius,
+    };
+    const after = {
+      x: current.x + (nextDx / nextLength) * cornerRadius,
+      y: current.y + (nextDy / nextLength) * cornerRadius,
+    };
+    path += ` L ${pathPoint(before)} Q ${pathPoint(current)}, ${pathPoint(after)}`;
+  }
+
+  path += ` L ${pathPoint(points[points.length - 1])}`;
+  return path;
 }
 
 function concaveCablePath(
@@ -2198,8 +2319,7 @@ function convexCablePath(
 
   if (absDx >= absDy) {
     const side = from.y <= to.y ? -1 : 1;
-    const laneY =
-      Math.min(from.y, to.y) - detour * side * outward;
+    const laneY = Math.min(from.y, to.y) - detour * side * outward;
     const lead = Math.min(72, absDx * 0.22);
     return `M ${pathPoint(from)} C ${pathPoint({
       x: from.x + lead,
@@ -2214,8 +2334,7 @@ function convexCablePath(
   }
 
   const side = from.x <= to.x ? -1 : 1;
-  const laneX =
-    Math.min(from.x, to.x) - detour * side * outward;
+  const laneX = Math.min(from.x, to.x) - detour * side * outward;
   const lead = Math.min(72, absDy * 0.22);
   return `M ${pathPoint(from)} C ${pathPoint({
     x: from.x,

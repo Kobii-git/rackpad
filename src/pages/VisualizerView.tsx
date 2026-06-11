@@ -425,7 +425,10 @@ function readShelfLayout(key: string): VisualizerShelfLayout {
 function readCableLayout(key: string): VisualizerCableLayout {
   try {
     const value = window.localStorage.getItem(key);
-    return value === "concave" || value === "convex" || value === "straight"
+    return value === "bundled" ||
+      value === "concave" ||
+      value === "convex" ||
+      value === "straight"
       ? value
       : "auto";
   } catch {

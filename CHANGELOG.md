@@ -8,6 +8,31 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.2-beta.3] - 2026-06-11
+
+### Added
+
+- Added a Visualizer "Bundled harness" cable routing mode that routes rack
+  cables through a rounded side gutter, matching the rack-side cable-management
+  shape requested in #49.
+
+### Changed
+
+- Visualizer "Auto cables" now prefers the bundled harness route for
+  rack-involved cable links, while keeping the older auto curve fallback for
+  non-rack topology links.
+
+### Fixed
+
+- Rack Visualizer cable paths are less likely to run as loose direct curves
+  through device cards when a rack-side route is available.
+
+### Test notes
+
+- Smoke-tested the bundled harness in the demo Rack elevations view with the
+  right control panel collapsed; same-rack links now leave the rack, turn
+  through a side gutter, and return to the destination port.
+
 ## [1.6.2-beta.2] - 2026-06-11
 
 ### Added

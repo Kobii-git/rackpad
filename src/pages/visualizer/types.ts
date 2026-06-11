@@ -17,7 +17,12 @@ export type VisualizerLayoutMode = "grouped" | "pyramid" | "diagram";
 export type VisualizerRackFaceMode = "front" | "rear" | "both";
 export type VisualizerRackScale = "compact" | "normal" | "wide" | "xwide";
 export type VisualizerShelfLayout = "auto" | "stacked" | "expanded";
-export type VisualizerCableLayout = "auto" | "concave" | "convex" | "straight";
+export type VisualizerCableLayout =
+  | "auto"
+  | "bundled"
+  | "concave"
+  | "convex"
+  | "straight";
 
 export interface VisualizerLayoutOptions {
   topologyLayout: VisualizerLayoutMode;
