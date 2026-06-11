@@ -8,6 +8,35 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.3-beta.2] - 2026-06-11
+
+### Added
+
+- Added Dependabot configuration for weekly npm and GitHub Actions update PRs
+  against the `dev` branch.
+- Added CodeQL scanning for JavaScript/TypeScript security analysis on pushes,
+  pull requests, scheduled runs, and manual dispatches.
+- Added Trivy filesystem and Docker image security scans that upload SARIF
+  reports without blocking builds on inherited base-image findings yet.
+
+### Fixed
+
+- Updated `concurrently` to pull in `shell-quote@1.8.4`, clearing the remaining
+  local npm audit finding.
+
+### Changed
+
+- Security scanning starts in reporting mode so Rackpad can track inherited
+  `node:22-bookworm-slim` Debian findings while avoiding false release blockers
+  for CVEs with no fixed Debian package available.
+
+### Test notes
+
+- Verified the npm dependency audit is clean after the `concurrently` update.
+- Added CI coverage for dependency, source, and container image security
+  scanning; Docker image scan reports should be reviewed in GitHub security
+  results before switching to fail-on-high/critical mode.
+
 ## [1.6.3-beta.1] - 2026-06-11
 
 ### Added

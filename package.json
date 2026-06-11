@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.6.3-beta.1",
+  "version": "1.6.3-beta.2",
   "private": true,
   "type": "module",
   "engines": {
@@ -56,7 +56,7 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
-    "concurrently": "^9.1.2",
+    "concurrently": "^10.0.3",
     "eslint": "^9.17.0",
     "prettier": "^3.4.2",
     "tailwindcss": "^4.0.0",

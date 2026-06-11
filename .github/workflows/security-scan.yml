@@ -1,0 +1,82 @@
+name: security-scan
+
+on:
+  push:
+    branches: [main, beta, dev]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    - cron: "43 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+  security-events: write
+
+jobs:
+  filesystem:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Scan repository
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,config
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-filesystem.sarif
+          exit-code: "0"
+
+      - name: Upload filesystem scan
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-filesystem.sarif
+          category: trivy-filesystem
+
+  image:
+    name: Trivy image scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build scan image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: rackpad:security-scan
+          build-args: |
+            RACKPAD_BUILD_CHANNEL=security-scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan Docker image
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: rackpad:security-scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-image.sarif
+          exit-code: "0"
+
+      - name: Upload image scan
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
