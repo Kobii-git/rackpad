@@ -560,3 +560,4 @@ Version-by-version release notes are in [CHANGELOG.md](./CHANGELOG.md).
 
 Rackpad is free to use. If it helps you and you want to support the work,
 there is an optional Ko-fi link here on GitHub: [ko-fi.com/k0bii](https://ko-fi.com/k0bii).
+PayPal.me is also available here: [paypal.me/St3wi](https://paypal.me/St3wi).
