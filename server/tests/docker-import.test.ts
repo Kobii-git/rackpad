@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildDockerApiUrl,
   buildDockerContainerNotes,
   buildDockerContainerSpecs,
   parseDockerContainersJson,
@@ -34,6 +35,18 @@ test("parseDockerContainersJson maps Docker Engine list payloads", () => {
     status: "Up 2 hours",
   });
   assert.equal(containers[1]?.state, "exited");
+});
+
+test("buildDockerApiUrl preserves Portainer proxy base paths", () => {
+  const url = buildDockerApiUrl(
+    "https://portainer.example/api/endpoints/2/docker/",
+    "/containers/json",
+  );
+  url.searchParams.set("all", "1");
+  assert.equal(
+    url.toString(),
+    "https://portainer.example/api/endpoints/2/docker/containers/json?all=1",
+  );
 });
 
 test("buildDockerContainerNotes and specs capture image and status", () => {

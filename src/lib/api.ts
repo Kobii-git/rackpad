@@ -117,6 +117,15 @@ export interface DockerContainerPreview {
   status: string;
 }
 
+export interface DockerStatusSyncResult {
+  sources: number;
+  updated: number;
+  missing: number;
+  failed: number;
+  devices: Device[];
+  errors: string[];
+}
+
 export type DeviceImagePatch = Nullable<Pick<DeviceImage, "label" | "notes">>;
 export type DeviceServicePatch = Nullable<
   Pick<
@@ -812,6 +821,13 @@ export const api = {
     hostname?: string;
   }) {
     return request<Device>("/imports/docker/import", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  syncDockerImports(input: { labId: string; sourceId?: string }) {
+    return request<DockerStatusSyncResult>("/imports/docker/sync", {
       method: "POST",
       body: JSON.stringify(input),
     });

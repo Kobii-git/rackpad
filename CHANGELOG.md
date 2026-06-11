@@ -8,6 +8,25 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.2-beta.5] - 2026-06-11
+
+### Added
+
+- Docker/Portainer imports now persist encrypted source metadata for imported
+  containers and can refresh their Rackpad device status from the Docker API.
+- Added a manual "Refresh Docker statuses" action, plus a background Docker
+  status sync loop configurable with `DOCKER_STATUS_SYNC_INTERVAL_MS`.
+
+### Fixed
+
+- Docker import now preserves Portainer proxy base paths such as
+  `/api/endpoints/{id}/docker` when calling `/containers/json`.
+
+### Test notes
+
+- Added parser coverage for Portainer proxy URLs and API coverage for Docker
+  import source/link persistence plus status refresh from running to stopped.
+
 ## [1.6.2-beta.4] - 2026-06-11
 
 ### Fixed

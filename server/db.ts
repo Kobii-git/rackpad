@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 26;
+const CURRENT_SCHEMA_VERSION = 27;
 
 export const db = new Database(DB_PATH);
 
@@ -833,6 +833,44 @@ const SCHEMA_MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS idx_documentation_device_links_device
         ON documentationDeviceLinks (deviceId);
+    `,
+  },
+  {
+    version: 27,
+    sql: `
+      CREATE TABLE IF NOT EXISTS dockerImportSources (
+        id              TEXT PRIMARY KEY,
+        labId           TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        name            TEXT NOT NULL,
+        endpoint        TEXT NOT NULL,
+        tokenEnc        TEXT,
+        lastSyncAt      TEXT,
+        lastSyncStatus  TEXT,
+        lastSyncMessage TEXT,
+        createdAt       TEXT NOT NULL,
+        updatedAt       TEXT NOT NULL,
+        UNIQUE(labId, endpoint)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_docker_import_sources_lab_id
+        ON dockerImportSources (labId);
+
+      CREATE TABLE IF NOT EXISTS dockerContainerLinks (
+        deviceId       TEXT PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+        sourceId       TEXT NOT NULL REFERENCES dockerImportSources(id) ON DELETE CASCADE,
+        containerId    TEXT NOT NULL,
+        containerName  TEXT NOT NULL,
+        image          TEXT NOT NULL,
+        state          TEXT NOT NULL,
+        status         TEXT NOT NULL,
+        lastSyncedAt   TEXT,
+        createdAt      TEXT NOT NULL,
+        updatedAt      TEXT NOT NULL,
+        UNIQUE(sourceId, containerId)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_docker_container_links_source_id
+        ON dockerContainerLinks (sourceId);
     `,
   },
 ] as const;

@@ -12,6 +12,15 @@ import {
 import { createId } from "../lib/ids.js";
 import { listPortTemplates } from "../lib/port-templates.js";
 import {
+  buildDockerContainerNotes,
+  buildDockerContainerSpecs,
+  fetchDockerContainersPreview,
+  linkDockerContainerDevice,
+  syncDockerImportSource,
+  syncDockerImportSourcesForLab,
+  upsertDockerImportSource,
+} from "../lib/docker-import.js";
+import {
   asObject,
   optionalEnum,
   optionalString,
@@ -193,9 +202,6 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
     const body = asObject(req.body);
     const endpoint = requiredString(body, "endpoint", { maxLength: 500 });
     const token = optionalString(body, "token", { maxLength: 500 });
-    const { fetchDockerContainersPreview } = await import(
-      "../lib/docker-import.js"
-    );
     const containers = await fetchDockerContainersPreview(endpoint, token ?? undefined);
     return { containers };
   });
@@ -222,11 +228,6 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: "Host device not found in lab." });
     }
 
-    const {
-      fetchDockerContainersPreview,
-      buildDockerContainerNotes,
-      buildDockerContainerSpecs,
-    } = await import("../lib/docker-import.js");
     const containers = await fetchDockerContainersPreview(endpoint, token ?? undefined);
     const container = containers.find((entry) => entry.id === containerId);
     if (!container) {
@@ -243,45 +244,80 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const deviceId = createId("d");
-    db.prepare(
-      `
-      INSERT INTO devices
-        (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model,
-         serial, managementIp, macAddress, status, placement, parentDeviceId, networkMode, roomId,
-         cpuCores, memoryGb, storageGb, specs, startU, heightU, face, tags, notes, lastSeen)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    `,
-    ).run(
-      deviceId,
-      labId,
-      null,
-      hostname,
-      container.name,
-      "container",
-      null,
-      null,
-      null,
-      null,
-      null,
-      container.state === "running" ? "online" : "offline",
-      "virtual",
-      hostDeviceId,
-      "normal",
-      null,
-      null,
-      null,
-      null,
-      buildDockerContainerSpecs(container),
-      null,
-      1,
-      null,
-      null,
-      buildDockerContainerNotes(container, endpoint),
-      new Date().toISOString(),
-    );
+    const createImportedContainer = db.transaction(() => {
+      const source = upsertDockerImportSource({ labId, endpoint, token });
+      const deviceId = createId("d");
+      const importedAt = new Date().toISOString();
+      db.prepare(
+        `
+        INSERT INTO devices
+          (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model,
+           serial, managementIp, macAddress, status, placement, parentDeviceId, networkMode, roomId,
+           cpuCores, memoryGb, storageGb, specs, startU, heightU, face, tags, notes, lastSeen)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      `,
+      ).run(
+        deviceId,
+        labId,
+        null,
+        hostname,
+        container.name,
+        "container",
+        null,
+        null,
+        null,
+        null,
+        null,
+        container.state === "running" ? "online" : "offline",
+        "virtual",
+        hostDeviceId,
+        "normal",
+        null,
+        null,
+        null,
+        null,
+        buildDockerContainerSpecs(container),
+        null,
+        1,
+        null,
+        null,
+        buildDockerContainerNotes(container, source.endpoint),
+        importedAt,
+      );
+      linkDockerContainerDevice({
+        deviceId,
+        sourceId: source.id,
+        container,
+        syncedAt: importedAt,
+      });
+      return db.prepare("SELECT * FROM devices WHERE id = ?").get(deviceId);
+    });
 
-    const device = db.prepare("SELECT * FROM devices WHERE id = ?").get(deviceId);
+    const device = createImportedContainer();
     return reply.status(201).send(device);
+  });
+
+  app.post("/docker/sync", async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: "Authentication required." });
+    }
+
+    const body = asObject(req.body);
+    const labId = requiredString(body, "labId", { maxLength: 80 });
+    const sourceId = optionalString(body, "sourceId", { maxLength: 80 });
+
+    if (!assertLabWrite(req, reply, labId)) return;
+
+    if (sourceId) {
+      const source = db
+        .prepare("SELECT id, labId FROM dockerImportSources WHERE id = ?")
+        .get(sourceId) as { id: string; labId: string } | undefined;
+      if (!source || source.labId !== labId) {
+        return reply.status(404).send({ error: "Docker import source not found." });
+      }
+      return syncDockerImportSource(sourceId);
+    }
+
+    return syncDockerImportSourcesForLab(labId);
   });
 };

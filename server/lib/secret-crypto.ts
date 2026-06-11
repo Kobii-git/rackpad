@@ -7,7 +7,7 @@ function getKey() {
   const secret = process.env.RACKPAD_SECRET_KEY?.trim()
   if (!secret) {
     throw new Error(
-      'RACKPAD_SECRET_KEY must be set before storing SNMP credential secrets.',
+      'RACKPAD_SECRET_KEY must be set before storing encrypted secrets.',
     )
   }
   if (!derivedKey) {
@@ -30,7 +30,7 @@ export function encryptSecret(value: string) {
 
 export function decryptSecret(value: string) {
   if (!value.startsWith(PREFIX)) {
-    throw new Error('Stored SNMP secret is missing encryption metadata.')
+    throw new Error('Stored secret is missing encryption metadata.')
   }
   const raw = Buffer.from(value.slice(PREFIX.length), 'base64')
   const iv = raw.subarray(0, 12)

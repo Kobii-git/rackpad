@@ -169,6 +169,16 @@ const exportBackupSnapshot = db.transaction(
         deviceMonitors: db
           .prepare("SELECT * FROM deviceMonitors ORDER BY deviceId, id")
           .all(),
+        dockerImportSources: db
+          .prepare(
+            "SELECT id, labId, name, endpoint, NULL AS tokenEnc, lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt FROM dockerImportSources ORDER BY labId, name, id",
+          )
+          .all(),
+        dockerContainerLinks: db
+          .prepare(
+            "SELECT * FROM dockerContainerLinks ORDER BY sourceId, containerName, deviceId",
+          )
+          .all(),
         snmpCredentials: db
           .prepare("SELECT * FROM snmpCredentials ORDER BY labId, name, id")
           .all(),
@@ -307,6 +317,14 @@ const restoreBackupSnapshot = db.transaction(
       data.deviceMonitors,
       "data.deviceMonitors",
     );
+    const dockerImportSources = normalizeArrayRecordArray(
+      data.dockerImportSources ?? [],
+      "data.dockerImportSources",
+    );
+    const dockerContainerLinks = normalizeArrayRecordArray(
+      data.dockerContainerLinks ?? [],
+      "data.dockerContainerLinks",
+    );
     const snmpCredentials = normalizeArrayRecordArray(
       data.snmpCredentials ?? [],
       "data.snmpCredentials",
@@ -369,6 +387,8 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM wifiControllers;
     DELETE FROM deviceServices;
     DELETE FROM deviceMonitors;
+    DELETE FROM dockerContainerLinks;
+    DELETE FROM dockerImportSources;
     DELETE FROM snmpTrapLog;
     DELETE FROM snmpTrapSources;
     DELETE FROM snmpCredentials;
@@ -515,6 +535,18 @@ const restoreBackupSnapshot = db.transaction(
       createdAt, updatedAt
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+    const insertDockerImportSource = db.prepare(`
+    INSERT INTO dockerImportSources (
+      id, labId, name, endpoint, tokenEnc,
+      lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertDockerContainerLink = db.prepare(`
+    INSERT INTO dockerContainerLinks (
+      deviceId, sourceId, containerId, containerName, image,
+      state, status, lastSyncedAt, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
     const insertSnmpTrapSource = db.prepare(`
     INSERT INTO snmpTrapSources (id, labId, deviceId, sourceIp, community, credentialId, lastTrapAt)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -627,6 +659,20 @@ const restoreBackupSnapshot = db.transaction(
         row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
       );
     }
+    for (const row of dockerImportSources) {
+      insertDockerImportSource.run(
+        row.id,
+        row.labId,
+        row.name,
+        row.endpoint,
+        row.tokenEnc ?? null,
+        row.lastSyncAt ?? null,
+        row.lastSyncStatus ?? null,
+        row.lastSyncMessage ?? null,
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      );
+    }
     for (const row of devices) {
       insertDevice.run(
         row.id,
@@ -671,6 +717,20 @@ const restoreBackupSnapshot = db.transaction(
         continue;
       }
       updateDeviceParent.run(parentDeviceId, row.id);
+    }
+    for (const row of dockerContainerLinks) {
+      insertDockerContainerLink.run(
+        row.deviceId,
+        row.sourceId,
+        row.containerId,
+        row.containerName,
+        row.image,
+        row.state,
+        row.status,
+        row.lastSyncedAt ?? null,
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      );
     }
     for (const row of snmpTrapSources) {
       insertSnmpTrapSource.run(

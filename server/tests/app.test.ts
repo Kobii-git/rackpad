@@ -3572,6 +3572,133 @@ interfaces:
   assert.equal(imported.ports[0]?.name, "eth0");
 });
 
+test("docker import stores a sync source and refreshes container status", async () => {
+  const adminToken = await bootstrapAdmin();
+  const hostRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      hostname: "docker-host-01",
+      deviceType: "server",
+      status: "online",
+    },
+  });
+  assert.equal(hostRes.statusCode, 201);
+  const host = readJson(hostRes) as { id: string };
+
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  const authHeaders: Array<string | null> = [];
+  let state = "running";
+  let status = "Up 3 minutes";
+  globalThis.fetch = (async (url, init) => {
+    requestedUrls.push(String(url));
+    const headers = init?.headers as Record<string, string> | undefined;
+    authHeaders.push(headers?.Authorization ?? null);
+    return new Response(
+      JSON.stringify([
+        {
+          Id: "container-abc123",
+          Names: ["/paperless"],
+          Image: "ghcr.io/paperless:latest",
+          State: state,
+          Status: status,
+        },
+      ]),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+  }) as typeof fetch;
+
+  try {
+    const importRes = await app.inject({
+      method: "POST",
+      url: "/api/imports/docker/import",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        endpoint: "https://portainer.example/api/endpoints/2/docker/",
+        token: "portainer-token",
+        containerId: "container-abc123",
+        labId: "lab_home",
+        hostDeviceId: host.id,
+      },
+    });
+    assert.equal(importRes.statusCode, 201);
+    const imported = readJson(importRes) as {
+      id: string;
+      hostname: string;
+      status: string;
+      specs: string;
+    };
+    assert.equal(imported.hostname, "paperless");
+    assert.equal(imported.status, "online");
+    assert.equal(imported.specs, "docker-image: ghcr.io/paperless:latest");
+    assert.equal(
+      requestedUrls[0],
+      "https://portainer.example/api/endpoints/2/docker/containers/json?all=1",
+    );
+    assert.equal(authHeaders[0], "Bearer portainer-token");
+
+    const source = db
+      .prepare("SELECT * FROM dockerImportSources WHERE labId = ?")
+      .get("lab_home") as {
+      id: string;
+      endpoint: string;
+      tokenEnc: string | null;
+    };
+    assert.equal(
+      source.endpoint,
+      "https://portainer.example/api/endpoints/2/docker",
+    );
+    assert.ok(source.tokenEnc);
+    assert.notEqual(source.tokenEnc, "portainer-token");
+
+    const link = db
+      .prepare("SELECT * FROM dockerContainerLinks WHERE deviceId = ?")
+      .get(imported.id) as {
+      sourceId: string;
+      containerId: string;
+      state: string;
+    };
+    assert.equal(link.sourceId, source.id);
+    assert.equal(link.containerId, "container-abc123");
+    assert.equal(link.state, "running");
+
+    state = "exited";
+    status = "Exited (0) 10 seconds ago";
+    const syncRes = await app.inject({
+      method: "POST",
+      url: "/api/imports/docker/sync",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { labId: "lab_home" },
+    });
+    assert.equal(syncRes.statusCode, 200);
+    const sync = readJson(syncRes) as {
+      updated: number;
+      missing: number;
+      failed: number;
+      devices: Array<{ id: string; status: string }>;
+    };
+    assert.equal(sync.updated, 1);
+    assert.equal(sync.missing, 0);
+    assert.equal(sync.failed, 0);
+    assert.equal(sync.devices[0]?.id, imported.id);
+    assert.equal(sync.devices[0]?.status, "offline");
+
+    const updatedLink = db
+      .prepare("SELECT state, status FROM dockerContainerLinks WHERE deviceId = ?")
+      .get(imported.id) as { state: string; status: string };
+    assert.equal(updatedLink.state, "exited");
+    assert.equal(updatedLink.status, "Exited (0) 10 seconds ago");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 function resetDatabase() {
   db.exec(`
     DELETE FROM userSessions;
@@ -3584,6 +3711,8 @@ function resetDatabase() {
     DELETE FROM wifiControllers;
     DELETE FROM deviceServices;
     DELETE FROM deviceMonitors;
+    DELETE FROM dockerContainerLinks;
+    DELETE FROM dockerImportSources;
     DELETE FROM appSettings;
     DELETE FROM auditLog;
     DELETE FROM referenceImages;

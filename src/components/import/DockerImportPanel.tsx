@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, Container } from "lucide-react";
+import { CheckCircle2, Container, RefreshCw } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -17,6 +17,7 @@ import { api, ApiError, type DockerContainerPreview } from "@/lib/api";
 import {
   canEditInventory,
   importDockerContainerRecord,
+  syncDockerContainerStatuses,
   useStore,
 } from "@/lib/store";
 
@@ -33,6 +34,7 @@ export function DockerImportPanel() {
   const [containers, setContainers] = useState<DockerContainerPreview[]>([]);
   const [previewing, setPreviewing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -100,6 +102,34 @@ export function DockerImportPanel() {
     }
   }
 
+  async function handleSync() {
+    if (!canEdit) return;
+    setSyncing(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await syncDockerContainerStatuses({ labId: lab.id });
+      setSuccess(
+        t("Updated {count} Docker container status(es).", {
+          count: String(result.updated),
+        }),
+      );
+      if (result.errors.length > 0) {
+        setError(result.errors.join(" "));
+      }
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : t("Docker status refresh failed."),
+      );
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -114,8 +144,9 @@ export function DockerImportPanel() {
       </CardHeader>
       <CardBody className="space-y-4">
         <p className="text-sm text-[var(--text-tertiary)]">
-          Paste a Docker Engine API base URL (or Portainer proxy URL) to preview
-          containers. Credentials are sent only for this request and are not stored.
+          {t(
+            "Paste a Docker Engine API base URL (or Portainer proxy URL) to preview containers. Tokens are stored encrypted for imported containers so Rackpad can refresh status.",
+          )}
         </p>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1 text-sm">
@@ -128,7 +159,7 @@ export function DockerImportPanel() {
           </label>
           <label className="space-y-1 text-sm">
             <span className="text-[var(--text-secondary)]">
-              {t("API token (optional, not stored)")}
+              {t("API token (optional, encrypted on import)")}
             </span>
             <Input
               value={token}
@@ -161,6 +192,15 @@ export function DockerImportPanel() {
             onClick={() => void handlePreview()}
           >
             {previewing ? t("Importing...") : t("Preview containers")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!canEdit || syncing}
+            onClick={() => void handleSync()}
+          >
+            <RefreshCw className="size-3.5" />
+            {syncing ? t("Refreshing...") : t("Refresh Docker statuses")}
           </Button>
           <Button
             size="sm"

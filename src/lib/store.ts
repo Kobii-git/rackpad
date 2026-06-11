@@ -2753,6 +2753,28 @@ export async function importDockerContainerRecord(input: {
   return created;
 }
 
+export async function syncDockerContainerStatuses(input: {
+  labId: string;
+  sourceId?: string;
+}) {
+  const result = await api.syncDockerImports(input);
+  const nextDevices = result.devices.reduce(
+    (devices, updated) => replaceById(devices, updated, sortDevices),
+    state.devices,
+  );
+  setState((prev) => ({
+    ...prev,
+    devices: nextDevices,
+  }));
+  void recordAudit(
+    "device.update",
+    "Device",
+    input.sourceId ?? input.labId,
+    `Refreshed ${result.updated} Docker container status(es)`,
+  );
+  return result;
+}
+
 export async function createDeviceImageRecord(input: {
   deviceId: string;
   label: string;
