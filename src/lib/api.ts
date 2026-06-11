@@ -5,6 +5,7 @@ import type {
   AuthSession,
   Device,
   DeviceImage,
+  DevicePlacement,
   DeviceService,
   DeviceTypeDefinition,
   DeviceMonitor,
@@ -92,7 +93,8 @@ export interface NetboxDeviceTypeImportPreview {
     suggestedHostname: string;
     manufacturer: string;
     model: string;
-    heightU: number;
+    heightU: number | null;
+    placement: DevicePlacement;
     deviceType: string;
     displayName: string;
     notes: string;

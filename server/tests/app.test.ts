@@ -3529,6 +3529,49 @@ interfaces:
   assert.equal(imported.ports[0]?.name, "GigabitEthernet1/0/1");
 });
 
+test("netbox device import accepts 0U access points", async () => {
+  const adminToken = await bootstrapAdmin();
+  const yaml = `
+manufacturer: Ubiquiti
+model: UAP-AC-PRO
+slug: ubiquiti-uap-ac-pro
+u_height: 0
+interfaces:
+  - name: eth0
+    type: 1000base-t
+`.trim();
+
+  const importRes = await app.inject({
+    method: "POST",
+    url: "/api/imports/netbox-device-type/import",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      yaml,
+      mode: "device",
+      labId: "lab_home",
+      hostname: "uap-ac-pro",
+    },
+  });
+  assert.equal(importRes.statusCode, 201);
+  const imported = readJson(importRes) as {
+    mode: string;
+    device: {
+      hostname: string;
+      heightU: number | null;
+      placement: string;
+      deviceType: string;
+    };
+    ports: Array<{ name: string }>;
+  };
+  assert.equal(imported.mode, "device");
+  assert.equal(imported.device.hostname, "uap-ac-pro");
+  assert.equal(imported.device.heightU, null);
+  assert.equal(imported.device.placement, "wireless");
+  assert.equal(imported.device.deviceType, "ap");
+  assert.equal(imported.ports.length, 1);
+  assert.equal(imported.ports[0]?.name, "eth0");
+});
+
 function resetDatabase() {
   db.exec(`
     DELETE FROM userSessions;

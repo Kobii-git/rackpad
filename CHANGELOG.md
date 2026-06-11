@@ -8,6 +8,22 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.2-beta.4] - 2026-06-11
+
+### Fixed
+
+- NetBox device-type YAML imports now accept `u_height: 0` devices, including
+  access points and other non-rack-mounted hardware from the NetBox device type
+  library.
+- NetBox device imports now create 0U access points as wireless inventory and
+  other 0U devices as room inventory instead of failing the preview or storing
+  an invalid loose placement.
+
+### Test notes
+
+- Added parser and API import coverage for 0U NetBox access points and generic
+  0U devices.
+
 ## [1.6.2-beta.3] - 2026-06-11
 
 ### Added

@@ -48,7 +48,8 @@ export interface NetBoxDeviceDraft {
   suggestedHostname: string;
   manufacturer: string;
   model: string;
-  heightU: number;
+  heightU: number | null;
+  placement: "room" | "wireless";
   deviceType: string;
   displayName: string;
   notes: string;
@@ -106,7 +107,10 @@ export function templateMatchesNetboxDedupe(
   const key = netboxDedupeKey(manufacturer, model);
   const descriptionKey = parseNetboxDescriptionKey(template.description);
   if (descriptionKey === key) return true;
-  return normalizeDedupePart(template.name) === normalizeDedupePart(`${manufacturer} ${model}`);
+  return (
+    normalizeDedupePart(template.name) ===
+    normalizeDedupePart(`${manufacturer} ${model}`)
+  );
 }
 
 export function findExistingNetboxTemplate(
@@ -128,7 +132,11 @@ function asRecord(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function readString(record: Record<string, unknown>, key: string, label: string) {
+function readString(
+  record: Record<string, unknown>,
+  key: string,
+  label: string,
+) {
   const value = record[key];
   if (value === undefined || value === null || value === "") {
     throw new ValidationError(`${label} is required.`);
@@ -153,8 +161,8 @@ function readUHeight(record: Record<string, unknown>) {
     throw new ValidationError("u_height is required.");
   }
   const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new ValidationError("u_height must be a positive number.");
+  if (!Number.isFinite(value) || value < 0) {
+    throw new ValidationError("u_height must be zero or a positive number.");
   }
   return Math.round(value);
 }
@@ -178,7 +186,10 @@ function readPortList(
   });
 }
 
-function mapInterfaceKind(type: string, section: NetBoxInterfaceEntry["section"]) {
+function mapInterfaceKind(
+  type: string,
+  section: NetBoxInterfaceEntry["section"],
+) {
   if (section === "console") {
     return { kind: "console" as const, speed: undefined };
   }
@@ -190,7 +201,8 @@ function mapInterfaceKind(type: string, section: NetBoxInterfaceEntry["section"]
   if (mapped) return mapped;
 
   const normalized = type.toLowerCase();
-  if (normalized.includes("qsfp")) return { kind: "qsfp" as const, speed: "40G" };
+  if (normalized.includes("qsfp"))
+    return { kind: "qsfp" as const, speed: "40G" };
   if (normalized.includes("sfpp") || normalized.includes("sfp+")) {
     return { kind: "sfp_plus" as const, speed: "10G" };
   }
@@ -206,8 +218,14 @@ function inferDeviceTypes(parsed: ParsedNetBoxDeviceType): string[] {
     (entry) => entry.section === "interface",
   ).length;
   const modelText = `${parsed.manufacturer} ${parsed.model}`.toLowerCase();
+  const looksLikeAccessPoint =
+    dataInterfaces <= 4 &&
+    /\b(access[\s-]?point|wireless|wi-?fi|wlan|aironet|fortiap|uap|eap\d*|wap\d*|meraki\s+mr|aruba\s+ap|ruckus|omada|ecw\d*|u6[-\s]|u7[-\s])\b/.test(
+      modelText,
+    );
 
   if (/patch[\s-]?panel/.test(modelText)) return ["patch_panel"];
+  if (looksLikeAccessPoint) return ["ap"];
   if (/pdu|ups|power\s+distribution/.test(modelText) && dataInterfaces === 0) {
     return ["pdu", "ups"];
   }
@@ -268,7 +286,9 @@ export function buildNetboxPortTemplateDraft(
   };
 }
 
-export function parseNetBoxDeviceTypeYaml(yamlText: string): ParsedNetBoxDeviceType {
+export function parseNetBoxDeviceTypeYaml(
+  yamlText: string,
+): ParsedNetBoxDeviceType {
   const trimmed = yamlText.trim();
   if (!trimmed) {
     throw new ValidationError("YAML content is empty.");
@@ -279,7 +299,9 @@ export function parseNetBoxDeviceTypeYaml(yamlText: string): ParsedNetBoxDeviceT
     document = parseYaml(trimmed);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invalid YAML.";
-    throw new ValidationError(`Could not parse NetBox device type YAML: ${message}`);
+    throw new ValidationError(
+      `Could not parse NetBox device type YAML: ${message}`,
+    );
   }
 
   const record = asRecord(document, "device type");
@@ -333,12 +355,14 @@ export function buildNetboxDeviceDraft(
   parsed: ParsedNetBoxDeviceType,
 ): NetBoxDeviceDraft {
   const templateDraft = buildNetboxPortTemplateDraft(parsed);
+  const deviceType = templateDraft.deviceTypes[0] ?? "server";
   return {
     suggestedHostname: slugifyHostname(parsed.slug ?? parsed.model),
     manufacturer: parsed.manufacturer,
     model: parsed.model,
-    heightU: parsed.uHeight,
-    deviceType: templateDraft.deviceTypes[0] ?? "server",
+    heightU: parsed.uHeight > 0 ? parsed.uHeight : null,
+    placement: deviceType === "ap" ? "wireless" : "room",
+    deviceType,
     displayName: `${parsed.manufacturer} ${parsed.model}`.slice(0, 120),
     notes: buildNetboxDeviceNotes(parsed),
     portCount: templateDraft.ports.length,

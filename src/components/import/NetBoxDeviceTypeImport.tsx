@@ -190,9 +190,15 @@ export function NetBoxDeviceTypeImport() {
         {preview && (
           <div className="space-y-4 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] p-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <PreviewStat label={t("Manufacturer")} value={preview.parsed.manufacturer} />
+              <PreviewStat
+                label={t("Manufacturer")}
+                value={preview.parsed.manufacturer}
+              />
               <PreviewStat label={t("Model")} value={preview.parsed.model} />
-              <PreviewStat label={t("U-height")} value={String(preview.parsed.uHeight)} />
+              <PreviewStat
+                label={t("U-height")}
+                value={String(preview.parsed.uHeight)}
+              />
               <PreviewStat
                 label={t("Interfaces")}
                 value={String(preview.parsed.interfaces.length)}
@@ -201,7 +207,9 @@ export function NetBoxDeviceTypeImport() {
 
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-1 text-sm">
-                <span className="text-[var(--text-secondary)]">{t("Import as")}</span>
+                <span className="text-[var(--text-secondary)]">
+                  {t("Import as")}
+                </span>
                 <select
                   className="rk-control w-full"
                   value={importMode}
@@ -215,7 +223,9 @@ export function NetBoxDeviceTypeImport() {
               </label>
               {importMode === "device" ? (
                 <label className="space-y-1 text-sm">
-                  <span className="text-[var(--text-secondary)]">{t("Hostname")}</span>
+                  <span className="text-[var(--text-secondary)]">
+                    {t("Hostname")}
+                  </span>
                   <Input
                     value={hostname}
                     onChange={(event) => setHostname(event.target.value)}
@@ -243,11 +253,16 @@ export function NetBoxDeviceTypeImport() {
 
             {importMode === "device" ? (
               <Mono className="block text-[10px] text-[var(--text-tertiary)]">
-                {t("Will create a {type} device at {u}U with {count} ports.", {
-                  type: preview.deviceDraft.deviceType,
-                  u: String(preview.deviceDraft.heightU),
-                  count: String(preview.deviceDraft.portCount),
-                })}
+                {preview.deviceDraft.heightU
+                  ? t(
+                      "Will create a {type} device at {u}U with {count} ports.",
+                      {
+                        type: preview.deviceDraft.deviceType,
+                        u: String(preview.deviceDraft.heightU),
+                        count: String(preview.deviceDraft.portCount),
+                      },
+                    )
+                  : `${t("Placement")}: ${preview.deviceDraft.placement} / ${t("Interfaces")}: ${preview.deviceDraft.portCount}`}
               </Mono>
             ) : (
               <Mono className="block text-[10px] text-[var(--text-tertiary)]">

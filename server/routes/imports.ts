@@ -137,7 +137,7 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
         null,
         null,
         "unknown",
-        "loose",
+        deviceDraft.placement,
         null,
         "normal",
         null,

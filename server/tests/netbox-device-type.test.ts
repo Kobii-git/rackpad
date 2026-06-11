@@ -32,6 +32,26 @@ power-ports:
     maximum_draw: 350
 `.trim();
 
+const ACCESS_POINT_YAML = `
+manufacturer: Ubiquiti
+model: UAP-AC-PRO
+slug: ubiquiti-uap-ac-pro
+u_height: 0
+interfaces:
+  - name: eth0
+    type: 1000base-t
+`.trim();
+
+const NON_RACK_DEVICE_YAML = `
+manufacturer: Raspberry Pi
+model: 4 Model B
+slug: raspberry-pi-4-model-b
+u_height: 0
+interfaces:
+  - name: eth0
+    type: 1000base-t
+`.trim();
+
 test("parseNetBoxDeviceTypeYaml extracts manufacturer, model, u-height, and ports", () => {
   const parsed = parseNetBoxDeviceTypeYaml(SAMPLE_YAML);
 
@@ -42,7 +62,9 @@ test("parseNetBoxDeviceTypeYaml extracts manufacturer, model, u-height, and port
   assert.equal(parsed.partNumber, "C9300-24T");
   assert.equal(parsed.interfaces.length, 5);
 
-  const dataPorts = parsed.interfaces.filter((entry) => entry.section === "interface");
+  const dataPorts = parsed.interfaces.filter(
+    (entry) => entry.section === "interface",
+  );
   assert.equal(dataPorts.length, 3);
   assert.deepEqual(dataPorts[0], {
     name: "GigabitEthernet1/0/1",
@@ -50,11 +72,15 @@ test("parseNetBoxDeviceTypeYaml extracts manufacturer, model, u-height, and port
     section: "interface",
   });
 
-  const consolePorts = parsed.interfaces.filter((entry) => entry.section === "console");
+  const consolePorts = parsed.interfaces.filter(
+    (entry) => entry.section === "console",
+  );
   assert.equal(consolePorts.length, 1);
   assert.equal(consolePorts[0]?.name, "Console");
 
-  const powerPorts = parsed.interfaces.filter((entry) => entry.section === "power");
+  const powerPorts = parsed.interfaces.filter(
+    (entry) => entry.section === "power",
+  );
   assert.equal(powerPorts.length, 1);
   assert.equal(powerPorts[0]?.name, "PSU1");
 });
@@ -96,7 +122,10 @@ test("previewNetboxDeviceTypeImport dedupes by manufacturer and model", () => {
   ];
 
   const preview = previewNetboxDeviceTypeImport(SAMPLE_YAML, templates);
-  assert.equal(preview.dedupeKey, netboxDedupeKey("Cisco", "Catalyst 9300-24T"));
+  assert.equal(
+    preview.dedupeKey,
+    netboxDedupeKey("Cisco", "Catalyst 9300-24T"),
+  );
   assert.equal(preview.existingTemplate?.id, "existing-template");
   assert.equal(
     findExistingNetboxTemplate("Cisco", "Catalyst 9300-24T", templates)?.id,
@@ -105,4 +134,24 @@ test("previewNetboxDeviceTypeImport dedupes by manufacturer and model", () => {
   assert.equal(preview.existingDevice, null);
   assert.equal(preview.deviceDraft.heightU, 1);
   assert.equal(preview.deviceDraft.portCount, 5);
+});
+
+test("previewNetboxDeviceTypeImport accepts 0U access points as wireless devices", () => {
+  const preview = previewNetboxDeviceTypeImport(ACCESS_POINT_YAML, []);
+
+  assert.equal(preview.parsed.uHeight, 0);
+  assert.equal(preview.deviceDraft.heightU, null);
+  assert.equal(preview.deviceDraft.deviceType, "ap");
+  assert.equal(preview.deviceDraft.placement, "wireless");
+  assert.deepEqual(preview.portTemplateDraft.deviceTypes, ["ap"]);
+  assert.equal(preview.portTemplateDraft.ports.length, 1);
+});
+
+test("previewNetboxDeviceTypeImport accepts other 0U devices as room inventory", () => {
+  const preview = previewNetboxDeviceTypeImport(NON_RACK_DEVICE_YAML, []);
+
+  assert.equal(preview.parsed.uHeight, 0);
+  assert.equal(preview.deviceDraft.heightU, null);
+  assert.equal(preview.deviceDraft.placement, "room");
+  assert.equal(preview.portTemplateDraft.ports.length, 1);
 });
