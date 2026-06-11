@@ -801,6 +801,7 @@ export const api = {
 
   previewDockerImport(input: {
     endpoint: string;
+    labId?: string;
     token?: string;
   }) {
     return request<{ containers: DockerContainerPreview[] }>(

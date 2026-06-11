@@ -18,7 +18,10 @@ import {
 } from "./snmp-trap-parser.js";
 
 const DEDUPE_WINDOW_MS = 30_000;
+const TRAP_LOG_BUCKET_LIMIT = 20;
+const TRAP_LOG_BUCKET_WINDOW_MS = 60_000;
 const dedupeCache = new Map<string, number>();
+const trapLogBuckets = new Map<string, { count: number; resetAt: number }>();
 
 interface TrapSourceMapping {
   id: string | null;
@@ -124,6 +127,35 @@ function shouldDedupe(sourceIp: string, trap: ParsedSnmpTrap) {
   return previous != null && now - previous < DEDUPE_WINDOW_MS;
 }
 
+function consumeTrapLogBudget(sourceIp: string) {
+  const now = Date.now();
+  const bucket = trapLogBuckets.get(sourceIp);
+  if (!bucket || now >= bucket.resetAt) {
+    trapLogBuckets.set(sourceIp, {
+      count: 1,
+      resetAt: now + TRAP_LOG_BUCKET_WINDOW_MS,
+    });
+    cleanupTrapLogBuckets(now);
+    return true;
+  }
+
+  if (bucket.count >= TRAP_LOG_BUCKET_LIMIT) {
+    cleanupTrapLogBuckets(now);
+    return false;
+  }
+
+  bucket.count += 1;
+  cleanupTrapLogBuckets(now);
+  return true;
+}
+
+function cleanupTrapLogBuckets(now: number) {
+  if (trapLogBuckets.size <= 5000) return;
+  for (const [sourceIp, bucket] of trapLogBuckets) {
+    if (now >= bucket.resetAt) trapLogBuckets.delete(sourceIp);
+  }
+}
+
 export async function handleTrapPacket(packet: Buffer, sourceIp: string) {
   status.trapsReceived += 1;
   status.lastTrapAt = new Date().toISOString();
@@ -171,17 +203,6 @@ export async function handleTrapPacket(packet: Buffer, sourceIp: string) {
     message = `Trap ${linkResult} from ${sourceIp} did not match an enabled SNMP interface monitor.`;
   }
 
-  insertTrapLog({
-    labId,
-    deviceId,
-    sourceIp,
-    trapOid: trap.trapOid ?? null,
-    ifIndex: ifIndex ?? null,
-    varbinds: trap.varbinds,
-    resultAction: action,
-    message,
-  });
-
   upsertTrapSource({
     id: mapping.id,
     labId,
@@ -191,22 +212,41 @@ export async function handleTrapPacket(packet: Buffer, sourceIp: string) {
     credentialId: trap.credentialId ?? null,
   });
 
-  db.prepare(
-    `
-    INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `,
-  ).run(
-    createId("a"),
-    new Date().toISOString(),
-    "system",
-    "monitor.snmp.trap",
-    deviceId ? "Device" : "Lab",
-    deviceId ?? labId,
-    message,
-  );
+  const persisted = consumeTrapLogBudget(sourceIp);
+  if (persisted) {
+    insertTrapLog({
+      labId,
+      deviceId,
+      sourceIp,
+      trapOid: trap.trapOid ?? null,
+      ifIndex: ifIndex ?? null,
+      varbinds: trap.varbinds,
+      resultAction: action,
+      message,
+    });
 
-  return { deduped: false, action, affectedMonitorIds: trustedMonitorIds };
+    db.prepare(
+      `
+      INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+    ).run(
+      createId("a"),
+      new Date().toISOString(),
+      "system",
+      "monitor.snmp.trap",
+      deviceId ? "Device" : "Lab",
+      deviceId ?? labId,
+      message,
+    );
+  }
+
+  return {
+    deduped: false,
+    action,
+    affectedMonitorIds: trustedMonitorIds,
+    persisted,
+  };
 }
 
 function resolveTrapSource(sourceIp: string): TrapSourceMapping {

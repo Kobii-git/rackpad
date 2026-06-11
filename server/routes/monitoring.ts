@@ -21,6 +21,7 @@ import {
   optionalInteger,
   optionalString,
   requiredString,
+  ensureHostTarget,
   ValidationError,
 } from '../lib/validation.js'
 
@@ -233,7 +234,8 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     const defaultName = existingCountRow.count === 0 ? 'Management' : `Target ${existingCountRow.count + 1}`
     const name = optionalString(body, 'name', { maxLength: 80 }) ?? defaultName
     const type = optionalEnum(body, 'type', MONITOR_TYPES) ?? 'none'
-    const target = optionalString(body, 'target', { maxLength: 200 })
+    const targetInput = optionalString(body, 'target', { maxLength: 200 })
+    const target = targetInput == null ? targetInput : ensureHostTarget(targetInput, 'target')
     const path = optionalString(body, 'path', { maxLength: 200 })
     const port = optionalInteger(body, 'port', { min: 1, max: 65535 })
     const snmpVersion = optionalEnum(body, 'snmpVersion', SNMP_VERSIONS) ?? '2c'
@@ -324,7 +326,8 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     const current = existing
     const name = optionalString(body, 'name', { maxLength: 80 })
     const type = optionalEnum(body, 'type', MONITOR_TYPES)
-    const target = optionalString(body, 'target', { maxLength: 200 })
+    const targetInput = optionalString(body, 'target', { maxLength: 200 })
+    const target = targetInput == null ? targetInput : ensureHostTarget(targetInput, 'target')
     const path = optionalString(body, 'path', { maxLength: 200 })
     const port = optionalInteger(body, 'port', { min: 1, max: 65535 })
     const snmpVersion = optionalEnum(body, 'snmpVersion', SNMP_VERSIONS)

@@ -195,22 +195,17 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/docker/preview", async (req, reply) => {
-    if (!req.authUser) {
-      return reply.status(401).send({ error: "Authentication required." });
-    }
-
     const body = asObject(req.body);
+    const labId = requiredString(body, "labId", { maxLength: 80 });
     const endpoint = requiredString(body, "endpoint", { maxLength: 500 });
     const token = optionalString(body, "token", { maxLength: 500 });
+    if (!assertLabWrite(req, reply, labId)) return;
+
     const containers = await fetchDockerContainersPreview(endpoint, token ?? undefined);
     return { containers };
   });
 
   app.post("/docker/import", async (req, reply) => {
-    if (!req.authUser) {
-      return reply.status(401).send({ error: "Authentication required." });
-    }
-
     const body = asObject(req.body);
     const endpoint = requiredString(body, "endpoint", { maxLength: 500 });
     const token = optionalString(body, "token", { maxLength: 500 });

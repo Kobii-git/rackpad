@@ -1,6 +1,7 @@
 import { ValidationError } from "./validation.js";
 import { db } from "../db.js";
 import { createId } from "./ids.js";
+import { ensureRoutableHost } from "./net-guard.js";
 import {
   canEncryptSecrets,
   decryptSecret,
@@ -32,6 +33,9 @@ interface DockerImportSourceRow extends DockerImportSource {
   tokenEnc?: string | null;
 }
 
+const DOCKER_ENDPOINT_RESERVED_MESSAGE =
+  "Docker endpoint must be a routable public/LAN host outside reserved ranges.";
+
 export interface DockerContainerLink {
   deviceId: string;
   sourceId: string;
@@ -61,7 +65,7 @@ function asRecord(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-export function normalizeDockerEndpoint(endpoint: string) {
+function parseDockerEndpoint(endpoint: string) {
   const trimmed = endpoint.trim().replace(/\/+$/, "");
   let url: URL;
   try {
@@ -75,15 +79,28 @@ export function normalizeDockerEndpoint(endpoint: string) {
   return url;
 }
 
-export function normalizeDockerEndpointText(endpoint: string) {
-  const url = normalizeDockerEndpoint(endpoint);
+export async function normalizeDockerEndpoint(endpoint: string) {
+  const url = parseDockerEndpoint(endpoint);
+  await ensureRoutableHost(url, DOCKER_ENDPOINT_RESERVED_MESSAGE);
+  return url;
+}
+
+export async function normalizeDockerEndpointText(endpoint: string) {
+  const url = await normalizeDockerEndpoint(endpoint);
   url.hash = "";
   url.search = "";
   return url.toString().replace(/\/+$/, "");
 }
 
-export function buildDockerApiUrl(endpoint: string, apiPath: string) {
-  const url = normalizeDockerEndpoint(endpoint);
+function normalizeDockerEndpointTextForStorage(endpoint: string) {
+  const url = parseDockerEndpoint(endpoint);
+  url.hash = "";
+  url.search = "";
+  return url.toString().replace(/\/+$/, "");
+}
+
+export async function buildDockerApiUrl(endpoint: string, apiPath: string) {
+  const url = await normalizeDockerEndpoint(endpoint);
   const basePath = url.pathname.replace(/\/+$/, "");
   const nextPath = apiPath.startsWith("/") ? apiPath : `/${apiPath}`;
   url.pathname = `${basePath}${nextPath}`.replace(/\/{2,}/g, "/");
@@ -121,7 +138,7 @@ export async function fetchDockerContainersPreview(
   endpoint: string,
   token?: string,
 ): Promise<DockerContainerPreview[]> {
-  const url = buildDockerApiUrl(endpoint, "/containers/json");
+  const url = await buildDockerApiUrl(endpoint, "/containers/json");
   url.searchParams.set("all", "1");
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -228,7 +245,7 @@ export function upsertDockerImportSource(input: {
   endpoint: string;
   token?: string | null;
 }) {
-  const endpoint = normalizeDockerEndpointText(input.endpoint);
+  const endpoint = normalizeDockerEndpointTextForStorage(input.endpoint);
   const tokenEnc = encryptDockerToken(input.token);
   const now = new Date().toISOString();
   const existing = db

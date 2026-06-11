@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import net from 'node:net'
 import { db } from '../db.js'
 import { sendMonitorTransitionAlert } from './alerts.js'
+import { ensureRoutableHost } from './net-guard.js'
 import { snmpGet, SNMP_VERSIONS, type SnmpVersion } from './snmp.js'
 import { resolveMonitorSnmpSession } from './snmp-session.js'
 import {
@@ -254,7 +255,9 @@ async function executeCheck(monitor: DeviceMonitor) {
     if (monitor.type === 'http' || monitor.type === 'https') {
       const port = monitor.port ?? (monitor.type === 'https' ? 443 : 80)
       const path = monitor.path?.trim() || '/'
-      const url = new URL(`${monitor.type}://${monitor.target}:${port}${path.startsWith('/') ? path : `/${path}`}`)
+      const host = net.isIP(monitor.target) === 6 ? `[${monitor.target}]` : monitor.target
+      const url = new URL(`${monitor.type}://${host}:${port}${path.startsWith('/') ? path : `/${path}`}`)
+      await ensureRoutableHost(url)
       const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
       if (!res.ok) {
         return { result: 'offline' as const, message: `${url} returned ${res.status}.` }

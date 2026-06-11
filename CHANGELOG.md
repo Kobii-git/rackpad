@@ -8,6 +8,37 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.3-beta.1] - 2026-06-11
+
+### Added
+
+- Added a shared routable-host guard for Docker import endpoints and HTTP/HTTPS
+  monitor checks, rejecting loopback, link-local, private, unique-local, and
+  metadata address ranges after DNS resolution.
+- Added monitor target validation for IPv4, IPv6, and RFC-1123 hostnames.
+
+### Fixed
+
+- Docker container preview now requires lab editor access, matching Docker
+  import permissions instead of allowing viewers to probe endpoints.
+- Docker and HTTP/HTTPS monitor checks now block reserved host targets before
+  outbound requests to reduce SSRF risk.
+- SNMP trap logging now caps persisted trap log and audit rows per source IP so
+  trap floods do not fill the database, while still updating trap status/source
+  counters and monitor state.
+
+### Changed
+
+- Moved `concurrently` and `tsx` to dev dependencies and refreshed audited
+  dependency metadata so production installs omit dev/test tooling.
+
+### Test notes
+
+- Added unit and API coverage for Docker endpoint host guards, monitoring
+  target validation, HTTP monitor reserved-host blocking, Docker preview lab
+  write access, and SNMP trap log flood caps.
+- Verified production dependencies with `npm audit --omit=dev`.
+
 ## [1.6.2-beta.5] - 2026-06-11
 
 ### Added

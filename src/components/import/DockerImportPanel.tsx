@@ -57,6 +57,7 @@ export function DockerImportPanel() {
     try {
       const result = await api.previewDockerImport({
         endpoint: endpoint.trim(),
+        labId: lab.id,
         token: token.trim() || undefined,
       });
       setContainers(result.containers);

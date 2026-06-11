@@ -2059,6 +2059,22 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   assert.equal(invalidMonitorRes.statusCode, 400);
   assert.match(invalidMonitorRes.body, /target/i);
 
+  const invalidHostTargetRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: device.id,
+      type: "tcp",
+      target: "bad host",
+      enabled: true,
+    },
+  });
+  assert.equal(invalidHostTargetRes.statusCode, 400);
+  assert.match(invalidHostTargetRes.body, /host target/i);
+
   const invalidSnmpMonitorRes = await app.inject({
     method: "POST",
     url: "/api/device-monitors",
@@ -2095,6 +2111,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   });
   assert.equal(validSnmpMonitorRes.statusCode, 200);
   const snmpMonitor = readJson(validSnmpMonitorRes) as {
+    id: string;
     type: string;
     port: number;
     snmpVersion: string;
@@ -2108,6 +2125,57 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   assert.equal(snmpMonitor.snmpCommunity, "public");
   assert.equal(snmpMonitor.snmpOid, ".1.3.6.1.2.1.2.2.1.8.1");
   assert.equal(snmpMonitor.snmpExpectedValue, "1");
+
+  const invalidPatchTargetRes = await app.inject({
+    method: "PATCH",
+    url: `/api/device-monitors/${snmpMonitor.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      target: "-bad-host",
+    },
+  });
+  assert.equal(invalidPatchTargetRes.statusCode, 400);
+  assert.match(invalidPatchTargetRes.body, /host target/i);
+
+  const blockedHttpMonitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: device.id,
+      type: "http",
+      target: "127.0.0.1",
+      enabled: true,
+    },
+  });
+  assert.equal(blockedHttpMonitorRes.statusCode, 200);
+  const blockedHttpMonitor = readJson(blockedHttpMonitorRes) as { id: string };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => {
+    throw new Error("fetch should not run for reserved monitor hosts");
+  }) as typeof fetch;
+  try {
+    const runBlockedHttpRes = await app.inject({
+      method: "POST",
+      url: `/api/device-monitors/${blockedHttpMonitor.id}/run`,
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+      },
+    });
+    assert.equal(runBlockedHttpRes.statusCode, 200);
+    const runBlockedHttp = readJson(runBlockedHttpRes) as {
+      lastResult?: string;
+      lastMessage?: string;
+    };
+    assert.equal(runBlockedHttp.lastResult, "offline");
+    assert.match(runBlockedHttp.lastMessage ?? "", /reserved ranges/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 
   const switchRes = await app.inject({
     method: "POST",
@@ -3574,6 +3642,12 @@ interfaces:
 
 test("docker import stores a sync source and refreshes container status", async () => {
   const adminToken = await bootstrapAdmin();
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "viewer-docker",
+    displayName: "Viewer Docker",
+    password: "viewer-docker-1",
+    role: "viewer",
+  });
   const hostRes = await app.inject({
     method: "POST",
     url: "/api/devices",
@@ -3615,12 +3689,23 @@ test("docker import stores a sync source and refreshes container status", async 
   }) as typeof fetch;
 
   try {
+    const viewerPreviewRes = await app.inject({
+      method: "POST",
+      url: "/api/imports/docker/preview",
+      headers: { authorization: `Bearer ${viewerToken}` },
+      payload: {
+        labId: "lab_home",
+        endpoint: "https://8.8.8.8/api/endpoints/2/docker/",
+      },
+    });
+    assert.equal(viewerPreviewRes.statusCode, 403);
+
     const importRes = await app.inject({
       method: "POST",
       url: "/api/imports/docker/import",
       headers: { authorization: `Bearer ${adminToken}` },
       payload: {
-        endpoint: "https://portainer.example/api/endpoints/2/docker/",
+        endpoint: "https://8.8.8.8/api/endpoints/2/docker/",
         token: "portainer-token",
         containerId: "container-abc123",
         labId: "lab_home",
@@ -3639,7 +3724,7 @@ test("docker import stores a sync source and refreshes container status", async 
     assert.equal(imported.specs, "docker-image: ghcr.io/paperless:latest");
     assert.equal(
       requestedUrls[0],
-      "https://portainer.example/api/endpoints/2/docker/containers/json?all=1",
+      "https://8.8.8.8/api/endpoints/2/docker/containers/json?all=1",
     );
     assert.equal(authHeaders[0], "Bearer portainer-token");
 
@@ -3652,7 +3737,7 @@ test("docker import stores a sync source and refreshes container status", async 
     };
     assert.equal(
       source.endpoint,
-      "https://portainer.example/api/endpoints/2/docker",
+      "https://8.8.8.8/api/endpoints/2/docker",
     );
     assert.ok(source.tokenEnc);
     assert.notEqual(source.tokenEnc, "portainer-token");

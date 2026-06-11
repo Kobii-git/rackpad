@@ -1,3 +1,5 @@
+import net from 'node:net'
+
 export class ValidationError extends Error {
   statusCode: number
 
@@ -151,6 +153,38 @@ export function ensureIpv4(ipAddress: string, key = 'ipAddress') {
     }
   }
   return ipAddress
+}
+
+export function ensureHostTarget(value: string, key = 'target') {
+  const target = value.trim()
+  if (!target || target.startsWith('-') || /\s/.test(target)) {
+    throw new ValidationError(`${label(key)} must be a valid host target.`)
+  }
+
+  if (/^[\d.]+$/.test(target)) {
+    return ensureIpv4(target, key)
+  }
+
+  if (net.isIP(target) === 6) {
+    return target
+  }
+
+  const hostname = target.endsWith('.') ? target.slice(0, -1) : target
+  if (!hostname || hostname.length > 253) {
+    throw new ValidationError(`${label(key)} must be a valid host target.`)
+  }
+
+  const labels = hostname.split('.')
+  if (
+    labels.some(
+      (part) =>
+        !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(part),
+    )
+  ) {
+    throw new ValidationError(`${label(key)} must be a valid host target.`)
+  }
+
+  return target
 }
 
 export function ensureCidr(cidr: string, key = 'cidr') {
