@@ -42,6 +42,11 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          labels: |
+            org.opencontainers.image.title=Rackpad
+            org.opencontainers.image.description=Self-hosted homelab and lab inventory: racks, ports, cables, IPs, devices.
+            org.opencontainers.image.url=https://github.com/Kobii-git/Rackpad
+            org.opencontainers.image.source=https://github.com/Kobii-git/Rackpad
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -57,6 +62,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
           build-args: |
             RACKPAD_BUILD_CHANNEL=${{ github.ref_name }}
           cache-from: type=gha

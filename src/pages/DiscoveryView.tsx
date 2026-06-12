@@ -36,6 +36,7 @@ import type {
   DiscoveredDevice,
   DiscoveryScanResult,
   IpAllocationMode,
+  IpZone,
   Subnet,
 } from "@/lib/types";
 import { ipToInt } from "@/lib/utils";
@@ -104,6 +105,7 @@ export default function DiscoveryView() {
   const deviceTypes = useStore((s) => s.deviceTypes);
   const subnets = useStore((s) => s.subnets);
   const scopes = useStore((s) => s.scopes);
+  const ipZones = useStore((s) => s.ipZones);
   const discoveredDevices = useStore((s) => s.discoveredDevices);
   const canEdit = canEditInventory(currentUser);
   const canManageDiscovery = currentUser?.role === "admin";
@@ -269,7 +271,12 @@ export default function DiscoveryView() {
 
   const drawerDefaults = useMemo(() => {
     if (!selected) return undefined;
-    const ipPlan = ipPlanForDiscoveredHost(selected.ipAddress, subnets, scopes);
+    const ipPlan = ipPlanForDiscoveredHost(
+      selected.ipAddress,
+      subnets,
+      scopes,
+      ipZones,
+    );
     return {
       hostname:
         selected.hostname ??
@@ -287,7 +294,7 @@ export default function DiscoveryView() {
       notes: selected.notes ?? "",
       status: "online" as const,
     };
-  }, [scopes, selected, subnets]);
+  }, [ipZones, scopes, selected, subnets]);
 
   useEffect(() => {
     if (scanTarget === "manual" || scanTarget === "all") return;
@@ -444,6 +451,7 @@ export default function DiscoveryView() {
           discovered.ipAddress,
           subnets,
           scopes,
+          ipZones,
         );
         const created = await createDevice({
           hostname:
@@ -1340,15 +1348,25 @@ function ipPlanForDiscoveredHost(
   ipAddress: string,
   subnets: Subnet[],
   scopes: DhcpScope[],
+  ipZones: IpZone[],
 ): {
   subnet?: Subnet;
   allocationMode: IpAllocationMode;
   dhcpScope?: DhcpScope;
 } {
   const subnet = subnets.find((entry) => cidrContainsIp(entry.cidr, ipAddress));
+  const inStaticZone = subnet
+    ? ipZones.some(
+        (zone) =>
+          zone.subnetId === subnet.id &&
+          zone.kind === "static" &&
+          ipInRange(ipAddress, zone.startIp, zone.endIp),
+      )
+    : false;
   const dhcpScope = subnet
     ? scopes.find(
         (scope) =>
+          !inStaticZone &&
           scope.subnetId === subnet.id &&
           ipInRange(ipAddress, scope.startIp, scope.endIp),
       )

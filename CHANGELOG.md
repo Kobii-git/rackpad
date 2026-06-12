@@ -8,6 +8,24 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.3-beta.3] - 2026-06-13
+
+### Fixed
+
+- Added explicit OCI metadata to the Docker image and disabled published
+  provenance/SBOM attestations so GHCR only lists Rackpad's runtime Linux
+  architectures.
+- IPAM static zones now take precedence over broad DHCP scopes, so static
+  addresses such as infrastructure management IPs can be assigned from the
+  selected static range without being rejected as DHCP pool addresses.
+
+### Test notes
+
+- Added API regression coverage for a broad DHCP scope with separate static and
+  DHCP IP zones, including a static assignment for `10.0.21.33`.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`, and
+  `npm run test:server`.
+
 ## [1.6.3-beta.2] - 2026-06-11
 
 ### Added

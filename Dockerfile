@@ -31,6 +31,11 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci --omit=dev
 FROM --platform=$TARGETPLATFORM node:22-bookworm-slim AS runtime
 WORKDIR /app
 
+LABEL org.opencontainers.image.title="Rackpad" \
+  org.opencontainers.image.description="Self-hosted homelab and lab inventory: racks, ports, cables, IPs, devices." \
+  org.opencontainers.image.url="https://github.com/Kobii-git/Rackpad" \
+  org.opencontainers.image.source="https://github.com/Kobii-git/Rackpad"
+
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000

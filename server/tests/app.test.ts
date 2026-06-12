@@ -3505,6 +3505,113 @@ test("ip assignments support DHCP reservations and protect technical IPs", async
   assert.equal(technicalLinked.deviceId, firewall.id);
 });
 
+test("static IP zones override broad DHCP scopes for host assignments", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const subnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.0.21.0/24",
+      name: "Server Network",
+    },
+  });
+  assert.equal(subnetRes.statusCode, 201);
+  const subnet = readJson(subnetRes) as { id: string };
+
+  const scopeRes = await app.inject({
+    method: "POST",
+    url: "/api/dhcp-scopes",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      name: "general-client-pool",
+      startIp: "10.0.21.1",
+      endIp: "10.0.21.254",
+      gateway: "10.0.21.1",
+      dnsServers: ["1.1.1.1"],
+    },
+  });
+  assert.equal(scopeRes.statusCode, 201);
+
+  const staticZoneRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-zones",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      kind: "static",
+      startIp: "10.0.21.30",
+      endIp: "10.0.21.149",
+      description: "Static addresses for infrastructure",
+    },
+  });
+  assert.equal(staticZoneRes.statusCode, 201);
+
+  const dhcpZoneRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-zones",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      kind: "dhcp",
+      startIp: "10.0.21.150",
+      endIp: "10.0.21.250",
+      description: "General client pool",
+    },
+  });
+  assert.equal(dhcpZoneRes.statusCode, 201);
+
+  const staticAssignmentRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      ipAddress: "10.0.21.33",
+      assignmentType: "device",
+      allocationMode: "static",
+      hostname: "server-static-33",
+    },
+  });
+  assert.equal(staticAssignmentRes.statusCode, 201, staticAssignmentRes.body);
+  const staticAssignment = readJson(staticAssignmentRes) as {
+    allocationMode: string;
+    dhcpScopeId: string | null;
+  };
+  assert.equal(staticAssignment.allocationMode, "static");
+  assert.equal(staticAssignment.dhcpScopeId, null);
+
+  const staticInsideDhcpZoneRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      ipAddress: "10.0.21.151",
+      assignmentType: "device",
+      allocationMode: "static",
+      hostname: "client-static-151",
+    },
+  });
+  assert.equal(staticInsideDhcpZoneRes.statusCode, 400);
+  assert.match(staticInsideDhcpZoneRes.body, /DHCP reservations/i);
+});
+
 test("documentation pages can be linked to devices", async () => {
   const adminToken = await bootstrapAdmin();
 

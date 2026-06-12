@@ -182,6 +182,7 @@ export function DeviceDrawer({
   const portTemplates = useStore((s) => s.portTemplates);
   const subnets = useStore((s) => s.subnets);
   const scopes = useStore((s) => s.scopes);
+  const ipZones = useStore((s) => s.ipZones);
   const isEdit = !!device;
   const [form, setForm] = useState<FormState>(() =>
     device
@@ -299,8 +300,20 @@ export function DeviceDrawer({
     () => scopes.filter((scope) => scope.subnetId === selectedIpSubnetId),
     [scopes, selectedIpSubnetId],
   );
+  const zonesForSelectedSubnet = useMemo(
+    () => ipZones.filter((zone) => zone.subnetId === selectedIpSubnetId),
+    [ipZones, selectedIpSubnetId],
+  );
+  const managementIpInStaticZone = managementIp
+    ? zonesForSelectedSubnet.some(
+        (zone) =>
+          zone.kind === "static" &&
+          ipInRange(managementIp, zone.startIp, zone.endIp),
+      )
+    : false;
   const matchingDhcpScope = managementIp
     ? scopesForSelectedSubnet.find((scope) =>
+        !managementIpInStaticZone &&
         ipInRange(managementIp, scope.startIp, scope.endIp),
       )
     : undefined;

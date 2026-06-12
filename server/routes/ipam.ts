@@ -88,6 +88,19 @@ function dhcpZonesForSubnet(subnetId: string) {
   `).all(subnetId) as Array<{ startIp: string; endIp: string }>
 }
 
+function ipZonesForIp(subnetId: string, ipAddress: string) {
+  return (db.prepare(`
+    SELECT kind, startIp, endIp
+    FROM ipZones
+    WHERE subnetId = ?
+    ORDER BY startIp
+  `).all(subnetId) as Array<{
+    kind: (typeof IP_ZONE_KINDS)[number]
+    startIp: string
+    endIp: string
+  }>).filter((zone) => ipInRange(ipAddress, zone.startIp, zone.endIp))
+}
+
 function dhcpTechnicalRole(subnetId: string, ipAddress: string) {
   const scopes = db.prepare('SELECT name, gateway, dnsServers FROM dhcpScopes WHERE subnetId = ?').all(subnetId) as Array<{
     name: string
@@ -145,6 +158,9 @@ function validateAssignmentSemantics(input: {
   }
 
   const containingScope = dhcpScopeForIp(input.subnetId, input.ipAddress)
+  const containingZones = ipZonesForIp(input.subnetId, input.ipAddress)
+  const inStaticZone = containingZones.some((zone) => zone.kind === 'static')
+  const inDhcpZone = containingZones.some((zone) => zone.kind === 'dhcp')
   if (input.allocationMode === 'dhcp-reservation') {
     if (!input.dhcpScopeId) {
       throw new ValidationError('DHCP reservation assignments must reference a DHCP scope.')
@@ -159,12 +175,12 @@ function validateAssignmentSemantics(input: {
       throw new ValidationError('DHCP reservation IP must be inside the selected DHCP scope.')
     }
     const dhcpZones = dhcpZonesForSubnet(input.subnetId)
-    if (dhcpZones.length > 0 && !dhcpZones.some((zone) => ipInRange(input.ipAddress, zone.startIp, zone.endIp))) {
+    if ((dhcpZones.length > 0 || containingZones.length > 0) && !inDhcpZone) {
       throw new ValidationError('DHCP reservation IP must be inside a DHCP IP zone.')
     }
   } else if (input.dhcpScopeId) {
     throw new ValidationError('Static assignments cannot reference a DHCP scope.')
-  } else if (containingScope && HOST_ASSIGNMENT_TYPES.has(input.assignmentType)) {
+  } else if (containingScope && !inStaticZone && HOST_ASSIGNMENT_TYPES.has(input.assignmentType)) {
     throw new ValidationError(
       'Device, interface, VM, and container IPs inside a DHCP scope must be marked as DHCP reservations.',
     )

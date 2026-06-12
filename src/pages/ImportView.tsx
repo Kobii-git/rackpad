@@ -41,6 +41,7 @@ import type {
   DeviceStatus,
   DhcpScope,
   IpAssignment,
+  IpZone,
   Port,
   Subnet,
   Vlan,
@@ -405,6 +406,7 @@ export default function ImportView() {
   const vlans = useStore((s) => s.vlans);
   const subnets = useStore((s) => s.subnets);
   const scopes = useStore((s) => s.scopes);
+  const ipZones = useStore((s) => s.ipZones);
   const ipAssignments = useStore((s) => s.ipAssignments);
   const canEdit = canEditInventory(currentUser);
   const [payload, setPayload] = useState<HyperVPayload | null>(null);
@@ -546,6 +548,7 @@ export default function ImportView() {
               devicesByHostname,
               ipAssignments,
               scopes,
+              ipZones,
               subnets,
               options,
               log,
@@ -569,6 +572,7 @@ export default function ImportView() {
                 draft,
                 device,
                 scopes,
+                ipZones,
                 subnets,
                 existingKeys: localIpKeys,
                 log,
@@ -1750,6 +1754,7 @@ async function upsertVmDevice({
   devicesByHostname,
   ipAssignments,
   scopes,
+  ipZones,
   subnets,
   options,
   log,
@@ -1759,6 +1764,7 @@ async function upsertVmDevice({
   devicesByHostname: Record<string, Device>;
   ipAssignments: IpAssignment[];
   scopes: DhcpScope[];
+  ipZones: IpZone[];
   subnets: Subnet[];
   options: ImportOptions;
   log: string[];
@@ -1796,7 +1802,7 @@ async function upsertVmDevice({
     : undefined;
   const managementDhcpScope =
     managementIp && managementSubnet
-      ? findDhcpScopeForIp(scopes, managementSubnet.id, managementIp)
+      ? findDhcpScopeForIp(scopes, ipZones, managementSubnet.id, managementIp)
       : undefined;
   const sourceIps = vmIps(draft.source);
   const guest = getVmGuestInfo(draft.source);
@@ -1951,6 +1957,7 @@ async function importSecondaryIps({
   draft,
   device,
   scopes,
+  ipZones,
   subnets,
   existingKeys,
   log,
@@ -1958,6 +1965,7 @@ async function importSecondaryIps({
   draft: VmDraft;
   device: Device;
   scopes: DhcpScope[];
+  ipZones: IpZone[];
   subnets: Subnet[];
   existingKeys: Set<string>;
   log: string[];
@@ -1973,7 +1981,7 @@ async function importSecondaryIps({
     if (!subnet) continue;
     const key = `${subnet.id}|${ipAddress}`;
     if (existingKeys.has(key)) continue;
-    const dhcpScope = findDhcpScopeForIp(scopes, subnet.id, ipAddress);
+    const dhcpScope = findDhcpScopeForIp(scopes, ipZones, subnet.id, ipAddress);
     const created = await createIpAssignmentRecord({
       subnetId: subnet.id,
       ipAddress,
@@ -2133,11 +2141,20 @@ function findIpAssignment(
 
 function findDhcpScopeForIp(
   scopes: DhcpScope[],
+  ipZones: IpZone[],
   subnetId: string,
   ipAddress: string,
 ) {
   if (!isUsableIpv4(ipAddress)) return undefined;
   const ipValue = ipToInt(ipAddress);
+  const inStaticZone = ipZones.some(
+    (zone) =>
+      zone.subnetId === subnetId &&
+      zone.kind === "static" &&
+      ipValue >= ipToInt(zone.startIp) &&
+      ipValue <= ipToInt(zone.endIp),
+  );
+  if (inStaticZone) return undefined;
   return scopes.find(
     (scope) =>
       scope.subnetId === subnetId &&
