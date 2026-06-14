@@ -2095,7 +2095,7 @@ export function visualizerCablePath(
   }
   const bundled = bundledCablePath(from, to, index, context, true);
   if (bundled) return bundled;
-  return autoCablePath(from, to, index);
+  return autoCablePath(from, to, index, context);
 }
 
 function straightCablePath(
@@ -2121,7 +2121,11 @@ function autoCablePath(
   from: { x: number; y: number },
   to: { x: number; y: number },
   index: number,
+  context: CablePathContext = {},
 ) {
+  const orthogonal = orthogonalCablePath(from, to, index, context);
+  if (orthogonal) return orthogonal;
+
   const dx = Math.abs(to.x - from.x);
   const dy = Math.abs(to.y - from.y);
   const laneOffset = ((index % 17) - 8) * 7;
@@ -2171,7 +2175,7 @@ function bundledCablePath(
   const fromPanel = rackPanelForNode(context.fromNode, context.rackPanels);
   const toPanel = rackPanelForNode(context.toNode, context.rackPanels);
   if (!fromPanel && !toPanel) {
-    return rackOnly ? null : autoCablePath(from, to, index);
+    return rackOnly ? null : autoCablePath(from, to, index, context);
   }
 
   const panels = [fromPanel, toPanel].filter((panel): panel is RackPanel =>
@@ -2200,6 +2204,96 @@ function bundledCablePath(
     ],
     22,
   );
+}
+
+function orthogonalCablePath(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  index: number,
+  context: CablePathContext,
+) {
+  const fromBounds = nodeBounds(context.fromNode, from);
+  const toBounds = nodeBounds(context.toNode, to);
+  if (!fromBounds || !toBounds) return null;
+
+  const dx = toBounds.centerX - fromBounds.centerX;
+  const dy = toBounds.centerY - fromBounds.centerY;
+  const laneOffset = ((index % 13) - 6) * 8;
+  const clearance = 38 + Math.abs(laneOffset) * 0.25;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const routeRight = dx >= 0;
+    const fromStubX = routeRight
+      ? fromBounds.right + 18
+      : fromBounds.left - 18;
+    const toStubX = routeRight ? toBounds.left - 18 : toBounds.right + 18;
+    const betweenX = (fromStubX + toStubX) / 2 + laneOffset;
+    const outsideX = routeRight
+      ? Math.max(fromBounds.right, toBounds.right) + clearance
+      : Math.min(fromBounds.left, toBounds.left) - clearance;
+    const betweenIsForward = routeRight
+      ? betweenX > fromStubX && betweenX < toStubX
+      : betweenX < fromStubX && betweenX > toStubX;
+    const laneX = betweenIsForward ? betweenX : outsideX;
+
+    return roundedPolylinePath(
+      [
+        from,
+        { x: fromStubX, y: from.y },
+        { x: laneX, y: from.y },
+        { x: laneX, y: to.y },
+        { x: toStubX, y: to.y },
+        to,
+      ],
+      18,
+    );
+  }
+
+  const routeDown = dy >= 0;
+  const fromStubY = routeDown
+    ? fromBounds.bottom + 18
+    : fromBounds.top - 18;
+  const toStubY = routeDown ? toBounds.top - 18 : toBounds.bottom + 18;
+  const betweenY = (fromStubY + toStubY) / 2 + laneOffset;
+  const outsideY = routeDown
+    ? Math.max(fromBounds.bottom, toBounds.bottom) + clearance
+    : Math.min(fromBounds.top, toBounds.top) - clearance;
+  const betweenIsForward = routeDown
+    ? betweenY > fromStubY && betweenY < toStubY
+    : betweenY < fromStubY && betweenY > toStubY;
+  const laneY = betweenIsForward ? betweenY : outsideY;
+
+  return roundedPolylinePath(
+    [
+      from,
+      { x: from.x, y: fromStubY },
+      { x: from.x, y: laneY },
+      { x: to.x, y: laneY },
+      { x: to.x, y: toStubY },
+      to,
+    ],
+    18,
+  );
+}
+
+function nodeBounds(
+  node: VisualizerNode | undefined,
+  fallback: { x: number; y: number },
+) {
+  const width = node?.width ?? 0;
+  const height = node?.height ?? 0;
+  const left = node?.x ?? fallback.x;
+  const top = node?.y ?? fallback.y;
+  const right = left + width;
+  const bottom = top + height;
+  return {
+    left,
+    right,
+    top,
+    bottom,
+    centerX: left + width / 2,
+    centerY: top + height / 2,
+  };
 }
 
 function rackPanelForNode(

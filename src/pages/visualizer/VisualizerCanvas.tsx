@@ -1,7 +1,6 @@
 import {
   type Dispatch,
   type KeyboardEvent,
-  type MouseEvent,
   type PointerEvent,
   type ReactNode,
   type SetStateAction,
@@ -154,6 +153,7 @@ export function VisualizerCanvas({
     scale: 1,
   });
   const [dragStart, setDragStart] = useState<{
+    pointerId: number;
     x: number;
     y: number;
     transform: TransformState;
@@ -317,20 +317,24 @@ export function VisualizerCanvas({
     });
   }
 
-  function handleCanvasPointerDown(event: MouseEvent<HTMLDivElement>) {
+  function handleCanvasPointerDown(event: PointerEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;
     if (target.closest("[data-visualizer-interactive='true']")) return;
-    if (event.button !== 0) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
     setSelection(null);
     setDragStart({
+      pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
       transform,
     });
   }
 
-  function handleCanvasPointerMove(event: MouseEvent<HTMLDivElement>) {
-    if (!dragStart) return;
+  function handleCanvasPointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (!dragStart || dragStart.pointerId !== event.pointerId) return;
+    event.preventDefault();
     setTransform({
       ...dragStart.transform,
       x: dragStart.transform.x + event.clientX - dragStart.x,
@@ -338,7 +342,11 @@ export function VisualizerCanvas({
     });
   }
 
-  function handleCanvasPointerUp() {
+  function handleCanvasPointerUp(event: PointerEvent<HTMLDivElement>) {
+    if (!dragStart || dragStart.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(dragStart.pointerId)) {
+      event.currentTarget.releasePointerCapture(dragStart.pointerId);
+    }
     setDragStart(null);
   }
 
@@ -575,10 +583,10 @@ export function VisualizerCanvas({
 
   return (
     <TooltipProvider>
-      <div className="flex flex-1 gap-4 overflow-hidden px-6 py-5">
-        <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 gap-4 overflow-y-auto px-4 py-4 xl:overflow-hidden xl:px-6 xl:py-5">
+        <div className="flex min-h-[620px] min-w-0 flex-1 flex-col xl:min-h-0">
           <Card className="min-h-0 flex flex-1 flex-col">
-            <CardHeader>
+            <CardHeader className="flex-col lg:flex-row">
               <CardTitle>
                 <CardLabel>
                   {model.layoutMode === "pyramid"
@@ -652,7 +660,7 @@ export function VisualizerCanvas({
             <CardBody className="min-h-0 flex-1 p-0">
               <div
                 ref={viewportRef}
-                className={`relative h-full overflow-hidden bg-[radial-gradient(circle_at_1px_1px,rgb(255_255_255_/_0.035)_1px,transparent_0)] [background-size:24px_24px] ${
+                className={`relative h-full touch-none select-none overflow-hidden bg-[radial-gradient(circle_at_1px_1px,rgb(255_255_255_/_0.035)_1px,transparent_0)] [background-size:24px_24px] ${
                   traceMode.enabled
                     ? "cursor-crosshair"
                     : dragStart || nodeDrag
@@ -660,10 +668,10 @@ export function VisualizerCanvas({
                       : "cursor-grab"
                 }`}
                 onWheel={handleWheel}
-                onMouseDown={handleCanvasPointerDown}
-                onMouseMove={handleCanvasPointerMove}
-                onMouseUp={handleCanvasPointerUp}
-                onMouseLeave={handleCanvasPointerUp}
+                onPointerDown={handleCanvasPointerDown}
+                onPointerMove={handleCanvasPointerMove}
+                onPointerUp={handleCanvasPointerUp}
+                onPointerCancel={handleCanvasPointerUp}
               >
                 {model.counts.cables === 0 && !noCableBannerDismissed && (
                   <NoCableBanner onDismiss={onDismissNoCableBanner} />

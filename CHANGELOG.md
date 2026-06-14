@@ -8,6 +8,24 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.3-beta.4] - 2026-06-14
+
+### Fixed
+
+- Visualizer Pyramid/auto cable routing now uses stable orthogonal lanes for
+  non-rack links instead of large sweeping curves, reducing crossed and looping
+  cable paths in Firefox and other browsers.
+- Visualizer canvas panning now uses pointer events and touch-safe handling, so
+  tablet users can drag the canvas while the page keeps a usable scroll layout
+  on narrower screens.
+
+### Test notes
+
+- Smoke-tested the Visualizer locally in Pyramid/auto mode with demo data at
+  desktop and 1024x768 tablet-sized viewports.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, and `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.3-beta.3] - 2026-06-13
 
 ### Fixed
