@@ -202,6 +202,35 @@ test('applyWifiDiscoveryPlacementToDevice updates device and association', () =>
   assert.equal(association.ssidId, 'ssid_guest')
 })
 
+test('applyWifiDiscoveryPlacementToDevice fills SSID when AP is already attached', () => {
+  seedWifiVlanSubnet()
+  db.prepare(`
+    INSERT INTO devices
+      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model,
+       serial, managementIp, macAddress, status, placement, parentDeviceId, networkMode, roomId, cpuCores, memoryGb, storageGb, specs,
+       startU, heightU, face, tags, notes, lastSeen)
+    VALUES ('client_attached', 'lab_home', NULL, 'ssid-phone', NULL, 'endpoint', NULL, NULL,
+       NULL, '192.168.30.89', NULL, 'online', 'wireless', 'ap_main', 'normal', NULL, NULL, NULL, NULL, NULL,
+       NULL, NULL, NULL, NULL, NULL, NULL)
+  `).run()
+
+  const applied = applyWifiDiscoveryPlacementToDevice({
+    labId: 'lab_home',
+    deviceId: 'client_attached',
+    ipAddress: '192.168.30.89',
+    deviceType: 'endpoint',
+    existingPlacement: 'wireless',
+    existingParentDeviceId: 'ap_main',
+  })
+  assert.equal(applied, true)
+
+  const association = db
+    .prepare('SELECT apDeviceId, ssidId FROM wifiClientAssociations WHERE clientDeviceId = ?')
+    .get('client_attached') as { apDeviceId: string; ssidId: string }
+  assert.equal(association.apDeviceId, 'ap_main')
+  assert.equal(association.ssidId, 'ssid_guest')
+})
+
 test('explainWifiClientPlacement reports vlan match and multiple AP ambiguity', () => {
   seedWifiVlanSubnet()
   const match = explainWifiClientPlacement({

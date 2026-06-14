@@ -2325,6 +2325,7 @@ export interface CreateDeviceInput {
 }
 
 export async function createDevice(input: CreateDeviceInput): Promise<Device> {
+  const labId = state.lab.id;
   const trimmedHostname = input.hostname.trim();
   const parentDevice = input.parentDeviceId
     ? state.devices.find((device) => device.id === input.parentDeviceId)
@@ -2342,7 +2343,7 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
   });
 
   const created = await api.createDevice({
-    labId: state.lab.id,
+    labId,
     hostname: trimmedHostname,
     deviceType: input.deviceType,
     displayName: input.displayName,
@@ -2383,6 +2384,16 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
   }
 
   const createdPorts = await api.getPorts({ deviceId: created.id });
+  let refreshedWifiClientAssociations: WifiClientAssociation[] | null = null;
+  if (created.placement === "wireless" || created.parentDeviceId) {
+    try {
+      refreshedWifiClientAssociations = await api.getWifiClientAssociations({
+        labId,
+      });
+    } catch {
+      refreshedWifiClientAssociations = null;
+    }
+  }
 
   setState((prev) => ({
     ...prev,
@@ -2395,6 +2406,9 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
     ),
     ports: sortPorts([...prev.ports, ...createdPorts]),
     ipAssignments: applyAssignmentSync(prev.ipAssignments, syncResult),
+    wifiClientAssociations: refreshedWifiClientAssociations
+      ? sortWifiClientAssociations(refreshedWifiClientAssociations)
+      : prev.wifiClientAssociations,
   }));
 
   void recordAudit(

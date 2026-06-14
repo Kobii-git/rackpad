@@ -241,7 +241,6 @@ export function applyWifiDiscoveryPlacementToDevice(input: {
   ) {
     return false
   }
-  if (input.existingParentDeviceId) return false
   if (deviceHasDocumentedPorts(input.deviceId)) return false
 
   const resolved = resolveWifiClientPlacement({
@@ -254,6 +253,12 @@ export function applyWifiDiscoveryPlacementToDevice(input: {
     excludeDeviceId: input.deviceId,
   })
   if (!resolved) return false
+  if (
+    input.existingParentDeviceId &&
+    input.existingParentDeviceId !== resolved.apDeviceId
+  ) {
+    return false
+  }
 
   db.transaction(() => {
     db.prepare(`

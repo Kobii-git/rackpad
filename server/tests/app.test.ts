@@ -1362,11 +1362,53 @@ test("device import auto-places wireless clients on WiFi VLAN subnets", async ()
   });
   assert.equal(deviceRes.statusCode, 201);
   const device = readJson(deviceRes) as {
+    id: string;
     placement: string;
     parentDeviceId: string | null;
   };
   assert.equal(device.placement, "wireless");
   assert.equal(device.parentDeviceId, "ap_guest_bulk");
+
+  const association = db
+    .prepare(
+      "SELECT apDeviceId, ssidId FROM wifiClientAssociations WHERE clientDeviceId = ?",
+    )
+    .get(device.id) as { apDeviceId: string; ssidId: string };
+  assert.equal(association.apDeviceId, "ap_guest_bulk");
+  assert.equal(association.ssidId, "ssid_guest_bulk");
+
+  const attachedDeviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "guest-tablet",
+      deviceType: "endpoint",
+      status: "online",
+      managementIp: "192.168.31.45",
+      placement: "wireless",
+      parentDeviceId: "ap_guest_bulk",
+    },
+  });
+  assert.equal(attachedDeviceRes.statusCode, 201);
+  const attachedDevice = readJson(attachedDeviceRes) as {
+    id: string;
+    placement: string;
+    parentDeviceId: string | null;
+  };
+  assert.equal(attachedDevice.placement, "wireless");
+  assert.equal(attachedDevice.parentDeviceId, "ap_guest_bulk");
+
+  const attachedAssociation = db
+    .prepare(
+      "SELECT apDeviceId, ssidId FROM wifiClientAssociations WHERE clientDeviceId = ?",
+    )
+    .get(attachedDevice.id) as { apDeviceId: string; ssidId: string };
+  assert.equal(attachedAssociation.apDeviceId, "ap_guest_bulk");
+  assert.equal(attachedAssociation.ssidId, "ssid_guest_bulk");
 });
 
 test("container is a built-in virtual workload device type", async () => {

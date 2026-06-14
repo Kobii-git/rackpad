@@ -8,6 +8,25 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.3-beta.5] - 2026-06-14
+
+### Fixed
+
+- Discovery WiFi auto-placement now fills the matching SSID association when a
+  client is discovered on a WiFi VLAN, including clients that are already
+  attached to the correct AP.
+- Newly auto-placed wireless clients now refresh WiFi associations in the UI
+  immediately after device creation, so the assigned SSID appears without a
+  page reload.
+
+### Test notes
+
+- Added regression coverage for WiFi VLAN discovery creating the correct SSID
+  association for new and already AP-attached clients.
+- Verified focused discovery placement and API tests, plus
+  `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, and `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.3-beta.4] - 2026-06-14
 
 ### Fixed
