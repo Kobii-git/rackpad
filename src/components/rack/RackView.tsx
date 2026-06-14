@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { motion } from "motion/react";
-import type { Device, Rack, RackFace } from "@/lib/types";
+import type { Device, DeviceImage, Rack, RackFace } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { cn, statusColor, statusGlow } from "@/lib/utils";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
@@ -14,6 +14,7 @@ import {
 interface RackViewProps {
   rack: Rack;
   devices: Device[];
+  deviceImages?: Record<string, DeviceImage[]>;
   face: RackFace | "both";
   onSelectDevice?: (deviceId: string) => void;
   selectedDeviceId?: string;
@@ -76,6 +77,7 @@ function buildLayout(rack: Rack, devices: Device[], face: RackFace): Slot[] {
 export function RackView({
   rack,
   devices,
+  deviceImages = {},
   face,
   onSelectDevice,
   selectedDeviceId,
@@ -88,6 +90,7 @@ export function RackView({
           key={rackFace}
           rack={rack}
           devices={devices}
+          deviceImages={deviceImages}
           face={rackFace}
           onSelectDevice={onSelectDevice}
           selectedDeviceId={selectedDeviceId}
@@ -100,12 +103,14 @@ export function RackView({
 function RackFaceView({
   rack,
   devices,
+  deviceImages,
   face,
   onSelectDevice,
   selectedDeviceId,
 }: {
   rack: Rack;
   devices: Device[];
+  deviceImages: Record<string, DeviceImage[]>;
   face: RackFace;
   onSelectDevice?: (deviceId: string) => void;
   selectedDeviceId?: string;
@@ -147,6 +152,7 @@ function RackFaceView({
                     <DeviceTile
                       key={slot.device.id}
                       device={slot.device}
+                      image={deviceImages[slot.device.id]?.[0]}
                       heightU={slot.spanU ?? 1}
                       childDevices={childDevicesByParent[slot.device.id] ?? []}
                       selected={selectedDeviceId === slot.device.id}
@@ -203,12 +209,14 @@ function RackRail({ slots, side }: { slots: Slot[]; side: "left" | "right" }) {
 
 function DeviceTile({
   device,
+  image,
   heightU,
   childDevices,
   selected,
   onClick,
 }: {
   device: Device;
+  image?: DeviceImage;
   heightU: number;
   childDevices: Device[];
   selected: boolean;
@@ -253,12 +261,28 @@ function DeviceTile({
             aria-hidden
           />
 
-          <DeviceTypeIcon
-            type={device.deviceType}
-            className="size-4 shrink-0 text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text-primary)]"
-          />
+          {image ? (
+            <span
+              className={cn(
+                "relative z-10 shrink-0 overflow-hidden rounded-[var(--radius-xs)] border border-[var(--border-subtle)] bg-black/20",
+                heightU > 1 ? "h-[calc(100%-8px)] w-16" : "size-6",
+              )}
+            >
+              <img
+                src={image.dataUrl}
+                alt={`${device.hostname} reference`}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            </span>
+          ) : (
+            <DeviceTypeIcon
+              type={device.deviceType}
+              className="relative z-10 size-4 shrink-0 text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text-primary)]"
+            />
+          )}
 
-          <div className="min-w-0 flex flex-1 flex-col leading-tight">
+          <div className="relative z-10 min-w-0 flex flex-1 flex-col leading-tight">
             <span className="truncate text-[13px] font-semibold tracking-normal text-[var(--text-primary)]">
               {device.hostname}
             </span>
@@ -272,7 +296,7 @@ function DeviceTile({
           </div>
 
           {childDevices.length > 0 && (
-            <span className="flex max-w-[9rem] shrink-0 gap-1 overflow-hidden">
+            <span className="relative z-10 flex max-w-[9rem] shrink-0 gap-1 overflow-hidden">
               {childDevices.slice(0, 5).map((child) => (
                 <span
                   key={child.id}
@@ -290,12 +314,14 @@ function DeviceTile({
             </span>
           )}
 
-          <span className="shrink-0 rounded-[999px] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.04)] px-1.5 py-0.5 font-mono text-[10px] uppercase text-[var(--text-muted)]">
+          <span className="relative z-10 shrink-0 rounded-[999px] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.04)] px-1.5 py-0.5 font-mono text-[10px] uppercase text-[var(--text-muted)]">
             U{device.startU}
             {heightU > 1 ? `-${(device.startU ?? 0) + heightU - 1}` : ""}
           </span>
 
-          <StatusDot status={device.status} />
+          <span className="relative z-10">
+            <StatusDot status={device.status} />
+          </span>
         </motion.button>
       </TooltipTrigger>
       <TooltipContent side="right" className="max-w-xs">

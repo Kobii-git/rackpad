@@ -6,11 +6,23 @@ Open Rackpad → **Imports** → **Docker container import**.
 
 ## What Works Today
 
-1. Paste a Docker Engine API base URL (for example `http://127.0.0.1:2375`) or a Portainer proxy URL.
-2. Optionally supply an API token. Preview uses it for the current request; imported containers store the token encrypted so Rackpad can refresh status later.
-3. Preview containers (name, image, state/status).
-4. Choose a compute host device in the lab and import one container as a virtual `container` workload attached to that host.
-5. Use **Refresh Docker statuses** to update imported containers immediately, or let the server background sync do it automatically.
+1. Choose a local Docker socket or HTTP / Portainer connection.
+2. For local socket mode, mount the socket into the Rackpad container and use `/var/run/docker.sock`.
+3. For HTTP mode, paste a Docker Engine API base URL or a Portainer proxy URL.
+4. Optionally supply an API token for HTTP mode. Preview uses it for the current request; imported containers store the token encrypted so Rackpad can refresh status later.
+5. Preview containers (name, image, state/status).
+6. Choose a compute host device in the lab and import one container as a virtual `container` workload attached to that host.
+7. Use **Refresh Docker statuses** to update imported containers immediately, or let the server background sync do it automatically.
+
+For socket mode, add the Docker socket as a read-only mount in your compose file:
+
+```yaml
+services:
+  rackpad:
+    volumes:
+      - rackpad_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+```
 
 Imported containers store:
 
@@ -27,6 +39,7 @@ Imported containers store:
 - Background status sync is read-only and only queries Docker/Portainer endpoints already used for imported containers.
 - No write-back to Docker (stop/start/remove) is attempted.
 - Import only creates a new device record; it does not modify IPAM or VLAN data.
+- Mounting the Docker socket gives Rackpad access to the host Docker API. Rackpad only calls read-only container-list endpoints for this feature, but the Docker socket itself is a privileged interface.
 
 ## Status Sync
 

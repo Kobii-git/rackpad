@@ -41,7 +41,14 @@ import {
   updateRoomRecord,
   useStore,
 } from "@/lib/store";
-import type { Device, Port, RackFace, ReferenceImage, Room } from "@/lib/types";
+import type {
+  Device,
+  DeviceImage,
+  Port,
+  RackFace,
+  ReferenceImage,
+  Room,
+} from "@/lib/types";
 import { cn, statusLabel } from "@/lib/utils";
 import { formatDeviceAddress } from "@/lib/network-labels";
 
@@ -95,6 +102,7 @@ export default function RackViewPage() {
   const racks = useStore((s) => s.racks);
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
+  const deviceImages = useStore((s) => s.deviceImages);
   const referenceImages = useStore((s) => s.referenceImages);
   const canEdit = canEditInventory(currentUser);
   const [selectedViewId, setSelectedViewId] = useState("");
@@ -251,6 +259,13 @@ export default function RackViewPage() {
       return acc;
     }, {});
   }, [ports]);
+
+  const deviceImagesByDeviceId = useMemo(() => {
+    return deviceImages.reduce<Record<string, DeviceImage[]>>((acc, image) => {
+      (acc[image.deviceId] ??= []).push(image);
+      return acc;
+    }, {});
+  }, [deviceImages]);
 
   const rackDevices = rack
     ? devices.filter((device) => device.rackId === rack.id)
@@ -693,6 +708,7 @@ export default function RackViewPage() {
                   <RackView
                     rack={rack}
                     devices={rackDevices}
+                    deviceImages={deviceImagesByDeviceId}
                     face={face}
                     selectedDeviceId={selectedDeviceId}
                     onSelectDevice={(id) =>

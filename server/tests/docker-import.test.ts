@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
+import http from "node:http";
+import os from "node:os";
+import path from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
 import test from "node:test";
 import {
   buildDockerApiUrl,
   buildDockerContainerNotes,
   buildDockerContainerSpecs,
+  fetchDockerContainersPreview,
   normalizeDockerEndpoint,
+  normalizeDockerEndpointText,
+  normalizeDockerSocketEndpoint,
   parseDockerContainersJson,
 } from "../lib/docker-import.js";
 
@@ -62,6 +69,47 @@ test("buildDockerApiUrl preserves Portainer proxy base paths", async () => {
     url.toString(),
     "https://8.8.8.8/api/endpoints/2/docker/containers/json?all=1",
   );
+});
+
+test("normalizeDockerEndpointText accepts unix socket endpoints", async () => {
+  assert.deepEqual(normalizeDockerSocketEndpoint("unix:///var/run/docker.sock"), {
+    endpoint: "unix:///var/run/docker.sock",
+    socketPath: "/var/run/docker.sock",
+  });
+  assert.equal(
+    await normalizeDockerEndpointText("unix:///var/run/docker.sock"),
+    "unix:///var/run/docker.sock",
+  );
+  assert.throws(
+    () => normalizeDockerSocketEndpoint("unix://var/run/docker.sock"),
+    /Docker socket endpoint must use unix:\/\/\/absolute\/path\.sock\./,
+  );
+});
+
+test("fetchDockerContainersPreview reads Docker JSON through a unix socket", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "rackpad-docker-"));
+  const socketPath = path.join(dir, "docker.sock");
+  const server = http.createServer((req, res) => {
+    assert.equal(req.url, "/containers/json?all=1");
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify(SAMPLE_RESPONSE));
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(socketPath, resolve);
+  });
+
+  try {
+    const containers = await fetchDockerContainersPreview(`unix://${socketPath}`);
+    assert.equal(containers.length, 2);
+    assert.equal(containers[0]?.name, "web-01");
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("buildDockerContainerNotes and specs capture image and status", () => {

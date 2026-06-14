@@ -38,7 +38,7 @@ import {
   toggleSort,
   type SortState,
 } from "@/lib/sort";
-import type { Subnet, Vlan, VlanRange } from "@/lib/types";
+import type { IpAssignment, Subnet, Vlan, VlanRange } from "@/lib/types";
 
 type RangeForm = {
   name: string;
@@ -199,6 +199,16 @@ export default function VlansView() {
       })
       .sort((a, b) => compareVlans(a, b, vlanSort, subnets));
   }, [normalizedQuery, ranges, selectedRangeId, subnets, vlanSort, vlans]);
+
+  const assignmentsBySubnetId = useMemo(() => {
+    return ipAssignments.reduce<Record<string, IpAssignment[]>>(
+      (acc, assignment) => {
+        (acc[assignment.subnetId] ??= []).push(assignment);
+        return acc;
+      },
+      {},
+    );
+  }, [ipAssignments]);
 
   async function handleDeleteVlan(id: string, name: string, vlanId: number) {
     if (
@@ -806,10 +816,9 @@ export default function VlansView() {
                                 const subnetScopes = scopes.filter(
                                   (scope) => scope.subnetId === subnet.id,
                                 );
-                                const ipCount = ipAssignments.filter(
-                                  (assignment) =>
-                                    assignment.subnetId === subnet.id,
-                                ).length;
+                                const subnetAssignments =
+                                  assignmentsBySubnetId[subnet.id] ?? [];
+                                const ipCount = subnetAssignments.length;
                                 return (
                                   <div
                                     key={subnet.id}
@@ -837,6 +846,7 @@ export default function VlansView() {
                                         subnet={subnet}
                                         zones={subnetZones}
                                         scopes={subnetScopes}
+                                        assignments={subnetAssignments}
                                       />
                                     )}
                                   </div>

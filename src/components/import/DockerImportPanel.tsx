@@ -21,13 +21,19 @@ import {
   useStore,
 } from "@/lib/store";
 
+type DockerConnectionMode = "socket" | "http";
+
+const DEFAULT_DOCKER_SOCKET_PATH = "/var/run/docker.sock";
+
 export function DockerImportPanel() {
   const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
   const devices = useStore((s) => s.devices);
   const canEdit = canEditInventory(currentUser);
-  const [endpoint, setEndpoint] = useState("http://127.0.0.1:2375");
+  const [connectionMode, setConnectionMode] =
+    useState<DockerConnectionMode>("socket");
+  const [endpoint, setEndpoint] = useState(DEFAULT_DOCKER_SOCKET_PATH);
   const [token, setToken] = useState("");
   const [hostDeviceId, setHostDeviceId] = useState("");
   const [selectedContainerId, setSelectedContainerId] = useState("");
@@ -48,6 +54,33 @@ export function DockerImportPanel() {
     [devices, lab.id],
   );
 
+  function buildEndpointForRequest() {
+    const value = endpoint.trim();
+    if (connectionMode === "http" || value.startsWith("unix://")) {
+      return value;
+    }
+    return `unix://${value}`;
+  }
+
+  function handleConnectionModeChange(nextMode: DockerConnectionMode) {
+    setConnectionMode(nextMode);
+    setEndpoint((current) => {
+      if (nextMode === "socket") {
+        return current.trim().startsWith("unix://") || current.trim().startsWith("/")
+          ? current
+          : DEFAULT_DOCKER_SOCKET_PATH;
+      }
+      return current.trim().startsWith("unix://") || current.trim().startsWith("/")
+        ? ""
+        : current;
+    });
+    setToken("");
+    setContainers([]);
+    setSelectedContainerId("");
+    setError("");
+    setSuccess("");
+  }
+
   async function handlePreview() {
     setPreviewing(true);
     setError("");
@@ -56,9 +89,9 @@ export function DockerImportPanel() {
     setSelectedContainerId("");
     try {
       const result = await api.previewDockerImport({
-        endpoint: endpoint.trim(),
+        endpoint: buildEndpointForRequest(),
         labId: lab.id,
-        token: token.trim() || undefined,
+        token: connectionMode === "http" ? token.trim() || undefined : undefined,
       });
       setContainers(result.containers);
     } catch (err) {
@@ -81,8 +114,8 @@ export function DockerImportPanel() {
     setSuccess("");
     try {
       const created = await importDockerContainerRecord({
-        endpoint: endpoint.trim(),
-        token: token.trim() || undefined,
+        endpoint: buildEndpointForRequest(),
+        token: connectionMode === "http" ? token.trim() || undefined : undefined,
         containerId: selectedContainerId,
         labId: lab.id,
         hostDeviceId,
@@ -146,28 +179,66 @@ export function DockerImportPanel() {
       <CardBody className="space-y-4">
         <p className="text-sm text-[var(--text-tertiary)]">
           {t(
-            "Paste a Docker Engine API base URL (or Portainer proxy URL) to preview containers. Tokens are stored encrypted for imported containers so Rackpad can refresh status.",
+            "Use a mounted Docker socket for local imports or HTTP/Portainer for remote Docker APIs.",
           )}
         </p>
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-1 text-sm">
-            <span className="text-[var(--text-secondary)]">{t("Docker endpoint")}</span>
+          <div className="space-y-1 text-sm md:col-span-2">
+            <span className="text-[var(--text-secondary)]">
+              {t("Connection")}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={`rk-filter-pill ${connectionMode === "socket" ? "rk-filter-pill-active" : ""}`}
+                onClick={() => handleConnectionModeChange("socket")}
+                disabled={!canEdit}
+              >
+                {t("Docker socket")}
+              </button>
+              <button
+                type="button"
+                className={`rk-filter-pill ${connectionMode === "http" ? "rk-filter-pill-active" : ""}`}
+                onClick={() => handleConnectionModeChange("http")}
+                disabled={!canEdit}
+              >
+                {t("HTTP / Portainer")}
+              </button>
+            </div>
+          </div>
+          <label
+            className={`space-y-1 text-sm ${
+              connectionMode === "socket" ? "md:col-span-2" : ""
+            }`}
+          >
+            <span className="text-[var(--text-secondary)]">
+              {connectionMode === "socket"
+                ? t("Docker socket path")
+                : t("Docker API URL")}
+            </span>
             <Input
               value={endpoint}
               onChange={(event) => setEndpoint(event.target.value)}
+              placeholder={
+                connectionMode === "socket"
+                  ? DEFAULT_DOCKER_SOCKET_PATH
+                  : "https://docker.example.internal:2376"
+              }
               disabled={!canEdit}
             />
           </label>
-          <label className="space-y-1 text-sm">
-            <span className="text-[var(--text-secondary)]">
-              {t("API token (optional, encrypted on import)")}
-            </span>
-            <Input
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-              disabled={!canEdit}
-            />
-          </label>
+          {connectionMode === "http" && (
+            <label className="space-y-1 text-sm">
+              <span className="text-[var(--text-secondary)]">
+                {t("API token (optional, encrypted on import)")}
+              </span>
+              <Input
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+                disabled={!canEdit}
+              />
+            </label>
+          )}
           <label className="space-y-1 text-sm md:col-span-2">
             <span className="text-[var(--text-secondary)]">{t("Host device")}</span>
             <select

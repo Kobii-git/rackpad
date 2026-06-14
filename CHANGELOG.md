@@ -8,6 +8,32 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.3-beta.6] - 2026-06-14
+
+### Added
+
+- Rack view device tiles can now show uploaded per-device images, using the
+  existing device image attachments as compact front-panel thumbnails.
+- Docker container imports can now preview, import, and refresh status through
+  a mounted `unix:///var/run/docker.sock` socket as well as HTTP/Portainer
+  endpoints.
+
+### Fixed
+
+- VLAN linked IP range DHCP utilization now counts assignments the same way IPAM
+  does, so DHCP usage percentages match between VLANs and IPAM.
+
+### Test notes
+
+- Verify uploaded device images appear on racked devices across different rack
+  unit heights.
+- Verify Docker socket preview/import/status refresh using a read-only
+  `/var/run/docker.sock` mount, and HTTP/Portainer Docker imports still work.
+- Verify VLAN linked DHCP utilization matches IPAM for the same subnet.
+- Added Docker socket regression coverage and verified `npm run check:i18n`,
+  `npm run build`, `npm run lint`, `npm run test:server`, and
+  `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.3-beta.5] - 2026-06-14
 
 ### Fixed

@@ -1,3 +1,4 @@
+import http from "node:http";
 import { ValidationError } from "./validation.js";
 import { db } from "../db.js";
 import { createId } from "./ids.js";
@@ -35,6 +36,8 @@ interface DockerImportSourceRow extends DockerImportSource {
 
 const DOCKER_ENDPOINT_RESERVED_MESSAGE =
   "Docker endpoint must be a routable public/LAN host outside reserved ranges.";
+const DOCKER_UNIX_PROTOCOL = "unix:";
+const DOCKER_SOCKET_PREFIX = "unix://";
 
 export interface DockerContainerLink {
   deviceId: string;
@@ -65,13 +68,15 @@ function asRecord(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function parseDockerEndpoint(endpoint: string) {
+function parseDockerHttpEndpoint(endpoint: string) {
   const trimmed = endpoint.trim().replace(/\/+$/, "");
   let url: URL;
   try {
     url = new URL(trimmed);
   } catch {
-    throw new ValidationError("Docker endpoint must be a valid http(s) URL.");
+    throw new ValidationError(
+      "Docker endpoint must be a valid http(s) URL or unix socket endpoint.",
+    );
   }
   if (!["http:", "https:"].includes(url.protocol)) {
     throw new ValidationError("Docker endpoint must use http or https.");
@@ -79,21 +84,93 @@ function parseDockerEndpoint(endpoint: string) {
   return url;
 }
 
+export function normalizeDockerSocketEndpoint(endpoint: string) {
+  const trimmed = endpoint.trim();
+  if (!trimmed.startsWith(DOCKER_SOCKET_PREFIX)) {
+    throw new ValidationError(
+      "Docker socket endpoint must use unix:///absolute/path.sock.",
+    );
+  }
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new ValidationError(
+      "Docker socket endpoint must use unix:///absolute/path.sock.",
+    );
+  }
+
+  if (
+    url.protocol !== DOCKER_UNIX_PROTOCOL ||
+    url.host ||
+    url.search ||
+    url.hash
+  ) {
+    throw new ValidationError(
+      "Docker socket endpoint must use unix:///absolute/path.sock.",
+    );
+  }
+
+  const socketPath = decodeURIComponent(url.pathname);
+  if (
+    !socketPath.startsWith("/") ||
+    socketPath.includes("\0") ||
+    socketPath === "/"
+  ) {
+    throw new ValidationError(
+      "Docker socket endpoint must use an absolute socket path.",
+    );
+  }
+
+  return {
+    endpoint: `${DOCKER_SOCKET_PREFIX}${socketPath}`,
+    socketPath,
+  };
+}
+
+function isDockerSocketEndpoint(endpoint: string) {
+  return endpoint.trim().startsWith(DOCKER_SOCKET_PREFIX);
+}
+
+async function normalizeDockerEndpointForRequest(endpoint: string) {
+  if (isDockerSocketEndpoint(endpoint)) {
+    return {
+      kind: "socket" as const,
+      ...normalizeDockerSocketEndpoint(endpoint),
+    };
+  }
+
+  const url = parseDockerHttpEndpoint(endpoint);
+  await ensureRoutableHost(url, DOCKER_ENDPOINT_RESERVED_MESSAGE);
+  return {
+    kind: "http" as const,
+    url,
+  };
+}
+
 export async function normalizeDockerEndpoint(endpoint: string) {
-  const url = parseDockerEndpoint(endpoint);
+  const url = parseDockerHttpEndpoint(endpoint);
   await ensureRoutableHost(url, DOCKER_ENDPOINT_RESERVED_MESSAGE);
   return url;
 }
 
 export async function normalizeDockerEndpointText(endpoint: string) {
-  const url = await normalizeDockerEndpoint(endpoint);
+  const normalized = await normalizeDockerEndpointForRequest(endpoint);
+  if (normalized.kind === "socket") return normalized.endpoint;
+
+  const url = normalized.url;
   url.hash = "";
   url.search = "";
   return url.toString().replace(/\/+$/, "");
 }
 
 function normalizeDockerEndpointTextForStorage(endpoint: string) {
-  const url = parseDockerEndpoint(endpoint);
+  if (isDockerSocketEndpoint(endpoint)) {
+    return normalizeDockerSocketEndpoint(endpoint).endpoint;
+  }
+
+  const url = parseDockerHttpEndpoint(endpoint);
   url.hash = "";
   url.search = "";
   return url.toString().replace(/\/+$/, "");
@@ -134,10 +211,69 @@ export function parseDockerContainersJson(data: unknown): DockerContainerPreview
   });
 }
 
+function fetchDockerSocketJson(
+  socketPath: string,
+  path: string,
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const request = http.request(
+      {
+        socketPath,
+        path,
+        method: "GET",
+        headers: { Accept: "application/json" },
+      },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          const statusCode = response.statusCode ?? 0;
+          if (statusCode < 200 || statusCode >= 300) {
+            reject(
+              new ValidationError(
+                `Docker socket returned HTTP ${statusCode}.`,
+              ),
+            );
+            return;
+          }
+
+          try {
+            resolve(JSON.parse(body) as unknown);
+          } catch {
+            reject(new ValidationError("Docker socket returned invalid JSON."));
+          }
+        });
+      },
+    );
+
+    request.setTimeout(10_000, () => {
+      request.destroy(new Error("Request timed out."));
+    });
+    request.on("error", reject);
+    request.end();
+  });
+}
+
 export async function fetchDockerContainersPreview(
   endpoint: string,
   token?: string,
 ): Promise<DockerContainerPreview[]> {
+  if (isDockerSocketEndpoint(endpoint)) {
+    const { socketPath } = normalizeDockerSocketEndpoint(endpoint);
+    let payload: unknown;
+    try {
+      payload = await fetchDockerSocketJson(socketPath, "/containers/json?all=1");
+    } catch (error) {
+      if (error instanceof ValidationError) throw error;
+      const message = error instanceof Error ? error.message : "Request failed.";
+      throw new ValidationError(`Could not reach Docker socket: ${message}`);
+    }
+    return parseDockerContainersJson(payload);
+  }
+
   const url = await buildDockerApiUrl(endpoint, "/containers/json");
   url.searchParams.set("all", "1");
   const headers: Record<string, string> = {
@@ -199,6 +335,10 @@ function parseSource(row: Record<string, unknown>): DockerImportSource {
 }
 
 function sourceNameFromEndpoint(endpoint: string) {
+  if (isDockerSocketEndpoint(endpoint)) {
+    return `Docker socket ${normalizeDockerSocketEndpoint(endpoint).socketPath}`;
+  }
+
   try {
     const url = new URL(endpoint);
     return url.pathname && url.pathname !== "/"
@@ -246,7 +386,9 @@ export function upsertDockerImportSource(input: {
   token?: string | null;
 }) {
   const endpoint = normalizeDockerEndpointTextForStorage(input.endpoint);
-  const tokenEnc = encryptDockerToken(input.token);
+  const tokenEnc = isDockerSocketEndpoint(endpoint)
+    ? undefined
+    : encryptDockerToken(input.token);
   const now = new Date().toISOString();
   const existing = db
     .prepare("SELECT * FROM dockerImportSources WHERE labId = ? AND endpoint = ?")
