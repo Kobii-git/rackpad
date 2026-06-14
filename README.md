@@ -556,6 +556,18 @@ rackpad/
 Full step-by-step setup instructions are in [INSTALL.md](./INSTALL.md).
 Version-by-version release notes are in [CHANGELOG.md](./CHANGELOG.md).
 
+## Special thanks
+
+A special thank you to [@M4v3r1cK87](https://github.com/M4v3r1cK87)
+and [@dhop90](https://github.com/dhop90).
+
+Rackpad has benefited hugely from their time, testing, feedback, screenshots,
+bug reports, and ideas. Their involvement has helped shape the project in a
+very real way, and I am genuinely grateful for the care they have put into
+helping improve it.
+
+Thank you both for being such an important part of Rackpad's journey.
+
 ## Support the project
 
 Rackpad is free to use. If it helps you and you want to support the work,
