@@ -383,6 +383,10 @@ On the first boot there are no users yet.
 4. Choose whether to start empty or preload the expanded demo environment.
 5. Start documenting racks, devices, VLANs, and IPAM.
 
+If a local admin password is lost in a Docker install, use the container CLI
+recovery command documented in [INSTALL.md](./INSTALL.md#admin-password-recovery).
+OIDC users must reset passwords in the identity provider.
+
 ## Install With Docker
 
 Recommended no-clone install from the published GHCR image:

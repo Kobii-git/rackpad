@@ -406,6 +406,26 @@ To update to a newer pinned release, change `RACKPAD_TAG` in `.env`, then run
 the same pull/up commands. To always pull the newest stable image, set
 `RACKPAD_TAG=latest`.
 
+## Admin Password Recovery
+
+If a local Rackpad user password is lost, reset it from inside the Docker
+container. The command prompts twice and does not echo the password:
+
+```bash
+cd /opt/rackpad
+sudo docker compose exec rackpad node dist-server/cli/reset-password.js --username admin
+```
+
+If you run the container without Compose:
+
+```bash
+sudo docker exec -it rackpad node dist-server/cli/reset-password.js --username admin
+```
+
+The command only works for local password accounts and invalidates active
+sessions for that user. OIDC users must reset passwords in the identity
+provider.
+
 ## Stop Or Remove
 
 Stop but keep data:

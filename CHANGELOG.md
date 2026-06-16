@@ -8,6 +8,22 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.4-beta.1] - 2026-06-16
+
+### Added
+
+- Added a Docker CLI recovery command for rotating local-user passwords from
+  inside the Rackpad container without adding public reset endpoints.
+
+### Test notes
+
+- Verify a local admin can reset a lost password from Docker with
+  `node dist-server/cli/reset-password.js --username admin`, sign in with the
+  new password, and that old sessions are invalidated.
+- Verify OIDC-backed users still reset passwords in the identity provider.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, and `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.3] - 2026-06-16
 
 ### Added

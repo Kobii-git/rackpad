@@ -23,6 +23,7 @@ process.env.SNMP_INVENTORY_SYNC = "1";
 const { createApp } = await import("../app.js");
 const { db } = await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
+const { resetLocalUserPassword } = await import("../lib/password-reset.js");
 const { parseIeeeOuiText } = await import("../lib/oui.js");
 const { parseArpScanOutput, parseNmapPingScanOutput } =
   await import("../routes/discovery.js");
@@ -87,6 +88,169 @@ test("bootstrap creates the first admin account and session", async () => {
   assert.equal(meRes.statusCode, 200);
   const me = readJson(meRes) as { user: { username: string } };
   assert.equal(me.user.username, "admin");
+});
+
+test("CLI password reset rotates a local password and invalidates only that user's sessions", async () => {
+  const adminToken = await bootstrapAdmin();
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "viewer-reset",
+    displayName: "Viewer Reset",
+    password: "viewer-password-1",
+    role: "viewer",
+  });
+  const editorToken = await createUserAndLogin(adminToken, {
+    username: "editor-reset",
+    displayName: "Editor Reset",
+    password: "editor-password-1",
+    role: "editor",
+  });
+
+  const result = resetLocalUserPassword({
+    username: "VIEWER-RESET",
+    password: "viewer-password-2",
+  });
+
+  assert.equal(result.username, "viewer-reset");
+  assert.equal(result.sessionsInvalidated, 1);
+
+  const oldLoginRes = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: {
+      username: "viewer-reset",
+      password: "viewer-password-1",
+    },
+  });
+  assert.equal(oldLoginRes.statusCode, 401);
+
+  const newLoginRes = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: {
+      username: "viewer-reset",
+      password: "viewer-password-2",
+    },
+  });
+  assert.equal(newLoginRes.statusCode, 200);
+
+  const oldSessionRes = await app.inject({
+    method: "GET",
+    url: "/api/auth/me",
+    headers: {
+      authorization: `Bearer ${viewerToken}`,
+    },
+  });
+  assert.equal(oldSessionRes.statusCode, 401);
+
+  const otherSessionRes = await app.inject({
+    method: "GET",
+    url: "/api/auth/me",
+    headers: {
+      authorization: `Bearer ${editorToken}`,
+    },
+  });
+  assert.equal(otherSessionRes.statusCode, 200);
+
+  const audit = db
+    .prepare(
+      `
+      SELECT user, action, entityType, entityId, summary
+      FROM auditLog
+      WHERE action = 'user.password_reset.cli'
+    `,
+    )
+    .get() as
+    | {
+        user: string;
+        action: string;
+        entityType: string;
+        entityId: string;
+        summary: string;
+      }
+    | undefined;
+
+  assert.ok(audit);
+  assert.equal(audit.user, "system");
+  assert.equal(audit.entityType, "User");
+  assert.equal(audit.entityId, result.userId);
+  assert.match(audit.summary, /viewer-reset/);
+});
+
+test("CLI password reset rejects missing, weak, OIDC, and non-local users", () => {
+  const now = new Date().toISOString();
+  db.prepare(
+    `
+    INSERT INTO users (id, username, displayName, passwordHash, role, disabled, createdAt, lastLoginAt)
+    VALUES (?, ?, ?, ?, ?, 0, ?, NULL)
+  `,
+  ).run(
+    "u_oidc_reset",
+    "oidc-reset",
+    "OIDC Reset",
+    "oidc:issuer:subject",
+    "viewer",
+    now,
+  );
+  db.prepare(
+    `
+    INSERT INTO oidcIdentities (issuer, subject, userId, email, displayName, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `,
+  ).run(
+    "https://idp.example.com",
+    "subject-reset",
+    "u_oidc_reset",
+    "oidc-reset@example.com",
+    "OIDC Reset",
+    now,
+    now,
+  );
+  db.prepare(
+    `
+    INSERT INTO users (id, username, displayName, passwordHash, role, disabled, createdAt, lastLoginAt)
+    VALUES (?, ?, ?, ?, ?, 0, ?, NULL)
+  `,
+  ).run(
+    "u_marker_reset",
+    "marker-reset",
+    "Marker Reset",
+    "legacy:password-marker",
+    "viewer",
+    now,
+  );
+
+  assert.throws(
+    () =>
+      resetLocalUserPassword({
+        username: "missing-reset",
+        password: "new-password-1",
+      }),
+    /User not found/,
+  );
+  assert.throws(
+    () =>
+      resetLocalUserPassword({
+        username: "oidc-reset",
+        password: "new-password-1",
+      }),
+    /identity provider/,
+  );
+  assert.throws(
+    () =>
+      resetLocalUserPassword({
+        username: "marker-reset",
+        password: "new-password-1",
+      }),
+    /local password accounts/,
+  );
+  assert.throws(
+    () =>
+      resetLocalUserPassword({
+        username: "marker-reset",
+        password: "short",
+      }),
+    /at least 10 characters/,
+  );
 });
 
 test("admin UI settings expose and update the instance language default", async () => {
