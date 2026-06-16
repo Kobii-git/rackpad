@@ -173,7 +173,7 @@ export function DockerImportPanel() {
         </CardTitle>
         <Badge tone="cyan">
           <Container className="size-3" />
-          read-only preview
+          {t("Preview containers")}
         </Badge>
       </CardHeader>
       <CardBody className="space-y-4">
@@ -263,7 +263,7 @@ export function DockerImportPanel() {
             disabled={!canEdit || previewing || !endpoint.trim()}
             onClick={() => void handlePreview()}
           >
-            {previewing ? t("Importing...") : t("Preview containers")}
+            {previewing ? t("Previewing...") : t("Preview containers")}
           </Button>
           <Button
             variant="outline"

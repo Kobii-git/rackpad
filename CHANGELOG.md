@@ -8,6 +8,59 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.3] - 2026-06-16
+
+### Added
+
+- Added SNMPv3 trap support for authenticated `linkUp`/`linkDown` events,
+  including encrypted credential matching for devices, monitors, and trap
+  sources.
+- Added Docker/Portainer import source tracking, encrypted Docker API token
+  storage, manual and background Docker container status refresh, and mounted
+  `unix:///var/run/docker.sock` import support.
+- Added a discovered-host picker so new devices, AP children, Proxmox children,
+  shelf devices, VMs, and containers can reuse scanned discovery data.
+- Added rack device image thumbnails, Visualizer bundled harness routing, and
+  CI security reporting with Dependabot, CodeQL, and Trivy scans.
+
+### Fixed
+
+- Proxmox collection now merges `pvesh`, `qm list`, and `pct list` results,
+  continues after individual guest validation failures, and imports guest IPs
+  inside DHCP scopes as DHCP reservations.
+- NetBox imports now accept 0U device types, creating access points as wireless
+  inventory and other 0U models as room inventory.
+- IPAM static zones now take precedence over broad DHCP scopes for host
+  assignments, and VLAN linked DHCP utilization now matches IPAM counts.
+- Visualizer cable routing and tablet panning are more stable, with reduced
+  looping/crossed paths for non-rack links.
+- WiFi discovery placement now fills matching SSID associations immediately for
+  new and already AP-attached clients.
+- Docker preview/import permissions, Docker/monitor target validation, and SNMP
+  trap logging were hardened to reduce SSRF and trap flood risk.
+- Updated `nodemailer` to clear the production npm audit finding before the
+  stable release.
+
+### Changed
+
+- Docker image publishing now includes explicit OCI metadata and disables
+  published provenance/SBOM attestations so GHCR lists only Rackpad runtime
+  Linux architectures.
+- Security scans currently run in reporting mode while inherited base-image
+  findings are reviewed.
+
+### Test notes
+
+- Verify Docker socket preview/import/status refresh with a read-only
+  `/var/run/docker.sock` mount, and verify HTTP/Portainer Docker imports still
+  work.
+- Verify Proxmox guest import completeness, NetBox 0U imports, IPAM static zone
+  assignments, WiFi discovery SSID placement, SNMPv3 traps, rack image
+  thumbnails, and Visualizer cable routing.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, `npm audit --omit=dev`, and
+  `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.3-beta.6] - 2026-06-14
 
 ### Added
