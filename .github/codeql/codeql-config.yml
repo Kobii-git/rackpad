@@ -1,5 +1,8 @@
 name: "Rackpad CodeQL config"
 
+paths-ignore:
+  - server/tests/**
+
 query-filters:
   - exclude:
       id: js/missing-rate-limiting
