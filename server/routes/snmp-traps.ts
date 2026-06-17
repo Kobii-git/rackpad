@@ -11,7 +11,7 @@ import {
   listSnmpTrapSources,
   updateSnmpTrapSource,
 } from '../lib/snmp-traps.js'
-import { asObject, optionalInteger, optionalString } from '../lib/validation.js'
+import { asObject, optionalString } from '../lib/validation.js'
 
 export const snmpTrapsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/status', async (req, reply) => {

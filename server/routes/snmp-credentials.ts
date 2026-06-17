@@ -1,10 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { requireAuth } from '../lib/auth.js'
 import {
-  appendLabFilter,
   assertLabRead,
   assertLabWrite,
-  assertLabWriteFromRow,
   resolveLabIdsForList,
 } from '../lib/lab-access.js'
 import { canEncryptSecrets } from '../lib/secret-crypto.js'
@@ -14,7 +12,6 @@ import {
   getSnmpCredentialRow,
   listSnmpCredentials,
   loadSnmpCredentialSecrets,
-  parseSnmpCredentialPublic,
   SNMP_CREDENTIAL_VERSIONS,
   SNMP_V3_AUTH_PROTOCOLS,
   SNMP_V3_PRIV_PROTOCOLS,

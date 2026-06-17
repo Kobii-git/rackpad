@@ -47,7 +47,6 @@ function parseObjectBody(body) {
 }
 
 function extractBlock(source, exportName) {
-  const suffix = exportName === "en" ? "} as const;" : "} satisfies TranslationMap;";
   const re = new RegExp(`export const ${exportName} = \\{([\\s\\S]*?)\\} ${exportName === "en" ? "as const;" : "satisfies TranslationMap;"}`);
   const match = source.match(re);
   if (!match) throw new Error(`Could not parse ${exportName}`);

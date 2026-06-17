@@ -23,6 +23,9 @@ process.env.SNMP_INVENTORY_SYNC = "1";
 const { createApp } = await import("../app.js");
 const { db } = await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
+const { setDockerHttpJsonFetcherForTests } = await import(
+  "../lib/docker-import.js"
+);
 const { resetLocalUserPassword } = await import("../lib/password-reset.js");
 const { parseIeeeOuiText } = await import("../lib/oui.js");
 const { parseArpScanOutput, parseNmapPingScanOutput } =
@@ -3975,31 +3978,23 @@ test("docker import stores a sync source and refreshes container status", async 
   assert.equal(hostRes.statusCode, 201);
   const host = readJson(hostRes) as { id: string };
 
-  const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];
   const authHeaders: Array<string | null> = [];
   let state = "running";
   let status = "Up 3 minutes";
-  globalThis.fetch = (async (url, init) => {
-    requestedUrls.push(String(url));
-    const headers = init?.headers as Record<string, string> | undefined;
+  setDockerHttpJsonFetcherForTests(async (url, headers) => {
+    requestedUrls.push(url.toString());
     authHeaders.push(headers?.Authorization ?? null);
-    return new Response(
-      JSON.stringify([
-        {
-          Id: "container-abc123",
-          Names: ["/paperless"],
-          Image: "ghcr.io/paperless:latest",
-          State: state,
-          Status: status,
-        },
-      ]),
+    return [
       {
-        status: 200,
-        headers: { "content-type": "application/json" },
+        Id: "container-abc123",
+        Names: ["/paperless"],
+        Image: "ghcr.io/paperless:latest",
+        State: state,
+        Status: status,
       },
-    );
-  }) as typeof fetch;
+    ];
+  });
 
   try {
     const viewerPreviewRes = await app.inject({
@@ -4093,7 +4088,7 @@ test("docker import stores a sync source and refreshes container status", async 
     assert.equal(updatedLink.state, "exited");
     assert.equal(updatedLink.status, "Exited (0) 10 seconds ago");
   } finally {
-    globalThis.fetch = originalFetch;
+    setDockerHttpJsonFetcherForTests(null);
   }
 });
 
@@ -4185,6 +4180,8 @@ async function createSnmpIntegerResponder(value: number) {
 }
 
 function closeUdpServer(server: dgram.Socket) {
+  // Test UDP sockets are local process resources; no filesystem path is checked.
+  // codeql[js/file-system-race]
   return new Promise<void>((resolve) => {
     server.close(() => resolve());
   });

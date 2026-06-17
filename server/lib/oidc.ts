@@ -232,6 +232,9 @@ export async function handleOidcCallback(
       404,
     )
   }
+  // A provider error aborts the callback before token exchange; it is not an
+  // authorization bypass controlled by the caller.
+  // codeql[js/user-controlled-bypass]
   if (input.error) {
     throw new ValidationError(input.errorDescription || input.error)
   }

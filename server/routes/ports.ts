@@ -289,6 +289,7 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     const speed = optionalString(body, 'speed', { maxLength: 20 })
     const vlanId = optionalString(body, 'vlanId', { maxLength: 80 })
     const virtualSwitchId = optionalString(body, 'virtualSwitchId', { maxLength: 80 })
+    const hasAllowedVlanIds = 'allowedVlanIds' in body
     const allowedVlanIds = normalizeAllowedVlanIds(optionalStringArray(body, 'allowedVlanIds', { maxItems: 128 }))
     const description = optionalString(body, 'description', { maxLength: 500 })
     const nextMode = 'mode' in body
@@ -313,11 +314,11 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     if ('linkState' in body) { updates.push('linkState = ?'); values.push(requiredEnum(body, 'linkState', LINK_STATES)) }
     if ('face' in body) { updates.push('face = ?'); values.push(requiredEnum(body, 'face', PORT_FACES)) }
     if ('mode' in body) { updates.push('mode = ?'); values.push(nextMode) }
-    if ('mode' in body || allowedVlanIds !== undefined) {
+    if ('mode' in body || hasAllowedVlanIds) {
       const persistedAllowed =
         nextMode === 'trunk'
           ? JSON.stringify(
-              allowedVlanIds ??
+              (hasAllowedVlanIds ? allowedVlanIds : null) ??
               (Array.isArray(current.allowedVlanIds) ? current.allowedVlanIds.map((entry) => String(entry)) : []),
             )
           : null

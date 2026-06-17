@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto'
 import dgram from 'node:dgram'
 import { snmpV3Get, snmpV3GetNext, type SnmpV3Session } from './snmp-v3.js'
 
@@ -20,6 +21,26 @@ export interface SnmpV1V2Session {
 
 export type SnmpSession = SnmpV1V2Session | SnmpV3Session
 export type { SnmpV3Session }
+
+const MIN_SNMP_TIMEOUT_MS = 1000
+const MAX_SNMP_TIMEOUT_MS = 30_000
+const DEFAULT_SNMP_TIMEOUT_MS = 8000
+const SNMP_TIMEOUT_BUCKETS_MS = [
+  1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10_000,
+  11_000, 12_000, 13_000, 14_000, 15_000, 16_000, 17_000, 18_000,
+  19_000, 20_000, 21_000, 22_000, 23_000, 24_000, 25_000, 26_000,
+  27_000, 28_000, 29_000, 30_000,
+] as const
+
+export function boundedSnmpTimeoutMs(timeoutMs: number) {
+  if (!Number.isFinite(timeoutMs)) return DEFAULT_SNMP_TIMEOUT_MS
+  const bounded = Math.min(
+    MAX_SNMP_TIMEOUT_MS,
+    Math.max(MIN_SNMP_TIMEOUT_MS, Math.trunc(timeoutMs)),
+  )
+  const bucketIndex = Math.ceil(bounded / 1000) - 1
+  return SNMP_TIMEOUT_BUCKETS_MS[bucketIndex] ?? DEFAULT_SNMP_TIMEOUT_MS
+}
 
 export function snmpGet(session: SnmpSession, oid: string): Promise<SnmpValue> {
   if (session.version === '3') {
@@ -63,8 +84,9 @@ function snmpRequest(
   mode: 'get' | 'getNext',
 ): Promise<SnmpValue> {
   const socket = dgram.createSocket('udp4')
-  const requestId = Math.floor(Math.random() * 0x7fffffff)
+  const requestId = randomInt(1, 0x7fffffff)
   const pduTag = mode === 'get' ? 0xa0 : 0xa1
+  const timeoutMs = boundedSnmpTimeoutMs(session.timeoutMs)
   const message = buildSnmpRequest(
     session.version,
     session.community,
@@ -91,7 +113,7 @@ function snmpRequest(
           ),
         )
       })
-    }, session.timeoutMs)
+    }, timeoutMs)
 
     socket.once('error', (error) => {
       finish(() => reject(error))

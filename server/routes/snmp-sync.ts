@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import { requireAdmin, requireAuth } from '../lib/auth.js'
 import { assertLabWrite } from '../lib/lab-access.js'
-import { collectSnmpProfile, getSnmpProfile, listSnmpProfiles } from '../lib/snmp-profiles/index.js'
+import { getSnmpProfile, listSnmpProfiles } from '../lib/snmp-profiles/index.js'
 import { resolveSnmpSessionForTarget } from '../lib/snmp-session.js'
 import {
   applySnmpSyncPreview,

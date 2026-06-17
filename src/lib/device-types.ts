@@ -23,15 +23,38 @@ export const BUILT_IN_DEVICE_TYPES: DeviceTypeDefinition[] = [
 const BUILT_IN_IDS = new Set(BUILT_IN_DEVICE_TYPES.map((type) => type.id));
 
 export function normalizeDeviceTypeId(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/'/g, "")
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 48);
+  let normalized = "";
+  let pendingSeparator = false;
+
+  const appendSeparator = () => {
+    pendingSeparator = normalized.length > 0;
+  };
+  const appendCharacter = (character: string) => {
+    if (pendingSeparator && normalized.length > 0) normalized += "_";
+    normalized += character;
+    pendingSeparator = false;
+  };
+  const appendWord = (word: string) => {
+    appendSeparator();
+    for (const character of word) appendCharacter(character);
+    appendSeparator();
+  };
+
+  for (const character of value.trim().toLowerCase()) {
+    const code = character.charCodeAt(0);
+    const isAlphaNumeric =
+      (code >= 48 && code <= 57) || (code >= 97 && code <= 122);
+    if (isAlphaNumeric) {
+      appendCharacter(character);
+    } else if (character === "&") {
+      appendWord("and");
+    } else if (character !== "'") {
+      appendSeparator();
+    }
+    if (normalized.length >= 48) break;
+  }
+
+  return normalized.slice(0, 48);
 }
 
 export function defaultDeviceTypeLabel(type: DeviceType) {

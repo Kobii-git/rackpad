@@ -3,7 +3,6 @@ import { useMemo, type CSSProperties } from "react";
 import {
   Activity,
   AlertTriangle,
-  Boxes,
   Cable,
   ChevronRight,
   ClipboardList,

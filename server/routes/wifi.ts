@@ -2,7 +2,6 @@ import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import {
   appendLabFilter,
-  assertLabReadFromRow,
   assertLabWrite,
   assertLabWriteFromRow,
   resolveLabIdsForList,

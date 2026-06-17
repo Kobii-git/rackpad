@@ -9,6 +9,34 @@ const packageJson = JSON.parse(
 ) as { version?: string }
 const appBuildChannel =
   process.env.RACKPAD_BUILD_CHANNEL ?? process.env.GITHUB_REF_NAME ?? ''
+const manualChunkPackages: Record<string, string[]> = {
+  react: ['react', 'react-dom', 'react-router-dom'],
+  ui: [
+    'lucide-react',
+    'motion',
+    '@radix-ui/react-dialog',
+    '@radix-ui/react-popover',
+    '@radix-ui/react-separator',
+    '@radix-ui/react-slot',
+    '@radix-ui/react-tabs',
+    '@radix-ui/react-tooltip',
+  ],
+  charts: ['recharts'],
+}
+
+function manualChunks(id: string) {
+  const normalizedId = id.split(path.sep).join('/')
+  for (const [chunkName, packageNames] of Object.entries(manualChunkPackages)) {
+    if (
+      packageNames.some((packageName) =>
+        normalizedId.includes(`/node_modules/${packageName}/`),
+      )
+    ) {
+      return chunkName
+    }
+  }
+  return undefined
+}
 
 export default defineConfig({
   define: {
@@ -19,20 +47,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ['react', 'react-dom', 'react-router-dom'],
-          ui: [
-            'lucide-react',
-            'motion',
-            '@radix-ui/react-dialog',
-            '@radix-ui/react-popover',
-            '@radix-ui/react-separator',
-            '@radix-ui/react-slot',
-            '@radix-ui/react-tabs',
-            '@radix-ui/react-tooltip',
-          ],
-          charts: ['recharts'],
-        },
+        manualChunks,
       },
     },
   },

@@ -118,7 +118,6 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
 
     const deviceDraft = buildNetboxDeviceDraft(parsed);
     const deviceId = createId("d");
-    const now = new Date().toISOString();
 
     const insertDevice = db.prepare(`
       INSERT INTO devices

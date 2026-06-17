@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS deps
+FROM --platform=$BUILDPLATFORM node:22-trixie-slim AS deps
 WORKDIR /app
 
 RUN apt-get update \
@@ -18,7 +18,7 @@ ENV RACKPAD_BUILD_CHANNEL=$RACKPAD_BUILD_CHANNEL
 COPY . .
 RUN npm run build
 
-FROM --platform=$TARGETPLATFORM node:22-bookworm-slim AS prod-deps
+FROM --platform=$TARGETPLATFORM node:22-trixie-slim AS prod-deps
 WORKDIR /app
 
 RUN apt-get update \
@@ -28,7 +28,7 @@ RUN apt-get update \
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci --omit=dev
 
-FROM --platform=$TARGETPLATFORM node:22-bookworm-slim AS runtime
+FROM --platform=$TARGETPLATFORM node:22-trixie-slim AS runtime
 WORKDIR /app
 
 LABEL org.opencontainers.image.title="Rackpad" \
@@ -44,6 +44,8 @@ ENV DATABASE_PATH=/data/rackpad.db
 RUN apt-get update \
   && apt-get install -y --no-install-recommends arp-scan iproute2 iputils-ping net-tools nmap \
   && rm -rf /var/lib/apt/lists/* \
+  && rm -rf /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx \
   && groupadd --system rackpad \
   && useradd --system --gid rackpad --uid 10001 --create-home rackpad \
   && mkdir -p /data

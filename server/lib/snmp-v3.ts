@@ -4,6 +4,7 @@ import {
   createHash,
   createHmac,
   randomBytes,
+  randomInt,
 } from "node:crypto";
 import dgram from "node:dgram";
 import {
@@ -12,6 +13,7 @@ import {
   berOctetString,
   berSequence,
   berTlv,
+  boundedSnmpTimeoutMs,
   decodeInteger,
   decodeObjectIdentifier,
   decodeSnmpValue,
@@ -56,6 +58,9 @@ export function passwordToKey(
   engineId: Buffer,
 ) {
   const passwordBytes = Buffer.from(password, "utf8");
+  if (passwordBytes.length === 0) {
+    throw new Error("SNMPv3 password must not be empty.");
+  }
   const buffer: Buffer[] = [];
   let count = 0;
   const chunkSize = protocol === "MD5" ? 64 : 64;
@@ -72,11 +77,20 @@ export function passwordToKey(
   }
 
   const digestInput = Buffer.concat(buffer);
+
+  // SNMPv3 USM password-to-key localization is defined by the configured
+  // device auth protocol; MD5/SHA1 remain here only for legacy device support.
+  // codeql[js/insufficient-password-hash]
+  // codeql[js/weak-cryptographic-algorithm]
   const hash =
     protocol === "MD5"
       ? createHash("md5").update(digestInput).digest()
       : createHash("sha1").update(digestInput).digest();
 
+  // SNMPv3 USM localizes the derived key with the engine ID using the same
+  // configured auth protocol, so stronger password hashing is not applicable.
+  // codeql[js/insufficient-password-hash]
+  // codeql[js/weak-cryptographic-algorithm]
   const localized =
     protocol === "MD5"
       ? createHash("md5")
@@ -94,7 +108,13 @@ export function localizedPrivKey(
   password: string,
   engineId: Buffer,
 ) {
+  // Privacy keys are derived from the SNMPv3 USM localized auth key.
+  // codeql[js/insufficient-password-hash]
+  // codeql[js/weak-cryptographic-algorithm]
   const localized = passwordToKey(protocol, password, engineId);
+
+  // SNMPv3 AES privacy key material follows the USM auth protocol derivation.
+  // codeql[js/weak-cryptographic-algorithm]
   return protocol === "MD5"
     ? createHash("md5").update(localized).digest().subarray(0, 16)
     : createHash("sha1").update(localized).digest().subarray(0, 16);
@@ -105,6 +125,8 @@ export function buildAuth(
   key: Buffer,
   wholeMessage: Buffer,
 ) {
+  // SNMPv3 USM authenticates messages with the device-selected legacy HMAC.
+  // codeql[js/weak-cryptographic-algorithm]
   const mac =
     protocol === "MD5"
       ? createHmac("md5", key).update(wholeMessage).digest()
@@ -172,10 +194,6 @@ function buildPdu(oid: string, requestId: number, pduTag: number) {
   );
 }
 
-function buildGetPdu(oid: string, requestId: number) {
-  return buildPdu(oid, requestId, 0xa0);
-}
-
 export function buildUsmSecurityParameters(
   engineId: Buffer,
   boots: number,
@@ -219,38 +237,6 @@ export function buildSnmpV3Message(options: {
       options.msgData,
     ]),
   );
-}
-
-function insertAuthParameters(
-  message: Buffer,
-  authOffset: number,
-  authParams: Buffer,
-) {
-  const next = Buffer.from(message);
-  authParams.copy(next, authOffset);
-  return next;
-}
-
-function findAuthParameterOffset(
-  securityParametersValue: Buffer,
-  user: string,
-) {
-  let offset = 0;
-  const sequence = readTlv(securityParametersValue, offset);
-  offset = sequence.valueStart;
-  offset = readTlv(securityParametersValue, offset).nextOffset;
-  offset = readTlv(securityParametersValue, offset).nextOffset;
-  offset = readTlv(securityParametersValue, offset).nextOffset;
-  const userTlv = readTlv(securityParametersValue, offset);
-  if (userTlv.tag !== 0x04) {
-    throw new Error("SNMPv3 security parameters did not include a username.");
-  }
-  const decodedUser = userTlv.value.toString("utf8");
-  if (decodedUser !== user) {
-    throw new Error("SNMPv3 username did not match the configured credential.");
-  }
-  const authTlv = readTlv(securityParametersValue, userTlv.nextOffset);
-  return authTlv.valueStart;
 }
 
 function encodeSnmpV3Request(
@@ -388,9 +374,8 @@ function parseEngineFromResponse(packet: Buffer): SnmpEngineState | null {
   const root = readTlv(packet, 0);
   let offset = root.valueStart;
   offset = readTlv(packet, offset).nextOffset;
-  offset = readTlv(packet, offset).nextOffset;
-  const securityParameters = readTlv(packet, offset);
-  offset = securityParameters.nextOffset;
+  const globalData = readTlv(packet, offset);
+  const securityParameters = readTlv(packet, globalData.nextOffset);
   const usm = readTlv(securityParameters.value, 0);
   let usmOffset = usm.valueStart;
   const engineId = readTlv(securityParameters.value, usmOffset);
@@ -504,6 +489,7 @@ function sendSnmpV3(
   engine: SnmpEngineState,
 ): Promise<SnmpValue> {
   const socket = dgram.createSocket("udp4");
+  const timeoutMs = boundedSnmpTimeoutMs(session.timeoutMs);
 
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -523,7 +509,7 @@ function sendSnmpV3(
           ),
         );
       });
-    }, session.timeoutMs);
+    }, timeoutMs);
 
     socket.once("error", (error) => finish(() => reject(error)));
     socket.once("message", (packet) => {
@@ -554,7 +540,7 @@ function sendSnmpV3(
 }
 
 async function discoverEngine(session: SnmpV3Session) {
-  const requestId = Math.floor(Math.random() * 0x7fffffff);
+  const requestId = randomInt(1, 0x7fffffff);
   const engine = { id: Buffer.alloc(0), boots: 0, time: 0 };
   const discoveryMessage = encodeSnmpV3Request(
     session,
@@ -566,6 +552,7 @@ async function discoverEngine(session: SnmpV3Session) {
 
   const packet = await new Promise<Buffer>((resolve, reject) => {
     const socket = dgram.createSocket("udp4");
+    const timeoutMs = boundedSnmpTimeoutMs(session.timeoutMs);
     let settled = false;
     const finish = (callback: () => void) => {
       if (settled) return;
@@ -580,7 +567,7 @@ async function discoverEngine(session: SnmpV3Session) {
           new Error(`SNMPv3 engine discovery timed out for ${session.host}.`),
         ),
       );
-    }, session.timeoutMs);
+    }, timeoutMs);
     socket.once("error", (error) => finish(() => reject(error)));
     socket.once("message", (message) => finish(() => resolve(message)));
     socket.send(discoveryMessage, session.port, session.host, (error) => {
@@ -609,7 +596,7 @@ export async function snmpV3Request(
     engine = await discoverEngine(session);
   }
 
-  const requestId = Math.floor(Math.random() * 0x7fffffff);
+  const requestId = randomInt(1, 0x7fffffff);
   const message = encodeSnmpV3Request(
     session,
     engine,
