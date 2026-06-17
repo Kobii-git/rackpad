@@ -544,6 +544,10 @@ export function VisualizerCanvas({
   }
 
   const visibleCables = model.cables.filter(cableIsVisible);
+  const cableRouteGroups = [
+    ...model.rackZone.sections.flatMap((section) => section.looseGroups),
+    ...model.roomZone.groups,
+  ];
   const visibleCableEntries = visibleCables
     .map((cable, index) => ({
       cable,
@@ -558,6 +562,7 @@ export function VisualizerCanvas({
                 fromNode: cable.fromNode,
                 toNode: cable.toNode,
                 rackPanels: model.rackZone.racks,
+                roomGroups: cableRouteGroups,
               },
             )
           : cable.path,

@@ -2072,6 +2072,7 @@ interface CablePathContext {
   fromNode?: VisualizerNode;
   toNode?: VisualizerNode;
   rackPanels?: RackPanel[];
+  roomGroups?: RoomGroup[];
 }
 
 export function visualizerCablePath(
@@ -2172,18 +2173,20 @@ function bundledCablePath(
   context: CablePathContext,
   rackOnly = false,
 ) {
-  const fromPanel = rackPanelForNode(context.fromNode, context.rackPanels);
-  const toPanel = rackPanelForNode(context.toNode, context.rackPanels);
-  if (!fromPanel && !toPanel) {
+  const fromContainer = cableBundleContainerForNode(context.fromNode, context);
+  const toContainer = cableBundleContainerForNode(context.toNode, context);
+  if (!fromContainer && !toContainer) {
     return rackOnly ? null : autoCablePath(from, to, index, context);
   }
 
-  const panels = [fromPanel, toPanel].filter((panel): panel is RackPanel =>
-    Boolean(panel),
+  const containers = [fromContainer, toContainer].filter(
+    (container): container is CableBundleContainer => Boolean(container),
   );
-  const rackRight = Math.max(...panels.map((panel) => panel.x + panel.width));
+  const containerRight = Math.max(
+    ...containers.map((container) => container.x + container.width),
+  );
   const laneOffset = ((index % 13) - 6) * 4;
-  const gutterX = Math.max(from.x, to.x, rackRight) + 46 + laneOffset;
+  const gutterX = Math.max(from.x, to.x, containerRight) + 46 + laneOffset;
   const stub = Math.max(
     18,
     Math.min(34, Math.abs(gutterX - Math.max(from.x, to.x)) * 0.35),
@@ -2203,6 +2206,21 @@ function bundledCablePath(
       to,
     ],
     22,
+  );
+}
+
+interface CableBundleContainer {
+  x: number;
+  width: number;
+}
+
+function cableBundleContainerForNode(
+  node: VisualizerNode | undefined,
+  context: CablePathContext,
+): CableBundleContainer | undefined {
+  return (
+    rackPanelForNode(node, context.rackPanels) ??
+    roomGroupForNode(node, context.roomGroups)
   );
 }
 
@@ -2312,6 +2330,31 @@ function rackPanelForNode(
       node.y >= panel.y &&
       node.y <= panel.y + panel.height,
   );
+}
+
+function roomGroupForNode(
+  node: VisualizerNode | undefined,
+  groups: RoomGroup[] | undefined,
+) {
+  if (!node || !groups || groups.length === 0) return undefined;
+
+  const directGroup = groups.find((group) =>
+    group.nodes.some((entry) => entry.device.id === node.device.id),
+  );
+  if (directGroup) return directGroup;
+
+  return groups.find((group) => {
+    const bottom = Math.max(
+      group.y + GROUP_HEADER_HEIGHT,
+      ...group.nodes.map((entry) => entry.y + entry.height),
+    );
+    return (
+      node.x >= group.x &&
+      node.x + node.width <= group.x + group.width &&
+      node.y >= group.y &&
+      node.y <= bottom
+    );
+  });
 }
 
 function roundedPolylinePath(

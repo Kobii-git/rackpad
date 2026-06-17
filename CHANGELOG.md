@@ -8,6 +8,22 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.4-beta.2] - 2026-06-17
+
+### Fixed
+
+- Routed bundled Visualizer cables for loose room devices through the same
+  right-side gutter treatment used by rack devices.
+
+### Test notes
+
+- Verify bundled harness routing with loose devices below racks and room-only
+  sections enabled; loose-device cables should offset to the right of the
+  cards instead of hugging the card edge.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, the focused Visualizer routing test, and
+  `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.4-beta.1] - 2026-06-16
 
 ### Added
