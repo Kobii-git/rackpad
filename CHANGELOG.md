@@ -8,6 +8,45 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.4-beta.3] - 2026-06-18
+
+### Added
+
+- Added global Fastify rate limiting for Rackpad API routes.
+- Added CodeQL configuration for Rackpad-specific security scan handling,
+  including exclusions for test fixtures and protocol-required SNMPv3
+  compatibility paths.
+
+### Fixed
+
+- Hardened Docker import HTTP requests against SSRF and DNS rebinding by
+  resolving and connecting only to routable hosts while preserving supported
+  Unix socket imports.
+- Cleared the GitHub Security and quality alert backlog on `dev`, including
+  Trivy image findings, CodeQL alert noise, OIDC callback validation, SNMP
+  timeout/resource exhaustion findings, random identifier generation, and
+  ReDoS-prone device type normalization.
+- Fixed a VLAN patch comparison bug found during the security cleanup.
+
+### Changed
+
+- Moved the runtime Docker base image to Node 22 trixie slim, removed npm/npx
+  from the runtime image, and refreshed frontend/build tooling dependencies.
+- Trivy image scans now ignore unfixed inherited base-image vulnerabilities so
+  beta security reporting focuses on actionable Rackpad findings.
+
+### Test notes
+
+- Verify Docker HTTP/Portainer import preview and import still work, and verify
+  Unix socket Docker import if the socket is mounted.
+- Verify API login/bootstrap flows, OIDC callback login if configured, SNMP
+  credentials/sync/traps if available, VLAN edits, and normal Rackpad
+  navigation.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, CodeQL, Trivy filesystem scan, Trivy image scan,
+  runtime npm/npx absence in the Docker image, and
+  `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.4-beta.2] - 2026-06-17
 
 ### Fixed
