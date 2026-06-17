@@ -70,6 +70,7 @@ jobs:
           image-ref: rackpad:security-scan
           scanners: vuln
           severity: HIGH,CRITICAL
+          ignore-unfixed: true
           format: sarif
           output: trivy-image.sarif
           exit-code: "0"

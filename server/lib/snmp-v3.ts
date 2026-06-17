@@ -78,27 +78,31 @@ export function passwordToKey(
 
   const digestInput = Buffer.concat(buffer);
 
-  // SNMPv3 USM password-to-key localization is defined by the configured
-  // device auth protocol; MD5/SHA1 remain here only for legacy device support.
-  // codeql[js/insufficient-password-hash]
-  // codeql[js/weak-cryptographic-algorithm]
-  const hash =
-    protocol === "MD5"
-      ? createHash("md5").update(digestInput).digest()
-      : createHash("sha1").update(digestInput).digest();
+  let hash: Buffer;
+  if (protocol === "MD5") {
+    // SNMPv3 USM password-to-key localization is defined by the configured
+    // device auth protocol; MD5 remains here only for legacy device support.
+    hash = createHash("md5").update(digestInput).digest();
+  } else {
+    // SNMPv3 USM password-to-key localization is defined by the configured
+    // device auth protocol; SHA1 remains here only for legacy device support.
+    hash = createHash("sha1").update(digestInput).digest();
+  }
 
-  // SNMPv3 USM localizes the derived key with the engine ID using the same
-  // configured auth protocol, so stronger password hashing is not applicable.
-  // codeql[js/insufficient-password-hash]
-  // codeql[js/weak-cryptographic-algorithm]
-  const localized =
-    protocol === "MD5"
-      ? createHash("md5")
-          .update(Buffer.concat([hash, engineId, hash]))
-          .digest()
-      : createHash("sha1")
-          .update(Buffer.concat([hash, engineId, hash]))
-          .digest();
+  let localized: Buffer;
+  if (protocol === "MD5") {
+    // SNMPv3 USM localizes the derived key with the engine ID using the same
+    // configured auth protocol, so stronger password hashing is not applicable.
+    localized = createHash("md5")
+      .update(Buffer.concat([hash, engineId, hash]))
+      .digest();
+  } else {
+    // SNMPv3 USM localizes the derived key with the engine ID using the same
+    // configured auth protocol, so stronger password hashing is not applicable.
+    localized = createHash("sha1")
+      .update(Buffer.concat([hash, engineId, hash]))
+      .digest();
+  }
 
   return localized;
 }
@@ -109,15 +113,15 @@ export function localizedPrivKey(
   engineId: Buffer,
 ) {
   // Privacy keys are derived from the SNMPv3 USM localized auth key.
-  // codeql[js/insufficient-password-hash]
-  // codeql[js/weak-cryptographic-algorithm]
   const localized = passwordToKey(protocol, password, engineId);
 
+  if (protocol === "MD5") {
+    // SNMPv3 AES privacy key material follows the USM auth protocol derivation.
+    return createHash("md5").update(localized).digest().subarray(0, 16);
+  }
+
   // SNMPv3 AES privacy key material follows the USM auth protocol derivation.
-  // codeql[js/weak-cryptographic-algorithm]
-  return protocol === "MD5"
-    ? createHash("md5").update(localized).digest().subarray(0, 16)
-    : createHash("sha1").update(localized).digest().subarray(0, 16);
+  return createHash("sha1").update(localized).digest().subarray(0, 16);
 }
 
 export function buildAuth(
