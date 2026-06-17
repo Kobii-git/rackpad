@@ -38,6 +38,18 @@ type OidcState = {
   createdAt: number
 }
 
+type OidcCallbackInput = {
+  code?: string
+  state?: string
+  error?: string
+  errorDescription?: string
+}
+
+type ValidOidcCallback = {
+  code: string
+  state: string
+}
+
 type PendingSession = {
   token: string
   expiresAt: string
@@ -97,6 +109,26 @@ function logOidcDebug(
     return
   }
   console.info(message, payload)
+}
+
+function callbackValue(value: string | undefined) {
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function callbackProviderError(input: OidcCallbackInput) {
+  return callbackValue(input.errorDescription) ?? callbackValue(input.error)
+}
+
+function parseOidcCallback(input: OidcCallbackInput): ValidOidcCallback {
+  const code = callbackValue(input.code)
+  const state = callbackValue(input.state)
+  if (!code || !state) {
+    throw new ValidationError(
+      callbackProviderError(input) ||
+        'OIDC callback is missing code or state.',
+    )
+  }
+  return { code, state }
 }
 
 function splitEnv(name: string) {
@@ -217,12 +249,7 @@ export async function createOidcAuthorizationUrl(
 }
 
 export async function handleOidcCallback(
-  input: {
-    code?: string
-    state?: string
-    error?: string
-    errorDescription?: string
-  },
+  input: OidcCallbackInput,
   log?: OidcLogger,
 ) {
   const config = oidcConfig()
@@ -232,16 +259,11 @@ export async function handleOidcCallback(
       404,
     )
   }
-  const callbackError = input.errorDescription || input.error
-  if (!input.code || !input.state) {
-    throw new ValidationError(
-      callbackError || 'OIDC callback is missing code or state.',
-    )
-  }
+  const callback = parseOidcCallback(input)
 
   cleanupExpired()
-  const state = oidcStates.get(input.state)
-  oidcStates.delete(input.state)
+  const state = oidcStates.get(callback.state)
+  oidcStates.delete(callback.state)
   if (!state || Date.now() - state.createdAt > STATE_TTL_MS) {
     throw new ValidationError(
       'OIDC sign-in state expired. Start sign-in again.',
@@ -252,7 +274,7 @@ export async function handleOidcCallback(
   const tokenResponse = await exchangeCodeForTokens(
     discovery,
     config,
-    input.code,
+    callback.code,
     state,
     log,
   )
