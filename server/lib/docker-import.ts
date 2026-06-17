@@ -1,8 +1,10 @@
 import http from "node:http";
+import https from "node:https";
+import net from "node:net";
 import { ValidationError } from "./validation.js";
 import { db } from "../db.js";
 import { createId } from "./ids.js";
-import { ensureRoutableHost } from "./net-guard.js";
+import { ensureRoutableHost, resolveRoutableHost } from "./net-guard.js";
 import {
   canEncryptSecrets,
   decryptSecret,
@@ -38,6 +40,7 @@ const DOCKER_ENDPOINT_RESERVED_MESSAGE =
   "Docker endpoint must be a routable public/LAN host outside reserved ranges.";
 const DOCKER_UNIX_PROTOCOL = "unix:";
 const DOCKER_SOCKET_PREFIX = "unix://";
+const DOCKER_HTTP_TIMEOUT_MS = 10_000;
 
 export interface DockerContainerLink {
   deviceId: string;
@@ -61,6 +64,19 @@ export interface DockerStatusSyncResult {
   errors: string[];
 }
 
+type DockerHttpJsonFetcher = (
+  url: URL,
+  headers: Record<string, string>,
+) => Promise<unknown>;
+
+let dockerHttpJsonFetcher: DockerHttpJsonFetcher = fetchDockerHttpJson;
+
+export function setDockerHttpJsonFetcherForTests(
+  fetcher: DockerHttpJsonFetcher | null,
+) {
+  dockerHttpJsonFetcher = fetcher ?? fetchDockerHttpJson;
+}
+
 function asRecord(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new ValidationError(`${label} must be an object.`);
@@ -69,7 +85,7 @@ function asRecord(value: unknown, label: string): Record<string, unknown> {
 }
 
 function parseDockerHttpEndpoint(endpoint: string) {
-  const trimmed = endpoint.trim().replace(/\/+$/, "");
+  const trimmed = trimTrailingSlashes(endpoint.trim());
   let url: URL;
   try {
     url = new URL(trimmed);
@@ -82,6 +98,50 @@ function parseDockerHttpEndpoint(endpoint: string) {
     throw new ValidationError("Docker endpoint must use http or https.");
   }
   return url;
+}
+
+function trimTrailingSlashes(value: string) {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}
+
+function trimLeadingSlashes(value: string) {
+  let start = 0;
+  while (start < value.length && value.charCodeAt(start) === 47) start += 1;
+  return value.slice(start);
+}
+
+function normalizeDockerPath(pathname: string, label: string) {
+  const parts = trimLeadingSlashes(pathname)
+    .split("/")
+    .filter((part) => part.length > 0);
+  const normalized: string[] = [];
+  for (const part of parts) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(part);
+    } catch {
+      throw new ValidationError(`${label} contains an invalid path segment.`);
+    }
+    if (
+      !decoded ||
+      decoded === "." ||
+      decoded === ".." ||
+      decoded.includes("\0") ||
+      decoded.includes("/")
+    ) {
+      throw new ValidationError(`${label} contains an invalid path segment.`);
+    }
+    normalized.push(part);
+  }
+  return normalized.length > 0 ? `/${normalized.join("/")}` : "";
+}
+
+function joinDockerApiPath(basePath: string, apiPath: string) {
+  const base = normalizeDockerPath(basePath, "Docker endpoint path");
+  const next = normalizeDockerPath(apiPath, "Docker API path");
+  return `${base}${next}` || "/";
 }
 
 export function normalizeDockerSocketEndpoint(endpoint: string) {
@@ -162,7 +222,7 @@ export async function normalizeDockerEndpointText(endpoint: string) {
   const url = normalized.url;
   url.hash = "";
   url.search = "";
-  return url.toString().replace(/\/+$/, "");
+  return trimTrailingSlashes(url.toString());
 }
 
 function normalizeDockerEndpointTextForStorage(endpoint: string) {
@@ -173,14 +233,12 @@ function normalizeDockerEndpointTextForStorage(endpoint: string) {
   const url = parseDockerHttpEndpoint(endpoint);
   url.hash = "";
   url.search = "";
-  return url.toString().replace(/\/+$/, "");
+  return trimTrailingSlashes(url.toString());
 }
 
 export async function buildDockerApiUrl(endpoint: string, apiPath: string) {
   const url = await normalizeDockerEndpoint(endpoint);
-  const basePath = url.pathname.replace(/\/+$/, "");
-  const nextPath = apiPath.startsWith("/") ? apiPath : `/${apiPath}`;
-  url.pathname = `${basePath}${nextPath}`.replace(/\/{2,}/g, "/");
+  url.pathname = joinDockerApiPath(url.pathname, apiPath);
   url.search = "";
   url.hash = "";
   return url;
@@ -257,6 +315,71 @@ function fetchDockerSocketJson(
   });
 }
 
+function fetchDockerHttpJson(
+  url: URL,
+  headers: Record<string, string>,
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    resolveRoutableHost(url, DOCKER_ENDPOINT_RESERVED_MESSAGE)
+      .then((resolved) => {
+        const requestOptions: http.RequestOptions & https.RequestOptions = {
+          protocol: url.protocol,
+          hostname: resolved.address,
+          family: resolved.family,
+          port: url.port
+            ? Number.parseInt(url.port, 10)
+            : url.protocol === "https:"
+              ? 443
+              : 80,
+          method: "GET",
+          path: `${url.pathname}${url.search}`,
+          headers: {
+            ...headers,
+            Host: url.host,
+          },
+          timeout: DOCKER_HTTP_TIMEOUT_MS,
+        };
+        if (url.protocol === "https:" && net.isIP(url.hostname) === 0) {
+          requestOptions.servername = url.hostname;
+        }
+
+        const request =
+          url.protocol === "https:"
+            ? https.request(requestOptions)
+            : http.request(requestOptions);
+        request.setTimeout(DOCKER_HTTP_TIMEOUT_MS, () => {
+          request.destroy(new Error("Request timed out."));
+        });
+        request.on("error", reject);
+        request.on("response", (response) => {
+          let body = "";
+          response.setEncoding("utf8");
+          response.on("data", (chunk) => {
+            body += chunk;
+          });
+          response.on("end", () => {
+            const statusCode = response.statusCode ?? 0;
+            if (statusCode < 200 || statusCode >= 300) {
+              reject(
+                new ValidationError(
+                  `Docker endpoint returned HTTP ${statusCode}.`,
+                ),
+              );
+              return;
+            }
+            try {
+              resolve(JSON.parse(body) as unknown);
+            } catch {
+              reject(new ValidationError("Docker endpoint returned invalid JSON."));
+            }
+          });
+        });
+        request.end();
+      })
+      .catch(reject);
+  });
+}
+
 export async function fetchDockerContainersPreview(
   endpoint: string,
   token?: string,
@@ -283,21 +406,14 @@ export async function fetchDockerContainersPreview(
     headers.Authorization = `Bearer ${token.trim()}`;
   }
 
-  let response: Response;
+  let payload: unknown;
   try {
-    response = await fetch(url, { headers });
+    payload = await dockerHttpJsonFetcher(url, headers);
   } catch (error) {
+    if (error instanceof ValidationError) throw error;
     const message = error instanceof Error ? error.message : "Request failed.";
     throw new ValidationError(`Could not reach Docker endpoint: ${message}`);
   }
-
-  if (!response.ok) {
-    throw new ValidationError(
-      `Docker endpoint returned HTTP ${response.status}.`,
-    );
-  }
-
-  const payload = (await response.json()) as unknown;
   return parseDockerContainersJson(payload);
 }
 
@@ -342,7 +458,7 @@ function sourceNameFromEndpoint(endpoint: string) {
   try {
     const url = new URL(endpoint);
     return url.pathname && url.pathname !== "/"
-      ? `${url.host}${url.pathname}`.replace(/\/+$/, "")
+      ? trimTrailingSlashes(`${url.host}${url.pathname}`)
       : url.host;
   } catch {
     return endpoint;

@@ -12,7 +12,6 @@ import {
 } from "../lib/lab-access.js";
 import { optionalDeviceType } from "../lib/device-types.js";
 import {
-  applyWifiDiscoveryPlacementToDevice,
   inferDiscoveryPlacement,
   inferDiscoveryPlacementHint,
 } from "../lib/discovery-placement.js";
@@ -1037,7 +1036,6 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
         if (!statusUpdated) {
           updates.push("status = ?");
           values.push("imported");
-          statusUpdated = true;
         }
         if (importedDevice.macAddress) {
           const linkedVendor = await lookupOuiVendor(importedDevice.macAddress);

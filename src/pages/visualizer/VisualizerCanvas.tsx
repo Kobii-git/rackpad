@@ -43,10 +43,9 @@ import {
 } from "@/components/ui/Tooltip";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { Mono } from "@/components/shared/Mono";
-import { StatusDot } from "@/components/shared/StatusDot";
 import type { Port } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
-import { formatPortEndpointLabel, statusLabel } from "@/lib/utils";
+import { formatPortEndpointLabel } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import {
   buildSearchResults,
@@ -2237,39 +2236,6 @@ function VisualizerRailStat({
   );
 }
 
-function VisualizerStat({
-  icon: Icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string | number;
-  hint: string;
-}) {
-  return (
-    <Card>
-      <CardBody className="p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="rk-kicker">{label}</div>
-            <div className="mt-1 text-xl font-semibold text-[var(--text-primary)]">
-              {value}
-            </div>
-            <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
-              {hint}
-            </div>
-          </div>
-          <div className="grid size-9 place-items-center rounded-[var(--radius-md)] border border-[var(--accent-secondary-border)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary)]">
-            <Icon className="size-4" />
-          </div>
-        </div>
-      </CardBody>
-    </Card>
-  );
-}
-
 function TypeChip({
   label,
   active,
@@ -2428,5 +2394,3 @@ function faceModeLabel(mode: RackPanel["faceMode"]) {
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
-
-const GROUP_HEADER_HEIGHT = 48;

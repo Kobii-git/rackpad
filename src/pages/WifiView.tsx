@@ -146,10 +146,6 @@ export default function WifiView() {
       ),
     [wifiAccessPoints],
   );
-  const radioById = useMemo(
-    () => Object.fromEntries(wifiRadios.map((radio) => [radio.id, radio])),
-    [wifiRadios],
-  );
   const associationByClientId = useMemo(
     () =>
       Object.fromEntries(

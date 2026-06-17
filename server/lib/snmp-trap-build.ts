@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import {
   berInteger,
   berObjectIdentifier,
@@ -90,7 +91,7 @@ export function buildSnmpV3TrapPacket(options: {
   const engineTime = options.engineTime ?? 123;
   const trapOid = options.trapOid ?? SNMP_TRAP_LINK_DOWN_OID;
   const sysUpTime = options.sysUpTimeTicks ?? 12345;
-  const msgId = Math.floor(Math.random() * 0x7fffffff);
+  const msgId = randomInt(1, 0x7fffffff);
 
   const varbinds: Buffer[] = [
     berSequence(

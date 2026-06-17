@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
+    "@fastify/rate-limit": "^11.0.0",
     "@fastify/static": "^9.1.3",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/ibm-plex-sans": "^5.2.8",
@@ -49,19 +50,19 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.0.0",
+    "@tailwindcss/vite": "^4.3.1",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.5",
     "@types/nodemailer": "^8.0.0",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^6.0.2",
     "concurrently": "^10.0.3",
     "eslint": "^9.17.0",
     "prettier": "^3.4.2",
     "tailwindcss": "^4.0.0",
-    "tsx": "^4.19.2",
-    "typescript": "~5.7.2",
-    "vite": "^6.0.7"
+    "tsx": "^4.22.4",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16"
   }
 }

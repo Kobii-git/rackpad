@@ -10,6 +10,13 @@ export async function ensureRoutableHost(
   target: string | URL,
   message = DEFAULT_RESERVED_HOST_MESSAGE,
 ) {
+  return (await resolveRoutableHost(target, message)).host;
+}
+
+export async function resolveRoutableHost(
+  target: string | URL,
+  message = DEFAULT_RESERVED_HOST_MESSAGE,
+) {
   const host = normalizeLookupHost(
     typeof target === "string" ? target : target.hostname,
   );
@@ -31,7 +38,7 @@ export async function ensureRoutableHost(
     throw new ValidationError(message);
   }
 
-  return host;
+  return { host, ...addresses[0]! };
 }
 
 function normalizeLookupHost(host: string) {

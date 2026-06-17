@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import staticPlugin from "@fastify/static";
 import path from "node:path";
 import { existsSync, readFileSync } from "node:fs";
@@ -45,11 +46,28 @@ const PROXMOX_COLLECTOR_PATH = path.resolve(
 );
 const DEV_ORIGINS = new Set(["http://localhost:5173", "http://127.0.0.1:5173"]);
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const DEFAULT_RATE_LIMIT_MAX = 600;
+const DEFAULT_RATE_LIMIT_WINDOW = "1 minute";
 
 function envFlag(name: string, fallback = false) {
   const raw = process.env[name]?.trim().toLowerCase();
   if (!raw) return fallback;
   return ["1", "true", "yes", "on"].includes(raw);
+}
+
+function envInteger(
+  name: string,
+  fallback: number,
+  options: { min?: number; max?: number } = {},
+) {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(
+    options.max ?? parsed,
+    Math.max(options.min ?? parsed, parsed),
+  );
 }
 
 function parseDelimitedEnv(name: string) {
@@ -148,6 +166,18 @@ export async function createApp() {
   app.decorateRequest("authUser", null);
   app.decorateRequest("sessionId", null);
   app.decorateRequest("labAccess", null);
+
+  if (!envFlag("RACKPAD_RATE_LIMIT_DISABLED")) {
+    await app.register(rateLimit, {
+      max: envInteger("RACKPAD_RATE_LIMIT_MAX", DEFAULT_RATE_LIMIT_MAX, {
+        min: 1,
+        max: 100_000,
+      }),
+      timeWindow:
+        process.env.RACKPAD_RATE_LIMIT_WINDOW?.trim() ||
+        DEFAULT_RATE_LIMIT_WINDOW,
+    });
+  }
 
   await app.register(cors, {
     origin:

@@ -40,7 +40,6 @@ import {
 } from "./translations";
 import {
   LANGUAGE_BCP47,
-  LANGUAGE_NATIVE_NAMES,
   LANGUAGE_OPTIONS,
   RTL_LANGUAGES,
   SUPPORTED_LANGUAGES,

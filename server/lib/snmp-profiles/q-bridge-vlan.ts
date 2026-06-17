@@ -1,4 +1,4 @@
-import { oidSuffixIndex, snmpWalkColumn, type SnmpSession } from '../snmp.js'
+import { snmpWalkColumn, type SnmpSession } from '../snmp.js'
 import type { SnmpCollectedVlan, SnmpProfileCollection, SnmpProfileDefinition } from './types.js'
 
 const DOT1Q_VLAN_STATIC_NAME = '1.3.6.1.2.1.17.7.1.4.3.1.1'
