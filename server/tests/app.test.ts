@@ -4341,6 +4341,9 @@ function ensureSpaIndex() {
     mkdirSync(spaDistDir, { recursive: true });
   }
   if (!existsSync(spaIndexFile)) {
+    // The fallback SPA fixture is created in the test workspace before app use.
+    //
+    // codeql[js/file-system-race]
     writeFileSync(
       spaIndexFile,
       "<!doctype html><html><head><title>Rackpad SPA Fallback</title></head><body>rackpad spa fallback</body></html>",

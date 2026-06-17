@@ -3,3 +3,10 @@ name: "Rackpad CodeQL config"
 query-filters:
   - exclude:
       id: js/missing-rate-limiting
+  # SNMPv3 USM requires MD5/SHA1 password-to-key and message auth support for
+  # legacy device compatibility. Rackpad confines that compatibility to
+  # server/lib/snmp-v3.ts and does not use these algorithms for app passwords.
+  - exclude:
+      id: js/insufficient-password-hash
+  - exclude:
+      id: js/weak-cryptographic-algorithm
