@@ -8,6 +8,52 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.4] - 2026-06-20
+
+### Added
+
+- Added a Docker CLI recovery command for rotating local-user passwords from
+  inside the Rackpad container without adding public reset endpoints.
+- Added global Fastify rate limiting for Rackpad API routes.
+- Added CodeQL configuration for Rackpad-specific security scan handling,
+  including exclusions for test fixtures and protocol-required SNMPv3
+  compatibility paths.
+
+### Fixed
+
+- Hardened Docker import HTTP requests against SSRF and DNS rebinding by
+  resolving and connecting only to routable hosts while preserving supported
+  Unix socket imports.
+- Cleared the GitHub Security and quality alert backlog on `dev` and `beta`,
+  including Trivy image findings, CodeQL alert noise, OIDC callback validation,
+  SNMP timeout/resource exhaustion findings, random identifier generation, and
+  ReDoS-prone device type normalization.
+- Routed bundled Visualizer cables for loose room devices through the same
+  right-side gutter treatment used by rack devices.
+- Fixed a VLAN patch comparison bug found during the security cleanup.
+
+### Changed
+
+- Moved the runtime Docker base image to Node 22 trixie slim, removed npm/npx
+  from the runtime image, and refreshed frontend/build tooling dependencies.
+- Trivy image scans now ignore unfixed inherited base-image vulnerabilities so
+  security reporting focuses on actionable Rackpad findings.
+
+### Test notes
+
+- Verify a local admin can reset a lost password from Docker with
+  `node dist-server/cli/reset-password.js --username admin`, sign in with the
+  new password, and that old sessions are invalidated.
+- Verify Docker HTTP/Portainer import preview and import still work, and verify
+  Unix socket Docker import if the socket is mounted.
+- Verify API login/bootstrap flows, OIDC callback login if configured, SNMP
+  credentials/sync/traps if available, VLAN edits, bundled Visualizer routing,
+  and normal Rackpad navigation.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, CodeQL, Trivy filesystem scan, Trivy image scan,
+  Docker publish for `beta`, runtime npm/npx absence in the Docker image, and
+  `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.4-beta.3] - 2026-06-18
 
 ### Added
