@@ -1,4 +1,11 @@
 import { useMemo, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  RotateCcw,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/Button";
@@ -11,6 +18,8 @@ import type {
   VisualizerCableLayout,
   VisualizerLayoutMode,
   VisualizerLooseDevicePlacement,
+  VisualizerNode,
+  VisualizerOrderSettings,
   VisualizerPoint,
   VisualizerRackFaceMode,
   VisualizerRackScale,
@@ -29,6 +38,27 @@ const READABLE_LABELS_STORAGE_KEY = "rackpad.visualizer.readable-labels";
 const CABLE_LAYOUT_STORAGE_KEY = "rackpad.visualizer.cable-layout";
 const CUSTOM_NODE_POSITIONS_STORAGE_KEY =
   "rackpad.visualizer.custom-node-positions";
+const ORDER_STORAGE_KEY = "rackpad.visualizer.order";
+
+type MoveDirection = "up" | "down";
+
+interface VisualizerOrderListItem {
+  id: string;
+  label: string;
+  detail?: string;
+}
+
+interface VisualizerOrderGroupItem extends VisualizerOrderListItem {
+  nodes: VisualizerNode[];
+  total: number;
+}
+
+const EMPTY_ORDER_SETTINGS: VisualizerOrderSettings = {
+  sections: [],
+  racks: [],
+  groups: [],
+  devicesByGroup: {},
+};
 
 export default function VisualizerView() {
   const { t } = useI18n();
@@ -38,6 +68,7 @@ export default function VisualizerView() {
   const rooms = useStore((s) => s.rooms);
   const racks = useStore((s) => s.racks);
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const ports = useStore((s) => s.ports);
   const portLinks = useStore((s) => s.portLinks);
   const deviceMonitors = useStore((s) => s.deviceMonitors);
@@ -79,6 +110,10 @@ export default function VisualizerView() {
   const [customNodePositions, setCustomNodePositions] = useState<
     Record<string, VisualizerPoint>
   >(() => readPointMap(CUSTOM_NODE_POSITIONS_STORAGE_KEY));
+  const [orderSettings, setOrderSettings] =
+    useState<VisualizerOrderSettings>(() => readOrderSettings(ORDER_STORAGE_KEY));
+  const [orderPanelOpen, setOrderPanelOpen] = useState(false);
+  const [selectedOrderGroupId, setSelectedOrderGroupId] = useState("");
   const [looseDevicePlacement, setLooseDevicePlacement] =
     useState<VisualizerLooseDevicePlacement>(() =>
       readLooseDevicePlacement(LOOSE_PLACEMENT_STORAGE_KEY),
@@ -102,6 +137,7 @@ export default function VisualizerView() {
         racks,
         rooms,
         devices,
+        deviceTypes,
         ports,
         portLinks,
         deviceMonitors,
@@ -120,12 +156,14 @@ export default function VisualizerView() {
           shelfLayout,
           readableLabels,
           customNodePositions,
+          order: orderSettings,
         },
       }),
     [
       racks,
       rooms,
       devices,
+      deviceTypes,
       ports,
       portLinks,
       deviceMonitors,
@@ -141,10 +179,57 @@ export default function VisualizerView() {
       shelfLayout,
       readableLabels,
       customNodePositions,
+      orderSettings,
       looseDevicePlacement,
       includeRoomOnlySections,
     ],
   );
+
+  const orderSections = useMemo<VisualizerOrderListItem[]>(
+    () =>
+      model.rackZone.sections.map((section) => ({
+        id: section.id,
+        label: section.name,
+        detail: section.subtitle,
+      })),
+    [model],
+  );
+  const orderRacks = useMemo<VisualizerOrderListItem[]>(
+    () =>
+      model.rackZone.sections.flatMap((section) =>
+        section.racks.map((panel) => ({
+          id: panel.rack.id,
+          label: panel.rack.name,
+          detail: section.name,
+        })),
+      ),
+    [model],
+  );
+  const orderGroups = useMemo<VisualizerOrderGroupItem[]>(
+    () => [
+      ...model.rackZone.sections.flatMap((section) =>
+        section.looseGroups.map((group) => ({
+          id: group.id,
+          label: group.name,
+          detail: `${section.name} loose devices`,
+          nodes: group.nodes,
+          total: group.total,
+        })),
+      ),
+      ...model.roomZone.groups.map((group) => ({
+        id: group.id,
+        label: group.name,
+        detail: group.subtitle,
+        nodes: group.nodes,
+        total: group.total,
+      })),
+    ],
+    [model],
+  );
+  const selectedOrderGroup =
+    orderGroups.find((group) => group.id === selectedOrderGroupId) ??
+    orderGroups[0] ??
+    null;
 
   function toggleRackRun(key: string) {
     setExpandedRackRuns((current) => {
@@ -220,6 +305,78 @@ export default function VisualizerView() {
     writePointMap(CUSTOM_NODE_POSITIONS_STORAGE_KEY, {});
   }
 
+  function updateOrderSettings(
+    updater: (current: VisualizerOrderSettings) => VisualizerOrderSettings,
+  ) {
+    setOrderSettings((current) => {
+      const next = sanitizeOrderSettings(updater(current));
+      writeOrderSettings(ORDER_STORAGE_KEY, next);
+      return next;
+    });
+  }
+
+  function moveSection(id: string, direction: MoveDirection) {
+    updateOrderSettings((current) => ({
+      ...current,
+      sections: moveOrderedId(
+        current.sections,
+        orderSections.map((section) => section.id),
+        id,
+        direction,
+      ),
+    }));
+  }
+
+  function moveRack(id: string, direction: MoveDirection) {
+    updateOrderSettings((current) => ({
+      ...current,
+      racks: moveOrderedId(
+        current.racks,
+        orderRacks.map((rack) => rack.id),
+        id,
+        direction,
+      ),
+    }));
+  }
+
+  function moveGroup(id: string, direction: MoveDirection) {
+    updateOrderSettings((current) => ({
+      ...current,
+      groups: moveOrderedId(
+        current.groups,
+        orderGroups.map((group) => group.id),
+        id,
+        direction,
+      ),
+    }));
+  }
+
+  function moveDeviceInGroup(
+    groupId: string,
+    deviceId: string,
+    direction: MoveDirection,
+  ) {
+    const group = orderGroups.find((entry) => entry.id === groupId);
+    if (!group) return;
+    updateOrderSettings((current) => ({
+      ...current,
+      devicesByGroup: {
+        ...current.devicesByGroup,
+        [groupId]: moveOrderedId(
+          current.devicesByGroup[groupId] ?? [],
+          group.nodes.map((node) => node.device.id),
+          deviceId,
+          direction,
+        ),
+      },
+    }));
+  }
+
+  function resetVisualizerOrder() {
+    setOrderSettings(EMPTY_ORDER_SETTINGS);
+    writeOrderSettings(ORDER_STORAGE_KEY, EMPTY_ORDER_SETTINGS);
+  }
+
   return (
     <>
       <TopBar
@@ -292,9 +449,35 @@ export default function VisualizerView() {
                 Trace mode
               </Button>
             )}
+            {layoutMode === "grouped" && (
+              <Button
+                variant={orderPanelOpen ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setOrderPanelOpen((current) => !current)}
+              >
+                <SlidersHorizontal />
+                Order
+              </Button>
+            )}
           </div>
         }
       />
+      {orderPanelOpen && layoutMode === "grouped" && (
+        <VisualizerOrderPanel
+          sections={orderSections}
+          racks={orderRacks}
+          groups={orderGroups}
+          selectedGroup={selectedOrderGroup}
+          selectedGroupId={selectedOrderGroup?.id ?? ""}
+          onSelectedGroupChange={setSelectedOrderGroupId}
+          onMoveSection={moveSection}
+          onMoveRack={moveRack}
+          onMoveGroup={moveGroup}
+          onMoveDevice={moveDeviceInGroup}
+          onReset={resetVisualizerOrder}
+          onClose={() => setOrderPanelOpen(false)}
+        />
+      )}
       {layoutMode === "diagram" ? (
         <DiagramCanvas
           model={model}
@@ -354,6 +537,219 @@ export default function VisualizerView() {
         />
       )}
     </>
+  );
+}
+
+function VisualizerOrderPanel({
+  sections,
+  racks,
+  groups,
+  selectedGroup,
+  selectedGroupId,
+  onSelectedGroupChange,
+  onMoveSection,
+  onMoveRack,
+  onMoveGroup,
+  onMoveDevice,
+  onReset,
+  onClose,
+}: {
+  sections: VisualizerOrderListItem[];
+  racks: VisualizerOrderListItem[];
+  groups: VisualizerOrderGroupItem[];
+  selectedGroup: VisualizerOrderGroupItem | null;
+  selectedGroupId: string;
+  onSelectedGroupChange: (id: string) => void;
+  onMoveSection: (id: string, direction: MoveDirection) => void;
+  onMoveRack: (id: string, direction: MoveDirection) => void;
+  onMoveGroup: (id: string, direction: MoveDirection) => void;
+  onMoveDevice: (
+    groupId: string,
+    deviceId: string,
+    direction: MoveDirection,
+  ) => void;
+  onReset: () => void;
+  onClose: () => void;
+}) {
+  const selectedDevices =
+    selectedGroup?.nodes.map((node) => ({
+      id: node.device.id,
+      label: node.device.displayName || node.device.hostname,
+      detail:
+        node.device.managementIp ??
+        node.device.hostname ??
+        node.effectiveDeviceType,
+    })) ?? [];
+
+  return (
+    <aside className="fixed right-5 top-[88px] z-40 flex max-h-[calc(100vh-112px)] w-[min(440px,calc(100vw-32px))] flex-col overflow-hidden rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-1)] shadow-2xl">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--border-muted)] px-4 py-3">
+        <div>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+            Visualizer order
+          </h2>
+          <p className="text-xs text-[var(--text-tertiary)]">
+            Stored on this browser
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            title="Reset order"
+            aria-label="Reset visualizer order"
+            onClick={onReset}
+          >
+            <RotateCcw />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            title="Close"
+            aria-label="Close visualizer order panel"
+            onClick={onClose}
+          >
+            <X />
+          </Button>
+        </div>
+      </div>
+      <div className="space-y-5 overflow-y-auto px-4 py-4">
+        <OrderList
+          title="Rooms and rack sections"
+          emptyLabel="No rack sections to order."
+          items={sections}
+          onMove={onMoveSection}
+        />
+        <OrderList
+          title="Racks"
+          emptyLabel="No racks to order."
+          items={racks}
+          onMove={onMoveRack}
+        />
+        <OrderList
+          title="Loose groups"
+          emptyLabel="No loose device groups to order."
+          items={groups}
+          onMove={onMoveGroup}
+        />
+        <section className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+              Devices in group
+            </h3>
+            <select
+              value={selectedGroupId}
+              onChange={(event) => onSelectedGroupChange(event.target.value)}
+              className="rk-control h-8 max-w-[240px] px-2 text-xs text-[var(--text-primary)]"
+              aria-label="Choose visualizer group to order devices"
+            >
+              {groups.length === 0 ? (
+                <option value="">No groups</option>
+              ) : (
+                groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.label}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+          {selectedGroup && selectedGroup.total > 0 && selectedDevices.length === 0 ? (
+            <p className="rounded-[var(--radius-sm)] border border-[var(--border-muted)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-tertiary)]">
+              Expand this group in the visualizer to order its devices.
+            </p>
+          ) : (
+            <OrderList
+              title=""
+              emptyLabel="No devices in this group."
+              items={selectedDevices}
+              onMove={(id, direction) => {
+                if (!selectedGroup) return;
+                onMoveDevice(selectedGroup.id, id, direction);
+              }}
+              showTitle={false}
+            />
+          )}
+        </section>
+      </div>
+    </aside>
+  );
+}
+
+function OrderList({
+  title,
+  emptyLabel,
+  items,
+  showTitle = true,
+  onMove,
+}: {
+  title: string;
+  emptyLabel: string;
+  items: VisualizerOrderListItem[];
+  showTitle?: boolean;
+  onMove: (id: string, direction: MoveDirection) => void;
+}) {
+  return (
+    <section className="space-y-2">
+      {showTitle && (
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+          {title}
+        </h3>
+      )}
+      {items.length === 0 ? (
+        <p className="rounded-[var(--radius-sm)] border border-[var(--border-muted)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-tertiary)]">
+          {emptyLabel}
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {items.map((item, index) => (
+            <div
+              key={item.id}
+              className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-muted)] bg-[var(--surface-2)] px-2 py-2"
+            >
+              <div className="min-w-0 flex-1 text-left">
+                <div className="break-words text-xs font-medium text-[var(--text-primary)]">
+                  {item.label}
+                </div>
+                {item.detail && (
+                  <div className="mt-0.5 break-words text-[11px] text-[var(--text-tertiary)]">
+                    {item.detail}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  title="Move up"
+                  aria-label={`Move ${item.label} up`}
+                  disabled={index === 0}
+                  onClick={() => onMove(item.id, "up")}
+                  className="h-7 w-7"
+                >
+                  <ArrowUp />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  title="Move down"
+                  aria-label={`Move ${item.label} down`}
+                  disabled={index === items.length - 1}
+                  onClick={() => onMove(item.id, "down")}
+                  className="h-7 w-7"
+                >
+                  <ArrowDown />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -462,6 +858,107 @@ function writePointMap(key: string, value: Record<string, VisualizerPoint>) {
   } catch {
     // Ignore storage issues in locked-down browsers.
   }
+}
+
+function readOrderSettings(key: string): VisualizerOrderSettings {
+  try {
+    return sanitizeOrderSettings(
+      JSON.parse(window.localStorage.getItem(key) ?? "{}"),
+    );
+  } catch {
+    return EMPTY_ORDER_SETTINGS;
+  }
+}
+
+function writeOrderSettings(key: string, value: VisualizerOrderSettings) {
+  try {
+    const sanitized = sanitizeOrderSettings(value);
+    const empty =
+      sanitized.sections.length === 0 &&
+      sanitized.racks.length === 0 &&
+      sanitized.groups.length === 0 &&
+      Object.keys(sanitized.devicesByGroup).length === 0;
+    if (empty) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, JSON.stringify(sanitized));
+  } catch {
+    // Ignore storage issues in locked-down browsers.
+  }
+}
+
+function sanitizeOrderSettings(value: unknown): VisualizerOrderSettings {
+  if (!value || typeof value !== "object") return EMPTY_ORDER_SETTINGS;
+  const candidate = value as Partial<VisualizerOrderSettings>;
+  const devicesByGroup =
+    candidate.devicesByGroup && typeof candidate.devicesByGroup === "object"
+      ? Object.fromEntries(
+          Object.entries(candidate.devicesByGroup)
+            .filter(
+              ([key, devices]) =>
+                typeof key === "string" && isStringArray(devices),
+            )
+            .map(([key, devices]) => [key, uniqueStrings(devices)]),
+        )
+      : {};
+
+  return {
+    sections: uniqueStrings(
+      isStringArray(candidate.sections) ? candidate.sections : [],
+    ),
+    racks: uniqueStrings(isStringArray(candidate.racks) ? candidate.racks : []),
+    groups: uniqueStrings(
+      isStringArray(candidate.groups) ? candidate.groups : [],
+    ),
+    devicesByGroup,
+  };
+}
+
+function moveOrderedId(
+  currentOrder: string[],
+  visibleIds: string[],
+  id: string,
+  direction: MoveDirection,
+) {
+  const normalized = normalizeVisibleOrder(currentOrder, visibleIds);
+  const index = normalized.indexOf(id);
+  if (index === -1) return normalized;
+  const nextIndex = direction === "up" ? index - 1 : index + 1;
+  if (nextIndex < 0 || nextIndex >= normalized.length) return normalized;
+  const next = [...normalized];
+  [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+  return next;
+}
+
+function normalizeVisibleOrder(currentOrder: string[], visibleIds: string[]) {
+  const visible = new Set(visibleIds);
+  const next: string[] = [];
+  const seen = new Set<string>();
+  for (const id of currentOrder) {
+    if (!visible.has(id) || seen.has(id)) continue;
+    next.push(id);
+    seen.add(id);
+  }
+  for (const id of visibleIds) {
+    if (seen.has(id)) continue;
+    next.push(id);
+    seen.add(id);
+  }
+  return next;
+}
+
+function uniqueStrings(values: string[]) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    if (seen.has(value)) return false;
+    seen.add(value);
+    return true;
+  });
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
 
 function writeString(key: string, value: string) {

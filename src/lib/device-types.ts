@@ -76,6 +76,38 @@ export function deviceTypeLabel(
   );
 }
 
+export function deviceTypeBase(
+  type: DeviceType | null | undefined,
+  definitions: DeviceTypeDefinition[] = BUILT_IN_DEVICE_TYPES,
+): DeviceType {
+  if (!type) return "other";
+  const byId = new Map(
+    [...BUILT_IN_DEVICE_TYPES, ...definitions].map((entry) => [
+      entry.id,
+      entry,
+    ]),
+  );
+  const seen = new Set<DeviceType>();
+  let current = type;
+  while (!seen.has(current)) {
+    seen.add(current);
+    const parent = byId.get(current)?.parentType;
+    if (!parent || parent === current) return current;
+    current = parent;
+  }
+  return type;
+}
+
+export function deviceTypeMatchesTemplate(
+  deviceType: DeviceType,
+  templateDeviceTypes: DeviceType[],
+  definitions: DeviceTypeDefinition[] = BUILT_IN_DEVICE_TYPES,
+) {
+  if (templateDeviceTypes.includes(deviceType)) return true;
+  const baseType = deviceTypeBase(deviceType, definitions);
+  return baseType !== deviceType && templateDeviceTypes.includes(baseType);
+}
+
 export function mergeDeviceTypeDefinitions(
   definitions: DeviceTypeDefinition[],
   context: {

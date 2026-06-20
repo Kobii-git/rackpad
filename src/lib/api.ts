@@ -678,7 +678,7 @@ export const api = {
     return request<DeviceTypeDefinition[]>("/device-types");
   },
 
-  createDeviceType(body: { id?: string; label: string }) {
+  createDeviceType(body: { id?: string; label: string; parentType?: string }) {
     return request<DeviceTypeDefinition>("/device-types", {
       method: "POST",
       body: JSON.stringify(body),

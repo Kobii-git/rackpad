@@ -40,7 +40,7 @@ import type {
   Vlan,
   VirtualSwitch,
 } from "@/lib/types";
-import { deviceTypeLabel } from "@/lib/device-types";
+import { deviceTypeLabel, deviceTypeMatchesTemplate } from "@/lib/device-types";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { formatPortLabel } from "@/lib/utils";
 import { ArrowRight, Filter, Network, Plus, Save, Trash2 } from "lucide-react";
@@ -561,12 +561,16 @@ export default function PortView() {
     ) {
       const preferred = device
         ? portTemplates.find((template) =>
-            template.deviceTypes.includes(device.deviceType),
+            deviceTypeMatchesTemplate(
+              device.deviceType,
+              template.deviceTypes,
+              deviceTypes,
+            ),
           )
         : portTemplates[0];
       setSelectedTemplateId(preferred?.id ?? portTemplates[0].id);
     }
-  }, [device, portTemplates, selectedTemplateId]);
+  }, [device, deviceTypes, portTemplates, selectedTemplateId]);
 
   const selectedPort =
     !creating && selectedPortId ? portById[selectedPortId] : undefined;
@@ -1743,7 +1747,11 @@ export default function PortView() {
                           !creatingTemplate &&
                           template.id === selectedTemplateId;
                         const appliesToCurrent = device
-                          ? template.deviceTypes.includes(device.deviceType)
+                          ? deviceTypeMatchesTemplate(
+                              device.deviceType,
+                              template.deviceTypes,
+                              deviceTypes,
+                            )
                           : false;
                         return (
                           <button

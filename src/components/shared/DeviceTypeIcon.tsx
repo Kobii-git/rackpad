@@ -12,6 +12,8 @@ import {
   Minus,
 } from "lucide-react";
 import type { DeviceType } from "@/lib/types";
+import { useStore } from "@/lib/store";
+import { deviceTypeBase } from "@/lib/device-types";
 
 const map: Record<string, typeof Server> = {
   switch: Network,
@@ -38,6 +40,7 @@ interface Props {
 }
 
 export function DeviceTypeIcon({ type, className }: Props) {
-  const Icon = map[type] ?? Boxes;
+  const deviceTypes = useStore((s) => s.deviceTypes);
+  const Icon = map[deviceTypeBase(type, deviceTypes)] ?? Boxes;
   return <Icon className={className} />;
 }

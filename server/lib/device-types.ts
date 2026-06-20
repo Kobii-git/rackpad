@@ -26,6 +26,7 @@ export interface DeviceTypeDefinition {
   id: string
   label: string
   builtIn: boolean
+  parentType?: string | null
   createdAt?: string
   updatedAt?: string
 }
@@ -34,6 +35,7 @@ interface DeviceTypeSettings {
   custom: Array<{
     id: string
     label: string
+    parentType?: string | null
     createdAt?: string
     updatedAt?: string
   }>
@@ -94,6 +96,18 @@ export function validateDeviceTypeId(id: string, key = 'deviceType') {
   return normalized
 }
 
+function optionalParentType(value: unknown) {
+  if (value == null || value === '') return null
+  if (typeof value !== 'string') {
+    throw new ValidationError('parentType must be a string.')
+  }
+  const parentType = validateDeviceTypeId(value, 'parentType')
+  if (!BUILT_IN_IDS.has(parentType)) {
+    throw new ValidationError('parentType must be a built-in device type.')
+  }
+  return parentType
+}
+
 function parseCustomDeviceTypes(value: unknown) {
   if (!Array.isArray(value)) return []
 
@@ -108,9 +122,14 @@ function parseCustomDeviceTypes(value: unknown) {
     const label = typeof record.label === 'string' && record.label.trim()
       ? record.label.trim().slice(0, 80)
       : defaultDeviceTypeLabel(id)
+    const parentType =
+      typeof record.parentType === 'string' && BUILT_IN_IDS.has(normalizeDeviceTypeId(record.parentType))
+        ? normalizeDeviceTypeId(record.parentType)
+        : null
     custom.push({
       id,
       label,
+      parentType,
       createdAt: typeof record.createdAt === 'string' ? record.createdAt : undefined,
       updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : undefined,
     })
@@ -178,7 +197,11 @@ export function optionalDeviceType(body: Record<string, unknown>, key = 'deviceT
   return normalized
 }
 
-export function createDeviceType(input: { id?: string | null; label: string }) {
+export function createDeviceType(input: {
+  id?: string | null
+  label: string
+  parentType?: string | null
+}) {
   const label = input.label.trim()
   if (!label) {
     throw new ValidationError('Label is required.')
@@ -201,6 +224,7 @@ export function createDeviceType(input: { id?: string | null; label: string }) {
   const created = {
     id,
     label,
+    parentType: optionalParentType(input.parentType),
     createdAt: now,
     updatedAt: now,
   }

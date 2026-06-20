@@ -974,7 +974,7 @@ function buildDiagramLayout(
 ): DiagramLayoutResult {
   const visibleNodes = model.nodes.filter(
     (node) =>
-      typeFilters.size === 0 || typeFilters.has(node.device.deviceType),
+      typeFilters.size === 0 || typeFilters.has(node.effectiveDeviceType),
   );
   const visibleDeviceIds = new Set(
     visibleNodes.map((node) => node.device.id),
@@ -1346,7 +1346,7 @@ function buildVirtualNetworkRows(
           ? model.deviceById[virtualSwitch.hostDeviceId]
           : undefined,
         port,
-        role: ["vm", "container"].includes(node.device.deviceType)
+        role: ["vm", "container"].includes(node.effectiveDeviceType)
           ? "guest nic"
           : "uplink",
         virtualSwitch,
@@ -1355,7 +1355,11 @@ function buildVirtualNetworkRows(
 
   const childDevices = Object.values(model.deviceById)
     .filter((device) => device.parentDeviceId === node.device.id)
-    .filter((device) => ["vm", "container"].includes(device.deviceType))
+    .filter((device) =>
+      ["vm", "container"].includes(
+        model.effectiveDeviceTypeByDeviceId[device.id] ?? device.deviceType,
+      ),
+    )
     .sort((a, b) =>
       a.hostname.localeCompare(b.hostname, undefined, {
         numeric: true,

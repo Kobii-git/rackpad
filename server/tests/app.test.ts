@@ -1184,6 +1184,7 @@ test("custom device types can be created and used by devices and templates", asy
     },
     payload: {
       label: "IP Camera",
+      parentType: "endpoint",
     },
   });
   assert.equal(typeRes.statusCode, 201);
@@ -1191,10 +1192,12 @@ test("custom device types can be created and used by devices and templates", asy
     id: string;
     label: string;
     builtIn: boolean;
+    parentType: string | null;
   };
   assert.equal(deviceType.id, "ip_camera");
   assert.equal(deviceType.label, "IP Camera");
   assert.equal(deviceType.builtIn, false);
+  assert.equal(deviceType.parentType, "endpoint");
 
   const deviceRes = await app.inject({
     method: "POST",
@@ -1239,13 +1242,34 @@ test("custom device types can be created and used by devices and templates", asy
     },
   });
   assert.equal(listRes.statusCode, 200);
-  const deviceTypes = readJson(listRes) as Array<{ id: string; label: string }>;
+  const deviceTypes = readJson(listRes) as Array<{
+    id: string;
+    label: string;
+    parentType?: string | null;
+  }>;
   assert.equal(
     deviceTypes.some(
-      (entry) => entry.id === "ip_camera" && entry.label === "IP Camera",
+      (entry) =>
+        entry.id === "ip_camera" &&
+        entry.label === "IP Camera" &&
+        entry.parentType === "endpoint",
     ),
     true,
   );
+
+  const invalidParentRes = await app.inject({
+    method: "POST",
+    url: "/api/device-types",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      label: "Nested Camera",
+      parentType: "ip_camera",
+    },
+  });
+  assert.equal(invalidParentRes.statusCode, 400);
+  assert.match(invalidParentRes.body, /built-in device type/i);
 });
 
 test("bulk device updates accept custom types and wireless placement", async () => {

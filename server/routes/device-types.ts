@@ -11,8 +11,8 @@ export const deviceTypesRoutes: FastifyPluginAsync = async (app) => {
     const body = asObject(req.body)
     const id = optionalString(body, 'id', { maxLength: 80 })
     const label = requiredString(body, 'label', { maxLength: 80 })
+    const parentType = optionalString(body, 'parentType', { maxLength: 80 })
 
-    return reply.status(201).send(createDeviceType({ id, label }))
+    return reply.status(201).send(createDeviceType({ id, label, parentType }))
   })
 }
-

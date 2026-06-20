@@ -6,6 +6,7 @@ export interface DeviceTypeDefinition {
   id: DeviceType;
   label: string;
   builtIn: boolean;
+  parentType?: DeviceType | null;
   createdAt?: string;
   updatedAt?: string;
 }

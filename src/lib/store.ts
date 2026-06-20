@@ -2108,6 +2108,7 @@ export async function deletePortTemplateRecord(id: string): Promise<void> {
 export async function createDeviceTypeRecord(input: {
   id?: string;
   label: string;
+  parentType?: string;
 }): Promise<DeviceTypeDefinition> {
   const created = await api.createDeviceType(input);
   setState((prev) => ({

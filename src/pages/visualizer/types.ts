@@ -24,6 +24,13 @@ export type VisualizerCableLayout =
   | "convex"
   | "straight";
 
+export interface VisualizerOrderSettings {
+  sections: string[];
+  racks: string[];
+  groups: string[];
+  devicesByGroup: Record<string, string[]>;
+}
+
 export interface VisualizerLayoutOptions {
   topologyLayout: VisualizerLayoutMode;
   looseDevicePlacement: VisualizerLooseDevicePlacement;
@@ -33,6 +40,7 @@ export interface VisualizerLayoutOptions {
   shelfLayout: VisualizerShelfLayout;
   readableLabels: boolean;
   customNodePositions: Record<string, VisualizerPoint>;
+  order: VisualizerOrderSettings;
 }
 
 export interface VisualizerPoint {
@@ -56,6 +64,7 @@ export interface VisualizerPort {
 
 export interface VisualizerNode {
   device: Device;
+  effectiveDeviceType: DeviceType;
   x: number;
   y: number;
   width: number;
@@ -230,6 +239,7 @@ export interface VisualizerModel {
   portById: Record<string, Port>;
   portLinkByPortId: Record<string, PortLink>;
   deviceById: Record<string, Device>;
+  effectiveDeviceTypeByDeviceId: Record<string, DeviceType>;
   vlanById: Record<string, Vlan>;
   directNeighborsByDeviceId: Record<string, VisualizerNeighbor[]>;
   deviceTypes: Array<{ type: DeviceType; label: string; count: number }>;

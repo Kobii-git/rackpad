@@ -8,6 +8,28 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.6-beta.1] - 2026-06-20
+
+### Added
+
+- Added parent classification for custom device types so user-created types can
+  inherit built-in icon, template compatibility, and Visualizer behavior.
+- Added Visualizer ordering controls for rack sections, racks, loose groups,
+  and devices inside those groups.
+
+### Fixed
+
+- Fixed custom child device types being treated as unknown in Visualizer
+  grouping, counts, filters, diagram behavior, and port template matching.
+
+### Test notes
+
+- Verify a custom device type can pick a built-in parent type, such as
+  `switch`, and that Visualizer grouping and icons follow the parent.
+- Verify the Visualizer `Order` panel can move rack sections, racks, loose
+  groups, and devices inside loose groups, and that the order persists after a
+  browser refresh.
+
 ## [1.6.5] - 2026-06-20
 
 ### Fixed

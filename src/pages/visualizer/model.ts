@@ -2,6 +2,7 @@ import type {
   Device,
   DeviceMonitor,
   DeviceType,
+  DeviceTypeDefinition,
   DiscoveredDevice,
   Port,
   PortKind,
@@ -21,6 +22,7 @@ import {
 import type { useI18n } from "@/i18n";
 import { formatPortTypeLabel } from "@/components/ports/port-mode-labels";
 import {
+  deviceTypeBase,
   defaultDeviceTypeLabel,
   normalizeDeviceTypeId,
 } from "@/lib/device-types";
@@ -41,6 +43,7 @@ import type {
   VisualizerModel,
   VisualizerNeighbor,
   VisualizerNode,
+  VisualizerOrderSettings,
   VisualizerPort,
   VisualizerRackFaceMode,
   VisualizerRackScale,
@@ -85,6 +88,12 @@ const PYRAMID_COMPONENT_GAP = 120;
 const GROUP_HEADER_HEIGHT = 48;
 const GROUP_GAP = 14;
 const CABLE_FALLBACK_COLOR = "rgb(151 167 183 / 0.5)";
+const DEFAULT_ORDER_SETTINGS: VisualizerOrderSettings = {
+  sections: [],
+  racks: [],
+  groups: [],
+  devicesByGroup: {},
+};
 const DEFAULT_LAYOUT_OPTIONS: VisualizerLayoutOptions = {
   topologyLayout: "grouped",
   looseDevicePlacement: "beside-racks",
@@ -94,6 +103,7 @@ const DEFAULT_LAYOUT_OPTIONS: VisualizerLayoutOptions = {
   shelfLayout: "auto",
   readableLabels: false,
   customNodePositions: {},
+  order: DEFAULT_ORDER_SETTINGS,
 };
 
 const RACK_SINGLE_WIDTH_BY_SCALE: Record<VisualizerRackScale, number> = {
@@ -188,6 +198,7 @@ interface BuildVisualizerInput {
   racks: Rack[];
   rooms: Room[];
   devices: Device[];
+  deviceTypes: DeviceTypeDefinition[];
   ports: Port[];
   portLinks: PortLink[];
   deviceMonitors: DeviceMonitor[];
@@ -212,12 +223,23 @@ export function buildVisualizerModel(
   const layout: VisualizerLayoutOptions = {
     ...DEFAULT_LAYOUT_OPTIONS,
     ...input.layout,
+    order: {
+      ...DEFAULT_ORDER_SETTINGS,
+      ...input.layout?.order,
+      devicesByGroup: {
+        ...input.layout?.order?.devicesByGroup,
+      },
+    },
   };
   if (layout.topologyLayout === "pyramid") {
     return buildPyramidVisualizerModel(input, layout);
   }
   const placeLooseBelow = layout.looseDevicePlacement === "below-racks";
-  const racks = [...input.racks].sort((a, b) => a.name.localeCompare(b.name));
+  const racks = [...input.racks].sort(
+    (a, b) =>
+      compareOrderedIds(layout.order.racks, a.id, b.id) ||
+      a.name.localeCompare(b.name),
+  );
   const roomsById = indexById(input.rooms);
   const deviceById = indexById(input.devices);
   const portById = indexById(input.ports);
@@ -267,6 +289,7 @@ export function buildVisualizerModel(
     looseDeviceRoomById,
     roomsById,
     includeRoomOnlySections: layout.includeRoomOnlySections,
+    order: layout.order,
   });
   const rackSectionRoomIds = new Set(
     rackRoomInputs
@@ -323,7 +346,7 @@ export function buildVisualizerModel(
     const sectionPanels = sectionInput.racks.map((rack, rackIndex) => {
       const rackDevices = input.devices
         .filter((device) => device.rackId === rack.id)
-        .sort(compareRackDevices);
+        .sort((a, b) => compareRackDevices(a, b, input.deviceTypes));
       const rackX =
         rackSectionX +
         RACK_SECTION_PADDING +
@@ -332,6 +355,7 @@ export function buildVisualizerModel(
         rack,
         room: rack.roomId ? roomsById[rack.roomId] : undefined,
         devices: rackDevices,
+        deviceTypes: input.deviceTypes,
         x: rackX,
         y: rackPanelY,
         width: rackPanelWidth,
@@ -365,6 +389,7 @@ export function buildVisualizerModel(
       sectionLooseDevices.length > 0
         ? buildRoomGroups({
             devices: sectionLooseDevices,
+            deviceTypes: input.deviceTypes,
             deviceById,
             racksById,
             roomsById,
@@ -378,6 +403,7 @@ export function buildVisualizerModel(
             vlansById: vlanById,
             monitorsByDeviceId,
             collapsedGroups: input.collapsedGroups,
+            order: layout.order,
             x: looseGroupX,
             y: looseGroupY,
             width: looseGroupWidth,
@@ -450,6 +476,7 @@ export function buildVisualizerModel(
   );
   const roomGroups = buildRoomGroups({
     devices: roomZoneLooseDevices,
+    deviceTypes: input.deviceTypes,
     deviceById,
     racksById,
     roomsById,
@@ -463,6 +490,7 @@ export function buildVisualizerModel(
     vlansById: vlanById,
     monitorsByDeviceId,
     collapsedGroups: input.collapsedGroups,
+    order: layout.order,
     x: roomZoneX + ZONE_PADDING,
     y: ZONE_Y + ZONE_HEADER,
     width: ROOM_ZONE_WIDTH - ZONE_PADDING * 2,
@@ -487,6 +515,9 @@ export function buildVisualizerModel(
 
   const nodesByDeviceId = Object.fromEntries(
     nodes.map((node) => [node.device.id, node]),
+  );
+  const effectiveDeviceTypeByDeviceId = Object.fromEntries(
+    nodes.map((node) => [node.device.id, node.effectiveDeviceType]),
   );
   const snmpVerifiedPortIds = buildSnmpVerifiedPortIds(
     input.deviceMonitors,
@@ -539,6 +570,7 @@ export function buildVisualizerModel(
     },
     nodes,
     nodesByDeviceId,
+    effectiveDeviceTypeByDeviceId,
     cables,
     cableById,
     portsByDeviceId,
@@ -547,7 +579,7 @@ export function buildVisualizerModel(
     deviceById,
     vlanById,
     directNeighborsByDeviceId,
-    deviceTypes: buildDeviceTypeCounts(input.devices),
+    deviceTypes: buildDeviceTypeCounts(input.devices, input.deviceTypes),
     cableTypes: Array.from(
       new Set(input.portLinks.map((link) => link.cableType || "Unknown")),
     ).sort((a, b) => NATURAL_COLLATOR.compare(a, b)),
@@ -557,8 +589,10 @@ export function buildVisualizerModel(
       crossZone: cables.filter((cable) => cable.crossZone).length,
       patchPanel: cables.filter(
         (cable) =>
-          cable.fromDevice?.deviceType === "patch_panel" ||
-          cable.toDevice?.deviceType === "patch_panel",
+          deviceBehaviorType(cable.fromDevice?.deviceType, input.deviceTypes) ===
+            "patch_panel" ||
+          deviceBehaviorType(cable.toDevice?.deviceType, input.deviceTypes) ===
+            "patch_panel",
       ).length,
     },
   };
@@ -623,9 +657,18 @@ function buildPyramidVisualizerModel(
   const contentY = PYRAMID_ZONE_Y + ZONE_HEADER + 42;
   let maxBottom = contentY + nodeHeight;
 
-  const components = buildPyramidComponents(input.devices, adjacency);
+  const components = buildPyramidComponents(
+    input.devices,
+    adjacency,
+    input.deviceTypes,
+  );
   for (const component of components) {
-    const layers = buildPyramidLayers(component, adjacency, deviceById);
+    const layers = buildPyramidLayers(
+      component,
+      adjacency,
+      deviceById,
+      input.deviceTypes,
+    );
     const layerWidths = layers.map(
       (layer) =>
         layer.length * nodeWidth + Math.max(0, layer.length - 1) * nodeGapX,
@@ -638,7 +681,12 @@ function buildPyramidVisualizerModel(
 
     layers.forEach((layer, depth) => {
       const sortedLayer = [...layer].sort((a, b) =>
-        comparePyramidDevices(deviceById[a], deviceById[b], adjacency),
+        comparePyramidDevices(
+          deviceById[a],
+          deviceById[b],
+          adjacency,
+          input.deviceTypes,
+        ),
       );
       const layerWidth =
         sortedLayer.length * nodeWidth +
@@ -663,6 +711,7 @@ function buildPyramidVisualizerModel(
             roomId: room?.id ?? null,
             roomName: room?.name ?? "Unassigned room",
             ports: portsByDeviceId[device.id] ?? [],
+            deviceTypes: input.deviceTypes,
             portLinkByPortId,
             virtualSwitchById,
             discoveredByDeviceId,
@@ -686,6 +735,9 @@ function buildPyramidVisualizerModel(
 
   const nodesByDeviceId = Object.fromEntries(
     nodes.map((node) => [node.device.id, node]),
+  );
+  const effectiveDeviceTypeByDeviceId = Object.fromEntries(
+    nodes.map((node) => [node.device.id, node.effectiveDeviceType]),
   );
   const snmpVerifiedPortIds = buildSnmpVerifiedPortIds(
     input.deviceMonitors,
@@ -735,6 +787,7 @@ function buildPyramidVisualizerModel(
     },
     nodes,
     nodesByDeviceId,
+    effectiveDeviceTypeByDeviceId,
     cables,
     cableById,
     portsByDeviceId,
@@ -743,7 +796,7 @@ function buildPyramidVisualizerModel(
     deviceById,
     vlanById,
     directNeighborsByDeviceId,
-    deviceTypes: buildDeviceTypeCounts(input.devices),
+    deviceTypes: buildDeviceTypeCounts(input.devices, input.deviceTypes),
     cableTypes: Array.from(
       new Set(input.portLinks.map((link) => link.cableType || "Unknown")),
     ).sort((a, b) => NATURAL_COLLATOR.compare(a, b)),
@@ -753,8 +806,10 @@ function buildPyramidVisualizerModel(
       crossZone: cables.filter((cable) => cable.crossZone).length,
       patchPanel: cables.filter(
         (cable) =>
-          cable.fromDevice?.deviceType === "patch_panel" ||
-          cable.toDevice?.deviceType === "patch_panel",
+          deviceBehaviorType(cable.fromDevice?.deviceType, input.deviceTypes) ===
+            "patch_panel" ||
+          deviceBehaviorType(cable.toDevice?.deviceType, input.deviceTypes) ===
+            "patch_panel",
       ).length,
     },
   };
@@ -764,6 +819,7 @@ function buildRackPanel(input: {
   rack: Rack;
   room?: Room;
   devices: Device[];
+  deviceTypes: DeviceTypeDefinition[];
   x: number;
   y: number;
   width: number;
@@ -878,6 +934,7 @@ function buildRackPanel(input: {
       : bodyX + 32;
     return createNode({
       device,
+      deviceTypes: input.deviceTypes,
       x: nodeX,
       y: top + 2,
       width: useDualFaceLayout ? faceNodeWidth : mountedNodeWidth,
@@ -908,7 +965,7 @@ function buildRackPanel(input: {
     if (!parentBounds || !parentNode) continue;
     const gap = input.readableLabels ? 8 : 4;
     const headerReserve =
-      input.readableLabels && parentNode.device.deviceType === "rack_shelf"
+      input.readableLabels && parentNode.effectiveDeviceType === "rack_shelf"
         ? 34
         : 4;
     const availableWidth = parentNode.width - (input.readableLabels ? 18 : 12);
@@ -979,6 +1036,7 @@ function buildRackPanel(input: {
       nodes.push(
         createNode({
           device,
+          deviceTypes: input.deviceTypes,
           x: startX + col * (childWidth + gap),
           y: shelfContentTop + rowOffset,
           width: childWidth,
@@ -1141,6 +1199,7 @@ function buildRackRoomInputs(input: {
   looseDeviceRoomById: Map<string, Room | undefined>;
   roomsById: Record<string, Room>;
   includeRoomOnlySections: boolean;
+  order: VisualizerOrderSettings;
 }) {
   const groups = new Map<
     string,
@@ -1186,13 +1245,26 @@ function buildRackRoomInputs(input: {
       });
     }
   }
-  return Array.from(groups.values()).sort(
-    (a, b) => a.name.localeCompare(b.name) || b.racks.length - a.racks.length,
-  );
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      racks: [...group.racks].sort(
+        (a, b) =>
+          compareOrderedIds(input.order.racks, a.id, b.id) ||
+          a.name.localeCompare(b.name),
+      ),
+    }))
+    .sort(
+      (a, b) =>
+        compareOrderedIds(input.order.sections, a.id, b.id) ||
+        a.name.localeCompare(b.name) ||
+        b.racks.length - a.racks.length,
+    );
 }
 
 function buildRoomGroups(input: {
   devices: Device[];
+  deviceTypes: DeviceTypeDefinition[];
   deviceById: Record<string, Device>;
   racksById: Record<string, Rack>;
   roomsById: Record<string, Room>;
@@ -1206,6 +1278,7 @@ function buildRoomGroups(input: {
   vlansById: Record<string, Vlan>;
   monitorsByDeviceId: Record<string, DeviceMonitor[]>;
   collapsedGroups: Set<string>;
+  order: VisualizerOrderSettings;
   x: number;
   y: number;
   width: number;
@@ -1232,7 +1305,11 @@ function buildRoomGroups(input: {
     );
     const roomKey = room ? `room:${room.id}` : "room:unassigned";
     const roomPrefix = room ? room.name : "Unassigned";
-    if (isWirelessClientDevice(device)) {
+    const effectiveDeviceType = deviceBehaviorType(
+      device.deviceType,
+      input.deviceTypes,
+    );
+    if (isWirelessClientDevice(device, input.deviceTypes)) {
       const parent = device.parentDeviceId
         ? input.deviceById[device.parentDeviceId]
         : undefined;
@@ -1259,7 +1336,7 @@ function buildRoomGroups(input: {
       continue;
     }
 
-    if (isVirtualInventoryDevice(device)) {
+    if (isVirtualInventoryDevice(device, input.deviceTypes)) {
       const parent = device.parentDeviceId
         ? input.deviceById[device.parentDeviceId]
         : undefined;
@@ -1291,7 +1368,7 @@ function buildRoomGroups(input: {
       : null;
     const key = subnet
       ? `${roomKey}:subnet:${subnet.id}`
-      : `${roomKey}:type:${device.deviceType}`;
+      : `${roomKey}:type:${effectiveDeviceType}`;
     const existing = groups.get(key);
     if (existing) {
       existing.devices.push(device);
@@ -1308,11 +1385,11 @@ function buildRoomGroups(input: {
       });
     } else {
       groups.set(key, {
-        name: `${roomPrefix} / ${DEVICE_TYPE_LABEL[device.deviceType]}`,
+        name: `${roomPrefix} / ${typeLabel(effectiveDeviceType)}`,
         subtitle: room
           ? (room.location ?? "Room inventory")
           : "Loose / unassigned inventory",
-        color: typeColor(device.deviceType),
+        color: typeColor(effectiveDeviceType),
         groupType: "device-type",
         devices: [device],
         room,
@@ -1323,12 +1400,14 @@ function buildRoomGroups(input: {
   let y = input.y;
   return Array.from(groups.entries())
     .sort(
-      ([, a], [, b]) =>
+      ([aId, a], [bId, b]) =>
+        compareOrderedIds(input.order.groups, aId, bId) ||
         b.devices.length - a.devices.length ||
         NATURAL_COLLATOR.compare(a.name, b.name),
     )
     .map(([id, group]) => {
       const collapsed = input.collapsedGroups.has(id);
+      const deviceOrder = input.order.devicesByGroup[id] ?? [];
       const sortedDevices = [...group.devices].sort((a, b) => {
         const aHealth = getDeviceHealth(
           a,
@@ -1339,6 +1418,7 @@ function buildRoomGroups(input: {
           input.monitorsByDeviceId[b.id] ?? [],
         );
         return (
+          compareOrderedIds(deviceOrder, a.id, b.id) ||
           healthSort(aHealth) - healthSort(bHealth) || compareDeviceName(a, b)
         );
       });
@@ -1349,6 +1429,7 @@ function buildRoomGroups(input: {
         : sortedDevices.map((device, index) =>
             createNode({
               device,
+              deviceTypes: input.deviceTypes,
               x: input.x + 22,
               y: groupTop + GROUP_HEADER_HEIGHT + index * ROOM_ROW_HEIGHT,
               width: ROOM_NODE_WIDTH,
@@ -1404,18 +1485,32 @@ function buildRoomGroups(input: {
     });
 }
 
-function isVirtualInventoryDevice(device: Device) {
+function isVirtualInventoryDevice(
+  device: Device,
+  deviceTypes: DeviceTypeDefinition[],
+) {
+  const effectiveDeviceType = deviceBehaviorType(
+    device.deviceType,
+    deviceTypes,
+  );
   return (
     device.placement === "virtual" ||
-    device.deviceType === "vm" ||
-    device.deviceType === "container"
+    effectiveDeviceType === "vm" ||
+    effectiveDeviceType === "container"
   );
 }
 
-function isWirelessClientDevice(device: Device) {
+function isWirelessClientDevice(
+  device: Device,
+  deviceTypes: DeviceTypeDefinition[],
+) {
+  const effectiveDeviceType = deviceBehaviorType(
+    device.deviceType,
+    deviceTypes,
+  );
   return (
     device.placement === "wireless" &&
-    device.deviceType !== "ap" &&
+    effectiveDeviceType !== "ap" &&
     Boolean(device.parentDeviceId)
   );
 }
@@ -1441,6 +1536,7 @@ function roomForDevice(
 
 function createNode(input: {
   device: Device;
+  deviceTypes: DeviceTypeDefinition[];
   x: number;
   y: number;
   width: number;
@@ -1466,15 +1562,20 @@ function createNode(input: {
       : undefined);
   const subnet = findSubnet(input.device.managementIp, input.subnetRanges);
   const linked = input.ports.filter((port) => input.portLinkByPortId[port.id]);
+  const effectiveDeviceType = deviceBehaviorType(
+    input.device.deviceType,
+    input.deviceTypes,
+  );
   const baseNode: VisualizerNode = {
     device: input.device,
+    effectiveDeviceType,
     x: input.x,
     y: input.y,
     width: input.width,
     height: input.height,
     health: input.health,
-    typeColor: typeColor(input.device.deviceType),
-    stripeColor: typeColor(input.device.deviceType),
+    typeColor: typeColor(effectiveDeviceType),
+    stripeColor: typeColor(effectiveDeviceType),
     zoneId: input.zoneId,
     rackId: input.rackId,
     rackName: input.rackName,
@@ -1680,12 +1781,13 @@ function buildDeviceAdjacency(
 function buildPyramidComponents(
   devices: Device[],
   adjacency: Record<string, Set<string>>,
+  deviceTypes: DeviceTypeDefinition[],
 ) {
   const visited = new Set<string>();
   const linkedComponents: string[][] = [];
   const unlinked: string[] = [];
   const sortedDeviceIds = [...devices]
-    .sort((a, b) => comparePyramidDevices(a, b, adjacency))
+    .sort((a, b) => comparePyramidDevices(a, b, adjacency, deviceTypes))
     .map((device) => device.id);
 
   for (const deviceId of sortedDeviceIds) {
@@ -1734,13 +1836,14 @@ function buildPyramidLayers(
   component: string[],
   adjacency: Record<string, Set<string>>,
   deviceById: Record<string, Device>,
+  deviceTypes: DeviceTypeDefinition[],
 ) {
   if (component.every((deviceId) => (adjacency[deviceId]?.size ?? 0) === 0)) {
     return [component];
   }
 
   const componentSet = new Set(component);
-  const root = pickPyramidRoot(component, adjacency, deviceById);
+  const root = pickPyramidRoot(component, adjacency, deviceById, deviceTypes);
   const layers: string[][] = [];
   const visited = new Set([root]);
   const queue: Array<{ id: string; depth: number }> = [{ id: root, depth: 0 }];
@@ -1751,7 +1854,12 @@ function buildPyramidLayers(
     const neighbors = [...(adjacency[current.id] ?? [])]
       .filter((neighbor) => componentSet.has(neighbor))
       .sort((a, b) =>
-        comparePyramidDevices(deviceById[a], deviceById[b], adjacency),
+        comparePyramidDevices(
+          deviceById[a],
+          deviceById[b],
+          adjacency,
+          deviceTypes,
+        ),
       );
     for (const neighbor of neighbors) {
       if (visited.has(neighbor)) continue;
@@ -1772,9 +1880,15 @@ function pickPyramidRoot(
   component: string[],
   adjacency: Record<string, Set<string>>,
   deviceById: Record<string, Device>,
+  deviceTypes: DeviceTypeDefinition[],
 ) {
   return [...component].sort((a, b) =>
-    comparePyramidRootDevices(deviceById[a], deviceById[b], adjacency),
+    comparePyramidRootDevices(
+      deviceById[a],
+      deviceById[b],
+      adjacency,
+      deviceTypes,
+    ),
   )[0];
 }
 
@@ -1782,14 +1896,16 @@ function comparePyramidRootDevices(
   a: Device | undefined,
   b: Device | undefined,
   adjacency: Record<string, Set<string>>,
+  deviceTypes: DeviceTypeDefinition[],
 ) {
   if (!a && !b) return 0;
   if (!a) return 1;
   if (!b) return -1;
   const priority =
-    pyramidRootPriority(b) - pyramidRootPriority(a) ||
+    pyramidRootPriority(b, deviceTypes) - pyramidRootPriority(a, deviceTypes) ||
     (adjacency[b.id]?.size ?? 0) - (adjacency[a.id]?.size ?? 0) ||
-    typeOrder(a.deviceType) - typeOrder(b.deviceType);
+    typeOrder(deviceBehaviorType(a.deviceType, deviceTypes)) -
+      typeOrder(deviceBehaviorType(b.deviceType, deviceTypes));
   return priority || compareDeviceName(a, b);
 }
 
@@ -1797,19 +1913,24 @@ function comparePyramidDevices(
   a: Device | undefined,
   b: Device | undefined,
   adjacency: Record<string, Set<string>>,
+  deviceTypes: DeviceTypeDefinition[],
 ) {
   if (!a && !b) return 0;
   if (!a) return 1;
   if (!b) return -1;
   return (
-    typeOrder(a.deviceType) - typeOrder(b.deviceType) ||
+    typeOrder(deviceBehaviorType(a.deviceType, deviceTypes)) -
+      typeOrder(deviceBehaviorType(b.deviceType, deviceTypes)) ||
     (adjacency[b.id]?.size ?? 0) - (adjacency[a.id]?.size ?? 0) ||
     compareDeviceName(a, b)
   );
 }
 
-function pyramidRootPriority(device: Device) {
-  switch (device.deviceType) {
+function pyramidRootPriority(
+  device: Device,
+  deviceTypes: DeviceTypeDefinition[],
+) {
+  switch (deviceBehaviorType(device.deviceType, deviceTypes)) {
     case "firewall":
       return 90;
     case "router":
@@ -1911,7 +2032,8 @@ function buildTraceAdjacency(model: VisualizerModel) {
   }
 
   for (const device of Object.values(model.deviceById)) {
-    if (device.deviceType !== "patch_panel") continue;
+    if (model.effectiveDeviceTypeByDeviceId[device.id] !== "patch_panel")
+      continue;
     const grouped = groupBy(
       model.portsByDeviceId[device.id] ?? [],
       (port) => `${port.kind}:${port.name}`,
@@ -2549,6 +2671,13 @@ export function typeColor(type: DeviceType) {
   return `var(--type-${normalizeDeviceTypeId(type).replaceAll("_", "-")}, var(--type-other))`;
 }
 
+function deviceBehaviorType(
+  type: DeviceType | null | undefined,
+  deviceTypes: DeviceTypeDefinition[],
+) {
+  return deviceTypeBase(type, deviceTypes);
+}
+
 export function typeLabel(type: DeviceType) {
   return DEVICE_TYPE_LABEL[type] ?? (defaultDeviceTypeLabel(type) || "Other");
 }
@@ -2558,10 +2687,14 @@ export function typeOrder(type: DeviceType) {
   return index === -1 ? DEVICE_TYPE_ORDER.length : index;
 }
 
-function buildDeviceTypeCounts(devices: Device[]) {
+function buildDeviceTypeCounts(
+  devices: Device[],
+  deviceTypes: DeviceTypeDefinition[],
+) {
   const counts = new Map<DeviceType, number>();
   for (const device of devices) {
-    counts.set(device.deviceType, (counts.get(device.deviceType) ?? 0) + 1);
+    const effectiveType = deviceBehaviorType(device.deviceType, deviceTypes);
+    counts.set(effectiveType, (counts.get(effectiveType) ?? 0) + 1);
   }
   const ordered = DEVICE_TYPE_ORDER.filter((type) => counts.has(type));
   const custom = [...counts.keys()]
@@ -2632,10 +2765,28 @@ function comparePorts(a: Port, b: Port) {
   return a.position - b.position || NATURAL_COLLATOR.compare(a.name, b.name);
 }
 
-function compareRackDevices(a: Device, b: Device) {
+function compareOrderedIds(order: string[], aId: string, bId: string) {
+  const aIndex = order.indexOf(aId);
+  const bIndex = order.indexOf(bId);
+  if (aIndex === -1 && bIndex === -1) return 0;
+  if (aIndex === -1) return 1;
+  if (bIndex === -1) return -1;
+  return aIndex - bIndex;
+}
+
+function compareRackDevices(
+  a: Device,
+  b: Device,
+  deviceTypes: DeviceTypeDefinition[],
+) {
   const aStart = a.startU ?? 0;
   const bStart = b.startU ?? 0;
-  return bStart - aStart || compareDeviceName(a, b);
+  return (
+    bStart - aStart ||
+    typeOrder(deviceBehaviorType(a.deviceType, deviceTypes)) -
+      typeOrder(deviceBehaviorType(b.deviceType, deviceTypes)) ||
+    compareDeviceName(a, b)
+  );
 }
 
 function compareDeviceName(a: Device, b: Device) {

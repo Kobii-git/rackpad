@@ -529,16 +529,26 @@ export function VisualizerCanvas({
   }
 
   function nodeMatchesFilter(node: VisualizerNode) {
-    return typeFilters.size === 0 || typeFilters.has(node.device.deviceType);
+    return typeFilters.size === 0 || typeFilters.has(node.effectiveDeviceType);
   }
 
   function cableMatchesFilter(cable: VisualizerCable) {
     return (
       typeFilters.size === 0 ||
       Boolean(
-        cable.fromDevice && typeFilters.has(cable.fromDevice.deviceType),
+        cable.fromDevice &&
+          typeFilters.has(
+            model.effectiveDeviceTypeByDeviceId[cable.fromDevice.id] ??
+              cable.fromDevice.deviceType,
+          ),
       ) ||
-      Boolean(cable.toDevice && typeFilters.has(cable.toDevice.deviceType))
+      Boolean(
+        cable.toDevice &&
+          typeFilters.has(
+            model.effectiveDeviceTypeByDeviceId[cable.toDevice.id] ??
+              cable.toDevice.deviceType,
+          ),
+      )
     );
   }
 

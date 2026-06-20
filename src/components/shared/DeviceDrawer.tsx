@@ -22,7 +22,11 @@ import {
 } from "@/lib/store";
 import { useI18n } from "@/i18n";
 import type { TranslationKey } from "@/i18n/translations";
-import { deviceTypeLabel } from "@/lib/device-types";
+import {
+  BUILT_IN_DEVICE_TYPES,
+  deviceTypeLabel,
+  deviceTypeMatchesTemplate,
+} from "@/lib/device-types";
 import { statusLabel } from "@/lib/utils";
 import type {
   Device,
@@ -196,6 +200,7 @@ export function DeviceDrawer({
   const [addingType, setAddingType] = useState(false);
   const [creatingType, setCreatingType] = useState(false);
   const [customTypeLabel, setCustomTypeLabel] = useState("");
+  const [customTypeParentType, setCustomTypeParentType] = useState("other");
   const [shelfForm, setShelfForm] = useState<ShelfFormState>(() =>
     blankShelfForm(defaultRackId),
   );
@@ -213,6 +218,7 @@ export function DeviceDrawer({
       setAddingType(false);
       setCreatingType(false);
       setCustomTypeLabel("");
+      setCustomTypeParentType("other");
       setShelfForm(blankShelfForm(defaultRackId));
       setSelectedDiscoveryId("");
     }
@@ -231,6 +237,13 @@ export function DeviceDrawer({
       },
     ];
   }, [deviceTypes, form.deviceType]);
+  const builtInDeviceTypes = useMemo(
+    () => {
+      const builtIns = deviceTypes.filter((entry) => entry.builtIn);
+      return builtIns.length > 0 ? builtIns : BUILT_IN_DEVICE_TYPES;
+    },
+    [deviceTypes],
+  );
 
   const devicePortCount = useMemo(
     () =>
@@ -245,9 +258,13 @@ export function DeviceDrawer({
   const compatibleTemplates = useMemo(
     () =>
       portTemplates.filter((template) =>
-        template.deviceTypes.includes(form.deviceType),
+        deviceTypeMatchesTemplate(
+          form.deviceType,
+          template.deviceTypes,
+          deviceTypes,
+        ),
       ),
-    [form.deviceType, portTemplates],
+    [deviceTypes, form.deviceType, portTemplates],
   );
   const isRackMounted = form.placement === "rack";
   const isShelfMounted = form.placement === "shelf";
@@ -516,9 +533,13 @@ export function DeviceDrawer({
 
     setCreatingType(true);
     try {
-      const created = await createDeviceTypeRecord({ label });
+      const created = await createDeviceTypeRecord({
+        label,
+        parentType: customTypeParentType || undefined,
+      });
       set("deviceType", created.id);
       setCustomTypeLabel("");
+      setCustomTypeParentType("other");
       setAddingType(false);
     } catch (err) {
       setError(
@@ -783,7 +804,7 @@ export function DeviceDrawer({
                       </Button>
                     </div>
                     {addingType && (
-                      <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+                      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(8rem,0.7fr)_auto] gap-2">
                         <Input
                           value={customTypeLabel}
                           onChange={(event) =>
@@ -791,6 +812,16 @@ export function DeviceDrawer({
                           }
                           placeholder="e.g. Camera"
                         />
+                        <Select
+                          value={customTypeParentType}
+                          onChange={setCustomTypeParentType}
+                        >
+                          {builtInDeviceTypes.map((type) => (
+                            <option key={type.id} value={type.id}>
+                              {type.label}
+                            </option>
+                          ))}
+                        </Select>
                         <Button
                           type="button"
                           size="sm"

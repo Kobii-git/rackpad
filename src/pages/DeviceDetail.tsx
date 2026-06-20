@@ -78,6 +78,7 @@ import {
 } from "lucide-react";
 import { formatPortLabel, relativeTime, statusLabel } from "@/lib/utils";
 import { formatDeviceAddress } from "@/lib/network-labels";
+import { deviceTypeMatchesTemplate } from "@/lib/device-types";
 import {
   defaultImageLabel,
   imageSizeLimitLabel,
@@ -233,6 +234,7 @@ export default function DeviceDetail() {
   const deviceImages = useStore((s) => s.deviceImages);
   const deviceServices = useStore((s) => s.deviceServices);
   const portTemplates = useStore((s) => s.portTemplates);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const documentationPages = useStore((s) => s.documentationPages);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -580,10 +582,14 @@ export default function DeviceDetail() {
     () =>
       device
         ? portTemplates.filter((template) =>
-            template.deviceTypes.includes(device.deviceType),
+            deviceTypeMatchesTemplate(
+              device.deviceType,
+              template.deviceTypes,
+              deviceTypes,
+            ),
           )
         : [],
-    [device, portTemplates],
+    [device, deviceTypes, portTemplates],
   );
   const hardwareMeta = [device?.manufacturer, device?.model]
     .filter(Boolean)
