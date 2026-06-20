@@ -8,6 +8,21 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.5] - 2026-06-20
+
+### Fixed
+
+- Updated Nodemailer to 9.0.1 to resolve GHSA-p6gq-j5cr-w38f in Trivy
+  filesystem and Docker image scans.
+
+### Test notes
+
+- Verify SMTP/email alerts still deliver with the configured host, port,
+  security mode, credentials, sender, and recipients.
+- Verified `npm audit --audit-level=low`, `npm run check:i18n`,
+  `npm run build`, `npm run lint`, `npm run test:server`, and
+  `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.4] - 2026-06-20
 
 ### Added
