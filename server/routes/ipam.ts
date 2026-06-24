@@ -16,6 +16,7 @@ import {
   optionalStringArray,
   optionalEnum,
   requiredEnum,
+  requiredInteger,
   requiredString,
   ValidationError,
 } from '../lib/validation.js'
@@ -33,6 +34,14 @@ const HOST_ASSIGNMENT_TYPES = new Set<string>(['device', 'interface', 'vm', 'con
 
 function parseScope(row: Record<string, unknown>) {
   return parseRow(row, ['dnsServers'])
+}
+
+function parseSubnet(row: Record<string, unknown>) {
+  return parseRow(row, ['dnsServers'])
+}
+
+function stringifyDnsServers(value: string[] | null | undefined) {
+  return value ? JSON.stringify(value.map((entry) => ensureIpv4(entry, 'dnsServers'))) : null
 }
 
 function ipv4ToInt(ipAddress: string) {
@@ -55,6 +64,18 @@ function subnetContainsIp(cidr: string, ipAddress: string) {
 function ipInRange(ipAddress: string, startIp: string, endIp: string) {
   const target = ipv4ToInt(ipAddress)
   return target >= ipv4ToInt(startIp) && target <= ipv4ToInt(endIp)
+}
+
+function ensureIpRange(startIp: string, endIp: string, label: string) {
+  if (ipv4ToInt(startIp) > ipv4ToInt(endIp)) {
+    throw new ValidationError(`${label} start IP must be before or equal to end IP.`)
+  }
+}
+
+function ensureIpBelongsToSubnet(cidr: string, ipAddress: string, key: string) {
+  if (!subnetContainsIp(cidr, ipAddress)) {
+    throw new ValidationError(`${key} must belong to subnet ${cidr}.`)
+  }
 }
 
 function assertAssignmentSubnet(subnetId: string, ipAddress: string) {
@@ -102,6 +123,23 @@ function ipZonesForIp(subnetId: string, ipAddress: string) {
 }
 
 function dhcpTechnicalRole(subnetId: string, ipAddress: string) {
+  const subnet = db.prepare('SELECT name, gateway, dnsServers FROM subnets WHERE id = ?').get(subnetId) as
+    | { name: string; gateway: string | null; dnsServers: string | null }
+    | undefined
+  if (subnet?.gateway === ipAddress) {
+    return { role: 'gateway', reason: `${subnet.name} gateway` }
+  }
+  if (subnet?.dnsServers) {
+    try {
+      const dnsServers = JSON.parse(subnet.dnsServers) as unknown
+      if (Array.isArray(dnsServers) && dnsServers.some((entry) => String(entry) === ipAddress)) {
+        return { role: 'dns', reason: `${subnet.name} DNS server` }
+      }
+    } catch {
+      // Ignore malformed legacy DNS JSON.
+    }
+  }
+
   const scopes = db.prepare('SELECT name, gateway, dnsServers FROM dhcpScopes WHERE subnetId = ?').all(subnetId) as Array<{
     name: string
     gateway: string | null
@@ -214,13 +252,14 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const { sql, params } = appendLabFilter('SELECT * FROM subnets', [], filter.labIds)
-    return db.prepare(`${sql} ORDER BY cidr`).all(...params)
+    return (db.prepare(`${sql} ORDER BY cidr`).all(...params) as Record<string, unknown>[]).map(parseSubnet)
   })
 
   app.get<{ Params: { id: string } }>('/subnets/:id', async (req, reply) => {
     const row = db.prepare('SELECT * FROM subnets WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
     if (!assertLabReadFromRow(req, reply, row)) return
-    return row
+    if (!row) return
+    return parseSubnet(row)
   })
 
   app.post('/subnets', async (req, reply) => {
@@ -231,11 +270,23 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const cidr = ensureCidr(requiredString(body, 'cidr', { maxLength: 40 }))
     const name = requiredString(body, 'name', { maxLength: 120 })
     const description = optionalString(body, 'description', { maxLength: 500 })
+    const gateway = optionalString(body, 'gateway', { maxLength: 40 })
+    const dnsServers = optionalStringArray(body, 'dnsServers', { maxItems: 5 })
     const vlanId = optionalString(body, 'vlanId', { maxLength: 80 })
     db.prepare(
-      'INSERT INTO subnets (id, labId, cidr, name, description, vlanId) VALUES (?,?,?,?,?,?)'
-    ).run(id, labId, cidr, name, description ?? null, vlanId ?? null)
-    return reply.status(201).send(db.prepare('SELECT * FROM subnets WHERE id = ?').get(id))
+      'INSERT INTO subnets (id, labId, cidr, name, description, gateway, dnsServers, vlanId) VALUES (?,?,?,?,?,?,?,?)'
+    ).run(
+      id,
+      labId,
+      cidr,
+      name,
+      description ?? null,
+      gateway ? ensureIpv4(gateway, 'gateway') : null,
+      stringifyDnsServers(dnsServers),
+      vlanId ?? null,
+    )
+    const row = db.prepare('SELECT * FROM subnets WHERE id = ?').get(id) as Record<string, unknown>
+    return reply.status(201).send(parseSubnet(row))
   })
 
   app.patch<{ Params: { id: string } }>('/subnets/:id', async (req, reply) => {
@@ -248,6 +299,8 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const cidr = optionalString(body, 'cidr', { maxLength: 40 })
     const name = optionalString(body, 'name', { maxLength: 120 })
     const description = optionalString(body, 'description', { maxLength: 500 })
+    const gateway = optionalString(body, 'gateway', { maxLength: 40 })
+    const dnsServers = optionalStringArray(body, 'dnsServers', { maxItems: 5 })
     const vlanId = optionalString(body, 'vlanId', { maxLength: 80 })
 
     if (cidr !== undefined) {
@@ -258,12 +311,15 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     }
     if (name !== undefined) { updates.push('name = ?'); values.push(name) }
     if (description !== undefined) { updates.push('description = ?'); values.push(description) }
+    if (gateway !== undefined) { updates.push('gateway = ?'); values.push(gateway ? ensureIpv4(gateway, 'gateway') : null) }
+    if (dnsServers !== undefined) { updates.push('dnsServers = ?'); values.push(stringifyDnsServers(dnsServers)) }
     if (vlanId !== undefined) { updates.push('vlanId = ?'); values.push(vlanId) }
 
     if (updates.length === 0) return reply.status(400).send({ error: 'No valid fields' })
     values.push(req.params.id)
     db.prepare(`UPDATE subnets SET ${updates.join(', ')} WHERE id = ?`).run(...values)
-    return db.prepare('SELECT * FROM subnets WHERE id = ?').get(req.params.id)
+    const row = db.prepare('SELECT * FROM subnets WHERE id = ?').get(req.params.id) as Record<string, unknown>
+    return parseSubnet(row)
   })
 
   app.delete<{ Params: { id: string } }>('/subnets/:id', async (req, reply) => {
@@ -271,6 +327,133 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     if (!assertLabWriteFromRow(req, reply, row)) return
     db.prepare('DELETE FROM subnets WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
+  })
+
+  app.post('/networks', async (req, reply) => {
+    const body = asObject(req.body)
+    const labId = requiredString(body, 'labId', { maxLength: 80 })
+    if (!assertLabWrite(req, reply, labId)) return
+
+    const vlanBody = body.vlan == null ? null : asObject(body.vlan)
+    const subnetBody = asObject(body.subnet)
+    const dhcpBody = body.dhcpScope == null ? null : asObject(body.dhcpScope)
+    const zoneBodies = body.zones == null ? [] : body.zones
+    if (!Array.isArray(zoneBodies)) {
+      throw new ValidationError('zones must be an array.')
+    }
+
+    const vlanDraft = vlanBody
+      ? {
+          id: optionalString(vlanBody, 'id', { maxLength: 80 }) ?? createId('v'),
+          vlanId: requiredInteger(vlanBody, 'vlanId', { min: 1, max: 4094 }),
+          name: requiredString(vlanBody, 'name', { maxLength: 120 }),
+          description: optionalString(vlanBody, 'description', { maxLength: 500 }),
+          color: optionalString(vlanBody, 'color', { maxLength: 30 }),
+        }
+      : null
+
+    const subnetDraft = {
+      id: optionalString(subnetBody, 'id', { maxLength: 80 }) ?? createId('s'),
+      cidr: ensureCidr(requiredString(subnetBody, 'cidr', { maxLength: 40 })),
+      name: requiredString(subnetBody, 'name', { maxLength: 120 }),
+      description: optionalString(subnetBody, 'description', { maxLength: 500 }),
+      gateway: optionalString(subnetBody, 'gateway', { maxLength: 40 }),
+      dnsServers: optionalStringArray(subnetBody, 'dnsServers', { maxItems: 5 }),
+    }
+    const subnetGateway = subnetDraft.gateway ? ensureIpv4(subnetDraft.gateway, 'gateway') : null
+
+    const dhcpDraft = dhcpBody
+      ? {
+          id: optionalString(dhcpBody, 'id', { maxLength: 80 }) ?? createId('sc'),
+          name: requiredString(dhcpBody, 'name', { maxLength: 120 }),
+          startIp: ensureIpv4(requiredString(dhcpBody, 'startIp', { maxLength: 40 }), 'startIp'),
+          endIp: ensureIpv4(requiredString(dhcpBody, 'endIp', { maxLength: 40 }), 'endIp'),
+          gateway: optionalString(dhcpBody, 'gateway', { maxLength: 40 }),
+          dnsServers: optionalStringArray(dhcpBody, 'dnsServers', { maxItems: 5 }),
+          description: optionalString(dhcpBody, 'description', { maxLength: 500 }),
+        }
+      : null
+    if (dhcpDraft) {
+      ensureIpRange(dhcpDraft.startIp, dhcpDraft.endIp, 'DHCP')
+      ensureIpBelongsToSubnet(subnetDraft.cidr, dhcpDraft.startIp, 'DHCP start IP')
+      ensureIpBelongsToSubnet(subnetDraft.cidr, dhcpDraft.endIp, 'DHCP end IP')
+    }
+
+    const zoneDrafts = zoneBodies.map((entry) => {
+      const zoneBody = asObject(entry)
+      const startIp = ensureIpv4(requiredString(zoneBody, 'startIp', { maxLength: 40 }), 'startIp')
+      const endIp = ensureIpv4(requiredString(zoneBody, 'endIp', { maxLength: 40 }), 'endIp')
+      ensureIpRange(startIp, endIp, 'IP zone')
+      ensureIpBelongsToSubnet(subnetDraft.cidr, startIp, 'Zone start IP')
+      ensureIpBelongsToSubnet(subnetDraft.cidr, endIp, 'Zone end IP')
+      return {
+        id: optionalString(zoneBody, 'id', { maxLength: 80 }) ?? createId('iz'),
+        kind: requiredEnum(zoneBody, 'kind', IP_ZONE_KINDS),
+        startIp,
+        endIp,
+        description: optionalString(zoneBody, 'description', { maxLength: 500 }),
+      }
+    })
+
+    const createNetwork = db.transaction(() => {
+      let vlan: Record<string, unknown> | null = null
+      if (vlanDraft) {
+        db.prepare(
+          'INSERT INTO vlans (id, labId, vlanId, name, description, color) VALUES (?,?,?,?,?,?)',
+        ).run(
+          vlanDraft.id,
+          labId,
+          vlanDraft.vlanId,
+          vlanDraft.name,
+          vlanDraft.description ?? null,
+          vlanDraft.color ?? null,
+        )
+        vlan = db.prepare('SELECT * FROM vlans WHERE id = ?').get(vlanDraft.id) as Record<string, unknown>
+      }
+
+      db.prepare(
+        'INSERT INTO subnets (id, labId, cidr, name, description, gateway, dnsServers, vlanId) VALUES (?,?,?,?,?,?,?,?)',
+      ).run(
+        subnetDraft.id,
+        labId,
+        subnetDraft.cidr,
+        subnetDraft.name,
+        subnetDraft.description ?? null,
+        subnetGateway,
+        stringifyDnsServers(subnetDraft.dnsServers),
+        vlanDraft?.id ?? null,
+      )
+      const subnet = parseSubnet(db.prepare('SELECT * FROM subnets WHERE id = ?').get(subnetDraft.id) as Record<string, unknown>)
+
+      let dhcpScope: Record<string, unknown> | null = null
+      if (dhcpDraft) {
+        const scopeGateway = dhcpDraft.gateway ? ensureIpv4(dhcpDraft.gateway, 'gateway') : null
+        db.prepare(
+          'INSERT INTO dhcpScopes (id, subnetId, name, startIp, endIp, gateway, dnsServers, description) VALUES (?,?,?,?,?,?,?,?)',
+        ).run(
+          dhcpDraft.id,
+          subnetDraft.id,
+          dhcpDraft.name,
+          dhcpDraft.startIp,
+          dhcpDraft.endIp,
+          scopeGateway,
+          stringifyDnsServers(dhcpDraft.dnsServers),
+          dhcpDraft.description ?? null,
+        )
+        dhcpScope = parseScope(db.prepare('SELECT * FROM dhcpScopes WHERE id = ?').get(dhcpDraft.id) as Record<string, unknown>)
+      }
+
+      const ipZones = zoneDrafts.map((zone) => {
+        db.prepare(
+          'INSERT INTO ipZones (id, subnetId, kind, startIp, endIp, description) VALUES (?,?,?,?,?,?)',
+        ).run(zone.id, subnetDraft.id, zone.kind, zone.startIp, zone.endIp, zone.description ?? null)
+        return db.prepare('SELECT * FROM ipZones WHERE id = ?').get(zone.id) as Record<string, unknown>
+      })
+
+      return { vlan, subnet, dhcpScope, ipZones }
+    })
+
+    return reply.status(201).send(createNetwork())
   })
 
   // ORDER BY added for consistency with all other list endpoints
@@ -317,7 +500,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
       'INSERT INTO dhcpScopes (id, subnetId, name, startIp, endIp, gateway, dnsServers, description) VALUES (?,?,?,?,?,?,?,?)'
     ).run(id, subnetId, name, startIp, endIp,
       gateway ? ensureIpv4(gateway, 'gateway') : null,
-      dnsServers ? JSON.stringify(dnsServers.map((entry) => ensureIpv4(entry, 'dnsServers'))) : null,
+      stringifyDnsServers(dnsServers),
       description ?? null)
     const row = db.prepare('SELECT * FROM dhcpScopes WHERE id = ?').get(id) as Record<string, unknown>
     return reply.status(201).send(parseScope(row))
@@ -356,7 +539,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
       values.push(ensureIpv4(endIp, 'endIp'))
     }
     if (gateway !== undefined) { updates.push('gateway = ?'); values.push(gateway ? ensureIpv4(gateway, 'gateway') : null) }
-    if (dnsServers !== undefined) { updates.push('dnsServers = ?'); values.push(dnsServers ? JSON.stringify(dnsServers.map((entry) => ensureIpv4(entry, 'dnsServers'))) : null) }
+    if (dnsServers !== undefined) { updates.push('dnsServers = ?'); values.push(stringifyDnsServers(dnsServers)) }
     if (description !== undefined) { updates.push('description = ?'); values.push(description) }
 
     if (updates.length === 0) return reply.status(400).send({ error: 'No valid fields' })

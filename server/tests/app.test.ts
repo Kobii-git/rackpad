@@ -936,6 +936,22 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
   });
   assert.equal(rackRes.statusCode, 201);
 
+  const subnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.44.0.0/24",
+      name: "Restore subnet",
+      gateway: "10.44.0.1",
+      dnsServers: ["10.44.0.10", "1.1.1.1"],
+    },
+  });
+  assert.equal(subnetRes.statusCode, 201);
+
   const exportRes = await app.inject({
     method: "GET",
     url: "/api/admin/export",
@@ -944,7 +960,20 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
     },
   });
   assert.equal(exportRes.statusCode, 200);
-  const snapshot = readJson(exportRes) as Record<string, unknown>;
+  const snapshot = readJson(exportRes) as Record<string, unknown> & {
+    data: {
+      subnets: Array<{
+        cidr: string;
+        gateway?: string | null;
+        dnsServers?: string[] | null;
+      }>;
+    };
+  };
+  const exportedSubnet = snapshot.data.subnets.find(
+    (subnet) => subnet.cidr === "10.44.0.0/24",
+  );
+  assert.equal(exportedSubnet?.gateway, "10.44.0.1");
+  assert.deepEqual(exportedSubnet?.dnsServers, ["10.44.0.10", "1.1.1.1"]);
 
   const postExportRackRes = await app.inject({
     method: "POST",
@@ -1010,6 +1039,25 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
     false,
   );
 
+  const subnetsAfterRestoreRes = await app.inject({
+    method: "GET",
+    url: "/api/subnets?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${refreshedToken}`,
+    },
+  });
+  assert.equal(subnetsAfterRestoreRes.statusCode, 200);
+  const subnetsAfterRestore = readJson(subnetsAfterRestoreRes) as Array<{
+    cidr: string;
+    gateway: string | null;
+    dnsServers: string[] | null;
+  }>;
+  const restoredSubnet = subnetsAfterRestore.find(
+    (subnet) => subnet.cidr === "10.44.0.0/24",
+  );
+  assert.equal(restoredSubnet?.gateway, "10.44.0.1");
+  assert.deepEqual(restoredSubnet?.dnsServers, ["10.44.0.10", "1.1.1.1"]);
+
   const templatesAfterRestoreRes = await app.inject({
     method: "GET",
     url: "/api/ports/templates",
@@ -1027,6 +1075,91 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
     ),
     true,
   );
+});
+
+test("admin restore accepts older backups without subnet gateway and DNS fields", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const subnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.45.0.0/24",
+      name: "Legacy restore subnet",
+      gateway: "10.45.0.1",
+      dnsServers: ["10.45.0.10"],
+    },
+  });
+  assert.equal(subnetRes.statusCode, 201);
+
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(exportRes.statusCode, 200);
+  const snapshot = readJson(exportRes) as Record<string, unknown> & {
+    data: { subnets: Array<Record<string, unknown>> };
+  };
+  const legacySnapshot = {
+    ...snapshot,
+    data: {
+      ...snapshot.data,
+      subnets: snapshot.data.subnets.map((subnet) => {
+        const legacySubnet = { ...subnet };
+        delete legacySubnet.gateway;
+        delete legacySubnet.dnsServers;
+        return legacySubnet;
+      }),
+    },
+  };
+
+  const restoreRes = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: legacySnapshot,
+  });
+  assert.equal(restoreRes.statusCode, 200);
+
+  const loginRes = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: {
+      username: "admin",
+      password: "super-secret-1",
+    },
+  });
+  assert.equal(loginRes.statusCode, 200);
+  const refreshedToken = (readJson(loginRes) as { token: string }).token;
+
+  const subnetsRes = await app.inject({
+    method: "GET",
+    url: "/api/subnets?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${refreshedToken}`,
+    },
+  });
+  assert.equal(subnetsRes.statusCode, 200);
+  const subnets = readJson(subnetsRes) as Array<{
+    cidr: string;
+    gateway: string | null;
+    dnsServers: string[] | null;
+  }>;
+  const restoredSubnet = subnets.find(
+    (subnet) => subnet.cidr === "10.45.0.0/24",
+  );
+  assert.ok(restoredSubnet);
+  assert.equal(restoredSubnet.gateway, null);
+  assert.equal(restoredSubnet.dnsServers, null);
 });
 
 test("admin restore preserves parent-linked devices even when children sort before their host", async () => {
@@ -3613,6 +3746,128 @@ test("ip assignments can be updated in place for device-linked addresses", async
   assert.equal(updated.description, "Updated management IP");
 });
 
+test("network bundles create VLAN, subnet, DHCP, and zones atomically", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const createRes = await app.inject({
+    method: "POST",
+    url: "/api/networks",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      vlan: {
+        vlanId: 777,
+        name: "Bundle VLAN",
+        description: "Created as one network bundle",
+        color: "#4f8cff",
+      },
+      subnet: {
+        cidr: "10.77.0.0/24",
+        name: "Bundle subnet",
+        gateway: "10.77.0.1",
+        dnsServers: ["10.77.0.1", "1.1.1.1"],
+      },
+      dhcpScope: {
+        name: "clients",
+        startIp: "10.77.0.100",
+        endIp: "10.77.0.150",
+        gateway: "10.77.0.1",
+        dnsServers: ["10.77.0.1"],
+      },
+      zones: [
+        {
+          kind: "dhcp",
+          startIp: "10.77.0.100",
+          endIp: "10.77.0.150",
+          description: "Dynamic pool",
+        },
+        {
+          kind: "static",
+          startIp: "10.77.0.10",
+          endIp: "10.77.0.49",
+          description: "Static hosts",
+        },
+      ],
+    },
+  });
+  assert.equal(createRes.statusCode, 201);
+  const created = readJson(createRes) as {
+    vlan: { id: string; vlanId: number; name: string };
+    subnet: {
+      id: string;
+      cidr: string;
+      vlanId: string;
+      gateway: string;
+      dnsServers: string[];
+    };
+    dhcpScope: { id: string; subnetId: string; startIp: string };
+    ipZones: Array<{ subnetId: string; kind: string; startIp: string }>;
+  };
+  assert.equal(created.vlan.vlanId, 777);
+  assert.equal(created.vlan.name, "Bundle VLAN");
+  assert.equal(created.subnet.vlanId, created.vlan.id);
+  assert.equal(created.subnet.gateway, "10.77.0.1");
+  assert.deepEqual(created.subnet.dnsServers, ["10.77.0.1", "1.1.1.1"]);
+  assert.equal(created.dhcpScope.subnetId, created.subnet.id);
+  assert.equal(created.dhcpScope.startIp, "10.77.0.100");
+  assert.equal(created.ipZones.length, 2);
+  assert.ok(
+    created.ipZones.every((zone) => zone.subnetId === created.subnet.id),
+  );
+
+  const badRes = await app.inject({
+    method: "POST",
+    url: "/api/networks",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      vlan: {
+        vlanId: 778,
+        name: "Bad bundle VLAN",
+      },
+      subnet: {
+        cidr: "10.78.0.0/24",
+        name: "Bad bundle subnet",
+      },
+      zones: [
+        {
+          kind: "static",
+          startIp: "10.79.0.10",
+          endIp: "10.79.0.20",
+        },
+      ],
+    },
+  });
+  assert.equal(badRes.statusCode, 400);
+
+  const vlansRes = await app.inject({
+    method: "GET",
+    url: "/api/vlans?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  const vlans = readJson(vlansRes) as Array<{ name: string }>;
+  assert.equal(vlans.some((vlan) => vlan.name === "Bad bundle VLAN"), false);
+
+  const subnetsRes = await app.inject({
+    method: "GET",
+    url: "/api/subnets?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  const subnets = readJson(subnetsRes) as Array<{ cidr: string }>;
+  assert.equal(
+    subnets.some((subnet) => subnet.cidr === "10.78.0.0/24"),
+    false,
+  );
+});
+
 test("ip assignments support DHCP reservations and protect technical IPs", async () => {
   const adminToken = await bootstrapAdmin();
 
@@ -3626,10 +3881,18 @@ test("ip assignments support DHCP reservations and protect technical IPs", async
       labId: "lab_home",
       cidr: "192.168.50.0/24",
       name: "Reservation LAN",
+      gateway: "192.168.50.1",
+      dnsServers: ["192.168.50.3"],
     },
   });
   assert.equal(subnetRes.statusCode, 201);
-  const subnet = readJson(subnetRes) as { id: string };
+  const subnet = readJson(subnetRes) as {
+    id: string;
+    gateway: string;
+    dnsServers: string[];
+  };
+  assert.equal(subnet.gateway, "192.168.50.1");
+  assert.deepEqual(subnet.dnsServers, ["192.168.50.3"]);
 
   const scopeRes = await app.inject({
     method: "POST",
@@ -3760,6 +4023,22 @@ test("ip assignments support DHCP reservations and protect technical IPs", async
   };
   assert.equal(dnsInterface.assignmentType, "interface");
   assert.equal(dnsInterface.ipAddress, "192.168.50.2");
+
+  const subnetDnsDeviceRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      ipAddress: "192.168.50.3",
+      assignmentType: "device",
+      hostname: "subnet-dns-overwrite",
+    },
+  });
+  assert.equal(subnetDnsDeviceRes.statusCode, 400);
+  assert.match(subnetDnsDeviceRes.body, /DNS/i);
 
   const firewallRes = await app.inject({
     method: "POST",

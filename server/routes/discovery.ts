@@ -198,6 +198,33 @@ function collectTechnicalAddresses(labId: string): TechnicalAddressContext {
   const byIp = new Map<string, TechnicalAddress>();
   const ranges: TechnicalAddressContext["ranges"] = [];
 
+  const subnets = db
+    .prepare(
+      `
+      SELECT name, gateway, dnsServers
+      FROM subnets
+      WHERE labId = ?
+    `,
+    )
+    .all(labId) as Array<{
+    name: string;
+    gateway: string | null;
+    dnsServers: string | null;
+  }>;
+
+  for (const subnet of subnets) {
+    setTechnicalAddress(byIp, subnet.gateway, {
+      role: "gateway",
+      reason: `${subnet.name} gateway`,
+    });
+    for (const dnsServer of parseStringArray(subnet.dnsServers)) {
+      setTechnicalAddress(byIp, dnsServer, {
+        role: "dns",
+        reason: `${subnet.name} DNS server`,
+      });
+    }
+  }
+
   const scopes = db
     .prepare(
       `

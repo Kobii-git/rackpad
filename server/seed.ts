@@ -251,13 +251,13 @@ const vlanRanges = [
 ]
 
 const subnets = [
-  { id: 's_default', labId: 'lab_home', cidr: '10.0.10.0/24', name: 'Default / Mgmt', description: null, vlanId: 'v_default' },
-  { id: 's_iot',     labId: 'lab_home', cidr: '10.0.20.0/24', name: 'IoT',            description: null, vlanId: 'v_iot' },
-  { id: 's_dmz',     labId: 'lab_home', cidr: '10.0.30.0/24', name: 'DMZ',            description: null, vlanId: 'v_dmz' },
-  { id: 's_storage', labId: 'lab_home', cidr: '10.0.40.0/24', name: 'Storage',        description: null, vlanId: 'v_storage' },
-  { id: 's_guest',   labId: 'lab_home', cidr: '10.0.50.0/24', name: 'Guest',          description: null, vlanId: 'v_guest' },
-  { id: 's_studio_default', labId: 'lab_studio', cidr: '10.42.10.0/24', name: 'Studio Default', description: 'Studio office management and trusted clients', vlanId: 'v_studio_default' },
-  { id: 's_studio_iot',     labId: 'lab_studio', cidr: '10.42.20.0/24', name: 'Studio IoT',     description: 'Studio bench gear and label printers',     vlanId: 'v_studio_iot' },
+  { id: 's_default', labId: 'lab_home', cidr: '10.0.10.0/24', name: 'Default / Mgmt', description: null, gateway: '10.0.10.1', dnsServers: JSON.stringify(['10.0.10.1', '1.1.1.1']), vlanId: 'v_default' },
+  { id: 's_iot',     labId: 'lab_home', cidr: '10.0.20.0/24', name: 'IoT',            description: null, gateway: '10.0.20.1', dnsServers: null, vlanId: 'v_iot' },
+  { id: 's_dmz',     labId: 'lab_home', cidr: '10.0.30.0/24', name: 'DMZ',            description: null, gateway: '10.0.30.1', dnsServers: null, vlanId: 'v_dmz' },
+  { id: 's_storage', labId: 'lab_home', cidr: '10.0.40.0/24', name: 'Storage',        description: null, gateway: null, dnsServers: null, vlanId: 'v_storage' },
+  { id: 's_guest',   labId: 'lab_home', cidr: '10.0.50.0/24', name: 'Guest',          description: null, gateway: null, dnsServers: null, vlanId: 'v_guest' },
+  { id: 's_studio_default', labId: 'lab_studio', cidr: '10.42.10.0/24', name: 'Studio Default', description: 'Studio office management and trusted clients', gateway: '10.42.10.1', dnsServers: JSON.stringify(['10.42.10.1', '1.1.1.1']), vlanId: 'v_studio_default' },
+  { id: 's_studio_iot',     labId: 'lab_studio', cidr: '10.42.20.0/24', name: 'Studio IoT',     description: 'Studio bench gear and label printers',     gateway: '10.42.20.1', dnsServers: null, vlanId: 'v_studio_iot' },
 ]
 
 const dhcpScopes = [
@@ -594,7 +594,7 @@ export function seedIfEmpty() {
   const insertVlan = db.prepare('INSERT INTO vlans VALUES (@id, @labId, @vlanId, @name, @description, @color)')
   const insertVlanRange = db.prepare('INSERT INTO vlanRanges VALUES (@id, @labId, @name, @startVlan, @endVlan, @purpose, @color)')
   const insertPortLink = db.prepare('INSERT INTO portLinks VALUES (@id, @fromPortId, @toPortId, @cableType, @cableLength, @color, @notes)')
-  const insertSubnet = db.prepare('INSERT INTO subnets VALUES (@id, @labId, @cidr, @name, @description, @vlanId)')
+  const insertSubnet = db.prepare('INSERT INTO subnets (id, labId, cidr, name, description, gateway, dnsServers, vlanId) VALUES (@id, @labId, @cidr, @name, @description, @gateway, @dnsServers, @vlanId)')
   const insertDhcpScope = db.prepare('INSERT INTO dhcpScopes VALUES (@id, @subnetId, @name, @startIp, @endIp, @gateway, @dnsServers, @description)')
   const insertIpZone = db.prepare('INSERT INTO ipZones VALUES (@id, @subnetId, @kind, @startIp, @endIp, @description)')
   const insertIpAssignment = db.prepare(`

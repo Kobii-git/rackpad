@@ -23,6 +23,7 @@ import { AllocatePanel } from "@/components/shared/AllocatePanel";
 import { ColorInput } from "@/components/shared/ColorInput";
 import {
   canEditInventory,
+  createNetworkRecord,
   createSubnetRecord,
   createVlanRangeRecord,
   deleteVlan,
@@ -38,7 +39,13 @@ import {
   toggleSort,
   type SortState,
 } from "@/lib/sort";
-import type { IpAssignment, Subnet, Vlan, VlanRange } from "@/lib/types";
+import type {
+  IpAssignment,
+  IpZoneKind,
+  Subnet,
+  Vlan,
+  VlanRange,
+} from "@/lib/types";
 
 type RangeForm = {
   name: string;
@@ -52,6 +59,32 @@ type SubnetForm = {
   cidr: string;
   name: string;
   description: string;
+  gateway: string;
+  dnsServers: string;
+};
+
+type NetworkForm = {
+  mode: "tagged" | "untagged";
+  vlanId: string;
+  name: string;
+  description: string;
+  color: string;
+  cidr: string;
+  subnetName: string;
+  subnetDescription: string;
+  gateway: string;
+  dnsServers: string;
+  enableDhcp: boolean;
+  dhcpName: string;
+  dhcpStartIp: string;
+  dhcpEndIp: string;
+  dhcpDescription: string;
+  staticStartIp: string;
+  staticEndIp: string;
+  reservedStartIp: string;
+  reservedEndIp: string;
+  infrastructureStartIp: string;
+  infrastructureEndIp: string;
 };
 
 type RangeSortKey = "name" | "ids" | "used" | "free" | "purpose";
@@ -69,6 +102,32 @@ const EMPTY_SUBNET_FORM: SubnetForm = {
   cidr: "",
   name: "",
   description: "",
+  gateway: "",
+  dnsServers: "",
+};
+
+const EMPTY_NETWORK_FORM: NetworkForm = {
+  mode: "tagged",
+  vlanId: "",
+  name: "",
+  description: "",
+  color: "",
+  cidr: "",
+  subnetName: "",
+  subnetDescription: "",
+  gateway: "",
+  dnsServers: "",
+  enableDhcp: true,
+  dhcpName: "",
+  dhcpStartIp: "",
+  dhcpEndIp: "",
+  dhcpDescription: "",
+  staticStartIp: "",
+  staticEndIp: "",
+  reservedStartIp: "",
+  reservedEndIp: "",
+  infrastructureStartIp: "",
+  infrastructureEndIp: "",
 };
 
 export default function VlansView() {
@@ -85,6 +144,11 @@ export default function VlansView() {
 
   const [selectedRangeId, setSelectedRangeId] = useState<string | undefined>();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [creatingNetwork, setCreatingNetwork] = useState(false);
+  const [networkForm, setNetworkForm] =
+    useState<NetworkForm>(EMPTY_NETWORK_FORM);
+  const [networkSaving, setNetworkSaving] = useState(false);
+  const [networkError, setNetworkError] = useState("");
   const [creatingRange, setCreatingRange] = useState(false);
   const [rangeForm, setRangeForm] = useState<RangeForm>(EMPTY_RANGE_FORM);
   const [rangeSaving, setRangeSaving] = useState(false);
@@ -200,6 +264,28 @@ export default function VlansView() {
       .sort((a, b) => compareVlans(a, b, vlanSort, subnets));
   }, [normalizedQuery, ranges, selectedRangeId, subnets, vlanSort, vlans]);
 
+  const untaggedSubnets = useMemo(() => {
+    return subnets
+      .filter((subnet) => !subnet.vlanId)
+      .filter((subnet) => {
+        if (!normalizedQuery) return true;
+        return [
+          subnet.cidr,
+          subnet.name,
+          subnet.description,
+          subnet.gateway,
+          ...(subnet.dnsServers ?? []),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery);
+      })
+      .sort((a, b) =>
+        a.cidr.localeCompare(b.cidr, undefined, { numeric: true }),
+      );
+  }, [normalizedQuery, subnets]);
+
   const assignmentsBySubnetId = useMemo(() => {
     return ipAssignments.reduce<Record<string, IpAssignment[]>>(
       (acc, assignment) => {
@@ -290,6 +376,8 @@ export default function VlansView() {
         cidr: subnetForm.cidr.trim(),
         name: subnetForm.name.trim(),
         description: subnetForm.description.trim() || undefined,
+        gateway: subnetForm.gateway.trim() || undefined,
+        dnsServers: parseDnsServers(subnetForm.dnsServers),
         vlanId,
       });
       setSubnetDraftVlanId(null);
@@ -302,6 +390,160 @@ export default function VlansView() {
       );
     } finally {
       setSubnetSaving(false);
+    }
+  }
+
+  async function handleCreateNetwork() {
+    setNetworkSaving(true);
+    setNetworkError("");
+    try {
+      const name = networkForm.name.trim();
+      const cidr = networkForm.cidr.trim();
+      if (!name) {
+        setNetworkError(t("Network name is required."));
+        return;
+      }
+      if (!cidr) {
+        setNetworkError(t("Subnet CIDR is required."));
+        return;
+      }
+
+      let vlan:
+        | {
+            vlanId: number;
+            name: string;
+            description?: string;
+            color?: string;
+          }
+        | null = null;
+      if (networkForm.mode === "tagged") {
+        const parsedVlanId = Number.parseInt(networkForm.vlanId, 10);
+        if (!Number.isFinite(parsedVlanId)) {
+          setNetworkError(t("VLAN ID is required."));
+          return;
+        }
+        vlan = {
+          vlanId: parsedVlanId,
+          name,
+          description: networkForm.description.trim() || undefined,
+          color: networkForm.color.trim() || undefined,
+        };
+      }
+
+      const dnsServers = parseDnsServers(networkForm.dnsServers);
+      const zones: Array<{
+        kind: IpZoneKind;
+        startIp: string;
+        endIp: string;
+        description: string;
+      }> = [];
+
+      const dhcpStartIp = networkForm.dhcpStartIp.trim();
+      const dhcpEndIp = networkForm.dhcpEndIp.trim();
+      const hasPartialDhcp = Boolean(dhcpStartIp || dhcpEndIp);
+      const hasCompleteDhcp = Boolean(dhcpStartIp && dhcpEndIp);
+      if (networkForm.enableDhcp && hasPartialDhcp && !hasCompleteDhcp) {
+        setNetworkError(t("DHCP needs both a start IP and an end IP."));
+        return;
+      }
+
+      let dhcpScope:
+        | {
+            name: string;
+            startIp: string;
+            endIp: string;
+            gateway?: string;
+            dnsServers?: string[];
+            description?: string;
+          }
+        | null = null;
+      if (
+        networkForm.enableDhcp &&
+        dhcpStartIp &&
+        dhcpEndIp
+      ) {
+        dhcpScope = {
+          name:
+            networkForm.dhcpName.trim() ||
+            `${networkForm.subnetName.trim() || name} DHCP`,
+          startIp: dhcpStartIp,
+          endIp: dhcpEndIp,
+          gateway: networkForm.gateway.trim() || undefined,
+          dnsServers,
+          description: networkForm.dhcpDescription.trim() || undefined,
+        };
+        zones.push({
+          kind: "dhcp",
+          startIp: dhcpStartIp,
+          endIp: dhcpEndIp,
+          description:
+            networkForm.dhcpDescription.trim() || "Dynamic lease pool",
+        });
+      }
+
+      const zoneDrafts = [
+        {
+          kind: "static" as const,
+          startIp: networkForm.staticStartIp.trim(),
+          endIp: networkForm.staticEndIp.trim(),
+          description: "Static assignments",
+        },
+        {
+          kind: "reserved" as const,
+          startIp: networkForm.reservedStartIp.trim(),
+          endIp: networkForm.reservedEndIp.trim(),
+          description: "Reserved addresses",
+        },
+        {
+          kind: "infrastructure" as const,
+          startIp: networkForm.infrastructureStartIp.trim(),
+          endIp: networkForm.infrastructureEndIp.trim(),
+          description: "Infrastructure addresses",
+        },
+      ];
+      for (const zone of zoneDrafts) {
+        if (!zone.startIp && !zone.endIp) continue;
+        if (!zone.startIp || !zone.endIp) {
+          setNetworkError(
+            t("{zone} needs both start and end IP.", {
+              zone: zone.description,
+            }),
+          );
+          return;
+        }
+        zones.push({
+          kind: zone.kind,
+          startIp: zone.startIp,
+          endIp: zone.endIp,
+          description: zone.description,
+        });
+      }
+
+      await createNetworkRecord({
+        labId: activeLab.id,
+        vlan,
+        subnet: {
+          cidr,
+          name: networkForm.subnetName.trim() || name,
+          description:
+            networkForm.subnetDescription.trim() ||
+            networkForm.description.trim() ||
+            undefined,
+          gateway: networkForm.gateway.trim() || undefined,
+          dnsServers,
+        },
+        dhcpScope,
+        zones,
+      });
+
+      setCreatingNetwork(false);
+      setNetworkForm(EMPTY_NETWORK_FORM);
+    } catch (err) {
+      setNetworkError(
+        err instanceof Error ? err.message : t("Failed to create network."),
+      );
+    } finally {
+      setNetworkSaving(false);
     }
   }
 
@@ -328,6 +570,18 @@ export default function VlansView() {
           canEdit ? (
             <>
               <Button
+                variant="default"
+                size="sm"
+                onClick={() => {
+                  setCreatingNetwork(true);
+                  setNetworkForm(EMPTY_NETWORK_FORM);
+                  setNetworkError("");
+                }}
+              >
+                <Plus className="size-3.5" />
+                {t("Add network")}
+              </Button>
+              <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
@@ -348,6 +602,344 @@ export default function VlansView() {
       />
 
       <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+        {canEdit && creatingNetwork && (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <CardLabel>{t("Network setup")}</CardLabel>
+                <CardHeading>
+                  {t("Add VLAN, subnet, DHCP, and zones")}
+                </CardHeading>
+              </CardTitle>
+            </CardHeader>
+            <CardBody className="space-y-5">
+              <div className="grid gap-4 lg:grid-cols-[0.8fr_1fr]">
+                <div className="space-y-4 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
+                  <div>
+                    <div className="rk-kicker">{t("Layer 2")}</div>
+                    <div className="mt-1 grid grid-cols-2 gap-1">
+                      {(["tagged", "untagged"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() =>
+                            setNetworkForm((prev) => ({ ...prev, mode }))
+                          }
+                          className={`rounded-[var(--radius-xs)] border px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-colors ${
+                            networkForm.mode === mode
+                              ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"
+                              : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
+                          }`}
+                        >
+                          {mode === "tagged"
+                            ? t("VLAN tagged")
+                            : t("No VLAN tag")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {networkForm.mode === "tagged" && (
+                      <Field label={t("VLAN ID")}>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={4094}
+                          value={networkForm.vlanId}
+                          onChange={(event) =>
+                            setNetworkForm((prev) => ({
+                              ...prev,
+                              vlanId: event.target.value,
+                            }))
+                          }
+                          placeholder="100"
+                        />
+                      </Field>
+                    )}
+                    <Field label={t("Name")}>
+                      <Input
+                        value={networkForm.name}
+                        onChange={(event) =>
+                          setNetworkForm((prev) => ({
+                            ...prev,
+                            name: event.target.value,
+                            subnetName: prev.subnetName || event.target.value,
+                          }))
+                        }
+                        placeholder="Management"
+                      />
+                    </Field>
+                  </div>
+                  <div
+                    className={`grid gap-4 ${
+                      networkForm.mode === "tagged" ? "md:grid-cols-2" : ""
+                    }`}
+                  >
+                    {networkForm.mode === "tagged" && (
+                      <Field label={t("Color")}>
+                        <ColorInput
+                          value={networkForm.color}
+                          onChange={(value) =>
+                            setNetworkForm((prev) => ({
+                              ...prev,
+                              color: value,
+                            }))
+                          }
+                          placeholder="#4f8cff or blue"
+                        />
+                      </Field>
+                    )}
+                    <Field label={t("Description")}>
+                      <Input
+                        value={networkForm.description}
+                        onChange={(event) =>
+                          setNetworkForm((prev) => ({
+                            ...prev,
+                            description: event.target.value,
+                          }))
+                        }
+                        placeholder="Core management network"
+                      />
+                    </Field>
+                  </div>
+                </div>
+
+                <div className="space-y-4 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
+                  <div className="rk-kicker">{t("Address plan")}</div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label={t("Subnet CIDR")}>
+                      <Input
+                        value={networkForm.cidr}
+                        onChange={(event) =>
+                          setNetworkForm((prev) => ({
+                            ...prev,
+                            cidr: event.target.value,
+                          }))
+                        }
+                        placeholder="10.0.10.0/24"
+                      />
+                    </Field>
+                    <Field label={t("Subnet name")}>
+                      <Input
+                        value={networkForm.subnetName}
+                        onChange={(event) =>
+                          setNetworkForm((prev) => ({
+                            ...prev,
+                            subnetName: event.target.value,
+                          }))
+                        }
+                        placeholder="Management subnet"
+                      />
+                    </Field>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label={t("Gateway")}>
+                      <Input
+                        value={networkForm.gateway}
+                        onChange={(event) =>
+                          setNetworkForm((prev) => ({
+                            ...prev,
+                            gateway: event.target.value,
+                          }))
+                        }
+                        placeholder="10.0.10.1"
+                      />
+                    </Field>
+                    <Field label={t("DNS servers")}>
+                      <Input
+                        value={networkForm.dnsServers}
+                        onChange={(event) =>
+                          setNetworkForm((prev) => ({
+                            ...prev,
+                            dnsServers: event.target.value,
+                          }))
+                        }
+                        placeholder="10.0.10.1, 1.1.1.1"
+                      />
+                    </Field>
+                  </div>
+                  <Field label={t("Subnet notes")}>
+                    <Input
+                      value={networkForm.subnetDescription}
+                      onChange={(event) =>
+                        setNetworkForm((prev) => ({
+                          ...prev,
+                          subnetDescription: event.target.value,
+                        }))
+                      }
+                      placeholder="Anything specific about this subnet"
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="space-y-4 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="rk-kicker">{t("DHCP")}</div>
+                      <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
+                        {t("Optional dynamic lease pool for this subnet.")}
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-[var(--color-fg-muted)]">
+                      <input
+                        type="checkbox"
+                        checked={networkForm.enableDhcp}
+                        onChange={(event) =>
+                          setNetworkForm((prev) => ({
+                            ...prev,
+                            enableDhcp: event.target.checked,
+                          }))
+                        }
+                      />
+                      {t("Enabled")}
+                    </label>
+                  </div>
+                  {networkForm.enableDhcp && (
+                    <>
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <Field label={t("Scope name")}>
+                          <Input
+                            value={networkForm.dhcpName}
+                            onChange={(event) =>
+                              setNetworkForm((prev) => ({
+                                ...prev,
+                                dhcpName: event.target.value,
+                              }))
+                            }
+                            placeholder="clients"
+                          />
+                        </Field>
+                        <Field label={t("Start IP")}>
+                          <Input
+                            value={networkForm.dhcpStartIp}
+                            onChange={(event) =>
+                              setNetworkForm((prev) => ({
+                                ...prev,
+                                dhcpStartIp: event.target.value,
+                              }))
+                            }
+                            placeholder="10.0.10.100"
+                          />
+                        </Field>
+                        <Field label={t("End IP")}>
+                          <Input
+                            value={networkForm.dhcpEndIp}
+                            onChange={(event) =>
+                              setNetworkForm((prev) => ({
+                                ...prev,
+                                dhcpEndIp: event.target.value,
+                              }))
+                            }
+                            placeholder="10.0.10.199"
+                          />
+                        </Field>
+                      </div>
+                      <Field label={t("DHCP notes")}>
+                        <Input
+                          value={networkForm.dhcpDescription}
+                          onChange={(event) =>
+                            setNetworkForm((prev) => ({
+                              ...prev,
+                              dhcpDescription: event.target.value,
+                            }))
+                          }
+                          placeholder="General client pool"
+                        />
+                      </Field>
+                    </>
+                  )}
+                </div>
+
+                <div className="space-y-4 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
+                  <div>
+                    <div className="rk-kicker">{t("IP zones")}</div>
+                    <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
+                      {t(
+                        "Optional ranges for static, reserved, and infrastructure addresses.",
+                      )}
+                    </div>
+                  </div>
+                  {(
+                    [
+                      ["Static", "staticStartIp", "staticEndIp"],
+                      ["Reserved", "reservedStartIp", "reservedEndIp"],
+                      [
+                        "Infrastructure",
+                        "infrastructureStartIp",
+                        "infrastructureEndIp",
+                      ],
+                    ] as const
+                  ).map(([label, startKey, endKey]) => (
+                    <div key={label} className="grid gap-3 md:grid-cols-3">
+                      <div className="pt-6 text-xs font-medium text-[var(--color-fg-muted)]">
+                        {t(label)}
+                      </div>
+                      <Field label={t("Start IP")}>
+                        <Input
+                          value={
+                            networkForm[startKey as keyof NetworkForm] as string
+                          }
+                          onChange={(event) =>
+                            setNetworkForm((prev) => ({
+                              ...prev,
+                              [startKey]: event.target.value,
+                            }))
+                          }
+                          placeholder="10.0.10.10"
+                        />
+                      </Field>
+                      <Field label={t("End IP")}>
+                        <Input
+                          value={
+                            networkForm[endKey as keyof NetworkForm] as string
+                          }
+                          onChange={(event) =>
+                            setNetworkForm((prev) => ({
+                              ...prev,
+                              [endKey]: event.target.value,
+                            }))
+                          }
+                          placeholder="10.0.10.99"
+                        />
+                      </Field>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {networkError && (
+                <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-sm text-[var(--color-err)]">
+                  {networkError}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setCreatingNetwork(false);
+                    setNetworkForm(EMPTY_NETWORK_FORM);
+                  setNetworkError("");
+                }}
+              >
+                  {t("Cancel")}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void handleCreateNetwork()}
+                  disabled={networkSaving}
+                >
+                  <Save className="size-3.5" />
+                  {networkSaving ? t("Creating...") : t("Create network")}
+                </Button>
+              </div>
+            </CardBody>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>
@@ -621,6 +1213,91 @@ export default function VlansView() {
           </Card>
         )}
 
+        {untaggedSubnets.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <CardLabel>{t("No VLAN tag")}</CardLabel>
+                <CardHeading>
+                  {t("{count} untagged networks", {
+                    count: untaggedSubnets.length,
+                  })}
+                </CardHeading>
+              </CardTitle>
+            </CardHeader>
+            <CardBody className="space-y-3">
+              {untaggedSubnets.map((subnet) => {
+                const subnetZones = zones.filter(
+                  (zone) => zone.subnetId === subnet.id,
+                );
+                const subnetScopes = scopes.filter(
+                  (scope) => scope.subnetId === subnet.id,
+                );
+                const subnetAssignments = assignmentsBySubnetId[subnet.id] ?? [];
+                return (
+                  <div
+                    key={subnet.id}
+                    className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-3"
+                  >
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Mono className="text-[11px] text-[var(--color-fg)]">
+                        {subnet.cidr}
+                      </Mono>
+                      <Badge tone="neutral">{subnet.name}</Badge>
+                      {subnet.gateway && (
+                        <span className="text-[11px] text-[var(--color-fg-subtle)]">
+                          {t("gateway {gateway}", {
+                            gateway: subnet.gateway,
+                          })}
+                        </span>
+                      )}
+                      {(subnet.dnsServers ?? []).length > 0 && (
+                        <span className="text-[11px] text-[var(--color-fg-subtle)]">
+                          {t("DNS {servers}", {
+                            servers: (subnet.dnsServers ?? []).join(", "),
+                          })}
+                        </span>
+                      )}
+                      {subnetScopes.length > 0 && (
+                        <Badge tone="cyan">
+                          {t("{count} DHCP", { count: subnetScopes.length })}
+                        </Badge>
+                      )}
+                      {subnetZones.length > 0 && (
+                        <Badge tone="accent">
+                          {t("{count} zones", { count: subnetZones.length })}
+                        </Badge>
+                      )}
+                      <span className="text-[11px] text-[var(--color-fg-subtle)]">
+                        {t("{count} assigned", {
+                          count: subnetAssignments.length,
+                        })}
+                      </span>
+                    </div>
+                    {(subnetZones.length > 0 || subnetScopes.length > 0) && (
+                      <IpZoneBar
+                        subnet={subnet}
+                        zones={subnetZones}
+                        scopes={subnetScopes}
+                        assignments={subnetAssignments}
+                      />
+                    )}
+                    <div className="mt-2">
+                      <Link
+                        to={`/ipam?subnetId=${subnet.id}`}
+                        className="inline-flex items-center gap-1 text-[11px] text-[var(--color-accent)] hover:text-[var(--color-accent-strong)]"
+                      >
+                        {t("Open IPAM")}
+                        <ChevronRight className="size-3" />
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </CardBody>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>
@@ -754,6 +1431,8 @@ export default function VlansView() {
                                       ? `${vlan.name} subnet`
                                       : "",
                                   description: "",
+                                  gateway: "",
+                                  dnsServers: "",
                                 });
                                 setSubnetError("");
                               }}
@@ -801,7 +1480,7 @@ export default function VlansView() {
                                 to={`/ipam?subnetId=${linkedSubnets[0].id}&vlanId=${vlan.id}`}
                                 className="inline-flex items-center gap-1 text-[11px] text-[var(--color-accent)] hover:text-[var(--color-accent-strong)]"
                               >
-                                Open IPAM
+                                {t("Open IPAM")}
                                 <ChevronRight className="size-3" />
                               </Link>
                             )}
@@ -831,8 +1510,38 @@ export default function VlansView() {
                                       <Badge tone="neutral">
                                         {subnet.name}
                                       </Badge>
+                                      {subnet.gateway && (
+                                        <span className="text-[11px] text-[var(--color-fg-subtle)]">
+                                          {t("gateway {gateway}", {
+                                            gateway: subnet.gateway,
+                                          })}
+                                        </span>
+                                      )}
+                                      {(subnet.dnsServers ?? []).length > 0 && (
+                                        <span className="text-[11px] text-[var(--color-fg-subtle)]">
+                                          {t("DNS {servers}", {
+                                            servers: (subnet.dnsServers ?? []).join(", "),
+                                          })}
+                                        </span>
+                                      )}
+                                      {subnetScopes.length > 0 && (
+                                        <Badge tone="cyan">
+                                          {t("{count} DHCP", {
+                                            count: subnetScopes.length,
+                                          })}
+                                        </Badge>
+                                      )}
+                                      {subnetZones.length > 0 && (
+                                        <Badge tone="accent">
+                                          {t("{count} zones", {
+                                            count: subnetZones.length,
+                                          })}
+                                        </Badge>
+                                      )}
                                       <span className="text-[11px] text-[var(--color-fg-subtle)]">
-                                        {ipCount} assigned
+                                        {t("{count} assigned", {
+                                          count: ipCount,
+                                        })}
                                       </span>
                                       {subnet.description && (
                                         <span className="text-[11px] text-[var(--color-fg-subtle)]">
@@ -895,6 +1604,32 @@ export default function VlansView() {
                                   placeholder="Primary subnet for this VLAN"
                                 />
                               </Field>
+                              <div className="grid gap-4 md:grid-cols-2">
+                                <Field label={t("Gateway")}>
+                                  <Input
+                                    value={subnetForm.gateway}
+                                    onChange={(event) =>
+                                      setSubnetForm((prev) => ({
+                                        ...prev,
+                                        gateway: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="10.0.10.1"
+                                  />
+                                </Field>
+                                <Field label={t("DNS servers")}>
+                                  <Input
+                                    value={subnetForm.dnsServers}
+                                    onChange={(event) =>
+                                      setSubnetForm((prev) => ({
+                                        ...prev,
+                                        dnsServers: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="10.0.10.1, 1.1.1.1"
+                                  />
+                                </Field>
+                              </div>
 
                               {subnetError && (
                                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-sm text-[var(--color-err)]">
@@ -991,6 +1726,14 @@ function SortButton({
       )}
     </button>
   );
+}
+
+function parseDnsServers(value: string) {
+  const normalized = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function compareRanges(

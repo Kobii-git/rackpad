@@ -1,6 +1,10 @@
 import { useSyncExternalStore } from "react";
 import { api, ApiError, getAuthToken, setAuthToken } from "./api";
-import type { IpAssignmentPatch } from "./api";
+import type {
+  IpAssignmentPatch,
+  NetworkCreateInput,
+  NetworkCreateResult,
+} from "./api";
 import type {
   AppUser,
   AuditEntry,
@@ -3343,6 +3347,37 @@ export async function createSubnetRecord(
     "Subnet",
     created.id,
     `Added subnet ${created.cidr} (${created.name})`,
+  );
+  return created;
+}
+
+export async function createNetworkRecord(
+  input: NetworkCreateInput,
+): Promise<NetworkCreateResult> {
+  const created = await api.createNetwork(input);
+  setState((prev) => {
+    let ipZones = prev.ipZones;
+    for (const zone of created.ipZones) {
+      ipZones = replaceById(ipZones, zone, sortIpZones);
+    }
+
+    return {
+      ...prev,
+      vlans: created.vlan
+        ? replaceById(prev.vlans, created.vlan, sortVlans)
+        : prev.vlans,
+      subnets: replaceById(prev.subnets, created.subnet, sortSubnets),
+      scopes: created.dhcpScope
+        ? replaceById(prev.scopes, created.dhcpScope, sortScopes)
+        : prev.scopes,
+      ipZones,
+    };
+  });
+  void recordAudit(
+    "network.create",
+    "Subnet",
+    created.subnet.id,
+    `Created network ${created.subnet.cidr} (${created.subnet.name})`,
   );
   return created;
 }

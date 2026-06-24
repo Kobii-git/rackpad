@@ -89,6 +89,8 @@ type SubnetForm = {
   cidr: string;
   name: string;
   description: string;
+  gateway: string;
+  dnsServers: string;
   vlanId: string;
 };
 
@@ -112,6 +114,8 @@ const EMPTY_SUBNET_FORM: SubnetForm = {
   cidr: "",
   name: "",
   description: "",
+  gateway: "",
+  dnsServers: "",
   vlanId: "",
 };
 
@@ -243,6 +247,8 @@ export default function IpamView() {
       cidr: subnet.cidr,
       name: subnet.name,
       description: subnet.description ?? "",
+      gateway: subnet.gateway ?? "",
+      dnsServers: (subnet.dnsServers ?? []).join(", "),
       vlanId: subnet.vlanId ?? "",
     });
     setSubnetError("");
@@ -392,6 +398,8 @@ export default function IpamView() {
                         cidr: subnetForm.cidr.trim(),
                         name: subnetForm.name.trim(),
                         description: subnetForm.description.trim() || undefined,
+                        gateway: subnetForm.gateway.trim() || undefined,
+                        dnsServers: parseDnsServers(subnetForm.dnsServers),
                         vlanId: subnetForm.vlanId || undefined,
                       });
                       setSubnetId(created.id);
@@ -444,6 +452,8 @@ export default function IpamView() {
           cidr: subnetForm.cidr.trim(),
           name: subnetForm.name.trim(),
           description: subnetForm.description.trim() || undefined,
+          gateway: subnetForm.gateway.trim() || undefined,
+          dnsServers: parseDnsServers(subnetForm.dnsServers),
           vlanId: subnetForm.vlanId || undefined,
         });
         setSubnetId(created.id);
@@ -455,6 +465,8 @@ export default function IpamView() {
         cidr: subnetForm.cidr.trim(),
         name: subnetForm.name.trim(),
         description: subnetForm.description.trim() || null,
+        gateway: subnetForm.gateway.trim() || null,
+        dnsServers: parseDnsServers(subnetForm.dnsServers) ?? null,
         vlanId: subnetForm.vlanId || null,
       });
     } catch (err) {
@@ -1004,6 +1016,32 @@ function SubnetEditor({
                 onChange((prev) => ({ ...prev, name: event.target.value }))
               }
               placeholder="Servers management"
+            />
+          </Field>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label={t("Gateway")}>
+            <Input
+              value={form.gateway}
+              onChange={(event) =>
+                onChange((prev) => ({
+                  ...prev,
+                  gateway: event.target.value,
+                }))
+              }
+              placeholder="10.0.10.1"
+            />
+          </Field>
+          <Field label={t("DNS servers")}>
+            <Input
+              value={form.dnsServers}
+              onChange={(event) =>
+                onChange((prev) => ({
+                  ...prev,
+                  dnsServers: event.target.value,
+                }))
+              }
+              placeholder="1.1.1.1, 8.8.8.8"
             />
           </Field>
         </div>

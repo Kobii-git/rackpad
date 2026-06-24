@@ -355,6 +355,8 @@ export interface Subnet {
   cidr: string;
   name: string;
   description?: string;
+  gateway?: string | null;
+  dnsServers?: string[];
   vlanId?: ID;
 }
 

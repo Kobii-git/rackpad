@@ -112,7 +112,12 @@ const exportBackupSnapshot = db.transaction(
         vlanRanges: db
           .prepare("SELECT * FROM vlanRanges ORDER BY startVlan, id")
           .all(),
-        subnets: db.prepare("SELECT * FROM subnets ORDER BY cidr, id").all(),
+        subnets: (
+          db.prepare("SELECT * FROM subnets ORDER BY cidr, id").all() as Record<
+            string,
+            unknown
+          >[]
+        ).map((row) => parseRow(row, ["dnsServers"])),
         dhcpScopes: (
           db
             .prepare("SELECT * FROM dhcpScopes ORDER BY subnetId, name, id")
@@ -457,7 +462,7 @@ const restoreBackupSnapshot = db.transaction(
       "INSERT INTO vlanRanges (id, labId, name, startVlan, endVlan, purpose, color) VALUES (?, ?, ?, ?, ?, ?, ?)",
     );
     const insertSubnet = db.prepare(
-      "INSERT INTO subnets (id, labId, cidr, name, description, vlanId) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO subnets (id, labId, cidr, name, description, gateway, dnsServers, vlanId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     );
     const insertDhcpScope = db.prepare(
       "INSERT INTO dhcpScopes (id, subnetId, name, startIp, endIp, gateway, dnsServers, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -795,6 +800,8 @@ const restoreBackupSnapshot = db.transaction(
         row.cidr,
         row.name,
         row.description ?? null,
+        row.gateway ?? null,
+        row.dnsServers ? JSON.stringify(row.dnsServers) : null,
         row.vlanId ?? null,
       );
     }

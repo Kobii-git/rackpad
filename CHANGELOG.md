@@ -8,6 +8,28 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+### Added
+
+- Added a combined VLAN/IPAM network setup flow for creating tagged or
+  untagged networks with subnet, gateway, DNS, optional DHCP scope, and IP zones
+  in one action.
+- Added subnet-level gateway and DNS server fields in IPAM, with backup export
+  and restore coverage for those fields.
+
+### Fixed
+
+- Protected subnet gateway and DNS addresses as technical IPs so normal host
+  assignments do not accidentally claim them.
+- Kept older backups that do not contain subnet gateway or DNS fields
+  restorable with null subnet values.
+
+### Test notes
+
+- Verify a tagged network and an untagged network can be created from VLANs and
+  then opened in IPAM with gateway/DNS visible.
+- Verify DHCP can be enabled or omitted during network creation, and that
+  partial DHCP or zone ranges are blocked before submission.
+
 ## [1.6.6-beta.2] - 2026-06-24
 
 ### Added

@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 27;
+const CURRENT_SCHEMA_VERSION = 28;
 
 export const db = new Database(DB_PATH);
 
@@ -871,6 +871,13 @@ const SCHEMA_MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS idx_docker_container_links_source_id
         ON dockerContainerLinks (sourceId);
+    `,
+  },
+  {
+    version: 28,
+    sql: `
+      ALTER TABLE subnets ADD COLUMN gateway TEXT;
+      ALTER TABLE subnets ADD COLUMN dnsServers TEXT;
     `,
   },
 ] as const;

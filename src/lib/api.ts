@@ -248,6 +248,21 @@ export type MonitorPatch = Nullable<
   >
 >;
 
+export interface NetworkCreateInput {
+  labId: ID;
+  vlan?: (Omit<Vlan, "id" | "labId"> & { id?: string }) | null;
+  subnet: Omit<Subnet, "id" | "labId" | "vlanId"> & { id?: string };
+  dhcpScope?: (Omit<DhcpScope, "id" | "subnetId"> & { id?: string }) | null;
+  zones?: Array<Omit<IpZone, "id" | "subnetId"> & { id?: string }>;
+}
+
+export interface NetworkCreateResult {
+  vlan: Vlan | null;
+  subnet: Subnet;
+  dhcpScope: DhcpScope | null;
+  ipZones: IpZone[];
+}
+
 export interface AuthStatus {
   needsBootstrap: boolean;
   oidc: OidcPublicConfig;
@@ -976,6 +991,13 @@ export const api = {
 
   createSubnet(body: Omit<Subnet, "id"> & { id?: string }) {
     return request<Subnet>("/subnets", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  createNetwork(body: NetworkCreateInput) {
+    return request<NetworkCreateResult>("/networks", {
       method: "POST",
       body: JSON.stringify(body),
     });
