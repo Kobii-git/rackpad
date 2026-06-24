@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.6.6-beta.1",
+  "version": "1.6.6-beta.2",
   "private": true,
   "type": "module",
   "engines": {

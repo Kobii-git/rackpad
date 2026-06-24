@@ -2123,6 +2123,45 @@ export async function createDeviceTypeRecord(input: {
   return created;
 }
 
+export async function updateDeviceTypeRecord(
+  id: string,
+  input: {
+    label?: string;
+    parentType?: string | null;
+  },
+): Promise<DeviceTypeDefinition> {
+  const updated = await api.updateDeviceType(id, input);
+  setState((prev) => ({
+    ...prev,
+    deviceTypes: sortDeviceTypes(
+      mergeDeviceTypeDefinitions(
+        prev.deviceTypes.map((entry) => (entry.id === id ? updated : entry)),
+        {
+          devices: prev.devices,
+          portTemplates: prev.portTemplates,
+        },
+      ),
+    ),
+  }));
+  return updated;
+}
+
+export async function deleteDeviceTypeRecord(id: string): Promise<void> {
+  await api.deleteDeviceType(id);
+  setState((prev) => ({
+    ...prev,
+    deviceTypes: sortDeviceTypes(
+      mergeDeviceTypeDefinitions(
+        prev.deviceTypes.filter((entry) => entry.id !== id),
+        {
+          devices: prev.devices,
+          portTemplates: prev.portTemplates,
+        },
+      ),
+    ),
+  }));
+}
+
 export interface CreateCableInput {
   fromPortId: string;
   toPortId: string;

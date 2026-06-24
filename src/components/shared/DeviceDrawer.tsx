@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { X, Save, Network, Plus } from "lucide-react";
+import { X, Save, Network, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Separator } from "@/components/ui/Separator";
@@ -15,8 +15,10 @@ import { cn } from "@/lib/utils";
 import {
   createDevice,
   createDeviceTypeRecord,
+  deleteDeviceTypeRecord,
   previewNextIpAllocation,
   updateDevice,
+  updateDeviceTypeRecord,
   updateDiscoveredDeviceRecord,
   useStore,
 } from "@/lib/store";
@@ -201,6 +203,11 @@ export function DeviceDrawer({
   const [creatingType, setCreatingType] = useState(false);
   const [customTypeLabel, setCustomTypeLabel] = useState("");
   const [customTypeParentType, setCustomTypeParentType] = useState("other");
+  const [managedTypeId, setManagedTypeId] = useState("");
+  const [managedTypeLabel, setManagedTypeLabel] = useState("");
+  const [managedTypeParentType, setManagedTypeParentType] = useState("other");
+  const [savingManagedType, setSavingManagedType] = useState(false);
+  const [deletingManagedType, setDeletingManagedType] = useState(false);
   const [shelfForm, setShelfForm] = useState<ShelfFormState>(() =>
     blankShelfForm(defaultRackId),
   );
@@ -219,6 +226,9 @@ export function DeviceDrawer({
       setCreatingType(false);
       setCustomTypeLabel("");
       setCustomTypeParentType("other");
+      setManagedTypeId("");
+      setManagedTypeLabel("");
+      setManagedTypeParentType("other");
       setShelfForm(blankShelfForm(defaultRackId));
       setSelectedDiscoveryId("");
     }
@@ -244,6 +254,13 @@ export function DeviceDrawer({
     },
     [deviceTypes],
   );
+  const manageableDeviceTypes = useMemo(
+    () => availableDeviceTypes.filter((entry) => !entry.builtIn),
+    [availableDeviceTypes],
+  );
+  const managedType = managedTypeId
+    ? manageableDeviceTypes.find((entry) => entry.id === managedTypeId)
+    : undefined;
 
   const devicePortCount = useMemo(
     () =>
@@ -378,6 +395,31 @@ export function DeviceDrawer({
       return;
     setForm((prev) => ({ ...prev, portTemplateId: "" }));
   }, [compatibleTemplates, form.portTemplateId]);
+
+  useEffect(() => {
+    if (manageableDeviceTypes.length === 0) {
+      setManagedTypeId("");
+      setManagedTypeLabel("");
+      setManagedTypeParentType("other");
+      return;
+    }
+    if (
+      managedTypeId &&
+      manageableDeviceTypes.some((entry) => entry.id === managedTypeId)
+    ) {
+      return;
+    }
+    const selectedCustom = manageableDeviceTypes.find(
+      (entry) => entry.id === form.deviceType,
+    );
+    setManagedTypeId(selectedCustom?.id ?? manageableDeviceTypes[0].id);
+  }, [form.deviceType, manageableDeviceTypes, managedTypeId]);
+
+  useEffect(() => {
+    if (!managedType) return;
+    setManagedTypeLabel(managedType.label);
+    setManagedTypeParentType(managedType.parentType ?? "other");
+  }, [managedType]);
 
   useEffect(() => {
     if (form.placement === "rack") return;
@@ -547,6 +589,56 @@ export function DeviceDrawer({
       );
     } finally {
       setCreatingType(false);
+    }
+  }
+
+  async function handleUpdateDeviceType() {
+    if (!managedType) return;
+    setError("");
+    const label = managedTypeLabel.trim();
+    if (!label) {
+      setError(t("Device type name is required."));
+      return;
+    }
+
+    setSavingManagedType(true);
+    try {
+      const updated = await updateDeviceTypeRecord(managedType.id, {
+        label,
+        parentType: managedTypeParentType || null,
+      });
+      if (form.deviceType === managedType.id) {
+        set("deviceType", updated.id);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("Failed to create device type."),
+      );
+    } finally {
+      setSavingManagedType(false);
+    }
+  }
+
+  async function handleDeleteDeviceType() {
+    if (!managedType) return;
+    if (!window.confirm(`Delete device type ${managedType.label}?`)) return;
+    setError("");
+    setDeletingManagedType(true);
+    try {
+      await deleteDeviceTypeRecord(managedType.id);
+      if (form.deviceType === managedType.id) {
+        set("deviceType", "server");
+      }
+      const next = manageableDeviceTypes.find(
+        (entry) => entry.id !== managedType.id,
+      );
+      setManagedTypeId(next?.id ?? "");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("Failed to create device type."),
+      );
+    } finally {
+      setDeletingManagedType(false);
     }
   }
 
@@ -804,32 +896,89 @@ export function DeviceDrawer({
                       </Button>
                     </div>
                     {addingType && (
-                      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(8rem,0.7fr)_auto] gap-2">
-                        <Input
-                          value={customTypeLabel}
-                          onChange={(event) =>
-                            setCustomTypeLabel(event.target.value)
-                          }
-                          placeholder="e.g. Camera"
-                        />
-                        <Select
-                          value={customTypeParentType}
-                          onChange={setCustomTypeParentType}
-                        >
-                          {builtInDeviceTypes.map((type) => (
-                            <option key={type.id} value={type.id}>
-                              {type.label}
-                            </option>
-                          ))}
-                        </Select>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => void handleCreateDeviceType()}
-                          disabled={creatingType}
-                        >
-                          {creatingType ? t("Adding...") : t("Add")}
-                        </Button>
+                      <div className="mt-2 space-y-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--surface-1)] p-3">
+                        <div className="grid grid-cols-[minmax(0,1fr)_minmax(8rem,0.7fr)_auto] gap-2">
+                          <Input
+                            value={customTypeLabel}
+                            onChange={(event) =>
+                              setCustomTypeLabel(event.target.value)
+                            }
+                            placeholder="e.g. Camera"
+                          />
+                          <Select
+                            value={customTypeParentType}
+                            onChange={setCustomTypeParentType}
+                          >
+                            {builtInDeviceTypes.map((type) => (
+                              <option key={type.id} value={type.id}>
+                                {type.label}
+                              </option>
+                            ))}
+                          </Select>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void handleCreateDeviceType()}
+                            disabled={creatingType}
+                          >
+                            {creatingType ? t("Adding...") : t("Add")}
+                          </Button>
+                        </div>
+
+                        {manageableDeviceTypes.length > 0 && (
+                          <div className="space-y-2 border-t border-[var(--color-line)] pt-3">
+                            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
+                              <Select
+                                value={managedTypeId}
+                                onChange={setManagedTypeId}
+                              >
+                                {manageableDeviceTypes.map((type) => (
+                                  <option key={type.id} value={type.id}>
+                                    {type.label}
+                                  </option>
+                                ))}
+                              </Select>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void handleUpdateDeviceType()}
+                                disabled={savingManagedType || !managedType}
+                              >
+                                {savingManagedType ? t("Saving...") : t("Save")}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="icon"
+                                onClick={() => void handleDeleteDeviceType()}
+                                disabled={deletingManagedType || !managedType}
+                                aria-label={`Delete ${managedType?.label ?? "device type"}`}
+                              >
+                                <Trash2 />
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-[minmax(0,1fr)_minmax(8rem,0.7fr)] gap-2">
+                              <Input
+                                value={managedTypeLabel}
+                                onChange={(event) =>
+                                  setManagedTypeLabel(event.target.value)
+                                }
+                                placeholder={t("Name")}
+                              />
+                              <Select
+                                value={managedTypeParentType}
+                                onChange={setManagedTypeParentType}
+                              >
+                                {builtInDeviceTypes.map((type) => (
+                                  <option key={type.id} value={type.id}>
+                                    {type.label}
+                                  </option>
+                                ))}
+                              </Select>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -685,6 +685,22 @@ export const api = {
     });
   },
 
+  updateDeviceType(
+    id: string,
+    body: { label?: string; parentType?: string | null },
+  ) {
+    return request<DeviceTypeDefinition>(`/device-types/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteDeviceType(id: string) {
+    return request<void>(`/device-types/${id}`, {
+      method: "DELETE",
+    });
+  },
+
   getVirtualSwitches(params?: { labId?: string; hostDeviceId?: string }) {
     return request<VirtualSwitch[]>("/virtual-switches", undefined, params);
   },

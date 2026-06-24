@@ -238,6 +238,82 @@ export function createDeviceType(input: {
   } satisfies DeviceTypeDefinition
 }
 
+export function updateDeviceType(
+  id: string,
+  input: {
+    label?: string | null
+    parentType?: string | null
+  },
+) {
+  const normalizedId = validateDeviceTypeId(id, 'id')
+  if (BUILT_IN_IDS.has(normalizedId)) {
+    throw new ValidationError('Built-in device types cannot be modified.', 400)
+  }
+
+  const settings = loadDeviceTypeSettings()
+  const existingIndex = settings.custom.findIndex((entry) => entry.id === normalizedId)
+  const observed = listObservedDeviceTypes().includes(normalizedId)
+  if (existingIndex < 0 && !observed) {
+    throw new ValidationError('Device type not found.', 404)
+  }
+
+  const existing = settings.custom[existingIndex] ?? {
+    id: normalizedId,
+    label: defaultDeviceTypeLabel(normalizedId),
+    parentType: null,
+    createdAt: new Date().toISOString(),
+  }
+  const nextLabel = input.label === undefined ? existing.label : String(input.label ?? '').trim()
+  if (!nextLabel) {
+    throw new ValidationError('Label is required.')
+  }
+  if (nextLabel.length > 80) {
+    throw new ValidationError('Label must be 80 characters or fewer.')
+  }
+
+  const updated = {
+    ...existing,
+    label: nextLabel,
+    parentType:
+      input.parentType === undefined
+        ? (existing.parentType ?? null)
+        : optionalParentType(input.parentType),
+    updatedAt: new Date().toISOString(),
+  }
+  const custom =
+    existingIndex >= 0
+      ? settings.custom.map((entry, index) => (index === existingIndex ? updated : entry))
+      : [...settings.custom, updated]
+  saveDeviceTypeSettings({ custom })
+
+  return {
+    ...updated,
+    builtIn: false,
+  } satisfies DeviceTypeDefinition
+}
+
+export function deleteDeviceType(id: string) {
+  const normalizedId = validateDeviceTypeId(id, 'id')
+  if (BUILT_IN_IDS.has(normalizedId)) {
+    throw new ValidationError('Built-in device types cannot be deleted.', 400)
+  }
+
+  const usage = deviceTypeUsage(normalizedId)
+  if (usage.devices + usage.discoveredDevices + usage.portTemplates > 0) {
+    throw new ValidationError(
+      'Device type is still used by devices, discovery records, or port templates.',
+      409,
+    )
+  }
+
+  const settings = loadDeviceTypeSettings()
+  const nextCustom = settings.custom.filter((entry) => entry.id !== normalizedId)
+  if (nextCustom.length === settings.custom.length) {
+    throw new ValidationError('Device type not found.', 404)
+  }
+  saveDeviceTypeSettings({ custom: nextCustom })
+}
+
 export function listObservedDeviceTypes() {
   return (db.prepare(`
     SELECT DISTINCT deviceType AS id
@@ -265,4 +341,34 @@ export function listDeviceTypesWithObserved(): DeviceTypeDefinition[] {
     .sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id))
 
   return [...listed, ...observed]
+}
+
+function deviceTypeUsage(deviceType: string) {
+  const devices = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM devices
+    WHERE deviceType = ?
+  `).get(deviceType) as { count: number }
+  const discoveredDevices = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM discoveredDevices
+    WHERE deviceType = ?
+  `).get(deviceType) as { count: number }
+  const templates = db.prepare(`
+    SELECT deviceTypes
+    FROM portTemplates
+  `).all() as Array<{ deviceTypes: string }>
+
+  return {
+    devices: Number(devices.count ?? 0),
+    discoveredDevices: Number(discoveredDevices.count ?? 0),
+    portTemplates: templates.filter((template) => {
+      try {
+        const parsed = JSON.parse(template.deviceTypes)
+        return Array.isArray(parsed) && parsed.includes(deviceType)
+      } catch {
+        return false
+      }
+    }).length,
+  }
 }

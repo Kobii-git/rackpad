@@ -8,6 +8,36 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.6-beta.2] - 2026-06-24
+
+### Added
+
+- Added management for existing custom or observed device types, including
+  label/parent updates and deletion for unused custom types.
+- Added a Visualizer trace picker so trace mode can start from, or trace to, a
+  device port selected from the side panel instead of only tiny canvas ports.
+
+### Fixed
+
+- Regenerated `package-lock.json` so package entries include resolved registry
+  URLs for Nix and other downstream build tooling.
+- Added a Ports workspace shortcut to the device detail empty Ports state,
+  pre-filtered to the selected device.
+- Improved black and white cable visibility in Visualizer canvas and diagram
+  views by adding theme-aware contrast treatment.
+
+### Test notes
+
+- Verify existing custom device types can be edited, observed legacy types can
+  be assigned a parent, and delete is blocked while a type is still used.
+- Verify a device with no ports offers a Ports workspace shortcut and opens it
+  filtered to that device.
+- Verify Visualizer trace mode works via the side-panel device/port picker and
+  black or white cables remain visible in light and dark themes.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, `npm audit`, and
+  `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.6-beta.1] - 2026-06-20
 
 ### Added

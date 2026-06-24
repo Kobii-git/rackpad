@@ -1270,6 +1270,69 @@ test("custom device types can be created and used by devices and templates", asy
   });
   assert.equal(invalidParentRes.statusCode, 400);
   assert.match(invalidParentRes.body, /built-in device type/i);
+
+  const updateTypeRes = await app.inject({
+    method: "PATCH",
+    url: `/api/device-types/${deviceType.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      label: "PoE Camera",
+      parentType: "ap",
+    },
+  });
+  assert.equal(updateTypeRes.statusCode, 200);
+  const updatedType = readJson(updateTypeRes) as {
+    id: string;
+    label: string;
+    parentType: string | null;
+  };
+  assert.equal(updatedType.id, "ip_camera");
+  assert.equal(updatedType.label, "PoE Camera");
+  assert.equal(updatedType.parentType, "ap");
+
+  const deleteUsedTypeRes = await app.inject({
+    method: "DELETE",
+    url: `/api/device-types/${deviceType.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(deleteUsedTypeRes.statusCode, 409);
+  assert.match(deleteUsedTypeRes.body, /still used/i);
+
+  const unusedTypeRes = await app.inject({
+    method: "POST",
+    url: "/api/device-types",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      label: "Unused Sensor",
+      parentType: "endpoint",
+    },
+  });
+  assert.equal(unusedTypeRes.statusCode, 201);
+  const unusedType = readJson(unusedTypeRes) as { id: string };
+
+  const deleteUnusedTypeRes = await app.inject({
+    method: "DELETE",
+    url: `/api/device-types/${unusedType.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(deleteUnusedTypeRes.statusCode, 204);
+
+  const deleteBuiltInTypeRes = await app.inject({
+    method: "DELETE",
+    url: "/api/device-types/switch",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(deleteBuiltInTypeRes.statusCode, 400);
 });
 
 test("bulk device updates accept custom types and wireless placement", async () => {

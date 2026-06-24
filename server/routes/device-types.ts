@@ -1,6 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { asObject, optionalString, requiredString } from '../lib/validation.js'
-import { createDeviceType, listDeviceTypesWithObserved } from '../lib/device-types.js'
+import {
+  createDeviceType,
+  deleteDeviceType,
+  listDeviceTypesWithObserved,
+  updateDeviceType,
+} from '../lib/device-types.js'
 
 export const deviceTypesRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', async () => {
@@ -14,5 +19,22 @@ export const deviceTypesRoutes: FastifyPluginAsync = async (app) => {
     const parentType = optionalString(body, 'parentType', { maxLength: 80 })
 
     return reply.status(201).send(createDeviceType({ id, label, parentType }))
+  })
+
+  app.patch('/:id', async (req) => {
+    const params = asObject(req.params)
+    const body = asObject(req.body)
+    const id = requiredString(params, 'id', { maxLength: 80 })
+    const label = optionalString(body, 'label', { maxLength: 80 })
+    const parentType = optionalString(body, 'parentType', { maxLength: 80 })
+
+    return updateDeviceType(id, { label, parentType })
+  })
+
+  app.delete('/:id', async (req, reply) => {
+    const params = asObject(req.params)
+    const id = requiredString(params, 'id', { maxLength: 80 })
+    deleteDeviceType(id)
+    return reply.status(204).send()
   })
 }

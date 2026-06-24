@@ -1650,6 +1650,14 @@ export default function DeviceDetail() {
                         title={t("No ports documented")}
                         description="Add or template ports for this device to inspect cabling, VLANs, and interface notes here."
                       />
+                      <div className="mt-3 flex justify-center">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/ports?deviceId=${device.id}`}>
+                            <ExternalLink className="size-3.5" />
+                            {t("Open in ports workspace")}
+                          </Link>
+                        </Button>
+                      </div>
                     </CardBody>
                   </Card>
                 ) : isVisualGrid ? (

@@ -144,6 +144,7 @@ export function VisualizerCanvas({
   readableLabels,
   onNodePositionChange,
 }: VisualizerCanvasProps) {
+  const { t } = useI18n();
   const viewportRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [transform, setTransform] = useState<TransformState>({
@@ -273,7 +274,7 @@ export function VisualizerCanvas({
             enabled: true,
             firstPortId: null,
             result: null,
-            message: "Click first port...",
+            message: t("Click first port..."),
           },
     );
   }
@@ -472,43 +473,43 @@ export function VisualizerCanvas({
     });
   }
 
-  function handlePortClick(node: VisualizerNode, visualPort: VisualizerPort) {
-    if (traceMode.enabled) {
-      if (!traceMode.firstPortId) {
-        const result = traceFromPort(model, visualPort.port.id);
-        if (result) {
-          setTraceMode({
-            enabled: true,
-            firstPortId: visualPort.port.id,
-            result,
-            message: `${result.segments.length} hop path traced from selected port.`,
-          });
-          setSelection({ kind: "device", id: node.device.id });
-          return;
-        }
-        setTraceMode({
-          enabled: true,
-          firstPortId: visualPort.port.id,
-          result: null,
-          message:
-            "No onward path found. Click a second port to trace manually.",
-        });
-        setSelection({ kind: "device", id: node.device.id });
-        return;
-      }
-      const result = tracePorts(
-        model,
-        traceMode.firstPortId,
-        visualPort.port.id,
-      );
+  function selectTracePort(deviceId: string, portId: string) {
+    const node = model.nodesByDeviceId[deviceId];
+    if (!node) return;
+    if (!traceMode.firstPortId) {
+      const result = traceFromPort(model, portId);
       setTraceMode({
         enabled: true,
-        firstPortId: traceMode.firstPortId,
+        firstPortId: portId,
         result,
         message: result
-          ? `${result.segments.length} hop path highlighted.`
-          : "No documented path between these ports.",
+          ? t("{count} hop path traced from selected port.", {
+              count: result.segments.length,
+            })
+          : t("No onward path found. Select a second port to trace manually."),
       });
+      setSelection({ kind: "device", id: deviceId });
+      focusDevice(deviceId);
+      return;
+    }
+    const result = tracePorts(model, traceMode.firstPortId, portId);
+    setTraceMode({
+      enabled: true,
+      firstPortId: traceMode.firstPortId,
+      result,
+      message: result
+        ? t("{count} hop path highlighted.", {
+            count: result.segments.length,
+          })
+        : t("No documented path between these ports."),
+    });
+    setSelection({ kind: "device", id: deviceId });
+    focusDevice(deviceId);
+  }
+
+  function handlePortClick(node: VisualizerNode, visualPort: VisualizerPort) {
+    if (traceMode.enabled) {
+      selectTracePort(node.device.id, visualPort.port.id);
       return;
     }
     if (visualPort.linkId) {
@@ -855,9 +856,19 @@ export function VisualizerCanvas({
                 selection={selection}
                 selectedCable={selectedCable}
                 selectedNode={selectedNode}
+                traceMode={traceMode}
                 traceResult={traceMode.result}
                 onSelectDevice={(id) => selectDevice(id, true)}
                 onSelectCable={selectCable}
+                onTracePortSelect={selectTracePort}
+                onClearTrace={() =>
+                  setTraceMode({
+                    enabled: true,
+                    firstPortId: null,
+                    result: null,
+                    message: t("Select a device and port..."),
+                  })
+                }
               />
             )}
           </div>
@@ -1467,6 +1478,7 @@ function CableSvg({
     : traceActive
       ? "var(--accent-primary)"
       : cable.color;
+  const needsContrast = cableNeedsContrastOutline(color);
   const opacity = traceActive ? 1 : dimmed ? 0.06 : active ? 1 : 0.5;
   const strokeWidth = traceActive ? 5.5 : active ? 5 : cable.up ? 2.6 : 2;
   // Firefox: round caps on dashed strokes balloon each dash segment; use butt for dashes only.
@@ -1485,6 +1497,17 @@ function CableSvg({
           stroke="var(--bg-page)"
           strokeWidth={strokeWidth + 6}
           strokeOpacity={0.82}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+      {needsContrast && (
+        <path
+          d={path}
+          fill="none"
+          stroke="var(--text-primary)"
+          strokeWidth={strokeWidth + 3}
+          strokeOpacity={dimmed ? 0.08 : 0.48}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -1515,11 +1538,23 @@ function CableSvg({
           r={active || traceActive ? 6.5 : 5}
           fill={color}
           fillOpacity={opacity}
-          stroke="var(--bg-page)"
-          strokeWidth={1}
+          stroke={needsContrast ? "var(--text-primary)" : "var(--bg-page)"}
+          strokeWidth={needsContrast ? 1.75 : 1}
         />
       ))}
     </g>
+  );
+}
+
+function cableNeedsContrastOutline(color: string) {
+  const value = color.trim().toLowerCase();
+  return (
+    value === "black" ||
+    value === "#000" ||
+    value === "#000000" ||
+    value === "white" ||
+    value === "#fff" ||
+    value === "#ffffff"
   );
 }
 
@@ -1751,9 +1786,12 @@ function VisualizerSidePanel({
   selection,
   selectedCable,
   selectedNode,
+  traceMode,
   traceResult,
   onSelectDevice,
   onSelectCable,
+  onTracePortSelect,
+  onClearTrace,
 }: {
   model: VisualizerModel;
   visibleCables: VisualizerCable[];
@@ -1779,9 +1817,12 @@ function VisualizerSidePanel({
   selection: VisualizerSelection;
   selectedCable: VisualizerCable | null;
   selectedNode: VisualizerNode | null;
+  traceMode: TraceModeState;
   traceResult: TraceResult | null;
   onSelectDevice: (id: string) => void;
   onSelectCable: (id: string) => void;
+  onTracePortSelect: (deviceId: string, portId: string) => void;
+  onClearTrace: () => void;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
@@ -1835,6 +1876,15 @@ function VisualizerSidePanel({
         </div>
       </div>
 
+      {traceMode.enabled && (
+        <TracePicker
+          model={model}
+          traceMode={traceMode}
+          onTracePortSelect={onTracePortSelect}
+          onClearTrace={onClearTrace}
+        />
+      )}
+
       <Card className="shrink-0">
         <CardHeader>
           <CardTitle>
@@ -1874,6 +1924,114 @@ function VisualizerSidePanel({
         />
       </div>
     </div>
+  );
+}
+
+function TracePicker({
+  model,
+  traceMode,
+  onTracePortSelect,
+  onClearTrace,
+}: {
+  model: VisualizerModel;
+  traceMode: TraceModeState;
+  onTracePortSelect: (deviceId: string, portId: string) => void;
+  onClearTrace: () => void;
+}) {
+  const { t } = useI18n();
+  const traceDevices = useMemo(
+    () =>
+      model.nodes
+        .filter((node) => (model.portsByDeviceId[node.device.id] ?? []).length > 0)
+        .sort((a, b) => a.device.hostname.localeCompare(b.device.hostname)),
+    [model],
+  );
+  const [deviceId, setDeviceId] = useState(traceDevices[0]?.device.id ?? "");
+  const devicePorts = deviceId ? (model.portsByDeviceId[deviceId] ?? []) : [];
+  const [portId, setPortId] = useState(devicePorts[0]?.id ?? "");
+
+  useEffect(() => {
+    if (traceDevices.some((node) => node.device.id === deviceId)) return;
+    setDeviceId(traceDevices[0]?.device.id ?? "");
+  }, [deviceId, traceDevices]);
+
+  useEffect(() => {
+    if (devicePorts.some((port) => port.id === portId)) return;
+    setPortId(devicePorts[0]?.id ?? "");
+  }, [devicePorts, portId]);
+
+  const firstPort = traceMode.firstPortId
+    ? model.portById[traceMode.firstPortId]
+    : undefined;
+  const firstDevice = firstPort ? model.deviceById[firstPort.deviceId] : undefined;
+
+  return (
+    <Card className="shrink-0">
+      <CardHeader>
+        <CardTitle>
+          <CardLabel>{t("Trace")}</CardLabel>
+          <CardHeading>{t("Device and port")}</CardHeading>
+        </CardTitle>
+        {traceMode.firstPortId && (
+          <Button variant="ghost" size="sm" onClick={onClearTrace}>
+            {t("Reset")}
+          </Button>
+        )}
+      </CardHeader>
+      <CardBody className="space-y-3">
+        {firstPort && firstDevice && (
+          <div className="rounded-[var(--radius-sm)] border border-[var(--accent-primary-border)] bg-[var(--accent-primary)]/8 px-3 py-2">
+            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+              {t("Start port")}
+            </div>
+            <div className="mt-1 truncate text-xs text-[var(--text-primary)]">
+              {firstDevice.hostname} / {firstPort.name}
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <LayoutField label={t("Device")}>
+            <select
+              value={deviceId}
+              onChange={(event) => setDeviceId(event.target.value)}
+              className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
+            >
+              {traceDevices.map((node) => (
+                <option key={node.device.id} value={node.device.id}>
+                  {node.device.hostname}
+                </option>
+              ))}
+            </select>
+          </LayoutField>
+          <LayoutField label={t("Port")}>
+            <select
+              value={portId}
+              onChange={(event) => setPortId(event.target.value)}
+              className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
+            >
+              {devicePorts.map((port) => (
+                <option key={port.id} value={port.id}>
+                  {formatPortEndpointLabel(port, model.deviceById[port.deviceId])}
+                </option>
+              ))}
+            </select>
+          </LayoutField>
+        </div>
+        <Button
+          size="sm"
+          className="w-full"
+          disabled={!deviceId || !portId}
+          onClick={() => onTracePortSelect(deviceId, portId)}
+        >
+          {traceMode.firstPortId ? t("Trace to port") : t("Set start port")}
+        </Button>
+        {traceMode.message && (
+          <div className="text-xs text-[var(--text-tertiary)]">
+            {traceMode.message}
+          </div>
+        )}
+      </CardBody>
+    </Card>
   );
 }
 
@@ -2294,9 +2452,10 @@ function NoCableBanner({ onDismiss }: { onDismiss: () => void }) {
 }
 
 function TraceBanner({ traceMode }: { traceMode: TraceModeState }) {
+  const { t } = useI18n();
   return (
     <div className="absolute left-1/2 top-4 z-[85] -translate-x-1/2 rounded-full border border-[var(--accent-primary-border)] bg-[var(--accent-primary-soft)] px-4 py-2 font-mono text-[10px] uppercase tracking-wider text-[var(--accent-primary)]">
-      {traceMode.message ?? "Click first port..."}
+      {traceMode.message ?? t("Click first port...")}
     </div>
   );
 }

@@ -1104,6 +1104,9 @@ function buildDiagramLayout(
           strokeWidth: cable.crossZone ? 3 : snmpUp ? 2.75 : 2.25,
           strokeOpacity: offline ? 0.38 : snmpUp ? 0.92 : 0.78,
           strokeDasharray: offline ? "8 7" : undefined,
+          filter: cableNeedsContrastOutline(cable.color)
+            ? "drop-shadow(0 0 2px var(--text-primary))"
+            : undefined,
           // Firefox: round caps on dashed strokes balloon each dash; solid edges stay round.
           strokeLinecap: offline ? "butt" : "round",
         },
@@ -1504,6 +1507,18 @@ function cableHasVisibleEndpoints(
       cable.toDevice &&
       visibleDeviceIds.has(cable.fromDevice.id) &&
       visibleDeviceIds.has(cable.toDevice.id),
+  );
+}
+
+function cableNeedsContrastOutline(color: string) {
+  const value = color.trim().toLowerCase();
+  return (
+    value === "black" ||
+    value === "#000" ||
+    value === "#000000" ||
+    value === "white" ||
+    value === "#fff" ||
+    value === "#ffffff"
   );
 }
 

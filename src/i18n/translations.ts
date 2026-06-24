@@ -963,6 +963,17 @@ export const en = {
   "No rear rack picture yet.": "No rear rack picture yet.",
   "No room picture yet.": "No room picture yet.",
   "No {face} rack picture yet.": "No {face} rack picture yet.",
+  "Trace": "Trace",
+  "Click first port...": "Click first port...",
+  "Select a device and port...": "Select a device and port...",
+  "{count} hop path traced from selected port.": "{count} hop path traced from selected port.",
+  "No onward path found. Select a second port to trace manually.": "No onward path found. Select a second port to trace manually.",
+  "{count} hop path highlighted.": "{count} hop path highlighted.",
+  "No documented path between these ports.": "No documented path between these ports.",
+  "Device and port": "Device and port",
+  "Start port": "Start port",
+  "Trace to port": "Trace to port",
+  "Set start port": "Set start port",
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -1933,6 +1944,17 @@ export const fr = {
   "No rear rack picture yet.": "Aucune photo de rack arrière pour l'instant.",
   "No room picture yet.": "Aucune photo de salle pour l'instant.",
   "No {face} rack picture yet.": "Aucune photo de rack {face} pour l'instant.",
+  "Trace": "Trace",
+  "Click first port...": "Click first port...",
+  "Select a device and port...": "Select a device and port...",
+  "{count} hop path traced from selected port.": "{count} hop path traced from selected port.",
+  "No onward path found. Select a second port to trace manually.": "No onward path found. Select a second port to trace manually.",
+  "{count} hop path highlighted.": "{count} hop path highlighted.",
+  "No documented path between these ports.": "No documented path between these ports.",
+  "Device and port": "Device and port",
+  "Start port": "Start port",
+  "Trace to port": "Trace to port",
+  "Set start port": "Set start port",
 } satisfies TranslationMap;
 
 
@@ -2901,6 +2923,17 @@ export const zh = {
   "No rear rack picture yet.": "尚无机架背面照片。",
   "No room picture yet.": "尚无机房照片。",
   "No {face} rack picture yet.": "尚无机架{face}照片。",
+  "Trace": "Trace",
+  "Click first port...": "Click first port...",
+  "Select a device and port...": "Select a device and port...",
+  "{count} hop path traced from selected port.": "{count} hop path traced from selected port.",
+  "No onward path found. Select a second port to trace manually.": "No onward path found. Select a second port to trace manually.",
+  "{count} hop path highlighted.": "{count} hop path highlighted.",
+  "No documented path between these ports.": "No documented path between these ports.",
+  "Device and port": "Device and port",
+  "Start port": "Start port",
+  "Trace to port": "Trace to port",
+  "Set start port": "Set start port",
 } satisfies TranslationMap;
 
 
@@ -3869,6 +3902,17 @@ export const es = {
   "No rear rack picture yet.": "Aún no hay foto trasera del rack.",
   "No room picture yet.": "Aún no hay foto de la sala.",
   "No {face} rack picture yet.": "Aún no hay foto {face} del rack.",
+  "Trace": "Trace",
+  "Click first port...": "Click first port...",
+  "Select a device and port...": "Select a device and port...",
+  "{count} hop path traced from selected port.": "{count} hop path traced from selected port.",
+  "No onward path found. Select a second port to trace manually.": "No onward path found. Select a second port to trace manually.",
+  "{count} hop path highlighted.": "{count} hop path highlighted.",
+  "No documented path between these ports.": "No documented path between these ports.",
+  "Device and port": "Device and port",
+  "Start port": "Start port",
+  "Trace to port": "Trace to port",
+  "Set start port": "Set start port",
 } satisfies TranslationMap;
 
 
@@ -4837,6 +4881,17 @@ export const hi = {
   "No rear rack picture yet.": "अभी तक कोई पीछे की रैक तस्वीर नहीं।",
   "No room picture yet.": "अभी तक कोई कमरे की तस्वीर नहीं।",
   "No {face} rack picture yet.": "अभी तक कोई {face} रैक तस्वीर नहीं।",
+  "Trace": "Trace",
+  "Click first port...": "Click first port...",
+  "Select a device and port...": "Select a device and port...",
+  "{count} hop path traced from selected port.": "{count} hop path traced from selected port.",
+  "No onward path found. Select a second port to trace manually.": "No onward path found. Select a second port to trace manually.",
+  "{count} hop path highlighted.": "{count} hop path highlighted.",
+  "No documented path between these ports.": "No documented path between these ports.",
+  "Device and port": "Device and port",
+  "Start port": "Start port",
+  "Trace to port": "Trace to port",
+  "Set start port": "Set start port",
 } satisfies TranslationMap;
 
 
@@ -5805,6 +5860,17 @@ export const ar = {
   "No rear rack picture yet.": "لا توجد صورة خلفية للرف بعد.",
   "No room picture yet.": "لا توجد صورة للغرفة بعد.",
   "No {face} rack picture yet.": "لا توجد صورة {face} للرف بعد.",
+  "Trace": "Trace",
+  "Click first port...": "Click first port...",
+  "Select a device and port...": "Select a device and port...",
+  "{count} hop path traced from selected port.": "{count} hop path traced from selected port.",
+  "No onward path found. Select a second port to trace manually.": "No onward path found. Select a second port to trace manually.",
+  "{count} hop path highlighted.": "{count} hop path highlighted.",
+  "No documented path between these ports.": "No documented path between these ports.",
+  "Device and port": "Device and port",
+  "Start port": "Start port",
+  "Trace to port": "Trace to port",
+  "Set start port": "Set start port",
 } satisfies TranslationMap;
 
 
@@ -6773,6 +6839,17 @@ export const ja = {
   "No rear rack picture yet.": "ラック背面の写真はまだありません。",
   "No room picture yet.": "部屋の写真はまだありません。",
   "No {face} rack picture yet.": "ラック{face}の写真はまだありません。",
+  "Trace": "Trace",
+  "Click first port...": "Click first port...",
+  "Select a device and port...": "Select a device and port...",
+  "{count} hop path traced from selected port.": "{count} hop path traced from selected port.",
+  "No onward path found. Select a second port to trace manually.": "No onward path found. Select a second port to trace manually.",
+  "{count} hop path highlighted.": "{count} hop path highlighted.",
+  "No documented path between these ports.": "No documented path between these ports.",
+  "Device and port": "Device and port",
+  "Start port": "Start port",
+  "Trace to port": "Trace to port",
+  "Set start port": "Set start port",
 } satisfies TranslationMap;
 
 export { de } from "./locales/de";
