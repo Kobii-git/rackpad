@@ -4,6 +4,7 @@ import type {
   IpAssignmentPatch,
   NetworkCreateInput,
   NetworkCreateResult,
+  VlanPatch,
 } from "./api";
 import type {
   AppUser,
@@ -3250,6 +3251,24 @@ export async function createVlanRecord(
   );
 
   return created;
+}
+
+export async function updateVlanRecord(
+  id: string,
+  changes: VlanPatch,
+): Promise<Vlan> {
+  const updated = await api.updateVlan(id, changes);
+  setState((prev) => ({
+    ...prev,
+    vlans: replaceById(prev.vlans, updated, sortVlans),
+  }));
+  void recordAudit(
+    "vlan.update",
+    "Vlan",
+    id,
+    `Updated VLAN ${updated.vlanId} (${updated.name})`,
+  );
+  return updated;
 }
 
 export async function deleteVlan(id: string): Promise<boolean> {

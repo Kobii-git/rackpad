@@ -62,6 +62,12 @@ export default function Dashboard() {
     totalUsableIps === 0
       ? 0
       : Math.round((ipAssignments.length / totalUsableIps) * 100);
+  const linkedVlanIds = new Set(
+    subnets.map((subnet) => subnet.vlanId).filter(Boolean),
+  );
+  const vlanOnlyCount = vlans.filter((vlan) => !linkedVlanIds.has(vlan.id))
+    .length;
+  const networkCount = subnets.length + vlanOnlyCount;
   const uncabledPorts = Math.max(0, ports.length - cabledPortIds.size);
   const portsWithoutSpeed = ports.filter((port) => !port.speed).length;
   const snmpVerifiedPortIds = useMemo(
@@ -163,9 +169,9 @@ export default function Dashboard() {
             }
           />
           <DashboardMetric
-            to="/ipam"
+            to="/networks"
             icon={Network}
-            label="IPAM used"
+            label="Network IPs used"
             value={`${ipUsagePct}%`}
             hint={`${ipAssignments.length}/${totalUsableIps || 0} usable addresses`}
             tone={ipUsagePct > 85 ? "warn" : "info"}
@@ -337,7 +343,7 @@ export default function Dashboard() {
                 )}
               />
               <CoverageRow
-                label="IPAM usage"
+                label="Network IPs used"
                 value={`${ipUsagePct}%`}
                 pct={ipUsagePct}
               />
@@ -409,8 +415,12 @@ export default function Dashboard() {
                 label="Ports without cable"
                 value={uncabledPorts}
               />
-              <GapRow to="/ipam" label="Subnets" value={subnets.length} />
-              <GapRow to="/vlans" label={t("VLANs")} value={vlans.length} />
+              <GapRow
+                to="/networks"
+                label={t("Networks")}
+                value={networkCount}
+              />
+              <GapRow to="/networks" label={t("VLANs")} value={vlans.length} />
             </CardBody>
           </Card>
         </div>

@@ -10,6 +10,9 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Added
 
+- Added a consolidated Networks workspace that replaces the separate VLANs and
+  IPAM sidebar pages with subnet-first network rows, VLAN-only planning rows,
+  DHCP scopes, zones, assignments, VLAN details, and VLAN ranges in one view.
 - Added a combined VLAN/IPAM network setup flow for creating tagged or
   untagged networks with subnet, gateway, DNS, optional DHCP scope, and IP zones
   in one action.
@@ -18,6 +21,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Fixed
 
+- Redirected legacy `/vlans` and `/ipam` routes to `/networks` while preserving
+  existing subnet and VLAN query selection where present.
 - Protected subnet gateway and DNS addresses as technical IPs so normal host
   assignments do not accidentally claim them.
 - Kept older backups that do not contain subnet gateway or DNS fields
@@ -25,8 +30,11 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Test notes
 
-- Verify a tagged network and an untagged network can be created from VLANs and
-  then opened in IPAM with gateway/DNS visible.
+- Verify the sidebar shows Networks only, `/vlans` and `/ipam` redirect to
+  `/networks`, and dashboard/command palette shortcuts open Networks.
+- Verify tagged, untagged, VLAN-only, and multi-subnet VLAN records all render
+  as separate network rows with gateway/DNS, DHCP, zones, assignments, and VLAN
+  details visible where applicable.
 - Verify DHCP can be enabled or omitted during network creation, and that
   partial DHCP or zone ranges are blocked before submission.
 

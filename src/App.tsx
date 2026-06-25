@@ -21,8 +21,7 @@ const ImportView = lazy(() => import("@/pages/ImportView"));
 const MonitoringView = lazy(() => import("@/pages/MonitoringView"));
 const PortView = lazy(() => import("@/pages/PortView"));
 const CableView = lazy(() => import("@/pages/CableView"));
-const VlansView = lazy(() => import("@/pages/VlansView"));
-const IpamView = lazy(() => import("@/pages/IpamView"));
+const NetworksView = lazy(() => import("@/pages/NetworksView"));
 const ReportsView = lazy(() => import("@/pages/ReportsView"));
 const AuditLogView = lazy(() => import("@/pages/AuditLogView"));
 const VisualizerView = lazy(() => import("@/pages/VisualizerView"));
@@ -139,21 +138,15 @@ export default function App() {
           }
         />
         <Route
-          path="/vlans"
+          path="/networks"
           element={
             <RouteFrame>
-              <VlansView />
+              <NetworksView />
             </RouteFrame>
           }
         />
-        <Route
-          path="/ipam"
-          element={
-            <RouteFrame>
-              <IpamView />
-            </RouteFrame>
-          }
-        />
+        <Route path="/vlans" element={<LegacyNetworkRedirect />} />
+        <Route path="/ipam" element={<LegacyNetworkRedirect />} />
         <Route
           path="/reports"
           element={
@@ -199,6 +192,21 @@ export default function App() {
       </Route>
     </Routes>
   );
+}
+
+function LegacyNetworkRedirect() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const next = new URLSearchParams();
+  const subnetId = params.get("subnetId");
+  const vlanId = params.get("vlanId");
+  if (subnetId) {
+    next.set("subnetId", subnetId);
+  } else if (vlanId) {
+    next.set("vlanId", vlanId);
+  }
+  const query = next.toString();
+  return <Navigate to={query ? `/networks?${query}` : "/networks"} replace />;
 }
 
 function RouteFrame({ children }: { children: ReactNode }) {

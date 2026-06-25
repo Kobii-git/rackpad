@@ -1284,10 +1284,10 @@ export default function VlansView() {
                     )}
                     <div className="mt-2">
                       <Link
-                        to={`/ipam?subnetId=${subnet.id}`}
+                        to={`/networks?subnetId=${subnet.id}`}
                         className="inline-flex items-center gap-1 text-[11px] text-[var(--color-accent)] hover:text-[var(--color-accent-strong)]"
                       >
-                        {t("Open IPAM")}
+                        {t("Open network")}
                         <ChevronRight className="size-3" />
                       </Link>
                     </div>
@@ -1477,10 +1477,10 @@ export default function VlansView() {
                             </div>
                             {linkedSubnets.length > 0 && (
                               <Link
-                                to={`/ipam?subnetId=${linkedSubnets[0].id}&vlanId=${vlan.id}`}
+                                to={`/networks?subnetId=${linkedSubnets[0].id}&vlanId=${vlan.id}`}
                                 className="inline-flex items-center gap-1 text-[11px] text-[var(--color-accent)] hover:text-[var(--color-accent-strong)]"
                               >
-                                {t("Open IPAM")}
+                                {t("Open network")}
                                 <ChevronRight className="size-3" />
                               </Link>
                             )}

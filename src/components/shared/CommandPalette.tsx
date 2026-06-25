@@ -35,12 +35,13 @@ import { useI18n } from "@/i18n";
 
 interface SearchResult {
   id: string;
-  group: "Pages" | "Devices" | "VLANs" | "IPs";
+  group: "Pages" | "Devices" | "Networks" | "IPs";
   title: string;
   subtitle?: string;
   href: string;
   Icon: LucideIcon;
   accent?: string;
+  keywords?: string[];
 }
 
 interface CommandPaletteProps {
@@ -128,20 +129,22 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         Icon: Route,
       },
       {
-        id: "p-vlans",
+        id: "p-networks",
         group: "Pages",
-        title: t("VLANs"),
-        subtitle: "Layer 2 segmentation",
-        href: "/vlans",
-        Icon: Hash,
-      },
-      {
-        id: "p-ipam",
-        group: "Pages",
-        title: t("IPAM"),
-        subtitle: "Address management",
-        href: "/ipam",
+        title: t("Networks"),
+        subtitle: "VLANs and address management",
+        href: "/networks",
         Icon: Network,
+        keywords: [
+          "network",
+          "networks",
+          "ipam",
+          "vlan",
+          "vlans",
+          "subnet",
+          "subnets",
+          "dhcp",
+        ],
       },
       {
         id: "p-reports",
@@ -226,10 +229,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       if (haystack.includes(q)) {
         out.push({
           id: vlan.id,
-          group: "VLANs",
+          group: "Networks",
           title: `VLAN ${vlan.vlanId} · ${vlan.name}`,
           subtitle: vlan.description,
-          href: "/vlans",
+          href: `/networks?vlanId=${vlan.id}`,
           Icon: Hash,
           accent: vlan.color,
         });
@@ -253,7 +256,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           subtitle: [assignment.hostname, assignment.assignmentType]
             .filter(Boolean)
             .join(" · "),
-          href: "/ipam",
+          href: `/networks?subnetId=${assignment.subnetId}`,
           Icon: Network,
         });
       }
@@ -277,7 +280,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     }
 
     for (const page of pages) {
-      if (page.title.toLowerCase().includes(q)) out.push(page);
+      const haystack = [page.title, ...(page.keywords ?? [])]
+        .join(" ")
+        .toLowerCase();
+      if (haystack.includes(q)) out.push(page);
     }
 
     return out;
@@ -420,8 +426,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                           <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
                             {group.label === "Devices"
                               ? t("Devices")
-                              : group.label === "VLANs"
-                                ? t("VLANs")
+                              : group.label === "Networks"
+                                ? t("Networks")
                                 : group.label}
                           </span>
                           <span className="flex-1 border-t border-[var(--color-line)]" />
