@@ -28,6 +28,11 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Kept older backups that do not contain subnet gateway or DNS fields
   restorable with null subnet values.
 
+### Changed
+
+- Set the dev branch app version to `1.6.7-dev.0` so dev builds are visibly
+  distinct from beta and stable releases in the app chrome.
+
 ### Test notes
 
 - Verify the sidebar shows Networks only, `/vlans` and `/ipam` redirect to

@@ -3,10 +3,15 @@ export const APP_VERSION_TAG = `v${APP_VERSION}`;
 export const APP_BUILD_CHANNEL = __APP_BUILD_CHANNEL__.trim().toLowerCase();
 
 function inferReleaseChannel(version: string, buildChannel: string) {
-  if (["dev", "development"].includes(buildChannel) || buildChannel.startsWith("dev-")) {
+  const normalizedVersion = version.toLowerCase();
+  if (
+    ["dev", "development"].includes(buildChannel) ||
+    buildChannel.startsWith("dev-") ||
+    normalizedVersion.includes("dev")
+  ) {
     return "dev";
   }
-  if (buildChannel.includes("beta") || version.toLowerCase().includes("beta")) {
+  if (buildChannel.includes("beta") || normalizedVersion.includes("beta")) {
     return "beta";
   }
   return "stable";
