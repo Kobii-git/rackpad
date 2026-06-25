@@ -51,7 +51,16 @@ import type {
   Vlan,
   VlanRange,
 } from "@/lib/types";
-import { Filter, Hash, Network, Plus, Save, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  Hash,
+  Network,
+  Plus,
+  Save,
+  Trash2,
+} from "lucide-react";
 import { cidrSize } from "@/lib/utils";
 import { formatDeviceMac } from "@/lib/network-labels";
 
@@ -85,6 +94,9 @@ const ZONE_KIND_KEYS: Record<IpZone["kind"], TranslationKey> = {
   reserved: "reserved",
   infrastructure: "infrastructure",
 };
+
+const USER_ZONE_KINDS: IpZone["kind"][] = ["static", "dhcp", "reserved"];
+const USER_ZONE_KIND_SET = new Set<IpZone["kind"]>(USER_ZONE_KINDS);
 
 const VISIBLE_ASSIGNMENT_TYPES: IpAssignment["assignmentType"][] = [
   "device",
@@ -155,8 +167,6 @@ type NetworkForm = {
   staticEndIp: string;
   reservedStartIp: string;
   reservedEndIp: string;
-  infrastructureStartIp: string;
-  infrastructureEndIp: string;
 };
 
 type NetworkRow =
@@ -238,8 +248,6 @@ const EMPTY_NETWORK_FORM: NetworkForm = {
   staticEndIp: "",
   reservedStartIp: "",
   reservedEndIp: "",
-  infrastructureStartIp: "",
-  infrastructureEndIp: "",
 };
 
 export default function NetworksView() {
@@ -293,6 +301,7 @@ export default function NetworksView() {
 
   const [selectedRangeId, setSelectedRangeId] = useState<string | undefined>();
   const [creatingRange, setCreatingRange] = useState(false);
+  const [showVlanPlanning, setShowVlanPlanning] = useState(false);
   const [rangeForm, setRangeForm] = useState<RangeForm>(EMPTY_RANGE_FORM);
   const [rangeSaving, setRangeSaving] = useState(false);
   const [rangeDeleting, setRangeDeleting] = useState(false);
@@ -388,6 +397,16 @@ export default function NetworksView() {
   const assignments = selectedNetwork?.assignments ?? [];
   const subnetScopes = selectedNetwork?.dhcpScopes ?? [];
   const subnetZones = selectedNetwork?.zones ?? [];
+  const visibleSubnetZones = useMemo(
+    () => subnetZones.filter(isUserVisibleZone),
+    [subnetZones],
+  );
+  const configuredNetworks = filteredNetworks.filter(
+    (network) => network.kind === "subnet",
+  );
+  const planningNetworks = filteredNetworks.filter(
+    (network) => network.kind === "vlan-only",
+  );
 
   useEffect(() => {
     if (!networks.length) {
@@ -488,20 +507,20 @@ export default function NetworksView() {
   }, [creatingScope, selectedScope]);
 
   useEffect(() => {
-    if (!subnetZones.length) {
+    if (!visibleSubnetZones.length) {
       setSelectedZoneId(null);
       return;
     }
     if (
       !selectedZoneId ||
-      !subnetZones.some((zone) => zone.id === selectedZoneId)
+      !visibleSubnetZones.some((zone) => zone.id === selectedZoneId)
     ) {
-      setSelectedZoneId(subnetZones[0].id);
+      setSelectedZoneId(visibleSubnetZones[0].id);
     }
-  }, [selectedZoneId, subnetZones]);
+  }, [selectedZoneId, visibleSubnetZones]);
 
   const selectedZone = selectedZoneId
-    ? subnetZones.find((zone) => zone.id === selectedZoneId)
+    ? visibleSubnetZones.find((zone) => zone.id === selectedZoneId)
     : undefined;
 
   useEffect(() => {
@@ -540,12 +559,8 @@ export default function NetworksView() {
     : undefined;
 
   useEffect(() => {
-    if (!ranges.length) return;
-    if (
-      !selectedRangeId ||
-      !ranges.some((range) => range.id === selectedRangeId)
-    ) {
-      setSelectedRangeId(ranges[0].id);
+    if (selectedRangeId && !ranges.some((range) => range.id === selectedRangeId)) {
+      setSelectedRangeId(undefined);
     }
   }, [ranges, selectedRangeId]);
 
@@ -720,12 +735,6 @@ export default function NetworksView() {
           startIp: networkForm.reservedStartIp.trim(),
           endIp: networkForm.reservedEndIp.trim(),
           description: "Reserved addresses",
-        },
-        {
-          kind: "infrastructure" as const,
-          startIp: networkForm.infrastructureStartIp.trim(),
-          endIp: networkForm.infrastructureEndIp.trim(),
-          description: "Infrastructure addresses",
         },
       ];
       for (const zone of zoneDrafts) {
@@ -1008,10 +1017,13 @@ export default function NetworksView() {
     setZoneSaving(true);
     setZoneError("");
     try {
+      const kind = USER_ZONE_KIND_SET.has(zoneForm.kind)
+        ? zoneForm.kind
+        : "static";
       if (creatingZone) {
         const created = await createIpZoneRecord({
           subnetId: subnet.id,
-          kind: zoneForm.kind,
+          kind,
           startIp: zoneForm.startIp.trim(),
           endIp: zoneForm.endIp.trim(),
           description: zoneForm.description.trim() || undefined,
@@ -1023,7 +1035,7 @@ export default function NetworksView() {
 
       if (!selectedZone) return;
       await updateIpZoneRecord(selectedZone.id, {
-        kind: zoneForm.kind,
+        kind,
         startIp: zoneForm.startIp.trim(),
         endIp: zoneForm.endIp.trim(),
         description: zoneForm.description.trim() || undefined,
@@ -1127,88 +1139,41 @@ export default function NetworksView() {
             </div>
           </div>
           <div className="flex-1 overflow-y-auto py-1">
-            {filteredNetworks.map((network) => {
-              const isActive = network.id === selectedNetwork?.id;
-              const rowSubnet =
-                network.kind === "subnet" ? network.subnet : undefined;
-              const rowVlan =
-                network.kind === "subnet" ? network.vlan : network.vlan;
-              const pct = rowSubnet
-                ? Math.round(
-                    (network.assignments.length /
-                      Math.max(1, cidrSize(rowSubnet.cidr) - 2)) *
-                      100,
-                  )
-                : 0;
-              return (
-                <button
+            <NetworkListSection
+              title={t("Configured networks")}
+              count={configuredNetworks.length}
+            >
+              {configuredNetworks.map((network) => (
+                <NetworkListRow
                   key={network.id}
-                  onClick={() => selectNetwork(network)}
-                  className={`w-full border-l-2 px-4 py-3 text-left transition-colors ${
-                    isActive
-                      ? "border-[var(--color-accent)] bg-[var(--color-surface)]"
-                      : "border-transparent hover:bg-[var(--color-surface)]/40"
-                  }`}
-                >
-                  <div className="mb-1 flex items-center gap-2">
-                    {rowSubnet ? (
-                      <Network className="size-3 text-[var(--color-fg-muted)]" />
-                    ) : (
-                      <Hash className="size-3 text-[var(--color-fg-muted)]" />
-                    )}
-                    <Mono className="truncate text-xs text-[var(--color-fg)]">
-                      {rowSubnet
-                        ? rowSubnet.cidr
-                        : rowVlan
-                          ? `VLAN ${rowVlan.vlanId}`
-                          : t("No VLAN tag")}
-                    </Mono>
-                    {network.kind === "vlan-only" && (
-                      <Badge tone="warn">{t("Needs subnet")}</Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-[11px] text-[var(--color-fg-subtle)]">
-                      {rowSubnet?.name ?? rowVlan?.name ?? t("No VLAN tag")}
-                    </span>
-                    {rowVlan ? (
-                      <span
-                        className="rounded-[1px] px-1 font-mono text-[10px]"
-                        style={{
-                          backgroundColor: `${rowVlan.color}20`,
-                          color: rowVlan.color,
-                        }}
-                      >
-                        VL{rowVlan.vlanId}
-                      </span>
-                    ) : (
-                      <span className="font-mono text-[10px] text-[var(--color-fg-subtle)]">
-                        {t("No VLAN tag")}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[var(--color-fg-subtle)]">
-                    <span>
-                      {t("{count} assigned", {
-                        count: network.assignments.length,
-                      })}
-                    </span>
-                    <span>|</span>
-                    <span>{t("{count} DHCP", { count: network.dhcpScopes.length })}</span>
-                    <span>|</span>
-                    <span>{t("{count} zones", { count: network.zones.length })}</span>
-                  </div>
-                  {rowSubnet && (
-                    <div className="mt-1.5 h-0.5 overflow-hidden bg-[var(--color-bg)]">
-                      <div
-                        className="h-full bg-[var(--color-accent)]"
-                        style={{ width: `${pct}%`, opacity: 0.7 }}
-                      />
-                    </div>
-                  )}
-                </button>
-              );
-            })}
+                  network={network}
+                  active={network.id === selectedNetwork?.id}
+                  onSelect={() => selectNetwork(network)}
+                />
+              ))}
+            </NetworkListSection>
+
+            {planningNetworks.length > 0 && (
+              <NetworkListSection
+                title={t("VLANs needing subnet")}
+                count={planningNetworks.length}
+              >
+                {planningNetworks.map((network) => (
+                  <NetworkListRow
+                    key={network.id}
+                    network={network}
+                    active={network.id === selectedNetwork?.id}
+                    onSelect={() => selectNetwork(network)}
+                  />
+                ))}
+              </NetworkListSection>
+            )}
+
+            {filteredNetworks.length === 0 && (
+              <div className="px-4 py-6 text-xs text-[var(--color-fg-subtle)]">
+                {t("No networks documented yet")}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1388,7 +1353,7 @@ export default function NetworksView() {
 
               {subnet && (
                 <>
-                  {subnetZones.length > 0 && (
+                  {visibleSubnetZones.length > 0 && (
                     <Card>
                       <CardHeader>
                         <CardTitle>
@@ -1399,7 +1364,7 @@ export default function NetworksView() {
                       <CardBody>
                         <IpZoneBar
                           subnet={subnet}
-                          zones={subnetZones}
+                          zones={visibleSubnetZones}
                           scopes={subnetScopes}
                           assignments={assignments}
                         />
@@ -1441,7 +1406,7 @@ export default function NetworksView() {
                   />
 
                   <ZoneEditor
-                    zones={subnetZones}
+                    zones={visibleSubnetZones}
                     selectedZoneId={selectedZoneId}
                     setSelectedZoneId={setSelectedZoneId}
                     creating={creatingZone}
@@ -1468,37 +1433,182 @@ export default function NetworksView() {
             </>
           )}
 
-          <VlanRangesPanel
-            ranges={ranges}
-            vlans={vlans}
-            selectedRangeId={selectedRangeId}
-            selectedRange={selectedRange}
-            creating={creatingRange}
-            form={rangeForm}
-            error={rangeError}
-            saving={rangeSaving}
-            deleting={rangeDeleting}
-            canEdit={canEdit}
-            onSelectRange={(id) => {
-              setSelectedRangeId(id === selectedRangeId ? undefined : id);
-              setCreatingRange(false);
-            }}
-            onNew={() => {
-              setCreatingRange(true);
-              setRangeForm(EMPTY_RANGE_FORM);
-              setRangeError("");
-            }}
-            onChange={setRangeForm}
-            onCancel={() => {
-              setCreatingRange(false);
-              setRangeError("");
-            }}
-            onSave={() => void handleSaveRange()}
-            onDelete={() => void handleDeleteRange()}
-          />
+          {showVlanPlanning || creatingRange ? (
+            <VlanRangesPanel
+              ranges={ranges}
+              vlans={vlans}
+              selectedRangeId={selectedRangeId}
+              selectedRange={selectedRange}
+              creating={creatingRange}
+              form={rangeForm}
+              error={rangeError}
+              saving={rangeSaving}
+              deleting={rangeDeleting}
+              canEdit={canEdit}
+              onSelectRange={(id) => {
+                setSelectedRangeId(id === selectedRangeId ? undefined : id);
+                setCreatingRange(false);
+              }}
+              onNew={() => {
+                setShowVlanPlanning(true);
+                setCreatingRange(true);
+                setSelectedRangeId(undefined);
+                setRangeForm(EMPTY_RANGE_FORM);
+                setRangeError("");
+              }}
+              onChange={setRangeForm}
+              onCancel={() => {
+                setCreatingRange(false);
+                setRangeError("");
+              }}
+              onSave={() => void handleSaveRange()}
+              onDelete={() => void handleDeleteRange()}
+              onCollapse={() => {
+                setShowVlanPlanning(false);
+                setCreatingRange(false);
+                setSelectedRangeId(undefined);
+                setRangeError("");
+              }}
+            />
+          ) : (
+            <VlanPlanningSummary
+              ranges={ranges}
+              vlans={vlans}
+              canEdit={canEdit}
+              onShow={() => setShowVlanPlanning(true)}
+              onNew={() => {
+                setShowVlanPlanning(true);
+                setCreatingRange(true);
+                setSelectedRangeId(undefined);
+                setRangeForm(EMPTY_RANGE_FORM);
+                setRangeError("");
+              }}
+            />
+          )}
         </div>
       </div>
     </>
+  );
+}
+
+function NetworkListSection({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: ReactNode;
+}) {
+  if (count === 0) return null;
+  return (
+    <section className="border-b border-[var(--color-line)]/70 py-1 last:border-b-0">
+      <div className="flex items-center justify-between px-4 py-2">
+        <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
+          {title}
+        </span>
+        <span className="font-mono text-[9px] text-[var(--color-fg-faint)]">
+          {count}
+        </span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function NetworkListRow({
+  network,
+  active,
+  onSelect,
+}: {
+  network: NetworkRow;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const { t } = useI18n();
+  const rowSubnet = network.kind === "subnet" ? network.subnet : undefined;
+  const rowVlan = network.kind === "subnet" ? network.vlan : network.vlan;
+  const pct = rowSubnet
+    ? Math.round(
+        (network.assignments.length / Math.max(1, cidrSize(rowSubnet.cidr) - 2)) *
+          100,
+      )
+    : 0;
+  const zoneCount = countUserVisibleZones(network.zones);
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full border-l-2 px-4 py-3 text-left transition-colors ${
+        active
+          ? "border-[var(--color-accent)] bg-[var(--color-surface)]"
+          : "border-transparent hover:bg-[var(--color-surface)]/40"
+      }`}
+    >
+      <div className="mb-1 flex items-center gap-2">
+        {rowSubnet ? (
+          <Network className="size-3 text-[var(--color-fg-muted)]" />
+        ) : (
+          <Hash className="size-3 text-[var(--color-fg-muted)]" />
+        )}
+        <Mono className="truncate text-xs text-[var(--color-fg)]">
+          {rowSubnet
+            ? rowSubnet.cidr
+            : rowVlan
+              ? `VLAN ${rowVlan.vlanId}`
+              : t("No VLAN tag")}
+        </Mono>
+        {network.kind === "vlan-only" && (
+          <Badge tone="warn">{t("Needs subnet")}</Badge>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-[11px] text-[var(--color-fg-subtle)]">
+          {rowSubnet?.name ?? rowVlan?.name ?? t("No VLAN tag")}
+        </span>
+        {rowVlan ? (
+          <span
+            className="rounded-[1px] px-1 font-mono text-[10px]"
+            style={{
+              backgroundColor: `${rowVlan.color}20`,
+              color: rowVlan.color,
+            }}
+          >
+            VL{rowVlan.vlanId}
+          </span>
+        ) : (
+          <span className="font-mono text-[10px] text-[var(--color-fg-subtle)]">
+            {t("No VLAN tag")}
+          </span>
+        )}
+      </div>
+      {rowSubnet ? (
+        <>
+          <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[var(--color-fg-subtle)]">
+            <span>
+              {t("{count} assigned", {
+                count: network.assignments.length,
+              })}
+            </span>
+            <span>|</span>
+            <span>{t("{count} DHCP", { count: network.dhcpScopes.length })}</span>
+            <span>|</span>
+            <span>{t("{count} zones", { count: zoneCount })}</span>
+          </div>
+          <div className="mt-1.5 h-0.5 overflow-hidden bg-[var(--color-bg)]">
+            <div
+              className="h-full bg-[var(--color-accent)]"
+              style={{ width: `${pct}%`, opacity: 0.7 }}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="mt-1.5 text-[10px] text-[var(--color-fg-subtle)]">
+          {t("No subnet linked yet")}
+        </div>
+      )}
+    </button>
   );
 }
 
@@ -1760,14 +1870,13 @@ function NetworkSetupPanel({
             <div>
               <div className="rk-kicker">{t("IP zones")}</div>
               <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
-                {t("Optional ranges for static, reserved, and infrastructure addresses.")}
+                {t("Optional ranges for static and reserved addresses.")}
               </div>
             </div>
             {(
               [
                 ["Static", "staticStartIp", "staticEndIp"],
                 ["Reserved", "reservedStartIp", "reservedEndIp"],
-                ["Infrastructure", "infrastructureStartIp", "infrastructureEndIp"],
               ] as const
             ).map(([label, startKey, endKey]) => (
               <div key={label} className="grid gap-3 md:grid-cols-3">
@@ -1921,6 +2030,66 @@ function VlanEditor({
   );
 }
 
+function VlanPlanningSummary({
+  ranges,
+  vlans,
+  canEdit,
+  onShow,
+  onNew,
+}: {
+  ranges: VlanRange[];
+  vlans: Vlan[];
+  canEdit: boolean;
+  onShow: () => void;
+  onNew: () => void;
+}) {
+  const { t } = useI18n();
+  const totalReserved = ranges.reduce(
+    (sum, range) => sum + (range.endVlan - range.startVlan + 1),
+    0,
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <CardLabel>{t("Advanced planning")}</CardLabel>
+          <CardHeading>{t("VLAN planning ranges")}</CardHeading>
+        </CardTitle>
+        <div className="flex items-center gap-2">
+          <Mono className="text-[11px] text-[var(--color-fg-subtle)]">
+            {ranges.length} {t("VLAN ranges")} |{" "}
+            {totalReserved > 0 ? (
+              <>
+                {vlans.length} / {totalReserved} {t("used")}
+              </>
+            ) : (
+              t("{count} VLANs", { count: vlans.length })
+            )}
+          </Mono>
+          <Button variant="outline" size="sm" onClick={onShow}>
+            <ChevronDown className="size-3.5" />
+            {t("Show ranges")}
+          </Button>
+          {canEdit && (
+            <Button size="sm" onClick={onNew}>
+              <Plus className="size-3.5" />
+              {t("Add VLAN range")}
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardBody>
+        <p className="max-w-3xl text-xs text-[var(--color-fg-subtle)]">
+          {t(
+            "Optional labels for blocks of VLAN IDs. They help allocate tags, but they do not create networks, subnets, or IP ranges.",
+          )}
+        </p>
+      </CardBody>
+    </Card>
+  );
+}
+
 function VlanRangesPanel({
   ranges,
   vlans,
@@ -1938,6 +2107,7 @@ function VlanRangesPanel({
   onCancel,
   onSave,
   onDelete,
+  onCollapse,
 }: {
   ranges: VlanRange[];
   vlans: Vlan[];
@@ -1955,6 +2125,7 @@ function VlanRangesPanel({
   onCancel: () => void;
   onSave: () => void;
   onDelete: () => void;
+  onCollapse: () => void;
 }) {
   const { t } = useI18n();
   const totalReserved = ranges.reduce(
@@ -1965,13 +2136,23 @@ function VlanRangesPanel({
     <Card>
       <CardHeader>
         <CardTitle>
-          <CardLabel>{t("VLAN ranges")}</CardLabel>
-          <CardHeading>{t("Reserved VLAN ID space")}</CardHeading>
+          <CardLabel>{t("Advanced planning")}</CardLabel>
+          <CardHeading>{t("VLAN planning ranges")}</CardHeading>
         </CardTitle>
         <div className="flex items-center gap-2">
           <Mono className="text-[11px] text-[var(--color-fg-subtle)]">
-            {vlans.length} / {totalReserved} {t("used")}
+            {totalReserved > 0 ? (
+              <>
+                {vlans.length} / {totalReserved} {t("used")}
+              </>
+            ) : (
+              t("{count} VLANs", { count: vlans.length })
+            )}
           </Mono>
+          <Button variant="ghost" size="sm" onClick={onCollapse}>
+            <ChevronUp className="size-3.5" />
+            {t("Hide ranges")}
+          </Button>
           {canEdit && (
             <Button variant="outline" size="sm" onClick={onNew}>
               <Plus className="size-3.5" />
@@ -1981,52 +2162,68 @@ function VlanRangesPanel({
         </div>
       </CardHeader>
       <CardBody className="space-y-4">
-        <VlanRangeBar
-          ranges={ranges}
-          vlans={vlans}
-          selectedRangeId={selectedRangeId}
-          onSelectRange={onSelectRange}
-        />
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {ranges.map((range) => {
-            const used = vlans.filter(
-              (vlan) =>
-                vlan.vlanId >= range.startVlan &&
-                vlan.vlanId <= range.endVlan,
-            ).length;
-            const active = range.id === selectedRangeId && !creating;
-            return (
-              <button
-                key={range.id}
-                type="button"
-                onClick={() => onSelectRange(range.id)}
-                className={`rounded-[var(--radius-sm)] border p-3 text-left transition-colors ${
-                  active
-                    ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10"
-                    : "border-[var(--color-line)] bg-[var(--color-bg)] hover:border-[var(--color-line-strong)]"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className="size-2 rounded-[1px]"
-                    style={{ backgroundColor: range.color }}
-                  />
-                  <span className="text-sm font-medium text-[var(--color-fg)]">
-                    {range.name}
-                  </span>
-                </div>
-                <Mono className="mt-1 block text-[11px] text-[var(--color-fg-muted)]">
-                  {range.startVlan}-{range.endVlan} | {used} {t("used")}
-                </Mono>
-                {range.purpose && (
-                  <div className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
-                    {range.purpose}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        <p className="max-w-3xl text-xs text-[var(--color-fg-subtle)]">
+          {t(
+            "Optional labels for blocks of VLAN IDs. They help allocate tags, but they do not create networks, subnets, or IP ranges.",
+          )}
+        </p>
+        {ranges.length > 0 ? (
+          <>
+            <VlanRangeBar
+              ranges={ranges}
+              vlans={vlans}
+              selectedRangeId={selectedRangeId}
+              onSelectRange={onSelectRange}
+            />
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {ranges.map((range) => {
+                const used = vlans.filter(
+                  (vlan) =>
+                    vlan.vlanId >= range.startVlan &&
+                    vlan.vlanId <= range.endVlan,
+                ).length;
+                const active = range.id === selectedRangeId && !creating;
+                return (
+                  <button
+                    key={range.id}
+                    type="button"
+                    onClick={() => onSelectRange(range.id)}
+                    className={`rounded-[var(--radius-sm)] border p-3 text-left transition-colors ${
+                      active
+                        ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10"
+                        : "border-[var(--color-line)] bg-[var(--color-bg)] hover:border-[var(--color-line-strong)]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="size-2 rounded-[1px]"
+                        style={{ backgroundColor: range.color }}
+                      />
+                      <span className="text-sm font-medium text-[var(--color-fg)]">
+                        {range.name}
+                      </span>
+                    </div>
+                    <Mono className="mt-1 block text-[11px] text-[var(--color-fg-muted)]">
+                      {range.startVlan}-{range.endVlan} | {used} {t("used")}
+                    </Mono>
+                    {range.purpose && (
+                      <div className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
+                        {range.purpose}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <EmptyState
+            title={t("No VLAN planning ranges")}
+            description={t(
+              "Create ranges only when you want Rackpad to suggest or group VLAN IDs.",
+            )}
+          />
+        )}
 
         {canEdit && (creating || selectedRange) && (
           <div className="space-y-4 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
@@ -2605,9 +2802,7 @@ function ZoneEditor({
       <CardHeader>
         <CardTitle>
           <CardLabel>{t("IP zones")}</CardLabel>
-          <CardHeading>
-            {t("Static, DHCP, reserved, infrastructure")}
-          </CardHeading>
+          <CardHeading>{t("Static, DHCP, reserved")}</CardHeading>
         </CardTitle>
         {canEdit && (
           <Button
@@ -2652,7 +2847,7 @@ function ZoneEditor({
           <EmptyState
             title={t("No IP zones documented yet")}
             description={t(
-              "Define infrastructure, reserved, static, or DHCP zones to make address ownership easier to scan.",
+              "Define static, DHCP, or reserved zones to make address ownership easier to scan.",
             )}
           />
         )}
@@ -2670,12 +2865,11 @@ function ZoneEditor({
                     }))
                   }
                 >
-                  <option value="static">{t("static")}</option>
-                  <option value="dhcp">{t("dhcp")}</option>
-                  <option value="reserved">{t("reserved")}</option>
-                  <option value="infrastructure">
-                    {t("infrastructure")}
-                  </option>
+                  {USER_ZONE_KINDS.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {t(ZONE_KIND_KEYS[kind])}
+                    </option>
+                  ))}
                 </Select>
               </Field>
               <Field label={t("Start IP")}>
@@ -2709,7 +2903,7 @@ function ZoneEditor({
                     description: event.target.value,
                   }))
                 }
-                placeholder="Static addresses for infrastructure"
+                placeholder="Static addresses"
               />
             </Field>
             {error && <ErrorBanner>{error}</ErrorBanner>}
@@ -2807,6 +3001,14 @@ function networkSearchText(network: NetworkRow) {
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+}
+
+function isUserVisibleZone(zone: IpZone) {
+  return USER_ZONE_KIND_SET.has(zone.kind);
+}
+
+function countUserVisibleZones(zones: IpZone[]) {
+  return zones.filter(isUserVisibleZone).length;
 }
 
 function badgeTone(type: IpAssignment["assignmentType"]) {
