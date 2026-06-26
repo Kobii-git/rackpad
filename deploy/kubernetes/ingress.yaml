@@ -1,0 +1,26 @@
+# Optional. Exposes rackpad over HTTP(S). Adjust the host, ingressClassName, and
+# TLS to match your cluster. If you use cert-manager, add the issuer annotation.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rackpad
+  namespace: rackpad
+  # annotations:
+  #   cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  # ingressClassName: nginx
+  rules:
+    - host: rackpad.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rackpad
+                port:
+                  number: 3000
+  # tls:
+  #   - hosts:
+  #       - rackpad.example.com
+  #     secretName: rackpad-tls

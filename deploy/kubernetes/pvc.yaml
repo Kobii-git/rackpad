@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rackpad-data
+  namespace: rackpad
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # Holds the SQLite database (DATABASE_PATH=/data/rackpad.db). A few GiB
+      # is plenty for a homelab inventory.
+      storage: 2Gi
+  # Uses the cluster default StorageClass. Uncomment and set this if you want a
+  # specific one. SQLite relies on file locking, so prefer block storage
+  # (e.g. iSCSI / local-path / Ceph RBD) over NFS, where lock semantics vary.
+  # storageClassName: ""

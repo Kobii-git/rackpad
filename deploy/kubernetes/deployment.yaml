@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rackpad
+  namespace: rackpad
+  labels:
+    app.kubernetes.io/name: rackpad
+spec:
+  replicas: 1
+  # SQLite is single-writer; never scale this beyond one replica.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rackpad
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rackpad
+    spec:
+      # Image runs as the non-root "rackpad" user (uid/gid 10001).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: rackpad
+          # Pin to a released tag for production: https://github.com/Kobii-git/rackpad/releases
+          image: ghcr.io/kobii-git/rackpad:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: HOST
+              value: 0.0.0.0
+            - name: PORT
+              value: "3000"
+            - name: DATABASE_PATH
+              value: /data/rackpad.db
+            # Periodically re-checks existing device monitors (up/down/latency).
+            # Set to 0 to disable. This is NOT subnet discovery.
+            - name: MONITOR_INTERVAL_MS
+              value: "300000"
+            # Set this to your external URL when behind an ingress/reverse proxy,
+            # e.g. https://rackpad.example.com — needed for OIDC and CSRF origins.
+            # - name: APP_URL
+            #   value: ""
+            # - name: TRUST_PROXY
+            #   value: "1"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: rackpad-data
+        # rootfs is read-only; the app needs a writable /tmp.
+        - name: tmp
+          emptyDir: {}
