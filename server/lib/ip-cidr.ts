@@ -21,6 +21,38 @@ export function intToIp(value: number) {
   ].join('.')
 }
 
+export function cidrBounds(cidr: string) {
+  const [networkAddress, prefixRaw] = cidr.split('/')
+  const prefix = Number.parseInt(prefixRaw ?? '', 10)
+  if (!networkAddress || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) {
+    throw new Error(`Invalid CIDR block: ${cidr}`)
+  }
+  const mask =
+    prefix === 0
+      ? 0
+      : prefix === 32
+        ? 0xffffffff
+        : (0xffffffff << (32 - prefix)) >>> 0
+  const network = (ipToInt(networkAddress) & mask) >>> 0
+  const size = 2 ** (32 - prefix)
+  return {
+    network,
+    broadcast: network + size - 1,
+    prefix,
+    size,
+  }
+}
+
+export function cidrContainsIp(cidr: string, ipAddress: string) {
+  try {
+    const { network, broadcast } = cidrBounds(cidr)
+    const target = ipToInt(ipAddress)
+    return target >= network && target <= broadcast
+  } catch {
+    return false
+  }
+}
+
 export function ipv4MaskToPrefix(mask: string) {
   const bits = ipToInt(mask)
   if (bits === 0) return 0

@@ -14,7 +14,7 @@ import type {
   VirtualSwitch,
 } from "@/lib/types";
 import {
-  cidrSize,
+  cidrBounds,
   formatPortLabel,
   ipToInt,
   normalizeColorToCss,
@@ -2726,12 +2726,11 @@ function portVlanSummary(port: Port, vlansById: Record<string, Vlan>) {
 
 function toSubnetRange(subnet: Subnet): SubnetRange | null {
   try {
-    const [base] = subnet.cidr.split("/");
-    const start = ipToInt(base);
+    const { network: start, broadcast: end } = cidrBounds(subnet.cidr);
     return {
       subnet,
       start,
-      end: start + cidrSize(subnet.cidr) - 1,
+      end,
     };
   } catch {
     return null;

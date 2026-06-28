@@ -86,6 +86,25 @@ function getDeviceLabRow(deviceId: string) {
     | undefined
 }
 
+function getVlanLabRow(vlanId: string) {
+  return db.prepare('SELECT id, labId FROM vlans WHERE id = ?').get(vlanId) as
+    | { id: string; labId: string }
+    | undefined
+}
+
+function normalizePortVlanId(labId: string, vlanId: string | null | undefined, label = 'Selected VLAN') {
+  if (!vlanId) return null
+  const vlan = getVlanLabRow(vlanId)
+  if (!vlan) throw new ValidationError(`${label} does not exist.`)
+  if (vlan.labId !== labId) throw new ValidationError(`${label} must belong to the same lab.`)
+  return vlan.id
+}
+
+function ensureAllowedVlanIdsBelongToLab(labId: string, vlanIds: string[] | null | undefined) {
+  if (!vlanIds) return null
+  return vlanIds.map((vlanId) => normalizePortVlanId(labId, vlanId, `Allowed VLAN ${vlanId}`))
+}
+
 function getPortLabRow(portId: string) {
   return db.prepare(`
     SELECT ports.id, devices.labId
@@ -242,6 +261,9 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     if (virtualSwitchId) {
       ensurePortVirtualSwitchMembership(deviceId, virtualSwitchId)
     }
+    const normalizedVlanId = normalizePortVlanId(device.labId, vlanId)
+    const normalizedAllowedVlanIds =
+      mode === 'trunk' ? ensureAllowedVlanIdsBelongToLab(device.labId, allowedVlanIds) : null
 
     const row = db.prepare('SELECT MAX(position) AS maxPosition FROM ports WHERE deviceId = ?').get(deviceId) as { maxPosition?: number | null }
     const position = requestedPosition ?? ((row.maxPosition ?? 0) + 1)
@@ -259,8 +281,8 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
       speed ?? null,
       linkState,
       mode,
-      vlanId ?? null,
-      mode === 'trunk' && allowedVlanIds ? JSON.stringify(allowedVlanIds) : null,
+      normalizedVlanId,
+      mode === 'trunk' && normalizedAllowedVlanIds ? JSON.stringify(normalizedAllowedVlanIds) : null,
       description ?? null,
       face,
       virtualSwitchId ?? null,
@@ -299,10 +321,23 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     if (virtualSwitchId) {
       ensurePortVirtualSwitchMembership(String(current.deviceId), virtualSwitchId)
     }
+    const labId = String(current.labId)
+    const normalizedVlanId =
+      vlanId !== undefined ? normalizePortVlanId(labId, vlanId) : undefined
+    const currentAllowedVlanIds = Array.isArray(current.allowedVlanIds)
+      ? current.allowedVlanIds.map((entry) => String(entry))
+      : []
+    const nextAllowedVlanIds =
+      ('mode' in body || hasAllowedVlanIds) && nextMode === 'trunk'
+        ? ensureAllowedVlanIdsBelongToLab(
+            labId,
+            (hasAllowedVlanIds ? allowedVlanIds : null) ?? currentAllowedVlanIds,
+          )
+        : null
 
     if (name !== undefined) { updates.push('name = ?'); values.push(name) }
     if (speed !== undefined) { updates.push('speed = ?'); values.push(speed) }
-    if (vlanId !== undefined) { updates.push('vlanId = ?'); values.push(vlanId) }
+    if (vlanId !== undefined) { updates.push('vlanId = ?'); values.push(normalizedVlanId) }
     if (virtualSwitchId !== undefined) { updates.push('virtualSwitchId = ?'); values.push(virtualSwitchId) }
     if (description !== undefined) { updates.push('description = ?'); values.push(description) }
     if ('macAddress' in body) {
@@ -317,10 +352,7 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     if ('mode' in body || hasAllowedVlanIds) {
       const persistedAllowed =
         nextMode === 'trunk'
-          ? JSON.stringify(
-              (hasAllowedVlanIds ? allowedVlanIds : null) ??
-              (Array.isArray(current.allowedVlanIds) ? current.allowedVlanIds.map((entry) => String(entry)) : []),
-            )
+          ? JSON.stringify(nextAllowedVlanIds ?? [])
           : null
       updates.push('allowedVlanIds = ?')
       values.push(persistedAllowed)

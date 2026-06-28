@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { DhcpScope, IpAssignment, Subnet } from "@/lib/types";
-import { ipToInt, cidrSize } from "@/lib/utils";
+import { cidrBounds, ipToInt } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -25,9 +25,11 @@ export function IpUtilizationBar({
   assignments,
   scopes = [],
 }: IpUtilizationBarProps) {
-  const total = cidrSize(subnet.cidr);
-  const baseInt = ipToInt(subnet.cidr.split("/")[0]);
-  const broadcastInt = baseInt + total - 1;
+  const {
+    network: baseInt,
+    broadcast: broadcastInt,
+    size: total,
+  } = cidrBounds(subnet.cidr);
 
   const usedMap = useMemo(() => {
     const map = new Map<number, IpAssignment>();

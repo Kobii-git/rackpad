@@ -103,6 +103,8 @@ function seedWifiVlanSubnet(input?: { secondAp?: boolean }) {
 test('cidrContainsIp matches subnet membership', () => {
   assert.equal(cidrContainsIp('192.168.30.0/24', '192.168.30.42'), true)
   assert.equal(cidrContainsIp('192.168.30.0/24', '192.168.31.1'), false)
+  assert.equal(cidrContainsIp('192.168.30.42/24', '192.168.30.55'), true)
+  assert.equal(cidrContainsIp('192.168.30.42/24', '192.168.31.1'), false)
 })
 
 test('resolveWifiClientPlacement picks the sole AP on a WiFi VLAN subnet', () => {

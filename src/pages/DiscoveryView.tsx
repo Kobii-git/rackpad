@@ -39,7 +39,7 @@ import type {
   IpZone,
   Subnet,
 } from "@/lib/types";
-import { ipToInt } from "@/lib/utils";
+import { cidrContainsIp, ipToInt } from "@/lib/utils";
 import {
   applySortDirection,
   compareDate,
@@ -1406,16 +1406,6 @@ function mergeScanResults(results: DiscoveryScanResult[]): DiscoveryScanResult {
     diagnostics: results.flatMap((result) => result.diagnostics),
     rows: [...rowsById.values()],
   };
-}
-
-function cidrContainsIp(cidr: string, ipAddress: string) {
-  const [networkAddress, prefixRaw] = cidr.split("/");
-  const prefix = Number.parseInt(prefixRaw, 10);
-  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) return false;
-  const ip = ipToInt(ipAddress);
-  const network = ipToInt(networkAddress);
-  const size = 2 ** (32 - prefix);
-  return ip >= network && ip <= network + size - 1;
 }
 
 function ipInRange(ipAddress: string, startIp: string, endIp: string) {

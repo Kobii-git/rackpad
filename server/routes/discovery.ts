@@ -16,6 +16,7 @@ import {
   inferDiscoveryPlacementHint,
 } from "../lib/discovery-placement.js";
 import { createId } from "../lib/ids.js";
+import { cidrBounds } from "../lib/ip-cidr.js";
 import { runIcmpProbe } from "../lib/monitoring.js";
 import { lookupOuiVendor } from "../lib/oui.js";
 import {
@@ -146,9 +147,8 @@ function intToIp(value: number) {
 
 function cidrHosts(cidr: string) {
   ensureCidr(cidr);
-  const [networkAddress, prefixRaw] = cidr.split("/");
-  const prefix = Number.parseInt(prefixRaw, 10);
-  const hostCount = Math.pow(2, 32 - prefix) - 2;
+  const { network, size } = cidrBounds(cidr);
+  const hostCount = size - 2;
 
   if (hostCount < 1) {
     throw new ValidationError("CIDR must include at least one usable host.");
@@ -159,7 +159,6 @@ function cidrHosts(cidr: string) {
     );
   }
 
-  const network = ipToInt(networkAddress);
   return Array.from({ length: hostCount }, (_, index) =>
     intToIp(network + index + 1),
   );

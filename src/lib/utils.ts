@@ -105,9 +105,63 @@ export function intToIp(n: number): string {
   ].join(".");
 }
 
+function isIpv4Text(value: string): boolean {
+  const octets = value.split(".");
+  return (
+    octets.length === 4 &&
+    octets.every((octet) => {
+      if (!/^\d+$/.test(octet)) return false;
+      const parsed = Number.parseInt(octet, 10);
+      return parsed >= 0 && parsed <= 255;
+    })
+  );
+}
+
+export function cidrBounds(cidr: string): {
+  network: number;
+  broadcast: number;
+  prefix: number;
+  size: number;
+} {
+  const [networkAddress, prefixRaw] = cidr.split("/");
+  const prefix = Number.parseInt(prefixRaw ?? "", 10);
+  if (
+    !networkAddress ||
+    !isIpv4Text(networkAddress) ||
+    !Number.isInteger(prefix) ||
+    prefix < 0 ||
+    prefix > 32
+  ) {
+    throw new Error(`Invalid CIDR block: ${cidr}`);
+  }
+  const mask =
+    prefix === 0
+      ? 0
+      : prefix === 32
+        ? 0xffffffff
+        : (0xffffffff << (32 - prefix)) >>> 0;
+  const network = (ipToInt(networkAddress) & mask) >>> 0;
+  const size = 2 ** (32 - prefix);
+  return {
+    network,
+    broadcast: network + size - 1,
+    prefix,
+    size,
+  };
+}
+
+export function cidrContainsIp(cidr: string, ipAddress: string): boolean {
+  try {
+    const { network, broadcast } = cidrBounds(cidr);
+    const target = ipToInt(ipAddress);
+    return target >= network && target <= broadcast;
+  } catch {
+    return false;
+  }
+}
+
 export function cidrSize(cidr: string): number {
-  const prefix = parseInt(cidr.split("/")[1], 10);
-  return Math.pow(2, 32 - prefix);
+  return cidrBounds(cidr).size;
 }
 
 export function utilization(used: number, total: number): number {
@@ -218,10 +272,7 @@ export function nextFreeStaticIp(
   options: { skipDhcp?: boolean; skipReserved?: boolean } = {},
 ): string | null {
   const { skipDhcp = true, skipReserved = false } = options;
-  const baseInt = ipToInt(subnetCidr.split("/")[0]);
-  const total = cidrSize(subnetCidr);
-  const network = baseInt;
-  const broadcast = baseInt + total - 1;
+  const { network, broadcast } = cidrBounds(subnetCidr);
 
   const assigned = new Set(assignedIps.map(ipToInt));
 

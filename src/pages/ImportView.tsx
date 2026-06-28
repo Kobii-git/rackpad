@@ -47,7 +47,7 @@ import type {
   Vlan,
   VirtualSwitch,
 } from "@/lib/types";
-import { cidrSize, cn, ipToInt } from "@/lib/utils";
+import { cidrBounds, cidrContainsIp, cn, ipToInt } from "@/lib/utils";
 
 type ImportProvider = "hyperv" | "proxmox";
 
@@ -2117,12 +2117,13 @@ function findSubnetForIp(subnets: Subnet[], ipAddress: string) {
   if (!isUsableIpv4(ipAddress)) return undefined;
   const ipValue = ipToInt(ipAddress);
   return subnets.find((subnet) => {
-    const [networkAddress, prefixRaw] = subnet.cidr.split("/");
-    const prefix = Number.parseInt(prefixRaw, 10);
-    if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) return false;
-    const network = ipToInt(networkAddress);
-    const broadcast = network + cidrSize(subnet.cidr) - 1;
-    return ipValue > network && ipValue < broadcast;
+    try {
+      const { network, broadcast } = cidrBounds(subnet.cidr);
+      if (!cidrContainsIp(subnet.cidr, ipAddress)) return false;
+      return ipValue > network && ipValue < broadcast;
+    } catch {
+      return false;
+    }
   });
 }
 

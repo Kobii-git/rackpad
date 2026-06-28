@@ -8,6 +8,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.7-beta.0] - 2026-06-28
+
 ### Added
 
 - Added a consolidated Networks workspace that replaces the separate VLANs and
@@ -18,6 +20,9 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   in one action.
 - Added subnet-level gateway and DNS server fields in IPAM, with backup export
   and restore coverage for those fields.
+- Added server-side regression coverage for DHCP scopes, IP zones, subnet edit
+  safety, cross-lab VLAN links, restored legacy subnet data, and non-canonical
+  CIDR containment.
 
 ### Fixed
 
@@ -27,11 +32,25 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   assignments do not accidentally claim them.
 - Kept older backups that do not contain subnet gateway or DNS fields
   restorable with null subnet values.
+- Enforced server-side validation for DHCP ranges, IP zones, subnet gateways,
+  DHCP gateways, and subnet CIDR edits so existing child records cannot be
+  stranded outside their subnet.
+- Prevented subnet VLAN links and port access/trunk VLAN links from crossing lab
+  boundaries.
+- Allowed restored legacy subnet records with an existing off-subnet gateway to
+  receive unrelated edits while still blocking CIDR or gateway changes that
+  would preserve invalid data.
+- Fixed non-canonical CIDR handling so values such as `192.168.1.42/24` still
+  use the masked network for containment, allocation, discovery placement,
+  utilization bars, imports, and visualizer range math.
+- Avoided mutating grouped assignment arrays while rendering the Networks view.
 
 ### Changed
 
-- Set the dev branch app version to `1.6.7-dev.0` so dev builds are visibly
-  distinct from beta and stable releases in the app chrome.
+- Released the Networks/IPAM development candidate as `1.6.7-beta.0` for beta
+  Docker testing.
+- Preserved submitted CIDR strings in API and backup data while using masked
+  CIDR bounds for validation and display math.
 
 ### Test notes
 
@@ -42,6 +61,15 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   details visible where applicable.
 - Verify DHCP can be enabled or omitted during network creation, and that
   partial DHCP or zone ranges are blocked before submission.
+- Verify invalid DHCP scopes, IP zones, subnet gateways, DHCP gateways, and
+  cross-lab VLAN links are rejected with clear API errors, while external DNS
+  servers such as `1.1.1.1` remain accepted.
+- Verify restored legacy subnet data with an off-subnet gateway can still edit
+  unrelated fields, but must clear or replace the bad gateway before changing
+  CIDR.
+- Verify non-canonical CIDRs such as `192.168.1.42/24` accept in-subnet
+  gateway, DHCP, zone, assignment, discovery, import, and visualization
+  behavior for the masked `192.168.1.0/24` network.
 
 ## [1.6.6-beta.2] - 2026-06-24
 

@@ -2357,7 +2357,7 @@ function AssignmentsSection({
             </CardHeader>
             <CardBody className="p-0">
               <div className="divide-y divide-[var(--color-line)]">
-                {items
+                {[...items]
                   .sort((a, b) =>
                     a.ipAddress.localeCompare(b.ipAddress, undefined, {
                       numeric: true,

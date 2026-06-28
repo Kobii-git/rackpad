@@ -3868,6 +3868,748 @@ test("network bundles create VLAN, subnet, DHCP, and zones atomically", async ()
   );
 });
 
+test("DHCP scopes and IP zones validate ranges and subnet containment", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const subnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      cidr: "172.20.0.0/24",
+      name: "Validation LAN",
+      gateway: "172.20.0.1",
+      dnsServers: ["1.1.1.1"],
+    },
+  });
+  assert.equal(subnetRes.statusCode, 201);
+  const subnet = readJson(subnetRes) as { id: string; dnsServers: string[] };
+  assert.deepEqual(subnet.dnsServers, ["1.1.1.1"]);
+
+  const reversedScopeRes = await app.inject({
+    method: "POST",
+    url: "/api/dhcp-scopes",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      name: "reversed",
+      startIp: "172.20.0.50",
+      endIp: "172.20.0.20",
+    },
+  });
+  assert.equal(reversedScopeRes.statusCode, 400);
+  assert.match(reversedScopeRes.body, /start IP/i);
+
+  const outsideScopeRes = await app.inject({
+    method: "POST",
+    url: "/api/dhcp-scopes",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      name: "outside",
+      startIp: "172.21.0.10",
+      endIp: "172.21.0.20",
+    },
+  });
+  assert.equal(outsideScopeRes.statusCode, 400);
+  assert.match(outsideScopeRes.body, /subnet/i);
+
+  const outsideScopeGatewayRes = await app.inject({
+    method: "POST",
+    url: "/api/dhcp-scopes",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      name: "outside-gateway",
+      startIp: "172.20.0.10",
+      endIp: "172.20.0.20",
+      gateway: "172.21.0.1",
+      dnsServers: ["8.8.8.8"],
+    },
+  });
+  assert.equal(outsideScopeGatewayRes.statusCode, 400);
+  assert.match(outsideScopeGatewayRes.body, /gateway/i);
+
+  const validScopeRes = await app.inject({
+    method: "POST",
+    url: "/api/dhcp-scopes",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      name: "valid",
+      startIp: "172.20.0.10",
+      endIp: "172.20.0.20",
+      gateway: "172.20.0.1",
+      dnsServers: ["8.8.8.8"],
+    },
+  });
+  assert.equal(validScopeRes.statusCode, 201);
+  const scope = readJson(validScopeRes) as { id: string; dnsServers: string[] };
+  assert.deepEqual(scope.dnsServers, ["8.8.8.8"]);
+
+  const invalidStartPatchRes = await app.inject({
+    method: "PATCH",
+    url: `/api/dhcp-scopes/${scope.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      startIp: "172.20.0.30",
+    },
+  });
+  assert.equal(invalidStartPatchRes.statusCode, 400);
+  assert.match(invalidStartPatchRes.body, /start IP/i);
+
+  const invalidEndPatchRes = await app.inject({
+    method: "PATCH",
+    url: `/api/dhcp-scopes/${scope.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      endIp: "172.21.0.20",
+    },
+  });
+  assert.equal(invalidEndPatchRes.statusCode, 400);
+  assert.match(invalidEndPatchRes.body, /subnet/i);
+
+  const reversedZoneRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-zones",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      kind: "static",
+      startIp: "172.20.0.80",
+      endIp: "172.20.0.70",
+    },
+  });
+  assert.equal(reversedZoneRes.statusCode, 400);
+  assert.match(reversedZoneRes.body, /start IP/i);
+
+  const outsideZoneRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-zones",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      kind: "static",
+      startIp: "172.21.0.70",
+      endIp: "172.21.0.80",
+    },
+  });
+  assert.equal(outsideZoneRes.statusCode, 400);
+  assert.match(outsideZoneRes.body, /subnet/i);
+
+  const validZoneRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-zones",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      subnetId: subnet.id,
+      kind: "static",
+      startIp: "172.20.0.70",
+      endIp: "172.20.0.80",
+    },
+  });
+  assert.equal(validZoneRes.statusCode, 201);
+  const zone = readJson(validZoneRes) as { id: string };
+
+  const invalidZoneStartPatchRes = await app.inject({
+    method: "PATCH",
+    url: `/api/ip-zones/${zone.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      startIp: "172.20.0.90",
+    },
+  });
+  assert.equal(invalidZoneStartPatchRes.statusCode, 400);
+  assert.match(invalidZoneStartPatchRes.body, /start IP/i);
+
+  const invalidZoneEndPatchRes = await app.inject({
+    method: "PATCH",
+    url: `/api/ip-zones/${zone.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      endIp: "172.21.0.80",
+    },
+  });
+  assert.equal(invalidZoneEndPatchRes.statusCode, 400);
+  assert.match(invalidZoneEndPatchRes.body, /subnet/i);
+});
+
+test("non-canonical CIDRs validate against their masked network", async () => {
+  const adminToken = await bootstrapAdmin();
+  const authHeaders = {
+    authorization: `Bearer ${adminToken}`,
+  };
+
+  const subnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: authHeaders,
+    payload: {
+      labId: "lab_home",
+      cidr: "192.168.1.42/24",
+      name: "Non-canonical LAN",
+      gateway: "192.168.1.1",
+    },
+  });
+  assert.equal(subnetRes.statusCode, 201);
+  const subnet = readJson(subnetRes) as { id: string; cidr: string; gateway: string };
+  assert.equal(subnet.cidr, "192.168.1.42/24");
+  assert.equal(subnet.gateway, "192.168.1.1");
+
+  const scopeRes = await app.inject({
+    method: "POST",
+    url: "/api/dhcp-scopes",
+    headers: authHeaders,
+    payload: {
+      subnetId: subnet.id,
+      name: "inside-pool",
+      startIp: "192.168.1.50",
+      endIp: "192.168.1.60",
+      gateway: "192.168.1.1",
+    },
+  });
+  assert.equal(scopeRes.statusCode, 201);
+
+  const zoneRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-zones",
+    headers: authHeaders,
+    payload: {
+      subnetId: subnet.id,
+      kind: "static",
+      startIp: "192.168.1.70",
+      endIp: "192.168.1.80",
+    },
+  });
+  assert.equal(zoneRes.statusCode, 201);
+
+  const outsideScopeRes = await app.inject({
+    method: "POST",
+    url: "/api/dhcp-scopes",
+    headers: authHeaders,
+    payload: {
+      subnetId: subnet.id,
+      name: "outside-pool",
+      startIp: "192.168.2.50",
+      endIp: "192.168.2.60",
+    },
+  });
+  assert.equal(outsideScopeRes.statusCode, 400);
+  assert.match(outsideScopeRes.body, /subnet/i);
+
+  const outsideZoneRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-zones",
+    headers: authHeaders,
+    payload: {
+      subnetId: subnet.id,
+      kind: "reserved",
+      startIp: "192.168.2.70",
+      endIp: "192.168.2.80",
+    },
+  });
+  assert.equal(outsideZoneRes.statusCode, 400);
+  assert.match(outsideZoneRes.body, /subnet/i);
+
+  const assignmentRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: authHeaders,
+    payload: {
+      subnetId: subnet.id,
+      ipAddress: "192.168.1.200",
+      assignmentType: "reserved",
+      hostname: "non-canonical-reservation",
+    },
+  });
+  assert.equal(assignmentRes.statusCode, 201);
+
+  const cidrPatchRes = await app.inject({
+    method: "PATCH",
+    url: `/api/subnets/${subnet.id}`,
+    headers: authHeaders,
+    payload: {
+      cidr: "192.168.1.99/24",
+    },
+  });
+  assert.equal(cidrPatchRes.statusCode, 200);
+  assert.equal((readJson(cidrPatchRes) as { cidr: string }).cidr, "192.168.1.99/24");
+});
+
+test("subnet edits validate gateways and existing child records", async () => {
+  const adminToken = await bootstrapAdmin();
+  const authHeaders = {
+    authorization: `Bearer ${adminToken}`,
+  };
+
+  async function createSubnet(cidr: string, name: string, gateway?: string) {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/subnets",
+      headers: authHeaders,
+      payload: {
+        labId: "lab_home",
+        cidr,
+        name,
+        gateway,
+      },
+    });
+    assert.equal(res.statusCode, 201);
+    return readJson(res) as { id: string };
+  }
+
+  async function expectCidrPatchRejected(
+    subnetId: string,
+    cidr: string,
+    pattern: RegExp,
+  ) {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/subnets/${subnetId}`,
+      headers: authHeaders,
+      payload: { cidr },
+    });
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body, pattern);
+  }
+
+  const badGatewayCreateRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: authHeaders,
+    payload: {
+      labId: "lab_home",
+      cidr: "10.80.0.0/24",
+      name: "Bad gateway LAN",
+      gateway: "10.81.0.1",
+    },
+  });
+  assert.equal(badGatewayCreateRes.statusCode, 400);
+  assert.match(badGatewayCreateRes.body, /gateway/i);
+
+  const gatewaySubnet = await createSubnet(
+    "10.81.0.0/24",
+    "Gateway edit LAN",
+    "10.81.0.1",
+  );
+  const badGatewayPatchRes = await app.inject({
+    method: "PATCH",
+    url: `/api/subnets/${gatewaySubnet.id}`,
+    headers: authHeaders,
+    payload: {
+      gateway: "10.82.0.1",
+    },
+  });
+  assert.equal(badGatewayPatchRes.statusCode, 400);
+  assert.match(badGatewayPatchRes.body, /gateway/i);
+
+  const assignmentSubnet = await createSubnet(
+    "10.82.0.0/24",
+    "Assignment child LAN",
+    "10.82.0.1",
+  );
+  const assignmentRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: authHeaders,
+    payload: {
+      subnetId: assignmentSubnet.id,
+      ipAddress: "10.82.0.200",
+      assignmentType: "reserved",
+      hostname: "reserved-child",
+    },
+  });
+  assert.equal(assignmentRes.statusCode, 201);
+  await expectCidrPatchRejected(assignmentSubnet.id, "10.82.0.0/25", /assignment/i);
+
+  const scopeSubnet = await createSubnet(
+    "10.83.0.0/24",
+    "Scope child LAN",
+    "10.83.0.1",
+  );
+  const scopeRes = await app.inject({
+    method: "POST",
+    url: "/api/dhcp-scopes",
+    headers: authHeaders,
+    payload: {
+      subnetId: scopeSubnet.id,
+      name: "late-pool",
+      startIp: "10.83.0.200",
+      endIp: "10.83.0.210",
+      gateway: "10.83.0.1",
+    },
+  });
+  assert.equal(scopeRes.statusCode, 201);
+  await expectCidrPatchRejected(scopeSubnet.id, "10.83.0.0/25", /DHCP scope/i);
+
+  const zoneSubnet = await createSubnet(
+    "10.84.0.0/24",
+    "Zone child LAN",
+    "10.84.0.1",
+  );
+  const zoneRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-zones",
+    headers: authHeaders,
+    payload: {
+      subnetId: zoneSubnet.id,
+      kind: "static",
+      startIp: "10.84.0.200",
+      endIp: "10.84.0.210",
+    },
+  });
+  assert.equal(zoneRes.statusCode, 201);
+  await expectCidrPatchRejected(zoneSubnet.id, "10.84.0.0/25", /IP zone/i);
+
+  const successSubnet = await createSubnet(
+    "10.85.0.0/24",
+    "Shrinkable LAN",
+    "10.85.0.1",
+  );
+  const successScopeRes = await app.inject({
+    method: "POST",
+    url: "/api/dhcp-scopes",
+    headers: authHeaders,
+    payload: {
+      subnetId: successSubnet.id,
+      name: "early-pool",
+      startIp: "10.85.0.30",
+      endIp: "10.85.0.40",
+      gateway: "10.85.0.1",
+    },
+  });
+  assert.equal(successScopeRes.statusCode, 201);
+  const successZoneRes = await app.inject({
+    method: "POST",
+    url: "/api/ip-zones",
+    headers: authHeaders,
+    payload: {
+      subnetId: successSubnet.id,
+      kind: "static",
+      startIp: "10.85.0.50",
+      endIp: "10.85.0.60",
+    },
+  });
+  assert.equal(successZoneRes.statusCode, 201);
+  const shrinkRes = await app.inject({
+    method: "PATCH",
+    url: `/api/subnets/${successSubnet.id}`,
+    headers: authHeaders,
+    payload: {
+      cidr: "10.85.0.0/25",
+    },
+  });
+  assert.equal(shrinkRes.statusCode, 200);
+  assert.equal((readJson(shrinkRes) as { cidr: string }).cidr, "10.85.0.0/25");
+});
+
+test("legacy off-subnet subnet gateways do not block unrelated edits", async () => {
+  const adminToken = await bootstrapAdmin();
+  const authHeaders = {
+    authorization: `Bearer ${adminToken}`,
+  };
+
+  const vlanRes = await app.inject({
+    method: "POST",
+    url: "/api/vlans",
+    headers: authHeaders,
+    payload: {
+      labId: "lab_home",
+      vlanId: 186,
+      name: "Legacy Gateway VLAN",
+    },
+  });
+  assert.equal(vlanRes.statusCode, 201);
+  const vlan = readJson(vlanRes) as { id: string };
+
+  db.prepare(
+    "INSERT INTO subnets (id, labId, cidr, name, description, gateway, dnsServers, vlanId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run(
+    "s_legacy_gateway",
+    "lab_home",
+    "10.86.0.0/24",
+    "Legacy gateway LAN",
+    "Restored subnet",
+    "10.87.0.1",
+    JSON.stringify(["1.1.1.1"]),
+    null,
+  );
+
+  const unrelatedEditRes = await app.inject({
+    method: "PATCH",
+    url: "/api/subnets/s_legacy_gateway",
+    headers: authHeaders,
+    payload: {
+      name: "Legacy gateway LAN renamed",
+      description: "Edited without touching gateway",
+      dnsServers: ["8.8.8.8"],
+      vlanId: vlan.id,
+    },
+  });
+  assert.equal(unrelatedEditRes.statusCode, 200);
+  const edited = readJson(unrelatedEditRes) as {
+    name: string;
+    description: string;
+    gateway: string | null;
+    dnsServers: string[];
+    vlanId: string | null;
+  };
+  assert.equal(edited.name, "Legacy gateway LAN renamed");
+  assert.equal(edited.description, "Edited without touching gateway");
+  assert.equal(edited.gateway, "10.87.0.1");
+  assert.deepEqual(edited.dnsServers, ["8.8.8.8"]);
+  assert.equal(edited.vlanId, vlan.id);
+
+  const cidrBlockedRes = await app.inject({
+    method: "PATCH",
+    url: "/api/subnets/s_legacy_gateway",
+    headers: authHeaders,
+    payload: {
+      cidr: "10.86.0.0/25",
+    },
+  });
+  assert.equal(cidrBlockedRes.statusCode, 400);
+  assert.match(cidrBlockedRes.body, /gateway/i);
+
+  const cidrClearGatewayRes = await app.inject({
+    method: "PATCH",
+    url: "/api/subnets/s_legacy_gateway",
+    headers: authHeaders,
+    payload: {
+      cidr: "10.86.0.0/25",
+      gateway: null,
+    },
+  });
+  assert.equal(cidrClearGatewayRes.statusCode, 200);
+  const shrunk = readJson(cidrClearGatewayRes) as {
+    cidr: string;
+    gateway: string | null;
+  };
+  assert.equal(shrunk.cidr, "10.86.0.0/25");
+  assert.equal(shrunk.gateway, null);
+
+  const badGatewayRes = await app.inject({
+    method: "PATCH",
+    url: "/api/subnets/s_legacy_gateway",
+    headers: authHeaders,
+    payload: {
+      gateway: "10.87.0.1",
+    },
+  });
+  assert.equal(badGatewayRes.statusCode, 400);
+  assert.match(badGatewayRes.body, /gateway/i);
+});
+
+test("subnets and ports reject cross-lab VLAN links", async () => {
+  const adminToken = await bootstrapAdmin();
+  const authHeaders = {
+    authorization: `Bearer ${adminToken}`,
+  };
+
+  const otherLabRes = await app.inject({
+    method: "POST",
+    url: "/api/labs",
+    headers: authHeaders,
+    payload: {
+      id: "lab_vlan_other",
+      name: "Other VLAN Lab",
+    },
+  });
+  assert.equal(otherLabRes.statusCode, 201);
+
+  const homeVlanRes = await app.inject({
+    method: "POST",
+    url: "/api/vlans",
+    headers: authHeaders,
+    payload: {
+      labId: "lab_home",
+      vlanId: 200,
+      name: "Home VLAN",
+    },
+  });
+  assert.equal(homeVlanRes.statusCode, 201);
+  const homeVlan = readJson(homeVlanRes) as { id: string };
+
+  const otherVlanRes = await app.inject({
+    method: "POST",
+    url: "/api/vlans",
+    headers: authHeaders,
+    payload: {
+      labId: "lab_vlan_other",
+      vlanId: 200,
+      name: "Other VLAN",
+    },
+  });
+  assert.equal(otherVlanRes.statusCode, 201);
+  const otherVlan = readJson(otherVlanRes) as { id: string };
+
+  const homeSubnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: authHeaders,
+    payload: {
+      labId: "lab_home",
+      cidr: "10.90.0.0/24",
+      name: "Home VLAN subnet",
+      vlanId: homeVlan.id,
+    },
+  });
+  assert.equal(homeSubnetRes.statusCode, 201);
+  const homeSubnet = readJson(homeSubnetRes) as { id: string; vlanId: string };
+  assert.equal(homeSubnet.vlanId, homeVlan.id);
+
+  const crossLabSubnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: authHeaders,
+    payload: {
+      labId: "lab_home",
+      cidr: "10.91.0.0/24",
+      name: "Cross lab subnet",
+      vlanId: otherVlan.id,
+    },
+  });
+  assert.equal(crossLabSubnetRes.statusCode, 400);
+  assert.match(crossLabSubnetRes.body, /same lab/i);
+
+  const crossLabSubnetPatchRes = await app.inject({
+    method: "PATCH",
+    url: `/api/subnets/${homeSubnet.id}`,
+    headers: authHeaders,
+    payload: {
+      vlanId: otherVlan.id,
+    },
+  });
+  assert.equal(crossLabSubnetPatchRes.statusCode, 400);
+  assert.match(crossLabSubnetPatchRes.body, /same lab/i);
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: authHeaders,
+    payload: {
+      labId: "lab_home",
+      hostname: "vlan-link-switch",
+      deviceType: "switch",
+      status: "online",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const accessPortRes = await app.inject({
+    method: "POST",
+    url: "/api/ports",
+    headers: authHeaders,
+    payload: {
+      deviceId: device.id,
+      name: "Gi0/10",
+      kind: "rj45",
+      mode: "access",
+      vlanId: homeVlan.id,
+    },
+  });
+  assert.equal(accessPortRes.statusCode, 201);
+  const accessPort = readJson(accessPortRes) as { id: string; vlanId: string };
+  assert.equal(accessPort.vlanId, homeVlan.id);
+
+  const crossLabAccessPortRes = await app.inject({
+    method: "POST",
+    url: "/api/ports",
+    headers: authHeaders,
+    payload: {
+      deviceId: device.id,
+      name: "Gi0/11",
+      kind: "rj45",
+      mode: "access",
+      vlanId: otherVlan.id,
+    },
+  });
+  assert.equal(crossLabAccessPortRes.statusCode, 400);
+  assert.match(crossLabAccessPortRes.body, /same lab/i);
+
+  const crossLabAccessPatchRes = await app.inject({
+    method: "PATCH",
+    url: `/api/ports/${accessPort.id}`,
+    headers: authHeaders,
+    payload: {
+      vlanId: otherVlan.id,
+    },
+  });
+  assert.equal(crossLabAccessPatchRes.statusCode, 400);
+  assert.match(crossLabAccessPatchRes.body, /same lab/i);
+
+  const trunkPortRes = await app.inject({
+    method: "POST",
+    url: "/api/ports",
+    headers: authHeaders,
+    payload: {
+      deviceId: device.id,
+      name: "Gi0/12",
+      kind: "rj45",
+      mode: "trunk",
+      allowedVlanIds: [homeVlan.id],
+    },
+  });
+  assert.equal(trunkPortRes.statusCode, 201);
+  const trunkPort = readJson(trunkPortRes) as {
+    id: string;
+    allowedVlanIds: string[];
+  };
+  assert.deepEqual(trunkPort.allowedVlanIds, [homeVlan.id]);
+
+  const missingTrunkVlanRes = await app.inject({
+    method: "POST",
+    url: "/api/ports",
+    headers: authHeaders,
+    payload: {
+      deviceId: device.id,
+      name: "Gi0/13",
+      kind: "rj45",
+      mode: "trunk",
+      allowedVlanIds: ["vlan_missing"],
+    },
+  });
+  assert.equal(missingTrunkVlanRes.statusCode, 400);
+  assert.match(missingTrunkVlanRes.body, /does not exist/i);
+
+  const crossLabTrunkPatchRes = await app.inject({
+    method: "PATCH",
+    url: `/api/ports/${trunkPort.id}`,
+    headers: authHeaders,
+    payload: {
+      allowedVlanIds: [otherVlan.id],
+    },
+  });
+  assert.equal(crossLabTrunkPatchRes.statusCode, 400);
+  assert.match(crossLabTrunkPatchRes.body, /same lab/i);
+});
+
 test("ip assignments support DHCP reservations and protect technical IPs", async () => {
   const adminToken = await bootstrapAdmin();
 

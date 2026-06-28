@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { DhcpScope, IpAssignment, IpZone, Subnet } from "@/lib/types";
-import { ipToInt, cidrSize } from "@/lib/utils";
+import { cidrBounds, ipToInt } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -37,8 +37,7 @@ export function IpZoneBar({
   scopes,
   assignments = [],
 }: IpZoneBarProps) {
-  const total = cidrSize(subnet.cidr);
-  const baseInt = ipToInt(subnet.cidr.split("/")[0]);
+  const { network: baseInt, size: total } = cidrBounds(subnet.cidr);
 
   const combined = useMemo(() => {
     const explicit: ZoneEntry[] = [...zones];

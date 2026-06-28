@@ -1,5 +1,5 @@
 import { db } from '../db.js'
-import { ipToInt } from './ip-cidr.js'
+import { cidrContainsIp } from './ip-cidr.js'
 
 const WIRED_DEVICE_TYPES = new Set([
   'switch',
@@ -28,22 +28,8 @@ export interface WifiClientPlacementResult {
   roomId: string | null
 }
 
-export function cidrContainsIp(cidr: string, ipAddress: string) {
-  const [networkAddress, prefixRaw] = cidr.split('/')
-  const prefix = Number.parseInt(prefixRaw ?? '', 10)
-  if (!networkAddress || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) {
-    return false
-  }
-  try {
-    const network = ipToInt(networkAddress)
-    const ip = ipToInt(ipAddress)
-    if (prefix === 0) return true
-    const mask = prefix === 32 ? 0xffffffff : (0xffffffff << (32 - prefix)) >>> 0
-    return (network & mask) === (ip & mask)
-  } catch {
-    return false
-  }
-}
+export { cidrContainsIp }
+
 
 export function shouldSkipWifiAutoPlacement(input: {
   deviceType: string

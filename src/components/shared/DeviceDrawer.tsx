@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Separator } from "@/components/ui/Separator";
 import { Badge } from "@/components/ui/Badge";
-import { cn } from "@/lib/utils";
+import { cidrContainsIp, cn } from "@/lib/utils";
 import {
   createDevice,
   createDeviceTypeRecord,
@@ -1719,20 +1719,6 @@ function mergeNoteText(existing: string, incoming?: string | null) {
   if (!existing.trim()) return next;
   if (existing.includes(next)) return existing;
   return `${existing}\n\n${next}`;
-}
-
-function cidrContainsIp(cidr: string, ipAddress: string) {
-  const [networkAddress, prefixRaw] = cidr.split("/");
-  const network = ipv4ToInt(networkAddress);
-  const target = ipv4ToInt(ipAddress);
-  const prefix = Number.parseInt(prefixRaw ?? "", 10);
-  if (network == null || target == null || !Number.isInteger(prefix)) {
-    return false;
-  }
-  if (prefix < 0 || prefix > 32) return false;
-  const hostBits = 32 - prefix;
-  const broadcast = hostBits === 0 ? network : network + (2 ** hostBits - 1);
-  return target >= network && target <= broadcast;
 }
 
 function ipInRange(ipAddress: string, startIp: string, endIp: string) {

@@ -70,7 +70,8 @@ import type {
 } from "./api";
 import { mergeDeviceTypeDefinitions } from "./device-types";
 import {
-  cidrSize,
+  cidrBounds,
+  cidrContainsIp,
   intToIp,
   ipToInt,
   nextFreeStaticIp,
@@ -634,12 +635,13 @@ function isValidIpv4(ipAddress: string) {
 function findSubnetForIp(ipAddress: string) {
   const ipValue = ipToInt(ipAddress);
   return state.subnets.find((subnet) => {
-    const [networkAddress, prefixRaw] = subnet.cidr.split("/");
-    const prefix = Number.parseInt(prefixRaw, 10);
-    if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) return false;
-    const network = ipToInt(networkAddress);
-    const broadcast = network + cidrSize(subnet.cidr) - 1;
-    return ipValue > network && ipValue < broadcast;
+    try {
+      const { network, broadcast } = cidrBounds(subnet.cidr);
+      if (!cidrContainsIp(subnet.cidr, ipAddress)) return false;
+      return ipValue > network && ipValue < broadcast;
+    } catch {
+      return false;
+    }
   });
 }
 
@@ -1687,8 +1689,7 @@ function nextFreeDhcpReservationIp(
   blockedZones: IpZone[],
   assignedSet: Set<number>,
 ) {
-  const baseInt = ipToInt(subnetCidr.split("/")[0]);
-  const broadcast = baseInt + cidrSize(subnetCidr) - 1;
+  const { network: baseInt, broadcast } = cidrBounds(subnetCidr);
   const sortedScopes = [...dhcpScopes].sort(
     (a, b) => ipToInt(a.startIp) - ipToInt(b.startIp),
   );
