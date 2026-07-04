@@ -8,10 +8,24 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.9-beta.0] - 2026-07-04
+
 ### Added
 
 - Added per-lab scheduled discovery scans so selected CIDRs can refresh the
   discovery inbox automatically on their own interval.
+
+### Changed
+
+- Released Rackpad `1.6.9-beta.0` for beta testing of scheduled discovery
+  scans.
+
+### Test notes
+
+- Verify scheduled discovery scans can be created, paused, resumed, run
+  manually, and deleted from the Discovery page.
+- Verify scheduled scan results continue landing in the normal review inbox.
+- Verify backup export and restore preserve scheduled discovery scans.
 
 ## [1.6.8-beta.1] - 2026-07-04
 
