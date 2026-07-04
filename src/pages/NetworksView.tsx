@@ -47,6 +47,7 @@ import type {
   IpAssignment,
   IpZone,
   IpZoneKind,
+  Port,
   Subnet,
   Vlan,
   VlanRange,
@@ -188,6 +189,16 @@ type NetworkRow =
       assignments: [];
     };
 
+type VlanOverviewRow = {
+  vlan: Vlan;
+  subnetCount: number;
+  subnetCidrs: string[];
+  dhcpScopeCount: number;
+  assignmentCount: number;
+  portUsageCount: number;
+  status: "configured" | "needs-subnet";
+};
+
 const EMPTY_SUBNET_FORM: SubnetForm = {
   cidr: "",
   name: "",
@@ -258,6 +269,7 @@ export default function NetworksView() {
   const ranges = useStore((s) => s.vlanRanges);
   const subnets = useStore((s) => s.subnets);
   const vlans = useStore((s) => s.vlans);
+  const ports = useStore((s) => s.ports);
   const devices = useStore((s) => s.devices);
   const allAssignments = useStore((s) => s.ipAssignments);
   const allScopes = useStore((s) => s.scopes);
@@ -378,6 +390,12 @@ export default function NetworksView() {
     zonesBySubnetId,
   ]);
 
+  const vlanOverviewRows = useMemo(
+    () =>
+      buildVlanOverviewRows(vlans, subnets, allScopes, allAssignments, ports),
+    [allAssignments, allScopes, ports, subnets, vlans],
+  );
+
   const filteredNetworks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return networks;
@@ -444,12 +462,7 @@ export default function NetworksView() {
     if (nextId !== selectedNetworkId) {
       setSelectedNetworkId(nextId);
     }
-  }, [
-    networks,
-    requestedSubnetId,
-    requestedVlanId,
-    selectedNetworkId,
-  ]);
+  }, [networks, requestedSubnetId, requestedVlanId, selectedNetworkId]);
 
   const deviceById = useMemo(() => {
     return devices.reduce<Record<string, Device>>((acc, device) => {
@@ -559,7 +572,10 @@ export default function NetworksView() {
     : undefined;
 
   useEffect(() => {
-    if (selectedRangeId && !ranges.some((range) => range.id === selectedRangeId)) {
+    if (
+      selectedRangeId &&
+      !ranges.some((range) => range.id === selectedRangeId)
+    ) {
       setSelectedRangeId(undefined);
     }
   }, [ranges, selectedRangeId]);
@@ -654,14 +670,12 @@ export default function NetworksView() {
         return;
       }
 
-      let vlanDraft:
-        | {
-            vlanId: number;
-            name: string;
-            description?: string;
-            color?: string;
-          }
-        | null = null;
+      let vlanDraft: {
+        vlanId: number;
+        name: string;
+        description?: string;
+        color?: string;
+      } | null = null;
       if (networkForm.mode === "tagged") {
         const parsedVlanId = Number.parseInt(networkForm.vlanId, 10);
         if (!Number.isFinite(parsedVlanId)) {
@@ -693,16 +707,14 @@ export default function NetworksView() {
         return;
       }
 
-      let dhcpScope:
-        | {
-            name: string;
-            startIp: string;
-            endIp: string;
-            gateway?: string;
-            dnsServers?: string[];
-            description?: string;
-          }
-        | null = null;
+      let dhcpScope: {
+        name: string;
+        startIp: string;
+        endIp: string;
+        gateway?: string;
+        dnsServers?: string[];
+        description?: string;
+      } | null = null;
       if (networkForm.enableDhcp && dhcpStartIp && dhcpEndIp) {
         dhcpScope = {
           name:
@@ -868,7 +880,9 @@ export default function NetworksView() {
   async function handleDeleteRange() {
     if (!selectedRange) return;
     if (
-      !window.confirm(t("Delete VLAN range {name}?", { name: selectedRange.name }))
+      !window.confirm(
+        t("Delete VLAN range {name}?", { name: selectedRange.name }),
+      )
     ) {
       return;
     }
@@ -1190,6 +1204,26 @@ export default function NetworksView() {
                 setNetworkError("");
               }}
               onSave={() => void handleCreateNetwork()}
+            />
+          )}
+
+          {vlanOverviewRows.length > 0 && (
+            <VlanOverviewTable
+              rows={vlanOverviewRows}
+              onSelect={(row) => {
+                const target =
+                  networks.find(
+                    (network) =>
+                      network.kind === "subnet" &&
+                      network.vlan?.id === row.vlan.id,
+                  ) ??
+                  networks.find(
+                    (network) =>
+                      network.kind === "vlan-only" &&
+                      network.vlan.id === row.vlan.id,
+                  );
+                if (target) selectNetwork(target, true);
+              }}
             />
           )}
 
@@ -1516,6 +1550,91 @@ function NetworkListSection({
   );
 }
 
+function VlanOverviewTable({
+  rows,
+  onSelect,
+}: {
+  rows: VlanOverviewRow[];
+  onSelect: (row: VlanOverviewRow) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <CardLabel>{t("VLAN overview")}</CardLabel>
+          <CardHeading>{t("All VLANs")}</CardHeading>
+        </CardTitle>
+      </CardHeader>
+      <CardBody className="p-0">
+        <div className="rk-table-shell max-h-80 overflow-y-auto">
+          <table className="rk-table">
+            <thead>
+              <tr>
+                <th>{t("VLAN ID")}</th>
+                <th>{t("Name")}</th>
+                <th>{t("Subnets")}</th>
+                <th>{t("DHCP")}</th>
+                <th>{t("Assignments")}</th>
+                <th>{t("Port usage")}</th>
+                <th>{t("Status")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.vlan.id}>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() => onSelect(row)}
+                      className="font-mono text-xs text-[var(--color-accent)] hover:underline"
+                    >
+                      VLAN {row.vlan.vlanId}
+                    </button>
+                  </td>
+                  <td>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="size-2.5 shrink-0 rounded-sm"
+                        style={{ backgroundColor: row.vlan.color }}
+                      />
+                      <span className="truncate">{row.vlan.name}</span>
+                    </span>
+                  </td>
+                  <td>
+                    <Mono>
+                      {row.subnetCount}
+                      {row.subnetCidrs.length > 0
+                        ? ` | ${row.subnetCidrs.join(", ")}`
+                        : ""}
+                    </Mono>
+                  </td>
+                  <td>
+                    <Mono>{row.dhcpScopeCount}</Mono>
+                  </td>
+                  <td>
+                    <Mono>{row.assignmentCount}</Mono>
+                  </td>
+                  <td>
+                    <Mono>{row.portUsageCount}</Mono>
+                  </td>
+                  <td>
+                    <Badge tone={row.status === "configured" ? "ok" : "warn"}>
+                      {row.status === "configured"
+                        ? t("Configured")
+                        : t("Needs subnet")}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
 function NetworkListRow({
   network,
   active,
@@ -1530,7 +1649,8 @@ function NetworkListRow({
   const rowVlan = network.kind === "subnet" ? network.vlan : network.vlan;
   const pct = rowSubnet
     ? Math.round(
-        (network.assignments.length / Math.max(1, cidrSize(rowSubnet.cidr) - 2)) *
+        (network.assignments.length /
+          Math.max(1, cidrSize(rowSubnet.cidr) - 2)) *
           100,
       )
     : 0;
@@ -1592,7 +1712,9 @@ function NetworkListRow({
               })}
             </span>
             <span>|</span>
-            <span>{t("{count} DHCP", { count: network.dhcpScopes.length })}</span>
+            <span>
+              {t("{count} DHCP", { count: network.dhcpScopes.length })}
+            </span>
             <span>|</span>
             <span>{t("{count} zones", { count: zoneCount })}</span>
           </div>
@@ -2835,7 +2957,9 @@ function ZoneEditor({
                     : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
                 }`}
               >
-                <span className="font-mono">{t(ZONE_KIND_KEYS[zone.kind])}</span>
+                <span className="font-mono">
+                  {t(ZONE_KIND_KEYS[zone.kind])}
+                </span>
                 <span className="mx-1 text-[var(--color-fg-faint)]">|</span>
                 <span>
                   {zone.startIp}-{zone.endIp}
@@ -2974,9 +3098,13 @@ function ErrorBanner({ children }: { children: ReactNode }) {
 
 function compareNetworkRows(a: NetworkRow, b: NetworkRow) {
   const aVlan =
-    a.kind === "subnet" ? (a.vlan?.vlanId ?? Number.MAX_SAFE_INTEGER) : a.vlan.vlanId;
+    a.kind === "subnet"
+      ? (a.vlan?.vlanId ?? Number.MAX_SAFE_INTEGER)
+      : a.vlan.vlanId;
   const bVlan =
-    b.kind === "subnet" ? (b.vlan?.vlanId ?? Number.MAX_SAFE_INTEGER) : b.vlan.vlanId;
+    b.kind === "subnet"
+      ? (b.vlan?.vlanId ?? Number.MAX_SAFE_INTEGER)
+      : b.vlan.vlanId;
   if (aVlan !== bVlan) return aVlan - bVlan;
 
   const aLabel = a.kind === "subnet" ? a.subnet.cidr : a.vlan.name;
@@ -3001,6 +3129,76 @@ function networkSearchText(network: NetworkRow) {
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+}
+
+function buildVlanOverviewRows(
+  vlans: Vlan[],
+  subnets: Subnet[],
+  scopes: DhcpScope[],
+  assignments: IpAssignment[],
+  ports: Port[],
+): VlanOverviewRow[] {
+  const subnetById = new Map(subnets.map((subnet) => [subnet.id, subnet]));
+  const subnetsByVlanId = new Map<string, Subnet[]>();
+  for (const subnet of subnets) {
+    if (!subnet.vlanId) continue;
+    subnetsByVlanId.set(subnet.vlanId, [
+      ...(subnetsByVlanId.get(subnet.vlanId) ?? []),
+      subnet,
+    ]);
+  }
+
+  const scopeCountByVlanId = new Map<string, number>();
+  for (const scope of scopes) {
+    const subnet = subnetById.get(scope.subnetId);
+    if (!subnet?.vlanId) continue;
+    scopeCountByVlanId.set(
+      subnet.vlanId,
+      (scopeCountByVlanId.get(subnet.vlanId) ?? 0) + 1,
+    );
+  }
+
+  const assignmentCountByVlanId = new Map<string, number>();
+  for (const assignment of assignments) {
+    const subnet = subnetById.get(assignment.subnetId);
+    if (!subnet?.vlanId) continue;
+    assignmentCountByVlanId.set(
+      subnet.vlanId,
+      (assignmentCountByVlanId.get(subnet.vlanId) ?? 0) + 1,
+    );
+  }
+
+  const portUsageByVlanId = new Map<string, Set<string>>();
+  const addPortUsage = (vlanId: string | undefined, portId: string) => {
+    if (!vlanId) return;
+    let set = portUsageByVlanId.get(vlanId);
+    if (!set) {
+      set = new Set<string>();
+      portUsageByVlanId.set(vlanId, set);
+    }
+    set.add(portId);
+  };
+  for (const port of ports) {
+    addPortUsage(port.vlanId, port.id);
+    for (const vlanId of port.allowedVlanIds ?? []) {
+      addPortUsage(vlanId, port.id);
+    }
+  }
+
+  return [...vlans]
+    .sort((a, b) => a.vlanId - b.vlanId || a.name.localeCompare(b.name))
+    .map((vlan) => {
+      const linkedSubnets = subnetsByVlanId.get(vlan.id) ?? [];
+      return {
+        vlan,
+        subnetCount: linkedSubnets.length,
+        subnetCidrs: linkedSubnets.map((subnet) => subnet.cidr),
+        dhcpScopeCount: scopeCountByVlanId.get(vlan.id) ?? 0,
+        assignmentCount: assignmentCountByVlanId.get(vlan.id) ?? 0,
+        portUsageCount: portUsageByVlanId.get(vlan.id)?.size ?? 0,
+        status: linkedSubnets.length > 0 ? "configured" : "needs-subnet",
+      };
+    });
 }
 
 function isUserVisibleZone(zone: IpZone) {

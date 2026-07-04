@@ -542,6 +542,7 @@ export interface DiscoveryScanDiagnostic {
 }
 
 export interface DiscoveryScanResult {
+  chunkCount?: number;
   scannedHostCount: number;
   discoveredCount: number;
   macAddressCount: number;

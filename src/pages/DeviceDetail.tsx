@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
+import { CablingMapPanel } from "@/components/shared/CablingMapPanel";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
@@ -1436,10 +1437,7 @@ export default function DeviceDetail() {
                       value={parentDevice?.hostname}
                     />
                     <Row label="Face" value={device.face} />
-                    <Row
-                      label="Slot"
-                      value={formatRackSlot(device.rackSlot)}
-                    />
+                    <Row label="Slot" value={formatRackSlot(device.rackSlot)} />
                     <Row
                       label="U position"
                       value={
@@ -1729,6 +1727,13 @@ export default function DeviceDetail() {
                     </CardBody>
                   </Card>
                 )}
+                <CablingMapPanel
+                  device={device}
+                  devices={devices}
+                  ports={ports}
+                  portLinks={portLinks}
+                  deviceTypes={deviceTypes}
+                />
               </div>
 
               <div className="col-span-12 xl:col-span-4">
@@ -3389,7 +3394,9 @@ function formatRackUnit(device: Device, includeHeight = false) {
   if (!device.startU) return "";
   const heightU = device.heightU ?? 1;
   const range =
-    heightU > 1 ? `U${device.startU}-${device.startU + heightU - 1}` : `U${device.startU}`;
+    heightU > 1
+      ? `U${device.startU}-${device.startU + heightU - 1}`
+      : `U${device.startU}`;
   const slot =
     (device.rackSlot ?? "full") === "full"
       ? ""

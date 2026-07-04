@@ -8,6 +8,31 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.0-beta.4] - 2026-07-04
+
+### Added
+
+- Added copyable cabling maps in device ports, visualizer device inspection,
+  and trace summaries.
+- Added a compact VLAN overview to Networks with subnet, DHCP, assignment, and
+  port usage counts.
+
+### Changed
+
+- Discovery scans now fan out larger CIDRs into up to 16 `/24` chunks for
+  manual and scheduled runs while scanning every usable host in the accepted
+  CIDR.
+
+### Test notes
+
+- Verify Device Detail and Visualizer cabling maps can be copied or downloaded
+  in direct, active-endpoint, and full-path modes.
+- Verify Trace mode can copy or download a traced path summary.
+- Verify Networks shows all VLANs in the overview and selecting a VLAN opens the
+  matching network details.
+- Verify manual and scheduled discovery scans accept up to `/20`, reject larger
+  ranges, and keep results in the normal discovery inbox.
+
 ## [1.7.0-beta.3] - 2026-07-04
 
 ### Fixed

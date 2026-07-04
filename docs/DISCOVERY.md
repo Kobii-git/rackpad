@@ -35,10 +35,11 @@ link, or delete devices.
 
 ## Current scan limits
 
-Manual and scheduled scans follow Rackpad's existing `/24`-or-smaller guard. If
-you need larger networks, split them into smaller CIDRs for now. Larger-CIDR
-fan-out is intentionally left as future work so scheduled discovery cannot
-accidentally create long-running scans or very noisy inbox refreshes.
+Manual and scheduled scans handle `/24` and smaller CIDRs directly. Larger
+CIDRs are expanded into `/24` chunks, up to 16 chunks per run, so `/20` is the
+largest accepted discovery range. Rackpad still scans every usable host in the
+original accepted CIDR. Split anything larger into smaller scheduled or manual
+scans.
 
 Rackpad does not currently provide a long-lived discovery API token for external
 schedulers. Use the built-in schedule list for this workflow.

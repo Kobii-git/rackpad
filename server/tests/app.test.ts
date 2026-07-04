@@ -23,13 +23,16 @@ process.env.SNMP_INVENTORY_SYNC = "1";
 const { createApp } = await import("../app.js");
 const { db } = await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
-const { setDockerHttpJsonFetcherForTests } = await import(
-  "../lib/docker-import.js"
-);
+const { setDockerHttpJsonFetcherForTests } =
+  await import("../lib/docker-import.js");
 const { resetLocalUserPassword } = await import("../lib/password-reset.js");
 const { parseIeeeOuiText } = await import("../lib/oui.js");
-const { parseArpScanOutput, parseNmapPingScanOutput } =
-  await import("../routes/discovery.js");
+const {
+  expandDiscoveryCidrs,
+  expandDiscoveryScanChunks,
+  parseArpScanOutput,
+  parseNmapPingScanOutput,
+} = await import("../routes/discovery.js");
 
 type AppInstance = Awaited<ReturnType<typeof createApp>>;
 
@@ -3719,7 +3722,11 @@ test("port aggregates use a cabled aggregate endpoint and block member cabling",
       },
     });
     assert.equal(res.statusCode, 201);
-    return readJson(res) as { id: string; name: string; aggregatePortId?: string | null };
+    return readJson(res) as {
+      id: string;
+      name: string;
+      aggregatePortId?: string | null;
+    };
   }
 
   const sw1 = await createPort(switchDevice.id, "Gi0/1");
@@ -3944,7 +3951,8 @@ test("port aggregates are included in backup export and restore", async () => {
     };
   };
   assert.equal(
-    snapshot.data.ports.find((port) => port.id === aggregate.aggregate.id)?.portRole,
+    snapshot.data.ports.find((port) => port.id === aggregate.aggregate.id)
+      ?.portRole,
     "aggregate",
   );
   assert.equal(
@@ -4151,7 +4159,7 @@ test("discovery scan schedules can be managed per lab", async () => {
     payload: {
       labId: "lab_home",
       name: "Routed pods",
-      cidr: "10.42.0.0/30",
+      cidr: "10.42.0.0/20",
       intervalMs: 120_000,
       enabled: true,
     },
@@ -4165,7 +4173,7 @@ test("discovery scan schedules can be managed per lab", async () => {
     enabled: boolean;
   };
   assert.equal(created.name, "Routed pods");
-  assert.equal(created.cidr, "10.42.0.0/30");
+  assert.equal(created.cidr, "10.42.0.0/20");
   assert.equal(created.intervalMs, 120_000);
   assert.equal(created.enabled, true);
 
@@ -4177,7 +4185,7 @@ test("discovery scan schedules can be managed per lab", async () => {
     },
     payload: {
       labId: "lab_home",
-      cidr: "10.42.0.0/30",
+      cidr: "10.42.0.0/20",
       intervalMs: 120_000,
       enabled: true,
     },
@@ -4192,6 +4200,7 @@ test("discovery scan schedules can be managed per lab", async () => {
     },
     payload: {
       name: "Routed pods sweep",
+      cidr: "10.42.0.0/23",
       intervalMs: 300_000,
       enabled: false,
     },
@@ -4199,10 +4208,12 @@ test("discovery scan schedules can be managed per lab", async () => {
   assert.equal(updateRes.statusCode, 200);
   const updated = readJson(updateRes) as {
     name: string;
+    cidr: string;
     intervalMs: number;
     enabled: boolean;
   };
   assert.equal(updated.name, "Routed pods sweep");
+  assert.equal(updated.cidr, "10.42.0.0/23");
   assert.equal(updated.intervalMs, 300_000);
   assert.equal(updated.enabled, false);
 
@@ -4238,6 +4249,67 @@ test("discovery scan schedules can be managed per lab", async () => {
   });
   assert.equal(listAfterDeleteRes.statusCode, 200);
   assert.deepEqual(readJson(listAfterDeleteRes), []);
+});
+
+test("discovery CIDR expansion fans larger ranges into safe chunks", () => {
+  assert.deepEqual(expandDiscoveryCidrs("10.42.0.0/24"), ["10.42.0.0/24"]);
+  assert.deepEqual(expandDiscoveryCidrs("10.42.0.0/23"), [
+    "10.42.0.0/24",
+    "10.42.1.0/24",
+  ]);
+  assert.equal(expandDiscoveryCidrs("10.42.0.0/20").length, 16);
+  assert.throws(
+    () => expandDiscoveryCidrs("10.42.0.0/19"),
+    /at most 16 \/24 chunks/,
+  );
+});
+
+test("discovery fan-out scans every usable host in the original CIDR", () => {
+  const chunk24 = expandDiscoveryScanChunks("10.42.0.0/24");
+  assert.equal(chunk24.length, 1);
+  assert.equal(chunk24[0].hosts.length, 254);
+  assert.equal(chunk24[0].hosts[0], "10.42.0.1");
+  assert.equal(chunk24[0].hosts.at(-1), "10.42.0.254");
+
+  const chunks23 = expandDiscoveryScanChunks("10.42.0.0/23");
+  assert.deepEqual(
+    chunks23.map((chunk) => chunk.cidr),
+    ["10.42.0.0/24", "10.42.1.0/24"],
+  );
+  assert.equal(
+    chunks23.reduce((sum, chunk) => sum + chunk.hosts.length, 0),
+    510,
+  );
+  assert(chunks23[0].hosts.includes("10.42.0.255"));
+  assert(chunks23[1].hosts.includes("10.42.1.0"));
+
+  const chunks20 = expandDiscoveryScanChunks("10.42.0.0/20");
+  assert.equal(chunks20.length, 16);
+  assert.equal(
+    chunks20.reduce((sum, chunk) => sum + chunk.hosts.length, 0),
+    4094,
+  );
+});
+
+test("discovery scan schedules reject ranges larger than the fan-out cap", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const res = await app.inject({
+    method: "POST",
+    url: "/api/discovery/schedules",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.42.0.0/19",
+      intervalMs: 120_000,
+      enabled: true,
+    },
+  });
+
+  assert.equal(res.statusCode, 400);
+  assert.match(readJson(res).error, /at most 16 \/24 chunks/);
 });
 
 test("discovery scan schedules require lab write access", async () => {
@@ -4554,7 +4626,10 @@ test("network bundles create VLAN, subnet, DHCP, and zones atomically", async ()
     },
   });
   const vlans = readJson(vlansRes) as Array<{ name: string }>;
-  assert.equal(vlans.some((vlan) => vlan.name === "Bad bundle VLAN"), false);
+  assert.equal(
+    vlans.some((vlan) => vlan.name === "Bad bundle VLAN"),
+    false,
+  );
 
   const subnetsRes = await app.inject({
     method: "GET",
@@ -4779,7 +4854,11 @@ test("non-canonical CIDRs validate against their masked network", async () => {
     },
   });
   assert.equal(subnetRes.statusCode, 201);
-  const subnet = readJson(subnetRes) as { id: string; cidr: string; gateway: string };
+  const subnet = readJson(subnetRes) as {
+    id: string;
+    cidr: string;
+    gateway: string;
+  };
   assert.equal(subnet.cidr, "192.168.1.42/24");
   assert.equal(subnet.gateway, "192.168.1.1");
 
@@ -4860,7 +4939,10 @@ test("non-canonical CIDRs validate against their masked network", async () => {
     },
   });
   assert.equal(cidrPatchRes.statusCode, 200);
-  assert.equal((readJson(cidrPatchRes) as { cidr: string }).cidr, "192.168.1.99/24");
+  assert.equal(
+    (readJson(cidrPatchRes) as { cidr: string }).cidr,
+    "192.168.1.99/24",
+  );
 });
 
 test("subnet edits validate gateways and existing child records", async () => {
@@ -4947,7 +5029,11 @@ test("subnet edits validate gateways and existing child records", async () => {
     },
   });
   assert.equal(assignmentRes.statusCode, 201);
-  await expectCidrPatchRejected(assignmentSubnet.id, "10.82.0.0/25", /assignment/i);
+  await expectCidrPatchRejected(
+    assignmentSubnet.id,
+    "10.82.0.0/25",
+    /assignment/i,
+  );
 
   const scopeSubnet = await createSubnet(
     "10.83.0.0/24",
@@ -5856,10 +5942,7 @@ test("docker import stores a sync source and refreshes container status", async 
       endpoint: string;
       tokenEnc: string | null;
     };
-    assert.equal(
-      source.endpoint,
-      "https://8.8.8.8/api/endpoints/2/docker",
-    );
+    assert.equal(source.endpoint, "https://8.8.8.8/api/endpoints/2/docker");
     assert.ok(source.tokenEnc);
     assert.notEqual(source.tokenEnc, "portainer-token");
 
@@ -5896,7 +5979,9 @@ test("docker import stores a sync source and refreshes container status", async 
     assert.equal(sync.devices[0]?.status, "offline");
 
     const updatedLink = db
-      .prepare("SELECT state, status FROM dockerContainerLinks WHERE deviceId = ?")
+      .prepare(
+        "SELECT state, status FROM dockerContainerLinks WHERE deviceId = ?",
+      )
       .get(imported.id) as { state: string; status: string };
     assert.equal(updatedLink.state, "exited");
     assert.equal(updatedLink.status, "Exited (0) 10 seconds ago");

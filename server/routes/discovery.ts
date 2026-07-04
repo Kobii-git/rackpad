@@ -45,6 +45,7 @@ const DISCOVERY_MAC_SCAN_MODES = [
   "nmap",
   "off",
 ] as const;
+const MAX_DISCOVERY_SCAN_CHUNKS = 16;
 const execFileAsync = promisify(execFile);
 
 type DiscoveryMacScanMode = (typeof DISCOVERY_MAC_SCAN_MODES)[number];
@@ -85,6 +86,7 @@ export type DiscoveryScanSchedule = {
 };
 
 export type DiscoveryScanResult = {
+  chunkCount: number;
   scannedHostCount: number;
   discoveredCount: number;
   macAddressCount: number;
@@ -203,15 +205,68 @@ function cidrHosts(cidr: string) {
   if (hostCount < 1) {
     throw new ValidationError("CIDR must include at least one usable host.");
   }
-  if (hostCount > 254) {
-    throw new ValidationError(
-      "Discovery scans are limited to /24 or smaller networks.",
-    );
-  }
 
   return Array.from({ length: hostCount }, (_, index) =>
     intToIp(network + index + 1),
   );
+}
+
+function hostsInRange(start: number, end: number) {
+  if (end < start) return [];
+  return Array.from({ length: end - start + 1 }, (_, index) =>
+    intToIp(start + index),
+  );
+}
+
+export function expandDiscoveryCidrs(cidr: string) {
+  ensureCidr(cidr);
+  const { network, prefix, size } = cidrBounds(cidr);
+  const hostCount = size - 2;
+
+  if (hostCount < 1) {
+    throw new ValidationError("CIDR must include at least one usable host.");
+  }
+
+  if (prefix >= 24) {
+    return [`${intToIp(network)}/${prefix}`];
+  }
+
+  const chunkCount = size / 256;
+  if (chunkCount > MAX_DISCOVERY_SCAN_CHUNKS) {
+    throw new ValidationError(
+      "Discovery scans can cover at most 16 /24 chunks per run (/20). Split larger ranges into smaller scans.",
+    );
+  }
+
+  return Array.from(
+    { length: chunkCount },
+    (_, index) => `${intToIp(network + index * 256)}/24`,
+  );
+}
+
+export function expandDiscoveryScanChunks(cidr: string) {
+  const scanCidrs = expandDiscoveryCidrs(cidr);
+  const { network, prefix, broadcast } = cidrBounds(cidr);
+
+  if (prefix >= 24) {
+    return scanCidrs.map((scanCidr) => ({
+      cidr: scanCidr,
+      hosts: cidrHosts(scanCidr),
+    }));
+  }
+
+  const firstUsableHost = network + 1;
+  const lastUsableHost = broadcast - 1;
+  return scanCidrs.map((scanCidr) => {
+    const chunk = cidrBounds(scanCidr);
+    return {
+      cidr: scanCidr,
+      hosts: hostsInRange(
+        Math.max(chunk.network, firstUsableHost),
+        Math.min(chunk.broadcast, lastUsableHost),
+      ),
+    };
+  });
 }
 
 function parseStringArray(value: unknown) {
@@ -803,6 +858,20 @@ async function scanHosts(
   return results;
 }
 
+type DiscoveryHostRecord = NonNullable<Awaited<ReturnType<typeof scanHost>>> & {
+  technicalRole?: string | null;
+  technicalReason?: string | null;
+};
+
+type DiscoveryScanChunkResult = Pick<
+  DiscoveryScanResult,
+  | "scannedHostCount"
+  | "macAddressCount"
+  | "vendorCount"
+  | "technicalCount"
+  | "diagnostics"
+>;
+
 export async function runDiscoveryScan(
   labId: string,
   cidr: string,
@@ -814,9 +883,67 @@ export async function runDiscoveryScan(
   resetStaleImportedDiscoveryRows(labId);
 
   const scannedAt = new Date().toISOString();
-  const hosts = cidrHosts(cidr);
-  const macScan = await collectSubnetMacAddresses(cidr);
+  const scanChunks = expandDiscoveryScanChunks(cidr);
   const technicalAddresses = collectTechnicalAddresses(labId);
+  const results: DiscoveryScanChunkResult[] = [];
+
+  for (const scanChunk of scanChunks) {
+    results.push(
+      await runDiscoveryScanChunk({
+        labId,
+        cidr: scanChunk.cidr,
+        hosts: scanChunk.hosts,
+        scannedAt,
+        technicalAddresses,
+      }),
+    );
+  }
+
+  const rows = db
+    .prepare(
+      `
+    SELECT * FROM discoveredDevices
+    WHERE labId = ? AND lastScannedAt = ?
+    ORDER BY ipAddress ASC
+  `,
+    )
+    .all(labId, scannedAt) as Record<string, unknown>[];
+
+  return {
+    chunkCount: scanChunks.length,
+    scannedHostCount: results.reduce(
+      (sum, result) => sum + result.scannedHostCount,
+      0,
+    ),
+    discoveredCount: rows.length,
+    macAddressCount: results.reduce(
+      (sum, result) => sum + result.macAddressCount,
+      0,
+    ),
+    vendorCount: results.reduce((sum, result) => sum + result.vendorCount, 0),
+    technicalCount: results.reduce(
+      (sum, result) => sum + result.technicalCount,
+      0,
+    ),
+    diagnostics: results.flatMap((result) => result.diagnostics),
+    rows: rows.map(parseDiscoveredDevice),
+  };
+}
+
+async function runDiscoveryScanChunk({
+  labId,
+  cidr,
+  hosts,
+  scannedAt,
+  technicalAddresses,
+}: {
+  labId: string;
+  cidr: string;
+  hosts: string[];
+  scannedAt: string;
+  technicalAddresses: TechnicalAddressContext;
+}): Promise<DiscoveryScanChunkResult> {
+  const macScan = await collectSubnetMacAddresses(cidr);
   const reachableHosts = (await scanHosts(hosts, macScan.macByIp, labId)).map(
     (record) => {
       if (!record) return record;
@@ -843,6 +970,22 @@ export async function runDiscoveryScan(
     diagnostics.push(macUnavailableDiagnostic(reachableHosts.length));
   }
 
+  persistDiscoveredHosts(labId, scannedAt, reachableHosts);
+
+  return {
+    scannedHostCount: hosts.length,
+    macAddressCount,
+    vendorCount,
+    technicalCount,
+    diagnostics,
+  };
+}
+
+function persistDiscoveredHosts(
+  labId: string,
+  scannedAt: string,
+  reachableHosts: Array<DiscoveryHostRecord | null>,
+) {
   const upsert = db.prepare(`
     INSERT INTO discoveredDevices
       (id, labId, ipAddress, hostname, displayName, deviceType, placement, placementHint, macAddress, vendor, source, status, notes, importedDeviceId, technicalRole, technicalReason, lastSeen, lastScannedAt)
@@ -927,33 +1070,13 @@ export async function runDiscoveryScan(
   });
 
   persistScan();
-
-  const rows = db
-    .prepare(
-      `
-    SELECT * FROM discoveredDevices
-    WHERE labId = ? AND lastScannedAt = ?
-    ORDER BY ipAddress ASC
-  `,
-    )
-    .all(labId, scannedAt) as Record<string, unknown>[];
-
-  return {
-    scannedHostCount: hosts.length,
-    discoveredCount: rows.length,
-    macAddressCount,
-    vendorCount,
-    technicalCount,
-    diagnostics,
-    rows: rows.map(parseDiscoveredDevice),
-  };
 }
 
 const runningScheduleIds = new Set<string>();
 let discoveryScheduleIntervalHandle: NodeJS.Timeout | null = null;
 
 function validateScheduleCidr(cidr: string) {
-  cidrHosts(cidr);
+  expandDiscoveryCidrs(cidr);
   return cidr;
 }
 
@@ -961,9 +1084,10 @@ function formatScheduleMessage(result: DiscoveryScanResult) {
   const warningCount = result.diagnostics.filter(
     (entry) => entry.severity === "warning",
   ).length;
-  const warningSuffix =
-    warningCount > 0 ? ` ${warningCount} warning(s).` : "";
-  return `Checked ${result.scannedHostCount} hosts; found ${result.discoveredCount} reachable.${warningSuffix}`;
+  const warningSuffix = warningCount > 0 ? ` ${warningCount} warning(s).` : "";
+  const chunkSuffix =
+    result.chunkCount > 1 ? ` across ${result.chunkCount} /24 chunks` : "";
+  return `Checked ${result.scannedHostCount} hosts${chunkSuffix}; found ${result.discoveredCount} reachable.${warningSuffix}`;
 }
 
 export async function runDiscoveryScanSchedule(
@@ -979,7 +1103,10 @@ export async function runDiscoveryScanSchedule(
     return { schedule, scan: null };
   }
   if (runningScheduleIds.has(id)) {
-    throw new ValidationError("Discovery scan schedule is already running.", 409);
+    throw new ValidationError(
+      "Discovery scan schedule is already running.",
+      409,
+    );
   }
 
   runningScheduleIds.add(id);
@@ -1074,13 +1201,21 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(401).send({ error: "Authentication required." });
       }
 
-      const filter = resolveLabIdsForList(req.authUser, req.labAccess ?? [], req.query.labId);
+      const filter = resolveLabIdsForList(
+        req.authUser,
+        req.labAccess ?? [],
+        req.query.labId,
+      );
       if (!filter.ok) {
         return reply.status(filter.status).send({ error: filter.error });
       }
 
       resetStaleImportedDiscoveryRows(req.query.labId);
-      const filtered = appendLabFilter("SELECT * FROM discoveredDevices WHERE 1=1", [], filter.labIds);
+      const filtered = appendLabFilter(
+        "SELECT * FROM discoveredDevices WHERE 1=1",
+        [],
+        filter.labIds,
+      );
       let sql = filtered.sql;
       const params: unknown[] = [...filtered.params];
       if (req.query.status) {
@@ -1098,28 +1233,31 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.get<{ Querystring: { labId?: string } }>("/schedules", async (req, reply) => {
-    if (!req.authUser) {
-      return reply.status(401).send({ error: "Authentication required." });
-    }
-    const filter = resolveLabIdsForList(
-      req.authUser,
-      req.labAccess ?? [],
-      req.query.labId,
-    );
-    if (!filter.ok) {
-      return reply.status(filter.status).send({ error: filter.error });
-    }
-    const filtered = appendLabFilter(
-      "SELECT * FROM discoveryScanSchedules WHERE 1=1",
-      [],
-      filter.labIds,
-    );
-    const rows = db
-      .prepare(`${filtered.sql} ORDER BY cidr, name, id`)
-      .all(...filtered.params) as Record<string, unknown>[];
-    return rows.map(parseDiscoveryScanSchedule);
-  });
+  app.get<{ Querystring: { labId?: string } }>(
+    "/schedules",
+    async (req, reply) => {
+      if (!req.authUser) {
+        return reply.status(401).send({ error: "Authentication required." });
+      }
+      const filter = resolveLabIdsForList(
+        req.authUser,
+        req.labAccess ?? [],
+        req.query.labId,
+      );
+      if (!filter.ok) {
+        return reply.status(filter.status).send({ error: filter.error });
+      }
+      const filtered = appendLabFilter(
+        "SELECT * FROM discoveryScanSchedules WHERE 1=1",
+        [],
+        filter.labIds,
+      );
+      const rows = db
+        .prepare(`${filtered.sql} ORDER BY cidr, name, id`)
+        .all(...filtered.params) as Record<string, unknown>[];
+      return rows.map(parseDiscoveryScanSchedule);
+    },
+  );
 
   app.post("/schedules", async (req, reply) => {
     const body = asObject(req.body);
@@ -1237,7 +1375,9 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
       db.prepare(
         `UPDATE discoveryScanSchedules SET ${updates.join(", ")} WHERE id = ?`,
       ).run(...values);
-      return parseDiscoveryScanSchedule(getDiscoveryScanScheduleRow(req.params.id)!);
+      return parseDiscoveryScanSchedule(
+        getDiscoveryScanScheduleRow(req.params.id)!,
+      );
     },
   );
 

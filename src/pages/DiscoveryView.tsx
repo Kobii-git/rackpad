@@ -381,7 +381,9 @@ export default function DiscoveryView() {
       setLastScanResult(mergeScanResults(results));
       setFilter("all");
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Failed to scan subnet."));
+      setError(
+        err instanceof Error ? err.message : t("Failed to scan subnet."),
+      );
     } finally {
       setScanning(false);
     }
@@ -614,11 +616,14 @@ export default function DiscoveryView() {
 
     if (failures.length > 0) {
       setError(
-        t("Auto-map imported {mapped} host(s); {failedCount} failed. {details}", {
-          mapped,
-          failedCount: failures.length,
-          details: failures.slice(0, 3).join(" "),
-        }),
+        t(
+          "Auto-map imported {mapped} host(s); {failedCount} failed. {details}",
+          {
+            mapped,
+            failedCount: failures.length,
+            details: failures.slice(0, 3).join(" "),
+          },
+        ),
       );
     } else {
       setAutoMapMessage(
@@ -873,9 +878,7 @@ export default function DiscoveryView() {
                           </Td>
                           <Td>
                             <div className="flex flex-wrap gap-1">
-                              <Badge
-                                tone={schedule.enabled ? "ok" : "neutral"}
-                              >
+                              <Badge tone={schedule.enabled ? "ok" : "neutral"}>
                                 {schedule.enabled
                                   ? t("Enabled")
                                   : t("Disabled")}
@@ -1162,7 +1165,9 @@ export default function DiscoveryView() {
                               <Badge tone="warn">
                                 <AlertTriangle className="size-3" />
                                 {matches.length === 1
-                                  ? t("{count} match", { count: matches.length })
+                                  ? t("{count} match", {
+                                      count: matches.length,
+                                    })
                                   : t("{count} matches", {
                                       count: matches.length,
                                     })}
@@ -1396,7 +1401,9 @@ export default function DiscoveryView() {
                           <option value="wireless">
                             {t("WiFi / AP linked")}
                           </option>
-                          <option value="virtual">{t("Virtual / hosted")}</option>
+                          <option value="virtual">
+                            {t("Virtual / hosted")}
+                          </option>
                           <option value="rack">{t("Rack mounted")}</option>
                         </Select>
                       </Field>
@@ -1422,9 +1429,7 @@ export default function DiscoveryView() {
                       </Select>
                       {selectedIsTechnical && (
                         <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
-                          {t(
-                            "Status is locked for IPAM technical addresses.",
-                          )}
+                          {t("Status is locked for IPAM technical addresses.")}
                         </div>
                       )}
                     </Field>
@@ -1635,10 +1640,7 @@ function FilterButton({
   );
 }
 
-function placementHintLabel(
-  hint: string,
-  t: ReturnType<typeof useI18n>["t"],
-) {
+function placementHintLabel(hint: string, t: ReturnType<typeof useI18n>["t"]) {
   const key = PLACEMENT_HINT_KEYS[hint];
   return key ? t(key) : hint;
 }
@@ -1709,6 +1711,10 @@ function mergeScanResults(results: DiscoveryScanResult[]): DiscoveryScanResult {
     }
   }
   return {
+    chunkCount: results.reduce(
+      (sum, result) => sum + (result.chunkCount ?? 1),
+      0,
+    ),
     scannedHostCount: results.reduce(
       (sum, result) => sum + result.scannedHostCount,
       0,

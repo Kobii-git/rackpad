@@ -13,6 +13,8 @@ import {
 import { Link } from "react-router-dom";
 import {
   Cable,
+  Copy,
+  Download,
   ExternalLink,
   LocateFixed,
   Network,
@@ -35,6 +37,11 @@ import {
   CardLabel,
   CardTitle,
 } from "@/components/ui/Card";
+import {
+  CablingMapPanel,
+  copyText,
+  downloadText,
+} from "@/components/shared/CablingMapPanel";
 import {
   Tooltip,
   TooltipContent,
@@ -539,17 +546,17 @@ export function VisualizerCanvas({
       typeFilters.size === 0 ||
       Boolean(
         cable.fromDevice &&
-          typeFilters.has(
-            model.effectiveDeviceTypeByDeviceId[cable.fromDevice.id] ??
-              cable.fromDevice.deviceType,
-          ),
+        typeFilters.has(
+          model.effectiveDeviceTypeByDeviceId[cable.fromDevice.id] ??
+            cable.fromDevice.deviceType,
+        ),
       ) ||
       Boolean(
         cable.toDevice &&
-          typeFilters.has(
-            model.effectiveDeviceTypeByDeviceId[cable.toDevice.id] ??
-              cable.toDevice.deviceType,
-          ),
+        typeFilters.has(
+          model.effectiveDeviceTypeByDeviceId[cable.toDevice.id] ??
+            cable.toDevice.deviceType,
+        ),
       )
     );
   }
@@ -1994,7 +2001,9 @@ function TracePicker({
   const traceDevices = useMemo(
     () =>
       model.nodes
-        .filter((node) => (model.portsByDeviceId[node.device.id] ?? []).length > 0)
+        .filter(
+          (node) => (model.portsByDeviceId[node.device.id] ?? []).length > 0,
+        )
         .sort((a, b) => a.device.hostname.localeCompare(b.device.hostname)),
     [model],
   );
@@ -2015,7 +2024,9 @@ function TracePicker({
   const firstPort = traceMode.firstPortId
     ? model.portById[traceMode.firstPortId]
     : undefined;
-  const firstDevice = firstPort ? model.deviceById[firstPort.deviceId] : undefined;
+  const firstDevice = firstPort
+    ? model.deviceById[firstPort.deviceId]
+    : undefined;
 
   return (
     <Card className="shrink-0">
@@ -2063,7 +2074,10 @@ function TracePicker({
             >
               {devicePorts.map((port) => (
                 <option key={port.id} value={port.id}>
-                  {formatPortEndpointLabel(port, model.deviceById[port.deviceId])}
+                  {formatPortEndpointLabel(
+                    port,
+                    model.deviceById[port.deviceId],
+                  )}
                 </option>
               ))}
             </select>
@@ -2154,6 +2168,17 @@ function Inspector({
           )}
         </CardBody>
       </Card>
+
+      {selectedNode && (
+        <CablingMapPanel
+          className="shrink-0"
+          device={selectedNode.device}
+          devices={Object.values(model.deviceById)}
+          ports={Object.values(model.portById)}
+          portLinks={uniquePortLinks(model)}
+          effectiveDeviceTypeByDeviceId={model.effectiveDeviceTypeByDeviceId}
+        />
+      )}
 
       <Card className="flex min-h-64 flex-col">
         <CardHeader>
@@ -2332,6 +2357,22 @@ function TraceSummary({
   result: TraceResult;
 }) {
   const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const traceText = useMemo(
+    () => formatTraceText(model, result),
+    [model, result],
+  );
+
+  async function copyTrace() {
+    await copyText(traceText);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  function downloadTrace() {
+    downloadText("rackpad-trace-path.txt", traceText);
+  }
+
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--accent-primary-border)] bg-[var(--accent-primary-soft)] p-3">
       <div className="flex items-start justify-between gap-3">
@@ -2341,6 +2382,26 @@ function TraceSummary({
             {t("{count} hops", { count: result.segments.length })} |{" "}
             {result.totalCableLengthLabel}
           </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void copyTrace()}
+            disabled={!traceText}
+          >
+            <Copy className="size-3.5" />
+            {copied ? t("Copied") : t("Copy")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={downloadTrace}
+            disabled={!traceText}
+          >
+            <Download className="size-3.5" />
+            {t("Download")}
+          </Button>
         </div>
       </div>
       <div className="mt-3 space-y-2">
@@ -2376,6 +2437,25 @@ function TraceSummary({
       </div>
     </div>
   );
+}
+
+function uniquePortLinks(model: VisualizerModel) {
+  return [
+    ...new Map(
+      model.cables.map((cable) => [cable.link.id, cable.link]),
+    ).values(),
+  ];
+}
+
+function formatTraceText(model: VisualizerModel, result: TraceResult) {
+  return result.segments
+    .map((segment, index) => {
+      const fromDevice = model.deviceById[segment.fromPort.deviceId];
+      const toDevice = model.deviceById[segment.toPort.deviceId];
+      const length = segment.length ? ` | ${segment.length}` : "";
+      return `#${index + 1} ${fromDevice?.hostname ?? "Unknown"} ${segment.fromPort.name} -> ${toDevice?.hostname ?? "Unknown"} ${segment.toPort.name} (${segment.kind}${length})`;
+    })
+    .join("\n");
 }
 
 function EndpointButton({
