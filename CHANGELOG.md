@@ -8,6 +8,33 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.0-beta.2] - 2026-07-04
+
+### Changed
+
+- Improved visualizer cable routing with stable lane assignment by
+  rack/room/container pair.
+- Increased spacing for patch-panel cable routes and kept traced cables drawn
+  above normal cables.
+- Reserved label space from the actual port strip width on device cards to
+  reduce dense-port label overlap.
+
+### Fixed
+
+- Added regression coverage that dragged pyramid/diagram nodes expand the
+  visualizer bounds instead of escaping the parent canvas.
+
+### Test notes
+
+- Verify visualizer cables remain readable around patch panels and that trace
+  highlights stay visually above normal cables.
+- Verified `node --import tsx --test src/pages/visualizer/model.test.ts`.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, and `bash -n scripts/collect-proxmox.sh`.
+- Smoke tested the Visualizer with a patch-panel path and confirmed the
+  3-hop trace list, patch segment, last-hop marker, and trace-highlighted
+  cable paths render in beta.
+
 ## [1.7.0-beta.1] - 2026-07-04
 
 ### Added

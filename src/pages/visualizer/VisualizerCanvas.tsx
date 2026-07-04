@@ -54,6 +54,7 @@ import {
   traceFromPort,
   tracePorts,
   typeLabel,
+  visualizerCableLaneIndexes,
   visualizerCablePath,
 } from "./model";
 import type {
@@ -558,28 +559,45 @@ export function VisualizerCanvas({
     ...model.rackZone.sections.flatMap((section) => section.looseGroups),
     ...model.roomZone.groups,
   ];
+  const cableRouteContext = {
+    rackPanels: model.rackZone.racks,
+    roomGroups: cableRouteGroups,
+  };
+  const laneIndexesByCableId = visualizerCableLaneIndexes(
+    visibleCables,
+    cableRouteContext,
+  );
   const visibleCableEntries = visibleCables
-    .map((cable, index) => ({
-      cable,
-      path:
-        cable.fromPoint && cable.toPoint
-          ? visualizerCablePath(
-              cable.fromPoint,
-              cable.toPoint,
-              index,
-              cableLayout,
-              {
-                fromNode: cable.fromNode,
-                toNode: cable.toNode,
-                rackPanels: model.rackZone.racks,
-                roomGroups: cableRouteGroups,
-              },
-            )
-          : cable.path,
-    }))
+    .map((cable) => {
+      const patchPanelRoute = cableTouchesPatchPanel(cable, model);
+      return {
+        cable,
+        path:
+          cable.fromPoint && cable.toPoint
+            ? visualizerCablePath(
+                cable.fromPoint,
+                cable.toPoint,
+                laneIndexesByCableId.get(cable.link.id) ?? 0,
+                cableLayout,
+                {
+                  ...cableRouteContext,
+                  fromNode: cable.fromNode,
+                  toNode: cable.toNode,
+                  patchPanelRoute,
+                },
+              )
+            : cable.path,
+      };
+    })
     .filter((entry): entry is { cable: VisualizerCable; path: string } =>
       Boolean(entry.path),
     );
+  const traceCableIds = traceMode.result?.cableIds ?? null;
+  const cableDrawEntries = [...visibleCableEntries].sort((a, b) => {
+    const aTrace = traceCableIds?.has(a.cable.link.id) ? 1 : 0;
+    const bTrace = traceCableIds?.has(b.cable.link.id) ? 1 : 0;
+    return aTrace - bTrace;
+  });
   const activeNeighborIds = new Set(
     isolatedDeviceId
       ? (model.directNeighborsByDeviceId[isolatedDeviceId] ?? []).map(
@@ -717,7 +735,7 @@ export function VisualizerCanvas({
                     aria-label="Cable links between Rackpad devices"
                   >
                     <g pointerEvents="none">
-                      {visibleCableEntries.map(({ cable, path }) => (
+                      {cableDrawEntries.map(({ cable, path }) => (
                         <CableSvg
                           key={cable.link.id}
                           cable={cable}
@@ -1297,6 +1315,10 @@ function DeviceCard({
         overflow: "hidden",
       }
     : undefined;
+  const portReserve = nodePortReserve(node, {
+    compact: compactRackNode,
+    readable: readableLabels,
+  });
   return (
     <div
       data-visualizer-interactive="true"
@@ -1330,6 +1352,7 @@ function DeviceCard({
         top: node.y,
         width: node.width,
         height: node.height,
+        paddingRight: portReserve,
         opacity: dimmed ? 0.4 : 1,
       }}
     >
@@ -1388,6 +1411,20 @@ function DeviceCard({
         />
       ))}
     </div>
+  );
+}
+
+function nodePortReserve(
+  node: VisualizerNode,
+  options: { compact: boolean; readable: boolean },
+) {
+  if (node.ports.length === 0) return undefined;
+  const stripLeft = Math.min(...node.ports.map((port) => port.x));
+  const reserveFromLayout = node.x + node.width - stripLeft + 10;
+  const reserveFloor = options.readable ? 56 : options.compact ? 44 : 50;
+  const maxReserve = Math.max(36, node.width - 58);
+  return Math.round(
+    Math.min(Math.max(reserveFloor, reserveFromLayout), maxReserve),
   );
 }
 
@@ -1555,6 +1592,19 @@ function cableNeedsContrastOutline(color: string) {
     value === "white" ||
     value === "#fff" ||
     value === "#ffffff"
+  );
+}
+
+function cableTouchesPatchPanel(
+  cable: VisualizerCable,
+  model: VisualizerModel,
+) {
+  return (
+    (cable.fromDevice &&
+      model.effectiveDeviceTypeByDeviceId[cable.fromDevice.id] ===
+        "patch_panel") ||
+    (cable.toDevice &&
+      model.effectiveDeviceTypeByDeviceId[cable.toDevice.id] === "patch_panel")
   );
 }
 

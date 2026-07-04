@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Device, DeviceTypeDefinition } from "@/lib/types";
-import { buildVisualizerModel, visualizerCablePath } from "./model";
-import type { RoomGroup, VisualizerNode } from "./types";
+import type { Device, DeviceTypeDefinition, Port } from "@/lib/types";
+import {
+  buildVisualizerModel,
+  visualizerCableLaneIndexes,
+  visualizerCablePath,
+} from "./model";
+import type { RoomGroup, VisualizerCable, VisualizerNode } from "./types";
 
 function testDevice(id: string): Device {
   return {
@@ -43,6 +47,51 @@ function testNode(
   };
 }
 
+function testPort(deviceId: string, id: string, position: number): Port {
+  return {
+    id,
+    deviceId,
+    name: `eth${position}`,
+    position,
+    kind: "ethernet",
+    linkState: "up",
+    mode: "access",
+  };
+}
+
+function testCable(
+  id: string,
+  fromNode: VisualizerNode,
+  toNode: VisualizerNode,
+  fromPosition: number,
+  toPosition: number,
+): VisualizerCable {
+  const fromPort = testPort(fromNode.device.id, `${id}_from`, fromPosition);
+  const toPort = testPort(toNode.device.id, `${id}_to`, toPosition);
+  return {
+    link: {
+      id,
+      fromPortId: fromPort.id,
+      toPortId: toPort.id,
+    },
+    fromPort,
+    toPort,
+    fromDevice: fromNode.device,
+    toDevice: toNode.device,
+    fromNode,
+    toNode,
+    fromPoint: { x: fromNode.x + fromNode.width, y: fromNode.y + 12 },
+    toPoint: { x: toNode.x, y: toNode.y + 12 },
+    path: null,
+    color: "blue",
+    up: true,
+    bothOnline: true,
+    unknown: false,
+    crossZone: false,
+    snmpVerified: false,
+  };
+}
+
 test("bundled visualizer cables route loose devices through a right-side gutter", () => {
   const fromNode = testNode("loose-a", 48, 96, 160, 40);
   const toNode = testNode("loose-b", 48, 172, 160, 40);
@@ -79,6 +128,39 @@ test("bundled visualizer cables route loose devices through a right-side gutter"
     Math.max(...xCoordinates) > group.x + group.width,
     "expected loose-device bundled routing to use a gutter outside the group",
   );
+});
+
+test("visualizer cable lanes are stable within each route container pair", () => {
+  const fromNode = testNode("loose-a", 48, 96, 160, 40);
+  const toNode = testNode("loose-b", 48, 172, 160, 40);
+  const group: RoomGroup = {
+    id: "room:test:loose",
+    name: "Test room / Loose",
+    subtitle: "Room inventory",
+    color: "var(--type-endpoint)",
+    x: 28,
+    y: 48,
+    width: 220,
+    nodes: [fromNode, toNode],
+    total: 2,
+    online: 2,
+    down: 0,
+    collapsed: false,
+    groupType: "device-type",
+  };
+  const cableA = testCable("link-a", fromNode, toNode, 1, 1);
+  const cableB = testCable("link-b", fromNode, toNode, 2, 2);
+
+  const lanesAFirst = visualizerCableLaneIndexes([cableA, cableB], {
+    roomGroups: [group],
+  });
+  const lanesBFirst = visualizerCableLaneIndexes([cableB, cableA], {
+    roomGroups: [group],
+  });
+
+  assert.equal(lanesAFirst.get("link-a"), lanesBFirst.get("link-a"));
+  assert.equal(lanesAFirst.get("link-b"), lanesBFirst.get("link-b"));
+  assert.notEqual(lanesAFirst.get("link-a"), lanesAFirst.get("link-b"));
 });
 
 test("custom device type parents drive visualizer grouping and counts", () => {
@@ -231,4 +313,58 @@ test("manual visualizer order controls sections, racks, groups, and group device
     alphaSection.looseGroups[0]?.nodes.map((node) => node.device.id),
     ["endpoint_z", "endpoint_a"],
   );
+});
+
+test("pyramid visualizer bounds expand around dragged nodes", () => {
+  const devices: Device[] = [
+    {
+      id: "endpoint_dragged",
+      labId: "lab_visualizer_drag",
+      hostname: "dragged-endpoint",
+      deviceType: "endpoint",
+      status: "online",
+      placement: "room",
+    },
+    {
+      id: "switch_source",
+      labId: "lab_visualizer_drag",
+      hostname: "source-switch",
+      deviceType: "switch",
+      status: "online",
+      placement: "room",
+    },
+  ];
+
+  const model = buildVisualizerModel({
+    rooms: [],
+    racks: [],
+    devices,
+    deviceTypes: [],
+    ports: [],
+    portLinks: [],
+    deviceMonitors: [],
+    subnets: [],
+    vlans: [],
+    discoveredDevices: [],
+    virtualSwitches: [],
+    expandedRackRuns: new Set(),
+    collapsedGroups: new Set(),
+    layout: {
+      topologyLayout: "pyramid",
+      customNodePositions: {
+        endpoint_dragged: { x: 1600, y: 1200 },
+      },
+    },
+  });
+
+  const draggedNode = model.nodesByDeviceId.endpoint_dragged;
+  assert.ok(draggedNode);
+  assert.equal(draggedNode.x, 1600);
+  assert.equal(draggedNode.y, 1200);
+  assert.ok(model.width > draggedNode.x + draggedNode.width);
+  assert.ok(model.height > draggedNode.y + draggedNode.height);
+  assert.ok(
+    model.rackZone.width > draggedNode.x - model.rackZone.x + draggedNode.width,
+  );
+  assert.ok(model.rackZone.height > draggedNode.y + draggedNode.height);
 });

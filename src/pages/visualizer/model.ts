@@ -2200,11 +2200,37 @@ function pathPoint(point: { x: number; y: number }) {
   return `${roundPathCoord(point.x)} ${roundPathCoord(point.y)}`;
 }
 
-interface CablePathContext {
+export interface CablePathContext {
   fromNode?: VisualizerNode;
   toNode?: VisualizerNode;
   rackPanels?: RackPanel[];
   roomGroups?: RoomGroup[];
+  patchPanelRoute?: boolean;
+}
+
+export function visualizerCableLaneIndexes(
+  cables: VisualizerCable[],
+  context: CablePathContext = {},
+) {
+  const lanes = new Map<string, number>();
+  const byRoute = groupBy(cables, (cable) =>
+    visualizerCableRouteKey(cable, context),
+  );
+  for (const routeCables of Object.values(byRoute)) {
+    [...routeCables].sort(compareCableLaneOrder).forEach((cable, index) => {
+      lanes.set(cable.link.id, index);
+    });
+  }
+  return lanes;
+}
+
+export function visualizerCableRouteKey(
+  cable: VisualizerCable,
+  context: CablePathContext = {},
+) {
+  const fromKey = cableRouteEndpointKey(cable.fromNode, context);
+  const toKey = cableRouteEndpointKey(cable.toNode, context);
+  return [fromKey, toKey].sort().join("::");
 }
 
 export function visualizerCablePath(
@@ -2231,12 +2257,52 @@ export function visualizerCablePath(
   return autoCablePath(from, to, index, context);
 }
 
+function centeredLaneOffset(index: number, step: number, span: number) {
+  const normalized = Math.abs(index) % Math.max(1, span);
+  if (normalized === 0) return 0;
+  const magnitude = Math.ceil(normalized / 2);
+  const direction = normalized % 2 === 0 ? 1 : -1;
+  return magnitude * direction * step;
+}
+
+function cableRouteEndpointKey(
+  node: VisualizerNode | undefined,
+  context: CablePathContext,
+) {
+  const rackPanel = rackPanelForNode(node, context.rackPanels);
+  if (rackPanel) return `rack:${rackPanel.id}`;
+  const roomGroup = roomGroupForNode(node, context.roomGroups);
+  if (roomGroup) return `room-group:${roomGroup.id}`;
+  return node?.zoneId ?? node?.device.id ?? "unknown";
+}
+
+function compareCableLaneOrder(a: VisualizerCable, b: VisualizerCable) {
+  return (
+    NATURAL_COLLATOR.compare(cableLaneLabel(a), cableLaneLabel(b)) ||
+    NATURAL_COLLATOR.compare(a.link.id, b.link.id)
+  );
+}
+
+function cableLaneLabel(cable: VisualizerCable) {
+  const from = [
+    cable.fromDevice?.hostname,
+    cable.fromPort?.position,
+    cable.fromPort?.name,
+  ]
+    .filter(Boolean)
+    .join(":");
+  const to = [cable.toDevice?.hostname, cable.toPort?.position, cable.toPort?.name]
+    .filter(Boolean)
+    .join(":");
+  return [from, to].sort().join("|");
+}
+
 function straightCablePath(
   from: { x: number; y: number },
   to: { x: number; y: number },
   index: number,
 ) {
-  const laneOffset = ((index % 17) - 8) * 4;
+  const laneOffset = centeredLaneOffset(index, 4, 17);
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const distance = Math.max(1, Math.hypot(dx, dy));
@@ -2261,7 +2327,11 @@ function autoCablePath(
 
   const dx = Math.abs(to.x - from.x);
   const dy = Math.abs(to.y - from.y);
-  const laneOffset = ((index % 17) - 8) * 7;
+  const laneOffset = centeredLaneOffset(
+    index,
+    context.patchPanelRoute ? 9 : 7,
+    17,
+  );
   if (dx < 72) {
     const busX = Math.max(from.x, to.x) + 72 + Math.abs(laneOffset) * 0.8;
     return `M ${pathPoint(from)} L ${pathPoint({ x: busX, y: from.y })} C ${pathPoint(
@@ -2317,7 +2387,11 @@ function bundledCablePath(
   const containerRight = Math.max(
     ...containers.map((container) => container.x + container.width),
   );
-  const laneOffset = ((index % 13) - 6) * 4;
+  const laneOffset = centeredLaneOffset(
+    index,
+    context.patchPanelRoute ? 7 : 4,
+    13,
+  );
   const gutterX = Math.max(from.x, to.x, containerRight) + 46 + laneOffset;
   const stub = Math.max(
     18,
@@ -2368,8 +2442,13 @@ function orthogonalCablePath(
 
   const dx = toBounds.centerX - fromBounds.centerX;
   const dy = toBounds.centerY - fromBounds.centerY;
-  const laneOffset = ((index % 13) - 6) * 8;
-  const clearance = 38 + Math.abs(laneOffset) * 0.25;
+  const laneOffset = centeredLaneOffset(
+    index,
+    context.patchPanelRoute ? 11 : 8,
+    13,
+  );
+  const clearance =
+    (context.patchPanelRoute ? 50 : 38) + Math.abs(laneOffset) * 0.25;
 
   if (Math.abs(dx) >= Math.abs(dy)) {
     const routeRight = dx >= 0;
@@ -2540,7 +2619,7 @@ function concaveCablePath(
   to: { x: number; y: number },
   index: number,
 ) {
-  const laneOffset = ((index % 17) - 8) * 5;
+  const laneOffset = centeredLaneOffset(index, 5, 17);
   const midX = (from.x + to.x) / 2 + laneOffset;
   const midY = (from.y + to.y) / 2 + laneOffset;
   const dx = Math.abs(to.x - from.x);
@@ -2582,7 +2661,7 @@ function convexCablePath(
   const absDx = Math.abs(dx);
   const absDy = Math.abs(dy);
   const distance = Math.max(1, Math.hypot(dx, dy));
-  const laneOffset = ((index % 17) - 8) * 10;
+  const laneOffset = centeredLaneOffset(index, 10, 17);
   const outward = index % 2 === 0 ? 1 : -1;
   const detour = Math.min(360, Math.max(120, distance * 0.42)) + laneOffset;
 
