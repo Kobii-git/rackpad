@@ -8,6 +8,58 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.7] - 2026-07-04
+
+### Added
+
+- Added the consolidated Networks workspace as the stable VLAN, subnet, DHCP,
+  zone, assignment, VLAN detail, and VLAN range workflow.
+- Added the combined VLAN/IPAM network setup flow for creating tagged or
+  untagged networks with subnet, gateway, DNS, optional DHCP scope, and IP zones
+  in one action.
+- Added subnet-level gateway and DNS server fields in IPAM, with backup export
+  and restore coverage for those fields.
+- Added server-side regression coverage for DHCP scopes, IP zones, subnet edit
+  safety, cross-lab VLAN links, restored legacy subnet data, and non-canonical
+  CIDR containment.
+
+### Fixed
+
+- Redirected legacy `/vlans` and `/ipam` routes to `/networks` while preserving
+  existing subnet and VLAN query selection where present.
+- Protected subnet gateway and DNS addresses as technical IPs so normal host
+  assignments do not accidentally claim them.
+- Kept older backups that do not contain subnet gateway or DNS fields
+  restorable with null subnet values.
+- Enforced server-side validation for DHCP ranges, IP zones, subnet gateways,
+  DHCP gateways, and subnet CIDR edits so existing child records cannot be
+  stranded outside their subnet.
+- Prevented subnet VLAN links and port access/trunk VLAN links from crossing lab
+  boundaries.
+- Allowed restored legacy subnet records with an existing off-subnet gateway to
+  receive unrelated edits while still blocking CIDR or gateway changes that
+  would preserve invalid data.
+- Fixed non-canonical CIDR handling so values such as `192.168.1.42/24` still
+  use the masked network for containment, allocation, discovery placement,
+  utilization bars, imports, and visualizer range math.
+- Avoided mutating grouped assignment arrays while rendering the Networks view.
+
+### Changed
+
+- Promoted the `1.6.7-beta.0` Networks/IPAM release candidate to the stable
+  `1.6.7` release.
+- Preserved submitted CIDR strings in API and backup data while using masked
+  CIDR bounds for validation and display math.
+
+### Test notes
+
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, and `bash -n scripts/collect-proxmox.sh`.
+- For smoke testing, verify Networks loads from the sidebar, legacy `/vlans`
+  and `/ipam` links redirect, and tagged, untagged, VLAN-only, and multi-subnet
+  VLAN records render with gateway/DNS, DHCP, zones, assignments, and VLAN
+  details visible where applicable.
+
 ## [1.6.7-beta.0] - 2026-06-28
 
 ### Added
