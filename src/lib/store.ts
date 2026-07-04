@@ -4,6 +4,8 @@ import type {
   IpAssignmentPatch,
   NetworkCreateInput,
   NetworkCreateResult,
+  PortAggregateInput,
+  PortAggregatePatch,
   VlanPatch,
 } from "./api";
 import type {
@@ -2227,6 +2229,12 @@ export async function createCable(input: CreateCableInput): Promise<PortLink> {
   if (fromPort.id === toPort.id) {
     throw new Error("A port cannot be connected to itself.");
   }
+  if (fromPort.aggregatePortId) {
+    throw new Error(`${fromPort.name} is a bond member. Cable the aggregate port instead.`);
+  }
+  if (toPort.aggregatePortId) {
+    throw new Error(`${toPort.name} is a bond member. Cable the aggregate port instead.`);
+  }
   if (
     state.portLinks.some((link) =>
       [link.fromPortId, link.toPortId].includes(fromPort.id),
@@ -2271,6 +2279,91 @@ export async function createCable(input: CreateCableInput): Promise<PortLink> {
   );
 
   return created;
+}
+
+function applyAggregatePayloadToPorts(
+  ports: Port[],
+  aggregate: Port,
+  members: Port[],
+) {
+  const memberIds = new Set(members.map((port) => port.id));
+  return sortPorts(
+    replaceById(
+      ports.map((port) => {
+        if (port.id === aggregate.id) return aggregate;
+        if (memberIds.has(port.id)) {
+          return {
+            ...port,
+            aggregatePortId: aggregate.id,
+            portRole: "physical" as const,
+          };
+        }
+        if (port.aggregatePortId === aggregate.id) {
+          return { ...port, aggregatePortId: null };
+        }
+        return port;
+      }),
+      aggregate,
+    ),
+  );
+}
+
+export async function createPortAggregate(
+  input: PortAggregateInput,
+): Promise<Port> {
+  const result = await api.createPortAggregate(input);
+  setState((prev) => ({
+    ...prev,
+    ports: applyAggregatePayloadToPorts(
+      prev.ports,
+      result.aggregate,
+      result.members,
+    ),
+  }));
+  void recordAudit(
+    "port.aggregate.create",
+    "Port",
+    result.aggregate.id,
+    `Created aggregate ${result.aggregate.name}`,
+  );
+  return result.aggregate;
+}
+
+export async function updatePortAggregate(
+  id: string,
+  patch: PortAggregatePatch,
+): Promise<Port> {
+  const result = await api.updatePortAggregate(id, patch);
+  setState((prev) => ({
+    ...prev,
+    ports: applyAggregatePayloadToPorts(
+      prev.ports,
+      result.aggregate,
+      result.members,
+    ),
+  }));
+  void recordAudit(
+    "port.aggregate.update",
+    "Port",
+    result.aggregate.id,
+    `Updated aggregate ${result.aggregate.name}`,
+  );
+  return result.aggregate;
+}
+
+export async function deletePortAggregate(id: string): Promise<void> {
+  await api.deletePortAggregate(id);
+  setState((prev) => ({
+    ...prev,
+    ports: sortPorts(
+      prev.ports
+        .filter((port) => port.id !== id)
+        .map((port) =>
+          port.aggregatePortId === id ? { ...port, aggregatePortId: null } : port,
+        ),
+    ),
+  }));
+  void recordAudit("port.aggregate.delete", "Port", id, "Deleted aggregate port");
 }
 
 export async function deleteCable(id: string): Promise<boolean> {
@@ -2335,6 +2428,16 @@ export async function updateCable(
     if (Object.prototype.hasOwnProperty.call(changes, key)) {
       patch[key] = changes[key] ?? null;
     }
+  }
+  const nextFromPortId = String(patch.fromPortId ?? existing.fromPortId);
+  const nextToPortId = String(patch.toPortId ?? existing.toPortId);
+  const nextFromPort = state.ports.find((port) => port.id === nextFromPortId);
+  const nextToPort = state.ports.find((port) => port.id === nextToPortId);
+  if (nextFromPort?.aggregatePortId) {
+    throw new Error(`${nextFromPort.name} is a bond member. Cable the aggregate port instead.`);
+  }
+  if (nextToPort?.aggregatePortId) {
+    throw new Error(`${nextToPort.name} is a bond member. Cable the aggregate port instead.`);
   }
 
   const updated = await api.updatePortLink(id, patch);

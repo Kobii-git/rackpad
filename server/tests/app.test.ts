@@ -3469,6 +3469,314 @@ test("ports can be updated and deleted with a custom MAC address", async () => {
   assert.equal(ports.length, 0);
 });
 
+test("port aggregates use a cabled aggregate endpoint and block member cabling", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const switchRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "lag-switch",
+      deviceType: "switch",
+      status: "online",
+    },
+  });
+  assert.equal(switchRes.statusCode, 201);
+  const switchDevice = readJson(switchRes) as { id: string };
+
+  const serverRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "lag-server",
+      deviceType: "server",
+      status: "online",
+    },
+  });
+  assert.equal(serverRes.statusCode, 201);
+  const serverDevice = readJson(serverRes) as { id: string };
+
+  async function createPort(deviceId: string, name: string) {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ports",
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+      },
+      payload: {
+        deviceId,
+        name,
+        kind: "rj45",
+        linkState: "down",
+        speed: "1G",
+      },
+    });
+    assert.equal(res.statusCode, 201);
+    return readJson(res) as { id: string; name: string; aggregatePortId?: string | null };
+  }
+
+  const sw1 = await createPort(switchDevice.id, "Gi0/1");
+  const sw2 = await createPort(switchDevice.id, "Gi0/2");
+  const sw3 = await createPort(switchDevice.id, "Gi0/3");
+  const serverPort = await createPort(serverDevice.id, "eno1");
+
+  const createAggregateRes = await app.inject({
+    method: "POST",
+    url: "/api/port-aggregates",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: switchDevice.id,
+      name: "Bond1",
+      speed: "2G",
+      memberPortIds: [sw1.id, sw2.id],
+    },
+  });
+  assert.equal(createAggregateRes.statusCode, 201);
+  const createdAggregate = readJson(createAggregateRes) as {
+    aggregate: { id: string; name: string; portRole: string };
+    members: Array<{ id: string; aggregatePortId: string }>;
+  };
+  assert.equal(createdAggregate.aggregate.name, "Bond1");
+  assert.equal(createdAggregate.aggregate.portRole, "aggregate");
+  assert.deepEqual(
+    createdAggregate.members.map((port) => port.aggregatePortId),
+    [createdAggregate.aggregate.id, createdAggregate.aggregate.id],
+  );
+
+  const memberCableRes = await app.inject({
+    method: "POST",
+    url: "/api/port-links",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      fromPortId: sw1.id,
+      toPortId: serverPort.id,
+      cableType: "copper",
+    },
+  });
+  assert.equal(memberCableRes.statusCode, 409);
+  assert.match(memberCableRes.body, /aggregate/i);
+
+  const updateAggregateRes = await app.inject({
+    method: "PATCH",
+    url: `/api/port-aggregates/${createdAggregate.aggregate.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      memberPortIds: [sw2.id, sw3.id],
+    },
+  });
+  assert.equal(updateAggregateRes.statusCode, 200);
+  const updatedAggregate = readJson(updateAggregateRes) as {
+    members: Array<{ id: string; aggregatePortId: string }>;
+  };
+  assert.deepEqual(
+    updatedAggregate.members.map((port) => port.id).sort(),
+    [sw2.id, sw3.id].sort(),
+  );
+
+  const aggregateCableRes = await app.inject({
+    method: "POST",
+    url: "/api/port-links",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      fromPortId: createdAggregate.aggregate.id,
+      toPortId: serverPort.id,
+      cableType: "lacp",
+    },
+  });
+  assert.equal(aggregateCableRes.statusCode, 201);
+  const cable = readJson(aggregateCableRes) as { id: string };
+
+  const blockedDeleteRes = await app.inject({
+    method: "DELETE",
+    url: `/api/port-aggregates/${createdAggregate.aggregate.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(blockedDeleteRes.statusCode, 409);
+
+  const deleteCableRes = await app.inject({
+    method: "DELETE",
+    url: `/api/port-links/${cable.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(deleteCableRes.statusCode, 204);
+
+  const deleteAggregateRes = await app.inject({
+    method: "DELETE",
+    url: `/api/port-aggregates/${createdAggregate.aggregate.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(deleteAggregateRes.statusCode, 204);
+
+  const portsAfterDeleteRes = await app.inject({
+    method: "GET",
+    url: `/api/ports?deviceId=${switchDevice.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(portsAfterDeleteRes.statusCode, 200);
+  const portsAfterDelete = readJson(portsAfterDeleteRes) as Array<{
+    id: string;
+    aggregatePortId?: string | null;
+  }>;
+  assert.equal(
+    portsAfterDelete.some((port) => port.id === createdAggregate.aggregate.id),
+    false,
+  );
+  assert.equal(
+    portsAfterDelete.some((port) => port.aggregatePortId),
+    false,
+  );
+});
+
+test("port aggregates are included in backup export and restore", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "backup-lag-switch",
+      deviceType: "switch",
+      status: "online",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  async function createPort(name: string) {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ports",
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+      },
+      payload: {
+        deviceId: device.id,
+        name,
+        kind: "rj45",
+        linkState: "down",
+      },
+    });
+    assert.equal(res.statusCode, 201);
+    return readJson(res) as { id: string };
+  }
+
+  const first = await createPort("Gi1");
+  const second = await createPort("Gi2");
+
+  const aggregateRes = await app.inject({
+    method: "POST",
+    url: "/api/port-aggregates",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: device.id,
+      name: "Bond1",
+      memberPortIds: [first.id, second.id],
+    },
+  });
+  assert.equal(aggregateRes.statusCode, 201);
+  const aggregate = readJson(aggregateRes) as { aggregate: { id: string } };
+
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(exportRes.statusCode, 200);
+  const snapshot = readJson(exportRes) as {
+    data: {
+      ports: Array<{
+        id: string;
+        name: string;
+        portRole?: string;
+        aggregatePortId?: string | null;
+      }>;
+    };
+  };
+  assert.equal(
+    snapshot.data.ports.find((port) => port.id === aggregate.aggregate.id)?.portRole,
+    "aggregate",
+  );
+  assert.equal(
+    snapshot.data.ports.find((port) => port.id === first.id)?.aggregatePortId,
+    aggregate.aggregate.id,
+  );
+
+  const restoreRes = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: snapshot,
+  });
+  assert.equal(restoreRes.statusCode, 200);
+
+  const loginRes = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: {
+      username: "admin",
+      password: "super-secret-1",
+    },
+  });
+  assert.equal(loginRes.statusCode, 200);
+  const refreshedToken = (readJson(loginRes) as { token: string }).token;
+
+  const portsRes = await app.inject({
+    method: "GET",
+    url: `/api/ports?deviceId=${device.id}`,
+    headers: {
+      authorization: `Bearer ${refreshedToken}`,
+    },
+  });
+  assert.equal(portsRes.statusCode, 200);
+  const restoredPorts = readJson(portsRes) as Array<{
+    id: string;
+    portRole?: string;
+    aggregatePortId?: string | null;
+  }>;
+  assert.equal(
+    restoredPorts.find((port) => port.id === aggregate.aggregate.id)?.portRole,
+    "aggregate",
+  );
+  assert.equal(
+    restoredPorts.find((port) => port.id === second.id)?.aggregatePortId,
+    aggregate.aggregate.id,
+  );
+});
+
 test("wifi ports and device services can be managed", async () => {
   const adminToken = await bootstrapAdmin();
 

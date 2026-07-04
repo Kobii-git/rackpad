@@ -13,6 +13,7 @@ import { racksRoutes } from "./routes/racks.js";
 import { devicesRoutes } from "./routes/devices.js";
 import { deviceTypesRoutes } from "./routes/device-types.js";
 import { portsRoutes } from "./routes/ports.js";
+import { portAggregatesRoutes } from "./routes/port-aggregates.js";
 import { cablesRoutes } from "./routes/cables.js";
 import { vlansRoutes } from "./routes/vlans.js";
 import { ipamRoutes } from "./routes/ipam.js";
@@ -373,6 +374,7 @@ export async function createApp() {
   await app.register(devicesRoutes, { prefix: "/api/devices" });
   await app.register(deviceTypesRoutes, { prefix: "/api/device-types" });
   await app.register(portsRoutes, { prefix: "/api/ports" });
+  await app.register(portAggregatesRoutes, { prefix: "/api/port-aggregates" });
   await app.register(cablesRoutes, { prefix: "/api/port-links" });
   await app.register(vlansRoutes, { prefix: "/api/vlans" });
   await app.register(ipamRoutes, { prefix: "/api" });

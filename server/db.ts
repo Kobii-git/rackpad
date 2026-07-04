@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 29;
+const CURRENT_SCHEMA_VERSION = 30;
 
 export const db = new Database(DB_PATH);
 
@@ -905,6 +905,19 @@ const SCHEMA_MIGRATIONS = [
         ON discoveryScanSchedules (enabled, lastRunAt);
     `,
   },
+  {
+    version: 30,
+    sql: `
+      ALTER TABLE ports ADD COLUMN portRole TEXT NOT NULL DEFAULT 'physical';
+      ALTER TABLE ports ADD COLUMN aggregatePortId TEXT REFERENCES ports(id) ON DELETE SET NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_ports_aggregate_port_id
+        ON ports (aggregatePortId);
+
+      CREATE INDEX IF NOT EXISTS idx_ports_device_role
+        ON ports (deviceId, portRole);
+    `,
+  },
 ] as const;
 
 const applySchema = db.transaction(() => {
@@ -956,6 +969,8 @@ type PatchPanelPortRow = {
   description: string | null;
   face: string | null;
   virtualSwitchId: string | null;
+  portRole: string | null;
+  aggregatePortId: string | null;
   macAddress: string | null;
 };
 

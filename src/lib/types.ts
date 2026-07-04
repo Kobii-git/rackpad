@@ -26,6 +26,7 @@ export type PortKind =
 export type RackFace = "front" | "rear";
 export type LinkState = "up" | "down" | "disabled" | "unknown";
 export type PortMode = "access" | "trunk";
+export type PortRole = "physical" | "aggregate";
 export type DeviceStatus =
   | "online"
   | "offline"
@@ -324,6 +325,8 @@ export interface Port {
   vlanId?: ID;
   allowedVlanIds?: ID[];
   virtualSwitchId?: ID | null;
+  portRole?: PortRole;
+  aggregatePortId?: ID | null;
   description?: string;
   face?: RackFace;
   snmpIfIndex?: number | null;

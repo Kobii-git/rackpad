@@ -286,6 +286,11 @@ function PortCell({
               aria-label={t("SNMP verified")}
             />
           ) : null}
+          {port.portRole === "aggregate" || port.aggregatePortId ? (
+            <span className="absolute left-1 top-1 rounded-[3px] border border-[var(--border-default)] bg-[var(--surface-1)] px-1 font-mono text-[7px] uppercase text-[var(--text-tertiary)]">
+              {port.portRole === "aggregate" ? t("Bond") : t("Member")}
+            </span>
+          ) : null}
 
           <div className="flex items-center gap-1">
             <span
@@ -328,11 +333,24 @@ function PortCell({
               })}
             </span>
           ) : null}
-          {snmpVerified ? (
-            <span className="text-[var(--accent-primary)]">
-              {t("SNMP verified link state")}
-            </span>
-          ) : null}
+	          {snmpVerified ? (
+	            <span className="text-[var(--accent-primary)]">
+	              {t("SNMP verified link state")}
+	            </span>
+	          ) : null}
+	          {port.portRole === "aggregate" ? (
+	            <span className="text-[var(--accent-secondary)]">
+	              {t("Aggregate port")}
+	            </span>
+	          ) : port.aggregatePortId ? (
+	            <span className="text-[var(--text-tertiary)]">
+	              {t("Member of {name}", {
+	                name:
+	                  portsById[port.aggregatePortId]?.name ??
+	                  port.aggregatePortId,
+	              })}
+	            </span>
+	          ) : null}
           {isLinked && otherDevice && otherPort ? (
             <span className="text-[var(--accent-secondary)]">
               {t("linked to {hostname}:{portLabel}", {

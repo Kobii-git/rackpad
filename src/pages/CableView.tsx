@@ -154,7 +154,7 @@ export default function CableView() {
 
   const availablePorts = useMemo(() => {
     return [...ports]
-      .filter((port) => !linkedPortIds.has(port.id))
+      .filter((port) => !linkedPortIds.has(port.id) && !port.aggregatePortId)
       .sort((a, b) =>
         portOptionLabel(a, deviceById).localeCompare(
           portOptionLabel(b, deviceById),
@@ -176,7 +176,8 @@ export default function CableView() {
     return [...ports]
       .filter(
         (port) =>
-          !linkedPortIds.has(port.id) || selectedEndpointPortIds.has(port.id),
+          (!linkedPortIds.has(port.id) || selectedEndpointPortIds.has(port.id)) &&
+          !port.aggregatePortId,
       )
       .sort((a, b) =>
         portOptionLabel(a, deviceById).localeCompare(
@@ -832,10 +833,11 @@ function CableEndpoints({
 
 function portOptionLabel(port: Port, deviceById: Record<string, Device>) {
   const device = deviceById[port.deviceId];
-  return formatPortEndpointLabel(port, device, {
+  const label = formatPortEndpointLabel(port, device, {
     includeFace: true,
     includeSpeed: true,
   });
+  return port.portRole === "aggregate" ? `${label} (bond)` : label;
 }
 
 function compareCables(

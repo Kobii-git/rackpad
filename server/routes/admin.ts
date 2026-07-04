@@ -455,8 +455,13 @@ const restoreBackupSnapshot = db.transaction(
     VALUES (?, ?, ?, ?, ?, ?)
   `);
     const insertPort = db.prepare(`
-    INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, snmpIfIndex, macAddress)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, snmpIfIndex, macAddress, portRole, aggregatePortId)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const updatePortAggregate = db.prepare(`
+    UPDATE ports
+    SET aggregatePortId = ?
+    WHERE id = ?
   `);
     const insertPortLink = db.prepare(
       "INSERT INTO portLinks (id, fromPortId, toPortId, cableType, cableLength, color, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -837,6 +842,8 @@ const restoreBackupSnapshot = db.transaction(
         row.virtualSwitchId ?? null,
         row.snmpIfIndex ?? null,
         row.macAddress ?? null,
+        row.portRole ?? "physical",
+        null,
       );
     }
     ensurePatchPanelPassThroughPorts(
@@ -844,6 +851,15 @@ const restoreBackupSnapshot = db.transaction(
         .filter((row) => row.deviceType === "patch_panel")
         .map((row) => String(row.id)),
     );
+    const portIds = new Set(ports.map((row) => String(row.id)));
+    for (const row of ports) {
+      const aggregatePortId = row.aggregatePortId
+        ? String(row.aggregatePortId)
+        : null;
+      if (aggregatePortId && portIds.has(aggregatePortId)) {
+        updatePortAggregate.run(aggregatePortId, row.id);
+      }
+    }
     for (const row of portLinks) {
       insertPortLink.run(
         row.id,

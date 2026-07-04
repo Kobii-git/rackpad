@@ -159,6 +159,23 @@ export type IpAssignmentPatch = Nullable<Omit<IpAssignment, "id">>;
 export type VlanPatch = Nullable<Omit<Vlan, "id" | "labId">>;
 export type VlanRangePatch = Nullable<Omit<VlanRange, "id" | "labId">>;
 export type PortPatch = Nullable<Omit<Port, "id" | "deviceId" | "position">>;
+export interface PortAggregatePayload {
+  aggregate: Port;
+  members: Port[];
+}
+export interface PortAggregateInput {
+  deviceId: ID;
+  name: string;
+  speed?: string | null;
+  description?: string | null;
+  memberPortIds: ID[];
+}
+export interface PortAggregatePatch {
+  name?: string | null;
+  speed?: string | null;
+  description?: string | null;
+  memberPortIds?: ID[] | null;
+}
 export type VirtualSwitchPatch = Nullable<
   Pick<VirtualSwitch, "name" | "kind" | "membersShareHostIp" | "notes">
 >;
@@ -914,6 +931,26 @@ export const api = {
 
   deletePort(id: string) {
     return request<void>(`/ports/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  createPortAggregate(body: PortAggregateInput) {
+    return request<PortAggregatePayload>("/port-aggregates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updatePortAggregate(id: string, body: PortAggregatePatch) {
+    return request<PortAggregatePayload>(`/port-aggregates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deletePortAggregate(id: string) {
+    return request<void>(`/port-aggregates/${id}`, {
       method: "DELETE",
     });
   },

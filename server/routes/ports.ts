@@ -107,11 +107,11 @@ function ensureAllowedVlanIdsBelongToLab(labId: string, vlanIds: string[] | null
 
 function getPortLabRow(portId: string) {
   return db.prepare(`
-    SELECT ports.id, devices.labId
+    SELECT ports.id, devices.labId, ports.portRole
     FROM ports
     JOIN devices ON devices.id = ports.deviceId
     WHERE ports.id = ?
-  `).get(portId) as { id: string; labId: string } | undefined
+  `).get(portId) as { id: string; labId: string; portRole: string | null } | undefined
 }
 
 export const portsRoutes: FastifyPluginAsync = async (app) => {
@@ -369,6 +369,15 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const port = getPortLabRow(req.params.id)
     if (!assertLabWriteFromRow(req, reply, port)) return
+
+    if (port?.portRole === 'aggregate') {
+      const linked = db.prepare(
+        'SELECT id FROM portLinks WHERE fromPortId = ? OR toPortId = ? LIMIT 1'
+      ).get(req.params.id, req.params.id)
+      if (linked) {
+        return reply.status(409).send({ error: 'Remove the linked cable before deleting this aggregate.' })
+      }
+    }
 
     const peers = db.prepare(`
       SELECT CASE WHEN fromPortId = ? THEN toPortId ELSE fromPortId END AS peerPortId

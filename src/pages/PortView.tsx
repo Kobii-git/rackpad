@@ -22,8 +22,10 @@ import { StatusDot } from "@/components/shared/StatusDot";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import {
   canEditInventory,
+  createPortAggregate,
   createPortRecord,
   createPortTemplateRecord,
+  deletePortAggregate,
   deletePortRecord,
   deletePortTemplateRecord,
   updatePort,
@@ -305,6 +307,7 @@ export default function PortView() {
   );
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkError, setBulkError] = useState("");
+  const [aggregateSaving, setAggregateSaving] = useState(false);
   const [form, setForm] = useState<PortFormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -518,6 +521,19 @@ export default function PortView() {
     () => visibleDevicePorts.filter((port) => selectedPortIds.has(port.id)),
     [selectedPortIds, visibleDevicePorts],
   );
+  const aggregateMemberCandidates = useMemo(
+    () =>
+      selectedBulkPorts.filter(
+        (port) =>
+          (port.portRole ?? "physical") === "physical" &&
+          !port.aggregatePortId &&
+          !linkByPortId[port.id],
+      ),
+    [linkByPortId, selectedBulkPorts],
+  );
+  const selectedPortsCanAggregate =
+    selectedBulkPorts.length >= 2 &&
+    aggregateMemberCandidates.length === selectedBulkPorts.length;
   const allVisiblePortsSelected =
     visibleDevicePorts.length > 0 &&
     visibleDevicePorts.every((port) => selectedPortIds.has(port.id));
@@ -575,6 +591,13 @@ export default function PortView() {
   const selectedPort =
     !creating && selectedPortId ? portById[selectedPortId] : undefined;
   const selectedLink = selectedPort ? linkByPortId[selectedPort.id] : undefined;
+  const selectedAggregatePort = selectedPort?.aggregatePortId
+    ? portById[selectedPort.aggregatePortId]
+    : undefined;
+  const selectedAggregateMembers =
+    selectedPort?.portRole === "aggregate"
+      ? devicePorts.filter((port) => port.aggregatePortId === selectedPort.id)
+      : [];
   const peerPortId =
     selectedPort && selectedLink
       ? selectedLink.fromPortId === selectedPort.id
@@ -613,6 +636,15 @@ export default function PortView() {
     (port) => port.linkState === "up",
   ).length;
   const totalCableCount = portLinks.length;
+  const nextAggregateName = useMemo(() => {
+    const usedNumbers = devicePorts
+      .map((port) => /^bond(\d+)$/i.exec(port.name.trim())?.[1])
+      .filter((value): value is string => Boolean(value))
+      .map(Number);
+    const next =
+      usedNumbers.length > 0 ? Math.max(...usedNumbers.filter(Number.isFinite)) + 1 : 1;
+    return `Bond${Number.isFinite(next) && next > 0 ? next : 1}`;
+  }, [devicePorts]);
 
   async function handleSave() {
     if (!device || !form) return;
@@ -875,6 +907,51 @@ export default function PortView() {
       );
     } finally {
       setBulkSaving(false);
+    }
+  }
+
+  async function handleCreateAggregate() {
+    if (!device || !selectedPortsCanAggregate) return;
+    setAggregateSaving(true);
+    setBulkError("");
+    try {
+      const aggregate = await createPortAggregate({
+        deviceId: device.id,
+        name: nextAggregateName,
+        speed: aggregateMemberCandidates[0]?.speed ?? undefined,
+        memberPortIds: aggregateMemberCandidates.map((port) => port.id),
+      });
+      setSelectedPortIds(new Set());
+      setSelectedPortId(aggregate.id);
+    } catch (err) {
+      setBulkError(
+        err instanceof Error ? err.message : t("Failed to create aggregate."),
+      );
+    } finally {
+      setAggregateSaving(false);
+    }
+  }
+
+  async function handleDeleteSelectedAggregate() {
+    if (!selectedPort || selectedPort.portRole !== "aggregate") return;
+    if (
+      !window.confirm(
+        t("Delete aggregate {name}?", { name: selectedPort.name }),
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setError("");
+    try {
+      await deletePortAggregate(selectedPort.id);
+      setSelectedPortId(undefined);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("Failed to delete aggregate."),
+      );
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -1169,6 +1246,31 @@ export default function PortView() {
                       </Button>
                     </CardHeader>
                     <CardBody className="space-y-3">
+                      <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
+                              {t("Port bonding")}
+                            </div>
+                            <div className="mt-1 text-xs text-[var(--color-fg-muted)]">
+                              {selectedPortsCanAggregate
+                                ? t("Create {name} from the selected member ports.", {
+                                    name: nextAggregateName,
+                                  })
+                                : t("Select two or more free physical ports to create a bond.")}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={!selectedPortsCanAggregate || aggregateSaving}
+                            onClick={() => void handleCreateAggregate()}
+                          >
+                            <Network className="size-3.5" />
+                            {aggregateSaving ? t("Saving...") : t("Create bond")}
+                          </Button>
+                        </div>
+                      </div>
                       <BulkField
                         label={t("Kind")}
                         checked={bulkPortFields.has("kind")}
@@ -1617,6 +1719,42 @@ export default function PortView() {
                           />
                         </Field>
 
+                        {!creating && selectedPort && (
+                          <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-3">
+                            <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
+                              {t("Port bonding")}
+                            </div>
+                            {selectedPort.portRole === "aggregate" ? (
+                              <div className="space-y-2 text-xs text-[var(--color-fg-muted)]">
+                                <div>
+                                  {t("{count} member ports", {
+                                    count: selectedAggregateMembers.length,
+                                  })}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {selectedAggregateMembers.map((member) => (
+                                    <Badge key={member.id} tone="neutral">
+                                      {formatPortLabel(member, {
+                                        includeFace: member.face === "rear",
+                                      })}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : selectedAggregatePort ? (
+                              <div className="text-xs text-[var(--color-fg-muted)]">
+                                {t("Member of {name}. Cable the aggregate port instead.", {
+                                  name: selectedAggregatePort.name,
+                                })}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-[var(--color-fg-subtle)]">
+                                {t("Not part of a bond.")}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-3">
                           <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
                             {t("Link")}
@@ -1656,17 +1794,36 @@ export default function PortView() {
                         )}
 
                         <div className="flex items-center justify-between gap-3">
-                          {!creating && canEdit && selectedPort && (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => void handleDelete()}
-                              disabled={deleting}
-                            >
-                              <Trash2 className="size-3.5" />
-                              {deleting ? t("Deleting...") : t("Delete port")}
-                            </Button>
-                          )}
+                          {!creating &&
+                            canEdit &&
+                            selectedPort &&
+                            selectedPort.portRole === "aggregate" && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => void handleDeleteSelectedAggregate()}
+                                disabled={deleting}
+                              >
+                                <Trash2 className="size-3.5" />
+                                {deleting
+                                  ? t("Deleting...")
+                                  : t("Delete aggregate")}
+                              </Button>
+                            )}
+                          {!creating &&
+                            canEdit &&
+                            selectedPort &&
+                            selectedPort.portRole !== "aggregate" && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => void handleDelete()}
+                                disabled={deleting}
+                              >
+                                <Trash2 className="size-3.5" />
+                                {deleting ? t("Deleting...") : t("Delete port")}
+                              </Button>
+                            )}
                           <div className="ml-auto flex items-center gap-2">
                             {creating && (
                               <Button
@@ -2221,6 +2378,8 @@ function portSearchHaystack(
     formatPortLabel(port, { includeFace: true }),
     port.name,
     port.kind,
+    port.portRole,
+    port.aggregatePortId ? context.portById[port.aggregatePortId]?.name : null,
     port.speed,
     port.linkState,
     port.mode,

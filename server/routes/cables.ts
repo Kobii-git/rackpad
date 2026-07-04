@@ -12,11 +12,13 @@ import { asObject, optionalString, requiredString } from '../lib/validation.js'
 
 function getPortLabRow(portId: string) {
   return db.prepare(`
-    SELECT ports.id, devices.labId
+    SELECT ports.id, devices.labId, ports.portRole, ports.aggregatePortId
     FROM ports
     JOIN devices ON devices.id = ports.deviceId
     WHERE ports.id = ?
-  `).get(portId) as { id: string; labId: string } | undefined
+  `).get(portId) as
+    | { id: string; labId: string; portRole: string | null; aggregatePortId: string | null }
+    | undefined
 }
 
 function getLinkLabRow(linkId: string) {
@@ -27,6 +29,12 @@ function getLinkLabRow(linkId: string) {
     JOIN devices fromDevice ON fromDevice.id = fromPort.deviceId
     WHERE portLinks.id = ?
   `).get(linkId) as { id: string; labId: string } | undefined
+}
+
+function ensureCableEndpoint(port: { aggregatePortId: string | null }) {
+  if (port.aggregatePortId) {
+    throw new Error('Aggregate member ports cannot be cabled directly. Cable the aggregate port instead.')
+  }
 }
 
 export const cablesRoutes: FastifyPluginAsync = async (app) => {
@@ -87,6 +95,12 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     }
     if (!assertLabWrite(req, reply, fromPort.labId)) return
     if (!assertLabWrite(req, reply, toPort.labId)) return
+    try {
+      ensureCableEndpoint(fromPort)
+      ensureCableEndpoint(toPort)
+    } catch (error) {
+      return reply.status(409).send({ error: error instanceof Error ? error.message : 'Invalid cable endpoint.' })
+    }
 
     const existing = db.prepare(`
       SELECT id
@@ -140,6 +154,12 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!assertLabWrite(req, reply, fromPort.labId)) return
       if (!assertLabWrite(req, reply, toPort.labId)) return
+      try {
+        ensureCableEndpoint(fromPort)
+        ensureCableEndpoint(toPort)
+      } catch (error) {
+        return reply.status(409).send({ error: error instanceof Error ? error.message : 'Invalid cable endpoint.' })
+      }
 
       const conflicting = db.prepare(`
         SELECT id

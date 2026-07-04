@@ -223,13 +223,29 @@ export function PortList({
                   <Mono className="text-[var(--text-primary)]">
                     <span className="inline-flex items-center gap-2">
                       {formatPortLabel(port)}
-                      {snmpVerifiedPortIds?.has(port.id) ? (
-                        <span className="rounded border border-[var(--accent-primary)]/35 bg-[var(--accent-primary)]/10 px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--accent-primary)]">
-                          SNMP
-                        </span>
-                      ) : null}
-                    </span>
-                  </Mono>
+	                      {snmpVerifiedPortIds?.has(port.id) ? (
+	                        <span className="rounded border border-[var(--accent-primary)]/35 bg-[var(--accent-primary)]/10 px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--accent-primary)]">
+	                          SNMP
+	                        </span>
+	                      ) : null}
+	                      {port.portRole === "aggregate" ? (
+	                        <span className="rounded border border-[var(--accent-secondary)]/35 bg-[var(--accent-secondary)]/10 px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--accent-secondary)]">
+	                          {t("Bond")}
+	                        </span>
+	                      ) : port.aggregatePortId ? (
+	                        <span
+	                          className="rounded border border-[var(--border-default)] bg-[var(--surface-2)] px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]"
+	                          title={t("Member of {name}", {
+	                            name:
+	                              portsById[port.aggregatePortId]?.name ??
+	                              port.aggregatePortId,
+	                          })}
+	                        >
+	                          {t("Member")}
+	                        </span>
+	                      ) : null}
+	                    </span>
+	                  </Mono>
                 </Td>
                 <Td>
                   <span className="inline-flex items-center gap-2">

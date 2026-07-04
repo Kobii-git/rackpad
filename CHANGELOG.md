@@ -8,6 +8,35 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.0-beta.0] - 2026-07-04
+
+### Added
+
+- Added port bonding/LAG support using aggregate ports as cable endpoints.
+- Added port aggregate create, update, and delete APIs with same-device,
+  same-lab member validation.
+
+### Changed
+
+- Member ports in a bond are blocked from direct cabling; cable the aggregate
+  port instead.
+- Ports views now show aggregate ports and mark physical members with their
+  aggregate membership.
+
+### Fixed
+
+- Backup export and restore now preserve aggregate ports and member
+  relationships.
+
+### Test notes
+
+- Verify creating `Bond1` from two free switch ports, cabling the aggregate
+  endpoint, and confirming the member ports are unavailable as cable endpoints.
+- Verify deleting a cabled aggregate is rejected, then succeeds after removing
+  the cable.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, and `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.9-beta.1] - 2026-07-04
 
 ### Changed
