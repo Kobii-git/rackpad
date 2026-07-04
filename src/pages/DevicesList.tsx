@@ -1015,10 +1015,7 @@ export default function DevicesList() {
                               |
                             </span>
                             <Mono className="text-[var(--color-fg-muted)]">
-                              U{device.startU}
-                              {(device.heightU ?? 1) > 1
-                                ? `-${device.startU + (device.heightU ?? 1) - 1}`
-                                : ""}
+                              {formatRackUnit(device)}
                             </Mono>
                           </span>
                         ) : (
@@ -1218,11 +1215,21 @@ function devicePlacementSortValue(
   }
 
   if (rack && device.startU) {
-    return `${rack.name} | U${device.startU}`;
+    return `${rack.name} | ${formatRackUnit(device)}`;
   }
 
   if (device.placement === "rack") return "Pending placement";
   return room ? `Room | ${room.name}` : "Loose / room";
+}
+
+function formatRackUnit(device: Device) {
+  if (!device.startU) return "";
+  const heightU = device.heightU ?? 1;
+  const range =
+    heightU > 1 ? `U${device.startU}-${device.startU + heightU - 1}` : `U${device.startU}`;
+  if (device.rackSlot === "left") return `${range} | left half`;
+  if (device.rackSlot === "right") return `${range} | right half`;
+  return range;
 }
 
 function isUnplacedDevice(device: Device) {

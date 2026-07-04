@@ -929,15 +929,25 @@ function buildRackPanel(input: {
       height: Math.max(Math.max(24, rackUnitHeight - 4), bottom - top - 4),
     });
     const face = device.face ?? "front";
-    const nodeX = useDualFaceLayout
+    const faceBaseX = useDualFaceLayout
       ? nodeAreaX + (face === "rear" ? faceNodeWidth + faceGap : 0)
       : bodyX + 32;
+    const rackSlot = device.rackSlot ?? "full";
+    const slotGap = 6;
+    const baseWidth = useDualFaceLayout ? faceNodeWidth : mountedNodeWidth;
+    const halfSlotWidth = Math.max(0, Math.floor((baseWidth - slotGap) / 2));
+    const nodeWidth =
+      rackSlot === "full"
+        ? baseWidth
+        : halfSlotWidth;
+    const nodeX =
+      rackSlot === "right" ? faceBaseX + nodeWidth + slotGap : faceBaseX;
     return createNode({
       device,
       deviceTypes: input.deviceTypes,
       x: nodeX,
       y: top + 2,
-      width: useDualFaceLayout ? faceNodeWidth : mountedNodeWidth,
+      width: nodeWidth,
       height: Math.max(Math.max(24, rackUnitHeight - 4), bottom - top - 4),
       zoneId: input.room
         ? `room:${input.room.id}:rack:${input.rack.id}`

@@ -605,6 +605,7 @@ function normalizeDeviceChanges(
     "startU",
     "heightU",
     "face",
+    "rackSlot",
     "tags",
     "notes",
     "lastSeen",
@@ -2508,6 +2509,7 @@ export interface CreateDeviceInput {
   startU?: number;
   heightU?: number;
   face?: RackFace;
+  rackSlot?: Device["rackSlot"];
   tags?: string[];
   notes?: string;
   portTemplateId?: string;
@@ -2554,6 +2556,7 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
     startU: input.startU,
     heightU: input.heightU ?? 1,
     face: input.face ?? "front",
+    rackSlot: input.rackSlot ?? "full",
     tags: input.tags,
     notes: input.notes,
     lastSeen: new Date().toISOString(),

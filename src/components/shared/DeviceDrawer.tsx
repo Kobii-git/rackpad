@@ -38,6 +38,7 @@ import type {
   IpAllocationMode,
   IpAssignmentType,
   RackFace,
+  RackSlot,
 } from "@/lib/types";
 
 const STATUS_OPTIONS: DeviceStatus[] = [
@@ -73,6 +74,7 @@ interface FormState {
   startU: string;
   heightU: string;
   face: RackFace;
+  rackSlot: RackSlot;
   portTemplateId: string;
   tags: string;
   notes: string;
@@ -112,6 +114,7 @@ function blankForm(defaults?: Partial<FormState>): FormState {
     startU: "",
     heightU: "1",
     face: "front",
+    rackSlot: "full",
     portTemplateId: "",
     tags: "",
     notes: "",
@@ -155,6 +158,7 @@ function deviceToForm(device: Device): FormState {
     startU: device.startU != null ? String(device.startU) : "",
     heightU: device.heightU != null ? String(device.heightU) : "1",
     face: device.face ?? "front",
+    rackSlot: device.rackSlot ?? "full",
     portTemplateId: "",
     tags: (device.tags ?? []).join(", "),
     notes: device.notes ?? "",
@@ -429,6 +433,7 @@ export function DeviceDrawer({
       startU: "",
       heightU: form.placement === "shelf" ? prev.heightU || "1" : "1",
       face: "front",
+      rackSlot: "full",
     }));
   }, [form.placement]);
 
@@ -727,6 +732,7 @@ export function DeviceDrawer({
               : 1
             : undefined,
         face: isRackMounted ? form.face : undefined,
+        rackSlot: isRackMounted ? form.rackSlot : undefined,
         portTemplateId:
           canApplyTemplate && form.portTemplateId
             ? form.portTemplateId
@@ -1507,7 +1513,7 @@ export function DeviceDrawer({
                   )}
 
                   {isRackMounted && (
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                       <Field label={t("Start U")}>
                         <Input
                           type="number"
@@ -1539,6 +1545,18 @@ export function DeviceDrawer({
                         >
                           <option value="front">{t("Front")}</option>
                           <option value="rear">{t("Rear")}</option>
+                        </Select>
+                      </Field>
+                      <Field label={t("Rack slot")}>
+                        <Select
+                          value={form.rackSlot}
+                          onChange={(value) =>
+                            set("rackSlot", value as RackSlot)
+                          }
+                        >
+                          <option value="full">{t("Full width")}</option>
+                          <option value="left">{t("Left half")}</option>
+                          <option value="right">{t("Right half")}</option>
                         </Select>
                       </Field>
                     </div>

@@ -47,6 +47,7 @@ const DEVICE_PLACEMENTS = [
   "shelf",
 ] as const;
 const DEVICE_FACES = ["front", "rear"] as const;
+const DEVICE_RACK_SLOTS = ["full", "left", "right"] as const;
 const DEVICE_NETWORK_MODES = ["normal", "host-shared"] as const;
 const JSON_COLS = ["tags"] as const;
 
@@ -88,6 +89,7 @@ function normalizePlacement(input: {
   startU?: number | null;
   heightU?: number | null;
   face?: (typeof DEVICE_FACES)[number] | null;
+  rackSlot?: (typeof DEVICE_RACK_SLOTS)[number] | null;
   parentDevice?: ParentDeviceRow | null;
 }) {
   const placement = derivePlacement(input);
@@ -116,6 +118,7 @@ function normalizePlacement(input: {
       startU: null,
       heightU: input.heightU ?? 1,
       face: parent.face ?? null,
+      rackSlot: "full" as const,
     };
   }
 
@@ -126,6 +129,7 @@ function normalizePlacement(input: {
       startU: null,
       heightU: null,
       face: null,
+      rackSlot: "full" as const,
     };
   }
 
@@ -135,6 +139,7 @@ function normalizePlacement(input: {
     startU: input.startU ?? null,
     heightU: input.heightU ?? null,
     face: input.face ?? null,
+    rackSlot: input.rackSlot ?? null,
   });
 
   return {
@@ -143,6 +148,7 @@ function normalizePlacement(input: {
     startU: resolved.startU,
     heightU: resolved.heightU,
     face: resolved.face,
+    rackSlot: resolved.rackSlot,
   };
 }
 
@@ -299,6 +305,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const startU = optionalInteger(body, "startU", { min: 1, max: 100 });
     const heightU = optionalInteger(body, "heightU", { min: 1, max: 20 });
     const face = optionalEnum(body, "face", DEVICE_FACES);
+    const rackSlot = optionalEnum(body, "rackSlot", DEVICE_RACK_SLOTS);
     const tags = optionalStringArray(body, "tags", { maxItems: 30 });
     const notes = optionalString(body, "notes", { maxLength: 2000 });
     const lastSeen = optionalString(body, "lastSeen", { maxLength: 80 });
@@ -317,6 +324,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
       startU,
       heightU,
       face,
+      rackSlot,
       parentDevice,
     });
     const normalizedParentDeviceId = parentDevice?.id ?? null;
@@ -336,8 +344,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
       INSERT INTO devices
         (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model,
          serial, managementIp, macAddress, status, placement, parentDeviceId, networkMode, roomId, cpuCores, memoryGb, storageGb, specs,
-         startU, heightU, face, tags, notes, lastSeen)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         startU, heightU, face, rackSlot, tags, notes, lastSeen)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `);
     const insertPort = db.prepare(`
       INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, macAddress)
@@ -369,6 +377,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         normalizedPlacement.startU,
         normalizedPlacement.heightU,
         normalizedPlacement.face,
+        normalizedPlacement.rackSlot,
         tags ? JSON.stringify(tags) : null,
         notes ?? null,
         lastSeen ?? null,
@@ -434,6 +443,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
 
     const wifiSsidId = optionalString(changes, "wifiSsidId", { maxLength: 80 });
     const roomId = optionalString(changes, "roomId", { maxLength: 80 });
+    const rackSlot = optionalEnum(changes, "rackSlot", DEVICE_RACK_SLOTS);
     const status = optionalEnum(changes, "status", DEVICE_STATUSES);
     const manufacturer = optionalString(changes, "manufacturer", {
       maxLength: 120,
@@ -521,7 +531,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         const placementFieldsChanging =
           placement !== undefined ||
           parentDeviceId !== undefined ||
-          roomId !== undefined;
+          roomId !== undefined ||
+          rackSlot !== undefined;
 
         if (placementFieldsChanging) {
           const nextPlacement =
@@ -574,6 +585,13 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
             face: existing.face
               ? (String(existing.face) as (typeof DEVICE_FACES)[number])
               : null,
+            rackSlot:
+              rackSlot ??
+              (existing.rackSlot
+                ? (String(
+                    existing.rackSlot,
+                  ) as (typeof DEVICE_RACK_SLOTS)[number])
+                : null),
             parentDevice,
           });
 
@@ -584,6 +602,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
             "startU = ?",
             "heightU = ?",
             "face = ?",
+            "rackSlot = ?",
           );
           values.push(
             normalizedPlacement.placement,
@@ -592,6 +611,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
             normalizedPlacement.startU,
             normalizedPlacement.heightU,
             normalizedPlacement.face,
+            normalizedPlacement.rackSlot,
           );
 
           if (roomId !== undefined) {
@@ -696,6 +716,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const startU = optionalInteger(body, "startU", { min: 1, max: 100 });
     const heightU = optionalInteger(body, "heightU", { min: 1, max: 20 });
     const face = optionalEnum(body, "face", DEVICE_FACES);
+    const rackSlot = optionalEnum(body, "rackSlot", DEVICE_RACK_SLOTS);
     const placement = optionalEnum(body, "placement", DEVICE_PLACEMENTS);
     const parentDeviceId = optionalString(body, "parentDeviceId", {
       maxLength: 80,
@@ -712,6 +733,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
       startU !== undefined ||
       heightU !== undefined ||
       face !== undefined ||
+      rackSlot !== undefined ||
       placement !== undefined ||
       parentDeviceId !== undefined
     ) {
@@ -757,6 +779,12 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
               ? (String(device.face) as (typeof DEVICE_FACES)[number])
               : null
             : face,
+        rackSlot:
+          rackSlot === undefined
+            ? device.rackSlot
+              ? (String(device.rackSlot) as (typeof DEVICE_RACK_SLOTS)[number])
+              : null
+            : rackSlot,
         parentDevice,
       });
       const normalizedParentDeviceId = parentDevice?.id ?? null;
@@ -769,6 +797,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         "startU = ?",
         "heightU = ?",
         "face = ?",
+        "rackSlot = ?",
       );
       values.push(
         normalizedPlacement.placement,
@@ -777,6 +806,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         normalizedPlacement.startU,
         normalizedPlacement.heightU,
         normalizedPlacement.face,
+        normalizedPlacement.rackSlot,
       );
     }
 

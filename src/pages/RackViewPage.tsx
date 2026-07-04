@@ -614,10 +614,7 @@ export default function RackViewPage() {
                 const inRack = devices.filter(
                   (device) => device.rackId === entry.id,
                 );
-                const used = inRack.reduce(
-                  (sum, device) => sum + (device.heightU ?? 0),
-                  0,
-                );
+                const used = occupiedRackUnits(inRack);
                 const isActive = entry.id === rack?.id && !viewingUnracked;
                 return (
                   <button
@@ -848,6 +845,19 @@ export default function RackViewPage() {
       />
     </>
   );
+}
+
+function occupiedRackUnits(devices: Device[]) {
+  const units = new Set<string>();
+  for (const device of devices) {
+    if (!device.startU) continue;
+    const face = device.face ?? "front";
+    const heightU = device.heightU ?? 1;
+    for (let u = device.startU; u < device.startU + heightU; u += 1) {
+      units.add(`${face}:${u}`);
+    }
+  }
+  return units.size;
 }
 
 function UnrackedPanel({

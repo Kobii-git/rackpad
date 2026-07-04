@@ -1085,6 +1085,11 @@ export const en = {
   "Member of {name}": "Member of {name}",
   "Member": "Member",
   "Aggregate port": "Aggregate port",
+  "Rack slot": "Rack slot",
+  "Full width": "Full width",
+  "Left half": "Left half",
+  "Right half": "Right half",
+  "Slot": "Slot",
   "VLAN ID": "VLAN ID",
 } as const;
 
@@ -2178,6 +2183,11 @@ export const fr = {
   "Member of {name}": "Member of {name}",
   "Member": "Member",
   "Aggregate port": "Aggregate port",
+  "Rack slot": "Rack slot",
+  "Full width": "Full width",
+  "Left half": "Left half",
+  "Right half": "Right half",
+  "Slot": "Slot",
   "VLAN ID": "VLAN ID",
 } satisfies TranslationMap;
 
@@ -3269,6 +3279,11 @@ export const zh = {
   "Member of {name}": "Member of {name}",
   "Member": "Member",
   "Aggregate port": "Aggregate port",
+  "Rack slot": "Rack slot",
+  "Full width": "Full width",
+  "Left half": "Left half",
+  "Right half": "Right half",
+  "Slot": "Slot",
   "VLAN ID": "VLAN ID",
 } satisfies TranslationMap;
 
@@ -4360,6 +4375,11 @@ export const es = {
   "Member of {name}": "Member of {name}",
   "Member": "Member",
   "Aggregate port": "Aggregate port",
+  "Rack slot": "Rack slot",
+  "Full width": "Full width",
+  "Left half": "Left half",
+  "Right half": "Right half",
+  "Slot": "Slot",
   "VLAN ID": "VLAN ID",
 } satisfies TranslationMap;
 
@@ -5451,6 +5471,11 @@ export const hi = {
   "Member of {name}": "Member of {name}",
   "Member": "Member",
   "Aggregate port": "Aggregate port",
+  "Rack slot": "Rack slot",
+  "Full width": "Full width",
+  "Left half": "Left half",
+  "Right half": "Right half",
+  "Slot": "Slot",
   "VLAN ID": "VLAN ID",
 } satisfies TranslationMap;
 
@@ -6542,6 +6567,11 @@ export const ar = {
   "Member of {name}": "Member of {name}",
   "Member": "Member",
   "Aggregate port": "Aggregate port",
+  "Rack slot": "Rack slot",
+  "Full width": "Full width",
+  "Left half": "Left half",
+  "Right half": "Right half",
+  "Slot": "Slot",
   "VLAN ID": "VLAN ID",
 } satisfies TranslationMap;
 
@@ -7633,6 +7663,11 @@ export const ja = {
   "Member of {name}": "Member of {name}",
   "Member": "Member",
   "Aggregate port": "Aggregate port",
+  "Rack slot": "Rack slot",
+  "Full width": "Full width",
+  "Left half": "Left half",
+  "Right half": "Right half",
+  "Slot": "Slot",
   "VLAN ID": "VLAN ID",
 } satisfies TranslationMap;
 

@@ -2558,9 +2558,15 @@ function placementLabel(node: VisualizerNode) {
   if (node.rackId) {
     const rack = node.rackName ?? "Rack";
     const prefix = node.roomName ? `${node.roomName} | ${rack}` : rack;
+    const rackSlot =
+      node.device.rackSlot === "left"
+        ? " | left half"
+        : node.device.rackSlot === "right"
+          ? " | right half"
+          : "";
     return `${prefix} | ${node.device.startU ? `U${node.device.startU}` : "rack"}${
       node.device.heightU ? ` / ${node.device.heightU}U` : ""
-    }`;
+    }${rackSlot}`;
   }
   if (node.roomName)
     return node.device.placement

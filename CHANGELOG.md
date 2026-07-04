@@ -8,6 +8,33 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.0-beta.1] - 2026-07-04
+
+### Added
+
+- Added half-width rack placement with full, left, and right rack slots.
+- Added rack-slot controls to the device drawer and slot labels in rack,
+  device list, device detail, and visualizer rack views.
+
+### Changed
+
+- Rack placement validation now allows left and right devices to share the
+  same U/face while still rejecting same-side and full-width overlaps.
+- Rack usage counts now treat left/right devices sharing one face/U as one
+  occupied rack unit.
+
+### Fixed
+
+- Legacy backup restores default missing rack-slot data to full-width devices.
+
+### Test notes
+
+- Verify two half-width devices can share one U as left/right, and that
+  full-width or same-side overlaps are rejected across multi-U spans.
+- Verify rack and visualizer views render left/right devices side-by-side.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, and `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.7.0-beta.0] - 2026-07-04
 
 ### Added

@@ -1128,6 +1128,41 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
 test("admin restore accepts older backups without subnet gateway and DNS fields", async () => {
   const adminToken = await bootstrapAdmin();
 
+  const rackRes = await app.inject({
+    method: "POST",
+    url: "/api/racks",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      name: "Legacy rack slot rack",
+      totalU: 8,
+    },
+  });
+  assert.equal(rackRes.statusCode, 201);
+  const rack = readJson(rackRes) as { id: string };
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      rackId: rack.id,
+      hostname: "legacy-rack-slot-device",
+      deviceType: "server",
+      status: "unknown",
+      startU: 2,
+      heightU: 1,
+      face: "front",
+      rackSlot: "left",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+
   const subnetRes = await app.inject({
     method: "POST",
     url: "/api/subnets",
@@ -1153,12 +1188,20 @@ test("admin restore accepts older backups without subnet gateway and DNS fields"
   });
   assert.equal(exportRes.statusCode, 200);
   const snapshot = readJson(exportRes) as Record<string, unknown> & {
-    data: { subnets: Array<Record<string, unknown>> };
+    data: {
+      devices: Array<Record<string, unknown>>;
+      subnets: Array<Record<string, unknown>>;
+    };
   };
   const legacySnapshot = {
     ...snapshot,
     data: {
       ...snapshot.data,
+      devices: snapshot.data.devices.map((device) => {
+        const legacyDevice = { ...device };
+        delete legacyDevice.rackSlot;
+        return legacyDevice;
+      }),
       subnets: snapshot.data.subnets.map((subnet) => {
         const legacySubnet = { ...subnet };
         delete legacySubnet.gateway;
@@ -1208,6 +1251,24 @@ test("admin restore accepts older backups without subnet gateway and DNS fields"
   assert.ok(restoredSubnet);
   assert.equal(restoredSubnet.gateway, null);
   assert.equal(restoredSubnet.dnsServers, null);
+
+  const devicesRes = await app.inject({
+    method: "GET",
+    url: "/api/devices?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${refreshedToken}`,
+    },
+  });
+  assert.equal(devicesRes.statusCode, 200);
+  const devices = readJson(devicesRes) as Array<{
+    hostname: string;
+    rackSlot: string;
+  }>;
+  const restoredDevice = devices.find(
+    (device) => device.hostname === "legacy-rack-slot-device",
+  );
+  assert.ok(restoredDevice);
+  assert.equal(restoredDevice.rackSlot, "full");
 });
 
 test("admin restore preserves parent-linked devices even when children sort before their host", async () => {
@@ -2026,6 +2087,144 @@ test("rack placement validation rejects overlapping devices", async () => {
 
   assert.equal(overlapRes.statusCode, 400);
   assert.match(overlapRes.body, /overlap/i);
+});
+
+test("rack placement validation allows opposite half-width slots only", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const rackRes = await app.inject({
+    method: "POST",
+    url: "/api/racks",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      name: "Half Width Rack",
+      totalU: 12,
+    },
+  });
+  assert.equal(rackRes.statusCode, 201);
+  const rack = readJson(rackRes) as { id: string };
+
+  const leftRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      rackId: rack.id,
+      hostname: "half-left-01",
+      deviceType: "server",
+      status: "unknown",
+      startU: 5,
+      heightU: 2,
+      face: "front",
+      rackSlot: "left",
+    },
+  });
+  assert.equal(leftRes.statusCode, 201);
+  const left = readJson(leftRes) as { id: string; rackSlot: string };
+  assert.equal(left.rackSlot, "left");
+
+  const rightRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      rackId: rack.id,
+      hostname: "half-right-01",
+      deviceType: "server",
+      status: "unknown",
+      startU: 5,
+      heightU: 2,
+      face: "front",
+      rackSlot: "right",
+    },
+  });
+  assert.equal(rightRes.statusCode, 201);
+  const right = readJson(rightRes) as { id: string; rackSlot: string };
+  assert.equal(right.rackSlot, "right");
+
+  const leftConflictRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      rackId: rack.id,
+      hostname: "half-left-conflict",
+      deviceType: "server",
+      status: "unknown",
+      startU: 6,
+      heightU: 1,
+      face: "front",
+      rackSlot: "left",
+    },
+  });
+  assert.equal(leftConflictRes.statusCode, 400);
+  assert.match(leftConflictRes.body, /overlap/i);
+
+  const fullConflictRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      rackId: rack.id,
+      hostname: "full-conflict",
+      deviceType: "server",
+      status: "unknown",
+      startU: 5,
+      heightU: 1,
+      face: "front",
+      rackSlot: "full",
+    },
+  });
+  assert.equal(fullConflictRes.statusCode, 400);
+  assert.match(fullConflictRes.body, /overlap/i);
+
+  const rearFullRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      rackId: rack.id,
+      hostname: "rear-full-ok",
+      deviceType: "server",
+      status: "unknown",
+      startU: 5,
+      heightU: 2,
+      face: "rear",
+      rackSlot: "full",
+    },
+  });
+  assert.equal(rearFullRes.statusCode, 201);
+
+  const patchConflictRes = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${right.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      rackSlot: "full",
+    },
+  });
+  assert.equal(patchConflictRes.statusCode, 400);
+  assert.match(patchConflictRes.body, /overlap/i);
 });
 
 test("virtual switches can be attached to shelf-mounted physical hosts", async () => {

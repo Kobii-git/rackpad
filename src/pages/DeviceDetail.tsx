@@ -1322,11 +1322,7 @@ export default function DeviceDetail() {
                     </span>
                     {device.placement === "shelf" && parentDevice
                       ? `${rack.name} | shelf ${parentDevice.hostname}`
-                      : `${rack.name} U${device.startU}${
-                          (device.heightU ?? 1) > 1
-                            ? `-${device.startU! + device.heightU! - 1}`
-                            : ""
-                        }`}
+                      : `${rack.name} ${formatRackUnit(device)}`}
                   </>
                 )}
               </div>
@@ -1441,11 +1437,13 @@ export default function DeviceDetail() {
                     />
                     <Row label="Face" value={device.face} />
                     <Row
+                      label="Slot"
+                      value={formatRackSlot(device.rackSlot)}
+                    />
+                    <Row
                       label="U position"
                       value={
-                        device.startU
-                          ? `U${device.startU}${(device.heightU ?? 1) > 1 ? `-${device.startU + (device.heightU ?? 1) - 1}` : ""} (${device.heightU ?? 1}U)`
-                          : undefined
+                        device.startU ? formatRackUnit(device, true) : undefined
                       }
                     />
                     <Row
@@ -3379,6 +3377,24 @@ function formatPlacement(placement?: Device["placement"]) {
     default:
       return "Loose / room";
   }
+}
+
+function formatRackSlot(slot?: Device["rackSlot"]) {
+  if (slot === "left") return "Left half";
+  if (slot === "right") return "Right half";
+  return "Full width";
+}
+
+function formatRackUnit(device: Device, includeHeight = false) {
+  if (!device.startU) return "";
+  const heightU = device.heightU ?? 1;
+  const range =
+    heightU > 1 ? `U${device.startU}-${device.startU + heightU - 1}` : `U${device.startU}`;
+  const slot =
+    (device.rackSlot ?? "full") === "full"
+      ? ""
+      : ` | ${formatRackSlot(device.rackSlot)}`;
+  return includeHeight ? `${range}${slot} (${heightU}U)` : `${range}${slot}`;
 }
 
 function formatCapacityValue(value?: number) {

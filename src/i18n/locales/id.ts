@@ -1087,5 +1087,10 @@ export const id = {
   "Member of {name}": "Member of {name}",
   "Member": "Member",
   "Aggregate port": "Aggregate port",
+  "Rack slot": "Rack slot",
+  "Full width": "Full width",
+  "Left half": "Left half",
+  "Right half": "Right half",
+  "Slot": "Slot",
   "VLAN ID": "VLAN ID",
 } satisfies TranslationMap;

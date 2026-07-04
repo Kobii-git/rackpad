@@ -24,6 +24,7 @@ export type PortKind =
   | "wifi";
 
 export type RackFace = "front" | "rear";
+export type RackSlot = "full" | "left" | "right";
 export type LinkState = "up" | "down" | "disabled" | "unknown";
 export type PortMode = "access" | "trunk";
 export type PortRole = "physical" | "aggregate";
@@ -144,6 +145,7 @@ export interface Device {
   startU?: number;
   heightU?: number;
   face?: RackFace;
+  rackSlot?: RackSlot;
   tags?: string[];
   notes?: string;
   lastSeen?: string;

@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 30;
+const CURRENT_SCHEMA_VERSION = 31;
 
 export const db = new Database(DB_PATH);
 
@@ -916,6 +916,15 @@ const SCHEMA_MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS idx_ports_device_role
         ON ports (deviceId, portRole);
+    `,
+  },
+  {
+    version: 31,
+    sql: `
+      ALTER TABLE devices ADD COLUMN rackSlot TEXT NOT NULL DEFAULT 'full';
+
+      CREATE INDEX IF NOT EXISTS idx_devices_rack_slot
+        ON devices (rackId, face, rackSlot);
     `,
   },
 ] as const;
