@@ -16,6 +16,7 @@ import type {
   DeviceMonitor,
   DiscoveredDevice,
   DiscoveryScanResult,
+  DiscoveryScanSchedule,
   DocumentationPage,
   DhcpScope,
   IpAssignment,
@@ -50,6 +51,7 @@ import type {
   DeviceServicePatch,
   DocumentationPagePatch,
   DiscoveredDevicePatch,
+  DiscoveryScanSchedulePatch,
   DhcpScopePatch,
   LabPatch,
   MonitorPatch,
@@ -126,6 +128,7 @@ interface State {
   deviceMonitors: DeviceMonitor[];
   portTemplates: PortTemplate[];
   discoveredDevices: DiscoveredDevice[];
+  discoveryScanSchedules: DiscoveryScanSchedule[];
   wifiControllers: WifiController[];
   wifiSsids: WifiSsid[];
   wifiAccessPoints: WifiAccessPoint[];
@@ -157,6 +160,7 @@ const EMPTY_DATA = {
   deviceMonitors: [] as DeviceMonitor[],
   portTemplates: [] as PortTemplate[],
   discoveredDevices: [] as DiscoveredDevice[],
+  discoveryScanSchedules: [] as DiscoveryScanSchedule[],
   wifiControllers: [] as WifiController[],
   wifiSsids: [] as WifiSsid[],
   wifiAccessPoints: [] as WifiAccessPoint[],
@@ -408,6 +412,15 @@ function sortDiscoveredDevices(devices: DiscoveredDevice[]) {
   });
 }
 
+function sortDiscoveryScanSchedules(schedules: DiscoveryScanSchedule[]) {
+  return [...schedules].sort(
+    (a, b) =>
+      a.cidr.localeCompare(b.cidr) ||
+      (a.name ?? "").localeCompare(b.name ?? "") ||
+      a.id.localeCompare(b.id),
+  );
+}
+
 function sortWifiControllers(controllers: WifiController[]) {
   return [...controllers].sort(
     (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
@@ -496,6 +509,7 @@ function filterAuditForLab(
     assignmentIds: Set<string>;
     monitorIds: Set<string>;
     discoveredIds: Set<string>;
+    discoveryScheduleIds: Set<string>;
     documentationPageIds: Set<string>;
     deviceImageIds: Set<string>;
     deviceServiceIds: Set<string>;
@@ -540,6 +554,8 @@ function filterAuditForLab(
           return context.monitorIds.has(entry.entityId);
         case "DiscoveredDevice":
           return context.discoveredIds.has(entry.entityId);
+        case "DiscoveryScanSchedule":
+          return context.discoveryScheduleIds.has(entry.entityId);
         case "DocumentationPage":
           return context.documentationPageIds.has(entry.entityId);
         case "DeviceImage":
@@ -1103,6 +1119,7 @@ export async function loadAll(
         deviceMonitors: api.getDeviceMonitors(),
         portTemplates: api.getPortTemplates(),
         discoveredDevices: api.getDiscoveredDevices(),
+        discoveryScanSchedules: api.getDiscoveryScanSchedules(),
         documentationPages: api.getDocumentationPages(),
         deviceImages: api.getDeviceImages(),
         deviceServices: api.getDeviceServices(),
@@ -1254,6 +1271,17 @@ export async function loadAll(
         allDiscoveredDevices.map((device) => device.id),
       );
 
+      const allDiscoveryScanSchedules = sortDiscoveryScanSchedules(
+        (
+          (resolved.get("discoveryScanSchedules") as
+            | DiscoveryScanSchedule[]
+            | undefined) ?? []
+        ).filter((schedule) => schedule.labId === activeLab.id),
+      );
+      const discoveryScheduleIds = new Set(
+        allDiscoveryScanSchedules.map((schedule) => schedule.id),
+      );
+
       const allDocumentationPages = sortDocumentationPages(
         (
           (resolved.get("documentationPages") as
@@ -1367,6 +1395,7 @@ export async function loadAll(
           assignmentIds,
           monitorIds,
           discoveredIds,
+          discoveryScheduleIds,
           documentationPageIds,
           deviceImageIds,
           deviceServiceIds,
@@ -1406,6 +1435,7 @@ export async function loadAll(
         deviceMonitors: allMonitors,
         portTemplates: allPortTemplates,
         discoveredDevices: allDiscoveredDevices,
+        discoveryScanSchedules: allDiscoveryScanSchedules,
         documentationPages: allDocumentationPages,
         deviceImages: allDeviceImages,
         deviceServices: allDeviceServices,
@@ -3720,17 +3750,10 @@ export async function runAllDeviceMonitorChecks(): Promise<void> {
   await loadAll(true);
 }
 
-export async function scanDiscoveredSubnet(
-  cidr: string,
-): Promise<DiscoveryScanResult> {
-  const result = await api.scanDiscoveredDevices({
-    labId: state.lab.id,
-    cidr,
-  });
-
+function mergeDiscoveredDeviceRows(rows: DiscoveredDevice[]) {
   setState((prev) => {
     const next = [...prev.discoveredDevices];
-    for (const row of result.rows) {
+    for (const row of rows) {
       const existingIndex = next.findIndex((device) => device.id === row.id);
       if (existingIndex >= 0) {
         next[existingIndex] = row;
@@ -3743,6 +3766,17 @@ export async function scanDiscoveredSubnet(
       discoveredDevices: sortDiscoveredDevices(next),
     };
   });
+}
+
+export async function scanDiscoveredSubnet(
+  cidr: string,
+): Promise<DiscoveryScanResult> {
+  const result = await api.scanDiscoveredDevices({
+    labId: state.lab.id,
+    cidr,
+  });
+
+  mergeDiscoveredDeviceRows(result.rows);
 
   void recordAudit(
     "discovery.scan",
@@ -3752,6 +3786,101 @@ export async function scanDiscoveredSubnet(
   );
 
   return result;
+}
+
+export async function createDiscoveryScanSchedule(
+  input: {
+    name?: string | null;
+    cidr: string;
+    intervalMs: number;
+    enabled: boolean;
+  },
+): Promise<DiscoveryScanSchedule> {
+  const created = await api.createDiscoveryScanSchedule({
+    labId: state.lab.id,
+    ...input,
+  });
+  setState((prev) => ({
+    ...prev,
+    discoveryScanSchedules: sortDiscoveryScanSchedules([
+      ...prev.discoveryScanSchedules,
+      created,
+    ]),
+  }));
+  void recordAudit(
+    "discovery.schedule.create",
+    "DiscoveryScanSchedule",
+    created.id,
+    `Scheduled discovery scan for ${created.cidr}`,
+  );
+  return created;
+}
+
+export async function updateDiscoveryScanScheduleRecord(
+  id: string,
+  changes: DiscoveryScanSchedulePatch,
+): Promise<DiscoveryScanSchedule> {
+  const updated = await api.updateDiscoveryScanSchedule(id, changes);
+  setState((prev) => ({
+    ...prev,
+    discoveryScanSchedules: replaceById(
+      prev.discoveryScanSchedules,
+      updated,
+      sortDiscoveryScanSchedules,
+    ),
+  }));
+  void recordAudit(
+    "discovery.schedule.update",
+    "DiscoveryScanSchedule",
+    id,
+    `Updated discovery schedule for ${updated.cidr}`,
+  );
+  return updated;
+}
+
+export async function runDiscoveryScanScheduleNow(
+  id: string,
+): Promise<DiscoveryScanResult | null> {
+  const result = await api.runDiscoveryScanSchedule(id);
+  setState((prev) => ({
+    ...prev,
+    discoveryScanSchedules: replaceById(
+      prev.discoveryScanSchedules,
+      result.schedule,
+      sortDiscoveryScanSchedules,
+    ),
+  }));
+  if (result.scan) {
+    mergeDiscoveredDeviceRows(result.scan.rows);
+  }
+  void recordAudit(
+    "discovery.schedule.run",
+    "DiscoveryScanSchedule",
+    id,
+    `Ran scheduled discovery scan for ${result.schedule.cidr}`,
+  );
+  return result.scan;
+}
+
+export async function deleteDiscoveryScanScheduleRecord(
+  id: string,
+): Promise<void> {
+  const existing = state.discoveryScanSchedules.find(
+    (schedule) => schedule.id === id,
+  );
+  await api.deleteDiscoveryScanSchedule(id);
+  setState((prev) => ({
+    ...prev,
+    discoveryScanSchedules: removeById(prev.discoveryScanSchedules, id),
+  }));
+  if (existing) {
+    void recordAudit(
+      "discovery.schedule.delete",
+      "DiscoveryScanSchedule",
+      id,
+      `Removed discovery schedule for ${existing.cidr}`,
+    );
+  }
 }
 
 export async function updateDiscoveredDeviceRecord(

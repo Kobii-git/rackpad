@@ -546,6 +546,25 @@ export interface DiscoveryScanResult {
   rows: DiscoveredDevice[];
 }
 
+export interface DiscoveryScanSchedule {
+  id: ID;
+  labId: ID;
+  name?: string | null;
+  cidr: string;
+  intervalMs: number;
+  enabled: boolean;
+  lastRunAt?: string | null;
+  lastResult?: "success" | "error" | string | null;
+  lastMessage?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DiscoveryScanScheduleRunResult {
+  schedule: DiscoveryScanSchedule;
+  scan: DiscoveryScanResult | null;
+}
+
 export interface WifiController {
   id: ID;
   labId: ID;

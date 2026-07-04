@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Inbox, RefreshCcw, Save, Search, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Clock,
+  Inbox,
+  Play,
+  Power,
+  RefreshCcw,
+  Save,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { TopBar } from "@/components/layout/TopBar";
@@ -24,9 +34,13 @@ import {
   canEditInventory,
   createDevice,
   createDeviceMonitorConfig,
+  createDiscoveryScanSchedule,
   deleteDiscoveredDeviceRecord,
+  deleteDiscoveryScanScheduleRecord,
   runDeviceMonitorCheck,
+  runDiscoveryScanScheduleNow,
   scanDiscoveredSubnet,
+  updateDiscoveryScanScheduleRecord,
   updateDiscoveredDeviceRecord,
   useStore,
 } from "@/lib/store";
@@ -35,6 +49,7 @@ import type {
   Device,
   DiscoveredDevice,
   DiscoveryScanResult,
+  DiscoveryScanSchedule,
   IpAllocationMode,
   IpZone,
   Subnet,
@@ -107,15 +122,29 @@ export default function DiscoveryView() {
   const scopes = useStore((s) => s.scopes);
   const ipZones = useStore((s) => s.ipZones);
   const discoveredDevices = useStore((s) => s.discoveredDevices);
+  const discoveryScanSchedules = useStore((s) => s.discoveryScanSchedules);
   const canEdit = canEditInventory(currentUser);
   const canManageDiscovery = currentUser?.role === "admin";
   const [scanCidr, setScanCidr] = useState("");
   const [scanTarget, setScanTarget] = useState<DiscoveryScanTarget>(
     subnets[0]?.id ?? "manual",
   );
+  const [scheduleTarget, setScheduleTarget] = useState<DiscoveryScanTarget>(
+    subnets[0]?.id ?? "manual",
+  );
+  const [scheduleCidr, setScheduleCidr] = useState("");
+  const [scheduleName, setScheduleName] = useState("");
+  const [scheduleIntervalMinutes, setScheduleIntervalMinutes] = useState("60");
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [draft, setDraft] = useState<DiscoveryDraft | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [runningScheduleId, setRunningScheduleId] = useState<string | null>(
+    null,
+  );
+  const [deletingScheduleId, setDeletingScheduleId] = useState<string | null>(
+    null,
+  );
   const [lastScanResult, setLastScanResult] =
     useState<DiscoveryScanResult | null>(null);
   const [saving, setSaving] = useState(false);
@@ -355,6 +384,96 @@ export default function DiscoveryView() {
       setError(err instanceof Error ? err.message : t("Failed to scan subnet."));
     } finally {
       setScanning(false);
+    }
+  }
+
+  function selectedScheduleCidrs() {
+    return scheduleTarget === "all"
+      ? subnets.map((subnet) => subnet.cidr)
+      : scheduleTarget === "manual"
+        ? [scheduleCidr.trim()].filter(Boolean)
+        : subnets
+            .filter((subnet) => subnet.id === scheduleTarget)
+            .map((subnet) => subnet.cidr);
+  }
+
+  async function handleAddSchedule() {
+    const cidrs = selectedScheduleCidrs();
+    const intervalMinutes = Number.parseInt(scheduleIntervalMinutes, 10);
+    if (cidrs.length === 0 || !Number.isFinite(intervalMinutes)) return;
+    setSavingSchedule(true);
+    setError("");
+    try {
+      for (const cidr of cidrs) {
+        await createDiscoveryScanSchedule({
+          name: scheduleName.trim() || null,
+          cidr,
+          intervalMs: Math.max(1, intervalMinutes) * 60_000,
+          enabled: true,
+        });
+      }
+      setScheduleName("");
+      if (scheduleTarget === "manual") setScheduleCidr("");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("Failed to save discovery schedule."),
+      );
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
+
+  async function handleRunSchedule(schedule: DiscoveryScanSchedule) {
+    setRunningScheduleId(schedule.id);
+    setError("");
+    try {
+      const result = await runDiscoveryScanScheduleNow(schedule.id);
+      if (result) {
+        setLastScanResult(result);
+        setFilter("all");
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("Failed to run discovery schedule."),
+      );
+    } finally {
+      setRunningScheduleId(null);
+    }
+  }
+
+  async function handleToggleSchedule(schedule: DiscoveryScanSchedule) {
+    setError("");
+    try {
+      await updateDiscoveryScanScheduleRecord(schedule.id, {
+        enabled: !schedule.enabled,
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("Failed to save discovery schedule."),
+      );
+    }
+  }
+
+  async function handleDeleteSchedule(schedule: DiscoveryScanSchedule) {
+    if (!window.confirm(`Delete discovery schedule ${schedule.cidr}?`)) return;
+    setDeletingScheduleId(schedule.id);
+    setError("");
+    try {
+      await deleteDiscoveryScanScheduleRecord(schedule.id);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("Failed to delete discovery schedule."),
+      );
+    } finally {
+      setDeletingScheduleId(null);
     }
   }
 
@@ -632,6 +751,210 @@ export default function DiscoveryView() {
         </div>
 
         {lastScanResult && <ScanSummary result={lastScanResult} t={t} />}
+
+        {canEdit && (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <CardLabel>{t("Scheduled scans")}</CardLabel>
+                <CardHeading>
+                  {t("Keep selected CIDRs refreshed automatically.")}
+                </CardHeading>
+              </CardTitle>
+              <Badge tone="neutral">
+                <Clock className="size-3" />
+                {t("{count} schedules", {
+                  count: discoveryScanSchedules.length,
+                })}
+              </Badge>
+            </CardHeader>
+            <CardBody className="space-y-3">
+              <div className="grid gap-2 md:grid-cols-[minmax(12rem,1.2fr)_minmax(8rem,1fr)_8rem_auto]">
+                <select
+                  value={scheduleTarget}
+                  onChange={(event) => setScheduleTarget(event.target.value)}
+                  className="rk-control h-9 px-2 text-xs text-[var(--text-primary)]"
+                  disabled={!canManageDiscovery || savingSchedule}
+                  aria-label={t("Discovery schedule target")}
+                >
+                  {subnets.length > 0 && (
+                    <option value="all">{t("All IPAM subnets")}</option>
+                  )}
+                  {subnets.map((subnet) => (
+                    <option key={subnet.id} value={subnet.id}>
+                      {subnet.cidr} · {subnet.name}
+                    </option>
+                  ))}
+                  <option value="manual">{t("Manual CIDR")}</option>
+                </select>
+                {scheduleTarget === "manual" ? (
+                  <Input
+                    value={scheduleCidr}
+                    onChange={(event) => setScheduleCidr(event.target.value)}
+                    placeholder="10.0.21.0/24"
+                    disabled={!canManageDiscovery || savingSchedule}
+                  />
+                ) : (
+                  <Input
+                    value={scheduleName}
+                    onChange={(event) => setScheduleName(event.target.value)}
+                    placeholder={t("Schedule name")}
+                    disabled={!canManageDiscovery || savingSchedule}
+                  />
+                )}
+                <Input
+                  type="number"
+                  min={1}
+                  value={scheduleIntervalMinutes}
+                  onChange={(event) =>
+                    setScheduleIntervalMinutes(event.target.value)
+                  }
+                  aria-label={t("Interval minutes")}
+                  disabled={!canManageDiscovery || savingSchedule}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleAddSchedule()}
+                  disabled={
+                    !canManageDiscovery ||
+                    savingSchedule ||
+                    (scheduleTarget === "manual" && !scheduleCidr.trim()) ||
+                    (scheduleTarget === "all" && subnets.length === 0)
+                  }
+                >
+                  <Clock className="size-3.5" />
+                  {savingSchedule ? t("Saving...") : t("Add schedule")}
+                </Button>
+              </div>
+              {scheduleTarget === "manual" && (
+                <Input
+                  value={scheduleName}
+                  onChange={(event) => setScheduleName(event.target.value)}
+                  placeholder={t("Schedule name")}
+                  disabled={!canManageDiscovery || savingSchedule}
+                />
+              )}
+              {discoveryScanSchedules.length === 0 ? (
+                <EmptyState
+                  icon={Clock}
+                  title={t("No scheduled scans yet")}
+                  description={t(
+                    "Add a CIDR schedule to keep discovery fresh automatically.",
+                  )}
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="rk-table min-w-[760px]">
+                    <thead>
+                      <tr>
+                        <th>{t("CIDR")}</th>
+                        <th>{t("Name")}</th>
+                        <th>{t("Interval")}</th>
+                        <th>{t("Status")}</th>
+                        <th>{t("Last run")}</th>
+                        <th>{t("Actions")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {discoveryScanSchedules.map((schedule) => (
+                        <tr key={schedule.id}>
+                          <Td>
+                            <Mono>{schedule.cidr}</Mono>
+                          </Td>
+                          <Td>{schedule.name || "-"}</Td>
+                          <Td>
+                            {t("Every {minutes} min", {
+                              minutes: Math.max(
+                                1,
+                                Math.round(schedule.intervalMs / 60_000),
+                              ),
+                            })}
+                          </Td>
+                          <Td>
+                            <div className="flex flex-wrap gap-1">
+                              <Badge
+                                tone={schedule.enabled ? "ok" : "neutral"}
+                              >
+                                {schedule.enabled
+                                  ? t("Enabled")
+                                  : t("Disabled")}
+                              </Badge>
+                              {schedule.lastResult && (
+                                <Badge
+                                  tone={
+                                    schedule.lastResult === "success"
+                                      ? "ok"
+                                      : "warn"
+                                  }
+                                >
+                                  {schedule.lastResult === "success"
+                                    ? t("Success")
+                                    : t("Error")}
+                                </Badge>
+                              )}
+                            </div>
+                          </Td>
+                          <Td>
+                            <div className="space-y-0.5 text-[11px] text-[var(--color-fg-subtle)]">
+                              <div>{schedule.lastRunAt ?? t("Never")}</div>
+                              {schedule.lastMessage && (
+                                <div>{schedule.lastMessage}</div>
+                              )}
+                            </div>
+                          </Td>
+                          <Td>
+                            <div className="flex flex-wrap gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => void handleRunSchedule(schedule)}
+                                disabled={
+                                  !canManageDiscovery ||
+                                  runningScheduleId === schedule.id
+                                }
+                              >
+                                <Play className="size-3.5" />
+                                {runningScheduleId === schedule.id
+                                  ? t("Running...")
+                                  : t("Run now")}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  void handleToggleSchedule(schedule)
+                                }
+                                disabled={!canManageDiscovery}
+                              >
+                                <Power className="size-3.5" />
+                                {schedule.enabled ? t("Pause") : t("Resume")}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  void handleDeleteSchedule(schedule)
+                                }
+                                disabled={
+                                  !canManageDiscovery ||
+                                  deletingScheduleId === schedule.id
+                                }
+                              >
+                                <Trash2 className="size-3.5" />
+                                {t("Delete")}
+                              </Button>
+                            </div>
+                          </Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">

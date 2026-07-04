@@ -13,6 +13,8 @@ import type {
   DocumentationPage,
   DiscoveredDevice,
   DiscoveryScanResult,
+  DiscoveryScanSchedule,
+  DiscoveryScanScheduleRunResult,
   DhcpScope,
   IpAssignment,
   IpZone,
@@ -176,6 +178,9 @@ export type DiscoveredDevicePatch = Nullable<
     | "importedDeviceId"
     | "lastSeen"
   >
+>;
+export type DiscoveryScanSchedulePatch = Nullable<
+  Pick<DiscoveryScanSchedule, "name" | "cidr" | "intervalMs" | "enabled">
 >;
 export type WifiControllerPatch = Nullable<
   Pick<
@@ -1314,6 +1319,56 @@ export const api = {
     return request<DiscoveryScanResult>("/discovery/scan", {
       method: "POST",
       body: JSON.stringify(body),
+    });
+  },
+
+  getDiscoveryScanSchedules(params?: { labId?: string }) {
+    return request<DiscoveryScanSchedule[]>(
+      "/discovery/schedules",
+      undefined,
+      params,
+    );
+  },
+
+  createDiscoveryScanSchedule(
+    body: Omit<
+      DiscoveryScanSchedule,
+      | "id"
+      | "lastRunAt"
+      | "lastResult"
+      | "lastMessage"
+      | "createdAt"
+      | "updatedAt"
+    > & { id?: string },
+  ) {
+    return request<DiscoveryScanSchedule>("/discovery/schedules", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateDiscoveryScanSchedule(
+    id: string,
+    body: DiscoveryScanSchedulePatch,
+  ) {
+    return request<DiscoveryScanSchedule>(`/discovery/schedules/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  runDiscoveryScanSchedule(id: string) {
+    return request<DiscoveryScanScheduleRunResult>(
+      `/discovery/schedules/${id}/run`,
+      {
+        method: "POST",
+      },
+    );
+  },
+
+  deleteDiscoveryScanSchedule(id: string) {
+    return request<void>(`/discovery/schedules/${id}`, {
+      method: "DELETE",
     });
   },
 

@@ -952,6 +952,22 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
   });
   assert.equal(subnetRes.statusCode, 201);
 
+  const scheduleRes = await app.inject({
+    method: "POST",
+    url: "/api/discovery/schedules",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      name: "Restore scan",
+      cidr: "10.44.0.0/24",
+      intervalMs: 600_000,
+      enabled: true,
+    },
+  });
+  assert.equal(scheduleRes.statusCode, 201);
+
   const exportRes = await app.inject({
     method: "GET",
     url: "/api/admin/export",
@@ -967,6 +983,12 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
         gateway?: string | null;
         dnsServers?: string[] | null;
       }>;
+      discoveryScanSchedules: Array<{
+        name?: string | null;
+        cidr: string;
+        intervalMs: number;
+        enabled: number | boolean;
+      }>;
     };
   };
   const exportedSubnet = snapshot.data.subnets.find(
@@ -974,6 +996,11 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
   );
   assert.equal(exportedSubnet?.gateway, "10.44.0.1");
   assert.deepEqual(exportedSubnet?.dnsServers, ["10.44.0.10", "1.1.1.1"]);
+  const exportedSchedule = snapshot.data.discoveryScanSchedules.find(
+    (schedule) => schedule.cidr === "10.44.0.0/24",
+  );
+  assert.equal(exportedSchedule?.name, "Restore scan");
+  assert.equal(exportedSchedule?.intervalMs, 600_000);
 
   const postExportRackRes = await app.inject({
     method: "POST",
@@ -1057,6 +1084,27 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
   );
   assert.equal(restoredSubnet?.gateway, "10.44.0.1");
   assert.deepEqual(restoredSubnet?.dnsServers, ["10.44.0.10", "1.1.1.1"]);
+
+  const schedulesAfterRestoreRes = await app.inject({
+    method: "GET",
+    url: "/api/discovery/schedules?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${refreshedToken}`,
+    },
+  });
+  assert.equal(schedulesAfterRestoreRes.statusCode, 200);
+  const schedulesAfterRestore = readJson(schedulesAfterRestoreRes) as Array<{
+    name?: string | null;
+    cidr: string;
+    intervalMs: number;
+    enabled: boolean;
+  }>;
+  const restoredSchedule = schedulesAfterRestore.find(
+    (schedule) => schedule.cidr === "10.44.0.0/24",
+  );
+  assert.equal(restoredSchedule?.name, "Restore scan");
+  assert.equal(restoredSchedule?.intervalMs, 600_000);
+  assert.equal(restoredSchedule?.enabled, true);
 
   const templatesAfterRestoreRes = await app.inject({
     method: "GET",
@@ -3564,6 +3612,133 @@ test("discovery scans require lab write access", async () => {
   assert.equal(scanRes.statusCode, 200);
 });
 
+test("discovery scan schedules can be managed per lab", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const createRes = await app.inject({
+    method: "POST",
+    url: "/api/discovery/schedules",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      name: "Routed pods",
+      cidr: "10.42.0.0/30",
+      intervalMs: 120_000,
+      enabled: true,
+    },
+  });
+  assert.equal(createRes.statusCode, 201);
+  const created = readJson(createRes) as {
+    id: string;
+    name: string;
+    cidr: string;
+    intervalMs: number;
+    enabled: boolean;
+  };
+  assert.equal(created.name, "Routed pods");
+  assert.equal(created.cidr, "10.42.0.0/30");
+  assert.equal(created.intervalMs, 120_000);
+  assert.equal(created.enabled, true);
+
+  const duplicateRes = await app.inject({
+    method: "POST",
+    url: "/api/discovery/schedules",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.42.0.0/30",
+      intervalMs: 120_000,
+      enabled: true,
+    },
+  });
+  assert.equal(duplicateRes.statusCode, 409);
+
+  const updateRes = await app.inject({
+    method: "PATCH",
+    url: `/api/discovery/schedules/${created.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      name: "Routed pods sweep",
+      intervalMs: 300_000,
+      enabled: false,
+    },
+  });
+  assert.equal(updateRes.statusCode, 200);
+  const updated = readJson(updateRes) as {
+    name: string;
+    intervalMs: number;
+    enabled: boolean;
+  };
+  assert.equal(updated.name, "Routed pods sweep");
+  assert.equal(updated.intervalMs, 300_000);
+  assert.equal(updated.enabled, false);
+
+  const listRes = await app.inject({
+    method: "GET",
+    url: "/api/discovery/schedules?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(listRes.statusCode, 200);
+  const schedules = readJson(listRes) as Array<{ id: string; cidr: string }>;
+  assert.deepEqual(
+    schedules.map((schedule) => schedule.id),
+    [created.id],
+  );
+
+  const deleteRes = await app.inject({
+    method: "DELETE",
+    url: `/api/discovery/schedules/${created.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(deleteRes.statusCode, 204);
+
+  const listAfterDeleteRes = await app.inject({
+    method: "GET",
+    url: "/api/discovery/schedules?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(listAfterDeleteRes.statusCode, 200);
+  assert.deepEqual(readJson(listAfterDeleteRes), []);
+});
+
+test("discovery scan schedules require lab write access", async () => {
+  const adminToken = await bootstrapAdmin();
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "viewer-discovery-schedule",
+    displayName: "Viewer Discovery Schedule",
+    password: "viewer-discovery-schedule-1",
+    role: "viewer",
+  });
+
+  const res = await app.inject({
+    method: "POST",
+    url: "/api/discovery/schedules",
+    headers: {
+      authorization: `Bearer ${viewerToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.42.0.0/30",
+      intervalMs: 120_000,
+      enabled: true,
+    },
+  });
+
+  assert.equal(res.statusCode, 403);
+});
+
 test("vlan range patch rejects inverted ranges", async () => {
   const adminToken = await bootstrapAdmin();
 
@@ -5224,6 +5399,7 @@ function resetDatabase() {
     DELETE FROM documentationPages;
     DELETE FROM documentationDeviceLinks;
     DELETE FROM ipAssignments;
+    DELETE FROM discoveryScanSchedules;
     DELETE FROM discoveredDevices;
     DELETE FROM portLinks;
     DELETE FROM ports;

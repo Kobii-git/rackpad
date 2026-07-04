@@ -23,7 +23,9 @@ import {
   asObject,
   ensureCidr,
   ensureIsoDate,
+  optionalBoolean,
   optionalEnum,
+  optionalInteger,
   optionalString,
   ValidationError,
 } from "../lib/validation.js";
@@ -68,6 +70,30 @@ type MacScanContext = {
   diagnostics: DiscoveryScanDiagnostic[];
 };
 
+export type DiscoveryScanSchedule = {
+  id: string;
+  labId: string;
+  name: string | null;
+  cidr: string;
+  intervalMs: number;
+  enabled: boolean;
+  lastRunAt: string | null;
+  lastResult: string | null;
+  lastMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DiscoveryScanResult = {
+  scannedHostCount: number;
+  discoveredCount: number;
+  macAddressCount: number;
+  vendorCount: number;
+  technicalCount: number;
+  diagnostics: DiscoveryScanDiagnostic[];
+  rows: ReturnType<typeof parseDiscoveredDevice>[];
+};
+
 function parseDiscoveredDevice(row: Record<string, unknown>) {
   return {
     id: String(row.id),
@@ -91,6 +117,30 @@ function parseDiscoveredDevice(row: Record<string, unknown>) {
     lastSeen: row.lastSeen ? String(row.lastSeen) : null,
     lastScannedAt: String(row.lastScannedAt),
   };
+}
+
+function parseDiscoveryScanSchedule(
+  row: Record<string, unknown>,
+): DiscoveryScanSchedule {
+  return {
+    id: String(row.id),
+    labId: String(row.labId),
+    name: row.name ? String(row.name) : null,
+    cidr: String(row.cidr),
+    intervalMs: Number(row.intervalMs),
+    enabled: Number(row.enabled ?? 0) === 1,
+    lastRunAt: row.lastRunAt ? String(row.lastRunAt) : null,
+    lastResult: row.lastResult ? String(row.lastResult) : null,
+    lastMessage: row.lastMessage ? String(row.lastMessage) : null,
+    createdAt: String(row.createdAt),
+    updatedAt: String(row.updatedAt),
+  };
+}
+
+function getDiscoveryScanScheduleRow(id: string) {
+  return db
+    .prepare("SELECT * FROM discoveryScanSchedules WHERE id = ?")
+    .get(id) as Record<string, unknown> | undefined;
 }
 
 function resetStaleImportedDiscoveryRows(labId?: string) {
@@ -753,6 +803,269 @@ async function scanHosts(
   return results;
 }
 
+export async function runDiscoveryScan(
+  labId: string,
+  cidr: string,
+): Promise<DiscoveryScanResult> {
+  const lab = db.prepare("SELECT id FROM labs WHERE id = ?").get(labId);
+  if (!lab) {
+    throw new ValidationError("Lab not found.", 404);
+  }
+  resetStaleImportedDiscoveryRows(labId);
+
+  const scannedAt = new Date().toISOString();
+  const hosts = cidrHosts(cidr);
+  const macScan = await collectSubnetMacAddresses(cidr);
+  const technicalAddresses = collectTechnicalAddresses(labId);
+  const reachableHosts = (await scanHosts(hosts, macScan.macByIp, labId)).map(
+    (record) => {
+      if (!record) return record;
+      const technical = technicalAddressForIp(
+        record.ipAddress,
+        technicalAddresses,
+      );
+      return {
+        ...record,
+        technicalRole: technical?.role ?? null,
+        technicalReason: technical?.reason ?? null,
+      };
+    },
+  );
+  const macAddressCount = reachableHosts.filter(
+    (record) => record?.macAddress,
+  ).length;
+  const vendorCount = reachableHosts.filter((record) => record?.vendor).length;
+  const technicalCount = reachableHosts.filter(
+    (record) => record?.technicalRole,
+  ).length;
+  const diagnostics = [...macScan.diagnostics];
+  if (reachableHosts.length > 0 && macAddressCount === 0) {
+    diagnostics.push(macUnavailableDiagnostic(reachableHosts.length));
+  }
+
+  const upsert = db.prepare(`
+    INSERT INTO discoveredDevices
+      (id, labId, ipAddress, hostname, displayName, deviceType, placement, placementHint, macAddress, vendor, source, status, notes, importedDeviceId, technicalRole, technicalReason, lastSeen, lastScannedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(labId, ipAddress) DO UPDATE SET
+      hostname = CASE
+        WHEN discoveredDevices.importedDeviceId IS NOT NULL
+          THEN discoveredDevices.hostname
+        ELSE COALESCE(excluded.hostname, discoveredDevices.hostname)
+      END,
+      displayName = CASE
+        WHEN discoveredDevices.importedDeviceId IS NOT NULL
+          THEN discoveredDevices.displayName
+        ELSE COALESCE(discoveredDevices.displayName, excluded.displayName)
+      END,
+      deviceType = CASE
+        WHEN discoveredDevices.importedDeviceId IS NOT NULL
+          THEN discoveredDevices.deviceType
+        ELSE COALESCE(discoveredDevices.deviceType, excluded.deviceType)
+      END,
+      placement = CASE
+        WHEN discoveredDevices.importedDeviceId IS NOT NULL
+          THEN discoveredDevices.placement
+        ELSE COALESCE(discoveredDevices.placement, excluded.placement)
+      END,
+      placementHint = CASE
+        WHEN discoveredDevices.importedDeviceId IS NOT NULL
+          THEN discoveredDevices.placementHint
+        ELSE COALESCE(discoveredDevices.placementHint, excluded.placementHint)
+      END,
+      macAddress = CASE
+        WHEN discoveredDevices.importedDeviceId IS NOT NULL
+          THEN discoveredDevices.macAddress
+        ELSE COALESCE(discoveredDevices.macAddress, excluded.macAddress)
+      END,
+      vendor = CASE
+        WHEN discoveredDevices.importedDeviceId IS NOT NULL
+          THEN discoveredDevices.vendor
+        ELSE COALESCE(discoveredDevices.vendor, excluded.vendor)
+      END,
+      technicalRole = excluded.technicalRole,
+      technicalReason = excluded.technicalReason,
+      importedDeviceId = CASE
+        WHEN excluded.technicalRole IS NOT NULL
+          THEN NULL
+        ELSE discoveredDevices.importedDeviceId
+      END,
+      status = CASE
+        WHEN excluded.technicalRole IS NOT NULL
+          THEN 'dismissed'
+        ELSE discoveredDevices.status
+      END,
+      source = excluded.source,
+      lastSeen = excluded.lastSeen,
+      lastScannedAt = excluded.lastScannedAt
+  `);
+
+  const persistScan = db.transaction(() => {
+    for (const record of reachableHosts) {
+      if (!record) continue;
+      upsert.run(
+        createId("disc"),
+        labId,
+        record.ipAddress,
+        record.hostname,
+        record.displayName,
+        record.deviceType,
+        record.placement,
+        record.placementHint,
+        record.macAddress,
+        record.vendor,
+        record.source,
+        record.technicalRole ? "dismissed" : "new",
+        null,
+        null,
+        record.technicalRole,
+        record.technicalReason,
+        record.lastSeen,
+        scannedAt,
+      );
+    }
+  });
+
+  persistScan();
+
+  const rows = db
+    .prepare(
+      `
+    SELECT * FROM discoveredDevices
+    WHERE labId = ? AND lastScannedAt = ?
+    ORDER BY ipAddress ASC
+  `,
+    )
+    .all(labId, scannedAt) as Record<string, unknown>[];
+
+  return {
+    scannedHostCount: hosts.length,
+    discoveredCount: rows.length,
+    macAddressCount,
+    vendorCount,
+    technicalCount,
+    diagnostics,
+    rows: rows.map(parseDiscoveredDevice),
+  };
+}
+
+const runningScheduleIds = new Set<string>();
+let discoveryScheduleIntervalHandle: NodeJS.Timeout | null = null;
+
+function validateScheduleCidr(cidr: string) {
+  cidrHosts(cidr);
+  return cidr;
+}
+
+function formatScheduleMessage(result: DiscoveryScanResult) {
+  const warningCount = result.diagnostics.filter(
+    (entry) => entry.severity === "warning",
+  ).length;
+  const warningSuffix =
+    warningCount > 0 ? ` ${warningCount} warning(s).` : "";
+  return `Checked ${result.scannedHostCount} hosts; found ${result.discoveredCount} reachable.${warningSuffix}`;
+}
+
+export async function runDiscoveryScanSchedule(
+  id: string,
+  options: { force?: boolean } = {},
+) {
+  const row = getDiscoveryScanScheduleRow(id);
+  if (!row) {
+    throw new ValidationError("Discovery scan schedule not found.", 404);
+  }
+  const schedule = parseDiscoveryScanSchedule(row);
+  if (!schedule.enabled && !options.force) {
+    return { schedule, scan: null };
+  }
+  if (runningScheduleIds.has(id)) {
+    throw new ValidationError("Discovery scan schedule is already running.", 409);
+  }
+
+  runningScheduleIds.add(id);
+  try {
+    const scan = await runDiscoveryScan(schedule.labId, schedule.cidr);
+    const finishedAt = new Date().toISOString();
+    const message = formatScheduleMessage(scan);
+    db.prepare(
+      `
+      UPDATE discoveryScanSchedules
+      SET lastRunAt = ?, lastResult = ?, lastMessage = ?, updatedAt = ?
+      WHERE id = ?
+    `,
+    ).run(finishedAt, "success", message, finishedAt, id);
+    return {
+      schedule: parseDiscoveryScanSchedule(getDiscoveryScanScheduleRow(id)!),
+      scan,
+    };
+  } catch (err) {
+    const finishedAt = new Date().toISOString();
+    const message =
+      err instanceof Error ? err.message : "Scheduled discovery scan failed.";
+    db.prepare(
+      `
+      UPDATE discoveryScanSchedules
+      SET lastRunAt = ?, lastResult = ?, lastMessage = ?, updatedAt = ?
+      WHERE id = ?
+    `,
+    ).run(finishedAt, "error", message, finishedAt, id);
+    throw err;
+  } finally {
+    runningScheduleIds.delete(id);
+  }
+}
+
+export async function runDueDiscoveryScanSchedules() {
+  const rows = db
+    .prepare(
+      `
+      SELECT * FROM discoveryScanSchedules
+      WHERE enabled = 1
+      ORDER BY lastRunAt IS NOT NULL, lastRunAt, cidr
+    `,
+    )
+    .all() as Record<string, unknown>[];
+  const now = Date.now();
+  for (const row of rows) {
+    const schedule = parseDiscoveryScanSchedule(row);
+    if (runningScheduleIds.has(schedule.id)) continue;
+    if (
+      schedule.lastRunAt &&
+      now - Date.parse(schedule.lastRunAt) < schedule.intervalMs
+    ) {
+      continue;
+    }
+    try {
+      await runDiscoveryScanSchedule(schedule.id);
+    } catch (err) {
+      // Persisted on the schedule; keep the loop alive for other schedules.
+      console.warn(
+        `[rackpad] Scheduled discovery scan failed for ${schedule.cidr}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+}
+
+export function startDiscoveryScanScheduleLoop(pollIntervalMs: number) {
+  if (pollIntervalMs <= 0) return () => {};
+  if (discoveryScheduleIntervalHandle) {
+    clearInterval(discoveryScheduleIntervalHandle);
+  }
+
+  discoveryScheduleIntervalHandle = setInterval(() => {
+    void runDueDiscoveryScanSchedules();
+  }, pollIntervalMs);
+  discoveryScheduleIntervalHandle.unref?.();
+
+  return () => {
+    if (discoveryScheduleIntervalHandle) {
+      clearInterval(discoveryScheduleIntervalHandle);
+    }
+    discoveryScheduleIntervalHandle = null;
+  };
+}
+
 export const discoveryRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { labId?: string; status?: string } }>(
     "/",
@@ -785,6 +1098,177 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
+  app.get<{ Querystring: { labId?: string } }>("/schedules", async (req, reply) => {
+    if (!req.authUser) {
+      return reply.status(401).send({ error: "Authentication required." });
+    }
+    const filter = resolveLabIdsForList(
+      req.authUser,
+      req.labAccess ?? [],
+      req.query.labId,
+    );
+    if (!filter.ok) {
+      return reply.status(filter.status).send({ error: filter.error });
+    }
+    const filtered = appendLabFilter(
+      "SELECT * FROM discoveryScanSchedules WHERE 1=1",
+      [],
+      filter.labIds,
+    );
+    const rows = db
+      .prepare(`${filtered.sql} ORDER BY cidr, name, id`)
+      .all(...filtered.params) as Record<string, unknown>[];
+    return rows.map(parseDiscoveryScanSchedule);
+  });
+
+  app.post("/schedules", async (req, reply) => {
+    const body = asObject(req.body);
+    const labId = optionalString(body, "labId", { maxLength: 80 });
+    const name = optionalString(body, "name", { maxLength: 120 });
+    const cidr = optionalString(body, "cidr", { maxLength: 80 });
+    const intervalMs =
+      optionalInteger(body, "intervalMs", { min: 60_000, max: 86_400_000 }) ??
+      3_600_000;
+    const enabledInput = optionalBoolean(body, "enabled");
+    const enabled = enabledInput ?? true;
+
+    if (!labId) throw new ValidationError("labId is required.");
+    if (!assertLabWrite(req, reply, labId)) return;
+    if (!cidr) throw new ValidationError("cidr is required.");
+    if (enabledInput == null && "enabled" in body) {
+      throw new ValidationError("enabled must be true or false.");
+    }
+
+    validateScheduleCidr(cidr);
+    const lab = db.prepare("SELECT id FROM labs WHERE id = ?").get(labId);
+    if (!lab) {
+      return reply.status(404).send({ error: "Lab not found." });
+    }
+    const existing = db
+      .prepare(
+        "SELECT id FROM discoveryScanSchedules WHERE labId = ? AND cidr = ?",
+      )
+      .get(labId, cidr);
+    if (existing) {
+      throw new ValidationError(
+        "A discovery schedule already exists for this CIDR in this lab.",
+        409,
+      );
+    }
+
+    const now = new Date().toISOString();
+    const id = createId("dss");
+    db.prepare(
+      `
+      INSERT INTO discoveryScanSchedules
+        (id, labId, name, cidr, intervalMs, enabled, lastRunAt, lastResult, lastMessage, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
+    `,
+    ).run(id, labId, name ?? null, cidr, intervalMs, enabled ? 1 : 0, now, now);
+
+    return reply
+      .status(201)
+      .send(parseDiscoveryScanSchedule(getDiscoveryScanScheduleRow(id)!));
+  });
+
+  app.patch<{ Params: { id: string } }>(
+    "/schedules/:id",
+    async (req, reply) => {
+      const existing = getDiscoveryScanScheduleRow(req.params.id);
+      if (!assertLabWriteFromRow(req, reply, existing)) return;
+      const current = parseDiscoveryScanSchedule(existing!);
+      const body = asObject(req.body);
+      const updates: string[] = [];
+      const values: unknown[] = [];
+
+      const name = optionalString(body, "name", { maxLength: 120 });
+      const cidr = optionalString(body, "cidr", { maxLength: 80 });
+      const intervalMs = optionalInteger(body, "intervalMs", {
+        min: 60_000,
+        max: 86_400_000,
+      });
+      const enabled = optionalBoolean(body, "enabled");
+
+      if (name !== undefined) {
+        updates.push("name = ?");
+        values.push(name);
+      }
+      if (cidr !== undefined) {
+        if (!cidr) throw new ValidationError("cidr is required.");
+        validateScheduleCidr(cidr);
+        const duplicate = db
+          .prepare(
+            `
+            SELECT id FROM discoveryScanSchedules
+            WHERE labId = ? AND cidr = ? AND id != ?
+          `,
+          )
+          .get(current.labId, cidr, current.id);
+        if (duplicate) {
+          throw new ValidationError(
+            "A discovery schedule already exists for this CIDR in this lab.",
+            409,
+          );
+        }
+        updates.push("cidr = ?");
+        values.push(cidr);
+      }
+      if (intervalMs !== undefined) {
+        if (intervalMs == null) {
+          throw new ValidationError("intervalMs is required.");
+        }
+        updates.push("intervalMs = ?");
+        values.push(intervalMs);
+      }
+      if (enabled !== undefined) {
+        if (enabled == null) {
+          throw new ValidationError("enabled must be true or false.");
+        }
+        updates.push("enabled = ?");
+        values.push(enabled ? 1 : 0);
+      }
+      if (updates.length === 0) {
+        return reply.status(400).send({ error: "No valid fields to update." });
+      }
+
+      const now = new Date().toISOString();
+      updates.push("updatedAt = ?");
+      values.push(now, req.params.id);
+      db.prepare(
+        `UPDATE discoveryScanSchedules SET ${updates.join(", ")} WHERE id = ?`,
+      ).run(...values);
+      return parseDiscoveryScanSchedule(getDiscoveryScanScheduleRow(req.params.id)!);
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/schedules/:id/run",
+    async (req, reply) => {
+      const existing = getDiscoveryScanScheduleRow(req.params.id);
+      if (!assertLabWriteFromRow(req, reply, existing)) return;
+      try {
+        return await runDiscoveryScanSchedule(req.params.id, { force: true });
+      } catch (err) {
+        if (err instanceof ValidationError && err.statusCode === 409) {
+          return reply.status(409).send({ error: err.message });
+        }
+        throw err;
+      }
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    "/schedules/:id",
+    async (req, reply) => {
+      const existing = getDiscoveryScanScheduleRow(req.params.id);
+      if (!assertLabWriteFromRow(req, reply, existing)) return;
+      db.prepare("DELETE FROM discoveryScanSchedules WHERE id = ?").run(
+        req.params.id,
+      );
+      return reply.status(204).send();
+    },
+  );
+
   app.post("/scan", async (req, reply) => {
     const body = asObject(req.body);
     const labId = optionalString(body, "labId", { maxLength: 80 });
@@ -798,148 +1282,7 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
       throw new ValidationError("cidr is required.");
     }
 
-    const lab = db.prepare("SELECT id FROM labs WHERE id = ?").get(labId);
-    if (!lab) {
-      return reply.status(404).send({ error: "Lab not found." });
-    }
-    resetStaleImportedDiscoveryRows(labId);
-
-    const scannedAt = new Date().toISOString();
-    const hosts = cidrHosts(cidr);
-    const macScan = await collectSubnetMacAddresses(cidr);
-    const technicalAddresses = collectTechnicalAddresses(labId);
-    const reachableHosts = (await scanHosts(hosts, macScan.macByIp, labId)).map(
-      (record) => {
-        if (!record) return record;
-        const technical = technicalAddressForIp(
-          record.ipAddress,
-          technicalAddresses,
-        );
-        return {
-          ...record,
-          technicalRole: technical?.role ?? null,
-          technicalReason: technical?.reason ?? null,
-        };
-      },
-    );
-    const macAddressCount = reachableHosts.filter(
-      (record) => record?.macAddress,
-    ).length;
-    const vendorCount = reachableHosts.filter(
-      (record) => record?.vendor,
-    ).length;
-    const technicalCount = reachableHosts.filter(
-      (record) => record?.technicalRole,
-    ).length;
-    const diagnostics = [...macScan.diagnostics];
-    if (reachableHosts.length > 0 && macAddressCount === 0) {
-      diagnostics.push(macUnavailableDiagnostic(reachableHosts.length));
-    }
-
-    const upsert = db.prepare(`
-      INSERT INTO discoveredDevices
-        (id, labId, ipAddress, hostname, displayName, deviceType, placement, placementHint, macAddress, vendor, source, status, notes, importedDeviceId, technicalRole, technicalReason, lastSeen, lastScannedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(labId, ipAddress) DO UPDATE SET
-        hostname = CASE
-          WHEN discoveredDevices.importedDeviceId IS NOT NULL
-            THEN discoveredDevices.hostname
-          ELSE COALESCE(excluded.hostname, discoveredDevices.hostname)
-        END,
-        displayName = CASE
-          WHEN discoveredDevices.importedDeviceId IS NOT NULL
-            THEN discoveredDevices.displayName
-          ELSE COALESCE(discoveredDevices.displayName, excluded.displayName)
-        END,
-        deviceType = CASE
-          WHEN discoveredDevices.importedDeviceId IS NOT NULL
-            THEN discoveredDevices.deviceType
-          ELSE COALESCE(discoveredDevices.deviceType, excluded.deviceType)
-        END,
-        placement = CASE
-          WHEN discoveredDevices.importedDeviceId IS NOT NULL
-            THEN discoveredDevices.placement
-          ELSE COALESCE(discoveredDevices.placement, excluded.placement)
-        END,
-        placementHint = CASE
-          WHEN discoveredDevices.importedDeviceId IS NOT NULL
-            THEN discoveredDevices.placementHint
-          ELSE COALESCE(discoveredDevices.placementHint, excluded.placementHint)
-        END,
-        macAddress = CASE
-          WHEN discoveredDevices.importedDeviceId IS NOT NULL
-            THEN discoveredDevices.macAddress
-          ELSE COALESCE(discoveredDevices.macAddress, excluded.macAddress)
-        END,
-        vendor = CASE
-          WHEN discoveredDevices.importedDeviceId IS NOT NULL
-            THEN discoveredDevices.vendor
-          ELSE COALESCE(discoveredDevices.vendor, excluded.vendor)
-        END,
-        technicalRole = excluded.technicalRole,
-        technicalReason = excluded.technicalReason,
-        importedDeviceId = CASE
-          WHEN excluded.technicalRole IS NOT NULL
-            THEN NULL
-          ELSE discoveredDevices.importedDeviceId
-        END,
-        status = CASE
-          WHEN excluded.technicalRole IS NOT NULL
-            THEN 'dismissed'
-          ELSE discoveredDevices.status
-        END,
-        source = excluded.source,
-        lastSeen = excluded.lastSeen,
-        lastScannedAt = excluded.lastScannedAt
-    `);
-
-    const persistScan = db.transaction(() => {
-      for (const record of reachableHosts) {
-        if (!record) continue;
-        upsert.run(
-          createId("disc"),
-          labId,
-          record.ipAddress,
-          record.hostname,
-          record.displayName,
-          record.deviceType,
-          record.placement,
-          record.placementHint,
-          record.macAddress,
-          record.vendor,
-          record.source,
-          record.technicalRole ? "dismissed" : "new",
-          null,
-          null,
-          record.technicalRole,
-          record.technicalReason,
-          record.lastSeen,
-          scannedAt,
-        );
-      }
-    });
-
-    persistScan();
-
-    const rows = db
-      .prepare(
-        `
-      SELECT * FROM discoveredDevices
-      WHERE labId = ? AND lastScannedAt = ?
-      ORDER BY ipAddress ASC
-    `,
-      )
-      .all(labId, scannedAt) as Record<string, unknown>[];
-
-    return {
-      scannedHostCount: hosts.length,
-      discoveredCount: rows.length,
-      macAddressCount,
-      vendorCount,
-      technicalCount,
-      diagnostics,
-      rows: rows.map(parseDiscoveredDevice),
-    };
+    return runDiscoveryScan(labId, cidr);
   });
 
   app.patch<{ Params: { id: string } }>("/:id", async (req, reply) => {

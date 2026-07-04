@@ -136,6 +136,11 @@ const exportBackupSnapshot = db.transaction(
             "SELECT * FROM discoveredDevices ORDER BY lastScannedAt DESC, ipAddress, id",
           )
           .all(),
+        discoveryScanSchedules: db
+          .prepare(
+            "SELECT * FROM discoveryScanSchedules ORDER BY labId, cidr, id",
+          )
+          .all(),
         documentationPages: db
           .prepare(
             "SELECT * FROM documentationPages ORDER BY labId, updatedAt DESC, title, id",
@@ -296,6 +301,10 @@ const restoreBackupSnapshot = db.transaction(
       data.discoveredDevices ?? [],
       "data.discoveredDevices",
     );
+    const discoveryScanSchedules = normalizeArrayRecordArray(
+      data.discoveryScanSchedules ?? [],
+      "data.discoveryScanSchedules",
+    );
     const documentationPages = normalizeArrayRecordArray(
       data.documentationPages ?? [],
       "data.documentationPages",
@@ -404,6 +413,7 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM documentationDeviceLinks;
     DELETE FROM documentationPages;
     DELETE FROM ipAssignments;
+    DELETE FROM discoveryScanSchedules;
     DELETE FROM discoveredDevices;
     DELETE FROM portLinks;
     DELETE FROM ports;
@@ -478,6 +488,11 @@ const restoreBackupSnapshot = db.transaction(
     INSERT INTO discoveredDevices
       (id, labId, ipAddress, hostname, displayName, deviceType, placement, macAddress, vendor, source, status, notes, importedDeviceId, lastSeen, lastScannedAt, technicalRole, technicalReason)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertDiscoveryScanSchedule = db.prepare(`
+    INSERT INTO discoveryScanSchedules
+      (id, labId, name, cidr, intervalMs, enabled, lastRunAt, lastResult, lastMessage, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDocumentationPage = db.prepare(`
     INSERT INTO documentationPages (id, labId, title, content, createdAt, updatedAt)
@@ -910,6 +925,22 @@ const restoreBackupSnapshot = db.transaction(
         row.technicalReason ?? null,
       );
     }
+    for (const row of discoveryScanSchedules) {
+      const now = new Date().toISOString();
+      insertDiscoveryScanSchedule.run(
+        row.id,
+        row.labId,
+        row.name ?? null,
+        row.cidr,
+        row.intervalMs ?? 3_600_000,
+        row.enabled === false || row.enabled === 0 ? 0 : 1,
+        row.lastRunAt ?? null,
+        row.lastResult ?? null,
+        row.lastMessage ?? null,
+        row.createdAt ?? now,
+        row.updatedAt ?? row.createdAt ?? now,
+      );
+    }
     for (const row of documentationPages) {
       const now = new Date().toISOString();
       insertDocumentationPage.run(
@@ -1109,6 +1140,7 @@ const restoreBackupSnapshot = db.transaction(
         devices: devices.length,
         virtualSwitches: virtualSwitches.length,
         discoveredDevices: discoveredDevices.length,
+        discoveryScanSchedules: discoveryScanSchedules.length,
         documentationPages: documentationPages.length,
         documentationDeviceLinks: documentationDeviceLinks.length,
         deviceImages: deviceImages.length,

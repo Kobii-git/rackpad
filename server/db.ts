@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 28;
+const CURRENT_SCHEMA_VERSION = 29;
 
 export const db = new Database(DB_PATH);
 
@@ -878,6 +878,31 @@ const SCHEMA_MIGRATIONS = [
     sql: `
       ALTER TABLE subnets ADD COLUMN gateway TEXT;
       ALTER TABLE subnets ADD COLUMN dnsServers TEXT;
+    `,
+  },
+  {
+    version: 29,
+    sql: `
+      CREATE TABLE IF NOT EXISTS discoveryScanSchedules (
+        id              TEXT PRIMARY KEY,
+        labId           TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        name            TEXT,
+        cidr            TEXT NOT NULL,
+        intervalMs      INTEGER NOT NULL,
+        enabled         INTEGER NOT NULL DEFAULT 1,
+        lastRunAt       TEXT,
+        lastResult      TEXT,
+        lastMessage     TEXT,
+        createdAt       TEXT NOT NULL,
+        updatedAt       TEXT NOT NULL,
+        UNIQUE(labId, cidr)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_discovery_scan_schedules_lab_id
+        ON discoveryScanSchedules (labId);
+
+      CREATE INDEX IF NOT EXISTS idx_discovery_scan_schedules_enabled
+        ON discoveryScanSchedules (enabled, lastRunAt);
     `,
   },
 ] as const;
