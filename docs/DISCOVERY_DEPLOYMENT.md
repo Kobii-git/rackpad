@@ -4,6 +4,10 @@ Rackpad discovery uses ICMP reachability plus optional layer-2 MAC collection
 (ARP/neighbor tables, `arp-scan`, or `nmap`). Bridge-networked containers often
 **cannot see client MAC addresses** on routed or host-only VLANs.
 
+For the Discovery workflow itself, including manual scans, scheduled scans,
+review-first inbox behavior, and current `/24` scan limits, see the
+[Discovery guide](./DISCOVERY.md).
+
 ## When to use host networking
 
 Use the host-network compose override (or equivalent) when:
@@ -43,5 +47,7 @@ networking, Docker Desktop, VPNs, and missing capabilities.
 
 ## Related docs
 
+- [Discovery guide](./DISCOVERY.md) — manual and scheduled scans
+- [Docker network discovery](./DOCKER_DISCOVERY.md) — host networking compose
 - [SNMP implementation plan](./SNMP_IMPLEMENTATION_PLAN.md) — polling/traps scope
 - Main [README](../README.md) — general install

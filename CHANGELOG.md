@@ -8,6 +8,22 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.9-beta.1] - 2026-07-04
+
+### Changed
+
+- Added a Networks/IPAM guide for simple tagged and untagged homelab network
+  setup, DHCP scopes, DHCP reservations, IP zones, and optional VLAN ranges.
+- Added a Discovery guide covering manual scans, scheduled scans, review-first
+  inbox behavior, `/24` scan limits, Docker/LXC MAC visibility, and backup
+  restore expectations.
+
+### Test notes
+
+- Verify the README links open the new Networks/IPAM and Discovery guides.
+- Verify scheduled discovery scans can still be created, run, paused, resumed,
+  deleted, and preserved in backup exports.
+
 ## [1.6.9-beta.0] - 2026-07-04
 
 ### Added

@@ -40,6 +40,8 @@ If `rackpad.co.za` is unavailable, the repo still contains the core material you
 - [Proxmox install notes](./docs/PROXMOX.md)
 - [Hyper-V import guide](./docs/HYPERV_IMPORT.md)
 - [Proxmox import guide](./docs/PROXMOX_IMPORT.md)
+- [Networks, VLANs, DHCP, and IPAM guide](./docs/NETWORKS_IPAM.md)
+- [Discovery guide](./docs/DISCOVERY.md)
 - [Reports guide](./docs/REPORTS.md)
 - [Visualizer guide](./docs/VISUALIZER.md)
 - [OIDC login guide](./docs/OIDC.md)
@@ -210,6 +212,8 @@ Use these when you want the workflow steps rather than just the overview:
 - [Hyper-V import](./docs/HYPERV_IMPORT.md): download the collector, collect inventory on a Hyper-V host, map or create the host record, review VMs, and import selected categories.
 - [Proxmox import](./docs/PROXMOX_IMPORT.md): download the collector, collect inventory on a Proxmox node, map or create the node record, review QEMU VMs and LXC containers, and import selected categories.
 - [Reports](./docs/REPORTS.md): generate a clean inventory report, print/save to PDF, and export CSV or Excel-compatible files.
+- [Networks/IPAM](./docs/NETWORKS_IPAM.md): create tagged or untagged networks, document DHCP scopes, zones, reservations, and VLAN planning ranges.
+- [Discovery](./docs/DISCOVERY.md): run manual or scheduled scans, keep results review-first, and understand Docker/LXC visibility limits.
 - [Visualizer](./docs/VISUALIZER.md): inspect rack, loose-room, port, and cable relationships from existing Rackpad data.
 - [OIDC login](./docs/OIDC.md): configure Authentik or another IdP, map roles, and debug issuer/discovery URL problems.
 - [Documentation and images](./docs/DOCUMENTATION.md): create Markdown runbooks, insert pictures, attach device reference images, and include them in backups.
