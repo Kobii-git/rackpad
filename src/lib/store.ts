@@ -69,6 +69,7 @@ import type {
   WifiSsidPatch,
 } from "./api";
 import { mergeDeviceTypeDefinitions } from "./device-types";
+import { buildManagementAssignmentPatch } from "./management-assignment-sync";
 import {
   cidrBounds,
   cidrContainsIp,
@@ -797,9 +798,18 @@ async function syncDeviceManagementAssignment(
   };
 
   if (existingAssignment) {
+    const patch = buildManagementAssignmentPatch({
+      existingAssignment,
+      device,
+      subnetId: validated.subnet.id,
+      ipAddress: validated.ipAddress,
+      allocationMode: options.allocationMode,
+      dhcpScopeId: options.dhcpScopeId,
+    });
+    if (!patch) return {};
     const updated = await api.updateIpAssignment(
       existingAssignment.id,
-      payload,
+      patch,
     );
     return { upserted: updated };
   }

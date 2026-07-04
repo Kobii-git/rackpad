@@ -1884,6 +1884,9 @@ function VisualizerSidePanel({
           onClearTrace={onClearTrace}
         />
       )}
+      {traceMode.enabled && traceResult && (
+        <TraceSummary model={model} result={traceResult} />
+      )}
 
       <Card className="shrink-0">
         <CardHeader>
@@ -1918,7 +1921,6 @@ function VisualizerSidePanel({
           selection={selection}
           selectedCable={selectedCable}
           selectedNode={selectedNode}
-          traceResult={traceResult}
           onSelectDevice={onSelectDevice}
           onSelectCable={onSelectCable}
         />
@@ -2040,7 +2042,6 @@ function Inspector({
   selection,
   selectedCable,
   selectedNode,
-  traceResult,
   onSelectDevice,
   onSelectCable,
 }: {
@@ -2048,7 +2049,6 @@ function Inspector({
   selection: VisualizerSelection;
   selectedCable: VisualizerCable | null;
   selectedNode: VisualizerNode | null;
-  traceResult: TraceResult | null;
   onSelectDevice: (id: string) => void;
   onSelectCable: (id: string) => void;
 }) {
@@ -2080,7 +2080,7 @@ function Inspector({
           )}
         </CardHeader>
         <CardBody className="space-y-4">
-          {!selection && !traceResult && (
+          {!selection && (
             <EmptyState
               icon={Network}
               title={t("No item selected")}
@@ -2102,7 +2102,6 @@ function Inspector({
               onSelectDevice={onSelectDevice}
             />
           )}
-          {traceResult && <TraceSummary model={model} result={traceResult} />}
         </CardBody>
       </Card>
 
@@ -2284,24 +2283,33 @@ function TraceSummary({
 }) {
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--accent-primary-border)] bg-[var(--accent-primary-soft)] p-3">
-      <div className="rk-kicker">Trace summary</div>
-      <div className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
-        {result.segments.length} hops | {result.totalCableLengthLabel}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="rk-kicker">Trace hops</div>
+          <div className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
+            {result.segments.length} hops | {result.totalCableLengthLabel}
+          </div>
+        </div>
       </div>
       <div className="mt-3 space-y-2">
         {result.segments.map((segment, index) => {
           const fromDevice = model.deviceById[segment.fromPort.deviceId];
           const toDevice = model.deviceById[segment.toPort.deviceId];
+          const isLastHop = index === result.segments.length - 1;
           return (
             <div
               key={index}
-              className="rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.18)] px-2 py-1.5 text-xs"
+              className="rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.18)] px-2.5 py-2 text-xs"
             >
-              <div className="text-[var(--text-primary)]">
-                {fromDevice?.hostname ?? "Unknown"} {segment.fromPort.name} to{" "}
-                {toDevice?.hostname ?? "Unknown"} {segment.toPort.name}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 text-[var(--text-primary)]">
+                  <span className="font-semibold">#{index + 1}</span>{" "}
+                  {fromDevice?.hostname ?? "Unknown"} {segment.fromPort.name} to{" "}
+                  {toDevice?.hostname ?? "Unknown"} {segment.toPort.name}
+                </div>
+                {isLastHop && <Badge tone="accent">Last hop</Badge>}
               </div>
-              <Mono className="text-[10px] text-[var(--text-tertiary)]">
+              <Mono className="mt-1 block text-[10px] text-[var(--text-tertiary)]">
                 {segment.kind}
                 {segment.length ? ` | ${segment.length}` : ""}
               </Mono>

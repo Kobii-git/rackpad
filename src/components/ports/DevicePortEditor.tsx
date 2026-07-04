@@ -477,9 +477,7 @@ export function DevicePortEditor({
                     <option value="">{t("Add tagged VLAN...")}</option>
                     {vlans
                       .filter(
-                        (vlan) =>
-                          vlan.id !== form.vlanId &&
-                          !form.allowedVlanIds.includes(vlan.id),
+                        (vlan) => !form.allowedVlanIds.includes(vlan.id),
                       )
                       .map((vlan) => (
                         <option key={vlan.id} value={vlan.id}>

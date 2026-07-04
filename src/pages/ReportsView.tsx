@@ -27,6 +27,7 @@ import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { Mono } from "@/components/shared/Mono";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { useStore } from "@/lib/store";
+import { summarizeNetworkCapacity } from "@/lib/report-capacity";
 import type {
   Device,
   DeviceMonitor,
@@ -48,7 +49,6 @@ import {
   cidrSize,
   formatBandwidthMbps,
   formatPortEndpointLabel,
-  parsePortSpeedMbps,
   relativeTime,
   statusLabel,
 } from "@/lib/utils";
@@ -106,15 +106,9 @@ export default function ReportsView() {
     const linkedPorts = ports.filter(
       (port) => port.linkState === "up" || linksByPortId.has(port.id),
     ).length;
-    const capacityMbps = ports.reduce(
-      (sum, port) => sum + (parsePortSpeedMbps(port.speed) ?? 0),
-      0,
-    );
-    const linkedCapacityMbps = ports.reduce(
-      (sum, port) =>
-        sum +
-        (port.linkState === "up" ? (parsePortSpeedMbps(port.speed) ?? 0) : 0),
-      0,
+    const { capacityMbps, linkedCapacityMbps } = summarizeNetworkCapacity(
+      ports,
+      devices,
     );
     const usableIpCount = subnets.reduce(
       (sum, subnet) => sum + Math.max(0, cidrSize(subnet.cidr) - 2),

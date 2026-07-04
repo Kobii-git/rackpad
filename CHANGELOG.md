@@ -8,6 +8,42 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.8-beta.0] - 2026-07-04
+
+### Fixed
+
+- Fixed device edits being blocked by unchanged management IP assignments whose
+  existing DHCP/static metadata would fail strict validation if resubmitted.
+- Allowed trunk ports to use the native VLAN as an allowed/tagged VLAN in both
+  port editors while preserving same-lab VLAN validation.
+- Counted passive patch panel front/rear pass-through pairs once in report
+  capacity totals instead of double-counting front and rear terminations.
+- Surfaced the Visualizer trace hop list beside the trace picker with numbered
+  rows, segment details, and a final-hop marker.
+
+### Changed
+
+- Released Rackpad `1.6.8-beta.0` as a focused fault-fix beta for device/IP
+  sync, trunk VLAN editing, patch panel capacity reporting, and trace hop
+  visibility.
+- Kept production server builds focused on runtime code by excluding
+  `server/tests` from `tsconfig.server.json`; server tests still run through
+  `npm run test:server`.
+
+### Test notes
+
+- Verify editing a device's placement, room, or wireless attachment no longer
+  trips DHCP/static management IP validation when the management IP settings are
+  unchanged.
+- Verify a trunk port can use the same VLAN as native and tagged/allowed, and
+  that cross-lab VLAN choices are still rejected.
+- Verify Reports capacity shows a 24-port front/rear patch panel as 24 Gbps
+  instead of 48 Gbps, and linked passive pairs count once.
+- Verify Visualizer trace mode shows the numbered hop list beside the trace
+  picker, with a `Last hop` marker on the final row.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, and `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.7-beta.0] - 2026-06-28
 
 ### Added

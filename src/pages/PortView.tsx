@@ -1508,7 +1508,6 @@ export default function PortView() {
                                 {vlans
                                   .filter(
                                     (vlan) =>
-                                      vlan.id !== form.vlanId &&
                                       !form.allowedVlanIds.includes(vlan.id),
                                   )
                                   .map((vlan) => (

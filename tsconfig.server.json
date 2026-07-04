@@ -13,5 +13,5 @@
     "sourceMap": true
   },
   "include": ["server/**/*"],
-  "exclude": ["node_modules", "dist", "dist-server", "src"]
+  "exclude": ["node_modules", "dist", "dist-server", "src", "server/tests"]
 }

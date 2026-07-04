@@ -4573,14 +4573,17 @@ test("subnets and ports reject cross-lab VLAN links", async () => {
       name: "Gi0/12",
       kind: "rj45",
       mode: "trunk",
+      vlanId: homeVlan.id,
       allowedVlanIds: [homeVlan.id],
     },
   });
   assert.equal(trunkPortRes.statusCode, 201);
   const trunkPort = readJson(trunkPortRes) as {
     id: string;
+    vlanId: string;
     allowedVlanIds: string[];
   };
+  assert.equal(trunkPort.vlanId, homeVlan.id);
   assert.deepEqual(trunkPort.allowedVlanIds, [homeVlan.id]);
 
   const missingTrunkVlanRes = await app.inject({
