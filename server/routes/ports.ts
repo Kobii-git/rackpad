@@ -107,11 +107,13 @@ function ensureAllowedVlanIdsBelongToLab(labId: string, vlanIds: string[] | null
 
 function getPortLabRow(portId: string) {
   return db.prepare(`
-    SELECT ports.id, devices.labId, ports.portRole
+    SELECT ports.id, devices.labId, ports.portRole, ports.aggregatePortId
     FROM ports
     JOIN devices ON devices.id = ports.deviceId
     WHERE ports.id = ?
-  `).get(portId) as { id: string; labId: string; portRole: string | null } | undefined
+  `).get(portId) as
+    | { id: string; labId: string; portRole: string | null; aggregatePortId: string | null }
+    | undefined
 }
 
 export const portsRoutes: FastifyPluginAsync = async (app) => {
@@ -371,12 +373,10 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     if (!assertLabWriteFromRow(req, reply, port)) return
 
     if (port?.portRole === 'aggregate') {
-      const linked = db.prepare(
-        'SELECT id FROM portLinks WHERE fromPortId = ? OR toPortId = ? LIMIT 1'
-      ).get(req.params.id, req.params.id)
-      if (linked) {
-        return reply.status(409).send({ error: 'Remove the linked cable before deleting this aggregate.' })
-      }
+      return reply.status(409).send({ error: 'Use the aggregate delete flow to remove this bond.' })
+    }
+    if (port?.aggregatePortId) {
+      return reply.status(409).send({ error: 'Remove or delete the bond before deleting member ports.' })
     }
 
     const peers = db.prepare(`

@@ -3752,6 +3752,26 @@ test("port aggregates use a cabled aggregate endpoint and block member cabling",
     [createdAggregate.aggregate.id, createdAggregate.aggregate.id],
   );
 
+  const genericMemberDeleteRes = await app.inject({
+    method: "DELETE",
+    url: `/api/ports/${sw1.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(genericMemberDeleteRes.statusCode, 409);
+  assert.match(genericMemberDeleteRes.body, /member/i);
+
+  const genericAggregateDeleteRes = await app.inject({
+    method: "DELETE",
+    url: `/api/ports/${createdAggregate.aggregate.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(genericAggregateDeleteRes.statusCode, 409);
+  assert.match(genericAggregateDeleteRes.body, /aggregate delete flow/i);
+
   const memberCableRes = await app.inject({
     method: "POST",
     url: "/api/port-links",

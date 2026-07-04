@@ -8,6 +8,22 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.0-beta.3] - 2026-07-04
+
+### Fixed
+
+- Blocked generic port deletion for bond aggregate ports and bond member ports;
+  aggregate removal must use the aggregate delete flow.
+- Hid the generic delete action for bond aggregate/member ports in the device
+  detail port editor.
+- Updated the visualizer route test helper to use a valid Rackpad port kind.
+
+### Test notes
+
+- Verify bond member ports cannot be deleted directly from generic port APIs or
+  device detail, and that uncabled aggregate ports can still be deleted from
+  the Ports workspace aggregate flow.
+
 ## [1.7.0-beta.2] - 2026-07-04
 
 ### Changed

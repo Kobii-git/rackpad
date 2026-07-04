@@ -53,7 +53,7 @@ function testPort(deviceId: string, id: string, position: number): Port {
     deviceId,
     name: `eth${position}`,
     position,
-    kind: "ethernet",
+    kind: "rj45",
     linkState: "up",
     mode: "access",
   };

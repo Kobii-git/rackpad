@@ -198,6 +198,16 @@ export function DevicePortEditor({
   const candidateVirtualSwitches = virtualSwitches.filter(
     (entry) => entry.hostDeviceId === device.id,
   );
+  const aggregatePort = port?.aggregatePortId
+    ? devicePorts.find((entry) => entry.id === port.aggregatePortId)
+    : undefined;
+  const aggregateMembers =
+    port?.portRole === "aggregate"
+      ? devicePorts.filter((entry) => entry.aggregatePortId === port.id)
+      : [];
+  const isBondPort = Boolean(
+    port?.portRole === "aggregate" || port?.aggregatePortId,
+  );
 
   useEffect(() => {
     if (creating) {
@@ -558,6 +568,38 @@ export function DevicePortEditor({
               />
             </Field>
 
+            {isBondPort ? (
+              <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-3">
+                <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
+                  {t("Port bonding")}
+                </div>
+                {port?.portRole === "aggregate" ? (
+                  <div className="space-y-2 text-xs text-[var(--color-fg-muted)]">
+                    <div>
+                      {t("{count} member ports", {
+                        count: aggregateMembers.length,
+                      })}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {aggregateMembers.map((member) => (
+                        <Badge key={member.id} tone="neutral">
+                          {formatPortLabel(member, {
+                            includeFace: member.face === "rear",
+                          })}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-[var(--color-fg-muted)]">
+                    {t("Member of {name}. Cable the aggregate port instead.", {
+                      name: aggregatePort?.name ?? t("Unknown"),
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
             <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-3">
               <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
                 {t("Link")}
@@ -590,7 +632,7 @@ export function DevicePortEditor({
             ) : null}
 
             <div className="flex items-center justify-between gap-3">
-              {!creating && port ? (
+              {!creating && port && !isBondPort ? (
                 <Button
                   variant="destructive"
                   size="sm"
