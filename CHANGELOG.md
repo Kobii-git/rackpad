@@ -8,6 +8,28 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.6.8-beta.1] - 2026-07-04
+
+### Fixed
+
+- Counted custom device types parented to Patch panel as passive patch panel
+  pass-through pairs in Reports capacity totals.
+- Localized the new Visualizer trace hop labels and last-hop marker.
+
+### Changed
+
+- Released Rackpad `1.6.8-beta.1` as a follow-up beta for the trace hop and
+  custom patch panel report fixes.
+
+### Test notes
+
+- Verify a custom patch panel device type with front/rear ports reports each
+  pass-through lane once in Reports capacity.
+- Verify Visualizer trace mode still shows the numbered hop list beside the
+  trace picker with the `Last hop` marker.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, and `bash -n scripts/collect-proxmox.sh`.
+
 ## [1.6.8-beta.0] - 2026-07-04
 
 ### Fixed

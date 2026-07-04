@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildManagementAssignmentPatch } from "../../src/lib/management-assignment-sync.ts";
 import { summarizeNetworkCapacity } from "../../src/lib/report-capacity.ts";
-import type { Device, IpAssignment, Port } from "../../src/lib/types.ts";
+import type {
+  Device,
+  DeviceTypeDefinition,
+  IpAssignment,
+  Port,
+} from "../../src/lib/types.ts";
 
 function makeDevice(overrides: Partial<Device>): Device {
   return {
@@ -116,6 +121,48 @@ test("network capacity counts passive patch panel pairs once", () => {
   }).flat();
 
   const summary = summarizeNetworkCapacity(patchPorts, [patchPanel]);
+
+  assert.equal(summary.capacityMbps, 24_000);
+  assert.equal(summary.linkedCapacityMbps, 24_000);
+});
+
+test("network capacity counts custom patch panel descendants as passive pairs", () => {
+  const deviceTypes: DeviceTypeDefinition[] = [
+    {
+      id: "keystone_patch_panel",
+      label: "Keystone patch panel",
+      builtIn: false,
+      parentType: "patch_panel",
+    },
+  ];
+  const patchPanel = makeDevice({
+    id: "custom_patch_1",
+    hostname: "keystone-panel",
+    deviceType: "keystone_patch_panel",
+  });
+  const patchPorts = Array.from({ length: 24 }, (_, index) => {
+    const position = index + 1;
+    return [
+      makePort({
+        id: `custom_patch_${position}_front`,
+        deviceId: "custom_patch_1",
+        name: `F${position}`,
+        position,
+        face: "front",
+        linkState: "up",
+      }),
+      makePort({
+        id: `custom_patch_${position}_rear`,
+        deviceId: "custom_patch_1",
+        name: `R${position}`,
+        position,
+        face: "rear",
+        linkState: "up",
+      }),
+    ];
+  }).flat();
+
+  const summary = summarizeNetworkCapacity(patchPorts, [patchPanel], deviceTypes);
 
   assert.equal(summary.capacityMbps, 24_000);
   assert.equal(summary.linkedCapacityMbps, 24_000);

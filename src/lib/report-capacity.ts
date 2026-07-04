@@ -1,4 +1,5 @@
-import type { Device, Port } from "./types";
+import { deviceTypeBase } from "./device-types";
+import type { Device, DeviceTypeDefinition, Port } from "./types";
 import { parsePortSpeedMbps } from "./utils";
 
 export interface NetworkCapacitySummary {
@@ -16,6 +17,7 @@ function highestPortSpeedMbps(ports: Port[]) {
 export function summarizeNetworkCapacity(
   ports: Port[],
   devices: Device[],
+  deviceTypes?: DeviceTypeDefinition[],
 ): NetworkCapacitySummary {
   const deviceById = new Map(devices.map((device) => [device.id, device]));
   const passivePairs = new Map<string, Port[]>();
@@ -24,7 +26,7 @@ export function summarizeNetworkCapacity(
 
   for (const port of ports) {
     const device = deviceById.get(port.deviceId);
-    if (device?.deviceType === "patch_panel") {
+    if (deviceTypeBase(device?.deviceType, deviceTypes) === "patch_panel") {
       const pairKey = `${port.deviceId}:${port.position}`;
       passivePairs.set(pairKey, [...(passivePairs.get(pairKey) ?? []), port]);
       continue;

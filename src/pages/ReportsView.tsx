@@ -67,6 +67,7 @@ export default function ReportsView() {
   const rooms = useStore((s) => s.rooms);
   const racks = useStore((s) => s.racks);
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const ports = useStore((s) => s.ports);
   const portLinks = useStore((s) => s.portLinks);
   const virtualSwitches = useStore((s) => s.virtualSwitches);
@@ -109,6 +110,7 @@ export default function ReportsView() {
     const { capacityMbps, linkedCapacityMbps } = summarizeNetworkCapacity(
       ports,
       devices,
+      deviceTypes,
     );
     const usableIpCount = subnets.reduce(
       (sum, subnet) => sum + Math.max(0, cidrSize(subnet.cidr) - 2),
@@ -164,6 +166,7 @@ export default function ReportsView() {
     };
   }, [
     deviceMonitors,
+    deviceTypes,
     devices,
     portLinks,
     ports,

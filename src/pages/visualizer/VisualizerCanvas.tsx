@@ -2281,13 +2281,15 @@ function TraceSummary({
   model: VisualizerModel;
   result: TraceResult;
 }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--accent-primary-border)] bg-[var(--accent-primary-soft)] p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="rk-kicker">Trace hops</div>
+          <div className="rk-kicker">{t("Trace hops")}</div>
           <div className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
-            {result.segments.length} hops | {result.totalCableLengthLabel}
+            {t("{count} hops", { count: result.segments.length })} |{" "}
+            {result.totalCableLengthLabel}
           </div>
         </div>
       </div>
@@ -2296,6 +2298,12 @@ function TraceSummary({
           const fromDevice = model.deviceById[segment.fromPort.deviceId];
           const toDevice = model.deviceById[segment.toPort.deviceId];
           const isLastHop = index === result.segments.length - 1;
+          const fromLabel = `${fromDevice?.hostname ?? t("Unknown")} ${
+            segment.fromPort.name
+          }`;
+          const toLabel = `${toDevice?.hostname ?? t("Unknown")} ${
+            segment.toPort.name
+          }`;
           return (
             <div
               key={index}
@@ -2304,10 +2312,9 @@ function TraceSummary({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 text-[var(--text-primary)]">
                   <span className="font-semibold">#{index + 1}</span>{" "}
-                  {fromDevice?.hostname ?? "Unknown"} {segment.fromPort.name} to{" "}
-                  {toDevice?.hostname ?? "Unknown"} {segment.toPort.name}
+                  {t("{from} to {to}", { from: fromLabel, to: toLabel })}
                 </div>
-                {isLastHop && <Badge tone="accent">Last hop</Badge>}
+                {isLastHop && <Badge tone="accent">{t("Last hop")}</Badge>}
               </div>
               <Mono className="mt-1 block text-[10px] text-[var(--text-tertiary)]">
                 {segment.kind}
