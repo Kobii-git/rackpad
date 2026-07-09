@@ -28,6 +28,7 @@ export function NetBoxDeviceTypeImport() {
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
   const canEdit = canEditInventory(currentUser);
+  const canManageTemplates = currentUser?.role === "admin";
   const [yamlText, setYamlText] = useState("");
   const [importMode, setImportMode] = useState<ImportMode>("template");
   const [hostname, setHostname] = useState("");
@@ -45,11 +46,17 @@ export function NetBoxDeviceTypeImport() {
     setHostname(preview.deviceDraft.suggestedHostname);
   }, [preview]);
 
+  useEffect(() => {
+    if (!canManageTemplates && importMode === "template") setImportMode("device");
+  }, [canManageTemplates, importMode]);
+
   const importBlocked = useMemo(() => {
     if (!preview) return true;
-    if (importMode === "template") return Boolean(preview.existingTemplate);
+    if (importMode === "template") {
+      return !canManageTemplates || Boolean(preview.existingTemplate);
+    }
     return Boolean(preview.existingDevice);
-  }, [importMode, preview]);
+  }, [canManageTemplates, importMode, preview]);
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -142,7 +149,7 @@ export function NetBoxDeviceTypeImport() {
     <Card>
       <CardHeader>
         <CardTitle>
-          <CardLabel>NetBox device types</CardLabel>
+          <CardLabel>{t("NetBox device types")}</CardLabel>
           <CardHeading>{t("Import NetBox YAML")}</CardHeading>
         </CardTitle>
         <Badge tone="cyan">
@@ -217,7 +224,9 @@ export function NetBoxDeviceTypeImport() {
                     setImportMode(event.target.value as ImportMode)
                   }
                 >
-                  <option value="template">{t("Port template only")}</option>
+                  <option value="template" disabled={!canManageTemplates}>
+                    {t("Port template only")}
+                  </option>
                   <option value="device">{t("Device with interfaces")}</option>
                 </select>
               </label>

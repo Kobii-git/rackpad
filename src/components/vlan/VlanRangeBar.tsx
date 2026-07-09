@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n";
 import { useMemo } from "react";
 import { motion } from "motion/react";
 import type { Vlan, VlanRange } from "@/lib/types";
@@ -23,6 +24,7 @@ export function VlanRangeBar({
   onSelectRange,
   selectedRangeId,
 }: VlanRangeBarProps) {
+  const { t } = useI18n();
   const sorted = useMemo(
     () => [...ranges].sort((a, b) => a.startVlan - b.startVlan),
     [ranges],
@@ -88,9 +90,7 @@ export function VlanRangeBar({
                 </TooltipTrigger>
                 <TooltipContent>
                   <div className="text-[11px]">
-                    <div className="font-mono text-[var(--text-tertiary)]">
-                      unallocated
-                    </div>
+                    <div className="font-mono text-[var(--text-tertiary)]">{t("unallocated")}</div>
                     <div>
                       VLAN {segment.start}-{segment.end} | {total} IDs free
                     </div>
@@ -174,10 +174,8 @@ export function VlanRangeBar({
       </div>
 
       <div className="flex items-center justify-between px-1 font-mono text-[9px] text-[var(--text-muted)]">
-        <span>VLAN 1</span>
-        <span className="normal-case tracking-normal">
-          defined ranges sized for visibility
-        </span>
+        <span>{t("VLAN 1")}</span>
+        <span className="normal-case tracking-normal">{t("defined ranges sized for visibility")}</span>
         <span>4094</span>
       </div>
 

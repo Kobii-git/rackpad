@@ -183,6 +183,7 @@ export function DeviceDrawer({
   onSaved,
 }: DeviceDrawerProps) {
   const { t } = useI18n();
+  const currentUser = useStore((s) => s.currentUser);
   const racks = useStore((s) => s.racks);
   const rooms = useStore((s) => s.rooms);
   const devices = useStore((s) => s.devices);
@@ -863,7 +864,7 @@ export function DeviceDrawer({
                     <Input
                       value={form.hostname}
                       onChange={(event) => set("hostname", event.target.value)}
-                      placeholder="e.g. core-sw-01"
+                      placeholder={t("e.g. core-sw-01")}
                       autoFocus
                     />
                   </Field>
@@ -873,7 +874,7 @@ export function DeviceDrawer({
                       onChange={(event) =>
                         set("displayName", event.target.value)
                       }
-                      placeholder="e.g. Core Switch"
+                      placeholder={t("e.g. Core Switch")}
                     />
                   </Field>
                   <div className="block">
@@ -891,7 +892,7 @@ export function DeviceDrawer({
                           </option>
                         ))}
                       </Select>
-                      <Button
+                      {currentUser?.role === "admin" && <Button
                         type="button"
                         variant="outline"
                         size="sm"
@@ -899,9 +900,9 @@ export function DeviceDrawer({
                       >
                         <Plus className="size-3.5" />
                         {t("Type")}
-                      </Button>
+                      </Button>}
                     </div>
-                    {addingType && (
+                    {addingType && currentUser?.role === "admin" && (
                       <div className="mt-2 space-y-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--surface-1)] p-3">
                         <div className="grid grid-cols-[minmax(0,1fr)_minmax(8rem,0.7fr)_auto] gap-2">
                           <Input
@@ -909,7 +910,7 @@ export function DeviceDrawer({
                             onChange={(event) =>
                               setCustomTypeLabel(event.target.value)
                             }
-                            placeholder="e.g. Camera"
+                            placeholder={t("e.g. Camera")}
                           />
                           <Select
                             value={customTypeParentType}
@@ -1019,14 +1020,14 @@ export function DeviceDrawer({
                         onChange={(event) =>
                           set("manufacturer", event.target.value)
                         }
-                        placeholder="e.g. Cisco"
+                        placeholder={t("e.g. Cisco")}
                       />
                     </Field>
                     <Field label={t("Model")}>
                       <Input
                         value={form.model}
                         onChange={(event) => set("model", event.target.value)}
-                        placeholder="e.g. C9300-48P"
+                        placeholder={t("e.g. C9300-48P")}
                       />
                     </Field>
                   </div>
@@ -1034,7 +1035,7 @@ export function DeviceDrawer({
                     <Input
                       value={form.serial}
                       onChange={(event) => set("serial", event.target.value)}
-                      placeholder="e.g. FOC2134X0AB"
+                      placeholder={t("e.g. FOC2134X0AB")}
                     />
                   </Field>
                   <Field label={t("Management IP")}>
@@ -1043,7 +1044,7 @@ export function DeviceDrawer({
                       onChange={(event) =>
                         set("managementIp", event.target.value)
                       }
-                      placeholder="e.g. 10.0.10.12"
+                      placeholder={t("e.g. 10.0.10.12")}
                     />
                   </Field>
                   {!isEdit &&
@@ -1220,7 +1221,7 @@ export function DeviceDrawer({
                       onChange={(event) =>
                         set("macAddress", event.target.value)
                       }
-                      placeholder="e.g. aa:bb:cc:dd:ee:ff"
+                      placeholder={t("e.g. aa:bb:cc:dd:ee:ff")}
                     />
                   </Field>
                 </Section>
@@ -1237,7 +1238,7 @@ export function DeviceDrawer({
                         onChange={(event) =>
                           set("cpuCores", event.target.value)
                         }
-                        placeholder="e.g. 8"
+                        placeholder={t("e.g. 8")}
                       />
                     </Field>
                     <Field label={t("Memory (GB)")}>
@@ -1345,7 +1346,7 @@ export function DeviceDrawer({
                                 onChange={(event) =>
                                   setShelf("hostname", event.target.value)
                                 }
-                                placeholder="e.g. cmp-shelf-u32"
+                                placeholder={t("e.g. cmp-shelf-u32")}
                               />
                             </Field>
                             <Field label={t("Rack")}>
@@ -1369,7 +1370,7 @@ export function DeviceDrawer({
                                 onChange={(event) =>
                                   setShelf("startU", event.target.value)
                                 }
-                                placeholder="e.g. 32"
+                                placeholder={t("e.g. 32")}
                               />
                             </Field>
                             <Field label={t("Height (U)")}>
@@ -1523,7 +1524,7 @@ export function DeviceDrawer({
                           onChange={(event) =>
                             set("startU", event.target.value)
                           }
-                          placeholder="e.g. 12"
+                          placeholder={t("e.g. 12")}
                         />
                       </Field>
                       <Field label={t("Height (U)")}>
@@ -1588,7 +1589,7 @@ export function DeviceDrawer({
                     <Input
                       value={form.tags}
                       onChange={(event) => set("tags", event.target.value)}
-                      placeholder="e.g. core, managed, poe"
+                      placeholder={t("e.g. core, managed, poe")}
                     />
                   </Field>
                   <Field label={t("Notes")}>

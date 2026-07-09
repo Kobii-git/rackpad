@@ -18,11 +18,16 @@ import {
 } from "../lib/ui-settings.js";
 import {
   asObject,
+  ensureCidr,
+  ensureIpv4,
   optionalBoolean,
   optionalInteger,
   optionalString,
   ValidationError,
 } from "../lib/validation.js";
+import { cidrContainsHostIp, cidrOverlaps } from "../lib/ip-cidr.js";
+import { getSubnetIntegrity } from "../lib/subnet-integrity.js";
+import { listAssignmentIntegrityIssues } from "../lib/ip-assignment-integrity.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "../..");
@@ -258,6 +263,85 @@ function normalizeArrayRecordArray(value: unknown, key: string) {
   return value.map((entry) => asObject(entry));
 }
 
+function validateBackupNetworkIntegrity(input: {
+  subnets: Record<string, unknown>[];
+  devices: Record<string, unknown>[];
+  ports: Record<string, unknown>[];
+  ipAssignments: Record<string, unknown>[];
+}) {
+  const subnetsById = new Map<string, { id: string; labId: string; cidr: string; name: string }>();
+  const subnetsByLab = new Map<string, Array<{ id: string; cidr: string; name: string }>>();
+  for (const row of input.subnets) {
+    const id = String(row.id ?? "");
+    const labId = String(row.labId ?? "");
+    if (!id || !labId) throw new ValidationError("Backup subnets must include id and labId.");
+    const cidr = ensureCidr(String(row.cidr ?? ""), "backup subnet CIDR");
+    row.cidr = cidr;
+    const subnet = { id, labId, cidr, name: String(row.name ?? cidr) };
+    subnetsById.set(id, subnet);
+    const list = subnetsByLab.get(labId) ?? [];
+    list.push(subnet);
+    subnetsByLab.set(labId, list);
+  }
+  for (const subnets of subnetsByLab.values()) {
+    for (let index = 0; index < subnets.length; index += 1) {
+      for (let candidateIndex = index + 1; candidateIndex < subnets.length; candidateIndex += 1) {
+        const left = subnets[index];
+        const right = subnets[candidateIndex];
+        if (!cidrOverlaps(left.cidr, right.cidr)) continue;
+        throw new ValidationError(
+          `Backup subnets ${left.cidr} and ${right.cidr} overlap.`,
+          409,
+          "SUBNET_OVERLAP",
+          { conflicts: [left, right] },
+        );
+      }
+    }
+  }
+
+  const devicesById = new Map(
+    input.devices.map((row) => [String(row.id), { id: String(row.id), labId: String(row.labId) }]),
+  );
+  const portsById = new Map(input.ports.map((row) => [
+    String(row.id),
+    { id: String(row.id), deviceId: String(row.deviceId) },
+  ]));
+
+  for (const assignment of input.ipAssignments) {
+    const subnet = subnetsById.get(String(assignment.subnetId ?? ""));
+    if (!subnet) throw new ValidationError("Backup IP assignment references a missing subnet.", 422);
+    const ipAddress = ensureIpv4(String(assignment.ipAddress ?? ""), "backup assignment IP");
+    if (!cidrContainsHostIp(subnet.cidr, ipAddress)) {
+      throw new ValidationError(`Backup IP ${ipAddress} does not belong to the usable host range of subnet ${subnet.cidr}.`, 422);
+    }
+
+    const deviceId = assignment.deviceId ? String(assignment.deviceId) : null;
+    const portId = assignment.portId ? String(assignment.portId) : null;
+    if (deviceId) {
+      const device = devicesById.get(deviceId);
+      if (!device) throw new ValidationError("Backup IP assignment references a missing device.", 422);
+      if (device.labId !== subnet.labId) {
+        throw new ValidationError("Backup IP assignment references a device in another lab.", 422, "CROSS_LAB_REFERENCE");
+      }
+    }
+    if (portId) {
+      const port = portsById.get(portId);
+      const portDevice = port ? devicesById.get(port.deviceId) : null;
+      if (!port || !portDevice) throw new ValidationError("Backup IP assignment references a missing port.", 422);
+      if (portDevice.labId !== subnet.labId || (deviceId && port.deviceId !== deviceId)) {
+        throw new ValidationError("Backup IP assignment references a port in another lab or device.", 422, "CROSS_LAB_REFERENCE");
+      }
+    }
+    for (const field of ["vmId", "containerId"] as const) {
+      const targetId = assignment[field] ? String(assignment[field]) : null;
+      const target = targetId ? devicesById.get(targetId) : null;
+      if (target && target.labId !== subnet.labId) {
+        throw new ValidationError(`Backup IP assignment ${field} belongs to another lab.`, 422, "CROSS_LAB_REFERENCE");
+      }
+    }
+  }
+}
+
 const restoreBackupSnapshot = db.transaction(
   (snapshot: Record<string, unknown>, restoredBy: string) => {
     if (snapshot.format !== "rackpad-backup-v1") {
@@ -389,6 +473,8 @@ const restoreBackupSnapshot = db.transaction(
         "Backup must contain at least one user account.",
       );
     }
+
+    validateBackupNetworkIntegrity({ subnets, devices, ports, ipAssignments });
 
     db.exec(`
     DELETE FROM userSessions;
@@ -1177,6 +1263,47 @@ const restoreBackupSnapshot = db.transaction(
 );
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
+  app.get("/integrity", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const subnetRows = db.prepare(`
+      SELECT subnets.id, subnets.labId, subnets.cidr, subnets.name,
+        (SELECT COUNT(*) FROM ipAssignments WHERE ipAssignments.subnetId = subnets.id) AS assignmentCount,
+        (SELECT COUNT(*) FROM dhcpScopes WHERE dhcpScopes.subnetId = subnets.id) AS scopeCount,
+        (SELECT COUNT(*) FROM ipZones WHERE ipZones.subnetId = subnets.id) AS zoneCount
+      FROM subnets
+      ORDER BY subnets.labId, subnets.cidr, subnets.id
+    `).all() as Array<{
+      id: string;
+      labId: string;
+      cidr: string;
+      name: string;
+      assignmentCount: number;
+      scopeCount: number;
+      zoneCount: number;
+    }>;
+    const subnetConflicts = subnetRows.flatMap((row) => {
+      const integrity = getSubnetIntegrity(row);
+      if (integrity.state === "ok") return [];
+      return [{
+        id: row.id,
+        labId: row.labId,
+        cidr: row.cidr,
+        name: row.name,
+        integrity,
+        childCounts: {
+          assignments: row.assignmentCount,
+          dhcpScopes: row.scopeCount,
+          zones: row.zoneCount,
+        },
+      }];
+    });
+    return {
+      checkedAt: new Date().toISOString(),
+      subnetConflicts,
+      assignmentReferences: listAssignmentIntegrityIssues(),
+    };
+  });
+
   app.get("/ui-settings", async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     return loadUiSettings();

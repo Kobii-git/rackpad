@@ -12,7 +12,13 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  quality:
+    uses: ./.github/workflows/quality.yml
+    permissions:
+      contents: read
+
   build:
+    needs: quality
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,8 +68,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          provenance: false
-          sbom: false
+          provenance: true
+          sbom: true
           build-args: |
             RACKPAD_BUILD_CHANNEL=${{ github.ref_name }}
           cache-from: type=gha

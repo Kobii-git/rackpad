@@ -1,12 +1,22 @@
 import net from 'node:net'
+import { canonicalizeIpv4Cidr } from './ip-cidr.js'
 
 export class ValidationError extends Error {
   statusCode: number
+  code?: string
+  details?: Record<string, unknown>
 
-  constructor(message: string, statusCode = 400) {
+  constructor(
+    message: string,
+    statusCode = 400,
+    code?: string,
+    details?: Record<string, unknown>,
+  ) {
     super(message)
     this.name = 'ValidationError'
     this.statusCode = statusCode
+    this.code = code
+    this.details = details
   }
 }
 
@@ -188,13 +198,11 @@ export function ensureHostTarget(value: string, key = 'target') {
 }
 
 export function ensureCidr(cidr: string, key = 'cidr') {
-  const [network, prefixRaw] = cidr.split('/')
-  const prefix = Number.parseInt(prefixRaw ?? '', 10)
-  if (!network || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) {
+  try {
+    return canonicalizeIpv4Cidr(cidr)
+  } catch {
     throw new ValidationError(`${label(key)} must be a valid CIDR block.`)
   }
-  ensureIpv4(network, key)
-  return cidr
 }
 
 export function ensureIsoDate(value: string, key = 'date') {

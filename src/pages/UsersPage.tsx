@@ -25,6 +25,7 @@ import {
 } from "@/lib/store";
 import type {
   AlertSettings,
+  AdminIntegrityReport,
   AuditEntry,
   AppUser,
   Lab,
@@ -145,10 +146,29 @@ export default function UsersPage() {
   const [languageSaving, setLanguageSaving] = useState(false);
   const [languageError, setLanguageError] = useState("");
   const [languageSuccess, setLanguageSuccess] = useState("");
+  const [integrityReport, setIntegrityReport] = useState<AdminIntegrityReport | null>(null);
+  const [integrityLoading, setIntegrityLoading] = useState(false);
+  const [integrityError, setIntegrityError] = useState("");
 
   useEffect(() => {
     setDefaultLanguage(uiSettings.defaultLanguage);
   }, [uiSettings.defaultLanguage]);
+
+  async function loadIntegrityReport() {
+    setIntegrityLoading(true);
+    setIntegrityError("");
+    try {
+      setIntegrityReport(await api.getAdminIntegrity());
+    } catch (err) {
+      setIntegrityError(err instanceof Error ? err.message : "Failed to load data integrity report.");
+    } finally {
+      setIntegrityLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (isAdmin(currentUser)) void loadIntegrityReport();
+  }, [currentUser]);
 
   useEffect(() => {
     if (!users.length) {
@@ -448,6 +468,19 @@ export default function UsersPage() {
     }
   }
 
+  async function clearInvalidAssignmentReferences(
+    issue: AdminIntegrityReport["assignmentReferences"][number],
+  ) {
+    if (!window.confirm(`Clear invalid target references from ${issue.ipAddress}?`)) return;
+    const patch = Object.fromEntries(issue.integrity.fields.map((field) => [field, null]));
+    try {
+      await api.updateIpAssignment(issue.id, patch);
+      await loadIntegrityReport();
+    } catch (err) {
+      setIntegrityError(err instanceof Error ? err.message : "Failed to clear invalid references.");
+    }
+  }
+
   return (
     <>
       <TopBar
@@ -476,9 +509,7 @@ export default function UsersPage() {
       <div className="flex flex-1 overflow-hidden">
         <div className="flex w-72 shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-bg-2)]/40">
           <div className="border-b border-[var(--color-line)] px-4 py-3">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-              Accounts
-            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">{t("Accounts")}</span>
           </div>
           <div className="flex-1 overflow-y-auto py-2">
             {users.map((user) => {
@@ -521,9 +552,7 @@ export default function UsersPage() {
                     </Badge>
                   </div>
                   {user.disabled && (
-                    <div className="mt-1 text-[11px] text-[var(--color-err)]">
-                      Disabled
-                    </div>
+                    <div className="mt-1 text-[11px] text-[var(--color-err)]">{t("Disabled")}</div>
                   )}
                 </button>
               );
@@ -533,6 +562,51 @@ export default function UsersPage() {
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
           <div className="max-w-3xl space-y-5">
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  <CardLabel>{t("Data integrity")}</CardLabel>
+                  <CardHeading>{t("IPAM repair queue")}</CardHeading>
+                </CardTitle>
+                <Button variant="outline" size="sm" onClick={() => void loadIntegrityReport()} disabled={integrityLoading}>
+                  {integrityLoading ? "Checking..." : "Recheck"}
+                </Button>
+              </CardHeader>
+              <CardBody className="space-y-3">
+                {integrityError && <div className="text-sm text-[var(--color-err)]">{integrityError}</div>}
+                {integrityReport && integrityReport.subnetConflicts.length === 0 && integrityReport.assignmentReferences.length === 0 ? (
+                  <div className="rounded-[var(--radius-sm)] border border-[var(--color-ok)]/30 bg-[var(--color-ok)]/10 px-3 py-2 text-sm text-[var(--color-ok)]">{t("No IPAM integrity issues detected.")}</div>
+                ) : null}
+                {integrityReport?.subnetConflicts.map((issue) => (
+                  <div key={issue.id} className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10 p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="font-medium text-[var(--color-fg)]">{issue.name} · {issue.cidr}</div>
+                        <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
+                          {issue.integrity.state === "invalid-cidr"
+                            ? "Invalid legacy CIDR"
+                            : `Overlaps ${issue.integrity.conflicts.map((conflict) => conflict.cidr).join(", ")}`}
+                          {` · ${issue.childCounts.assignments} assignments · ${issue.childCounts.dhcpScopes} scopes · ${issue.childCounts.zones} zones`}
+                        </div>
+                      </div>
+                      <a className="text-xs font-medium text-[var(--color-accent)] hover:underline" href={`/networks?subnetId=${encodeURIComponent(issue.id)}`}>{t("Repair subnet")}</a>
+                    </div>
+                  </div>
+                ))}
+                {integrityReport?.assignmentReferences.map((issue) => (
+                  <div key={issue.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--color-err)]/25 bg-[var(--color-err)]/10 p-3 text-sm">
+                    <div>
+                      <div className="font-medium text-[var(--color-fg)]">{issue.ipAddress}</div>
+                      <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
+                        {issue.integrity.state} · {issue.integrity.fields.join(", ")}
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => void clearInvalidAssignmentReferences(issue)}>{t("Clear invalid references")}</Button>
+                  </div>
+                ))}
+              </CardBody>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>
@@ -649,7 +723,7 @@ export default function UsersPage() {
                               username: event.target.value,
                             }))
                           }
-                          placeholder="username"
+                          placeholder={t("username")}
                         />
                       </Field>
                       <Field label="Display name">
@@ -661,7 +735,7 @@ export default function UsersPage() {
                               displayName: event.target.value,
                             }))
                           }
-                          placeholder="Display name"
+                          placeholder={t("Display name")}
                         />
                       </Field>
                     </div>
@@ -854,25 +928,16 @@ export default function UsersPage() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Operations</CardLabel>
-                  <CardHeading>Backup and release state</CardHeading>
+                  <CardLabel>{t("Operations")}</CardLabel>
+                  <CardHeading>{t("Backup and release state")}</CardHeading>
                 </CardTitle>
                 <Badge tone="accent">{APP_VERSION_LABEL}</Badge>
               </CardHeader>
               <CardBody className="space-y-4">
                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
-                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-                    Export snapshot
-                  </div>
-                  <div className="mt-2 text-sm text-[var(--color-fg)]">
-                    Download a full JSON backup of racks, devices, ports,
-                    cables, VLANs, IPAM, monitors, audit history, and user
-                    accounts.
-                  </div>
-                  <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
-                    Backups include password hashes for local users, so keep the
-                    file somewhere private.
-                  </div>
+                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Export snapshot")}</div>
+                  <div className="mt-2 text-sm text-[var(--color-fg)]">{t("Download a full JSON backup of racks, devices, ports, cables, VLANs, IPAM, monitors, audit history, and user accounts.")}</div>
+                  <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">{t("Backups include password hashes for local users, so keep the file somewhere private.")}</div>
                 </div>
 
                 {exportError && (
@@ -888,17 +953,9 @@ export default function UsersPage() {
                 )}
 
                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
-                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-                    Restore snapshot
-                  </div>
-                  <div className="mt-2 text-sm text-[var(--color-fg)]">
-                    Import a Rackpad JSON backup and replace the current
-                    database contents.
-                  </div>
-                  <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
-                    Restoring signs out the current session and reloads the
-                    restored users, templates, inventory, IPAM, and audit data.
-                  </div>
+                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Restore snapshot")}</div>
+                  <div className="mt-2 text-sm text-[var(--color-fg)]">{t("Import a Rackpad JSON backup and replace the current database contents.")}</div>
+                  <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">{t("Restoring signs out the current session and reloads the restored users, templates, inventory, IPAM, and audit data.")}</div>
                   <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
                     <input
                       type="file"
@@ -932,10 +989,7 @@ export default function UsersPage() {
                 )}
 
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs text-[var(--color-fg-subtle)]">
-                    Use this before Docker updates or test-database resets so
-                    you have a clean checkpoint.
-                  </div>
+                  <div className="text-xs text-[var(--color-fg-subtle)]">{t("Use this before Docker updates or test-database resets so you have a clean checkpoint.")}</div>
                   <Button
                     size="sm"
                     onClick={() => void handleExport()}
@@ -951,8 +1005,8 @@ export default function UsersPage() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Alerting</CardLabel>
-                  <CardHeading>Monitor notifications</CardHeading>
+                  <CardLabel>{t("Alerting")}</CardLabel>
+                  <CardHeading>{t("Monitor notifications")}</CardHeading>
                 </CardTitle>
                 <Badge tone="info">
                   <BellRing className="size-3" />
@@ -960,10 +1014,7 @@ export default function UsersPage() {
                 </Badge>
               </CardHeader>
               <CardBody className="space-y-4">
-                <div className="text-sm text-[var(--color-fg-subtle)]">
-                  Rackpad can alert when targets go down, when they recover, and
-                  when they stay offline long enough to need another reminder.
-                </div>
+                <div className="text-sm text-[var(--color-fg-subtle)]">{t("Rackpad can alert when targets go down, when they recover, and when they stay offline long enough to need another reminder.")}</div>
 
                 <label className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-fg)]">
                   <input
@@ -1055,7 +1106,7 @@ export default function UsersPage() {
                         discordWebhookUrl: event.target.value || null,
                       }))
                     }
-                    placeholder="https://discord.com/api/webhooks/..."
+                    placeholder={t("https://discord.com/api/webhooks/...")}
                     disabled={alertsLoading}
                   />
                 </Field>
@@ -1070,7 +1121,7 @@ export default function UsersPage() {
                           telegramBotToken: event.target.value || null,
                         }))
                       }
-                      placeholder="123456:ABCDEF..."
+                      placeholder={t("123456:ABCDEF...")}
                       disabled={alertsLoading}
                     />
                   </Field>
@@ -1092,12 +1143,8 @@ export default function UsersPage() {
                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
-                      <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-                        SMTP / Email
-                      </div>
-                      <div className="mt-1 text-sm text-[var(--color-fg-subtle)]">
-                        Recipients can be comma or newline separated.
-                      </div>
+                      <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("SMTP / Email")}</div>
+                      <div className="mt-1 text-sm text-[var(--color-fg-subtle)]">{t("Recipients can be comma or newline separated.")}</div>
                     </div>
                     <label className="flex items-center gap-2 text-sm text-[var(--color-fg)]">
                       <input
@@ -1125,7 +1172,7 @@ export default function UsersPage() {
                             smtpHost: event.target.value || null,
                           }))
                         }
-                        placeholder="smtp.example.com"
+                        placeholder={t("smtp.example.com")}
                         disabled={alertsLoading}
                       />
                     </Field>
@@ -1158,7 +1205,7 @@ export default function UsersPage() {
                             smtpUsername: event.target.value || null,
                           }))
                         }
-                        placeholder="username"
+                        placeholder={t("username")}
                         disabled={alertsLoading}
                       />
                     </Field>
@@ -1172,7 +1219,7 @@ export default function UsersPage() {
                             smtpPassword: event.target.value || null,
                           }))
                         }
-                        placeholder="password or app password"
+                        placeholder={t("password or app password")}
                         disabled={alertsLoading}
                       />
                     </Field>
@@ -1188,7 +1235,7 @@ export default function UsersPage() {
                             smtpFrom: event.target.value || null,
                           }))
                         }
-                        placeholder="rackpad@example.com"
+                        placeholder={t("rackpad@example.com")}
                         disabled={alertsLoading}
                       />
                     </Field>
@@ -1223,10 +1270,7 @@ export default function UsersPage() {
                 )}
 
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs text-[var(--color-fg-subtle)]">
-                    Configure at least one channel, then save before sending a
-                    test alert.
-                  </div>
+                  <div className="text-xs text-[var(--color-fg-subtle)]">{t("Configure at least one channel, then save before sending a test alert.")}</div>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
@@ -1253,8 +1297,8 @@ export default function UsersPage() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Alerting</CardLabel>
-                  <CardHeading>Recent alert activity</CardHeading>
+                  <CardLabel>{t("Alerting")}</CardLabel>
+                  <CardHeading>{t("Recent alert activity")}</CardHeading>
                 </CardTitle>
                 <Badge tone="neutral">{alertHistory.length} entries</Badge>
               </CardHeader>
@@ -1266,9 +1310,7 @@ export default function UsersPage() {
                 )}
 
                 {alertHistoryLoading ? (
-                  <div className="text-sm text-[var(--color-fg-subtle)]">
-                    Loading alert history...
-                  </div>
+                  <div className="text-sm text-[var(--color-fg-subtle)]">{t("Loading alert history...")}</div>
                 ) : alertHistory.length === 0 ? (
                   <EmptyState title={t("No alert activity recorded yet.")} />
                 ) : (

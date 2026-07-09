@@ -241,7 +241,7 @@ export default function LabsPage() {
                     onChange={(event) =>
                       setForm((prev) => ({ ...prev, name: event.target.value }))
                     }
-                    placeholder="Home Lab"
+                    placeholder={t("Home Lab")}
                   />
                 </Field>
                 <Field label="Location">
@@ -253,7 +253,7 @@ export default function LabsPage() {
                         location: event.target.value,
                       }))
                     }
-                    placeholder="Office, garage, Colo row A"
+                    placeholder={t("Office, garage, Colo row A")}
                   />
                 </Field>
                 <Field label={t("Description")}>
@@ -267,7 +267,7 @@ export default function LabsPage() {
                       }))
                     }
                     className="w-full resize-none rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-2.5 py-2 text-sm text-[var(--color-fg)] focus-visible:border-[var(--color-accent-soft)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-accent-soft)]"
-                    placeholder="What this lab is for, where it lives, who owns it..."
+                    placeholder={t("What this lab is for, where it lives, who owns it...")}
                   />
                 </Field>
 
@@ -286,9 +286,7 @@ export default function LabsPage() {
                       setEditingLabId(null);
                       setError("");
                     }}
-                  >
-                    Cancel
-                  </Button>
+                  >{t("Cancel")}</Button>
                   <div className="flex items-center gap-2">
                     {!creating && labs.length > 1 && editingLab && (
                       <Button

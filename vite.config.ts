@@ -45,6 +45,7 @@ export default defineConfig({
   },
   plugins: [react(), tailwindcss()],
   build: {
+    manifest: true,
     rollupOptions: {
       output: {
         manualChunks,

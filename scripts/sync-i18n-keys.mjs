@@ -4,7 +4,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const translationsPath = join(root, "src/i18n/translations.ts");
+const translationsPath = join(root, "src/i18n/base.ts");
 const localesDir = join(root, "src/i18n/locales");
 
 function parseObjectBody(body) {
@@ -22,7 +22,7 @@ function escapeString(value) {
 }
 
 function buildLocaleObject(existing, exportName) {
-  const lines = [`import type { TranslationMap } from "../translations";`, "", `export const ${exportName} = {`];
+  const lines = [`import type { TranslationMap } from "../base";`, "", `export const ${exportName} = {`];
   for (const [key, fallback] of enEntries) {
     const value = existing.get(key) ?? fallback;
     lines.push(`  "${escapeString(key)}": "${escapeString(value)}",`);

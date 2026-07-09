@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useI18n } from "@/i18n";
 
 type Theme = "dark" | "light";
 
@@ -31,6 +32,7 @@ function getInitialTheme(): Theme {
 }
 
 export function ThemeToggle() {
+  const { t } = useI18n();
   const [theme, setTheme] = useState<Theme>("dark");
 
   // Apply stored/OS preference on mount (no flash)
@@ -52,7 +54,7 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon"
       onClick={toggle}
-      aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+      aria-label={t(theme === "dark" ? "Switch to light mode" : "Switch to dark mode")}
     >
       {theme === "dark" ? <Sun /> : <Moon />}
     </Button>

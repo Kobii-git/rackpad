@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.7.0-beta.4",
+  "version": "1.8.0-dev.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -15,9 +15,14 @@
     "build:server": "tsc --project tsconfig.server.json",
     "build": "npm run build:client && npm run build:server",
     "start": "node dist-server/index.js",
-    "test:server": "node --import tsx --test --test-force-exit server/tests/**/*.test.ts",
+    "test:server": "node --import tsx --test server/tests/**/*.test.ts",
+    "test:client": "node --import tsx --test src/pages/visualizer/model.test.ts",
+    "test:e2e": "playwright test",
+    "test": "npm run check:i18n && npm run test:server && npm run test:client && npm run test:e2e",
     "lint": "eslint .",
     "check:i18n": "node scripts/check-i18n-values.mjs",
+    "check:bundle": "node scripts/check-bundle-size.mjs",
+    "check": "npm run lint && npm run test && npm run build && npm run check:bundle",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
   },
@@ -50,6 +55,8 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.53.0",
     "@tailwindcss/vite": "^4.3.1",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.5",

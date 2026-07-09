@@ -453,9 +453,7 @@ export default function DevicesList() {
             className="rk-filter-pill"
             data-active={type === null}
           >
-            <span className="font-mono text-[10px] uppercase tracking-wider">
-              All
-            </span>
+            <span className="font-mono text-[10px] uppercase tracking-wider">{t("All")}</span>
             <Mono className="ml-2 text-[10px]">{devices.length}</Mono>
           </button>
           <button
@@ -463,9 +461,7 @@ export default function DevicesList() {
             className="rk-filter-pill"
             data-active={showUnplacedOnly}
           >
-            <span className="font-mono text-[10px] uppercase tracking-wider">
-              Unplaced
-            </span>
+            <span className="font-mono text-[10px] uppercase tracking-wider">{t("Unplaced")}</span>
             <Mono className="ml-2 text-[10px]">
               {devices.filter(isUnplacedDevice).length}
             </Mono>
@@ -495,7 +491,7 @@ export default function DevicesList() {
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search hostname, model, IP, MAC, tag..."
+            placeholder={t("Search hostname, model, IP, MAC, tag...")}
             className="pl-7"
           />
         </div>
@@ -506,9 +502,7 @@ export default function DevicesList() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Badge tone="cyan">{selectedDeviceCount} selected</Badge>
-                  <span className="text-sm text-[var(--color-fg-subtle)]">
-                    Apply only checked fields to all selected devices.
-                  </span>
+                  <span className="text-sm text-[var(--color-fg-subtle)]">{t("Apply only checked fields to all selected devices.")}</span>
                 </div>
                 <Button
                   variant="ghost"
@@ -543,7 +537,7 @@ export default function DevicesList() {
                         tags: event.target.value,
                       }))
                     }
-                    placeholder="prod, lab, core"
+                    placeholder={t("prod, lab, core")}
                   />
                 </BulkField>
                 <BulkField
@@ -612,7 +606,7 @@ export default function DevicesList() {
                             }))
                           }
                         >
-                          <option value="">SSID (optional)</option>
+                          <option value="">{t("SSID (optional)")}</option>
                           {wifiSsids.map((ssid) => (
                             <option key={ssid.id} value={ssid.id}>
                               {ssid.name}
@@ -683,7 +677,7 @@ export default function DevicesList() {
                       setBulkForm((prev) => ({ ...prev, status: value }))
                     }
                   >
-                    <option value="">Keep current status</option>
+                    <option value="">{t("Keep current status")}</option>
                     {(
                       [
                         "online",
@@ -815,7 +809,7 @@ export default function DevicesList() {
                         type="checkbox"
                         checked={allFilteredSelected}
                         onChange={() => toggleAllFiltered()}
-                        aria-label="Select all filtered devices"
+                        aria-label={t("Select all filtered devices")}
                       />
                     )}
                   </Th>
@@ -824,58 +818,42 @@ export default function DevicesList() {
                     sortKey="hostname"
                     sort={sort}
                     onSort={handleSort}
-                  >
-                    Hostname
-                  </SortableHeader>
+                  >{t("Hostname")}</SortableHeader>
                   <SortableHeader
                     sortKey="type"
                     sort={sort}
                     onSort={handleSort}
-                  >
-                    Type
-                  </SortableHeader>
+                  >{t("Type")}</SortableHeader>
                   <SortableHeader
                     sortKey="model"
                     sort={sort}
                     onSort={handleSort}
-                  >
-                    Model
-                  </SortableHeader>
+                  >{t("Model")}</SortableHeader>
                   <SortableHeader
                     sortKey="managementIp"
                     sort={sort}
                     onSort={handleSort}
-                  >
-                    Mgmt IP
-                  </SortableHeader>
+                  >{t("Mgmt IP")}</SortableHeader>
                   <SortableHeader
                     sortKey="macAddress"
                     sort={sort}
                     onSort={handleSort}
-                  >
-                    MAC
-                  </SortableHeader>
+                  >{t("MAC")}</SortableHeader>
                   <SortableHeader
                     sortKey="placement"
                     sort={sort}
                     onSort={handleSort}
-                  >
-                    Placement
-                  </SortableHeader>
+                  >{t("Placement")}</SortableHeader>
                   <SortableHeader
                     sortKey="ports"
                     sort={sort}
                     onSort={handleSort}
-                  >
-                    Ports
-                  </SortableHeader>
+                  >{t("Ports")}</SortableHeader>
                   <SortableHeader
                     sortKey="status"
                     sort={sort}
                     onSort={handleSort}
-                  >
-                    Status
-                  </SortableHeader>
+                  >{t("Status")}</SortableHeader>
                   <Th />
                 </tr>
               </thead>
@@ -950,9 +928,7 @@ export default function DevicesList() {
                       <Td>
                         {device.placement === "virtual" ? (
                           <span className="text-xs">
-                            <span className="text-[var(--color-fg-muted)]">
-                              Virtual
-                            </span>
+                            <span className="text-[var(--color-fg-muted)]">{t("Virtual")}</span>
                             {parentDevice && (
                               <>
                                 <span className="mx-1 text-[var(--color-fg-faint)]">
@@ -966,9 +942,7 @@ export default function DevicesList() {
                           </span>
                         ) : device.placement === "wireless" ? (
                           <span className="text-xs">
-                            <span className="text-[var(--color-fg-muted)]">
-                              WiFi
-                            </span>
+                            <span className="text-[var(--color-fg-muted)]">{t("WiFi")}</span>
                             {parentDevice && (
                               <>
                                 <span className="mx-1 text-[var(--color-fg-faint)]">
@@ -982,9 +956,7 @@ export default function DevicesList() {
                           </span>
                         ) : device.placement === "shelf" ? (
                           <span className="text-xs">
-                            <span className="text-[var(--color-fg-muted)]">
-                              Shelf
-                            </span>
+                            <span className="text-[var(--color-fg-muted)]">{t("Shelf")}</span>
                             {parentDevice && (
                               <>
                                 <span className="mx-1 text-[var(--color-fg-faint)]">
@@ -1056,9 +1028,7 @@ export default function DevicesList() {
               </tbody>
             </table>
             {filtered.length === 0 && (
-              <div className="px-4 py-8 text-center text-xs text-[var(--color-fg-subtle)]">
-                No devices match your filter.
-              </div>
+              <div className="px-4 py-8 text-center text-xs text-[var(--color-fg-subtle)]">{t("No devices match your filter.")}</div>
             )}
           </CardBody>
         </Card>

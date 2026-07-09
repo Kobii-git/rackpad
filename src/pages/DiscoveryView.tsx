@@ -49,6 +49,7 @@ import type {
   Device,
   DiscoveredDevice,
   DiscoveryScanResult,
+  DiscoveryScanJob,
   DiscoveryScanSchedule,
   IpAllocationMode,
   IpZone,
@@ -138,6 +139,7 @@ export default function DiscoveryView() {
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [draft, setDraft] = useState<DiscoveryDraft | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [activeScanJob, setActiveScanJob] = useState<DiscoveryScanJob | null>(null);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [runningScheduleId, setRunningScheduleId] = useState<string | null>(
     null,
@@ -376,7 +378,7 @@ export default function DiscoveryView() {
     try {
       const results: DiscoveryScanResult[] = [];
       for (const cidr of scanCidrs) {
-        results.push(await scanDiscoveredSubnet(cidr));
+        results.push(await scanDiscoveredSubnet(cidr, setActiveScanJob));
       }
       setLastScanResult(mergeScanResults(results));
       setFilter("all");
@@ -385,6 +387,7 @@ export default function DiscoveryView() {
         err instanceof Error ? err.message : t("Failed to scan subnet."),
       );
     } finally {
+      setActiveScanJob(null);
       setScanning(false);
     }
   }
@@ -711,7 +714,9 @@ export default function DiscoveryView() {
               >
                 <Search className="size-3.5" />
                 {scanning
-                  ? t("Scanning...")
+                  ? activeScanJob?.status === "queued"
+                    ? `${t("Queued")} #${activeScanJob.queuePosition ?? 1}`
+                    : t("Scanning...")
                   : scanTarget === "all"
                     ? t("Scan all")
                     : t("Scan subnet")}

@@ -6,6 +6,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import {
   appendLabFilter,
+  assertLabRead,
   assertLabWrite,
   assertLabWriteFromRow,
   resolveLabIdsForList,
@@ -46,6 +47,8 @@ const DISCOVERY_MAC_SCAN_MODES = [
   "off",
 ] as const;
 const MAX_DISCOVERY_SCAN_CHUNKS = 16;
+const DISCOVERY_SCAN_JOB_TTL_MS = 30 * 60_000;
+const DISCOVERY_SCAN_MAX_COMPLETED = 128;
 const execFileAsync = promisify(execFile);
 
 type DiscoveryMacScanMode = (typeof DISCOVERY_MAC_SCAN_MODES)[number];
@@ -95,6 +98,36 @@ export type DiscoveryScanResult = {
   diagnostics: DiscoveryScanDiagnostic[];
   rows: ReturnType<typeof parseDiscoveredDevice>[];
 };
+
+type DiscoveryScanRunner = (
+  labId: string,
+  cidr: string,
+) => Promise<DiscoveryScanResult>;
+
+type DiscoveryScanJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+export type DiscoveryScanJob = {
+  id: string;
+  labId: string;
+  cidr: string;
+  status: DiscoveryScanJobStatus;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  result: DiscoveryScanResult | null;
+  error: string | null;
+  queuePosition: number | null;
+};
+
+type StoredDiscoveryScanJob = DiscoveryScanJob & {
+  scheduleIds: Set<string>;
+  completion: Promise<DiscoveryScanJob>;
+  resolveCompletion: (job: DiscoveryScanJob) => void;
+};
+
+const discoveryScanJobs = new Map<string, StoredDiscoveryScanJob>();
+let discoveryScanRunner: DiscoveryScanRunner = runDiscoveryScan;
 
 function parseDiscoveredDevice(row: Record<string, unknown>) {
   return {
@@ -1090,6 +1123,277 @@ function formatScheduleMessage(result: DiscoveryScanResult) {
   return `Checked ${result.scannedHostCount} hosts${chunkSuffix}; found ${result.discoveredCount} reachable.${warningSuffix}`;
 }
 
+function discoveryScanErrorMessage(err: unknown, fallback: string) {
+  return err instanceof Error ? err.message : fallback;
+}
+
+function recordDiscoveryScanScheduleSuccess(
+  id: string,
+  scan: DiscoveryScanResult,
+) {
+  const finishedAt = new Date().toISOString();
+  const message = formatScheduleMessage(scan);
+  db.prepare(
+    `
+      UPDATE discoveryScanSchedules
+      SET lastRunAt = ?, lastResult = ?, lastMessage = ?, updatedAt = ?
+      WHERE id = ?
+    `,
+  ).run(finishedAt, "success", message, finishedAt, id);
+  const row = getDiscoveryScanScheduleRow(id);
+  return row ? parseDiscoveryScanSchedule(row) : null;
+}
+
+function recordDiscoveryScanScheduleFailure(id: string, err: unknown) {
+  const finishedAt = new Date().toISOString();
+  const message = discoveryScanErrorMessage(
+    err,
+    "Scheduled discovery scan failed.",
+  );
+  db.prepare(
+    `
+      UPDATE discoveryScanSchedules
+      SET lastRunAt = ?, lastResult = ?, lastMessage = ?, updatedAt = ?
+      WHERE id = ?
+    `,
+  ).run(finishedAt, "error", message, finishedAt, id);
+  const row = getDiscoveryScanScheduleRow(id);
+  return row ? parseDiscoveryScanSchedule(row) : null;
+}
+
+function isActiveDiscoveryScanJob(job: StoredDiscoveryScanJob) {
+  return job.status === "queued" || job.status === "running";
+}
+
+function discoveryQueueLimit(name: string, fallback: number, max: number) {
+  const raw = process.env[name]?.trim();
+  if (!raw || !/^\d+$/.test(raw)) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Math.max(1, Math.min(max, parsed));
+}
+
+function discoveryQueueLimits() {
+  return {
+    global: discoveryQueueLimit("DISCOVERY_SCAN_MAX_ACTIVE", 2, 32),
+    perLab: discoveryQueueLimit("DISCOVERY_SCAN_MAX_ACTIVE_PER_LAB", 1, 16),
+    queued: discoveryQueueLimit("DISCOVERY_SCAN_MAX_QUEUED", 32, 1_024),
+  };
+}
+
+function cleanupDiscoveryScanJobs() {
+  const now = Date.now();
+  for (const [id, job] of discoveryScanJobs) {
+    if (isActiveDiscoveryScanJob(job)) continue;
+    const finishedAt = job.finishedAt ? Date.parse(job.finishedAt) : 0;
+    if (
+      Number.isFinite(finishedAt) &&
+      now - finishedAt > DISCOVERY_SCAN_JOB_TTL_MS
+    ) {
+      discoveryScanJobs.delete(id);
+    }
+  }
+  const completed = [...discoveryScanJobs.values()]
+    .filter((job) => !isActiveDiscoveryScanJob(job))
+    .sort((left, right) =>
+      Date.parse(right.finishedAt ?? right.updatedAt) -
+      Date.parse(left.finishedAt ?? left.updatedAt),
+    );
+  for (const job of completed.slice(DISCOVERY_SCAN_MAX_COMPLETED)) {
+    discoveryScanJobs.delete(job.id);
+  }
+}
+
+function queuedDiscoveryScanJobs() {
+  return [...discoveryScanJobs.values()].filter((job) => job.status === "queued");
+}
+
+function serializeDiscoveryScanJob(
+  job: StoredDiscoveryScanJob,
+): DiscoveryScanJob {
+  const queued = job.status === "queued" ? queuedDiscoveryScanJobs() : [];
+  const queueIndex = queued.findIndex((candidate) => candidate.id === job.id);
+  return {
+    id: job.id,
+    labId: job.labId,
+    cidr: job.cidr,
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    startedAt: job.startedAt,
+    finishedAt: job.finishedAt,
+    result: job.result,
+    error: job.error,
+    queuePosition: queueIndex >= 0 ? queueIndex + 1 : null,
+  };
+}
+
+function attachScheduleToDiscoveryScanJob(
+  job: StoredDiscoveryScanJob,
+  scheduleId: string,
+) {
+  job.scheduleIds.add(scheduleId);
+  runningScheduleIds.add(scheduleId);
+  job.updatedAt = new Date().toISOString();
+}
+
+function findActiveDiscoveryScanJob(labId: string, cidr: string) {
+  for (const job of discoveryScanJobs.values()) {
+    if (
+      job.labId === labId &&
+      job.cidr === cidr &&
+      isActiveDiscoveryScanJob(job)
+    ) {
+      return job;
+    }
+  }
+  return null;
+}
+
+function findActiveDiscoveryScanJobForSchedule(scheduleId: string) {
+  for (const job of discoveryScanJobs.values()) {
+    if (job.scheduleIds.has(scheduleId) && isActiveDiscoveryScanJob(job)) {
+      return job;
+    }
+  }
+  return null;
+}
+
+function startDiscoveryScanJob(
+  labId: string,
+  cidr: string,
+  options: { scheduleId?: string } = {},
+) {
+  cleanupDiscoveryScanJobs();
+  dispatchDiscoveryScanJobs();
+  const canonicalCidr = ensureCidr(cidr);
+  const active = findActiveDiscoveryScanJob(labId, canonicalCidr);
+  if (active) {
+    if (options.scheduleId) {
+      attachScheduleToDiscoveryScanJob(active, options.scheduleId);
+    }
+    return serializeDiscoveryScanJob(active);
+  }
+
+  const limits = discoveryQueueLimits();
+  const running = [...discoveryScanJobs.values()].filter((job) => job.status === "running");
+  const activeForLab = running.filter((job) => job.labId === labId).length;
+  const canStartImmediately =
+    running.length < limits.global && activeForLab < limits.perLab;
+  if (queuedDiscoveryScanJobs().length >= limits.queued && !canStartImmediately) {
+    throw new ValidationError(
+      "The discovery scan queue is full. Try again after an active scan finishes.",
+      429,
+      "DISCOVERY_QUEUE_FULL",
+      { maxQueued: limits.queued },
+    );
+  }
+
+  const now = new Date().toISOString();
+  let resolveCompletion!: (job: DiscoveryScanJob) => void;
+  const completion = new Promise<DiscoveryScanJob>((resolve) => {
+    resolveCompletion = resolve;
+  });
+  const job: StoredDiscoveryScanJob = {
+    id: createId("dsj"),
+    labId,
+    cidr: canonicalCidr,
+    status: "queued",
+    createdAt: now,
+    updatedAt: now,
+    startedAt: null,
+    finishedAt: null,
+    result: null,
+    error: null,
+    queuePosition: null,
+    scheduleIds: new Set(),
+    completion,
+    resolveCompletion,
+  };
+  if (options.scheduleId) {
+    attachScheduleToDiscoveryScanJob(job, options.scheduleId);
+  }
+  discoveryScanJobs.set(job.id, job);
+  dispatchDiscoveryScanJobs();
+  return serializeDiscoveryScanJob(job);
+}
+
+function dispatchDiscoveryScanJobs() {
+  const limits = discoveryQueueLimits();
+  while (true) {
+    const running = [...discoveryScanJobs.values()].filter(
+      (job) => job.status === "running",
+    );
+    if (running.length >= limits.global) return;
+    const runningByLab = new Map<string, number>();
+    for (const job of running) {
+      runningByLab.set(job.labId, (runningByLab.get(job.labId) ?? 0) + 1);
+    }
+    const next = queuedDiscoveryScanJobs().find(
+      (job) => (runningByLab.get(job.labId) ?? 0) < limits.perLab,
+    );
+    if (!next) return;
+    void executeDiscoveryScanJob(next.id);
+  }
+}
+
+async function executeDiscoveryScanJob(id: string) {
+  const job = discoveryScanJobs.get(id);
+  if (!job || job.status !== "queued") return;
+
+  const startedAt = new Date().toISOString();
+  job.status = "running";
+  job.startedAt = startedAt;
+  job.updatedAt = startedAt;
+
+  try {
+    const result = await discoveryScanRunner(job.labId, job.cidr);
+    job.status = "succeeded";
+    job.result = result;
+    job.error = null;
+    for (const scheduleId of job.scheduleIds) {
+      recordDiscoveryScanScheduleSuccess(scheduleId, result);
+    }
+  } catch (err) {
+    job.status = "failed";
+    job.result = null;
+    job.error = discoveryScanErrorMessage(err, "Discovery scan failed.");
+    for (const scheduleId of job.scheduleIds) {
+      recordDiscoveryScanScheduleFailure(scheduleId, err);
+    }
+  } finally {
+    const finishedAt = new Date().toISOString();
+    job.finishedAt = finishedAt;
+    job.updatedAt = finishedAt;
+    for (const scheduleId of job.scheduleIds) {
+      runningScheduleIds.delete(scheduleId);
+    }
+    const serialized = serializeDiscoveryScanJob(job);
+    job.resolveCompletion(serialized);
+    cleanupDiscoveryScanJobs();
+    dispatchDiscoveryScanJobs();
+  }
+}
+
+export function setDiscoveryScanRunnerForTests(
+  runner: DiscoveryScanRunner | null,
+) {
+  discoveryScanRunner = runner ?? runDiscoveryScan;
+}
+
+export function resetDiscoveryScanJobsForTests() {
+  for (const job of discoveryScanJobs.values()) {
+    if (isActiveDiscoveryScanJob(job)) {
+      job.status = "failed";
+      job.error = "Discovery scan reset for tests.";
+      job.finishedAt = new Date().toISOString();
+      job.resolveCompletion(serializeDiscoveryScanJob(job));
+    }
+  }
+  discoveryScanJobs.clear();
+  runningScheduleIds.clear();
+  discoveryScanRunner = runDiscoveryScan;
+}
+
 export async function runDiscoveryScanSchedule(
   id: string,
   options: { force?: boolean } = {},
@@ -1109,37 +1413,18 @@ export async function runDiscoveryScanSchedule(
     );
   }
 
-  runningScheduleIds.add(id);
-  try {
-    const scan = await runDiscoveryScan(schedule.labId, schedule.cidr);
-    const finishedAt = new Date().toISOString();
-    const message = formatScheduleMessage(scan);
-    db.prepare(
-      `
-      UPDATE discoveryScanSchedules
-      SET lastRunAt = ?, lastResult = ?, lastMessage = ?, updatedAt = ?
-      WHERE id = ?
-    `,
-    ).run(finishedAt, "success", message, finishedAt, id);
-    return {
-      schedule: parseDiscoveryScanSchedule(getDiscoveryScanScheduleRow(id)!),
-      scan,
-    };
-  } catch (err) {
-    const finishedAt = new Date().toISOString();
-    const message =
-      err instanceof Error ? err.message : "Scheduled discovery scan failed.";
-    db.prepare(
-      `
-      UPDATE discoveryScanSchedules
-      SET lastRunAt = ?, lastResult = ?, lastMessage = ?, updatedAt = ?
-      WHERE id = ?
-    `,
-    ).run(finishedAt, "error", message, finishedAt, id);
-    throw err;
-  } finally {
-    runningScheduleIds.delete(id);
+  const started = startDiscoveryScanJob(schedule.labId, schedule.cidr, {
+    scheduleId: schedule.id,
+  });
+  const stored = discoveryScanJobs.get(started.id);
+  if (!stored) throw new ValidationError("Discovery scan job not found.", 404);
+  const completed = await stored.completion;
+  if (completed.status === "failed" || !completed.result) {
+    throw new ValidationError(completed.error ?? "Discovery scan failed.");
   }
+  const updatedSchedule = getDiscoveryScanScheduleRow(id);
+  if (!updatedSchedule) throw new ValidationError("Discovery scan schedule not found.", 404);
+  return { schedule: parseDiscoveryScanSchedule(updatedSchedule), scan: completed.result };
 }
 
 export async function runDueDiscoveryScanSchedules() {
@@ -1153,6 +1438,7 @@ export async function runDueDiscoveryScanSchedules() {
     )
     .all() as Record<string, unknown>[];
   const now = Date.now();
+  const runs: Array<Promise<unknown>> = [];
   for (const row of rows) {
     const schedule = parseDiscoveryScanSchedule(row);
     if (runningScheduleIds.has(schedule.id)) continue;
@@ -1162,16 +1448,14 @@ export async function runDueDiscoveryScanSchedules() {
     ) {
       continue;
     }
-    try {
-      await runDiscoveryScanSchedule(schedule.id);
-    } catch (err) {
-      // Persisted on the schedule; keep the loop alive for other schedules.
+    runs.push(runDiscoveryScanSchedule(schedule.id).catch((err) => {
       console.warn(
         `[rackpad] Scheduled discovery scan failed for ${schedule.cidr}:`,
         err instanceof Error ? err.message : err,
       );
-    }
+    }));
   }
+  await Promise.allSettled(runs);
 }
 
 export function startDiscoveryScanScheduleLoop(pollIntervalMs: number) {
@@ -1232,6 +1516,16 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
       return rows.map(parseDiscoveredDevice);
     },
   );
+
+  app.get<{ Params: { id: string } }>("/scan-jobs/:id", async (req, reply) => {
+    cleanupDiscoveryScanJobs();
+    const job = discoveryScanJobs.get(req.params.id);
+    if (!job) {
+      return reply.status(404).send({ error: "Discovery scan job not found." });
+    }
+    if (!assertLabRead(req, reply, job.labId)) return;
+    return { job: serializeDiscoveryScanJob(job) };
+  });
 
   app.get<{ Querystring: { labId?: string } }>(
     "/schedules",
@@ -1386,14 +1680,22 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const existing = getDiscoveryScanScheduleRow(req.params.id);
       if (!assertLabWriteFromRow(req, reply, existing)) return;
-      try {
-        return await runDiscoveryScanSchedule(req.params.id, { force: true });
-      } catch (err) {
-        if (err instanceof ValidationError && err.statusCode === 409) {
-          return reply.status(409).send({ error: err.message });
+      if (runningScheduleIds.has(req.params.id)) {
+        const activeJob = findActiveDiscoveryScanJobForSchedule(req.params.id);
+        if (activeJob) {
+          return reply.status(202).send({
+            job: serializeDiscoveryScanJob(activeJob),
+          });
         }
-        throw err;
+        return reply
+          .status(409)
+          .send({ error: "Discovery scan schedule is already running." });
       }
+      const schedule = parseDiscoveryScanSchedule(existing!);
+      const job = startDiscoveryScanJob(schedule.labId, schedule.cidr, {
+        scheduleId: schedule.id,
+      });
+      return reply.status(202).send({ job });
     },
   );
 
@@ -1421,8 +1723,10 @@ export const discoveryRoutes: FastifyPluginAsync = async (app) => {
     if (!cidr) {
       throw new ValidationError("cidr is required.");
     }
+    validateScheduleCidr(cidr);
 
-    return runDiscoveryScan(labId, cidr);
+    const job = startDiscoveryScanJob(labId, cidr);
+    return reply.status(202).send({ job });
   });
 
   app.patch<{ Params: { id: string } }>("/:id", async (req, reply) => {

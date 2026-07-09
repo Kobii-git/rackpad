@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n";
 import { Input } from "@/components/ui/Input";
 import { COLOR_PRESETS, normalizeColorToCss } from "@/lib/utils";
 
@@ -12,6 +13,7 @@ export function ColorInput({
   onChange,
   placeholder = "#4a78c4 or blue",
 }: ColorInputProps) {
+  const { t } = useI18n();
   const normalizedValue = value.trim().toLowerCase();
   const selectedPreset = COLOR_PRESETS.find(
     (entry) =>
@@ -33,7 +35,7 @@ export function ColorInput({
           }}
           className="h-8 w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-2 text-sm text-[var(--color-fg)] focus-visible:border-[var(--color-accent-soft)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-accent-soft)]"
         >
-          <option value="">Custom / none</option>
+          <option value="">{t("Custom / none")}</option>
           {COLOR_PRESETS.map((preset) => (
             <option key={preset.value} value={preset.value}>
               {preset.label}

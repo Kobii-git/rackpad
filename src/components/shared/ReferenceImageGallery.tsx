@@ -102,7 +102,7 @@ export function ReferenceImageGallery({
     <Card>
       <CardHeader>
         <CardTitle>
-          <CardLabel>Pictures</CardLabel>
+          <CardLabel>{t("Pictures")}</CardLabel>
           <CardHeading>
             {entityType === "rack" && face
               ? `${capitalize(face)} reference`
@@ -135,14 +135,14 @@ export function ReferenceImageGallery({
             <Input
               value={label}
               onChange={(event) => setLabel(event.target.value)}
-              placeholder="Label"
+              placeholder={t("Label")}
             />
             {!compact && (
               <textarea
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
                 className="rk-control rk-textarea min-h-20 w-full text-sm"
-                placeholder="Notes"
+                placeholder={t("Notes")}
               />
             )}
             <div className="flex items-center justify-between gap-3">

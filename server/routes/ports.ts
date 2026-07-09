@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { db, parseRow } from '../db.js'
 import {
   appendLabFilter,
+  assertGlobalAdmin,
   assertLabReadFromRow,
   assertLabWrite,
   assertLabWriteFromRow,
@@ -122,6 +123,7 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.post('/templates', async (req, reply) => {
+    if (!assertGlobalAdmin(req, reply)) return
     const body = asObject(req.body)
     const id = optionalString(body, 'id', { maxLength: 80 }) ?? createId('pt')
     const name = requiredString(body, 'name', { maxLength: 120 })
@@ -140,6 +142,7 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.patch<{ Params: { id: string } }>('/templates/:id', async (req, reply) => {
+    if (!assertGlobalAdmin(req, reply)) return
     if (BUILT_IN_PORT_TEMPLATES.some((template) => template.id === req.params.id)) {
       return reply.status(403).send({ error: 'Built-in templates cannot be modified.' })
     }
@@ -189,6 +192,7 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete<{ Params: { id: string } }>('/templates/:id', async (req, reply) => {
+    if (!assertGlobalAdmin(req, reply)) return
     if (BUILT_IN_PORT_TEMPLATES.some((template) => template.id === req.params.id)) {
       return reply.status(403).send({ error: 'Built-in templates cannot be deleted.' })
     }

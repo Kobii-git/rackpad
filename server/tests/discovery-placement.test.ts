@@ -10,6 +10,7 @@ process.env.NODE_ENV = 'test'
 process.env.RACKPAD_SECRET_KEY = 'rackpad-test-secret-key'
 
 const { db } = await import('../db.js')
+const { cidrContainsHostIp } = await import('../lib/ip-cidr.js')
 const {
   applyWifiDiscoveryPlacementToDevice,
   cidrContainsIp,
@@ -105,6 +106,15 @@ test('cidrContainsIp matches subnet membership', () => {
   assert.equal(cidrContainsIp('192.168.30.0/24', '192.168.31.1'), false)
   assert.equal(cidrContainsIp('192.168.30.42/24', '192.168.30.55'), true)
   assert.equal(cidrContainsIp('192.168.30.42/24', '192.168.31.1'), false)
+})
+
+test('cidrContainsHostIp excludes network and broadcast while supporting point-to-point ranges', () => {
+  assert.equal(cidrContainsHostIp('192.168.30.0/24', '192.168.30.0'), false)
+  assert.equal(cidrContainsHostIp('192.168.30.0/24', '192.168.30.255'), false)
+  assert.equal(cidrContainsHostIp('192.168.30.0/24', '192.168.30.1'), true)
+  assert.equal(cidrContainsHostIp('192.168.30.0/31', '192.168.30.0'), true)
+  assert.equal(cidrContainsHostIp('192.168.30.0/31', '192.168.30.1'), true)
+  assert.equal(cidrContainsHostIp('192.168.30.5/32', '192.168.30.5'), true)
 })
 
 test('resolveWifiClientPlacement picks the sole AP on a WiFi VLAN subnet', () => {

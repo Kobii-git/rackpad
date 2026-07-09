@@ -34,6 +34,7 @@ import { importsRoutes } from "./routes/imports.js";
 import { getAuthToken, lookupSession, needsBootstrap } from "./lib/auth.js";
 import { fetchUserLabAccess } from "./lib/lab-access.js";
 import { ValidationError } from "./lib/validation.js";
+import { normalizeSafeSubnetCidrs } from "./lib/subnet-integrity.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = path.resolve(__dirname, "../dist");
@@ -135,6 +136,7 @@ function getRequestOrigin(headers: Record<string, unknown>) {
 }
 
 export async function createApp() {
+  normalizeSafeSubnetCidrs();
   const trustedHosts = new Set(
     parseDelimitedEnv("TRUSTED_HOSTS")
       .map(normalizeHost)
@@ -150,7 +152,9 @@ export async function createApp() {
     bodyLimit: 20 * 1024 * 1024,
     trustProxy: envFlag("TRUST_PROXY"),
     logger:
-      process.env.NODE_ENV === "production"
+      process.env.NODE_ENV === "test"
+        ? false
+        : process.env.NODE_ENV === "production"
         ? true
         : {
             transport: {
@@ -226,7 +230,11 @@ export async function createApp() {
 
   app.setErrorHandler((error, _req, reply) => {
     if (error instanceof ValidationError) {
-      reply.status(error.statusCode).send({ error: error.message });
+      reply.status(error.statusCode).send({
+        error: error.message,
+        ...(error.code ? { code: error.code } : {}),
+        ...(error.details ?? {}),
+      });
       return;
     }
 

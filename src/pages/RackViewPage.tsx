@@ -498,8 +498,8 @@ export default function RackViewPage() {
           <Card className="w-full max-w-xl">
             <CardHeader>
               <CardTitle>
-                <CardLabel>Inventory</CardLabel>
-                <CardHeading>No racks documented yet</CardHeading>
+                <CardLabel>{t("Inventory")}</CardLabel>
+                <CardHeading>{t("No racks documented yet")}</CardHeading>
               </CardTitle>
             </CardHeader>
             <CardBody className="space-y-4">
@@ -558,23 +558,17 @@ export default function RackViewPage() {
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-medium text-[var(--color-fg)]">
-                    Loose / room tech
-                  </span>
+                  <span className="font-mono text-xs font-medium text-[var(--color-fg)]">{t("Loose / room tech")}</span>
                   <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
                     {unrackedDevices.length}
                   </Mono>
                 </div>
-                <div className="mt-0.5 text-[11px] text-[var(--color-fg-subtle)]">
-                  Devices not mounted in a physical rack
-                </div>
+                <div className="mt-0.5 text-[11px] text-[var(--color-fg-subtle)]">{t("Devices not mounted in a physical rack")}</div>
               </button>
 
               {rooms.length > 0 && (
                 <div className="my-2 border-y border-[var(--border-default)] py-2">
-                  <div className="px-4 pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
-                    Rooms
-                  </div>
+                  <div className="px-4 pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">{t("Rooms")}</div>
                   {rooms.map((room) => {
                     const roomRackCount = racks.filter(
                       (entry) => entry.roomId === room.id,
@@ -671,9 +665,7 @@ export default function RackViewPage() {
               <>
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <div>
-                    <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                      Rack
-                    </div>
+                    <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">{t("Rack")}</div>
                     <h2 className="text-lg font-semibold tracking-normal text-[var(--color-fg)]">
                       {rack.name}
                     </h2>
@@ -689,9 +681,9 @@ export default function RackViewPage() {
                     onValueChange={(value) => setFace(value as RackDisplayFace)}
                   >
                     <TabsList>
-                      <TabsTrigger value="front">Front</TabsTrigger>
-                      <TabsTrigger value="rear">Rear</TabsTrigger>
-                      <TabsTrigger value="both">Both</TabsTrigger>
+                      <TabsTrigger value="front">{t("Front")}</TabsTrigger>
+                      <TabsTrigger value="rear">{t("Rear")}</TabsTrigger>
+                      <TabsTrigger value="both">{t("Both")}</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
@@ -867,26 +859,18 @@ function UnrackedPanel({
   devices: Device[];
   portsByDeviceId: Record<string, Port[]>;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-4">
       <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-          Physical layout
-        </div>
-        <h2 className="text-lg font-semibold tracking-normal text-[var(--color-fg)]">
-          Loose / room tech
-        </h2>
-        <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
-          Devices that live on a shelf, desk, wall, or in a room instead of a
-          rack.
-        </div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">{t("Physical layout")}</div>
+        <h2 className="text-lg font-semibold tracking-normal text-[var(--color-fg)]">{t("Loose / room tech")}</h2>
+        <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">{t("Devices that live on a shelf, desk, wall, or in a room instead of a rack.")}</div>
       </div>
 
       {devices.length === 0 ? (
         <Card>
-          <CardBody className="py-8 text-center text-sm text-[var(--color-fg-subtle)]">
-            No unracked devices yet.
-          </CardBody>
+          <CardBody className="py-8 text-center text-sm text-[var(--color-fg-subtle)]">{t("No unracked devices yet.")}</CardBody>
         </Card>
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
@@ -894,7 +878,7 @@ function UnrackedPanel({
             <Card key={device.id}>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Loose gear</CardLabel>
+                  <CardLabel>{t("Loose gear")}</CardLabel>
                   <CardHeading>{device.hostname}</CardHeading>
                 </CardTitle>
                 <Button variant="ghost" size="icon" asChild>
@@ -975,9 +959,7 @@ function RoomPanel({
   return (
     <div className="space-y-5">
       <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-          Room
-        </div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">{t("Room")}</div>
         <h2 className="text-lg font-semibold tracking-normal text-[var(--color-fg)]">
           {room.name}
         </h2>
@@ -1011,7 +993,7 @@ function RoomPanel({
         <Card>
           <CardHeader>
             <CardTitle>
-              <CardLabel>Racks</CardLabel>
+              <CardLabel>{t("Racks")}</CardLabel>
               <CardHeading>{racks.length} in this room</CardHeading>
             </CardTitle>
             <Badge tone="info">
@@ -1055,7 +1037,7 @@ function RoomPanel({
         <Card>
           <CardHeader>
             <CardTitle>
-              <CardLabel>Loose gear</CardLabel>
+              <CardLabel>{t("Loose gear")}</CardLabel>
               <CardHeading>{devices.length} devices</CardHeading>
             </CardTitle>
             <Badge tone="cyan">
@@ -1146,11 +1128,12 @@ function DeviceSummaryCard({
   position?: string;
   childDevices?: Device[];
 }) {
+  const { t } = useI18n();
   return (
     <Card>
       <CardHeader>
         <CardTitle>
-          <CardLabel>Device</CardLabel>
+          <CardLabel>{t("Device")}</CardLabel>
           <CardHeading>{device.hostname}</CardHeading>
         </CardTitle>
         <Button variant="ghost" size="icon" asChild>
@@ -1198,9 +1181,7 @@ function DeviceSummaryCard({
 
         {device.deviceType === RACK_SHELF_TYPE && childDevices.length > 0 && (
           <div className="mt-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-3">
-            <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-              On this shelf / tray
-            </div>
+            <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("On this shelf / tray")}</div>
             <div className="space-y-2">
               {childDevices
                 .sort((a, b) => a.hostname.localeCompare(b.hostname))
@@ -1254,6 +1235,7 @@ function RackEditorCard({
   onDelete: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card>
       <CardHeader>
@@ -1276,7 +1258,7 @@ function RackEditorCard({
               onChange={(event) =>
                 setRackForm((prev) => ({ ...prev, name: event.target.value }))
               }
-              placeholder="Rack A"
+              placeholder={t("Rack A")}
             />
           </Field>
           <Field label="Total U">
@@ -1303,7 +1285,7 @@ function RackEditorCard({
               }
               className="rk-control w-full text-sm"
             >
-              <option value="">-- no room selected --</option>
+              <option value="">{t("-- no room selected --")}</option>
               {rooms.map((room) => (
                 <option key={room.id} value={room.id}>
                   {room.name}
@@ -1320,7 +1302,7 @@ function RackEditorCard({
                   location: event.target.value,
                 }))
               }
-              placeholder="Garage wall, office, DC row A"
+              placeholder={t("Garage wall, office, DC row A")}
             />
           </Field>
           <Field label="Description">
@@ -1332,7 +1314,7 @@ function RackEditorCard({
                   description: event.target.value,
                 }))
               }
-              placeholder="Main homelab rack"
+              placeholder={t("Main homelab rack")}
             />
           </Field>
         </div>
@@ -1344,7 +1326,7 @@ function RackEditorCard({
               setRackForm((prev) => ({ ...prev, notes: event.target.value }))
             }
             className="w-full resize-none rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-2.5 py-2 text-sm text-[var(--color-fg)] focus-visible:border-[var(--color-accent-soft)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-accent-soft)]"
-            placeholder="Power feeds, cooling notes, ownership..."
+            placeholder={t("Power feeds, cooling notes, ownership...")}
           />
         </Field>
 
@@ -1355,9 +1337,7 @@ function RackEditorCard({
         )}
 
         <div className="flex items-center justify-between gap-3">
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            Cancel
-          </Button>
+          <Button variant="ghost" size="sm" onClick={onCancel}>{t("Cancel")}</Button>
           <div className="flex items-center gap-2">
             {canDelete && (
               <Button
@@ -1408,6 +1388,7 @@ function RoomEditorCard({
   onDelete: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card>
       <CardHeader>
@@ -1430,7 +1411,7 @@ function RoomEditorCard({
               onChange={(event) =>
                 setRoomForm((prev) => ({ ...prev, name: event.target.value }))
               }
-              placeholder="Server room, garage, office"
+              placeholder={t("Server room, garage, office")}
             />
           </Field>
           <Field label="Location">
@@ -1442,7 +1423,7 @@ function RoomEditorCard({
                   location: event.target.value,
                 }))
               }
-              placeholder="House, office, outbuilding"
+              placeholder={t("House, office, outbuilding")}
             />
           </Field>
         </div>
@@ -1455,7 +1436,7 @@ function RoomEditorCard({
                 description: event.target.value,
               }))
             }
-            placeholder="What lives here?"
+            placeholder={t("What lives here?")}
           />
         </Field>
         <Field label="Notes">
@@ -1466,7 +1447,7 @@ function RoomEditorCard({
               setRoomForm((prev) => ({ ...prev, notes: event.target.value }))
             }
             className="w-full resize-none rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-2.5 py-2 text-sm text-[var(--color-fg)] focus-visible:border-[var(--color-accent-soft)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-accent-soft)]"
-            placeholder="Cooling, power, WiFi coverage, access notes..."
+            placeholder={t("Cooling, power, WiFi coverage, access notes...")}
           />
         </Field>
 
@@ -1477,9 +1458,7 @@ function RoomEditorCard({
         )}
 
         <div className="flex items-center justify-between gap-3">
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            Cancel
-          </Button>
+          <Button variant="ghost" size="sm" onClick={onCancel}>{t("Cancel")}</Button>
           <div className="flex items-center gap-2">
             {canDelete && (
               <Button

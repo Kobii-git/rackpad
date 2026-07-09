@@ -398,19 +398,19 @@ export default function VisualizerView() {
                 writeString(LAYOUT_MODE_STORAGE_KEY, next);
               }}
               className="rk-control h-8 w-36 px-2 text-xs text-[var(--text-primary)]"
-              aria-label="Visualizer layout"
+              aria-label={t("Visualizer layout")}
             >
-              <option value="grouped">Grouped</option>
-              <option value="pyramid">Pyramid</option>
-              <option value="diagram">Diagram</option>
+              <option value="grouped">{t("Grouped")}</option>
+              <option value="pyramid">{t("Pyramid")}</option>
+              <option value="diagram">{t("Diagram")}</option>
             </select>
             <select
               value={cableType}
               onChange={(event) => setCableType(event.target.value)}
               className="rk-control h-8 w-40 px-2 text-xs text-[var(--text-primary)]"
-              aria-label="Filter visualized cables by type"
+              aria-label={t("Filter visualized cables by type")}
             >
-              <option value="all">All cable types</option>
+              <option value="all">{t("All cable types")}</option>
               {model.cableTypes.map((type) => (
                 <option key={type} value={type}>
                   {type}
@@ -421,9 +421,7 @@ export default function VisualizerView() {
               variant={healthOverlay ? "secondary" : "outline"}
               size="sm"
               onClick={toggleHealthOverlay}
-            >
-              Health
-            </Button>
+            >{t("Health")}</Button>
             {layoutMode !== "diagram" && (
               <Button
                 variant={traceMode.enabled ? "secondary" : "outline"}
@@ -445,9 +443,7 @@ export default function VisualizerView() {
                         },
                   )
                 }
-              >
-                Trace mode
-              </Button>
+              >{t("Trace mode")}</Button>
             )}
             {layoutMode === "grouped" && (
               <Button
@@ -571,6 +567,7 @@ function VisualizerOrderPanel({
   onReset: () => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const selectedDevices =
     selectedGroup?.nodes.map((node) => ({
       id: node.device.id,
@@ -585,20 +582,16 @@ function VisualizerOrderPanel({
     <aside className="fixed right-5 top-[88px] z-40 flex max-h-[calc(100vh-112px)] w-[min(440px,calc(100vw-32px))] flex-col overflow-hidden rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-1)] shadow-2xl">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--border-muted)] px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-            Visualizer order
-          </h2>
-          <p className="text-xs text-[var(--text-tertiary)]">
-            Stored on this browser
-          </p>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t("Visualizer order")}</h2>
+          <p className="text-xs text-[var(--text-tertiary)]">{t("Stored on this browser")}</p>
         </div>
         <div className="flex items-center gap-1">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            title="Reset order"
-            aria-label="Reset visualizer order"
+            title={t("Reset order")}
+            aria-label={t("Reset visualizer order")}
             onClick={onReset}
           >
             <RotateCcw />
@@ -607,8 +600,8 @@ function VisualizerOrderPanel({
             type="button"
             variant="ghost"
             size="icon"
-            title="Close"
-            aria-label="Close visualizer order panel"
+            title={t("Close")}
+            aria-label={t("Close visualizer order panel")}
             onClick={onClose}
           >
             <X />
@@ -617,36 +610,34 @@ function VisualizerOrderPanel({
       </div>
       <div className="space-y-5 overflow-y-auto px-4 py-4">
         <OrderList
-          title="Rooms and rack sections"
+          title={t("Rooms and rack sections")}
           emptyLabel="No rack sections to order."
           items={sections}
           onMove={onMoveSection}
         />
         <OrderList
-          title="Racks"
+          title={t("Racks")}
           emptyLabel="No racks to order."
           items={racks}
           onMove={onMoveRack}
         />
         <OrderList
-          title="Loose groups"
+          title={t("Loose groups")}
           emptyLabel="No loose device groups to order."
           items={groups}
           onMove={onMoveGroup}
         />
         <section className="space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-              Devices in group
-            </h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">{t("Devices in group")}</h3>
             <select
               value={selectedGroupId}
               onChange={(event) => onSelectedGroupChange(event.target.value)}
               className="rk-control h-8 max-w-[240px] px-2 text-xs text-[var(--text-primary)]"
-              aria-label="Choose visualizer group to order devices"
+              aria-label={t("Choose visualizer group to order devices")}
             >
               {groups.length === 0 ? (
-                <option value="">No groups</option>
+                <option value="">{t("No groups")}</option>
               ) : (
                 groups.map((group) => (
                   <option key={group.id} value={group.id}>
@@ -657,9 +648,7 @@ function VisualizerOrderPanel({
             </select>
           </div>
           {selectedGroup && selectedGroup.total > 0 && selectedDevices.length === 0 ? (
-            <p className="rounded-[var(--radius-sm)] border border-[var(--border-muted)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-tertiary)]">
-              Expand this group in the visualizer to order its devices.
-            </p>
+            <p className="rounded-[var(--radius-sm)] border border-[var(--border-muted)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-tertiary)]">{t("Expand this group in the visualizer to order its devices.")}</p>
           ) : (
             <OrderList
               title=""
@@ -691,6 +680,7 @@ function OrderList({
   showTitle?: boolean;
   onMove: (id: string, direction: MoveDirection) => void;
 }) {
+  const { t } = useI18n();
   return (
     <section className="space-y-2">
       {showTitle && (
@@ -724,7 +714,7 @@ function OrderList({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  title="Move up"
+                  title={t("Move up")}
                   aria-label={`Move ${item.label} up`}
                   disabled={index === 0}
                   onClick={() => onMove(item.id, "up")}
@@ -736,7 +726,7 @@ function OrderList({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  title="Move down"
+                  title={t("Move down")}
                   aria-label={`Move ${item.label} down`}
                   disabled={index === items.length - 1}
                   onClick={() => onMove(item.id, "down")}

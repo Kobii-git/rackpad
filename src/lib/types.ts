@@ -363,6 +363,11 @@ export interface Subnet {
   gateway?: string | null;
   dnsServers?: string[];
   vlanId?: ID;
+  integrity: {
+    state: "ok" | "legacy-overlap" | "invalid-cidr";
+    canonicalCidr: string | null;
+    conflicts: Array<{ id: ID; cidr: string; name: string }>;
+  };
 }
 
 export interface DhcpScope {
@@ -389,6 +394,30 @@ export interface IpAssignment {
   containerId?: ID;
   hostname?: string;
   description?: string;
+  integrity?: {
+    state: "ok" | "cross-lab-reference" | "missing-reference";
+    fields: Array<"deviceId" | "portId" | "vmId" | "containerId">;
+  };
+}
+
+export interface AdminIntegrityReport {
+  checkedAt: string;
+  subnetConflicts: Array<{
+    id: ID;
+    labId: ID;
+    cidr: string;
+    name: string;
+    integrity: Subnet["integrity"];
+    childCounts: { assignments: number; dhcpScopes: number; zones: number };
+  }>;
+  assignmentReferences: Array<{
+    id: ID;
+    subnetId: ID;
+    subnetLabId: ID;
+    ipAddress: string;
+    integrity: NonNullable<IpAssignment["integrity"]>;
+    references: Pick<IpAssignment, "deviceId" | "portId" | "vmId" | "containerId">;
+  }>;
 }
 
 export interface DeviceService {
@@ -552,6 +581,30 @@ export interface DiscoveryScanResult {
   rows: DiscoveredDevice[];
 }
 
+export type DiscoveryScanJobStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed";
+
+export interface DiscoveryScanJob {
+  id: ID;
+  labId: ID;
+  cidr: string;
+  status: DiscoveryScanJobStatus;
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  result?: DiscoveryScanResult | null;
+  error?: string | null;
+  queuePosition?: number | null;
+}
+
+export interface DiscoveryScanJobResponse {
+  job: DiscoveryScanJob;
+}
+
 export interface DiscoveryScanSchedule {
   id: ID;
   labId: ID;
@@ -564,11 +617,6 @@ export interface DiscoveryScanSchedule {
   lastMessage?: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface DiscoveryScanScheduleRunResult {
-  schedule: DiscoveryScanSchedule;
-  scan: DiscoveryScanResult | null;
 }
 
 export interface WifiController {

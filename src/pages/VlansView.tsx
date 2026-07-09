@@ -666,7 +666,7 @@ export default function VlansView() {
                             subnetName: prev.subnetName || event.target.value,
                           }))
                         }
-                        placeholder="Management"
+                        placeholder={t("Management")}
                       />
                     </Field>
                   </div>
@@ -685,7 +685,7 @@ export default function VlansView() {
                               color: value,
                             }))
                           }
-                          placeholder="#4f8cff or blue"
+                          placeholder={t("#4f8cff or blue")}
                         />
                       </Field>
                     )}
@@ -698,7 +698,7 @@ export default function VlansView() {
                             description: event.target.value,
                           }))
                         }
-                        placeholder="Core management network"
+                        placeholder={t("Core management network")}
                       />
                     </Field>
                   </div>
@@ -728,7 +728,7 @@ export default function VlansView() {
                             subnetName: event.target.value,
                           }))
                         }
-                        placeholder="Management subnet"
+                        placeholder={t("Management subnet")}
                       />
                     </Field>
                   </div>
@@ -767,7 +767,7 @@ export default function VlansView() {
                           subnetDescription: event.target.value,
                         }))
                       }
-                      placeholder="Anything specific about this subnet"
+                      placeholder={t("Anything specific about this subnet")}
                     />
                   </Field>
                 </div>
@@ -808,7 +808,7 @@ export default function VlansView() {
                                 dhcpName: event.target.value,
                               }))
                             }
-                            placeholder="clients"
+                            placeholder={t("clients")}
                           />
                         </Field>
                         <Field label={t("Start IP")}>
@@ -845,7 +845,7 @@ export default function VlansView() {
                               dhcpDescription: event.target.value,
                             }))
                           }
-                          placeholder="General client pool"
+                          placeholder={t("General client pool")}
                         />
                       </Field>
                     </>
@@ -943,8 +943,8 @@ export default function VlansView() {
         <Card>
           <CardHeader>
             <CardTitle>
-              <CardLabel>VLAN ID ranges</CardLabel>
-              <CardHeading>Reserved VLAN ID space | 1-4094</CardHeading>
+              <CardLabel>{t("VLAN ID ranges")}</CardLabel>
+              <CardHeading>{t("Reserved VLAN ID space | 1-4094")}</CardHeading>
             </CardTitle>
             <Mono className="text-[11px] text-[var(--color-fg-subtle)]">
               {totalUsed} / {totalReserved} used in reserved ranges
@@ -966,7 +966,7 @@ export default function VlansView() {
         <Card>
           <CardHeader>
             <CardTitle>
-              <CardLabel>Documented VLAN ID ranges</CardLabel>
+              <CardLabel>{t("Documented VLAN ID ranges")}</CardLabel>
               <CardHeading>{filteredRanges.length} ranges</CardHeading>
             </CardTitle>
           </CardHeader>
@@ -978,37 +978,27 @@ export default function VlansView() {
                     sortKey="name"
                     sort={rangeSort}
                     onSort={handleRangeSort}
-                  >
-                    Range
-                  </SortableHeader>
+                  >{t("Range")}</SortableHeader>
                   <SortableHeader
                     sortKey="ids"
                     sort={rangeSort}
                     onSort={handleRangeSort}
-                  >
-                    IDs
-                  </SortableHeader>
+                  >{t("IDs")}</SortableHeader>
                   <SortableHeader
                     sortKey="used"
                     sort={rangeSort}
                     onSort={handleRangeSort}
-                  >
-                    Used
-                  </SortableHeader>
+                  >{t("Used")}</SortableHeader>
                   <SortableHeader
                     sortKey="free"
                     sort={rangeSort}
                     onSort={handleRangeSort}
-                  >
-                    Free
-                  </SortableHeader>
+                  >{t("Free")}</SortableHeader>
                   <SortableHeader
                     sortKey="purpose"
                     sort={rangeSort}
                     onSort={handleRangeSort}
-                  >
-                    Purpose
-                  </SortableHeader>
+                  >{t("Purpose")}</SortableHeader>
                 </tr>
               </thead>
               <tbody>
@@ -1098,7 +1088,7 @@ export default function VlansView() {
                             name: event.target.value,
                           }))
                         }
-                        placeholder="Servers"
+                        placeholder={t("Servers")}
                       />
                     </Field>
                     <Field label="Color">
@@ -1107,7 +1097,7 @@ export default function VlansView() {
                         onChange={(value) =>
                           setRangeForm((prev) => ({ ...prev, color: value }))
                         }
-                        placeholder="#4f8cff or blue"
+                        placeholder={t("#4f8cff or blue")}
                       />
                     </Field>
                   </div>
@@ -1152,7 +1142,7 @@ export default function VlansView() {
                           purpose: event.target.value,
                         }))
                       }
-                      placeholder="Server LANs, storage, management"
+                      placeholder={t("Server LANs, storage, management")}
                     />
                   </Field>
 
@@ -1170,9 +1160,7 @@ export default function VlansView() {
                         setCreatingRange(false);
                         setRangeError("");
                       }}
-                    >
-                      Cancel
-                    </Button>
+                    >{t("Cancel")}</Button>
                     <div className="flex items-center gap-2">
                       {!creatingRange && selectedRange && (
                         <Button
@@ -1312,9 +1300,7 @@ export default function VlansView() {
               <button
                 onClick={() => setSelectedRangeId(undefined)}
                 className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)] hover:text-[var(--color-fg)]"
-              >
-                Clear filter
-              </button>
+              >{t("Clear filter")}</button>
             )}
           </CardHeader>
           <CardBody className="border-b border-[var(--border-subtle)]">
@@ -1324,33 +1310,27 @@ export default function VlansView() {
                 <Input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search VLAN, range, CIDR, purpose..."
+                  placeholder={t("Search VLAN, range, CIDR, purpose...")}
                   className="pl-8"
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rk-kicker">Sort VLANs</span>
+                <span className="rk-kicker">{t("Sort VLANs")}</span>
                 <SortButton
                   active={vlanSort.key === "vlanId"}
                   direction={vlanSort.direction}
                   onClick={() => handleVlanSort("vlanId")}
-                >
-                  ID
-                </SortButton>
+                >{t("ID")}</SortButton>
                 <SortButton
                   active={vlanSort.key === "name"}
                   direction={vlanSort.direction}
                   onClick={() => handleVlanSort("name")}
-                >
-                  Name
-                </SortButton>
+                >{t("Name")}</SortButton>
                 <SortButton
                   active={vlanSort.key === "subnets"}
                   direction={vlanSort.direction}
                   onClick={() => handleVlanSort("subnets")}
-                >
-                  IP ranges
-                </SortButton>
+                >{t("IP ranges")}</SortButton>
               </div>
             </div>
           </CardBody>
@@ -1466,9 +1446,7 @@ export default function VlansView() {
                         <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3">
                           <div className="mb-2 flex items-center justify-between gap-3">
                             <div>
-                              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-                                Linked IP ranges
-                              </div>
+                              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Linked IP ranges")}</div>
                               <div className="text-xs text-[var(--color-fg-subtle)]">
                                 {linkedSubnets.length > 0
                                   ? `${linkedSubnets.length} subnet${linkedSubnets.length === 1 ? "" : "s"} linked to VLAN ${vlan.vlanId}`
@@ -1588,7 +1566,7 @@ export default function VlansView() {
                                         name: event.target.value,
                                       }))
                                     }
-                                    placeholder="Servers management"
+                                    placeholder={t("Servers management")}
                                   />
                                 </Field>
                               </div>
@@ -1601,7 +1579,7 @@ export default function VlansView() {
                                       description: event.target.value,
                                     }))
                                   }
-                                  placeholder="Primary subnet for this VLAN"
+                                  placeholder={t("Primary subnet for this VLAN")}
                                 />
                               </Field>
                               <div className="grid gap-4 md:grid-cols-2">
@@ -1646,9 +1624,7 @@ export default function VlansView() {
                                     setSubnetForm(EMPTY_SUBNET_FORM);
                                     setSubnetError("");
                                   }}
-                                >
-                                  Cancel
-                                </Button>
+                                >{t("Cancel")}</Button>
                                 <Button
                                   size="sm"
                                   onClick={() =>

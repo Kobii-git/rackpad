@@ -224,9 +224,7 @@ export function PortList({
                     <span className="inline-flex items-center gap-2">
                       {formatPortLabel(port)}
 	                      {snmpVerifiedPortIds?.has(port.id) ? (
-	                        <span className="rounded border border-[var(--accent-primary)]/35 bg-[var(--accent-primary)]/10 px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--accent-primary)]">
-	                          SNMP
-	                        </span>
+	                        <span className="rounded border border-[var(--accent-primary)]/35 bg-[var(--accent-primary)]/10 px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--accent-primary)]">{t("SNMP")}</span>
 	                      ) : null}
 	                      {port.portRole === "aggregate" ? (
 	                        <span className="rounded border border-[var(--accent-secondary)]/35 bg-[var(--accent-secondary)]/10 px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--accent-secondary)]">

@@ -1,10 +1,36 @@
 import dns from "node:dns/promises";
 import type { LookupAddress } from "node:dns";
 import net from "node:net";
+import http from "node:http";
+import https from "node:https";
 import { ValidationError } from "./validation.js";
 
 const DEFAULT_RESERVED_HOST_MESSAGE =
   "Target host must be a routable public/LAN host outside reserved ranges.";
+type HostLookup = (host: string) => Promise<LookupAddress[]>;
+let hostLookup: HostLookup = (host) => dns.lookup(host, { all: true });
+type PinnedRequestResult = { statusCode: number; location?: string };
+type PinnedRequestTransport = (
+  input: URL,
+  resolved: LookupAddress,
+  options: {
+    timeoutMs: number;
+    headers: Record<string, string>;
+    method: "GET" | "POST";
+    body?: string;
+  },
+) => Promise<PinnedRequestResult>;
+let pinnedRequestTransport: PinnedRequestTransport = performPinnedRequest;
+
+export function setNetworkHostLookupForTests(lookup: HostLookup | null) {
+  hostLookup = lookup ?? ((host) => dns.lookup(host, { all: true }));
+}
+
+export function setPinnedRequestTransportForTests(
+  transport: PinnedRequestTransport | null,
+) {
+  pinnedRequestTransport = transport ?? performPinnedRequest;
+}
 
 export async function ensureRoutableHost(
   target: string | URL,
@@ -26,14 +52,14 @@ export async function resolveRoutableHost(
 
   let addresses: LookupAddress[];
   try {
-    addresses = await dns.lookup(host, { all: true });
+    addresses = await hostLookup(host);
   } catch {
     throw new ValidationError("Target host could not be resolved.");
   }
 
   if (
     addresses.length === 0 ||
-    addresses.some((entry) => isReservedAddress(entry.address))
+    addresses.some((entry) => isBlockedNetworkAddress(entry.address))
   ) {
     throw new ValidationError(message);
   }
@@ -49,10 +75,10 @@ function normalizeLookupHost(host: string) {
   return trimmed;
 }
 
-function isReservedAddress(address: string) {
+export function isBlockedNetworkAddress(address: string) {
   const normalized = normalizeLookupHost(address);
   if (net.isIP(normalized) === 4) {
-    return isReservedIpv4(normalized);
+    return isBlockedIpv4(normalized);
   }
 
   const bytes = parseIpv6Bytes(normalized);
@@ -60,26 +86,139 @@ function isReservedAddress(address: string) {
 
   const mappedIpv4 = mappedIpv4FromIpv6(bytes);
   if (mappedIpv4) {
-    return isReservedIpv4(mappedIpv4);
+    return isBlockedIpv4(mappedIpv4);
   }
 
   return (
+    bytes.every((byte) => byte === 0) ||
     bytes.every((byte, index) => byte === (index === 15 ? 1 : 0)) ||
-    (bytes[0] & 0xfe) === 0xfc ||
-    (bytes[0] === 0xfe && (bytes[1] & 0xc0) === 0x80)
+    (bytes[0] === 0xfe && (bytes[1] & 0xc0) === 0x80) ||
+    bytes[0] === 0xff ||
+    (bytes[0] === 0x20 && bytes[1] === 0x01 && bytes[2] === 0x0d && bytes[3] === 0xb8) ||
+    bytes.slice(0, 12).every((byte) => byte === 0)
   );
 }
 
-function isReservedIpv4(address: string) {
+function isBlockedIpv4(address: string) {
   const [a, b, c, d] = address.split(".").map((part) => Number(part));
   return (
-    (a === 0 && b === 0 && c === 0 && d === 0) ||
-    a === 10 ||
+    a === 0 ||
     a === 127 ||
     (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168)
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 192 && b === 0 && c === 0) ||
+    (a === 192 && b === 0 && c === 2) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113) ||
+    a >= 224 ||
+    (a === 255 && b === 255 && c === 255 && d === 255)
   );
+}
+
+export async function requestPinnedUrl(
+  input: URL,
+  options: {
+    timeoutMs?: number;
+    maxRedirects?: number;
+    headers?: Record<string, string>;
+    method?: "GET" | "POST";
+    body?: string;
+  } = {},
+): Promise<{ statusCode: number; url: URL }> {
+  const timeoutMs = options.timeoutMs ?? 5_000;
+  const maxRedirects = options.maxRedirects ?? 3;
+  if (input.protocol !== "http:" && input.protocol !== "https:") {
+    throw new ValidationError("Target URL must use HTTP or HTTPS.");
+  }
+  if (input.username || input.password) {
+    throw new ValidationError("Target URL must not contain credentials.");
+  }
+
+  const resolved = await resolveRoutableHost(input);
+  const status = await pinnedRequestTransport(input, resolved, {
+    timeoutMs,
+    headers: options.headers ?? {},
+    method: options.method ?? "GET",
+    body: options.body,
+  });
+
+  if (
+    status.statusCode >= 300 &&
+    status.statusCode < 400 &&
+    status.location
+  ) {
+    if (maxRedirects <= 0) {
+      throw new ValidationError("Target returned too many redirects.");
+    }
+    const preserveMethod = status.statusCode === 307 || status.statusCode === 308;
+    return requestPinnedUrl(new URL(status.location, input), {
+      ...options,
+      maxRedirects: maxRedirects - 1,
+      method: preserveMethod ? options.method : "GET",
+      body: preserveMethod ? options.body : undefined,
+    });
+  }
+  return { statusCode: status.statusCode, url: input };
+}
+
+export function buildPinnedRequestOptions(
+  input: URL,
+  resolved: LookupAddress,
+  headers: Record<string, string> = {},
+  method: "GET" | "POST" = "GET",
+): http.RequestOptions & https.RequestOptions {
+  const requestOptions: http.RequestOptions & https.RequestOptions = {
+    protocol: input.protocol,
+    hostname: resolved.address,
+    family: resolved.family,
+    port: input.port
+      ? Number.parseInt(input.port, 10)
+      : input.protocol === "https:"
+        ? 443
+        : 80,
+    method,
+    path: `${input.pathname}${input.search}`,
+    headers: { ...headers, Host: input.host },
+  };
+  if (input.protocol === "https:" && net.isIP(input.hostname) === 0) {
+    requestOptions.servername = input.hostname;
+  }
+  return requestOptions;
+}
+
+function performPinnedRequest(
+  input: URL,
+  resolved: LookupAddress,
+  options: {
+    timeoutMs: number;
+    headers: Record<string, string>;
+    method: "GET" | "POST";
+    body?: string;
+  },
+) {
+  return new Promise<PinnedRequestResult>((resolve, reject) => {
+    const requestOptions = buildPinnedRequestOptions(
+      input,
+      resolved,
+      options.headers,
+      options.method,
+    );
+    const request = input.protocol === "https:"
+      ? https.request(requestOptions)
+      : http.request(requestOptions);
+    request.setTimeout(options.timeoutMs, () => {
+      request.destroy(new Error("Request timed out."));
+    });
+    request.on("error", reject);
+    request.on("response", (response) => {
+      const statusCode = response.statusCode ?? 0;
+      const location = response.headers.location;
+      response.resume();
+      response.on("end", () => resolve({ statusCode, location }));
+    });
+    request.end(options.body);
+  });
 }
 
 function mappedIpv4FromIpv6(bytes: number[]) {

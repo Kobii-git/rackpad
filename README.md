@@ -121,6 +121,10 @@ Rackpad ships **light and dark themes**. Full-resolution 1920x1200 captures live
 
 <img src="./docs/screenshots/monitoring.png" alt="Rackpad monitoring workspace" width="100%">
 
+HTTP/HTTPS checks may target public hosts, RFC1918 LAN addresses, and IPv6 ULA
+addresses. Rackpad pins each DNS resolution and blocks loopback, link-local,
+metadata-service, multicast, and reserved destinations, including redirects.
+
 ### Compute
 
 <img src="./docs/screenshots/compute.png" alt="Rackpad compute workspace" width="100%">
@@ -316,6 +320,9 @@ SNMP_TRAP_PORT=1162
 SNMP_TRAP_BIND=0.0.0.0
 SNMP_INVENTORY_SYNC=1
 MONITOR_INTERVAL_MS=300000
+DISCOVERY_SCAN_MAX_ACTIVE=2
+DISCOVERY_SCAN_MAX_ACTIVE_PER_LAB=1
+DISCOVERY_SCAN_MAX_QUEUED=32
 NODE_ENV=production
 TRUST_PROXY=0
 TRUSTED_HOSTS=

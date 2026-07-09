@@ -1,5 +1,6 @@
 import { db } from '../db.js'
 import { createId } from './ids.js'
+import { assertSubnetCidrAvailable } from './subnet-integrity.js'
 import type {
   SnmpCollectedDhcpScope,
   SnmpProfileCollection,
@@ -272,14 +273,15 @@ export function applySnmpSyncPreview(input: {
       if (input.preview.policy === 'merge' && diff.action !== 'create') continue
       if (diff.action === 'create') {
         const id = createId('s')
+        const cidr = assertSubnetCidrAvailable(input.preview.labId, diff.cidr)
         const linkedVlanId =
           diff.vlanNumber != null ? vlanIdByNumber.get(diff.vlanNumber) ?? null : null
         db.prepare(`
           INSERT INTO subnets (id, labId, cidr, name, description, vlanId)
           VALUES (?, ?, ?, ?, NULL, ?)
-        `).run(id, input.preview.labId, diff.cidr, diff.name, linkedVlanId)
+        `).run(id, input.preview.labId, cidr, diff.name, linkedVlanId)
         result.createdSubnetIds.push(id)
-        writeSyncAudit(input.actor, 'snmp.sync.subnet.create', id, `Created subnet ${diff.cidr}.`)
+        writeSyncAudit(input.actor, 'snmp.sync.subnet.create', id, `Created subnet ${cidr}.`)
         continue
       }
 

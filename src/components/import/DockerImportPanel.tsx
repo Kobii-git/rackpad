@@ -168,7 +168,7 @@ export function DockerImportPanel() {
     <Card>
       <CardHeader>
         <CardTitle>
-          <CardLabel>Docker / Portainer</CardLabel>
+          <CardLabel>{t("Docker / Portainer")}</CardLabel>
           <CardHeading>{t("Docker container import")}</CardHeading>
         </CardTitle>
         <Badge tone="cyan">

@@ -22,6 +22,7 @@ import {
   useStore,
 } from "@/lib/store";
 import type { IpAllocationMode, IpAssignmentType } from "@/lib/types";
+import { useI18n } from "@/i18n";
 
 interface AllocatePanelProps {
   defaultTab?: "ip" | "vlan";
@@ -78,21 +79,20 @@ function AllocatePanelBody({
   onClose,
   onAllocated,
 }: BodyProps) {
+  const { t } = useI18n();
   return (
     <Tabs defaultValue={defaultTab}>
       <div className="flex items-center justify-between border-b border-[var(--color-line)] px-4 pb-2 pt-3">
         <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-            New
-          </div>
-          <div className="text-sm font-semibold tracking-tight">Allocate</div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">{t("New")}</div>
+          <div className="text-sm font-semibold tracking-tight">{t("Allocate")}</div>
         </div>
         <Sparkles className="size-4 text-[var(--color-accent)]" />
       </div>
 
       <TabsList className="-mb-px px-2">
-        <TabsTrigger value="ip">IP address</TabsTrigger>
-        <TabsTrigger value="vlan">VLAN ID</TabsTrigger>
+        <TabsTrigger value="ip">{t("IP address")}</TabsTrigger>
+        <TabsTrigger value="vlan">{t("VLAN ID")}</TabsTrigger>
       </TabsList>
 
       <TabsContent value="ip">
@@ -122,6 +122,7 @@ function AllocateIpForm({
   onClose: () => void;
   onAllocated?: (kind: "ip" | "vlan", id: string) => void;
 }) {
+  const { t } = useI18n();
   const subnets = useStore((s) => s.subnets);
   const scopes = useStore((s) => s.scopes);
   const ipZones = useStore((s) => s.ipZones);
@@ -261,7 +262,7 @@ function AllocateIpForm({
         <Field label="DHCP scope">
           <Select value={effectiveDhcpScopeId} onChange={setDhcpScopeId}>
             {scopesForSubnet.length === 0 && (
-              <option value="">No DHCP scope in this subnet</option>
+              <option value="">{t("No DHCP scope in this subnet")}</option>
             )}
             {scopesForSubnet.map((scope) => (
               <option key={scope.id} value={scope.id}>
@@ -269,10 +270,7 @@ function AllocateIpForm({
               </option>
             ))}
           </Select>
-          <p className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
-            The address keeps its real assignment type and is marked as a DHCP
-            reservation.
-          </p>
+          <p className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">{t("The address keeps its real assignment type and is marked as a DHCP reservation.")}</p>
         </Field>
       )}
 
@@ -300,7 +298,7 @@ function AllocateIpForm({
         <Input
           value={hostname}
           onChange={(e) => setHostname(e.target.value)}
-          placeholder="e.g. monitoring-01"
+          placeholder={t("e.g. monitoring-01")}
           autoFocus
         />
       </Field>
@@ -309,23 +307,19 @@ function AllocateIpForm({
         <Input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="e.g. Grafana on pve-02"
+          placeholder={t("e.g. Grafana on pve-02")}
         />
       </Field>
 
       <div className="flex items-center justify-end gap-2 pt-1">
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          Cancel
-        </Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>{t("Cancel")}</Button>
         {canRegisterDevice && (
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => setDeviceDrawerOpen(true)}
-          >
-            Allocate & add device
-          </Button>
+          >{t("Allocate & add device")}</Button>
         )}
         <Button
           variant="default"
@@ -382,6 +376,7 @@ function AllocateVlanForm({
   onClose: () => void;
   onAllocated?: (kind: "ip" | "vlan", id: string) => void;
 }) {
+  const { t } = useI18n();
   const ranges = useStore((s) => s.vlanRanges);
   const vlans = useStore((s) => s.vlans);
 
@@ -442,7 +437,7 @@ function AllocateVlanForm({
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. cameras"
+          placeholder={t("e.g. cameras")}
           autoFocus
         />
       </Field>
@@ -451,14 +446,12 @@ function AllocateVlanForm({
         <Input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="e.g. RTSP cameras + NVR"
+          placeholder={t("e.g. RTSP cameras + NVR")}
         />
       </Field>
 
       <div className="flex items-center justify-end gap-2 pt-1">
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          Cancel
-        </Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>{t("Cancel")}</Button>
         <Button
           variant="default"
           size="sm"
@@ -521,6 +514,7 @@ function PreviewBox({
   unit?: string;
   emptyText: string;
 }) {
+  const { t } = useI18n();
   return (
     <motion.div
       key={value ?? "empty"}
@@ -552,7 +546,7 @@ function PreviewBox({
               )}
             </div>
           </div>
-          <Badge tone="accent">ready</Badge>
+          <Badge tone="accent">{t("ready")}</Badge>
         </>
       ) : (
         <>

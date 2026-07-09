@@ -80,19 +80,17 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
   }
 
   return (
-    <aside className="relative flex h-full w-60 shrink-0 flex-col border-r border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-shell)_94%,black_6%)]">
+    <aside className="relative flex h-full w-16 shrink-0 flex-col border-r border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-shell)_94%,black_6%)] xl:w-60">
       <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-[linear-gradient(180deg,transparent,var(--edge-highlight),transparent)] opacity-70" />
-      <div className="flex items-center gap-3 px-4 pb-3 pt-4">
+      <div className="flex items-center justify-center gap-3 px-2 pb-3 pt-4 xl:justify-start xl:px-4">
         <Logo />
-        <div className="min-w-0">
-          <div className="text-[15px] font-semibold tracking-normal text-[var(--text-primary)]">
-            Rackpad
-          </div>
+        <div className="hidden min-w-0 xl:block">
+          <div className="text-[15px] font-semibold tracking-normal text-[var(--text-primary)]">{t("Rackpad")}</div>
           <div className="text-[11px] text-[var(--text-muted)]">
             {t("Homelab inventory")}
           </div>
         </div>
-        <div className="ml-auto flex flex-col items-end gap-1">
+        <div className="ml-auto hidden flex-col items-end gap-1 xl:flex">
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
             {APP_VERSION_TAG}
           </span>
@@ -111,13 +109,15 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
         </div>
       </div>
 
-      <div className="mx-3 mb-3">
+      <div className="relative mx-2 mb-3 xl:mx-3">
         <button
           type="button"
           onClick={() => setLabMenuOpen((value) => !value)}
-          className="rk-panel-inset flex w-full items-center justify-between gap-2 rounded-[var(--radius-md)] px-3 py-2 text-left transition-[background-color,border-color,box-shadow] duration-150 hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+          className="rk-panel-inset flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-2 py-2 text-left transition-[background-color,border-color,box-shadow] duration-150 hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] xl:justify-between xl:px-3"
+          aria-label={`${t("Lab")}: ${lab.name}`}
         >
-          <div className="min-w-0 flex flex-col leading-tight">
+          <Building2 className="size-4 shrink-0 xl:hidden" />
+          <div className="hidden min-w-0 flex-col leading-tight xl:flex">
             <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
               {t("Lab")}
             </span>
@@ -127,13 +127,13 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
           </div>
           <ChevronDown
             className={cn(
-              "size-3.5 text-[var(--text-tertiary)] transition-transform",
+              "hidden size-3.5 text-[var(--text-tertiary)] transition-transform xl:block",
               labMenuOpen ? "rotate-180" : "rotate-0",
             )}
           />
         </button>
         {labMenuOpen && (
-          <div className="rk-panel mt-2 rounded-[var(--radius-md)] p-2 shadow-[var(--shadow-elev)]">
+          <div className="rk-panel absolute left-0 top-full z-50 mt-2 w-56 rounded-[var(--radius-md)] p-2 shadow-[var(--shadow-elev)] xl:static xl:w-auto">
             <div className="space-y-1">
               {labs.map((entry) => (
                 <button
@@ -173,11 +173,12 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
 
       <button
         onClick={onOpenSearch}
-        className="mx-3 mb-3 flex w-[calc(100%-1.5rem)] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[rgb(255_255_255_/_0.012)] px-3 py-2 text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)]"
+        className="mx-2 mb-3 flex w-[calc(100%-1rem)] items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[rgb(255_255_255_/_0.012)] px-2 py-2 text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] xl:mx-3 xl:w-[calc(100%-1.5rem)] xl:justify-start xl:px-3"
+        aria-label={t("Search...")}
       >
         <Search className="size-3.5" />
-        <span className="text-xs">{t("Search...")}</span>
-        <kbd className="ml-auto rounded-[6px] border border-[var(--border-default)] bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)]">
+        <span className="hidden text-xs xl:inline">{t("Search...")}</span>
+        <kbd className="ml-auto hidden rounded-[6px] border border-[var(--border-default)] bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)] xl:inline">
           Ctrl+K
         </kbd>
       </button>
@@ -188,6 +189,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
             key={item.to}
             to={item.to}
             end={item.to === "/"}
+            title={t(item.label)}
             className={({ isActive }) =>
               cn(
                 "group flex items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 py-2 text-sm transition-[background-color,border-color,color,box-shadow] duration-150",
@@ -206,7 +208,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
                   )}
                 />
                 <item.icon className="size-4 shrink-0" />
-                <span>{t(item.label)}</span>
+                <span className="hidden xl:inline">{t(item.label)}</span>
               </>
             )}
           </NavLink>
@@ -214,10 +216,10 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
       </nav>
 
       {currentUser?.role === "admin" && (
-        <div className="mx-4 mt-4 border-t border-[var(--border-subtle)]" />
+        <div className="mx-2 mt-4 border-t border-[var(--border-subtle)] xl:mx-4" />
       )}
 
-      <div className="mt-auto border-t border-[var(--border-subtle)] px-4 py-3">
+      <div className="mt-auto border-t border-[var(--border-subtle)] px-2 py-3 xl:px-4">
         {currentUser && (
           <div
             className="flex items-center gap-2.5"
@@ -228,7 +230,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
             }
           >
             <span className="size-1.5 shrink-0 rounded-full bg-[var(--success)] shadow-[0_0_0_2px_var(--success-soft)]" />
-            <div className="min-w-0 leading-tight">
+            <div className="hidden min-w-0 leading-tight xl:block">
               <div className="truncate text-[12px] text-[var(--text-secondary)]">
                 {currentUser.displayName}
               </div>

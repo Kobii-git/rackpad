@@ -304,8 +304,8 @@ export default function CableView() {
           <Card className="col-span-12 xl:col-span-5">
             <CardHeader>
               <CardTitle>
-                <CardLabel>Create</CardLabel>
-                <CardHeading>Patch a new cable</CardHeading>
+                <CardLabel>{t("Create")}</CardLabel>
+                <CardHeading>{t("Patch a new cable")}</CardHeading>
               </CardTitle>
               <Badge tone="cyan">{availablePorts.length} free ports</Badge>
             </CardHeader>
@@ -318,7 +318,7 @@ export default function CableView() {
                       setCreateForm((prev) => ({ ...prev, fromPortId: value }))
                     }
                   >
-                    <option value="">Select a port</option>
+                    <option value="">{t("Select a port")}</option>
                     {availablePorts.map((port) => (
                       <option key={port.id} value={port.id}>
                         {portOptionLabel(port, deviceById)}
@@ -333,7 +333,7 @@ export default function CableView() {
                       setCreateForm((prev) => ({ ...prev, toPortId: value }))
                     }
                   >
-                    <option value="">Select a port</option>
+                    <option value="">{t("Select a port")}</option>
                     {availablePorts
                       .filter((port) => port.id !== createForm.fromPortId)
                       .map((port) => (
@@ -355,7 +355,7 @@ export default function CableView() {
                         cableType: e.target.value,
                       }))
                     }
-                    placeholder="Cat6a, DAC, OM4..."
+                    placeholder={t("Cat6a, DAC, OM4...")}
                   />
                 </Field>
                 <Field label="Length">
@@ -367,7 +367,7 @@ export default function CableView() {
                         cableLength: e.target.value,
                       }))
                     }
-                    placeholder="0.5m, 3m..."
+                    placeholder={t("0.5m, 3m...")}
                   />
                 </Field>
                 <Field label="Color">
@@ -376,7 +376,7 @@ export default function CableView() {
                     onChange={(value) =>
                       setCreateForm((prev) => ({ ...prev, color: value }))
                     }
-                    placeholder="#4a78c4 or blue"
+                    placeholder={t("#4a78c4 or blue")}
                   />
                 </Field>
               </div>
@@ -422,7 +422,7 @@ export default function CableView() {
           <Card className="col-span-12 xl:col-span-7">
             <CardHeader>
               <CardTitle>
-                <CardLabel>Inspector</CardLabel>
+                <CardLabel>{t("Inspector")}</CardLabel>
                 <CardHeading>
                   {selectedLink ? "Selected cable" : "Select a cable"}
                 </CardHeading>
@@ -443,9 +443,7 @@ export default function CableView() {
               ) : (
                 <div className="space-y-4">
                   <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">
-                    <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
-                      Endpoints
-                    </div>
+                    <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">{t("Endpoints")}</div>
                     <CableEndpoints
                       link={selectedLink}
                       portById={portById}
@@ -504,7 +502,7 @@ export default function CableView() {
                             cableType: e.target.value,
                           }))
                         }
-                        placeholder="Cat6a, DAC, OM4..."
+                        placeholder={t("Cat6a, DAC, OM4...")}
                       />
                     </Field>
                     <Field label="Length">
@@ -516,7 +514,7 @@ export default function CableView() {
                             cableLength: e.target.value,
                           }))
                         }
-                        placeholder="0.5m, 3m..."
+                        placeholder={t("0.5m, 3m...")}
                       />
                     </Field>
                     <Field label="Color">
@@ -525,7 +523,7 @@ export default function CableView() {
                         onChange={(value) =>
                           setEditForm((prev) => ({ ...prev, color: value }))
                         }
-                        placeholder="#4a78c4 or blue"
+                        placeholder={t("#4a78c4 or blue")}
                       />
                     </Field>
                   </div>
@@ -593,9 +591,7 @@ export default function CableView() {
                 : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
             }`}
           >
-            <span className="font-mono text-[10px] uppercase tracking-wider">
-              All
-            </span>
+            <span className="font-mono text-[10px] uppercase tracking-wider">{t("All")}</span>
             <Mono className="ml-2 text-[10px]">{portLinks.length}</Mono>
           </button>
           {Object.entries(byType).map(([type, count]) => (
@@ -622,7 +618,7 @@ export default function CableView() {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by device, port, type, color..."
+              placeholder={t("Search by device, port, type, color...")}
               className="pl-7"
             />
           </div>
@@ -631,7 +627,7 @@ export default function CableView() {
         <Card>
           <CardHeader>
             <CardTitle>
-              <CardLabel>Inventory</CardLabel>
+              <CardLabel>{t("Inventory")}</CardLabel>
               <CardHeading>{filtered.length} cables</CardHeading>
             </CardTitle>
             <CableIcon className="size-4 text-[var(--color-fg-subtle)]" />
@@ -641,30 +637,20 @@ export default function CableView() {
               <table className="rk-table">
                 <thead>
                   <tr>
-                    <SortableHeader sortKey="from" sort={sort} onSort={handleSort}>
-                      From
-                    </SortableHeader>
+                    <SortableHeader sortKey="from" sort={sort} onSort={handleSort}>{t("From")}</SortableHeader>
                     <Th />
-                    <SortableHeader sortKey="to" sort={sort} onSort={handleSort}>
-                      To
-                    </SortableHeader>
-                    <SortableHeader sortKey="type" sort={sort} onSort={handleSort}>
-                      Type
-                    </SortableHeader>
+                    <SortableHeader sortKey="to" sort={sort} onSort={handleSort}>{t("To")}</SortableHeader>
+                    <SortableHeader sortKey="type" sort={sort} onSort={handleSort}>{t("Type")}</SortableHeader>
                     <SortableHeader
                       sortKey="length"
                       sort={sort}
                       onSort={handleSort}
-                    >
-                      Length
-                    </SortableHeader>
+                    >{t("Length")}</SortableHeader>
                     <SortableHeader
                       sortKey="color"
                       sort={sort}
                       onSort={handleSort}
-                    >
-                      Color
-                    </SortableHeader>
+                    >{t("Color")}</SortableHeader>
                   </tr>
                 </thead>
                 <tbody>
@@ -745,9 +731,7 @@ export default function CableView() {
                 </tbody>
               </table>
               {filtered.length === 0 && (
-                <div className="px-4 py-8 text-center text-xs text-[var(--color-fg-subtle)]">
-                  No cables match your filter.
-                </div>
+                <div className="px-4 py-8 text-center text-xs text-[var(--color-fg-subtle)]">{t("No cables match your filter.")}</div>
               )}
             </div>
           </CardBody>

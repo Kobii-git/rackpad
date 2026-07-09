@@ -1,12 +1,12 @@
+import { useI18n } from "@/i18n";
 import type { ReactNode } from "react";
 
 export function MarkdownPreview({ content }: { content: string }) {
+  const { t } = useI18n();
   const blocks = parseBlocks(content);
   if (blocks.length === 0) {
     return (
-      <div className="text-sm text-[var(--color-fg-subtle)]">
-        Nothing documented yet.
-      </div>
+      <div className="text-sm text-[var(--color-fg-subtle)]">{t("Nothing documented yet.")}</div>
     );
   }
   return (

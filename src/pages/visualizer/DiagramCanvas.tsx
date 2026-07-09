@@ -45,6 +45,7 @@ import type {
   VisualizerModel,
   VisualizerNode,
 } from "./types";
+import { useI18n } from "@/i18n";
 
 const DIAGRAM_POSITIONS_STORAGE_KEY = "rackpad.visualizer.diagram-positions";
 const DIAGRAM_SECTION_POSITIONS_STORAGE_KEY =
@@ -174,6 +175,7 @@ export function DiagramCanvas({
   wifiClientAssociations,
   virtualSwitches,
 }: DiagramCanvasProps) {
+  const { t } = useI18n();
   const [savedPositions, setSavedPositions] = useState<
     Record<string, XYPosition>
   >(() => readDiagramPositions(DIAGRAM_POSITIONS_STORAGE_KEY));
@@ -429,9 +431,7 @@ export function DiagramCanvas({
   if (loading) {
     return (
       <div className="grid h-[calc(100vh-8.5rem)] min-h-[620px] place-items-center border-t border-[var(--border-subtle)] bg-[var(--surface-1)]">
-        <div className="rk-panel rounded-[var(--radius-md)] p-5 text-sm text-[var(--text-secondary)]">
-          Building topology diagram...
-        </div>
+        <div className="rk-panel rounded-[var(--radius-md)] p-5 text-sm text-[var(--text-secondary)]">{t("Building topology diagram...")}</div>
       </div>
     );
   }
@@ -440,12 +440,8 @@ export function DiagramCanvas({
     return (
       <div className="grid h-[calc(100vh-8.5rem)] min-h-[620px] place-items-center border-t border-[var(--border-subtle)] bg-grid">
         <div className="rk-panel max-w-sm rounded-[var(--radius-md)] p-5 text-center">
-          <div className="text-sm font-semibold text-[var(--text-primary)]">
-            No devices to diagram
-          </div>
-          <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">
-            Add devices, ports, and cables to build a draw-style topology map.
-          </p>
+          <div className="text-sm font-semibold text-[var(--text-primary)]">{t("No devices to diagram")}</div>
+          <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">{t("Add devices, ports, and cables to build a draw-style topology map.")}</p>
         </div>
       </div>
     );
@@ -515,7 +511,7 @@ export function DiagramCanvas({
               <GitBranch className="size-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <div className="rk-kicker">Diagram view</div>
+              <div className="rk-kicker">{t("Diagram view")}</div>
               <div className="truncate text-[11px] text-[var(--text-secondary)]">
                 {sections.length} sections | {visibleDeviceCount} shown
                 {hiddenDeviceCount > 0 ? ` / ${hiddenDeviceCount} hidden` : ""} |{" "}
@@ -569,6 +565,7 @@ export function DiagramCanvas({
 }
 
 function DiagramDeviceCard({ data, selected }: NodeProps<DiagramDeviceNode>) {
+  const { t } = useI18n();
   const shownPorts = data.ports.slice(0, 24);
   const hiddenPortCount = Math.max(0, data.ports.length - shownPorts.length);
 
@@ -616,7 +613,7 @@ function DiagramDeviceCard({ data, selected }: NodeProps<DiagramDeviceNode>) {
         <Link
           to={`/devices/${data.deviceId}`}
           className="nodrag nopan grid size-7 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--border-subtle)] text-[var(--text-tertiary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
-          title="Open device"
+          title={t("Open device")}
           onClick={(event) => event.stopPropagation()}
         >
           <ExternalLink className="size-3.5" />
@@ -746,10 +743,11 @@ function DiagramDeviceInspector({
   connectedCables: VisualizerCable[];
   virtualSwitches: VirtualSwitch[];
 }) {
+  const { t } = useI18n();
   const virtualRows = buildVirtualNetworkRows(node, model, virtualSwitches);
   return (
     <div>
-      <div className="rk-kicker">Device</div>
+      <div className="rk-kicker">{t("Device")}</div>
       <div className="mt-2 flex items-start gap-3">
         <span
           className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-1)]"
@@ -778,7 +776,7 @@ function DiagramDeviceInspector({
       {virtualRows.length > 0 && (
         <div className="mt-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-1)]">
           <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-3 py-2">
-            <div className="rk-kicker">Virtual NICs</div>
+            <div className="rk-kicker">{t("Virtual NICs")}</div>
             <span className="font-mono text-[10px] text-[var(--text-muted)]">
               {virtualRows.length}
             </span>
@@ -816,9 +814,7 @@ function DiagramDeviceInspector({
                         {formatPortLabel(row.port, { includeFace: true })}
                       </Link>
                     ) : (
-                      <span className="text-[var(--text-muted)]">
-                        no NIC documented
-                      </span>
+                      <span className="text-[var(--text-muted)]">{t("no NIC documented")}</span>
                     )}
                     <span className="text-[var(--text-muted)]">{"->"}</span>
                     <span className="min-w-0 truncate text-[var(--text-primary)]">
@@ -844,16 +840,14 @@ function DiagramDeviceInspector({
       )}
       <div className="mt-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-1)]">
         <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-3 py-2">
-          <div className="rk-kicker">Connected cables</div>
+          <div className="rk-kicker">{t("Connected cables")}</div>
           <span className="font-mono text-[10px] text-[var(--text-muted)]">
             {connectedCables.length}
           </span>
         </div>
         <div className="max-h-64 overflow-y-auto p-2">
           {connectedCables.length === 0 ? (
-            <div className="px-1 py-2 text-xs text-[var(--text-secondary)]">
-              No visible cable links for the current filter.
-            </div>
+            <div className="px-1 py-2 text-xs text-[var(--text-secondary)]">{t("No visible cable links for the current filter.")}</div>
           ) : (
             <div className="space-y-1.5">
               {connectedCables.map((cable) => {
@@ -910,9 +904,10 @@ function DiagramDeviceInspector({
 }
 
 function DiagramCableInspector({ cable }: { cable: VisualizerCable }) {
+  const { t } = useI18n();
   return (
     <div>
-      <div className="rk-kicker">Cable</div>
+      <div className="rk-kicker">{t("Cable")}</div>
       <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
         <span
           className="inline-block size-2.5 rounded-full"

@@ -1015,7 +1015,7 @@ function SubnetEditor({
               onChange={(event) =>
                 onChange((prev) => ({ ...prev, name: event.target.value }))
               }
-              placeholder="Servers management"
+              placeholder={t("Servers management")}
             />
           </Field>
         </div>
@@ -1070,7 +1070,7 @@ function SubnetEditor({
                   description: event.target.value,
                 }))
               }
-              placeholder="Primary management network"
+              placeholder={t("Primary management network")}
             />
           </Field>
         </div>
@@ -1194,7 +1194,7 @@ function ScopeEditor({
                   onChange={(event) =>
                     onChange((prev) => ({ ...prev, name: event.target.value }))
                   }
-                  placeholder="Clients"
+                  placeholder={t("Clients")}
                 />
               </Field>
               <Field label={t("Gateway")}>
@@ -1254,7 +1254,7 @@ function ScopeEditor({
                     description: event.target.value,
                   }))
                 }
-                placeholder="General client pool"
+                placeholder={t("General client pool")}
               />
             </Field>
             {error && <ErrorBanner>{error}</ErrorBanner>}
@@ -1425,7 +1425,7 @@ function ZoneEditor({
                     description: event.target.value,
                   }))
                 }
-                placeholder="Static addresses for infrastructure"
+                placeholder={t("Static addresses for infrastructure")}
               />
             </Field>
             {error && <ErrorBanner>{error}</ErrorBanner>}

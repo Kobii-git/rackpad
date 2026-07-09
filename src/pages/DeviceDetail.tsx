@@ -700,9 +700,7 @@ export default function DeviceDetail() {
         <TopBar subtitle={t("Devices")} title={t("Not found")} />
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
-            <div className="mb-3 text-sm text-[var(--color-fg-subtle)]">
-              Device not found.
-            </div>
+            <div className="mb-3 text-sm text-[var(--color-fg-subtle)]">{t("Device not found.")}</div>
             <Button variant="outline" size="sm" asChild>
               <Link to="/devices">
                 <ArrowLeft />
@@ -1366,7 +1364,7 @@ export default function DeviceDetail() {
               Images | {deviceImageList.length}
             </TabsTrigger>
             <TabsTrigger value="notes">{t("Notes")}</TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
+            <TabsTrigger value="activity">{t("Activity")}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="pt-4">
@@ -1611,7 +1609,7 @@ export default function DeviceDetail() {
                             </Button>
                           </>
                         ) : null}
-                        {devicePorts.length > 0 ? (
+                        {devicePorts.length > 0 && currentUser?.role === "admin" ? (
                           <Button
                             size="sm"
                             variant="outline"
@@ -1793,7 +1791,7 @@ export default function DeviceDetail() {
                         onChange={(value) => setNetworkField("subnetId", value)}
                         disabled={subnets.length === 0}
                       >
-                        <option value="">Select subnet</option>
+                        <option value="">{t("Select subnet")}</option>
                         {subnets.map((subnet) => (
                           <option key={subnet.id} value={subnet.id}>
                             {subnet.cidr} - {subnet.name}
@@ -1820,12 +1818,12 @@ export default function DeviceDetail() {
                           )
                         }
                       >
-                        <option value="interface">Interface</option>
-                        <option value="device">Device</option>
-                        <option value="infrastructure">Infrastructure</option>
-                        <option value="reserved">Reserved</option>
-                        <option value="vm">VM</option>
-                        <option value="container">Container</option>
+                        <option value="interface">{t("Interface")}</option>
+                        <option value="device">{t("Device")}</option>
+                        <option value="infrastructure">{t("Infrastructure")}</option>
+                        <option value="reserved">{t("Reserved")}</option>
+                        <option value="vm">{t("VM")}</option>
+                        <option value="container">{t("Container")}</option>
                       </Select>
                     </Field>
                     <Field label="Allocation">
@@ -1838,10 +1836,8 @@ export default function DeviceDetail() {
                           )
                         }
                       >
-                        <option value="static">Static</option>
-                        <option value="dhcp-reservation">
-                          DHCP reservation
-                        </option>
+                        <option value="static">{t("Static")}</option>
+                        <option value="dhcp-reservation">{t("DHCP reservation")}</option>
                       </Select>
                     </Field>
                     <Field label="DHCP scope">
@@ -1854,7 +1850,7 @@ export default function DeviceDetail() {
                           networkForm.allocationMode !== "dhcp-reservation"
                         }
                       >
-                        <option value="">Auto / none</option>
+                        <option value="">{t("Auto / none")}</option>
                         {scopesForNetworkSubnet.map((scope) => (
                           <option key={scope.id} value={scope.id}>
                             {scope.name}
@@ -1867,7 +1863,7 @@ export default function DeviceDetail() {
                         value={networkForm.portId}
                         onChange={(value) => setNetworkField("portId", value)}
                       >
-                        <option value="">Device-level</option>
+                        <option value="">{t("Device-level")}</option>
                         {networkAssignablePorts.map((port) => (
                           <option key={port.id} value={port.id}>
                             {formatPortLabel(port, { includeFace: true })}
@@ -1883,7 +1879,7 @@ export default function DeviceDetail() {
                         onChange={(event) =>
                           setNetworkField("description", event.target.value)
                         }
-                        placeholder="Gateway, docker0, WAN, storage NIC..."
+                        placeholder={t("Gateway, docker0, WAN, storage NIC...")}
                       />
                     </Field>
                     <Button
@@ -1919,9 +1915,7 @@ export default function DeviceDetail() {
               <CardBody className="p-0">
                 <div className="divide-y divide-[var(--color-line)]">
                   {displayedDeviceIpCount === 0 ? (
-                    <div className="px-4 py-6 text-center text-xs text-[var(--color-fg-subtle)]">
-                      No IPs assigned to this device.
-                    </div>
+                    <div className="px-4 py-6 text-center text-xs text-[var(--color-fg-subtle)]">{t("No IPs assigned to this device.")}</div>
                   ) : (
                     <>
                       {hostSharedAssignment && parentDevice && (
@@ -1931,15 +1925,11 @@ export default function DeviceDetail() {
                           </Mono>
                           <div className="col-span-3 text-xs">
                             {parentDevice.hostname}
-                            <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">
-                              shared parent address
-                            </Mono>
+                            <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">{t("shared parent address")}</Mono>
                           </div>
-                          <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">
-                            Host-network child using parent host IP
-                          </div>
+                          <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">{t("Host-network child using parent host IP")}</div>
                           <div className="col-span-2 flex items-center justify-end">
-                            <Badge tone="neutral">host network</Badge>
+                            <Badge tone="neutral">{t("host network")}</Badge>
                           </div>
                         </div>
                       )}
@@ -1977,7 +1967,7 @@ export default function DeviceDetail() {
                             </div>
                             <div className="col-span-2 flex items-center justify-end gap-2">
                               {ip.allocationMode === "dhcp-reservation" && (
-                                <Badge tone="neutral">DHCP res</Badge>
+                                <Badge tone="neutral">{t("DHCP res")}</Badge>
                               )}
                               <Badge tone="cyan">{ip.assignmentType}</Badge>
                               <Button
@@ -2031,9 +2021,7 @@ export default function DeviceDetail() {
                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-fg-subtle)]">
                   Rackpad runs these checks from the server or Docker container
                   itself. A device stays
-                  <span className="mx-1 font-mono text-[var(--color-fg)]">
-                    unknown
-                  </span>
+                  <span className="mx-1 font-mono text-[var(--color-fg)]">{t("unknown")}</span>
                   until at least one enabled target has run. For near-real-time
                   link events, forward SNMP v1/v2c or SNMPv3 traps to this
                   Rackpad host on UDP port 1162 (or map host 162 → container
@@ -2071,10 +2059,7 @@ export default function DeviceDetail() {
                 )}
 
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2">
-                  <div className="text-sm text-[var(--color-fg-subtle)]">
-                    Use separate targets for management IPs, storage NICs,
-                    service ports, or VIPs on the same device.
-                  </div>
+                  <div className="text-sm text-[var(--color-fg-subtle)]">{t("Use separate targets for management IPs, storage NICs, service ports, or VIPs on the same device.")}</div>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
@@ -2159,9 +2144,7 @@ export default function DeviceDetail() {
                                     → {entry.matchedPortName}
                                   </span>
                                 ) : (
-                                  <span className="ml-2 text-[var(--text-muted)]">
-                                    · no port match
-                                  </span>
+                                  <span className="ml-2 text-[var(--text-muted)]">{t("· no port match")}</span>
                                 )}
                                 {entry.highSpeedMbps ? (
                                   <span className="ml-2 font-mono text-[var(--text-tertiary)]">
@@ -2185,9 +2168,7 @@ export default function DeviceDetail() {
                 <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
                   <div className="space-y-2">
                     {deviceMonitorList.length === 0 ? (
-                      <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-4 text-sm text-[var(--color-fg-subtle)]">
-                        No monitor targets documented yet.
-                      </div>
+                      <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-4 text-sm text-[var(--color-fg-subtle)]">{t("No monitor targets documented yet.")}</div>
                     ) : (
                       deviceMonitorList.map((entry) => (
                         <button
@@ -2287,7 +2268,7 @@ export default function DeviceDetail() {
                               name: event.target.value,
                             }))
                           }
-                          placeholder="Management, Storage, WAN, VIP..."
+                          placeholder={t("Management, Storage, WAN, VIP...")}
                         />
                       </Field>
                       <Field label={t("Type")}>
@@ -2301,12 +2282,12 @@ export default function DeviceDetail() {
                           }
                           disabled={!canManageMonitoring}
                         >
-                          <option value="none">none</option>
-                          <option value="icmp">icmp</option>
-                          <option value="tcp">tcp</option>
-                          <option value="http">http</option>
-                          <option value="https">https</option>
-                          <option value="snmp">snmp</option>
+                          <option value="none">{t("none")}</option>
+                          <option value="icmp">{t("icmp")}</option>
+                          <option value="tcp">{t("tcp")}</option>
+                          <option value="http">{t("http")}</option>
+                          <option value="https">{t("https")}</option>
+                          <option value="snmp">{t("snmp")}</option>
                         </Select>
                       </Field>
                       <Field label="Target">
@@ -2319,7 +2300,7 @@ export default function DeviceDetail() {
                               target: event.target.value,
                             }))
                           }
-                          placeholder="10.0.10.12 or host.example"
+                          placeholder={t("10.0.10.12 or host.example")}
                         />
                       </Field>
                       <Field label="Every (minutes)">
@@ -2372,7 +2353,7 @@ export default function DeviceDetail() {
                                 path: event.target.value,
                               }))
                             }
-                            placeholder="/health"
+                            placeholder={t("/health")}
                           />
                         </Field>
                       )}
@@ -2407,7 +2388,7 @@ export default function DeviceDetail() {
                               });
                             }}
                           >
-                            <option value="">Apply preset…</option>
+                            <option value="">{t("Apply preset…")}</option>
                             {SNMP_OID_PRESETS.filter(
                               (entry) => entry.id !== "custom",
                             ).map((preset) => (
@@ -2464,7 +2445,7 @@ export default function DeviceDetail() {
                               });
                             }}
                           >
-                            <option value="">None</option>
+                            <option value="">{t("None")}</option>
                             {devicePorts.map((port) => (
                               <option key={port.id} value={port.id}>
                                 {port.name}
@@ -2485,7 +2466,7 @@ export default function DeviceDetail() {
                                 snmpIfIndex: event.target.value,
                               }))
                             }
-                            placeholder="Optional SNMP ifIndex"
+                            placeholder={t("Optional SNMP ifIndex")}
                           />
                         </Field>
                         <Field label="Credential">
@@ -2499,7 +2480,7 @@ export default function DeviceDetail() {
                               }))
                             }
                           >
-                            <option value="">Inline community / version</option>
+                            <option value="">{t("Inline community / version")}</option>
                             {snmpCredentials.map((credential) => (
                               <option key={credential.id} value={credential.id}>
                                 {credential.name} (v{credential.version})
@@ -2522,8 +2503,8 @@ export default function DeviceDetail() {
                               }))
                             }
                           >
-                            <option value="2c">v2c</option>
-                            <option value="1">v1</option>
+                            <option value="2c">{t("v2c")}</option>
+                            <option value="1">{t("v1")}</option>
                           </Select>
                         </Field>
                         <Field label="Community">
@@ -2539,7 +2520,7 @@ export default function DeviceDetail() {
                                 snmpCommunity: event.target.value,
                               }))
                             }
-                            placeholder="public"
+                            placeholder={t("public")}
                           />
                         </Field>
                         <Field label="OID">
@@ -2565,7 +2546,7 @@ export default function DeviceDetail() {
                                 snmpExpectedValue: event.target.value,
                               }))
                             }
-                            placeholder="Optional, e.g. 1 for ifOperStatus up"
+                            placeholder={t("Optional, e.g. 1 for ifOperStatus up")}
                           />
                         </Field>
                       </div>
@@ -2604,10 +2585,7 @@ export default function DeviceDetail() {
                 )}
 
                 {!canManageMonitoring && (
-                  <div className="rounded-[var(--radius-sm)] border border-[var(--color-info)]/30 bg-[var(--color-info-bg)] px-3 py-2 text-sm text-[var(--color-info)]">
-                    Only administrators can create, edit, delete, or run active
-                    monitor targets.
-                  </div>
+                  <div className="rounded-[var(--radius-sm)] border border-[var(--color-info)]/30 bg-[var(--color-info-bg)] px-3 py-2 text-sm text-[var(--color-info)]">{t("Only administrators can create, edit, delete, or run active monitor targets.")}</div>
                 )}
 
                 <div className="flex items-center justify-end gap-2">
@@ -2737,7 +2715,7 @@ export default function DeviceDetail() {
                           onChange={(event) =>
                             setServiceField("name", event.target.value)
                           }
-                          placeholder="e.g. DHCP, Grafana, Portainer"
+                          placeholder={t("e.g. DHCP, Grafana, Portainer")}
                         />
                       </Field>
                       <Field label={t("Type")}>
@@ -2766,7 +2744,7 @@ export default function DeviceDetail() {
                             setServiceField("ipAssignmentId", value)
                           }
                         >
-                          <option value="">No IP link</option>
+                          <option value="">{t("No IP link")}</option>
                           {deviceIps.map((assignment) => (
                             <option key={assignment.id} value={assignment.id}>
                               {assignment.ipAddress} ·{" "}
@@ -2782,7 +2760,7 @@ export default function DeviceDetail() {
                           disabled={!canManageMonitoring}
                           onChange={(value) => setServiceField("portId", value)}
                         >
-                          <option value="">No port link</option>
+                          <option value="">{t("No port link")}</option>
                           {devicePorts.map((port) => (
                             <option key={port.id} value={port.id}>
                               {formatPortLabel(port, { includeFace: true })}
@@ -2796,7 +2774,7 @@ export default function DeviceDetail() {
                           disabled={!canManageMonitoring}
                           onChange={(value) => setServiceField("vlanId", value)}
                         >
-                          <option value="">No VLAN link</option>
+                          <option value="">{t("No VLAN link")}</option>
                           {vlans.map((vlan) => (
                             <option key={vlan.id} value={vlan.id}>
                               VLAN {vlan.vlanId} · {vlan.name}
@@ -2812,7 +2790,7 @@ export default function DeviceDetail() {
                             setServiceField("monitorId", value)
                           }
                         >
-                          <option value="">No monitor link</option>
+                          <option value="">{t("No monitor link")}</option>
                           {deviceMonitorList.map((monitor) => (
                             <option key={monitor.id} value={monitor.id}>
                               {monitor.name} · {monitor.type}
@@ -2829,7 +2807,7 @@ export default function DeviceDetail() {
                         onChange={(event) =>
                           setServiceField("url", event.target.value)
                         }
-                        placeholder="https://host.example:8443/"
+                        placeholder={t("https://host.example:8443/")}
                       />
                     </Field>
                     <Field label="Notes">
@@ -2841,7 +2819,7 @@ export default function DeviceDetail() {
                         }
                         rows={3}
                         className="rk-control rk-textarea w-full text-sm"
-                        placeholder="Owner, role, dependencies, or failover notes..."
+                        placeholder={t("Owner, role, dependencies, or failover notes...")}
                       />
                     </Field>
 
@@ -2903,13 +2881,13 @@ export default function DeviceDetail() {
                     <Input
                       value={imageLabel}
                       onChange={(event) => setImageLabel(event.target.value)}
-                      placeholder="Label"
+                      placeholder={t("Label")}
                     />
                     <textarea
                       value={imageNotes}
                       onChange={(event) => setImageNotes(event.target.value)}
                       className="rk-control rk-textarea min-h-24 w-full text-sm"
-                      placeholder="Notes"
+                      placeholder={t("Notes")}
                     />
                     <div className="flex items-center justify-between gap-3">
                       <Mono className="text-[10px] text-[var(--color-fg-subtle)]">

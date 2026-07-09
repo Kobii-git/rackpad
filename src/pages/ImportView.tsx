@@ -652,8 +652,8 @@ export default function ImportView() {
           <Card>
             <CardHeader>
               <CardTitle>
-                <CardLabel>Inventory collectors</CardLabel>
-                <CardHeading>Upload Hyper-V or Proxmox JSON</CardHeading>
+                <CardLabel>{t("Inventory collectors")}</CardLabel>
+                <CardHeading>{t("Upload Hyper-V or Proxmox JSON")}</CardHeading>
               </CardTitle>
               <Badge tone="cyan">
                 <FileJson className="size-3" />
@@ -662,11 +662,7 @@ export default function ImportView() {
             </CardHeader>
             <CardBody className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
               <div className="space-y-3">
-                <p className="text-sm text-[var(--text-tertiary)]">
-                  Run a collector on the virtualization host, then upload the
-                  JSON here. Rackpad stages the host, guests, virtual networks,
-                  VLANs, ports, specs, MACs, and IPs before anything is written.
-                </p>
+                <p className="text-sm text-[var(--text-tertiary)]">{t("Run a collector on the virtualization host, then upload the JSON here. Rackpad stages the host, guests, virtual networks, VLANs, ports, specs, MACs, and IPs before anything is written.")}</p>
                 <div className="grid gap-3 lg:grid-cols-2">
                   <CollectorDownload provider="hyperv" />
                   <CollectorDownload provider="proxmox" />
@@ -726,8 +722,8 @@ export default function ImportView() {
           <Card>
             <CardHeader>
               <CardTitle>
-                <CardLabel>Import categories</CardLabel>
-                <CardHeading>Select what Rackpad should write</CardHeading>
+                <CardLabel>{t("Import categories")}</CardLabel>
+                <CardHeading>{t("Select what Rackpad should write")}</CardHeading>
               </CardTitle>
             </CardHeader>
             <CardBody>
@@ -786,8 +782,8 @@ export default function ImportView() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Import log</CardLabel>
-                  <CardHeading>What Rackpad changed</CardHeading>
+                  <CardLabel>{t("Import log")}</CardLabel>
+                  <CardHeading>{t("What Rackpad changed")}</CardHeading>
                 </CardTitle>
               </CardHeader>
               <CardBody>
@@ -846,12 +842,13 @@ const CATEGORY_COPY: Record<
 };
 
 function CollectorRunbooks() {
+  const { t } = useI18n();
   return (
     <Card>
       <CardHeader>
         <CardTitle>
-          <CardLabel>Collector runbook</CardLabel>
-          <CardHeading>Exact steps before importing</CardHeading>
+          <CardLabel>{t("Collector runbook")}</CardLabel>
+          <CardHeading>{t("Exact steps before importing")}</CardHeading>
         </CardTitle>
         <Badge tone="ok">
           <CheckCircle2 className="size-3" />
@@ -870,6 +867,7 @@ function CollectorRunbooks() {
 }
 
 function ProviderRunbook({ provider }: { provider: ImportProvider }) {
+  const { t } = useI18n();
   const copy = PROVIDER_COPY[provider];
   return (
     <section className="rk-panel-inset rounded-[var(--radius-md)] p-4">
@@ -896,7 +894,7 @@ function ProviderRunbook({ provider }: { provider: ImportProvider }) {
       </div>
 
       <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.015)] p-3">
-        <div className="rk-kicker">Before you run it</div>
+        <div className="rk-kicker">{t("Before you run it")}</div>
         <ul className="mt-2 space-y-1.5 text-xs leading-5 text-[var(--text-tertiary)]">
           {copy.runbook.prerequisites.map((item) => (
             <li key={item} className="flex gap-2">
@@ -932,7 +930,7 @@ function ProviderRunbook({ provider }: { provider: ImportProvider }) {
 
       {copy.runbook.optionalCommands?.length ? (
         <div className="mt-4 space-y-2">
-          <div className="rk-kicker">Optional commands</div>
+          <div className="rk-kicker">{t("Optional commands")}</div>
           {copy.runbook.optionalCommands.map((entry) => (
             <div key={entry.label}>
               <div className="text-[11px] font-medium text-[var(--text-secondary)]">
@@ -947,7 +945,7 @@ function ProviderRunbook({ provider }: { provider: ImportProvider }) {
       ) : null}
 
       <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.015)] p-3">
-        <div className="rk-kicker">Import notes</div>
+        <div className="rk-kicker">{t("Import notes")}</div>
         <ul className="mt-2 space-y-1.5 text-xs leading-5 text-[var(--text-tertiary)]">
           {copy.runbook.notes.map((item) => (
             <li key={item} className="flex gap-2">
@@ -976,6 +974,7 @@ function HostPreview({
   payload: HyperVPayload;
   value: HostDraft | null;
 }) {
+  const { t } = useI18n();
   const provider = providerForPayload(payload);
   const copy = PROVIDER_COPY[provider];
   const host = payload.host;
@@ -997,7 +996,7 @@ function HostPreview({
     <Card>
       <CardHeader>
         <CardTitle>
-          <CardLabel>Host</CardLabel>
+          <CardLabel>{t("Host")}</CardLabel>
           <CardHeading>
             {value?.displayName ||
               host?.computerName ||
@@ -1118,7 +1117,7 @@ function HostPreview({
           </>
         )}
         <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">
-          <div className="rk-kicker">Switches</div>
+          <div className="rk-kicker">{t("Switches")}</div>
           <div className="mt-2 space-y-2">
             {(payload.switches ?? []).map((entry) => (
               <div
@@ -1132,9 +1131,7 @@ function HostPreview({
               </div>
             ))}
             {(payload.switches ?? []).length === 0 && (
-              <div className="text-xs text-[var(--text-tertiary)]">
-                No virtual switches found.
-              </div>
+              <div className="text-xs text-[var(--text-tertiary)]">{t("No virtual switches found.")}</div>
             )}
           </div>
         </div>
@@ -1156,12 +1153,13 @@ function VmPreview({
   subnets: Subnet[];
   onChange: (key: string, changes: Partial<VmDraft>) => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card>
       <CardHeader>
         <CardTitle>
-          <CardLabel>Wizard</CardLabel>
-          <CardHeading>Review workloads before import</CardHeading>
+          <CardLabel>{t("Wizard")}</CardLabel>
+          <CardHeading>{t("Review workloads before import")}</CardHeading>
         </CardTitle>
         <Badge tone="accent">
           {drafts.filter((draft) => draft.include).length} selected
@@ -1221,9 +1219,9 @@ function VmPreview({
                       {guestOsLabel(osFamily)}
                     </Badge>
                   )}
-                  {!ipKnown && <Badge tone="warn">IP not in IPAM</Badge>}
+                  {!ipKnown && <Badge tone="warn">{t("IP not in IPAM")}</Badge>}
                   {ipConflict && !conflictBelongsToDevice && (
-                    <Badge tone="err">IP conflict</Badge>
+                    <Badge tone="err">{t("IP conflict")}</Badge>
                   )}
                 </div>
               </div>
@@ -1248,7 +1246,7 @@ function VmPreview({
                 <Field label="Primary IP">
                   <Input
                     value={draft.managementIp}
-                    placeholder="Add manually if missing"
+                    placeholder={t("Add manually if missing")}
                     onChange={(event) =>
                       onChange(draft.key, { managementIp: event.target.value })
                     }
@@ -1257,7 +1255,7 @@ function VmPreview({
                 <Field label="Guest OS">
                   <Input
                     value={draft.osName}
-                    placeholder="Windows Server, Ubuntu, Debian..."
+                    placeholder={t("Windows Server, Ubuntu, Debian...")}
                     onChange={(event) =>
                       onChange(draft.key, {
                         osName: event.target.value,
@@ -1277,11 +1275,11 @@ function VmPreview({
                     }
                     className="rk-control h-10 w-full px-3 text-sm text-[var(--text-primary)]"
                   >
-                    <option value="">Auto / unknown</option>
-                    <option value="windows">Windows</option>
-                    <option value="linux">Linux</option>
-                    <option value="bsd">BSD / firewall appliance</option>
-                    <option value="other">Other</option>
+                    <option value="">{t("Auto / unknown")}</option>
+                    <option value="windows">{t("Windows")}</option>
+                    <option value="linux">{t("Linux")}</option>
+                    <option value="bsd">{t("BSD / firewall appliance")}</option>
+                    <option value="other">{t("Other")}</option>
                   </select>
                 </Field>
                 <div className="grid grid-cols-3 gap-2">
@@ -1323,7 +1321,7 @@ function VmPreview({
                   />
                 </Field>
                 <div className="rk-panel-inset rounded-[var(--radius-md)] p-3 text-xs">
-                  <div className="rk-kicker">Adapters</div>
+                  <div className="rk-kicker">{t("Adapters")}</div>
                   <div className="mt-2 space-y-2">
                     {(draft.source.networkAdapters ?? []).map((adapter) => (
                       <div

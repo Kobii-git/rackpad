@@ -415,6 +415,9 @@ export default function NetworksView() {
   const assignments = selectedNetwork?.assignments ?? [];
   const subnetScopes = selectedNetwork?.dhcpScopes ?? [];
   const subnetZones = selectedNetwork?.zones ?? [];
+  const subnetNeedsRepair = Boolean(subnet && subnet.integrity.state !== "ok");
+  const canRepairSubnet = currentUser?.role === "admin";
+  const canAllocateSubnet = canEdit && !subnetNeedsRepair;
   const visibleSubnetZones = useMemo(
     () => subnetZones.filter(isUserVisibleZone),
     [subnetZones],
@@ -941,6 +944,12 @@ export default function NetworksView() {
 
   async function handleDeleteSubnet() {
     if (!subnet) return;
+    if (subnet.integrity.state !== "ok") {
+      const typed = window.prompt(
+        `Type ${subnet.cidr} to delete this conflicted subnet and its ${assignments.length} assignments, ${subnetScopes.length} DHCP scopes, and ${subnetZones.length} zones.`,
+      );
+      if (typed !== subnet.cidr) return;
+    } else
     if (
       !window.confirm(
         t(
@@ -1122,11 +1131,13 @@ export default function NetworksView() {
                 {t("Add network")}
               </Button>
             )}
-            <AllocatePanel
-              defaultTab={subnet ? "ip" : "vlan"}
-              defaultSubnetId={subnet?.id}
-              defaultRangeId={selectedRangeId}
-            />
+            {!subnetNeedsRepair && (
+              <AllocatePanel
+                defaultTab={subnet ? "ip" : "vlan"}
+                defaultSubnetId={subnet?.id}
+                defaultRangeId={selectedRangeId}
+              />
+            )}
           </>
         }
       />
@@ -1362,7 +1373,24 @@ export default function NetworksView() {
                 </Card>
               )}
 
-              {canEdit && (subnet || creatingSubnet) && (
+              {subnetNeedsRepair && subnet && (
+                <div className="rounded-[var(--radius-sm)] border border-[var(--warning-border)] bg-[var(--warning-soft)] px-4 py-3 text-sm text-[var(--warning)]">
+                  <div className="font-semibold">{t("Subnet integrity repair required")}</div>
+                  <div className="mt-1">
+                    {subnet.integrity.state === "invalid-cidr"
+                      ? `The legacy CIDR ${subnet.cidr} is invalid.`
+                      : `${subnet.cidr} overlaps ${subnet.integrity.conflicts.map((conflict) => `${conflict.name} (${conflict.cidr})`).join(", ")}.`}
+                    {canRepairSubnet
+                      ? " Enter a valid, non-overlapping CIDR below or delete the subnet after reviewing its child records."
+                      : " An administrator must repair it before new allocations can be made."}
+                  </div>
+                  <div className="mt-2 font-mono text-xs">
+                    {assignments.length} assignments · {subnetScopes.length} scopes · {subnetZones.length} zones
+                  </div>
+                </div>
+              )}
+
+              {canEdit && (subnet || creatingSubnet) && (!subnetNeedsRepair || canRepairSubnet) && (
                 <SubnetEditor
                   creating={creatingSubnet || !subnet}
                   form={subnetForm}
@@ -1434,7 +1462,7 @@ export default function NetworksView() {
                     error={scopeError}
                     saving={scopeSaving}
                     deleting={scopeDeleting}
-                    canEdit={canEdit}
+                    canEdit={canAllocateSubnet}
                     onSave={() => void handleSaveScope()}
                     onDelete={() => void handleDeleteScope()}
                   />
@@ -1450,7 +1478,7 @@ export default function NetworksView() {
                     error={zoneError}
                     saving={zoneSaving}
                     deleting={zoneDeleting}
-                    canEdit={canEdit}
+                    canEdit={canAllocateSubnet}
                     onSave={() => void handleSaveZone()}
                     onDelete={() => void handleDeleteZone()}
                   />
@@ -1808,7 +1836,7 @@ function NetworkSetupPanel({
                       subnetName: prev.subnetName || event.target.value,
                     }))
                   }
-                  placeholder="Management"
+                  placeholder={t("Management")}
                 />
               </Field>
             </div>
@@ -1824,7 +1852,7 @@ function NetworkSetupPanel({
                     onChange={(value) =>
                       onChange((prev) => ({ ...prev, color: value }))
                     }
-                    placeholder="#4f8cff or blue"
+                    placeholder={t("#4f8cff or blue")}
                   />
                 </Field>
               )}
@@ -1837,7 +1865,7 @@ function NetworkSetupPanel({
                       description: event.target.value,
                     }))
                   }
-                  placeholder="Core management network"
+                  placeholder={t("Core management network")}
                 />
               </Field>
             </div>
@@ -1864,7 +1892,7 @@ function NetworkSetupPanel({
                       subnetName: event.target.value,
                     }))
                   }
-                  placeholder="Management subnet"
+                  placeholder={t("Management subnet")}
                 />
               </Field>
             </div>
@@ -1903,7 +1931,7 @@ function NetworkSetupPanel({
                     subnetDescription: event.target.value,
                   }))
                 }
-                placeholder="Anything specific about this subnet"
+                placeholder={t("Anything specific about this subnet")}
               />
             </Field>
           </div>
@@ -1944,7 +1972,7 @@ function NetworkSetupPanel({
                           dhcpName: event.target.value,
                         }))
                       }
-                      placeholder="clients"
+                      placeholder={t("clients")}
                     />
                   </Field>
                   <Field label={t("Start IP")}>
@@ -1981,7 +2009,7 @@ function NetworkSetupPanel({
                         dhcpDescription: event.target.value,
                       }))
                     }
-                    placeholder="General client pool"
+                    placeholder={t("General client pool")}
                   />
                 </Field>
               </>
@@ -2111,7 +2139,7 @@ function VlanEditor({
               onChange={(value) =>
                 onChange((prev) => ({ ...prev, color: value }))
               }
-              placeholder="#4f8cff or blue"
+              placeholder={t("#4f8cff or blue")}
             />
           </Field>
           <Field label={t("Description")}>
@@ -2356,7 +2384,7 @@ function VlanRangesPanel({
                   onChange={(event) =>
                     onChange((prev) => ({ ...prev, name: event.target.value }))
                   }
-                  placeholder="Servers"
+                  placeholder={t("Servers")}
                 />
               </Field>
               <Field label={t("Color")}>
@@ -2365,7 +2393,7 @@ function VlanRangesPanel({
                   onChange={(value) =>
                     onChange((prev) => ({ ...prev, color: value }))
                   }
-                  placeholder="#4f8cff or blue"
+                  placeholder={t("#4f8cff or blue")}
                 />
               </Field>
             </div>
@@ -2410,7 +2438,7 @@ function VlanRangesPanel({
                     purpose: event.target.value,
                   }))
                 }
-                placeholder="Server LANs, storage, management"
+                placeholder={t("Server LANs, storage, management")}
               />
             </Field>
             {error && <ErrorBanner>{error}</ErrorBanner>}
@@ -2618,7 +2646,7 @@ function SubnetEditor({
               onChange={(event) =>
                 onChange((prev) => ({ ...prev, name: event.target.value }))
               }
-              placeholder="Servers management"
+              placeholder={t("Servers management")}
             />
           </Field>
         </div>
@@ -2673,7 +2701,7 @@ function SubnetEditor({
                   description: event.target.value,
                 }))
               }
-              placeholder="Primary management network"
+              placeholder={t("Primary management network")}
             />
           </Field>
         </div>
@@ -2797,7 +2825,7 @@ function ScopeEditor({
                   onChange={(event) =>
                     onChange((prev) => ({ ...prev, name: event.target.value }))
                   }
-                  placeholder="Clients"
+                  placeholder={t("Clients")}
                 />
               </Field>
               <Field label={t("Gateway")}>
@@ -2857,7 +2885,7 @@ function ScopeEditor({
                     description: event.target.value,
                   }))
                 }
-                placeholder="General client pool"
+                placeholder={t("General client pool")}
               />
             </Field>
             {error && <ErrorBanner>{error}</ErrorBanner>}
@@ -3027,7 +3055,7 @@ function ZoneEditor({
                     description: event.target.value,
                   }))
                 }
-                placeholder="Static addresses"
+                placeholder={t("Static addresses")}
               />
             </Field>
             {error && <ErrorBanner>{error}</ErrorBanner>}

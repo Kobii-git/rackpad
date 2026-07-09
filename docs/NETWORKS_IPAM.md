@@ -5,6 +5,14 @@ homelab network layouts. It can create a VLAN, subnet, gateway/DNS records,
 DHCP pool, and IP zones together, or it can document an untagged subnet without
 forcing a VLAN record.
 
+## Subnet integrity
+
+Rackpad stores IPv4 CIDRs in canonical network form and rejects equivalent or
+overlapping subnets inside the same lab. Legacy overlaps are preserved, marked
+read-only, and shown in the administrator data-integrity panel. An administrator
+must move a conflicted subnet to a non-overlapping CIDR or explicitly delete it;
+Rackpad never merges or deletes legacy IPAM data automatically.
+
 ## Simple tagged VLAN network
 
 Use this when a subnet lives on a tagged VLAN, such as `VLAN 20` for IoT or

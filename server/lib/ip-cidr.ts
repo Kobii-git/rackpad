@@ -22,18 +22,20 @@ export function intToIp(value: number) {
 }
 
 export function cidrBounds(cidr: string) {
-  const [networkAddress, prefixRaw] = cidr.split('/')
-  const prefix = Number.parseInt(prefixRaw ?? '', 10)
-  if (!networkAddress || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) {
+  const match = /^(\d{1,3}(?:\.\d{1,3}){3})\/(0|[1-9]|[12]\d|3[0-2])$/.exec(cidr.trim())
+  if (!match) {
     throw new Error(`Invalid CIDR block: ${cidr}`)
   }
+  const networkAddress = match[1]
+  const prefix = Number.parseInt(match[2], 10)
+  const address = ipToInt(networkAddress)
   const mask =
     prefix === 0
       ? 0
       : prefix === 32
         ? 0xffffffff
         : (0xffffffff << (32 - prefix)) >>> 0
-  const network = (ipToInt(networkAddress) & mask) >>> 0
+  const network = (address & mask) >>> 0
   const size = 2 ** (32 - prefix)
   return {
     network,
@@ -43,11 +45,43 @@ export function cidrBounds(cidr: string) {
   }
 }
 
+export function canonicalizeIpv4Cidr(cidr: string) {
+  const { network, prefix } = cidrBounds(cidr)
+  return `${intToIp(network)}/${prefix}`
+}
+
+export function cidrOverlaps(left: string, right: string) {
+  const leftBounds = cidrBounds(left)
+  const rightBounds = cidrBounds(right)
+  return (
+    leftBounds.network <= rightBounds.broadcast &&
+    rightBounds.network <= leftBounds.broadcast
+  )
+}
+
 export function cidrContainsIp(cidr: string, ipAddress: string) {
   try {
     const { network, broadcast } = cidrBounds(cidr)
     const target = ipToInt(ipAddress)
     return target >= network && target <= broadcast
+  } catch {
+    return false
+  }
+}
+
+export function cidrHostBounds(cidr: string) {
+  const { network, broadcast, prefix } = cidrBounds(cidr)
+  if (prefix >= 31) {
+    return { firstHost: network, lastHost: broadcast }
+  }
+  return { firstHost: network + 1, lastHost: broadcast - 1 }
+}
+
+export function cidrContainsHostIp(cidr: string, ipAddress: string) {
+  try {
+    const { firstHost, lastHost } = cidrHostBounds(cidr)
+    const target = ipToInt(ipAddress)
+    return target >= firstHost && target <= lastHost
   } catch {
     return false
   }

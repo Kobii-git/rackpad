@@ -32,6 +32,8 @@ const {
   expandDiscoveryScanChunks,
   parseArpScanOutput,
   parseNmapPingScanOutput,
+  resetDiscoveryScanJobsForTests,
+  setDiscoveryScanRunnerForTests,
 } = await import("../routes/discovery.js");
 
 type AppInstance = Awaited<ReturnType<typeof createApp>>;
@@ -39,11 +41,15 @@ type AppInstance = Awaited<ReturnType<typeof createApp>>;
 let app: AppInstance;
 
 beforeEach(async () => {
+  delete process.env.DISCOVERY_SCAN_MAX_ACTIVE;
+  delete process.env.DISCOVERY_SCAN_MAX_ACTIVE_PER_LAB;
+  delete process.env.DISCOVERY_SCAN_MAX_QUEUED;
   resetDatabase();
   app = await createApp();
 });
 
 afterEach(async () => {
+  resetDiscoveryScanJobsForTests();
   await app.close();
 });
 
@@ -1123,6 +1129,76 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
   assert.equal(
     templatesAfterRestore.some(
       (template) => template.name === "Custom restore template",
+    ),
+    true,
+  );
+});
+
+test("admin restore rejects overlapping subnets without changing current data", async () => {
+  const adminToken = await bootstrapAdmin();
+
+  const subnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.66.0.0/24",
+      name: "Restore integrity subnet",
+    },
+  });
+  assert.equal(subnetRes.statusCode, 201);
+
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(exportRes.statusCode, 200);
+  const snapshot = readJson(exportRes) as Record<string, unknown> & {
+    data: { subnets: Array<Record<string, unknown>> };
+  };
+  snapshot.data.subnets.push({
+    ...snapshot.data.subnets[0],
+    id: "subnet_restore_overlap",
+    labId: "lab_home",
+    cidr: "10.66.0.128/25",
+    name: "Overlapping restore subnet",
+  });
+
+  const rackRes = await app.inject({
+    method: "POST",
+    url: "/api/racks",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      name: "Must survive rejected restore",
+      totalU: 42,
+    },
+  });
+  assert.equal(rackRes.statusCode, 201);
+
+  const restoreRes = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: snapshot,
+  });
+  assert.equal(restoreRes.statusCode, 409);
+  assert.equal(
+    (readJson(restoreRes) as { code: string }).code,
+    "SUBNET_OVERLAP",
+  );
+
+  const racksRes = await app.inject({
+    method: "GET",
+    url: "/api/racks?labId=lab_home",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(racksRes.statusCode, 200);
+  assert.equal(
+    (readJson(racksRes) as Array<{ name: string }>).some(
+      (rack) => rack.name === "Must survive rejected restore",
     ),
     true,
   );
@@ -4144,7 +4220,122 @@ test("discovery scans require lab write access", async () => {
     },
   });
 
-  assert.equal(scanRes.statusCode, 200);
+  assert.equal(scanRes.statusCode, 202);
+});
+
+test("discovery scan jobs return before the scan runner resolves", async () => {
+  const adminToken = await bootstrapAdmin();
+  const deferredScan = createDeferred(makeDiscoveryScanResult());
+  setDiscoveryScanRunnerForTests(async (labId, cidr) => {
+    assert.equal(labId, "lab_home");
+    assert.equal(cidr, "10.0.10.0/24");
+    return deferredScan.promise;
+  });
+
+  const startRes = await app.inject({
+    method: "POST",
+    url: "/api/discovery/scan",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.0.10.0/24",
+    },
+  });
+
+  assert.equal(startRes.statusCode, 202);
+  const started = readJson(startRes) as { job: { id: string; status: string } };
+  assert.ok(started.job.id);
+  assert.notEqual(started.job.status, "succeeded");
+
+  const running = await waitForDiscoveryScanJobStatus(
+    adminToken,
+    started.job.id,
+    "running",
+  );
+  assert.equal(running.result, null);
+
+  deferredScan.resolve(makeDiscoveryScanResult({ discoveredCount: 2 }));
+  const succeeded = await waitForDiscoveryScanJobStatus(
+    adminToken,
+    started.job.id,
+    "succeeded",
+  );
+  assert.equal(succeeded.result?.discoveredCount, 2);
+});
+
+test("discovery scan jobs report runner failures", async () => {
+  const adminToken = await bootstrapAdmin();
+  setDiscoveryScanRunnerForTests(async () => {
+    throw new Error("scan exploded");
+  });
+
+  const startRes = await app.inject({
+    method: "POST",
+    url: "/api/discovery/scan",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.0.10.0/24",
+    },
+  });
+
+  assert.equal(startRes.statusCode, 202);
+  const started = readJson(startRes) as { job: { id: string } };
+  const failed = await waitForDiscoveryScanJobStatus(
+    adminToken,
+    started.job.id,
+    "failed",
+  );
+  assert.equal(failed.error, "scan exploded");
+  assert.equal(failed.result, null);
+});
+
+test("discovery scan job status requires lab read access", async () => {
+  const adminToken = await bootstrapAdmin();
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "viewer-no-discovery-job",
+    displayName: "Viewer No Discovery Job",
+    password: "viewer-no-discovery-job-1",
+    role: "viewer",
+  });
+  const viewer = db
+    .prepare("SELECT id FROM users WHERE username = ?")
+    .get("viewer-no-discovery-job") as { id: string };
+  db.prepare("DELETE FROM userLabAccess WHERE userId = ?").run(viewer.id);
+  const deferredScan = createDeferred(makeDiscoveryScanResult());
+  setDiscoveryScanRunnerForTests(async () => deferredScan.promise);
+
+  const startRes = await app.inject({
+    method: "POST",
+    url: "/api/discovery/scan",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.0.10.0/24",
+    },
+  });
+
+  assert.equal(startRes.statusCode, 202);
+  const started = readJson(startRes) as { job: { id: string } };
+  await waitForDiscoveryScanJobStatus(adminToken, started.job.id, "running");
+
+  const forbiddenRes = await app.inject({
+    method: "GET",
+    url: `/api/discovery/scan-jobs/${started.job.id}`,
+    headers: {
+      authorization: `Bearer ${viewerToken}`,
+    },
+  });
+  assert.equal(forbiddenRes.statusCode, 403);
+
+  deferredScan.resolve(makeDiscoveryScanResult());
+  await waitForDiscoveryScanJobStatus(adminToken, started.job.id, "succeeded");
 });
 
 test("discovery scan schedules can be managed per lab", async () => {
@@ -4249,6 +4440,102 @@ test("discovery scan schedules can be managed per lab", async () => {
   });
   assert.equal(listAfterDeleteRes.statusCode, 200);
   assert.deepEqual(readJson(listAfterDeleteRes), []);
+});
+
+test("running a discovery scan schedule starts a job and records success", async () => {
+  const adminToken = await bootstrapAdmin();
+  const scanResult = makeDiscoveryScanResult({
+    scannedHostCount: 4,
+    discoveredCount: 1,
+  });
+  const deferredScan = createDeferred(scanResult);
+  setDiscoveryScanRunnerForTests(async (labId, cidr) => {
+    assert.equal(labId, "lab_home");
+    assert.equal(cidr, "10.42.0.0/30");
+    return deferredScan.promise;
+  });
+  const schedule = await createDiscoveryScanScheduleForTest(adminToken);
+
+  const runRes = await app.inject({
+    method: "POST",
+    url: `/api/discovery/schedules/${schedule.id}/run`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+
+  assert.equal(runRes.statusCode, 202);
+  const started = readJson(runRes) as {
+    job: { id: string; cidr: string; status: string };
+  };
+  assert.equal(started.job.cidr, "10.42.0.0/30");
+  assert.notEqual(started.job.status, "succeeded");
+
+  await waitForDiscoveryScanJobStatus(adminToken, started.job.id, "running");
+  deferredScan.resolve(scanResult);
+  await waitForDiscoveryScanJobStatus(adminToken, started.job.id, "succeeded");
+
+  const listRes = await app.inject({
+    method: "GET",
+    url: "/api/discovery/schedules?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(listRes.statusCode, 200);
+  const schedules = readJson(listRes) as Array<{
+    id: string;
+    lastResult: string | null;
+    lastMessage: string | null;
+  }>;
+  const updated = schedules.find((entry) => entry.id === schedule.id);
+  assert.equal(updated?.lastResult, "success");
+  assert.match(
+    updated?.lastMessage ?? "",
+    /Checked 4 hosts; found 1 reachable/,
+  );
+});
+
+test("running a discovery scan schedule records job failures", async () => {
+  const adminToken = await bootstrapAdmin();
+  setDiscoveryScanRunnerForTests(async () => {
+    throw new Error("schedule scan failed");
+  });
+  const schedule = await createDiscoveryScanScheduleForTest(adminToken);
+
+  const runRes = await app.inject({
+    method: "POST",
+    url: `/api/discovery/schedules/${schedule.id}/run`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+
+  assert.equal(runRes.statusCode, 202);
+  const started = readJson(runRes) as { job: { id: string } };
+  const failed = await waitForDiscoveryScanJobStatus(
+    adminToken,
+    started.job.id,
+    "failed",
+  );
+  assert.equal(failed.error, "schedule scan failed");
+
+  const listRes = await app.inject({
+    method: "GET",
+    url: "/api/discovery/schedules?labId=lab_home",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+  });
+  assert.equal(listRes.statusCode, 200);
+  const schedules = readJson(listRes) as Array<{
+    id: string;
+    lastResult: string | null;
+    lastMessage: string | null;
+  }>;
+  const updated = schedules.find((entry) => entry.id === schedule.id);
+  assert.equal(updated?.lastResult, "error");
+  assert.equal(updated?.lastMessage, "schedule scan failed");
 });
 
 test("discovery CIDR expansion fans larger ranges into safe chunks", () => {
@@ -4836,7 +5123,7 @@ test("DHCP scopes and IP zones validate ranges and subnet containment", async ()
   assert.match(invalidZoneEndPatchRes.body, /subnet/i);
 });
 
-test("non-canonical CIDRs validate against their masked network", async () => {
+test("non-canonical CIDRs are stored as their canonical network", async () => {
   const adminToken = await bootstrapAdmin();
   const authHeaders = {
     authorization: `Bearer ${adminToken}`,
@@ -4859,7 +5146,7 @@ test("non-canonical CIDRs validate against their masked network", async () => {
     cidr: string;
     gateway: string;
   };
-  assert.equal(subnet.cidr, "192.168.1.42/24");
+  assert.equal(subnet.cidr, "192.168.1.0/24");
   assert.equal(subnet.gateway, "192.168.1.1");
 
   const scopeRes = await app.inject({
@@ -4941,7 +5228,7 @@ test("non-canonical CIDRs validate against their masked network", async () => {
   assert.equal(cidrPatchRes.statusCode, 200);
   assert.equal(
     (readJson(cidrPatchRes) as { cidr: string }).cidr,
-    "192.168.1.99/24",
+    "192.168.1.0/24",
   );
 });
 
@@ -5990,6 +6277,167 @@ test("docker import stores a sync source and refreshes container status", async 
   }
 });
 
+test("global device type and port template mutations require an administrator", async () => {
+  const adminToken = await bootstrapAdmin();
+  const editorToken = await createUserAndLogin(adminToken, {
+    username: "global-config-editor",
+    displayName: "Global Config Editor",
+    password: "global-config-editor-1",
+    role: "editor",
+  });
+  const headers = { authorization: `Bearer ${editorToken}` };
+
+  const deviceTypeRes = await app.inject({
+    method: "POST",
+    url: "/api/device-types",
+    headers,
+    payload: { label: "Unauthorized Type", parentType: "other" },
+  });
+  assert.equal(deviceTypeRes.statusCode, 403);
+
+  const templateRes = await app.inject({
+    method: "POST",
+    url: "/api/ports/templates",
+    headers,
+    payload: {
+      name: "Unauthorized Template",
+      description: "Must not be created",
+      deviceTypes: ["switch"],
+      ports: [{ name: "eth0", kind: "rj45" }],
+    },
+  });
+  assert.equal(templateRes.statusCode, 403);
+});
+
+test("IP assignments reject cross-lab references and make legacy references inert", async () => {
+  const adminToken = await bootstrapAdmin();
+  db.prepare("INSERT INTO labs (id, name) VALUES (?, ?)").run("lab_hidden", "Hidden Lab");
+  const editorToken = await createUserAndLogin(adminToken, {
+    username: "lab-a-editor",
+    displayName: "Lab A Editor",
+    password: "lab-a-editor-password",
+    role: "editor",
+  });
+  const editor = db.prepare("SELECT id FROM users WHERE username = ?").get("lab-a-editor") as { id: string };
+  db.prepare("DELETE FROM userLabAccess WHERE userId = ? AND labId = ?").run(editor.id, "lab_hidden");
+
+  db.prepare(`
+    INSERT INTO devices (id, labId, hostname, deviceType, managementIp, status, placement)
+    VALUES ('device_hidden', 'lab_hidden', 'hidden-router', 'router', '10.60.0.10', 'online', 'room')
+  `).run();
+  const subnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { labId: "lab_home", cidr: "10.50.0.0/24", name: "Visible subnet" },
+  });
+  const subnet = readJson(subnetRes) as { id: string };
+
+  const rejected = await app.inject({
+    method: "POST",
+    url: "/api/ip-assignments",
+    headers: { authorization: `Bearer ${editorToken}` },
+    payload: {
+      subnetId: subnet.id,
+      ipAddress: "10.50.0.10",
+      assignmentType: "device",
+      deviceId: "device_hidden",
+    },
+  });
+  assert.equal(rejected.statusCode, 422);
+  assert.equal((readJson(rejected) as { code: string }).code, "CROSS_LAB_REFERENCE");
+
+  db.prepare(`
+    INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, deviceId)
+    VALUES ('legacy_cross_lab', ?, '10.50.0.11', 'device', 'device_hidden')
+  `).run(subnet.id);
+  const listRes = await app.inject({
+    method: "GET",
+    url: `/api/ip-assignments?subnetId=${subnet.id}`,
+    headers: { authorization: `Bearer ${editorToken}` },
+  });
+  const listed = readJson(listRes) as Array<{ deviceId: string | null; integrity: { state: string } }>;
+  assert.equal(listed[0]?.deviceId, null);
+  assert.equal(listed[0]?.integrity.state, "cross-lab-reference");
+
+  const deleteRes = await app.inject({
+    method: "DELETE",
+    url: "/api/ip-assignments/legacy_cross_lab",
+    headers: { authorization: `Bearer ${editorToken}` },
+  });
+  assert.equal(deleteRes.statusCode, 204);
+  const hiddenDevice = db.prepare("SELECT managementIp FROM devices WHERE id = ?").get("device_hidden") as { managementIp: string };
+  assert.equal(hiddenDevice.managementIp, "10.60.0.10");
+});
+
+test("subnets are canonicalized, overlaps are rejected, and legacy conflicts are reported", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const firstRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers,
+    payload: { labId: "lab_home", cidr: "10.70.0.42/24", name: "Canonical" },
+  });
+  assert.equal(firstRes.statusCode, 201);
+  assert.equal((readJson(firstRes) as { cidr: string }).cidr, "10.70.0.0/24");
+
+  const overlapRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers,
+    payload: { labId: "lab_home", cidr: "10.70.0.128/25", name: "Overlap" },
+  });
+  assert.equal(overlapRes.statusCode, 409);
+  assert.equal((readJson(overlapRes) as { code: string }).code, "SUBNET_OVERLAP");
+
+  db.prepare("INSERT INTO subnets (id, labId, cidr, name) VALUES (?, ?, ?, ?)")
+    .run("legacy_overlap", "lab_home", "10.70.0.64/26", "Legacy overlap");
+  const integrityRes = await app.inject({ method: "GET", url: "/api/admin/integrity", headers });
+  assert.equal(integrityRes.statusCode, 200);
+  const report = readJson(integrityRes) as { subnetConflicts: Array<{ id: string }> };
+  assert.ok(report.subnetConflicts.some((issue) => issue.id === "legacy_overlap"));
+});
+
+test("discovery jobs enforce global, per-lab, and queued limits", async () => {
+  process.env.DISCOVERY_SCAN_MAX_ACTIVE = "2";
+  process.env.DISCOVERY_SCAN_MAX_ACTIVE_PER_LAB = "1";
+  process.env.DISCOVERY_SCAN_MAX_QUEUED = "1";
+  const adminToken = await bootstrapAdmin();
+  db.prepare("INSERT INTO labs (id, name) VALUES (?, ?)").run("lab_queue_b", "Queue B");
+  const deferred = new Map<string, ReturnType<typeof createDeferred<ReturnType<typeof makeDiscoveryScanResult>>>>();
+  setDiscoveryScanRunnerForTests(async (_labId, cidr) => {
+    const wait = createDeferred(makeDiscoveryScanResult());
+    deferred.set(cidr, wait);
+    return wait.promise;
+  });
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const start = (labId: string, cidr: string) => app.inject({
+    method: "POST",
+    url: "/api/discovery/scan",
+    headers,
+    payload: { labId, cidr },
+  });
+
+  const first = await start("lab_home", "10.80.0.0/30");
+  const queued = await start("lab_home", "10.80.0.4/30");
+  const otherLab = await start("lab_queue_b", "10.90.0.0/30");
+  assert.equal(first.statusCode, 202);
+  assert.equal(otherLab.statusCode, 202);
+  const queuedJob = (readJson(queued) as { job: { status: string; queuePosition: number } }).job;
+  assert.equal(queuedJob.status, "queued");
+  assert.equal(queuedJob.queuePosition, 1);
+
+  const full = await start("lab_home", "10.80.0.8/30");
+  assert.equal(full.statusCode, 429);
+  assert.equal((readJson(full) as { code: string }).code, "DISCOVERY_QUEUE_FULL");
+
+  deferred.get("10.80.0.0/30")?.resolve();
+  deferred.get("10.90.0.0/30")?.resolve();
+  await wait(20);
+  deferred.get("10.80.0.4/30")?.resolve();
+});
+
 function resetDatabase() {
   db.exec(`
     DELETE FROM userSessions;
@@ -6048,6 +6496,112 @@ async function bootstrapAdmin() {
 
 function readJson(response: { body: string }) {
   return JSON.parse(response.body);
+}
+
+function makeDiscoveryScanResult(
+  overrides: Partial<{
+    chunkCount: number;
+    scannedHostCount: number;
+    discoveredCount: number;
+    macAddressCount: number;
+    vendorCount: number;
+    technicalCount: number;
+    diagnostics: Array<{
+      code: string;
+      severity: "info" | "warning";
+      message: string;
+      detail?: string;
+    }>;
+    rows: unknown[];
+  }> = {},
+) {
+  return {
+    chunkCount: 1,
+    scannedHostCount: 2,
+    discoveredCount: 0,
+    macAddressCount: 0,
+    vendorCount: 0,
+    technicalCount: 0,
+    diagnostics: [],
+    rows: [],
+    ...overrides,
+  };
+}
+
+function createDeferred<T>(value?: T) {
+  let resolve!: (result: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return {
+    promise,
+    resolve: (result = value as T) => resolve(result),
+    reject,
+  };
+}
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function getDiscoveryScanJobForTest(token: string, id: string) {
+  const res = await app.inject({
+    method: "GET",
+    url: `/api/discovery/scan-jobs/${id}`,
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+  assert.equal(res.statusCode, 200);
+  return (
+    readJson(res) as {
+      job: {
+        id: string;
+        status: string;
+        result: ReturnType<typeof makeDiscoveryScanResult> | null;
+        error: string | null;
+      };
+    }
+  ).job;
+}
+
+async function waitForDiscoveryScanJobStatus(
+  token: string,
+  id: string,
+  status: string,
+) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const job = await getDiscoveryScanJobForTest(token, id);
+    if (job.status === status) return job;
+    await wait(20);
+  }
+  const job = await getDiscoveryScanJobForTest(token, id);
+  assert.fail(
+    `Expected discovery scan job ${id} to reach ${status}, got ${job.status}.`,
+  );
+}
+
+async function createDiscoveryScanScheduleForTest(adminToken: string) {
+  const createRes = await app.inject({
+    method: "POST",
+    url: "/api/discovery/schedules",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      name: "Async schedule",
+      cidr: "10.42.0.0/30",
+      intervalMs: 120_000,
+      enabled: true,
+    },
+  });
+  assert.equal(createRes.statusCode, 201);
+  return readJson(createRes) as { id: string; cidr: string };
 }
 
 async function createSnmpIntegerResponder(value: number) {

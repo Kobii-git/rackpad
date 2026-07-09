@@ -633,7 +633,7 @@ export function VisualizerCanvas({
                     ? "Pyramid view"
                     : "Grouped zones"}
                 </CardLabel>
-                <CardHeading>Physical and logical cable paths</CardHeading>
+                <CardHeading>{t("Physical and logical cable paths")}</CardHeading>
               </CardTitle>
               <div className="flex items-center gap-2">
                 <div className="relative">
@@ -644,8 +644,8 @@ export function VisualizerCanvas({
                     onChange={(event) => setQuery(event.target.value)}
                     onKeyDown={handleSearchKeyDown}
                     className="rk-control h-8 w-72 pl-8 text-xs"
-                    placeholder="Search host, IP, MAC, cable..."
-                    aria-label="Search visualizer"
+                    placeholder={t("Search host, IP, MAC, cable...")}
+                    aria-label={t("Search visualizer")}
                   />
                   {query && searchResults.length > 0 && (
                     <div
@@ -685,16 +685,12 @@ export function VisualizerCanvas({
                   variant={healthOverlay ? "secondary" : "outline"}
                   size="sm"
                   onClick={onToggleHealth}
-                >
-                  1 Health
-                </Button>
+                >{t("1 Health")}</Button>
                 <Button
                   variant={traceMode.enabled ? "secondary" : "outline"}
                   size="sm"
                   onClick={toggleTraceMode}
-                >
-                  2 Trace
-                </Button>
+                >{t("2 Trace")}</Button>
               </div>
             </CardHeader>
             <CardBody className="min-h-0 flex-1 p-0">
@@ -722,9 +718,7 @@ export function VisualizerCanvas({
                     <LocateFixed className="size-3.5" />
                     Fit
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={resetView}>
-                    Reset
-                  </Button>
+                  <Button variant="ghost" size="sm" onClick={resetView}>{t("Reset")}</Button>
                 </div>
                 <div
                   className="absolute left-0 top-0 origin-top-left transition-transform duration-150 ease-out"
@@ -739,7 +733,7 @@ export function VisualizerCanvas({
                     width={model.width}
                     height={model.height}
                     role="img"
-                    aria-label="Cable links between Rackpad devices"
+                    aria-label={t("Cable links between Rackpad devices")}
                   >
                     <g pointerEvents="none">
                       {cableDrawEntries.map(({ cable, path }) => (
@@ -833,9 +827,7 @@ export function VisualizerCanvas({
           <div className="flex h-full min-h-0 flex-col gap-3">
             <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-1)] px-2 py-2">
               {!sidePanelCollapsed && (
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-                  Context
-                </span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">{t("Context")}</span>
               )}
               <Button
                 variant="ghost"
@@ -952,6 +944,7 @@ function ZonePanels({
   onToggleRackRun: (key: string) => void;
   onToggleGroup: (key: string) => void;
 }) {
+  const { t } = useI18n();
   if (model.layoutMode === "pyramid") {
     return (
       <div className="absolute inset-0 z-20">
@@ -966,7 +959,7 @@ function ZonePanels({
         >
           <ZoneHeader
             eyebrow="Pyramid view"
-            title="Master and endpoint map"
+            title={t("Master and endpoint map")}
             stats={`${model.counts.devices} devices | ${model.counts.cables} links`}
           />
         </div>
@@ -987,14 +980,11 @@ function ZonePanels({
       >
         <ZoneHeader
           eyebrow="Rack zone"
-          title="Rack elevations"
+          title={t("Rack elevations")}
           stats={`${model.rackZone.sections.length} rooms | ${model.rackZone.racks.length} racks`}
         />
         {model.rackZone.sections.length === 0 ? (
-          <div className="absolute left-6 right-6 top-24 rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] p-4 text-sm text-[var(--text-tertiary)]">
-            Add racks or enable room-only sections to place room inventory in
-            this zone.
-          </div>
+          <div className="absolute left-6 right-6 top-24 rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] p-4 text-sm text-[var(--text-tertiary)]">{t("Add racks or enable room-only sections to place room inventory in this zone.")}</div>
         ) : (
           <>
             {model.rackZone.sections.map((section) => (
@@ -1039,7 +1029,7 @@ function ZonePanels({
       >
         <ZoneHeader
           eyebrow="Room / loose zone"
-          title="Hosted, rooms, and loose inventory"
+          title={t("Hosted, rooms, and loose inventory")}
           stats={`${model.roomZone.stats.total} devices | ${model.roomZone.stats.online} online | ${model.roomZone.stats.down} down`}
         />
         {model.roomZone.groups.map((group) => (
@@ -1087,6 +1077,7 @@ function RackRoomSectionView({
   zoneX: number;
   zoneY: number;
 }) {
+  const { t } = useI18n();
   return (
     <div
       className="absolute rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[rgb(0_0_0_/_0.10)]"
@@ -1098,7 +1089,7 @@ function RackRoomSectionView({
       }}
     >
       <div className="border-b border-[var(--border-subtle)] px-4 py-3">
-        <div className="rk-kicker">Room</div>
+        <div className="rk-kicker">{t("Room")}</div>
         <div className="mt-1 flex items-end justify-between gap-3">
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-[var(--text-primary)]">
@@ -1129,6 +1120,7 @@ function RackPanelView({
   zoneY: number;
   onToggleRackRun: (key: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div
       className="absolute rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[rgb(0_0_0_/_0.12)]"
@@ -1163,12 +1155,8 @@ function RackPanelView({
       >
         {panel.stats.rearMounted > 0 && panel.faceMode === "both" && (
           <>
-            <span className="pointer-events-none absolute left-3 top-1 z-10 rounded-[var(--radius-xs)] bg-[rgb(0_0_0_/_0.32)] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-              Front
-            </span>
-            <span className="pointer-events-none absolute right-3 top-1 z-10 rounded-[var(--radius-xs)] bg-[rgb(0_0_0_/_0.32)] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-              Rear
-            </span>
+            <span className="pointer-events-none absolute left-3 top-1 z-10 rounded-[var(--radius-xs)] bg-[rgb(0_0_0_/_0.32)] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">{t("Front")}</span>
+            <span className="pointer-events-none absolute right-3 top-1 z-10 rounded-[var(--radius-xs)] bg-[rgb(0_0_0_/_0.32)] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">{t("Rear")}</span>
           </>
         )}
         {panel.bands.map((band) => (
@@ -1209,21 +1197,27 @@ function RackBandView({
   band: RackBand;
   onToggleRackRun: (key: string) => void;
 }) {
+  const { t } = useI18n();
   const label = band.collapsed ? band.label : "";
-  return (
-    <button
-      type="button"
-      data-visualizer-interactive="true"
-      disabled={!band.expandKey}
-      onClick={() => band.expandKey && onToggleRackRun(band.expandKey)}
-      className={`absolute left-0 right-0 border-b border-[rgb(255_255_255_/_0.018)] text-center font-mono text-[8px] transition-colors ${
+  const className = `absolute left-0 right-0 border-b border-[rgb(255_255_255_/_0.018)] text-center font-mono text-[8px] transition-colors ${
         band.collapsed
           ? "bg-[rgb(255_255_255_/_0.018)] text-[var(--text-tertiary)] hover:bg-[rgb(255_255_255_/_0.035)]"
           : band.occupied
             ? "bg-[rgb(255_255_255_/_0.028)]"
             : "bg-[rgb(255_255_255_/_0.01)]"
-      }`}
-      style={{ top: band.y, height: band.height }}
+      }`;
+  const style = { top: band.y, height: band.height };
+  if (!band.expandKey) {
+    return <div aria-hidden="true" className={className} style={style}>{label}</div>;
+  }
+  return (
+    <button
+      type="button"
+      data-visualizer-interactive="true"
+      onClick={() => onToggleRackRun(band.expandKey!)}
+      className={className}
+      style={style}
+      aria-label={`${t("Open")} ${band.label}`}
     >
       {label}
     </button>
@@ -1307,6 +1301,7 @@ function DeviceCard({
   onPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
   onPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
 }) {
+  const { t } = useI18n();
   const stripe = nodeStripeColor(node, healthOverlay);
   const compactRackNode = Boolean(
     node.rackId && node.height < (readableLabels ? 30 : 34),
@@ -1329,12 +1324,6 @@ function DeviceCard({
   return (
     <div
       data-visualizer-interactive="true"
-      role="button"
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") onSelect();
-      }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -1363,11 +1352,19 @@ function DeviceCard({
         opacity: dimmed ? 0.4 : 1,
       }}
     >
+      <button
+        type="button"
+        data-visualizer-interactive="true"
+        className="absolute inset-0 z-0 rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)]"
+        onClick={onSelect}
+        aria-label={`${t("Select")} ${node.device.hostname}`}
+        title={node.device.hostname}
+      />
       <span
-        className="pointer-events-none absolute inset-y-1 left-1 w-0.5 rounded-full"
+        className="pointer-events-none absolute inset-y-1 left-1 z-10 w-0.5 rounded-full"
         style={{ background: stripe }}
       />
-      <div className="flex min-w-0 items-center gap-2 pl-1.5">
+      <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-2 pl-1.5">
         <span className="shrink-0" style={{ color: node.typeColor }}>
           <DeviceTypeIcon type={node.device.deviceType} className="size-4" />
         </span>
@@ -1467,7 +1464,7 @@ function PortSquare({
             event.stopPropagation();
             onClick();
           }}
-          className="absolute rounded-[2px] transition-[background-color,border-color,box-shadow,opacity] duration-150"
+          className="absolute z-20 rounded-[2px] transition-[background-color,border-color,box-shadow,opacity] duration-150"
           style={{
             left: visualPort.x - node.x,
             top: visualPort.y - node.y,
@@ -1652,12 +1649,13 @@ function VisualizerLayoutPanel({
   onResetCustomNodePositions: () => void;
   hasCustomNodePositions: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <Card className="shrink-0">
       <CardHeader>
         <CardTitle>
-          <CardLabel>Layout</CardLabel>
-          <CardHeading>View and routing</CardHeading>
+          <CardLabel>{t("Layout")}</CardLabel>
+          <CardHeading>{t("View and routing")}</CardHeading>
         </CardTitle>
       </CardHeader>
       <CardBody className="space-y-3">
@@ -1669,13 +1667,13 @@ function VisualizerLayoutPanel({
                 onCableLayoutChange(event.target.value as VisualizerCableLayout)
               }
               className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
-              aria-label="Cable route layout"
+              aria-label={t("Cable route layout")}
             >
-              <option value="auto">Auto cables</option>
-              <option value="bundled">Bundled harness</option>
-              <option value="concave">Concave</option>
-              <option value="convex">Convex</option>
-              <option value="straight">Straight</option>
+              <option value="auto">{t("Auto cables")}</option>
+              <option value="bundled">{t("Bundled harness")}</option>
+              <option value="concave">{t("Concave")}</option>
+              <option value="convex">{t("Convex")}</option>
+              <option value="straight">{t("Straight")}</option>
             </select>
           </LayoutField>
           <LayoutField label="Labels">
@@ -1699,11 +1697,11 @@ function VisualizerLayoutPanel({
                     )
                   }
                   className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
-                  aria-label="Rack face"
+                  aria-label={t("Rack face")}
                 >
-                  <option value="front">Front</option>
-                  <option value="rear">Rear</option>
-                  <option value="both">Both</option>
+                  <option value="front">{t("Front")}</option>
+                  <option value="rear">{t("Rear")}</option>
+                  <option value="both">{t("Both")}</option>
                 </select>
               </LayoutField>
               <LayoutField label="Rack width">
@@ -1713,12 +1711,12 @@ function VisualizerLayoutPanel({
                     onRackScaleChange(event.target.value as VisualizerRackScale)
                   }
                   className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
-                  aria-label="Rack visual width"
+                  aria-label={t("Rack visual width")}
                 >
-                  <option value="compact">Compact</option>
-                  <option value="normal">Normal</option>
-                  <option value="wide">Wide</option>
-                  <option value="xwide">Extra wide</option>
+                  <option value="compact">{t("Compact")}</option>
+                  <option value="normal">{t("Normal")}</option>
+                  <option value="wide">{t("Wide")}</option>
+                  <option value="xwide">{t("Extra wide")}</option>
                 </select>
               </LayoutField>
             </div>
@@ -1732,11 +1730,11 @@ function VisualizerLayoutPanel({
                     )
                   }
                   className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
-                  aria-label="Shelf device layout"
+                  aria-label={t("Shelf device layout")}
                 >
-                  <option value="auto">Auto</option>
-                  <option value="stacked">Stacked</option>
-                  <option value="expanded">Expanded</option>
+                  <option value="auto">{t("Auto")}</option>
+                  <option value="stacked">{t("Stacked")}</option>
+                  <option value="expanded">{t("Expanded")}</option>
                 </select>
               </LayoutField>
               <LayoutField label="Loose devices">
@@ -1763,9 +1761,7 @@ function VisualizerLayoutPanel({
             className="w-full"
             onClick={onResetCustomNodePositions}
             disabled={!hasCustomNodePositions}
-          >
-            Reset node positions
-          </Button>
+          >{t("Reset node positions")}</Button>
         )}
       </CardBody>
     </Card>
@@ -1881,6 +1877,7 @@ function VisualizerSidePanel({
   onTracePortSelect: (deviceId: string, portId: string) => void;
   onClearTrace: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
       <VisualizerLayoutPanel
@@ -1948,8 +1945,8 @@ function VisualizerSidePanel({
       <Card className="shrink-0">
         <CardHeader>
           <CardTitle>
-            <CardLabel>Filters</CardLabel>
-            <CardHeading>Device types</CardHeading>
+            <CardLabel>{t("Filters")}</CardLabel>
+            <CardHeading>{t("Device types")}</CardHeading>
           </CardTitle>
         </CardHeader>
         <CardBody className="flex max-h-32 flex-wrap gap-2 overflow-y-auto">
@@ -2125,7 +2122,7 @@ function Inspector({
       <Card className="shrink-0">
         <CardHeader>
           <CardTitle>
-            <CardLabel>Inspector</CardLabel>
+            <CardLabel>{t("Inspector")}</CardLabel>
             <CardHeading>
               {selectedNode
                 ? selectedNode.device.hostname
@@ -2183,7 +2180,7 @@ function Inspector({
       <Card className="flex min-h-64 flex-col">
         <CardHeader>
           <CardTitle>
-            <CardLabel>Visible links</CardLabel>
+            <CardLabel>{t("Visible links")}</CardLabel>
             <CardHeading>{model.cables.length} cables</CardHeading>
           </CardTitle>
         </CardHeader>
@@ -2234,6 +2231,7 @@ function DeviceInspector({
   }>;
   onSelectCable: (id: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-3">
       <Button size="sm" asChild>
@@ -2257,15 +2255,13 @@ function DeviceInspector({
         />
       </div>
       <div>
-        <div className="rk-kicker mb-2">Direct connections</div>
+        <div className="rk-kicker mb-2">{t("Direct connections")}</div>
         <div
           data-visualizer-scrollable="true"
           className="max-h-80 space-y-2 overflow-y-auto pr-1"
         >
           {neighbors.length === 0 ? (
-            <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] p-3 text-xs text-[var(--text-tertiary)]">
-              No documented cable neighbors.
-            </div>
+            <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] p-3 text-xs text-[var(--text-tertiary)]">{t("No documented cable neighbors.")}</div>
           ) : (
             neighbors.map((neighbor) => (
               <div
@@ -2290,9 +2286,7 @@ function DeviceInspector({
                 <Link
                   to={`/devices/${neighbor.device.id}`}
                   className="shrink-0 rounded-[var(--radius-xs)] border border-[var(--border-subtle)] px-2 py-1 text-[10px] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
-                >
-                  Open
-                </Link>
+                >{t("Open")}</Link>
                 <span
                   className="size-3 shrink-0 rounded-full border border-[var(--border-subtle)]"
                   style={{ background: neighbor.color }}
@@ -2313,6 +2307,7 @@ function CableInspector({
   cable: VisualizerCable;
   onSelectDevice: (id: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-3">
       <EndpointButton
@@ -2330,12 +2325,12 @@ function CableInspector({
       <div className="grid grid-cols-2 gap-2">
         {cable.fromDevice && (
           <Button variant="outline" size="sm" asChild>
-            <Link to={`/devices/${cable.fromDevice.id}`}>Open from</Link>
+            <Link to={`/devices/${cable.fromDevice.id}`}>{t("Open from")}</Link>
           </Button>
         )}
         {cable.toDevice && (
           <Button variant="outline" size="sm" asChild>
-            <Link to={`/devices/${cable.toDevice.id}`}>Open to</Link>
+            <Link to={`/devices/${cable.toDevice.id}`}>{t("Open to")}</Link>
           </Button>
         )}
       </div>
@@ -2574,21 +2569,18 @@ function TypeChip({
 }
 
 function NoCableBanner({ onDismiss }: { onDismiss: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="absolute left-24 right-24 top-4 z-[80] flex items-center justify-between gap-4 rounded-[var(--radius-md)] border border-[var(--accent-primary-border)] bg-[color-mix(in_srgb,var(--surface-2)_92%,black)] px-4 py-3 shadow-[var(--shadow-card)]">
       <div>
-        <div className="text-sm font-semibold text-[var(--text-primary)]">
-          No cables documented yet.
-        </div>
-        <div className="text-xs text-[var(--text-tertiary)]">
-          Patch a cable in Cables to see connections here.
-        </div>
+        <div className="text-sm font-semibold text-[var(--text-primary)]">{t("No cables documented yet.")}</div>
+        <div className="text-xs text-[var(--text-tertiary)]">{t("Patch a cable in Cables to see connections here.")}</div>
       </div>
       <Button
         variant="ghost"
         size="icon"
         onClick={onDismiss}
-        aria-label="Dismiss no cables banner"
+        aria-label={t("Dismiss no cables banner")}
       >
         <X className="size-4" />
       </Button>
@@ -2639,6 +2631,7 @@ function VisualizerSkeleton() {
 }
 
 function VisualizerNoDevices() {
+  const { t } = useI18n();
   return (
     <div className="flex flex-1 items-center justify-center px-6 py-5">
       <Card className="max-w-xl">
@@ -2646,20 +2639,14 @@ function VisualizerNoDevices() {
           <div className="mx-auto grid size-12 place-items-center rounded-[var(--radius-lg)] border border-[var(--accent-secondary-border)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary)]">
             <Network className="size-5" />
           </div>
-          <h2 className="mt-4 text-lg font-semibold text-[var(--text-primary)]">
-            Add racks, devices, and cables to see your topology
-          </h2>
-          <p className="mt-2 text-sm text-[var(--text-tertiary)]">
-            The Visualizer is generated from Rackpad inventory, so it becomes
-            useful as soon as your first devices and patch cables are
-            documented.
-          </p>
+          <h2 className="mt-4 text-lg font-semibold text-[var(--text-primary)]">{t("Add racks, devices, and cables to see your topology")}</h2>
+          <p className="mt-2 text-sm text-[var(--text-tertiary)]">{t("The Visualizer is generated from Rackpad inventory, so it becomes useful as soon as your first devices and patch cables are documented.")}</p>
           <div className="mt-5 flex justify-center gap-3">
             <Button asChild>
-              <Link to="/racks">Go to Racks</Link>
+              <Link to="/racks">{t("Go to Racks")}</Link>
             </Button>
             <Button asChild variant="secondary">
-              <Link to="/cables">Go to Cables</Link>
+              <Link to="/cables">{t("Go to Cables")}</Link>
             </Button>
           </div>
         </CardBody>

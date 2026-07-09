@@ -1,0 +1,60 @@
+name: quality
+
+on:
+  workflow_call:
+  push:
+    branches: [main, beta, dev]
+  pull_request:
+    branches: [main, beta, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install browser test runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Validate translations
+        run: npm run check:i18n
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test:server && npm run test:client
+
+      - name: Build
+        run: npm run build
+
+      - name: Check bundle budget
+        run: npm run check:bundle
+
+      - name: Check shell scripts
+        run: find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+
+      - name: Check PowerShell scripts
+        shell: pwsh
+        run: |
+          Get-ChildItem scripts -Filter *.ps1 | ForEach-Object {
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors)
+            if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
+          }
+
+      - name: Browser and accessibility tests
+        run: npm run test:e2e

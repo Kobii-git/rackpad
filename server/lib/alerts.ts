@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer'
 import { db } from '../db.js'
 import { createId } from './ids.js'
 import { getJsonSetting, putJsonSetting } from './app-settings.js'
+import { requestPinnedUrl } from './net-guard.js'
 
 export interface AlertSettings {
   enabled: boolean
@@ -251,22 +252,22 @@ async function dispatchAlert(settings: AlertSettings, message: string): Promise<
 }
 
 async function sendDiscordAlert(webhookUrl: string, content: string) {
-  const response = await fetch(webhookUrl, {
+  const response = await requestPinnedUrl(new URL(webhookUrl), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
-    signal: AbortSignal.timeout(8000),
+    timeoutMs: 8000,
   })
 
-  if (!response.ok) {
-    throw new Error(`Discord webhook failed with status ${response.status}.`)
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new Error(`Discord webhook failed with status ${response.statusCode}.`)
   }
 
   return { channel: 'discord', delivered: true }
 }
 
 async function sendTelegramAlert(botToken: string, chatId: string, text: string) {
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+  const response = await requestPinnedUrl(new URL(`https://api.telegram.org/bot${botToken}/sendMessage`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -274,11 +275,11 @@ async function sendTelegramAlert(botToken: string, chatId: string, text: string)
       text,
       disable_web_page_preview: true,
     }),
-    signal: AbortSignal.timeout(8000),
+    timeoutMs: 8000,
   })
 
-  if (!response.ok) {
-    throw new Error(`Telegram sendMessage failed with status ${response.status}.`)
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new Error(`Telegram sendMessage failed with status ${response.statusCode}.`)
   }
 
   return { channel: 'telegram', delivered: true }

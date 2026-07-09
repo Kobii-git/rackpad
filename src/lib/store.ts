@@ -17,6 +17,7 @@ import type {
   DeviceTypeDefinition,
   DeviceMonitor,
   DiscoveredDevice,
+  DiscoveryScanJob,
   DiscoveryScanResult,
   DiscoveryScanSchedule,
   DocumentationPage,
@@ -90,6 +91,7 @@ const DEFAULT_LAB: Lab = {
 };
 
 const ACTIVE_LAB_STORAGE_KEY = "rackpad.active.lab";
+const DISCOVERY_SCAN_JOB_POLL_MS = 2000;
 const DEFAULT_UI_SETTINGS: UiSettings = {
   defaultLanguage: "en",
 };
@@ -826,10 +828,7 @@ async function syncDeviceManagementAssignment(
       dhcpScopeId: options.dhcpScopeId,
     });
     if (!patch) return {};
-    const updated = await api.updateIpAssignment(
-      existingAssignment.id,
-      patch,
-    );
+    const updated = await api.updateIpAssignment(existingAssignment.id, patch);
     return { upserted: updated };
   }
 
@@ -2231,10 +2230,14 @@ export async function createCable(input: CreateCableInput): Promise<PortLink> {
     throw new Error("A port cannot be connected to itself.");
   }
   if (fromPort.aggregatePortId) {
-    throw new Error(`${fromPort.name} is a bond member. Cable the aggregate port instead.`);
+    throw new Error(
+      `${fromPort.name} is a bond member. Cable the aggregate port instead.`,
+    );
   }
   if (toPort.aggregatePortId) {
-    throw new Error(`${toPort.name} is a bond member. Cable the aggregate port instead.`);
+    throw new Error(
+      `${toPort.name} is a bond member. Cable the aggregate port instead.`,
+    );
   }
   if (
     state.portLinks.some((link) =>
@@ -2360,11 +2363,18 @@ export async function deletePortAggregate(id: string): Promise<void> {
       prev.ports
         .filter((port) => port.id !== id)
         .map((port) =>
-          port.aggregatePortId === id ? { ...port, aggregatePortId: null } : port,
+          port.aggregatePortId === id
+            ? { ...port, aggregatePortId: null }
+            : port,
         ),
     ),
   }));
-  void recordAudit("port.aggregate.delete", "Port", id, "Deleted aggregate port");
+  void recordAudit(
+    "port.aggregate.delete",
+    "Port",
+    id,
+    "Deleted aggregate port",
+  );
 }
 
 export async function deleteCable(id: string): Promise<boolean> {
@@ -2435,10 +2445,14 @@ export async function updateCable(
   const nextFromPort = state.ports.find((port) => port.id === nextFromPortId);
   const nextToPort = state.ports.find((port) => port.id === nextToPortId);
   if (nextFromPort?.aggregatePortId) {
-    throw new Error(`${nextFromPort.name} is a bond member. Cable the aggregate port instead.`);
+    throw new Error(
+      `${nextFromPort.name} is a bond member. Cable the aggregate port instead.`,
+    );
   }
   if (nextToPort?.aggregatePortId) {
-    throw new Error(`${nextToPort.name} is a bond member. Cable the aggregate port instead.`);
+    throw new Error(
+      `${nextToPort.name} is a bond member. Cable the aggregate port instead.`,
+    );
   }
 
   const updated = await api.updatePortLink(id, patch);
@@ -3501,7 +3515,7 @@ export async function deleteVlanRangeRecord(id: string): Promise<void> {
 }
 
 export async function createSubnetRecord(
-  input: Omit<Subnet, "id">,
+  input: Omit<Subnet, "id" | "integrity">,
 ): Promise<Subnet> {
   const created = await api.createSubnet(input);
   setState((prev) => ({
@@ -3874,13 +3888,60 @@ function mergeDiscoveredDeviceRows(rows: DiscoveredDevice[]) {
   });
 }
 
+function delay(ms: number) {
+  return new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
+}
+
+function isDiscoveryScanJobActive(job: DiscoveryScanJob) {
+  return job.status === "queued" || job.status === "running";
+}
+
+async function waitForDiscoveryScanJob(
+  initialJob: DiscoveryScanJob,
+  onUpdate?: (job: DiscoveryScanJob) => void,
+): Promise<DiscoveryScanJob> {
+  let job = initialJob;
+  onUpdate?.(job);
+  while (isDiscoveryScanJobActive(job)) {
+    await delay(DISCOVERY_SCAN_JOB_POLL_MS);
+    job = (await api.getDiscoveryScanJob(job.id)).job;
+    onUpdate?.(job);
+  }
+  return job;
+}
+
+function resultFromDiscoveryScanJob(job: DiscoveryScanJob) {
+  if (job.status === "failed") {
+    throw new Error(job.error || "Discovery scan failed.");
+  }
+  if (job.status !== "succeeded" || !job.result) {
+    throw new Error("Discovery scan finished without a result.");
+  }
+  return job.result;
+}
+
+async function refreshDiscoveryScanSchedules() {
+  const schedules = await api.getDiscoveryScanSchedules();
+  setState((prev) => ({
+    ...prev,
+    discoveryScanSchedules: sortDiscoveryScanSchedules(schedules),
+  }));
+  return schedules;
+}
+
 export async function scanDiscoveredSubnet(
   cidr: string,
+  onJobUpdate?: (job: DiscoveryScanJob) => void,
 ): Promise<DiscoveryScanResult> {
-  const result = await api.scanDiscoveredDevices({
+  const { job } = await api.scanDiscoveredDevices({
     labId: state.lab.id,
     cidr,
   });
+  const result = resultFromDiscoveryScanJob(
+    await waitForDiscoveryScanJob(job, onJobUpdate),
+  );
 
   mergeDiscoveredDeviceRows(result.rows);
 
@@ -3894,14 +3955,12 @@ export async function scanDiscoveredSubnet(
   return result;
 }
 
-export async function createDiscoveryScanSchedule(
-  input: {
-    name?: string | null;
-    cidr: string;
-    intervalMs: number;
-    enabled: boolean;
-  },
-): Promise<DiscoveryScanSchedule> {
+export async function createDiscoveryScanSchedule(input: {
+  name?: string | null;
+  cidr: string;
+  intervalMs: number;
+  enabled: boolean;
+}): Promise<DiscoveryScanSchedule> {
   const created = await api.createDiscoveryScanSchedule({
     labId: state.lab.id,
     ...input,
@@ -3947,25 +4006,18 @@ export async function updateDiscoveryScanScheduleRecord(
 export async function runDiscoveryScanScheduleNow(
   id: string,
 ): Promise<DiscoveryScanResult | null> {
-  const result = await api.runDiscoveryScanSchedule(id);
-  setState((prev) => ({
-    ...prev,
-    discoveryScanSchedules: replaceById(
-      prev.discoveryScanSchedules,
-      result.schedule,
-      sortDiscoveryScanSchedules,
-    ),
-  }));
-  if (result.scan) {
-    mergeDiscoveredDeviceRows(result.scan.rows);
-  }
+  const { job } = await api.runDiscoveryScanSchedule(id);
+  const finishedJob = await waitForDiscoveryScanJob(job);
+  await refreshDiscoveryScanSchedules();
+  const scan = resultFromDiscoveryScanJob(finishedJob);
+  mergeDiscoveredDeviceRows(scan.rows);
   void recordAudit(
     "discovery.schedule.run",
     "DiscoveryScanSchedule",
     id,
-    `Ran scheduled discovery scan for ${result.schedule.cidr}`,
+    `Ran scheduled discovery scan for ${finishedJob.cidr}`,
   );
-  return result.scan;
+  return scan;
 }
 
 export async function deleteDiscoveryScanScheduleRecord(

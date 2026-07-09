@@ -6,6 +6,7 @@ import {
   listDeviceTypesWithObserved,
   updateDeviceType,
 } from '../lib/device-types.js'
+import { assertGlobalAdmin } from '../lib/lab-access.js'
 
 export const deviceTypesRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', async () => {
@@ -13,6 +14,7 @@ export const deviceTypesRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.post('/', async (req, reply) => {
+    if (!assertGlobalAdmin(req, reply)) return
     const body = asObject(req.body)
     const id = optionalString(body, 'id', { maxLength: 80 })
     const label = requiredString(body, 'label', { maxLength: 80 })
@@ -21,7 +23,8 @@ export const deviceTypesRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(201).send(createDeviceType({ id, label, parentType }))
   })
 
-  app.patch('/:id', async (req) => {
+  app.patch('/:id', async (req, reply) => {
+    if (!assertGlobalAdmin(req, reply)) return
     const params = asObject(req.params)
     const body = asObject(req.body)
     const id = requiredString(params, 'id', { maxLength: 80 })
@@ -32,6 +35,7 @@ export const deviceTypesRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.delete('/:id', async (req, reply) => {
+    if (!assertGlobalAdmin(req, reply)) return
     const params = asObject(req.params)
     const id = requiredString(params, 'id', { maxLength: 80 })
     deleteDeviceType(id)

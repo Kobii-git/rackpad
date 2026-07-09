@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n";
 import { useMemo } from "react";
 import type { DhcpScope, IpAssignment, IpZone, Subnet } from "@/lib/types";
 import { cidrBounds, ipToInt } from "@/lib/utils";
@@ -37,6 +38,7 @@ export function IpZoneBar({
   scopes,
   assignments = [],
 }: IpZoneBarProps) {
+  const { t } = useI18n();
   const { network: baseInt, size: total } = cidrBounds(subnet.cidr);
 
   const combined = useMemo(() => {
@@ -65,9 +67,7 @@ export function IpZoneBar({
 
   if (combined.length === 0) {
     return (
-      <div className="text-[11px] text-[var(--text-tertiary)]">
-        No zones documented for this subnet.
-      </div>
+      <div className="text-[11px] text-[var(--text-tertiary)]">{t("No zones documented for this subnet.")}</div>
     );
   }
 

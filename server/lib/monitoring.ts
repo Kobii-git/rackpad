@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import net from 'node:net'
 import { db } from '../db.js'
 import { sendMonitorTransitionAlert } from './alerts.js'
-import { ensureRoutableHost } from './net-guard.js'
+import { requestPinnedUrl } from './net-guard.js'
 import { snmpGet, SNMP_VERSIONS, type SnmpVersion } from './snmp.js'
 import { resolveMonitorSnmpSession } from './snmp-session.js'
 import {
@@ -257,12 +257,11 @@ async function executeCheck(monitor: DeviceMonitor) {
       const path = monitor.path?.trim() || '/'
       const host = net.isIP(monitor.target) === 6 ? `[${monitor.target}]` : monitor.target
       const url = new URL(`${monitor.type}://${host}:${port}${path.startsWith('/') ? path : `/${path}`}`)
-      await ensureRoutableHost(url)
-      const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
-      if (!res.ok) {
-        return { result: 'offline' as const, message: `${url} returned ${res.status}.` }
+      const res = await requestPinnedUrl(url, { timeoutMs: 5_000, maxRedirects: 3 })
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        return { result: 'offline' as const, message: `${res.url} returned ${res.statusCode}.` }
       }
-      return { result: 'online' as const, message: `${url} returned ${res.status}.` }
+      return { result: 'online' as const, message: `${res.url} returned ${res.statusCode}.` }
     }
 
     if (monitor.type === 'snmp') {

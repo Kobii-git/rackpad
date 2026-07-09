@@ -287,7 +287,7 @@ export default function DocumentationView() {
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search documentation..."
+                placeholder={t("Search documentation...")}
                 className="pl-7"
               />
             </div>
@@ -318,9 +318,7 @@ export default function DocumentationView() {
               );
             })}
             {filteredPages.length === 0 && (
-              <div className="px-4 py-8 text-sm text-[var(--color-fg-subtle)]">
-                No matching pages.
-              </div>
+              <div className="px-4 py-8 text-sm text-[var(--color-fg-subtle)]">{t("No matching pages.")}</div>
             )}
           </div>
         </aside>
@@ -330,8 +328,8 @@ export default function DocumentationView() {
             <Card className="mx-auto mt-16 max-w-xl">
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>Documentation</CardLabel>
-                  <CardHeading>No pages yet</CardHeading>
+                  <CardLabel>{t("Documentation")}</CardLabel>
+                  <CardHeading>{t("No pages yet")}</CardHeading>
                 </CardTitle>
               </CardHeader>
               <CardBody>
@@ -361,8 +359,8 @@ export default function DocumentationView() {
                 <Card className="flex min-h-0 w-full flex-col">
                   <CardHeader>
                     <CardTitle>
-                      <CardLabel>Markdown</CardLabel>
-                      <CardHeading>Edit page</CardHeading>
+                      <CardLabel>{t("Markdown")}</CardLabel>
+                      <CardHeading>{t("Edit page")}</CardHeading>
                     </CardTitle>
                     {canEdit && (
                       <Button
@@ -481,7 +479,7 @@ export default function DocumentationView() {
                 <Card className="flex min-h-0 w-full flex-col">
                   <CardHeader className="screen-only">
                     <CardTitle>
-                      <CardLabel>Preview</CardLabel>
+                      <CardLabel>{t("Preview")}</CardLabel>
                       <CardHeading>
                         {draftTitle || selectedPage.title}
                       </CardHeading>

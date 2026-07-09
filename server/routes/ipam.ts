@@ -5,6 +5,7 @@ import {
   assertLabReadFromRow,
   assertLabWrite,
   assertLabWriteFromRow,
+  isGlobalAdmin,
   resolveLabIdsForList,
 } from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
@@ -20,7 +21,17 @@ import {
   requiredString,
   ValidationError,
 } from '../lib/validation.js'
-import { cidrContainsIp, ipToInt } from '../lib/ip-cidr.js'
+import { cidrContainsHostIp, ipToInt } from '../lib/ip-cidr.js'
+import {
+  assertSubnetCidrAvailable,
+  assertSubnetIntegrityHealthy,
+  enrichSubnetIntegrity,
+  getSubnetIntegrity,
+} from '../lib/subnet-integrity.js'
+import {
+  serializeAssignmentWithIntegrity,
+  validateAssignmentReferences,
+} from '../lib/ip-assignment-integrity.js'
 
 const IP_ZONE_KINDS = ['static', 'dhcp', 'reserved', 'infrastructure'] as const
 const ASSIGNMENT_TYPES = ['device', 'interface', 'vm', 'container', 'reserved', 'infrastructure'] as const
@@ -38,7 +49,7 @@ function parseScope(row: Record<string, unknown>) {
 }
 
 function parseSubnet(row: Record<string, unknown>) {
-  return parseRow(row, ['dnsServers'])
+  return enrichSubnetIntegrity(parseRow(row, ['dnsServers']))
 }
 
 function stringifyDnsServers(value: string[] | null | undefined) {
@@ -57,8 +68,8 @@ function ensureIpRange(startIp: string, endIp: string, label: string) {
 }
 
 function ensureIpBelongsToSubnet(cidr: string, ipAddress: string, key: string) {
-  if (!cidrContainsIp(cidr, ipAddress)) {
-    throw new ValidationError(`${key} must belong to subnet ${cidr}.`)
+  if (!cidrContainsHostIp(cidr, ipAddress)) {
+    throw new ValidationError(`${key} must belong to the usable host range of subnet ${cidr}.`)
   }
 }
 
@@ -165,10 +176,10 @@ function validateSubnetChildrenForCidr(subnetId: string, cidr: string) {
 function assertAssignmentSubnet(subnetId: string, ipAddress: string) {
   const subnet = db.prepare('SELECT cidr FROM subnets WHERE id = ?').get(subnetId) as { cidr?: string } | undefined
   if (!subnet?.cidr) {
-    throw new Error('Subnet not found.')
+    throw new ValidationError('Subnet not found.', 404)
   }
-  if (!cidrContainsIp(subnet.cidr, ipAddress)) {
-    throw new Error(`IP ${ipAddress} does not belong to subnet ${subnet.cidr}.`)
+  if (!cidrContainsHostIp(subnet.cidr, ipAddress)) {
+    throw new ValidationError(`IP ${ipAddress} does not belong to the usable host range of subnet ${subnet.cidr}.`)
   }
 }
 
@@ -351,7 +362,10 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const id = optionalString(body, 'id', { maxLength: 80 }) ?? createId('s')
     const labId = requiredString(body, 'labId', { maxLength: 80 })
     if (!assertLabWrite(req, reply, labId)) return
-    const cidr = ensureCidr(requiredString(body, 'cidr', { maxLength: 40 }))
+    const cidr = assertSubnetCidrAvailable(
+      labId,
+      ensureCidr(requiredString(body, 'cidr', { maxLength: 40 })),
+    )
     const name = requiredString(body, 'name', { maxLength: 120 })
     const description = optionalString(body, 'description', { maxLength: 500 })
     const gateway = optionalString(body, 'gateway', { maxLength: 40 })
@@ -379,6 +393,15 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const existing = db.prepare('SELECT * FROM subnets WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
     if (!assertLabWriteFromRow(req, reply, existing)) return
     const subnet = existing! as { id: string; labId: string; cidr: string; gateway: string | null }
+    const existingIntegrity = getSubnetIntegrity({
+      id: subnet.id,
+      labId: subnet.labId,
+      cidr: subnet.cidr,
+      name: String(existing!.name),
+    })
+    if (existingIntegrity.state !== 'ok' && !isGlobalAdmin(req.authUser)) {
+      return reply.status(403).send({ error: 'Administrator access is required to repair a conflicted subnet.' })
+    }
     const body = asObject(req.body)
     const updates: string[] = []
     const values: unknown[] = []
@@ -397,7 +420,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     if (cidr !== undefined) {
       // cidr is a NOT NULL column — reject explicit null/empty rather than letting the DB fail
       if (!cidr) return reply.status(400).send({ error: 'cidr cannot be empty.' })
-      nextCidr = ensureCidr(cidr)
+      nextCidr = assertSubnetCidrAvailable(subnet.labId, ensureCidr(cidr), req.params.id)
     }
     if (gateway !== undefined) {
       nextGateway = ensureGatewayBelongsToSubnet(nextCidr, gateway, 'gateway')
@@ -431,6 +454,15 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
   app.delete<{ Params: { id: string } }>('/subnets/:id', async (req, reply) => {
     const row = db.prepare('SELECT * FROM subnets WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
     if (!assertLabWriteFromRow(req, reply, row)) return
+    const integrity = getSubnetIntegrity({
+      id: String(row!.id),
+      labId: String(row!.labId),
+      cidr: String(row!.cidr),
+      name: String(row!.name),
+    })
+    if (integrity.state !== 'ok' && !isGlobalAdmin(req.authUser)) {
+      return reply.status(403).send({ error: 'Administrator access is required to delete a conflicted subnet.' })
+    }
     db.prepare('DELETE FROM subnets WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
   })
@@ -466,6 +498,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
       gateway: optionalString(subnetBody, 'gateway', { maxLength: 40 }),
       dnsServers: optionalStringArray(subnetBody, 'dnsServers', { maxItems: 5 }),
     }
+    subnetDraft.cidr = assertSubnetCidrAvailable(labId, subnetDraft.cidr)
     const subnetGateway = ensureGatewayBelongsToSubnet(subnetDraft.cidr, subnetDraft.gateway, 'gateway')
 
     const dhcpDraft = dhcpBody
@@ -592,6 +625,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const subnet = getSubnetLabRow(subnetId)
     if (!subnet) return reply.status(404).send({ error: 'Subnet not found.' })
     if (!assertLabWrite(req, reply, subnet.labId)) return
+    assertSubnetIntegrityHealthy(subnetId)
     const name = requiredString(body, 'name', { maxLength: 120 })
     const startIp = ensureIpv4(requiredString(body, 'startIp', { maxLength: 40 }), 'startIp')
     const endIp = ensureIpv4(requiredString(body, 'endIp', { maxLength: 40 }), 'endIp')
@@ -618,6 +652,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
       WHERE dhcpScopes.id = ?
     `).get(req.params.id) as Record<string, unknown> | undefined
     if (!assertLabWriteFromRow(req, reply, existing)) return
+    assertSubnetIntegrityHealthy(String(existing!.subnetId))
     const scope = existing! as { startIp: string; endIp: string; subnetCidr: string }
     const body = asObject(req.body)
     const updates: string[] = []
@@ -711,6 +746,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const subnet = getSubnetLabRow(subnetId)
     if (!subnet) return reply.status(404).send({ error: 'Subnet not found.' })
     if (!assertLabWrite(req, reply, subnet.labId)) return
+    assertSubnetIntegrityHealthy(subnetId)
     const kind = requiredEnum(body, 'kind', IP_ZONE_KINDS)
     const startIp = ensureIpv4(requiredString(body, 'startIp', { maxLength: 40 }), 'startIp')
     const endIp = ensureIpv4(requiredString(body, 'endIp', { maxLength: 40 }), 'endIp')
@@ -730,6 +766,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
       WHERE ipZones.id = ?
     `).get(req.params.id) as Record<string, unknown> | undefined
     if (!assertLabWriteFromRow(req, reply, existing)) return
+    assertSubnetIntegrityHealthy(String(existing!.subnetId))
     const zone = existing! as { startIp: string; endIp: string; subnetCidr: string }
     const body = asObject(req.body)
     const updates: string[] = []
@@ -789,7 +826,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     }
 
     let sql = `
-      SELECT ipAssignments.*
+      SELECT ipAssignments.*, subnets.labId AS subnetLabId
       FROM ipAssignments
       JOIN subnets ON subnets.id = ipAssignments.subnetId
       WHERE 1=1
@@ -798,18 +835,31 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     if (req.query.subnetId) { sql += ' AND ipAssignments.subnetId = ?'; params.push(req.query.subnetId) }
     if (req.query.deviceId) { sql += ' AND ipAssignments.deviceId = ?'; params.push(req.query.deviceId) }
     const filtered = appendLabFilter(sql, params, filter.labIds, 'subnets.labId')
-    return db.prepare(`${filtered.sql} ORDER BY ipAssignments.ipAddress`).all(...filtered.params)
+    const rows = db.prepare(`${filtered.sql} ORDER BY ipAssignments.ipAddress`).all(...filtered.params) as Array<Record<string, unknown>>
+    return rows.map((row) => {
+      const { subnetLabId, ...assignment } = row
+      return serializeAssignmentWithIntegrity(
+        assignment,
+        String(subnetLabId),
+        isGlobalAdmin(req.authUser),
+      )
+    })
   })
 
   app.get<{ Params: { id: string } }>('/ip-assignments/:id', async (req, reply) => {
     const row = db.prepare(`
-      SELECT ipAssignments.*, subnets.labId
+      SELECT ipAssignments.*, subnets.labId AS subnetLabId
       FROM ipAssignments
       JOIN subnets ON subnets.id = ipAssignments.subnetId
       WHERE ipAssignments.id = ?
     `).get(req.params.id) as Record<string, unknown> | undefined
-    if (!assertLabReadFromRow(req, reply, row)) return
-    return row
+    if (!assertLabReadFromRow(req, reply, row, 'subnetLabId')) return
+    const { subnetLabId, ...assignment } = row!
+    return serializeAssignmentWithIntegrity(
+      assignment,
+      String(subnetLabId),
+      isGlobalAdmin(req.authUser),
+    )
   })
 
   app.post('/ip-assignments', async (req, reply) => {
@@ -819,6 +869,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const subnet = getSubnetLabRow(subnetId)
     if (!subnet) return reply.status(404).send({ error: 'Subnet not found.' })
     if (!assertLabWrite(req, reply, subnet.labId)) return
+    assertSubnetIntegrityHealthy(subnetId)
     const ipAddress = ensureIpv4(requiredString(body, 'ipAddress', { maxLength: 40 }))
     const assignmentType = requiredEnum(body, 'assignmentType', ASSIGNMENT_TYPES)
     const deviceId = optionalString(body, 'deviceId', { maxLength: 80 })
@@ -829,24 +880,24 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     const description = optionalString(body, 'description', { maxLength: 500 })
     const dhcpScopeId = optionalString(body, 'dhcpScopeId', { maxLength: 80 })
     const allocationMode = optionalEnum(body, 'allocationMode', ALLOCATION_MODES) ?? (dhcpScopeId ? 'dhcp-reservation' : 'static')
-    try {
-      validateAssignmentSemantics({
-        subnetId,
-        ipAddress,
-        assignmentType,
-        allocationMode,
-        dhcpScopeId,
-      })
-    } catch (error) {
-      return reply.status(400).send({ error: error instanceof Error ? error.message : 'Invalid subnet assignment.' })
-    }
+    validateAssignmentSemantics({
+      subnetId,
+      ipAddress,
+      assignmentType,
+      allocationMode,
+      dhcpScopeId,
+    })
+    validateAssignmentReferences(subnetId, { deviceId, portId, vmId, containerId })
     db.prepare(
       'INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, allocationMode, dhcpScopeId, deviceId, portId, vmId, containerId, hostname, description) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
     ).run(id, subnetId, ipAddress, assignmentType,
       allocationMode, dhcpScopeId ?? null,
       deviceId ?? null, portId ?? null, vmId ?? null, containerId ?? null,
       hostname ?? null, description ?? null)
-    return reply.status(201).send(db.prepare('SELECT * FROM ipAssignments WHERE id = ?').get(id))
+    const created = db.prepare('SELECT * FROM ipAssignments WHERE id = ?').get(id) as Record<string, unknown>
+    return reply.status(201).send(
+      serializeAssignmentWithIntegrity(created, subnet.labId, isGlobalAdmin(req.authUser)),
+    )
   })
 
   app.patch<{ Params: { id: string } }>('/ip-assignments/:id', async (req, reply) => {
@@ -895,22 +946,35 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
           ? String(assignment.dhcpScopeId)
           : null
 
+    const effectiveReferences = {
+      deviceId: deviceId !== undefined ? deviceId : assignment.deviceId ? String(assignment.deviceId) : null,
+      portId: portId !== undefined ? portId : assignment.portId ? String(assignment.portId) : null,
+      vmId: vmId !== undefined ? vmId : assignment.vmId ? String(assignment.vmId) : null,
+      containerId: containerId !== undefined ? containerId : assignment.containerId ? String(assignment.containerId) : null,
+    }
+
     if (subnetId !== undefined || ipAddress !== undefined || allocationMode !== undefined || dhcpScopeId !== undefined || 'assignmentType' in body) {
       if (ipAddress !== undefined && !ipAddress) {
         return reply.status(400).send({ error: 'ipAddress cannot be empty.' })
       }
-      try {
-        validateAssignmentSemantics({
-          existingId: req.params.id,
-          assignmentType,
-          allocationMode: effectiveAllocationMode,
-          dhcpScopeId: effectiveDhcpScopeId,
-          subnetId: effectiveSubnetId,
-          ipAddress: ipAddress !== undefined ? ensureIpv4(ipAddress) : effectiveIpAddress,
-        })
-      } catch (error) {
-        return reply.status(400).send({ error: error instanceof Error ? error.message : 'Invalid subnet assignment.' })
-      }
+      assertSubnetIntegrityHealthy(effectiveSubnetId)
+      validateAssignmentSemantics({
+        existingId: req.params.id,
+        assignmentType,
+        allocationMode: effectiveAllocationMode,
+        dhcpScopeId: effectiveDhcpScopeId,
+        subnetId: effectiveSubnetId,
+        ipAddress: ipAddress !== undefined ? ensureIpv4(ipAddress) : effectiveIpAddress,
+      })
+    }
+    if (
+      subnetId !== undefined ||
+      deviceId !== undefined ||
+      portId !== undefined ||
+      vmId !== undefined ||
+      containerId !== undefined
+    ) {
+      validateAssignmentReferences(effectiveSubnetId, effectiveReferences)
     }
 
     if (subnetId !== undefined) { updates.push('subnetId = ?'); values.push(subnetId) }
@@ -928,27 +992,34 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     if (updates.length === 0) return reply.status(400).send({ error: 'No valid fields' })
     values.push(req.params.id)
     db.prepare(`UPDATE ipAssignments SET ${updates.join(', ')} WHERE id = ?`).run(...values)
-    return db.prepare('SELECT * FROM ipAssignments WHERE id = ?').get(req.params.id)
+    const updated = db.prepare('SELECT * FROM ipAssignments WHERE id = ?').get(req.params.id) as Record<string, unknown>
+    const updatedSubnet = getSubnetLabRow(effectiveSubnetId)!
+    return serializeAssignmentWithIntegrity(updated, updatedSubnet.labId, isGlobalAdmin(req.authUser))
   })
 
   app.delete<{ Params: { id: string } }>('/ip-assignments/:id', async (req, reply) => {
     const row = getAssignmentLabRow(req.params.id)
     if (!assertLabWriteFromRow(req, reply, row)) return
 
-    const assignment = db.prepare('SELECT deviceId, ipAddress FROM ipAssignments WHERE id = ?').get(req.params.id) as
-      | { deviceId?: string | null; ipAddress: string }
+    const assignment = db.prepare(`
+      SELECT ipAssignments.deviceId, ipAssignments.ipAddress, subnets.labId
+      FROM ipAssignments
+      JOIN subnets ON subnets.id = ipAssignments.subnetId
+      WHERE ipAssignments.id = ?
+    `).get(req.params.id) as
+      | { deviceId?: string | null; ipAddress: string; labId: string }
       | undefined
 
-    const deleteAssignment = db.transaction((assignmentId: string, deviceId: string | null | undefined, ipAddress: string) => {
+    const deleteAssignment = db.transaction((assignmentId: string, deviceId: string | null | undefined, ipAddress: string, labId: string) => {
       if (deviceId) {
         db.prepare(
-          'UPDATE devices SET managementIp = NULL WHERE id = ? AND managementIp = ?'
-        ).run(deviceId, ipAddress)
+          'UPDATE devices SET managementIp = NULL WHERE id = ? AND managementIp = ? AND labId = ?'
+        ).run(deviceId, ipAddress, labId)
       }
       db.prepare('DELETE FROM ipAssignments WHERE id = ?').run(assignmentId)
     })
 
-    deleteAssignment(req.params.id, assignment?.deviceId, assignment?.ipAddress ?? '')
+    deleteAssignment(req.params.id, assignment?.deviceId, assignment?.ipAddress ?? '', assignment?.labId ?? '')
     return reply.status(204).send()
   })
 }

@@ -280,6 +280,7 @@ export default function PortView() {
   const vlans = useStore((s) => s.vlans);
   const deviceMonitors = useStore((s) => s.deviceMonitors);
   const canEdit = canEditInventory(currentUser);
+  const canManageTemplates = currentUser?.role === "admin";
   const portBearingDevices = useMemo(
     () =>
       devices.filter(
@@ -1305,7 +1306,7 @@ export default function PortView() {
                               speed: event.target.value,
                             }))
                           }
-                          placeholder="1G, 10G, virtio..."
+                          placeholder={t("1G, 10G, virtio...")}
                         />
                       </BulkField>
                       <div className="grid grid-cols-2 gap-3">
@@ -1467,7 +1468,7 @@ export default function PortView() {
                                     : prev,
                                 )
                               }
-                              placeholder="e.g. 10G"
+                              placeholder={t("e.g. 10G")}
                             />
                           </Field>
                           <Field label={t("MAC address")}>
@@ -1480,7 +1481,7 @@ export default function PortView() {
                                     : prev,
                                 )
                               }
-                              placeholder="aa:bb:cc:dd:ee:ff"
+                              placeholder={t("aa:bb:cc:dd:ee:ff")}
                             />
                           </Field>
                         </div>
@@ -1876,7 +1877,7 @@ export default function PortView() {
                     </Badge>
                   </CardHeader>
                   <CardBody className="space-y-4">
-                    {canEdit && (
+                    {canManageTemplates && (
                       <div className="flex flex-wrap gap-2">
                         <Button
                           variant="outline"
@@ -1951,8 +1952,8 @@ export default function PortView() {
                                   name: event.target.value,
                                 }))
                               }
-                              disabled={Boolean(selectedTemplate?.builtIn)}
-                              placeholder="48-port access switch"
+                              disabled={Boolean(selectedTemplate?.builtIn) || !canManageTemplates}
+                              placeholder={t("48-port access switch")}
                             />
                           </Field>
                           <Field label={t("Description")}>
@@ -1964,8 +1965,8 @@ export default function PortView() {
                                   description: event.target.value,
                                 }))
                               }
-                              disabled={Boolean(selectedTemplate?.builtIn)}
-                              placeholder="Common layout for edge switches"
+                              disabled={Boolean(selectedTemplate?.builtIn) || !canManageTemplates}
+                              placeholder={t("Common layout for edge switches")}
                             />
                           </Field>
                         </div>
@@ -1981,7 +1982,7 @@ export default function PortView() {
                                 <button
                                   key={deviceType.id}
                                   type="button"
-                                  disabled={Boolean(selectedTemplate?.builtIn)}
+                                  disabled={Boolean(selectedTemplate?.builtIn) || !canManageTemplates}
                                   onClick={() =>
                                     setTemplateForm((prev) => ({
                                       ...prev,
@@ -2059,7 +2060,7 @@ export default function PortView() {
                                           ),
                                         }))
                                       }
-                                      placeholder="Gi1/0/1"
+                                      placeholder={t("Gi1/0/1")}
                                     />
                                   </Field>
                                 </div>
@@ -2114,7 +2115,7 @@ export default function PortView() {
                                           ),
                                         }))
                                       }
-                                      placeholder="10G"
+                                      placeholder={t("10G")}
                                     />
                                   </Field>
                                 </div>
@@ -2220,7 +2221,7 @@ export default function PortView() {
                                 )}
                           </div>
                           <div className="flex items-center gap-2">
-                            {creatingTemplate && (
+                            {canManageTemplates && creatingTemplate && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -2231,7 +2232,7 @@ export default function PortView() {
                             )}
                             {!creatingTemplate &&
                               selectedTemplate &&
-                              !selectedTemplate.builtIn && (
+                              !selectedTemplate.builtIn && canManageTemplates && (
                                 <Button
                                   variant="destructive"
                                   size="sm"
@@ -2244,7 +2245,7 @@ export default function PortView() {
                                     : t("Delete")}
                                 </Button>
                               )}
-                            {!selectedTemplate?.builtIn && (
+                            {!selectedTemplate?.builtIn && canManageTemplates && (
                               <Button
                                 size="sm"
                                 onClick={() => void handleSaveTemplate()}

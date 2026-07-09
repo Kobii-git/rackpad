@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
-import { assertLabWrite } from "../lib/lab-access.js";
+import { assertGlobalAdmin, assertLabWrite } from "../lib/lab-access.js";
 import {
   buildNetboxDeviceDraft,
   buildNetboxPortTemplateDraft,
@@ -52,6 +52,7 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
     const draft = buildNetboxPortTemplateDraft(parsed);
 
     if (mode === "template") {
+      if (!assertGlobalAdmin(req, reply)) return;
       const existing = findExistingNetboxTemplate(
         parsed.manufacturer,
         parsed.model,

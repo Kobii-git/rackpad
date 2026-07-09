@@ -33,6 +33,12 @@ Schedules are per lab. They reuse the same scan path as manual discovery and
 write results to the normal review inbox. They do not automatically import,
 link, or delete devices.
 
+Manual and scheduled scans share one bounded queue. Rackpad runs two scans
+globally and one per lab by default, with up to 32 waiting jobs. Override these
+limits with `DISCOVERY_SCAN_MAX_ACTIVE`,
+`DISCOVERY_SCAN_MAX_ACTIVE_PER_LAB`, and `DISCOVERY_SCAN_MAX_QUEUED`. A full
+queue returns HTTP 429 instead of starting unbounded subprocesses.
+
 ## Current scan limits
 
 Manual and scheduled scans handle `/24` and smaller CIDRs directly. Larger

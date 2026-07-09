@@ -364,7 +364,7 @@ export function DevicePortEditor({
                       prev ? { ...prev, speed: event.target.value } : prev,
                     )
                   }
-                  placeholder="e.g. 10G"
+                  placeholder={t("e.g. 10G")}
                 />
               </Field>
               <Field label={t("MAC address")}>
@@ -375,7 +375,7 @@ export function DevicePortEditor({
                       prev ? { ...prev, macAddress: event.target.value } : prev,
                     )
                   }
-                  placeholder="aa:bb:cc:dd:ee:ff"
+                  placeholder={t("aa:bb:cc:dd:ee:ff")}
                 />
               </Field>
             </div>
@@ -740,9 +740,7 @@ function ReadOnlyPortDetails({
         value={port.description?.trim() || "No description documented."}
       />
       <div className="space-y-1">
-        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-          Link peer
-        </div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Link peer")}</div>
         <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2">
           {peerDevice && peerPort ? (
             <div className="space-y-1 text-sm">

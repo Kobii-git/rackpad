@@ -198,7 +198,7 @@ export default function Dashboard() {
           <Card className="col-span-12 xl:col-span-5">
             <CardHeader>
               <CardTitle>
-                <CardHeading>Device status issues</CardHeading>
+                <CardHeading>{t("Device status issues")}</CardHeading>
               </CardTitle>
               <Badge tone={attentionDevices.length > 0 ? "warn" : "ok"}>
                 {attentionDevices.length} open
@@ -244,7 +244,7 @@ export default function Dashboard() {
           <Card className="col-span-12 xl:col-span-4">
             <CardHeader>
               <CardTitle>
-                <CardHeading>Monitor targets</CardHeading>
+                <CardHeading>{t("Monitor targets")}</CardHeading>
               </CardTitle>
               <Badge tone={monitorIssues.length > 0 ? "warn" : "ok"}>
                 {enabledMonitors.length} enabled
@@ -287,14 +287,12 @@ export default function Dashboard() {
           <Card className="col-span-12 xl:col-span-3">
             <CardHeader>
               <CardTitle>
-                <CardHeading>Recent activity</CardHeading>
+                <CardHeading>{t("Recent activity")}</CardHeading>
               </CardTitle>
               <Link
                 to="/audit-log"
                 className="text-xs text-[var(--accent-primary)] hover:underline"
-              >
-                View all
-              </Link>
+              >{t("View all")}</Link>
             </CardHeader>
             <CardBody className="space-y-2">
               {recentActivity.length === 0 ? (
@@ -326,7 +324,7 @@ export default function Dashboard() {
           <Card className="col-span-12 lg:col-span-4">
             <CardHeader>
               <CardTitle>
-                <CardHeading>Placement coverage</CardHeading>
+                <CardHeading>{t("Placement coverage")}</CardHeading>
               </CardTitle>
             </CardHeader>
             <CardBody className="space-y-3">
@@ -363,7 +361,7 @@ export default function Dashboard() {
           <Card className="col-span-12 lg:col-span-4">
             <CardHeader>
               <CardTitle>
-                <CardHeading>Device mix</CardHeading>
+                <CardHeading>{t("Device mix")}</CardHeading>
               </CardTitle>
             </CardHeader>
             <CardBody>
@@ -396,7 +394,7 @@ export default function Dashboard() {
           <Card className="col-span-12 lg:col-span-4">
             <CardHeader>
               <CardTitle>
-                <CardHeading>Coverage gaps</CardHeading>
+                <CardHeading>{t("Coverage gaps")}</CardHeading>
               </CardTitle>
             </CardHeader>
             <CardBody className="space-y-2">

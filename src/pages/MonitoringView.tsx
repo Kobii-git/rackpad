@@ -744,10 +744,10 @@ export default function MonitoringView() {
                           setBulkMonitorType(value as BulkMonitorType)
                         }
                       >
-                        <option value="icmp">ICMP</option>
-                        <option value="tcp">TCP</option>
-                        <option value="http">HTTP</option>
-                        <option value="https">HTTPS</option>
+                        <option value="icmp">{t("ICMP")}</option>
+                        <option value="tcp">{t("TCP")}</option>
+                        <option value="http">{t("HTTP")}</option>
+                        <option value="https">{t("HTTPS")}</option>
                       </Select>
                     </label>
                     <label className="block">

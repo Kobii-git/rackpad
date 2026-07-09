@@ -10,34 +10,7 @@ import {
 import type { SupportedLanguage } from "@/lib/types";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import {
-  af,
-  ar,
-  bn,
-  de,
-  en,
-  es,
-  fa,
-  fr,
-  he,
-  hi,
-  id,
-  it,
-  ja,
-  ko,
-  nl,
-  pl,
-  pt,
-  ru,
-  th,
-  tr,
-  uk,
-  vi,
-  zh,
-  zhTW,
-  type TranslationKey,
-  type TranslationMap,
-} from "./translations";
+import { en, type TranslationKey, type TranslationMap } from "./base";
 import {
   LANGUAGE_BCP47,
   LANGUAGE_OPTIONS,
@@ -58,53 +31,66 @@ interface I18nContextValue {
 
 const LANGUAGE_STORAGE_KEY = "rackpad.language";
 
-const dictionaries: Record<SupportedLanguage, TranslationMap> = {
-  en,
-  fr,
-  de,
-  nl,
-  es,
-  pt,
-  it,
-  pl,
-  zh,
-  "zh-TW": zhTW,
-  ja,
-  ko,
-  hi,
-  bn,
-  th,
-  he,
-  fa,
-  ar,
-  ru,
-  uk,
-  tr,
-  vi,
-  id,
-  af,
+const dictionaryLoaders: Record<Exclude<SupportedLanguage, "en">, () => Promise<TranslationMap>> = {
+  fr: () => import("./locales/fr").then((module) => module.fr),
+  de: () => import("./locales/de").then((module) => module.de),
+  nl: () => import("./locales/nl").then((module) => module.nl),
+  es: () => import("./locales/es").then((module) => module.es),
+  pt: () => import("./locales/pt").then((module) => module.pt),
+  it: () => import("./locales/it").then((module) => module.it),
+  pl: () => import("./locales/pl").then((module) => module.pl),
+  zh: () => import("./locales/zh").then((module) => module.zh),
+  "zh-TW": () => import("./locales/zh-TW").then((module) => module.zhTW),
+  ja: () => import("./locales/ja").then((module) => module.ja),
+  ko: () => import("./locales/ko").then((module) => module.ko),
+  hi: () => import("./locales/hi").then((module) => module.hi),
+  bn: () => import("./locales/bn").then((module) => module.bn),
+  th: () => import("./locales/th").then((module) => module.th),
+  he: () => import("./locales/he").then((module) => module.he),
+  fa: () => import("./locales/fa").then((module) => module.fa),
+  ar: () => import("./locales/ar").then((module) => module.ar),
+  ru: () => import("./locales/ru").then((module) => module.ru),
+  uk: () => import("./locales/uk").then((module) => module.uk),
+  tr: () => import("./locales/tr").then((module) => module.tr),
+  vi: () => import("./locales/vi").then((module) => module.vi),
+  id: () => import("./locales/id").then((module) => module.id),
+  af: () => import("./locales/af").then((module) => module.af),
 };
+const dictionaryCache = new Map<SupportedLanguage, TranslationMap>([["en", en]]);
 
 const I18nContext = createContext<I18nContextValue | null>(null);
-
-const SKIP_TRANSLATION_TAGS = new Set([
-  "SCRIPT",
-  "STYLE",
-  "TEXTAREA",
-  "SELECT",
-  "OPTION",
-  "CODE",
-  "PRE",
-  "KBD",
-  "SAMP",
-]);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const defaultLanguage = useStore((s) => s.uiSettings.defaultLanguage);
   const [browserLanguage, setBrowserLanguage] = useState<SupportedLanguage | null>(
     () => readStoredLanguage(),
   );
-  const language: SupportedLanguage = browserLanguage ?? defaultLanguage ?? "en";
+  const requestedLanguage: SupportedLanguage = browserLanguage ?? defaultLanguage ?? "en";
+  const [language, setActiveLanguage] = useState<SupportedLanguage>("en");
+  const [dictionary, setDictionary] = useState<TranslationMap>(en);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function activate() {
+      try {
+        const cached = dictionaryCache.get(requestedLanguage);
+        const next = cached ?? await dictionaryLoaders[requestedLanguage as Exclude<SupportedLanguage, "en">]();
+        if (cancelled) return;
+        dictionaryCache.set(requestedLanguage, next);
+        setDictionary(next);
+        setActiveLanguage(requestedLanguage);
+      } catch (error) {
+        if (cancelled) return;
+        console.error(`Failed to load ${requestedLanguage} translations.`, error);
+        window.localStorage.setItem(LANGUAGE_STORAGE_KEY, "en");
+        setBrowserLanguage("en");
+        setDictionary(en);
+        setActiveLanguage("en");
+      }
+    }
+    void activate();
+    return () => { cancelled = true; };
+  }, [requestedLanguage]);
 
   useEffect(() => {
     document.documentElement.lang = LANGUAGE_BCP47[language];
@@ -118,8 +104,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const t = useCallback(
     (key: TranslationKey, values?: TranslationValues) =>
-      interpolate(dictionaries[language][key] ?? en[key], values),
-    [language],
+      interpolate(dictionary[key] ?? en[key], values),
+    [dictionary],
   );
 
   const setLanguage = useCallback((nextLanguage: SupportedLanguage) => {
@@ -131,30 +117,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     () => ({ language, setLanguage, t, formatRelativeTime }),
     [language, setLanguage, t, formatRelativeTime],
   );
-
-  useEffect(() => {
-    translateStaticDom(language);
-
-    let frame = 0;
-    const scheduleTranslate = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => translateStaticDom(language));
-    };
-
-    const observer = new MutationObserver(scheduleTranslate);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["placeholder", "title", "aria-label", "alt"],
-      childList: true,
-      characterData: true,
-      subtree: true,
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, [language]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
@@ -241,90 +203,5 @@ function isSupportedLanguage(value: unknown): value is SupportedLanguage {
   return (
     typeof value === "string" &&
     SUPPORTED_LANGUAGES.includes(value as SupportedLanguage)
-  );
-}
-
-function translateStaticDom(language: SupportedLanguage) {
-  const root = document.body;
-  const dictionary = dictionaries[language];
-  const phraseMap = buildPhraseMap();
-
-  translateTextNodes(root, dictionary, phraseMap);
-  translateAttributes(root, dictionary, phraseMap);
-}
-
-function buildPhraseMap() {
-  const map = new Map<string, TranslationKey>();
-  for (const dictionary of Object.values(dictionaries)) {
-    for (const key of Object.keys(en) as TranslationKey[]) {
-      map.set(dictionary[key], key);
-    }
-  }
-  return map;
-}
-
-function translateTextNodes(
-  root: HTMLElement,
-  dictionary: TranslationMap,
-  phraseMap: Map<string, TranslationKey>,
-) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      const parent = node.parentElement;
-      if (!parent || shouldSkipElement(parent)) {
-        return NodeFilter.FILTER_REJECT;
-      }
-      return NodeFilter.FILTER_ACCEPT;
-    },
-  });
-
-  let node = walker.nextNode();
-  while (node) {
-    const original = node.textContent ?? "";
-    const trimmed = original.trim();
-    const key = phraseMap.get(trimmed);
-    if (key) {
-      const translated = dictionary[key];
-      if (translated !== trimmed) {
-        const next = original.replace(trimmed, translated);
-        if (next !== original) {
-          node.textContent = next;
-        }
-      }
-    }
-    node = walker.nextNode();
-  }
-}
-
-function translateAttributes(
-  root: HTMLElement,
-  dictionary: TranslationMap,
-  phraseMap: Map<string, TranslationKey>,
-) {
-  const attributes = ["placeholder", "title", "aria-label", "alt"];
-  const elements = root.querySelectorAll<HTMLElement>(
-    attributes.map((name) => `[${name}]`).join(","),
-  );
-
-  for (const element of elements) {
-    if (shouldSkipElement(element)) continue;
-    for (const attribute of attributes) {
-      const value = element.getAttribute(attribute);
-      if (!value) continue;
-      const key = phraseMap.get(value.trim());
-      if (key) {
-        const translated = dictionary[key];
-        if (translated !== value) {
-          element.setAttribute(attribute, translated);
-        }
-      }
-    }
-  }
-}
-
-function shouldSkipElement(element: Element) {
-  return (
-    SKIP_TRANSLATION_TAGS.has(element.tagName) ||
-    element.closest("[data-no-i18n]") !== null
   );
 }

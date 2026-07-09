@@ -573,7 +573,9 @@ export function seedIfEmpty() {
   const { count } = db.prepare('SELECT COUNT(*) as count FROM labs').get() as { count: number }
   if (count > 0) return
 
-  console.log('[rackpad] Seeding database with initial homelab data…')
+  if (process.env.NODE_ENV !== 'test') {
+    console.log('[rackpad] Seeding database with initial homelab data…')
+  }
 
   const insertLab = db.prepare('INSERT INTO labs VALUES (@id, @name, @description, @location)')
   const insertRoom = db.prepare('INSERT INTO rooms (id, labId, name, description, location, notes) VALUES (@id, @labId, @name, @description, @location, @notes)')
@@ -730,7 +732,9 @@ export function seedIfEmpty() {
 
   seed()
   ensurePatchPanelPassThroughPorts()
-  console.log('[rackpad] Seed complete.')
+  if (process.env.NODE_ENV !== 'test') {
+    console.log('[rackpad] Seed complete.')
+  }
 }
 
 export function ensureDefaultLab() {

@@ -29,11 +29,32 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
-          scanners: vuln,secret,config
+          scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
           format: sarif
           output: trivy-filesystem.sarif
           exit-code: "0"
+
+      - name: Block fixable high and critical dependency vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+
+      - name: Block high and critical secrets or configuration findings
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret,misconfig
+          severity: HIGH,CRITICAL
+          format: table
+          exit-code: "1"
 
       - name: Upload filesystem scan
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
@@ -74,6 +95,16 @@ jobs:
           format: sarif
           output: trivy-image.sarif
           exit-code: "0"
+
+      - name: Block fixable high and critical image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: rackpad:security-scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
 
       - name: Upload image scan
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)

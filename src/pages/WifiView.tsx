@@ -1309,7 +1309,7 @@ function ControllerEditor({
             onChange={(event) =>
               setForm((prev) => ({ ...prev, name: event.target.value }))
             }
-            placeholder="UniFi Network"
+            placeholder={t("UniFi Network")}
           />
         </Field>
         <Field label={t("Linked device")}>
@@ -1334,7 +1334,7 @@ function ControllerEditor({
             onChange={(event) =>
               setForm((prev) => ({ ...prev, vendor: event.target.value }))
             }
-            placeholder="Ubiquiti"
+            placeholder={t("Ubiquiti")}
           />
         </Field>
         <Field label={t("Model")}>
@@ -1343,7 +1343,7 @@ function ControllerEditor({
             onChange={(event) =>
               setForm((prev) => ({ ...prev, model: event.target.value }))
             }
-            placeholder="Cloud Key Gen2 Plus"
+            placeholder={t("Cloud Key Gen2 Plus")}
           />
         </Field>
         <Field label={t("Management IP")}>
@@ -1364,7 +1364,7 @@ function ControllerEditor({
             setForm((prev) => ({ ...prev, notes: event.target.value }))
           }
           className={TEXTAREA_CLASS}
-          placeholder="What this controller manages, where it runs, and any caveats."
+          placeholder={t("What this controller manages, where it runs, and any caveats.")}
         />
       </Field>
 
@@ -1460,7 +1460,7 @@ function SsidEditor({
             onChange={(event) =>
               setForm((prev) => ({ ...prev, name: event.target.value }))
             }
-            placeholder="Home-Main"
+            placeholder={t("Home-Main")}
           />
         </Field>
         <Field label={t("Security")}>
@@ -1469,7 +1469,7 @@ function SsidEditor({
             onChange={(event) =>
               setForm((prev) => ({ ...prev, security: event.target.value }))
             }
-            placeholder="WPA2/WPA3 Personal"
+            placeholder={t("WPA2/WPA3 Personal")}
           />
         </Field>
         <Field label={t("Purpose")}>
@@ -1478,7 +1478,7 @@ function SsidEditor({
             onChange={(event) =>
               setForm((prev) => ({ ...prev, purpose: event.target.value }))
             }
-            placeholder="Primary trusted LAN"
+            placeholder={t("Primary trusted LAN")}
           />
         </Field>
         <Field label={t("Linked VLAN")}>
@@ -1503,7 +1503,7 @@ function SsidEditor({
         <ColorInput
           value={form.color}
           onChange={(value) => setForm((prev) => ({ ...prev, color: value }))}
-          placeholder="#6a9bd4 or blue"
+          placeholder={t("#6a9bd4 or blue")}
         />
       </Field>
 
@@ -1638,7 +1638,7 @@ function AccessPointEditor({
             onChange={(event) =>
               setForm((prev) => ({ ...prev, location: event.target.value }))
             }
-            placeholder="Ground floor lounge ceiling"
+            placeholder={t("Ground floor lounge ceiling")}
           />
         </Field>
       </div>
@@ -1650,7 +1650,7 @@ function AccessPointEditor({
             setForm((prev) => ({ ...prev, notes: event.target.value }))
           }
           className={TEXTAREA_CLASS}
-          placeholder="Coverage area, mounting notes, or maintenance reminders."
+          placeholder={t("Coverage area, mounting notes, or maintenance reminders.")}
         />
       </Field>
 
@@ -1747,7 +1747,7 @@ function RadioEditor({
             onChange={(event) =>
               setForm((prev) => ({ ...prev, slotName: event.target.value }))
             }
-            placeholder="radio0"
+            placeholder={t("radio0")}
           />
         </Field>
         <Field label={t("Band")}>
@@ -1783,7 +1783,7 @@ function RadioEditor({
             onChange={(event) =>
               setForm((prev) => ({ ...prev, channelWidth: event.target.value }))
             }
-            placeholder="80 MHz"
+            placeholder={t("80 MHz")}
           />
         </Field>
         <Field label={t("Transmit power")}>
@@ -1792,7 +1792,7 @@ function RadioEditor({
             onChange={(event) =>
               setForm((prev) => ({ ...prev, txPower: event.target.value }))
             }
-            placeholder="high"
+            placeholder={t("high")}
           />
         </Field>
       </div>
@@ -1827,7 +1827,7 @@ function RadioEditor({
             setForm((prev) => ({ ...prev, notes: event.target.value }))
           }
           className={TEXTAREA_CLASS}
-          placeholder="Coverage notes, DFS behavior, or tuning details."
+          placeholder={t("Coverage notes, DFS behavior, or tuning details.")}
         />
       </Field>
 
@@ -2109,7 +2109,7 @@ function AssociationEditor({
             setForm((prev) => ({ ...prev, notes: event.target.value }))
           }
           className={TEXTAREA_CLASS}
-          placeholder="Why this client is pinned here, roaming behavior, or signal caveats."
+          placeholder={t("Why this client is pinned here, roaming behavior, or signal caveats.")}
         />
       </Field>
 

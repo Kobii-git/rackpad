@@ -644,6 +644,7 @@ export const subnets: Subnet[] = [
     cidr: "10.0.10.0/24",
     name: "Default / Mgmt",
     vlanId: "v_default",
+    integrity: { state: "ok", canonicalCidr: "10.0.10.0/24", conflicts: [] },
   },
   {
     id: "s_iot",
@@ -651,6 +652,7 @@ export const subnets: Subnet[] = [
     cidr: "10.0.20.0/24",
     name: "IoT",
     vlanId: "v_iot",
+    integrity: { state: "ok", canonicalCidr: "10.0.20.0/24", conflicts: [] },
   },
   {
     id: "s_dmz",
@@ -658,6 +660,7 @@ export const subnets: Subnet[] = [
     cidr: "10.0.30.0/24",
     name: "DMZ",
     vlanId: "v_dmz",
+    integrity: { state: "ok", canonicalCidr: "10.0.30.0/24", conflicts: [] },
   },
   {
     id: "s_storage",
@@ -665,6 +668,7 @@ export const subnets: Subnet[] = [
     cidr: "10.0.40.0/24",
     name: "Storage",
     vlanId: "v_storage",
+    integrity: { state: "ok", canonicalCidr: "10.0.40.0/24", conflicts: [] },
   },
   {
     id: "s_guest",
@@ -672,6 +676,7 @@ export const subnets: Subnet[] = [
     cidr: "10.0.50.0/24",
     name: "Guest",
     vlanId: "v_guest",
+    integrity: { state: "ok", canonicalCidr: "10.0.50.0/24", conflicts: [] },
   },
 ];
 

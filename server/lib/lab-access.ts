@@ -11,8 +11,8 @@ export interface LabAccessEntry {
   role: LabRole
 }
 
-export function isGlobalAdmin(user: AuthUser) {
-  return user.role === 'admin'
+export function isGlobalAdmin(user: AuthUser | null | undefined) {
+  return user?.role === 'admin'
 }
 
 export function parseLabRole(value: unknown): LabRole | null {
@@ -182,6 +182,18 @@ export function assertLabWrite(
   if (!requireAuth(req, reply)) return false
   if (!canWriteLab(req.authUser, labId, req.labAccess ?? [])) {
     void reply.status(403).send({ error: 'You do not have write access to this lab.' })
+    return false
+  }
+  return true
+}
+
+export function assertGlobalAdmin(
+  req: FastifyRequest,
+  reply: FastifyReply,
+): req is FastifyRequest & { authUser: AuthUser; labAccess: LabAccessEntry[] } {
+  if (!requireAuth(req, reply)) return false
+  if (!isGlobalAdmin(req.authUser)) {
+    void reply.status(403).send({ error: 'Administrator access is required.' })
     return false
   }
   return true

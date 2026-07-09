@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n";
 import { useMemo } from "react";
 import type { DhcpScope, IpAssignment, Subnet } from "@/lib/types";
 import { cidrBounds, ipToInt } from "@/lib/utils";
@@ -25,6 +26,7 @@ export function IpUtilizationBar({
   assignments,
   scopes = [],
 }: IpUtilizationBarProps) {
+  const { t } = useI18n();
   const {
     network: baseInt,
     broadcast: broadcastInt,
@@ -129,10 +131,10 @@ export function IpUtilizationBar({
                 <div className="text-[11px]">
                   <div className="font-mono">{intToIp(ipInt)}</div>
                   {isNetwork && (
-                    <div className="text-[var(--text-tertiary)]">network</div>
+                    <div className="text-[var(--text-tertiary)]">{t("network")}</div>
                   )}
                   {isBroadcast && (
-                    <div className="text-[var(--text-tertiary)]">broadcast</div>
+                    <div className="text-[var(--text-tertiary)]">{t("broadcast")}</div>
                   )}
                   {assignment && (
                     <>
@@ -149,13 +151,11 @@ export function IpUtilizationBar({
                       <div className="text-[var(--text-primary)]">
                         {technical.labels.join(" / ")}
                       </div>
-                      <div className="text-[var(--text-tertiary)]">
-                        reserved by DHCP scope
-                      </div>
+                      <div className="text-[var(--text-tertiary)]">{t("reserved by DHCP scope")}</div>
                     </>
                   )}
                   {!assignment && !technical && !isNetwork && !isBroadcast && (
-                    <div className="text-[var(--text-tertiary)]">free</div>
+                    <div className="text-[var(--text-tertiary)]">{t("free")}</div>
                   )}
                 </div>
               </TooltipContent>

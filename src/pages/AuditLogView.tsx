@@ -72,15 +72,15 @@ export default function AuditLogView() {
         <Card>
           <CardHeader>
             <CardTitle>
-              <CardLabel>Activity</CardLabel>
-              <CardHeading>Recent audit entries</CardHeading>
+              <CardLabel>{t("Activity")}</CardLabel>
+              <CardHeading>{t("Recent audit entries")}</CardHeading>
             </CardTitle>
             <div className="relative w-full max-w-sm">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--text-tertiary)]" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search action, user, entity..."
+                placeholder={t("Search action, user, entity...")}
                 className="h-8 pl-8 text-xs"
               />
             </div>
@@ -90,11 +90,11 @@ export default function AuditLogView() {
               <table className="rk-table min-w-[920px]">
                 <thead>
                   <tr>
-                    <th>Time</th>
-                    <th>Action</th>
-                    <th>User</th>
-                    <th>Entity</th>
-                    <th>Summary</th>
+                    <th>{t("Time")}</th>
+                    <th>{t("Action")}</th>
+                    <th>{t("User")}</th>
+                    <th>{t("Entity")}</th>
+                    <th>{t("Summary")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -151,10 +151,7 @@ export default function AuditLogView() {
           </CardBody>
         </Card>
 
-        <div className="mt-4 text-xs text-[var(--text-tertiary)]">
-          Showing the latest loaded audit history for this lab. Device-specific
-          activity is also available from each device page.
-        </div>
+        <div className="mt-4 text-xs text-[var(--text-tertiary)]">{t("Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.")}</div>
       </div>
     </>
   );

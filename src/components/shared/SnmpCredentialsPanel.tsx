@@ -240,7 +240,7 @@ export function SnmpCredentialsPanel({
             onChange={(event) =>
               setForm((prev) => ({ ...prev, name: event.target.value }))
             }
-            placeholder="Core switch RO"
+            placeholder={t("Core switch RO")}
           />
         </Field>
         <Field label={t("Version")}>
@@ -254,9 +254,9 @@ export function SnmpCredentialsPanel({
               }))
             }
           >
-            <option value="2c">v2c</option>
-            <option value="1">v1</option>
-            <option value="3">v3</option>
+            <option value="2c">{t("v2c")}</option>
+            <option value="1">{t("v1")}</option>
+            <option value="3">{t("v3")}</option>
           </Select>
         </Field>
         {form.version === "3" ? (
@@ -281,8 +281,8 @@ export function SnmpCredentialsPanel({
                   }))
                 }
               >
-                <option value="SHA">SHA</option>
-                <option value="MD5">MD5</option>
+                <option value="SHA">{t("SHA")}</option>
+                <option value="MD5">{t("MD5")}</option>
               </Select>
             </Field>
             <Field label={t("Auth password")}>
@@ -309,8 +309,8 @@ export function SnmpCredentialsPanel({
                   }))
                 }
               >
-                <option value="none">authNoPriv</option>
-                <option value="AES128">authPriv (AES128)</option>
+                <option value="none">{t("authNoPriv")}</option>
+                <option value="AES128">{t("authPriv (AES128)")}</option>
               </Select>
             </Field>
             {form.v3PrivProto === "AES128" && (

@@ -93,7 +93,7 @@ export function AuthScreen() {
                         username: event.target.value,
                       }))
                     }
-                    placeholder="admin"
+                    placeholder={t("admin")}
                   />
                 </Field>
                 <Field label={t("Display name")}>
@@ -214,7 +214,7 @@ export function AuthScreen() {
                         username: event.target.value,
                       }))
                     }
-                    placeholder="admin"
+                    placeholder={t("admin")}
                   />
                 </Field>
                 <Field label={t("Password")}>

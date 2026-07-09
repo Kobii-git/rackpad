@@ -1,5 +1,6 @@
 import type {
   AlertSettings,
+  AdminIntegrityReport,
   AppUser,
   AuditEntry,
   AuthSession,
@@ -12,9 +13,9 @@ import type {
   DiscoveredSnmpInterface,
   DocumentationPage,
   DiscoveredDevice,
+  DiscoveryScanJobResponse,
   DiscoveryScanResult,
   DiscoveryScanSchedule,
-  DiscoveryScanScheduleRunResult,
   DhcpScope,
   IpAssignment,
   IpZone,
@@ -152,7 +153,7 @@ export type DocumentationPagePatch = Nullable<
 export type LabPatch = Nullable<Omit<Lab, "id">>;
 export type RoomPatch = Nullable<Omit<Room, "id" | "labId">>;
 export type RackPatch = Nullable<Omit<Rack, "id" | "labId">>;
-export type SubnetPatch = Nullable<Omit<Subnet, "id" | "labId">>;
+export type SubnetPatch = Nullable<Omit<Subnet, "id" | "labId" | "integrity">>;
 export type DhcpScopePatch = Nullable<Omit<DhcpScope, "id" | "subnetId">>;
 export type IpZonePatch = Nullable<Omit<IpZone, "id" | "subnetId">>;
 export type IpAssignmentPatch = Nullable<Omit<IpAssignment, "id">>;
@@ -273,7 +274,7 @@ export type MonitorPatch = Nullable<
 export interface NetworkCreateInput {
   labId: ID;
   vlan?: (Omit<Vlan, "id" | "labId"> & { id?: string }) | null;
-  subnet: Omit<Subnet, "id" | "labId" | "vlanId"> & { id?: string };
+  subnet: Omit<Subnet, "id" | "labId" | "vlanId" | "integrity"> & { id?: string };
   dhcpScope?: (Omit<DhcpScope, "id" | "subnetId"> & { id?: string }) | null;
   zones?: Array<Omit<IpZone, "id" | "subnetId"> & { id?: string }>;
 }
@@ -530,6 +531,10 @@ export const api = {
     }>("/admin/alert-settings/test", {
       method: "POST",
     });
+  },
+
+  getAdminIntegrity() {
+    return request<AdminIntegrityReport>("/admin/integrity");
   },
 
   getUiSettings() {
@@ -1031,7 +1036,7 @@ export const api = {
     return request<Subnet[]>("/subnets", undefined, params);
   },
 
-  createSubnet(body: Omit<Subnet, "id"> & { id?: string }) {
+  createSubnet(body: Omit<Subnet, "id" | "integrity"> & { id?: string }) {
     return request<Subnet>("/subnets", {
       method: "POST",
       body: JSON.stringify(body),
@@ -1353,10 +1358,14 @@ export const api = {
   },
 
   scanDiscoveredDevices(body: { labId: string; cidr: string }) {
-    return request<DiscoveryScanResult>("/discovery/scan", {
+    return request<DiscoveryScanJobResponse>("/discovery/scan", {
       method: "POST",
       body: JSON.stringify(body),
     });
+  },
+
+  getDiscoveryScanJob(id: string) {
+    return request<DiscoveryScanJobResponse>(`/discovery/scan-jobs/${id}`);
   },
 
   getDiscoveryScanSchedules(params?: { labId?: string }) {
@@ -1384,10 +1393,7 @@ export const api = {
     });
   },
 
-  updateDiscoveryScanSchedule(
-    id: string,
-    body: DiscoveryScanSchedulePatch,
-  ) {
+  updateDiscoveryScanSchedule(id: string, body: DiscoveryScanSchedulePatch) {
     return request<DiscoveryScanSchedule>(`/discovery/schedules/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
@@ -1395,12 +1401,9 @@ export const api = {
   },
 
   runDiscoveryScanSchedule(id: string) {
-    return request<DiscoveryScanScheduleRunResult>(
-      `/discovery/schedules/${id}/run`,
-      {
-        method: "POST",
-      },
-    );
+    return request<DiscoveryScanJobResponse>(`/discovery/schedules/${id}/run`, {
+      method: "POST",
+    });
   },
 
   deleteDiscoveryScanSchedule(id: string) {
