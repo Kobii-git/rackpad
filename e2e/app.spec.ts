@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import packageJson from "../package.json" with { type: "json" };
 
 let token = "";
 
@@ -107,6 +108,14 @@ test("explicit translation never rewrites user-provided hostnames", async ({ pag
   await page.goto("/devices");
   await expect(page.getByText("Unknown", { exact: true }).first()).toBeVisible();
   expect(await page.locator("text=Inconnu").count()).toBe(0);
+});
+
+test("the GUI displays the package version", async ({ page }) => {
+  await authenticate(page);
+  await page.goto("/");
+  await expect(
+    page.getByText(`v${packageJson.version}`, { exact: true }),
+  ).toBeVisible();
 });
 
 test("non-English dictionaries load only after selection", async ({ page }) => {

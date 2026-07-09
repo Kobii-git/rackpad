@@ -45,6 +45,7 @@ beforeEach(async () => {
   delete process.env.DISCOVERY_SCAN_MAX_ACTIVE_PER_LAB;
   delete process.env.DISCOVERY_SCAN_MAX_QUEUED;
   resetDatabase();
+  ensureSpaIndex();
   app = await createApp();
 });
 
@@ -420,8 +421,6 @@ test("admin UI settings expose and update the instance language default", async 
 });
 
 test("non-api app routes serve the SPA index on refresh", async () => {
-  ensureSpaIndex();
-
   const res = await app.inject({
     method: "GET",
     url: "/compute",
