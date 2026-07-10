@@ -110,8 +110,9 @@ export default function VisualizerView() {
   const [customNodePositions, setCustomNodePositions] = useState<
     Record<string, VisualizerPoint>
   >(() => readPointMap(CUSTOM_NODE_POSITIONS_STORAGE_KEY));
-  const [orderSettings, setOrderSettings] =
-    useState<VisualizerOrderSettings>(() => readOrderSettings(ORDER_STORAGE_KEY));
+  const [orderSettings, setOrderSettings] = useState<VisualizerOrderSettings>(
+    () => readOrderSettings(ORDER_STORAGE_KEY),
+  );
   const [orderPanelOpen, setOrderPanelOpen] = useState(false);
   const [selectedOrderGroupId, setSelectedOrderGroupId] = useState("");
   const [looseDevicePlacement, setLooseDevicePlacement] =
@@ -380,12 +381,12 @@ export default function VisualizerView() {
   return (
     <>
       <TopBar
-        subtitle="Topology"
+        subtitle={t("Topology")}
         title={t("Visualizer")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {lab.name} | {model.counts.cables} cables | {model.counts.devices}{" "}
-            devices
+            {lab.name} | {model.counts.cables} {t("cables |")}
+            {model.counts.devices} {t("devices")}
           </span>
         }
         actions={
@@ -421,7 +422,9 @@ export default function VisualizerView() {
               variant={healthOverlay ? "secondary" : "outline"}
               size="sm"
               onClick={toggleHealthOverlay}
-            >{t("Health")}</Button>
+            >
+              {t("Health")}
+            </Button>
             {layoutMode !== "diagram" && (
               <Button
                 variant={traceMode.enabled ? "secondary" : "outline"}
@@ -443,7 +446,9 @@ export default function VisualizerView() {
                         },
                   )
                 }
-              >{t("Trace mode")}</Button>
+              >
+                {t("Trace mode")}
+              </Button>
             )}
             {layoutMode === "grouped" && (
               <Button
@@ -452,7 +457,7 @@ export default function VisualizerView() {
                 onClick={() => setOrderPanelOpen((current) => !current)}
               >
                 <SlidersHorizontal />
-                Order
+                {t("Order")}
               </Button>
             )}
           </div>
@@ -582,8 +587,12 @@ function VisualizerOrderPanel({
     <aside className="fixed right-5 top-[88px] z-40 flex max-h-[calc(100vh-112px)] w-[min(440px,calc(100vw-32px))] flex-col overflow-hidden rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-1)] shadow-2xl">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--border-muted)] px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t("Visualizer order")}</h2>
-          <p className="text-xs text-[var(--text-tertiary)]">{t("Stored on this browser")}</p>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+            {t("Visualizer order")}
+          </h2>
+          <p className="text-xs text-[var(--text-tertiary)]">
+            {t("Stored on this browser")}
+          </p>
         </div>
         <div className="flex items-center gap-1">
           <Button
@@ -629,7 +638,9 @@ function VisualizerOrderPanel({
         />
         <section className="space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">{t("Devices in group")}</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+              {t("Devices in group")}
+            </h3>
             <select
               value={selectedGroupId}
               onChange={(event) => onSelectedGroupChange(event.target.value)}
@@ -647,8 +658,12 @@ function VisualizerOrderPanel({
               )}
             </select>
           </div>
-          {selectedGroup && selectedGroup.total > 0 && selectedDevices.length === 0 ? (
-            <p className="rounded-[var(--radius-sm)] border border-[var(--border-muted)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-tertiary)]">{t("Expand this group in the visualizer to order its devices.")}</p>
+          {selectedGroup &&
+          selectedGroup.total > 0 &&
+          selectedDevices.length === 0 ? (
+            <p className="rounded-[var(--radius-sm)] border border-[var(--border-muted)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-tertiary)]">
+              {t("Expand this group in the visualizer to order its devices.")}
+            </p>
           ) : (
             <OrderList
               title=""
@@ -715,7 +730,7 @@ function OrderList({
                   variant="ghost"
                   size="icon"
                   title={t("Move up")}
-                  aria-label={`Move ${item.label} up`}
+                  aria-label={t("Move {label} up", { label: item.label })}
                   disabled={index === 0}
                   onClick={() => onMove(item.id, "up")}
                   className="h-7 w-7"
@@ -727,7 +742,7 @@ function OrderList({
                   variant="ghost"
                   size="icon"
                   title={t("Move down")}
-                  aria-label={`Move ${item.label} down`}
+                  aria-label={t("Move {label} down", { label: item.label })}
                   disabled={index === items.length - 1}
                   onClick={() => onMove(item.id, "down")}
                   className="h-7 w-7"
@@ -948,7 +963,9 @@ function uniqueStrings(values: string[]) {
 }
 
 function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
 }
 
 function writeString(key: string, value: string) {

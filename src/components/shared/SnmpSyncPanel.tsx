@@ -71,7 +71,10 @@ export function SnmpSyncPanel({
         if (cancelled) return;
         setProfiles(items);
         setFeatureEnabled(true);
-        if (items.length > 0 && !items.some((entry) => entry.id === profileId)) {
+        if (
+          items.length > 0 &&
+          !items.some((entry) => entry.id === profileId)
+        ) {
           setProfileId(items[0].id);
         }
       })
@@ -114,9 +117,7 @@ export function SnmpSyncPanel({
 
   async function handlePreview() {
     if (!target?.trim()) {
-      setError(
-        t("Set a management IP or SNMP target before previewing sync."),
-      );
+      setError(t("Set a management IP or SNMP target before previewing sync."));
       return;
     }
     setPreviewLoading(true);
@@ -162,7 +163,9 @@ export function SnmpSyncPanel({
       setPreview(null);
       await onApplied();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("SNMP sync apply failed."));
+      setError(
+        err instanceof Error ? err.message : t("SNMP sync apply failed."),
+      );
     } finally {
       setApplyLoading(false);
     }
@@ -237,7 +240,9 @@ export function SnmpSyncPanel({
             className="mt-1 h-8 w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-2 text-sm"
           >
             <option value="merge">{t("Merge (add missing only)")}</option>
-            <option value="mirror">{t("Mirror (create, update, delete)")}</option>
+            <option value="mirror">
+              {t("Mirror (create, update, delete)")}
+            </option>
           </select>
         </label>
         <label className="block text-xs">
@@ -304,22 +309,23 @@ export function SnmpSyncPanel({
           </div>
 
           {preview.warnings.map((warning) => (
-            <div
-              key={warning}
-              className="text-xs text-[var(--color-warning)]"
-            >
+            <div key={warning} className="text-xs text-[var(--color-warning)]">
               {warning}
             </div>
           ))}
 
           {preview.vlans.length > 0 ? (
-            <DiffSection title={t("VLANs")} rows={preview.vlans.map((entry) => ({
-              key: String(entry.vlanNumber),
-              label: t("VLAN {number}", { number: entry.vlanNumber }),
-              detail: entry.name,
-              action: entry.action,
-              note: entry.changes?.join("; ") ?? entry.blockedReason ?? undefined,
-            }))} />
+            <DiffSection
+              title={t("VLANs")}
+              rows={preview.vlans.map((entry) => ({
+                key: String(entry.vlanNumber),
+                label: t("VLAN {number}", { number: entry.vlanNumber }),
+                detail: entry.name,
+                action: entry.action,
+                note:
+                  entry.changes?.join("; ") ?? entry.blockedReason ?? undefined,
+              }))}
+            />
           ) : null}
 
           {preview.subnets.length > 0 ? (
@@ -330,14 +336,17 @@ export function SnmpSyncPanel({
                 label: entry.cidr,
                 detail: entry.name,
                 action: entry.action,
-                note: entry.changes?.join("; ") ?? entry.blockedReason ?? undefined,
+                note:
+                  entry.changes?.join("; ") ?? entry.blockedReason ?? undefined,
               }))}
             />
           ) : null}
 
           {!hasChanges ? (
             <div className="text-sm text-[var(--color-fg-subtle)]">
-              {t("Rackpad already matches the SNMP inventory for this profile.")}
+              {t(
+                "Rackpad already matches the SNMP inventory for this profile.",
+              )}
             </div>
           ) : null}
 
@@ -350,7 +359,8 @@ export function SnmpSyncPanel({
           {isAdmin ? (
             <div className="flex flex-wrap items-center gap-3">
               {policy === "mirror" &&
-              preview.summary.vlanDeletes + preview.summary.subnetDeletes > 0 ? (
+              preview.summary.vlanDeletes + preview.summary.subnetDeletes >
+                0 ? (
                 <label className="flex items-center gap-2 text-xs text-[var(--color-fg-subtle)]">
                   <input
                     type="checkbox"
@@ -413,7 +423,7 @@ function DiffSection({
               </div>
               <div className="truncate text-[var(--color-fg-subtle)]">
                 {row.detail}
-                {row.note ? ` · ${row.note}` : ""}
+                {row.note ? t("· {note}", { note: row.note }) : ""}
               </div>
             </div>
             <Badge tone={actionTone(row.action)}>

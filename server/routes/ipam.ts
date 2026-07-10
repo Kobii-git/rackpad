@@ -24,6 +24,7 @@ import {
 import { cidrContainsHostIp, ipToInt } from '../lib/ip-cidr.js'
 import {
   assertSubnetCidrAvailable,
+  assertSubnetChildMutationAllowed,
   assertSubnetIntegrityHealthy,
   enrichSubnetIntegrity,
   getSubnetIntegrity,
@@ -651,8 +652,12 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
       JOIN subnets ON subnets.id = dhcpScopes.subnetId
       WHERE dhcpScopes.id = ?
     `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabReadFromRow(req, reply, existing)) return
+    assertSubnetChildMutationAllowed(
+      String(existing!.subnetId),
+      isGlobalAdmin(req.authUser),
+    )
     if (!assertLabWriteFromRow(req, reply, existing)) return
-    assertSubnetIntegrityHealthy(String(existing!.subnetId))
     const scope = existing! as { startIp: string; endIp: string; subnetCidr: string }
     const body = asObject(req.body)
     const updates: string[] = []
@@ -704,11 +709,16 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>('/dhcp-scopes/:id', async (req, reply) => {
     const row = db.prepare(`
-      SELECT dhcpScopes.id, subnets.labId
+      SELECT dhcpScopes.id, dhcpScopes.subnetId, subnets.labId
       FROM dhcpScopes
       JOIN subnets ON subnets.id = dhcpScopes.subnetId
       WHERE dhcpScopes.id = ?
     `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabReadFromRow(req, reply, row)) return
+    assertSubnetChildMutationAllowed(
+      String(row!.subnetId),
+      isGlobalAdmin(req.authUser),
+    )
     if (!assertLabWriteFromRow(req, reply, row)) return
     db.prepare('DELETE FROM dhcpScopes WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
@@ -765,8 +775,12 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
       JOIN subnets ON subnets.id = ipZones.subnetId
       WHERE ipZones.id = ?
     `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabReadFromRow(req, reply, existing)) return
+    assertSubnetChildMutationAllowed(
+      String(existing!.subnetId),
+      isGlobalAdmin(req.authUser),
+    )
     if (!assertLabWriteFromRow(req, reply, existing)) return
-    assertSubnetIntegrityHealthy(String(existing!.subnetId))
     const zone = existing! as { startIp: string; endIp: string; subnetCidr: string }
     const body = asObject(req.body)
     const updates: string[] = []
@@ -805,11 +819,16 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>('/ip-zones/:id', async (req, reply) => {
     const row = db.prepare(`
-      SELECT ipZones.id, subnets.labId
+      SELECT ipZones.id, ipZones.subnetId, subnets.labId
       FROM ipZones
       JOIN subnets ON subnets.id = ipZones.subnetId
       WHERE ipZones.id = ?
     `).get(req.params.id) as Record<string, unknown> | undefined
+    if (!assertLabReadFromRow(req, reply, row)) return
+    assertSubnetChildMutationAllowed(
+      String(row!.subnetId),
+      isGlobalAdmin(req.authUser),
+    )
     if (!assertLabWriteFromRow(req, reply, row)) return
     db.prepare('DELETE FROM ipZones WHERE id = ?').run(req.params.id)
     return reply.status(204).send()
@@ -909,8 +928,13 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     `).get(req.params.id) as
       | ({ subnetId: string; ipAddress: string; assignmentType: (typeof ASSIGNMENT_TYPES)[number]; allocationMode?: string | null; dhcpScopeId?: string | null } & Record<string, unknown>)
       | undefined
-    if (!assertLabWriteFromRow(req, reply, existing)) return
+    if (!assertLabReadFromRow(req, reply, existing)) return
     const assignment = existing!
+    assertSubnetChildMutationAllowed(
+      assignment.subnetId,
+      isGlobalAdmin(req.authUser),
+    )
+    if (!assertLabWriteFromRow(req, reply, existing)) return
     const body = asObject(req.body)
     const updates: string[] = []
     const values: unknown[] = []
@@ -957,7 +981,9 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
       if (ipAddress !== undefined && !ipAddress) {
         return reply.status(400).send({ error: 'ipAddress cannot be empty.' })
       }
-      assertSubnetIntegrityHealthy(effectiveSubnetId)
+      if (effectiveSubnetId !== assignment.subnetId) {
+        assertSubnetIntegrityHealthy(effectiveSubnetId)
+      }
       validateAssignmentSemantics({
         existingId: req.params.id,
         assignmentType,
@@ -999,16 +1025,22 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>('/ip-assignments/:id', async (req, reply) => {
     const row = getAssignmentLabRow(req.params.id)
-    if (!assertLabWriteFromRow(req, reply, row)) return
+    if (!assertLabReadFromRow(req, reply, row)) return
 
     const assignment = db.prepare(`
-      SELECT ipAssignments.deviceId, ipAssignments.ipAddress, subnets.labId
+      SELECT ipAssignments.deviceId, ipAssignments.ipAddress, ipAssignments.subnetId, subnets.labId
       FROM ipAssignments
       JOIN subnets ON subnets.id = ipAssignments.subnetId
       WHERE ipAssignments.id = ?
     `).get(req.params.id) as
-      | { deviceId?: string | null; ipAddress: string; labId: string }
+      | { deviceId?: string | null; ipAddress: string; subnetId: string; labId: string }
       | undefined
+
+    assertSubnetChildMutationAllowed(
+      assignment!.subnetId,
+      isGlobalAdmin(req.authUser),
+    )
+    if (!assertLabWriteFromRow(req, reply, row)) return
 
     const deleteAssignment = db.transaction((assignmentId: string, deviceId: string | null | undefined, ipAddress: string, labId: string) => {
       if (deviceId) {

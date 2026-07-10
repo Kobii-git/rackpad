@@ -15,11 +15,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Mono } from "@/components/shared/Mono";
 import { EmptyState } from "@/components/shared/EmptyState";
-import {
-  createPortRecord,
-  deletePortRecord,
-  updatePort,
-} from "@/lib/store";
+import { createPortRecord, deletePortRecord, updatePort } from "@/lib/store";
 import type { Device, Port, PortLink, VirtualSwitch, Vlan } from "@/lib/types";
 import { Save, Trash2 } from "lucide-react";
 import { formatPortLabel } from "@/lib/utils";
@@ -448,7 +444,9 @@ export function DevicePortEditor({
                 <Select
                   value={form.vlanId}
                   onChange={(value) =>
-                    setForm((prev) => (prev ? { ...prev, vlanId: value } : prev))
+                    setForm((prev) =>
+                      prev ? { ...prev, vlanId: value } : prev,
+                    )
                   }
                 >
                   <option value="">
@@ -476,7 +474,9 @@ export function DevicePortEditor({
                         prev
                           ? {
                               ...prev,
-                              allowedVlanIds: prev.allowedVlanIds.includes(value)
+                              allowedVlanIds: prev.allowedVlanIds.includes(
+                                value,
+                              )
                                 ? prev.allowedVlanIds
                                 : [...prev.allowedVlanIds, value],
                             }
@@ -486,9 +486,7 @@ export function DevicePortEditor({
                   >
                     <option value="">{t("Add tagged VLAN...")}</option>
                     {vlans
-                      .filter(
-                        (vlan) => !form.allowedVlanIds.includes(vlan.id),
-                      )
+                      .filter((vlan) => !form.allowedVlanIds.includes(vlan.id))
                       .map((vlan) => (
                         <option key={vlan.id} value={vlan.id}>
                           {vlan.vlanId} - {vlan.name}
@@ -514,16 +512,23 @@ export function DevicePortEditor({
                                 prev
                                   ? {
                                       ...prev,
-                                      allowedVlanIds: prev.allowedVlanIds.filter(
-                                        (entry) => entry !== vlanId,
-                                      ),
+                                      allowedVlanIds:
+                                        prev.allowedVlanIds.filter(
+                                          (entry) => entry !== vlanId,
+                                        ),
                                     }
                                   : prev,
                               )
                             }
                             className="rounded-[var(--radius-xs)] border border-[var(--color-accent-soft)]/40 bg-[var(--color-accent)]/10 px-2 py-1 text-xs text-[var(--color-fg)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/15"
                           >
-                            {vlan ? `${vlan.vlanId} - ${vlan.name}` : vlanId} ×
+                            {vlan
+                              ? t("{vlanId} - {name}", {
+                                  vlanId: vlan.vlanId,
+                                  name: vlan.name,
+                                })
+                              : vlanId}{" "}
+                            ×
                           </button>
                         );
                       })
@@ -649,9 +654,17 @@ export function DevicePortEditor({
               ) : (
                 <span />
               )}
-              <Button size="sm" onClick={() => void handleSave()} disabled={saving || deleting}>
+              <Button
+                size="sm"
+                onClick={() => void handleSave()}
+                disabled={saving || deleting}
+              >
                 <Save className="size-3.5" />
-                {saving ? t("Saving...") : creating ? t("Create port") : t("Save port")}
+                {saving
+                  ? t("Saving...")
+                  : creating
+                    ? t("Create port")
+                    : t("Save port")}
               </Button>
             </div>
 
@@ -706,7 +719,11 @@ function ReadOnlyPortDetails({
         <InspectorRow label={t("Speed")} value={port.speed ?? t("n/a")} mono />
         <InspectorRow label={t("Mode")} value={port.mode ?? "access"} />
         <InspectorRow label={t("Face")} value={port.face ?? "front"} />
-        <InspectorRow label={t("MAC address")} value={port.macAddress ?? t("n/a")} mono />
+        <InspectorRow
+          label={t("MAC address")}
+          value={port.macAddress ?? t("n/a")}
+          mono
+        />
         <InspectorRow
           label={port.mode === "trunk" ? t("Native VLAN") : t("Access VLAN")}
           value={
@@ -740,7 +757,9 @@ function ReadOnlyPortDetails({
         value={port.description?.trim() || "No description documented."}
       />
       <div className="space-y-1">
-        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Link peer")}</div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+          {t("Link peer")}
+        </div>
         <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2">
           {peerDevice && peerPort ? (
             <div className="space-y-1 text-sm">

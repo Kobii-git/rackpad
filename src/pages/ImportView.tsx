@@ -627,11 +627,12 @@ export default function ImportView() {
   return (
     <>
       <TopBar
-        subtitle="Import tools"
+        subtitle={t("Import tools")}
         title={t("Imports")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {lab.name} | {importCopy?.label ?? "Hyper-V / Proxmox"} importer
+            {lab.name} | {importCopy?.label ?? t("Hyper-V / Proxmox")}{" "}
+            {t("importer")}
           </span>
         }
         actions={
@@ -642,7 +643,7 @@ export default function ImportView() {
             onClick={() => void handleImport()}
           >
             <CheckCircle2 className="size-3.5" />
-            {importing ? "Importing..." : "Import selected"}
+            {importing ? t("Importing...") : t("Import selected")}
           </Button>
         }
       />
@@ -657,19 +658,23 @@ export default function ImportView() {
               </CardTitle>
               <Badge tone="cyan">
                 <FileJson className="size-3" />
-                review-first import
+                {t("review-first import")}
               </Badge>
             </CardHeader>
             <CardBody className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
               <div className="space-y-3">
-                <p className="text-sm text-[var(--text-tertiary)]">{t("Run a collector on the virtualization host, then upload the JSON here. Rackpad stages the host, guests, virtual networks, VLANs, ports, specs, MACs, and IPs before anything is written.")}</p>
+                <p className="text-sm text-[var(--text-tertiary)]">
+                  {t(
+                    "Run a collector on the virtualization host, then upload the JSON here. Rackpad stages the host, guests, virtual networks, VLANs, ports, specs, MACs, and IPs before anything is written.",
+                  )}
+                </p>
                 <div className="grid gap-3 lg:grid-cols-2">
                   <CollectorDownload provider="hyperv" />
                   <CollectorDownload provider="proxmox" />
                 </div>
                 <label className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]">
                   <Upload className="size-4" />
-                  Choose import JSON
+                  {t("Choose import JSON")}
                   <input
                     type="file"
                     accept="application/json,.json"
@@ -687,27 +692,31 @@ export default function ImportView() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <ImportStat
                   icon={Server}
-                  label={importCopy?.workloadNoun ?? "Workloads selected"}
+                  label={importCopy?.workloadNoun ?? t("Workloads selected")}
                   value={summary?.selectedVms ?? 0}
-                  hint={`${summary?.existingMatches ?? 0} matched existing`}
+                  hint={t("{value1} matched existing", {
+                    value1: summary?.existingMatches ?? 0,
+                  })}
                 />
                 <ImportStat
                   icon={Network}
-                  label="Virtual switches"
+                  label={t("Virtual switches")}
                   value={summary?.switches ?? 0}
-                  hint="external, internal, private"
+                  hint={t("external, internal, private")}
                 />
                 <ImportStat
                   icon={HardDrive}
-                  label="Guest IPs"
+                  label={t("Guest IPs")}
                   value={summary?.ips ?? 0}
-                  hint="only matched subnets become IPAM records"
+                  hint={t("only matched subnets become IPAM records")}
                 />
                 <ImportStat
                   icon={FileJson}
-                  label="VLAN IDs"
+                  label={t("VLAN IDs")}
                   value={summary?.vlanIds.length ?? 0}
-                  hint={summary?.vlanIds.slice(0, 5).join(", ") || "none found"}
+                  hint={
+                    summary?.vlanIds.slice(0, 5).join(", ") || t("none found")
+                  }
                 />
               </div>
             </CardBody>
@@ -723,7 +732,9 @@ export default function ImportView() {
             <CardHeader>
               <CardTitle>
                 <CardLabel>{t("Import categories")}</CardLabel>
-                <CardHeading>{t("Select what Rackpad should write")}</CardHeading>
+                <CardHeading>
+                  {t("Select what Rackpad should write")}
+                </CardHeading>
               </CardTitle>
             </CardHeader>
             <CardBody>
@@ -852,7 +863,7 @@ function CollectorRunbooks() {
         </CardTitle>
         <Badge tone="ok">
           <CheckCircle2 className="size-3" />
-          beta guide
+          {t("beta guide")}
         </Badge>
       </CardHeader>
       <CardBody>
@@ -888,7 +899,7 @@ function ProviderRunbook({ provider }: { provider: ImportProvider }) {
             rel="noreferrer"
           >
             <DownloadCloud className="size-3.5" />
-            Download
+            {t("Download")}
           </a>
         </Button>
       </div>
@@ -1000,18 +1011,18 @@ function HostPreview({
           <CardHeading>
             {value?.displayName ||
               host?.computerName ||
-              `Unknown ${copy.hostNoun}`}
+              t("Unknown {hostNoun}", { hostNoun: copy.hostNoun })}
           </CardHeading>
         </CardTitle>
         <div className="flex flex-wrap justify-end gap-2">
           <Badge tone={selected || matched ? "ok" : "info"}>
             {targetLabel}
           </Badge>
-          <Badge>{payload.schema ?? "unknown schema"}</Badge>
+          <Badge>{payload.schema ?? t("unknown schema")}</Badge>
         </div>
       </CardHeader>
       <CardBody className="space-y-3">
-        <Field label="Import VMs under">
+        <Field label={t("Import VMs under")}>
           <select
             className="w-full rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-input)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--focus-ring)]"
             value={value?.targetDeviceId ?? AUTO_HOST_TARGET}
@@ -1020,7 +1031,8 @@ function HostPreview({
             }
           >
             <option value={AUTO_HOST_TARGET}>
-              Auto match or create {host?.computerName ?? copy.hostNoun}
+              {t("Auto match or create")}
+              {host?.computerName ?? copy.hostNoun}
             </option>
             {hostCandidates.map((device) => (
               <option key={device.id} value={device.id}>
@@ -1030,20 +1042,24 @@ function HostPreview({
           </select>
           <div className="mt-1 text-[11px] leading-5 text-[var(--text-tertiary)]">
             {hostRecordEnabled
-              ? "Host record is enabled, so Rackpad will create/update the target below."
-              : "Host record is disabled, so this target is only used as the VM parent."}
+              ? t(
+                  "Host record is enabled, so Rackpad will create/update the target below.",
+                )
+              : t(
+                  "Host record is disabled, so this target is only used as the VM parent.",
+                )}
           </div>
         </Field>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Hostname">
+          <Field label={t("Hostname")}>
             <Input
               disabled={!hostRecordEnabled}
               value={value?.hostname ?? ""}
               onChange={(event) => onChange({ hostname: event.target.value })}
             />
           </Field>
-          <Field label="Display name">
+          <Field label={t("Display name")}>
             <Input
               disabled={!hostRecordEnabled}
               value={value?.displayName ?? ""}
@@ -1052,7 +1068,7 @@ function HostPreview({
               }
             />
           </Field>
-          <Field label="Manufacturer">
+          <Field label={t("Manufacturer")}>
             <Input
               disabled={!hostRecordEnabled}
               value={value?.manufacturer ?? ""}
@@ -1061,28 +1077,28 @@ function HostPreview({
               }
             />
           </Field>
-          <Field label="Model">
+          <Field label={t("Model")}>
             <Input
               disabled={!hostRecordEnabled}
               value={value?.model ?? ""}
               onChange={(event) => onChange({ model: event.target.value })}
             />
           </Field>
-          <Field label="OS">
+          <Field label={t("OS")}>
             <Input
               disabled={!hostRecordEnabled}
               value={value?.osName ?? ""}
               onChange={(event) => onChange({ osName: event.target.value })}
             />
           </Field>
-          <Field label="OS version">
+          <Field label={t("OS version")}>
             <Input
               disabled={!hostRecordEnabled}
               value={value?.osVersion ?? ""}
               onChange={(event) => onChange({ osVersion: event.target.value })}
             />
           </Field>
-          <Field label="CPU cores">
+          <Field label={t("CPU cores")}>
             <Input
               disabled={!hostRecordEnabled}
               type="number"
@@ -1090,7 +1106,7 @@ function HostPreview({
               onChange={(event) => onChange({ cpuCores: event.target.value })}
             />
           </Field>
-          <Field label="Memory GB">
+          <Field label={t("Memory GB")}>
             <Input
               disabled={!hostRecordEnabled}
               type="number"
@@ -1100,7 +1116,7 @@ function HostPreview({
           </Field>
         </div>
 
-        <Field label="Notes / missing info">
+        <Field label={t("Notes / missing info")}>
           <textarea
             className="min-h-20 w-full rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-input)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--border-focus)] focus:ring-2 focus:ring-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!hostRecordEnabled}
@@ -1109,11 +1125,11 @@ function HostPreview({
           />
         </Field>
 
-        <InfoRow label="Collected FQDN" value={host?.fqdn} />
+        <InfoRow label={t("Collected FQDN")} value={host?.fqdn} />
         {provider === "proxmox" && (
           <>
-            <InfoRow label="Proxmox node" value={host?.nodeName} />
-            <InfoRow label="Proxmox version" value={host?.pveVersion} />
+            <InfoRow label={t("Proxmox node")} value={host?.nodeName} />
+            <InfoRow label={t("Proxmox version")} value={host?.pveVersion} />
           </>
         )}
         <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">
@@ -1131,7 +1147,9 @@ function HostPreview({
               </div>
             ))}
             {(payload.switches ?? []).length === 0 && (
-              <div className="text-xs text-[var(--text-tertiary)]">{t("No virtual switches found.")}</div>
+              <div className="text-xs text-[var(--text-tertiary)]">
+                {t("No virtual switches found.")}
+              </div>
             )}
           </div>
         </div>
@@ -1162,7 +1180,7 @@ function VmPreview({
           <CardHeading>{t("Review workloads before import")}</CardHeading>
         </CardTitle>
         <Badge tone="accent">
-          {drafts.filter((draft) => draft.include).length} selected
+          {drafts.filter((draft) => draft.include).length} {t("selected")}
         </Badge>
       </CardHeader>
       <CardBody className="max-h-[720px] space-y-3 overflow-y-auto">
@@ -1209,10 +1227,10 @@ function VmPreview({
                 <div className="flex flex-wrap gap-2">
                   <Badge tone="info">{workloadLabel}</Badge>
                   <Badge tone={existing ? "warn" : "ok"}>
-                    {existing ? "will update" : "new"}
+                    {existing ? t("will update") : t("new")}
                   </Badge>
                   <Badge tone={vmStateTone(draft.source.state)}>
-                    {draft.source.state ?? "unknown"}
+                    {draft.source.state ?? t("unknown")}
                   </Badge>
                   {draft.osName && (
                     <Badge tone={guestOsTone(osFamily)}>
@@ -1227,7 +1245,7 @@ function VmPreview({
               </div>
 
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                <Field label="Hostname">
+                <Field label={t("Hostname")}>
                   <Input
                     value={draft.hostname}
                     onChange={(event) =>
@@ -1235,7 +1253,7 @@ function VmPreview({
                     }
                   />
                 </Field>
-                <Field label="Display name">
+                <Field label={t("Display name")}>
                   <Input
                     value={draft.displayName}
                     onChange={(event) =>
@@ -1243,7 +1261,7 @@ function VmPreview({
                     }
                   />
                 </Field>
-                <Field label="Primary IP">
+                <Field label={t("Primary IP")}>
                   <Input
                     value={draft.managementIp}
                     placeholder={t("Add manually if missing")}
@@ -1252,7 +1270,7 @@ function VmPreview({
                     }
                   />
                 </Field>
-                <Field label="Guest OS">
+                <Field label={t("Guest OS")}>
                   <Input
                     value={draft.osName}
                     placeholder={t("Windows Server, Ubuntu, Debian...")}
@@ -1267,7 +1285,7 @@ function VmPreview({
                     }
                   />
                 </Field>
-                <Field label="OS family">
+                <Field label={t("OS family")}>
                   <select
                     value={draft.osFamily}
                     onChange={(event) =>
@@ -1283,7 +1301,7 @@ function VmPreview({
                   </select>
                 </Field>
                 <div className="grid grid-cols-3 gap-2">
-                  <Field label="CPU">
+                  <Field label={t("CPU")}>
                     <Input
                       value={draft.cpuCores}
                       onChange={(event) =>
@@ -1291,7 +1309,7 @@ function VmPreview({
                       }
                     />
                   </Field>
-                  <Field label="RAM GB">
+                  <Field label={t("RAM GB")}>
                     <Input
                       value={draft.memoryGb}
                       onChange={(event) =>
@@ -1299,7 +1317,7 @@ function VmPreview({
                       }
                     />
                   </Field>
-                  <Field label="Disk GB">
+                  <Field label={t("Disk GB")}>
                     <Input
                       value={draft.storageGb}
                       onChange={(event) =>
@@ -1311,7 +1329,7 @@ function VmPreview({
               </div>
 
               <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_0.8fr]">
-                <Field label="Notes / missing info">
+                <Field label={t("Notes / missing info")}>
                   <textarea
                     value={draft.notes}
                     onChange={(event) =>
@@ -1330,15 +1348,15 @@ function VmPreview({
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="truncate text-[var(--text-primary)]">
-                            {adapter.name ?? "Network adapter"}
+                            {adapter.name ?? t("Network adapter")}
                           </span>
-                          <Mono>{adapter.switchName ?? "no switch"}</Mono>
+                          <Mono>{adapter.switchName ?? t("no switch")}</Mono>
                         </div>
                         <div className="mt-1 text-[var(--text-tertiary)]">
                           {vlanSummary(adapter)} |{" "}
                           {normalizeStringList(adapter.ipAddresses).join(
                             ", ",
-                          ) || "no IPs"}
+                          ) || t("no IPs")}
                         </div>
                       </div>
                     ))}
@@ -1409,6 +1427,7 @@ function ImportStat({
 }
 
 function CollectorDownload({ provider }: { provider: ImportProvider }) {
+  const { t } = useI18n();
   const copy = PROVIDER_COPY[provider];
   return (
     <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">
@@ -1429,7 +1448,7 @@ function CollectorDownload({ provider }: { provider: ImportProvider }) {
             rel="noreferrer"
           >
             <DownloadCloud className="size-3.5" />
-            Download
+            {t("Download")}
           </a>
         </Button>
       </div>

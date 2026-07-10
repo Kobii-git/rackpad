@@ -56,14 +56,14 @@ export default function AuditLogView() {
         title={t("Audit log")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {auditLog.length} loaded entries
+            {auditLog.length} {t("loaded entries")}
           </span>
         }
       />
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <div className="mb-4 grid gap-3 md:grid-cols-4">
-          <AuditStat label="Entries" value={auditLog.length} />
+          <AuditStat label={t("Entries")} value={auditLog.length} />
           <AuditStat label={t("Devices")} value={actionCounts.device ?? 0} />
           <AuditStat label={t("Ports")} value={actionCounts.port ?? 0} />
           <AuditStat label={t("Users")} value={actionCounts.user ?? 0} />
@@ -151,7 +151,11 @@ export default function AuditLogView() {
           </CardBody>
         </Card>
 
-        <div className="mt-4 text-xs text-[var(--text-tertiary)]">{t("Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.")}</div>
+        <div className="mt-4 text-xs text-[var(--text-tertiary)]">
+          {t(
+            "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.",
+          )}
+        </div>
       </div>
     </>
   );

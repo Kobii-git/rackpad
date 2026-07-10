@@ -338,7 +338,9 @@ export default function ReportsView() {
             <CardBody className="p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <div className="rk-kicker">{t("Rackpad inventory report")}</div>
+                  <div className="rk-kicker">
+                    {t("Rackpad inventory report")}
+                  </div>
                   <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
                     {lab.name}
                   </h2>

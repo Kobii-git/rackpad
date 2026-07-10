@@ -163,7 +163,8 @@ export default function DocumentationView() {
 
   async function handleDelete() {
     if (!selectedPage || !canEdit) return;
-    if (!window.confirm(`Delete ${selectedPage.title}?`)) return;
+    if (!window.confirm(t("Delete {title}?", { title: selectedPage.title })))
+      return;
     setDeleting(true);
     setError("");
     try {
@@ -219,7 +220,7 @@ export default function DocumentationView() {
         title={t("Documentation")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {pages.length} pages
+            {pages.length} {t("pages")}
           </span>
         }
         actions={
@@ -243,7 +244,7 @@ export default function DocumentationView() {
                     onClick={() => imageInputRef.current?.click()}
                   >
                     <ImagePlus className="size-3.5" />
-                    Insert image
+                    {t("Insert image")}
                   </Button>
                 )}
                 <Button
@@ -253,7 +254,7 @@ export default function DocumentationView() {
                   disabled={saving}
                 >
                   <Plus className="size-3.5" />
-                  New page
+                  {t("New page")}
                 </Button>
                 {selectedPage && (
                   <Button
@@ -262,7 +263,7 @@ export default function DocumentationView() {
                     disabled={saving}
                   >
                     <Save className="size-3.5" />
-                    {saving ? "Saving..." : "Save"}
+                    {saving ? t("Saving...") : t("Save")}
                   </Button>
                 )}
               </>
@@ -318,7 +319,9 @@ export default function DocumentationView() {
               );
             })}
             {filteredPages.length === 0 && (
-              <div className="px-4 py-8 text-sm text-[var(--color-fg-subtle)]">{t("No matching pages.")}</div>
+              <div className="px-4 py-8 text-sm text-[var(--color-fg-subtle)]">
+                {t("No matching pages.")}
+              </div>
             )}
           </div>
         </aside>
@@ -340,7 +343,7 @@ export default function DocumentationView() {
                     action={
                       <Button onClick={() => void handleCreate()}>
                         <Plus className="size-3.5" />
-                        New page
+                        {t("New page")}
                       </Button>
                     }
                   />
@@ -370,7 +373,7 @@ export default function DocumentationView() {
                         disabled={deleting}
                       >
                         <Trash2 className="size-3.5" />
-                        {deleting ? "Deleting..." : "Delete"}
+                        {deleting ? t("Deleting...") : t("Delete")}
                       </Button>
                     )}
                   </CardHeader>
@@ -403,7 +406,9 @@ export default function DocumentationView() {
                                   key={link.id}
                                   className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] px-2 py-1 text-xs"
                                 >
-                                  <span>{device?.hostname ?? link.deviceId}</span>
+                                  <span>
+                                    {device?.hostname ?? link.deviceId}
+                                  </span>
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -458,7 +463,8 @@ export default function DocumentationView() {
                     />
                     <div className="flex items-center justify-between gap-3">
                       <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
-                        Images up to {imageSizeLimitLabel()}
+                        {t("Images up to")}
+                        {imageSizeLimitLabel()}
                       </Mono>
                       {canEdit && (
                         <Button
@@ -467,7 +473,7 @@ export default function DocumentationView() {
                           disabled={saving}
                         >
                           <Save className="size-3.5" />
-                          {saving ? "Saving..." : "Save"}
+                          {saving ? t("Saving...") : t("Save")}
                         </Button>
                       )}
                     </div>

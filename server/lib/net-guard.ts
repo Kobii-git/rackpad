@@ -3,6 +3,7 @@ import type { LookupAddress } from "node:dns";
 import net from "node:net";
 import http from "node:http";
 import https from "node:https";
+import ipaddr from "ipaddr.js";
 import { ValidationError } from "./validation.js";
 
 const DEFAULT_RESERVED_HOST_MESSAGE =
@@ -77,43 +78,18 @@ function normalizeLookupHost(host: string) {
 
 export function isBlockedNetworkAddress(address: string) {
   const normalized = normalizeLookupHost(address);
-  if (net.isIP(normalized) === 4) {
-    return isBlockedIpv4(normalized);
+  if (!ipaddr.isValid(normalized)) return true;
+
+  const parsed = ipaddr.parse(normalized);
+  const ipv6 = parsed.kind() === "ipv6" ? (parsed as ipaddr.IPv6) : null;
+  if (ipv6?.isIPv4MappedAddress()) {
+    return isBlockedNetworkAddress(ipv6.toIPv4Address().toString());
   }
 
-  const bytes = parseIpv6Bytes(normalized);
-  if (!bytes) return true;
-
-  const mappedIpv4 = mappedIpv4FromIpv6(bytes);
-  if (mappedIpv4) {
-    return isBlockedIpv4(mappedIpv4);
-  }
-
-  return (
-    bytes.every((byte) => byte === 0) ||
-    bytes.every((byte, index) => byte === (index === 15 ? 1 : 0)) ||
-    (bytes[0] === 0xfe && (bytes[1] & 0xc0) === 0x80) ||
-    bytes[0] === 0xff ||
-    (bytes[0] === 0x20 && bytes[1] === 0x01 && bytes[2] === 0x0d && bytes[3] === 0xb8) ||
-    bytes.slice(0, 12).every((byte) => byte === 0)
-  );
-}
-
-function isBlockedIpv4(address: string) {
-  const [a, b, c, d] = address.split(".").map((part) => Number(part));
-  return (
-    a === 0 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 192 && b === 0 && c === 0) ||
-    (a === 192 && b === 0 && c === 2) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    (a === 198 && b === 51 && c === 100) ||
-    (a === 203 && b === 0 && c === 113) ||
-    a >= 224 ||
-    (a === 255 && b === 255 && c === 255 && d === 255)
-  );
+  const range = parsed.range();
+  return parsed.kind() === "ipv4"
+    ? range !== "unicast" && range !== "private"
+    : range !== "unicast" && range !== "uniqueLocal";
 }
 
 export async function requestPinnedUrl(
@@ -143,15 +119,12 @@ export async function requestPinnedUrl(
     body: options.body,
   });
 
-  if (
-    status.statusCode >= 300 &&
-    status.statusCode < 400 &&
-    status.location
-  ) {
+  if (status.statusCode >= 300 && status.statusCode < 400 && status.location) {
     if (maxRedirects <= 0) {
       throw new ValidationError("Target returned too many redirects.");
     }
-    const preserveMethod = status.statusCode === 307 || status.statusCode === 308;
+    const preserveMethod =
+      status.statusCode === 307 || status.statusCode === 308;
     return requestPinnedUrl(new URL(status.location, input), {
       ...options,
       maxRedirects: maxRedirects - 1,
@@ -204,9 +177,10 @@ function performPinnedRequest(
       options.headers,
       options.method,
     );
-    const request = input.protocol === "https:"
-      ? https.request(requestOptions)
-      : http.request(requestOptions);
+    const request =
+      input.protocol === "https:"
+        ? https.request(requestOptions)
+        : http.request(requestOptions);
     request.setTimeout(options.timeoutMs, () => {
       request.destroy(new Error("Request timed out."));
     });
@@ -219,64 +193,4 @@ function performPinnedRequest(
     });
     request.end(options.body);
   });
-}
-
-function mappedIpv4FromIpv6(bytes: number[]) {
-  if (
-    bytes.slice(0, 10).every((byte) => byte === 0) &&
-    bytes[10] === 0xff &&
-    bytes[11] === 0xff
-  ) {
-    return bytes.slice(12).join(".");
-  }
-  return null;
-}
-
-function parseIpv6Bytes(address: string) {
-  let normalized = address.toLowerCase();
-  const zoneIndex = normalized.indexOf("%");
-  if (zoneIndex >= 0) normalized = normalized.slice(0, zoneIndex);
-
-  if (normalized.includes(".")) {
-    const lastColon = normalized.lastIndexOf(":");
-    if (lastColon < 0) return null;
-    const ipv4 = normalized.slice(lastColon + 1);
-    if (net.isIP(ipv4) !== 4) return null;
-    const octets = ipv4.split(".").map((part) => Number(part));
-    normalized = `${normalized.slice(0, lastColon)}:${(
-      (octets[0] << 8) |
-      octets[1]
-    ).toString(16)}:${((octets[2] << 8) | octets[3]).toString(16)}`;
-  }
-
-  const sides = normalized.split("::");
-  if (sides.length > 2) return null;
-
-  const head = parseIpv6Hextets(sides[0]);
-  const tail = sides.length === 2 ? parseIpv6Hextets(sides[1]) : [];
-  if (!head || !tail) return null;
-
-  const missing = 8 - head.length - tail.length;
-  if (sides.length === 1 && missing !== 0) return null;
-  if (sides.length === 2 && missing < 1) return null;
-
-  const hextets = [...head, ...Array(missing).fill(0), ...tail];
-  if (hextets.length !== 8) return null;
-
-  const bytes: number[] = [];
-  for (const hextet of hextets) {
-    bytes.push((hextet >> 8) & 0xff, hextet & 0xff);
-  }
-  return bytes;
-}
-
-function parseIpv6Hextets(input: string) {
-  if (!input) return [];
-  const parts = input.split(":");
-  const hextets: number[] = [];
-  for (const part of parts) {
-    if (!/^[0-9a-f]{1,4}$/i.test(part)) return null;
-    hextets.push(Number.parseInt(part, 16));
-  }
-  return hextets;
 }

@@ -28,10 +28,42 @@ test("ensureRoutableHost accepts routable literal addresses", async () => {
 });
 
 test("ensureRoutableHost rejects multicast, benchmarking, and documentation ranges", async () => {
-  await assert.rejects(() => ensureRoutableHost("224.0.0.1"), /reserved ranges/);
-  await assert.rejects(() => ensureRoutableHost("198.18.0.1"), /reserved ranges/);
-  await assert.rejects(() => ensureRoutableHost("203.0.113.10"), /reserved ranges/);
-  await assert.rejects(() => ensureRoutableHost("2001:db8::1"), /reserved ranges/);
+  for (const address of [
+    "0.0.0.0",
+    "100.64.0.1",
+    "127.0.0.1",
+    "169.254.1.1",
+    "192.0.0.1",
+    "192.0.2.1",
+    "198.18.0.1",
+    "203.0.113.10",
+    "224.0.0.1",
+    "255.255.255.255",
+    "::",
+    "::1",
+    "100::1",
+    "2001:2::1",
+    "2001:20::1",
+    "2001:db8::1",
+    "64:ff9b:1::1",
+    "fec0::1",
+    "fe80::1",
+    "ff02::1",
+    "::ffff:127.0.0.1",
+  ]) {
+    await assert.rejects(
+      () => ensureRoutableHost(address),
+      /reserved ranges/,
+      address,
+    );
+  }
+});
+
+test("ensureRoutableHost recursively accepts mapped private IPv4", async () => {
+  assert.equal(
+    await ensureRoutableHost("::ffff:10.20.30.40"),
+    "::ffff:10.20.30.40",
+  );
 });
 
 test("ensureRoutableHost rejects DNS answers mixed with blocked destinations", async () => {
@@ -40,7 +72,10 @@ test("ensureRoutableHost rejects DNS answers mixed with blocked destinations", a
     { address: "127.0.0.1", family: 4 },
   ]);
   try {
-    await assert.rejects(() => ensureRoutableHost("mixed.example"), /reserved ranges/);
+    await assert.rejects(
+      () => ensureRoutableHost("mixed.example"),
+      /reserved ranges/,
+    );
   } finally {
     setNetworkHostLookupForTests(null);
   }
@@ -80,10 +115,13 @@ test("redirects are re-resolved and revalidated before connecting", async () => 
   });
 
   try {
-    const result = await requestPinnedUrl(new URL("https://first.example/start"), {
-      method: "POST",
-      body: "payload",
-    });
+    const result = await requestPinnedUrl(
+      new URL("https://first.example/start"),
+      {
+        method: "POST",
+        body: "payload",
+      },
+    );
     assert.equal(result.url.toString(), "https://second.example/final");
     assert.deepEqual(resolvedHosts, ["first.example", "second.example"]);
     assert.deepEqual(requestedHosts, ["first.example", "second.example"]);
@@ -91,6 +129,28 @@ test("redirects are re-resolved and revalidated before connecting", async () => 
       { method: "POST", body: "payload" },
       { method: "GET", body: undefined },
     ]);
+  } finally {
+    setPinnedRequestTransportForTests(null);
+    setNetworkHostLookupForTests(null);
+  }
+});
+
+test("redirects cannot switch to a blocked destination", async () => {
+  setNetworkHostLookupForTests(async (host) => [
+    {
+      address: host === "metadata.example" ? "169.254.169.254" : "8.8.8.8",
+      family: 4,
+    },
+  ]);
+  setPinnedRequestTransportForTests(async () => ({
+    statusCode: 302,
+    location: "http://metadata.example/latest/meta-data",
+  }));
+  try {
+    await assert.rejects(
+      () => requestPinnedUrl(new URL("https://public.example/start")),
+      /reserved ranges/,
+    );
   } finally {
     setPinnedRequestTransportForTests(null);
     setNetworkHostLookupForTests(null);

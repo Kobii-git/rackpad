@@ -131,10 +131,14 @@ export function IpUtilizationBar({
                 <div className="text-[11px]">
                   <div className="font-mono">{intToIp(ipInt)}</div>
                   {isNetwork && (
-                    <div className="text-[var(--text-tertiary)]">{t("network")}</div>
+                    <div className="text-[var(--text-tertiary)]">
+                      {t("network")}
+                    </div>
                   )}
                   {isBroadcast && (
-                    <div className="text-[var(--text-tertiary)]">{t("broadcast")}</div>
+                    <div className="text-[var(--text-tertiary)]">
+                      {t("broadcast")}
+                    </div>
                   )}
                   {assignment && (
                     <>
@@ -151,11 +155,15 @@ export function IpUtilizationBar({
                       <div className="text-[var(--text-primary)]">
                         {technical.labels.join(" / ")}
                       </div>
-                      <div className="text-[var(--text-tertiary)]">{t("reserved by DHCP scope")}</div>
+                      <div className="text-[var(--text-tertiary)]">
+                        {t("reserved by DHCP scope")}
+                      </div>
                     </>
                   )}
                   {!assignment && !technical && !isNetwork && !isBroadcast && (
-                    <div className="text-[var(--text-tertiary)]">{t("free")}</div>
+                    <div className="text-[var(--text-tertiary)]">
+                      {t("free")}
+                    </div>
                   )}
                 </div>
               </TooltipContent>
@@ -165,12 +173,12 @@ export function IpUtilizationBar({
       </div>
 
       <div className="flex flex-wrap items-center gap-4 font-mono text-[10px] text-[var(--text-tertiary)]">
-        <Legend color="var(--accent-secondary)" label="Device" />
-        <Legend color="var(--accent-primary)" label="VM" />
-        <Legend color="var(--info)" label="Container" />
-        <Legend color="var(--warning)" label="Reserved" />
-        <Legend color="var(--warning)" label="Gateway/DNS" />
-        <Legend color="var(--text-muted)" label="Free" muted />
+        <Legend color="var(--accent-secondary)" label={t("Device")} />
+        <Legend color="var(--accent-primary)" label={t("VM")} />
+        <Legend color="var(--info)" label={t("Container")} />
+        <Legend color="var(--warning)" label={t("Reserved")} />
+        <Legend color="var(--warning)" label={t("Gateway/DNS")} />
+        <Legend color="var(--text-muted)" label={t("Free")} muted />
       </div>
     </div>
   );

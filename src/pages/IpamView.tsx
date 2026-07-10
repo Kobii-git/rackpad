@@ -395,30 +395,31 @@ export default function IpamView() {
                         try {
                           const created = await createSubnetRecord({
                             labId: activeLab.id,
-                        cidr: subnetForm.cidr.trim(),
-                        name: subnetForm.name.trim(),
-                        description: subnetForm.description.trim() || undefined,
-                        gateway: subnetForm.gateway.trim() || undefined,
-                        dnsServers: parseDnsServers(subnetForm.dnsServers),
-                        vlanId: subnetForm.vlanId || undefined,
-                      });
-                      setSubnetId(created.id);
-                      setCreatingSubnet(false);
-                    } catch (err) {
-                      setSubnetError(
-                        err instanceof Error
-                          ? err.message
-                          : t("Failed to create subnet."),
-                      );
-                    } finally {
-                      setSubnetSaving(false);
-                    }
-                  }}
-                  onDelete={async () => {}}
-                  onNew={() => {
-                    setCreatingSubnet(true);
-                    setSubnetForm(EMPTY_SUBNET_FORM);
-                  }}
+                            cidr: subnetForm.cidr.trim(),
+                            name: subnetForm.name.trim(),
+                            description:
+                              subnetForm.description.trim() || undefined,
+                            gateway: subnetForm.gateway.trim() || undefined,
+                            dnsServers: parseDnsServers(subnetForm.dnsServers),
+                            vlanId: subnetForm.vlanId || undefined,
+                          });
+                          setSubnetId(created.id);
+                          setCreatingSubnet(false);
+                        } catch (err) {
+                          setSubnetError(
+                            err instanceof Error
+                              ? err.message
+                              : t("Failed to create subnet."),
+                          );
+                        } finally {
+                          setSubnetSaving(false);
+                        }
+                      }}
+                      onDelete={async () => {}}
+                      onNew={() => {
+                        setCreatingSubnet(true);
+                        setSubnetForm(EMPTY_SUBNET_FORM);
+                      }}
                     />
                   ) : undefined
                 }
@@ -711,7 +712,8 @@ export default function IpamView() {
                           color: entryVlan.color,
                         }}
                       >
-                        VL{entryVlan.vlanId}
+                        {t("VL")}
+                        {entryVlan.vlanId}
                       </span>
                     )}
                   </div>
@@ -918,7 +920,10 @@ export default function IpamView() {
                             </div>
                             <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">
                               {device
-                                ? `${device.hostname} (${device.deviceType})`
+                                ? t("{hostname} ({deviceType})", {
+                                    hostname: device.hostname,
+                                    deviceType: device.deviceType,
+                                  })
                                 : (assignment.description ?? "-")}
                             </div>
                             <div className="col-span-3 flex items-center justify-end gap-2">
@@ -1356,7 +1361,9 @@ function ZoneEditor({
                     : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
                 }`}
               >
-                <span className="font-mono">{t(ZONE_KIND_KEYS[zone.kind])}</span>
+                <span className="font-mono">
+                  {t(ZONE_KIND_KEYS[zone.kind])}
+                </span>
                 <span className="mx-1 text-[var(--color-fg-faint)]">|</span>
                 <span>
                   {zone.startIp}-{zone.endIp}
@@ -1389,9 +1396,7 @@ function ZoneEditor({
                   <option value="static">{t("static")}</option>
                   <option value="dhcp">{t("dhcp")}</option>
                   <option value="reserved">{t("reserved")}</option>
-                  <option value="infrastructure">
-                    {t("infrastructure")}
-                  </option>
+                  <option value="infrastructure">{t("infrastructure")}</option>
                 </Select>
               </Field>
               <Field label={t("Start IP")}>

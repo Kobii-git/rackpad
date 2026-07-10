@@ -417,7 +417,9 @@ export default function NetworksView() {
   const subnetZones = selectedNetwork?.zones ?? [];
   const subnetNeedsRepair = Boolean(subnet && subnet.integrity.state !== "ok");
   const canRepairSubnet = currentUser?.role === "admin";
-  const canAllocateSubnet = canEdit && !subnetNeedsRepair;
+  const canCreateSubnetChild = canEdit && !subnetNeedsRepair;
+  const canMutateSubnetChild =
+    canEdit && (!subnetNeedsRepair || canRepairSubnet);
   const visibleSubnetZones = useMemo(
     () => subnetZones.filter(isUserVisibleZone),
     [subnetZones],
@@ -946,11 +948,18 @@ export default function NetworksView() {
     if (!subnet) return;
     if (subnet.integrity.state !== "ok") {
       const typed = window.prompt(
-        `Type ${subnet.cidr} to delete this conflicted subnet and its ${assignments.length} assignments, ${subnetScopes.length} DHCP scopes, and ${subnetZones.length} zones.`,
+        t(
+          "Type {cidr} to delete this conflicted subnet and its {length} assignments, {length3} DHCP scopes, and {length4} zones.",
+          {
+            cidr: subnet.cidr,
+            length: assignments.length,
+            length3: subnetScopes.length,
+            length4: subnetZones.length,
+          },
+        ),
       );
       if (typed !== subnet.cidr) return;
-    } else
-    if (
+    } else if (
       !window.confirm(
         t(
           "Delete subnet {cidr}? This also removes its scopes, zones, and assignments.",
@@ -1276,7 +1285,10 @@ export default function NetworksView() {
                       </>
                     ) : (
                       <>
-                        <span className="font-mono">VLAN {vlan?.vlanId}</span>
+                        <span className="font-mono">
+                          {t("VLAN")}
+                          {vlan?.vlanId}
+                        </span>
                         <span className="font-sans text-[var(--color-fg-muted)]">
                           /
                         </span>
@@ -1315,7 +1327,7 @@ export default function NetworksView() {
                     )}
                   </div>
                 </div>
-                {subnet && (
+                {subnet && !subnetNeedsRepair && (
                   <AllocatePanel
                     defaultTab="ip"
                     defaultSubnetId={subnet.id}
@@ -1375,43 +1387,63 @@ export default function NetworksView() {
 
               {subnetNeedsRepair && subnet && (
                 <div className="rounded-[var(--radius-sm)] border border-[var(--warning-border)] bg-[var(--warning-soft)] px-4 py-3 text-sm text-[var(--warning)]">
-                  <div className="font-semibold">{t("Subnet integrity repair required")}</div>
+                  <div className="font-semibold">
+                    {t("Subnet integrity repair required")}
+                  </div>
                   <div className="mt-1">
                     {subnet.integrity.state === "invalid-cidr"
-                      ? `The legacy CIDR ${subnet.cidr} is invalid.`
-                      : `${subnet.cidr} overlaps ${subnet.integrity.conflicts.map((conflict) => `${conflict.name} (${conflict.cidr})`).join(", ")}.`}
+                      ? t("The legacy CIDR {cidr} is invalid.", {
+                          cidr: subnet.cidr,
+                        })
+                      : t("{cidr} overlaps {value2}.", {
+                          cidr: subnet.cidr,
+                          value2: subnet.integrity.conflicts
+                            .map(
+                              (conflict) =>
+                                `${conflict.name} (${conflict.cidr})`,
+                            )
+                            .join(", "),
+                        })}
                     {canRepairSubnet
-                      ? " Enter a valid, non-overlapping CIDR below or delete the subnet after reviewing its child records."
-                      : " An administrator must repair it before new allocations can be made."}
+                      ? t(
+                          "Enter a valid, non-overlapping CIDR below or delete the subnet after reviewing its child records.",
+                        )
+                      : t(
+                          "An administrator must repair it before new allocations can be made.",
+                        )}
                   </div>
                   <div className="mt-2 font-mono text-xs">
-                    {assignments.length} assignments · {subnetScopes.length} scopes · {subnetZones.length} zones
+                    {assignments.length} {t("assignments ·")}
+                    {subnetScopes.length} {t("scopes ·")}
+                    {subnetZones.length} {t("zones")}
                   </div>
                 </div>
               )}
 
-              {canEdit && (subnet || creatingSubnet) && (!subnetNeedsRepair || canRepairSubnet) && (
-                <SubnetEditor
-                  creating={creatingSubnet || !subnet}
-                  form={subnetForm}
-                  vlans={vlans}
-                  error={subnetError}
-                  saving={subnetSaving}
-                  deleting={subnetDeleting}
-                  canDelete={Boolean(subnet && !creatingSubnet)}
-                  onChange={setSubnetForm}
-                  onSave={() => void handleSaveSubnet()}
-                  onDelete={() => void handleDeleteSubnet()}
-                  onNew={() => {
-                    setCreatingSubnet(true);
-                    setSubnetForm({
-                      ...EMPTY_SUBNET_FORM,
-                      vlanId: vlan?.id ?? "",
-                    });
-                    setSubnetError("");
-                  }}
-                />
-              )}
+              {canEdit &&
+                (subnet || creatingSubnet) &&
+                (!subnetNeedsRepair || canRepairSubnet) && (
+                  <SubnetEditor
+                    creating={creatingSubnet || !subnet}
+                    form={subnetForm}
+                    vlans={vlans}
+                    error={subnetError}
+                    saving={subnetSaving}
+                    deleting={subnetDeleting}
+                    canDelete={Boolean(subnet && !creatingSubnet)}
+                    onChange={setSubnetForm}
+                    onSave={() => void handleSaveSubnet()}
+                    onDelete={() => void handleDeleteSubnet()}
+                    onNew={() => {
+                      setCreatingSubnet(true);
+                      setSubnetForm({
+                        ...EMPTY_SUBNET_FORM,
+                        vlanId: vlan?.id ?? "",
+                      });
+                      setSubnetError("");
+                    }}
+                  />
+                )}
 
               {subnet && (
                 <>
@@ -1462,7 +1494,8 @@ export default function NetworksView() {
                     error={scopeError}
                     saving={scopeSaving}
                     deleting={scopeDeleting}
-                    canEdit={canAllocateSubnet}
+                    canCreate={canCreateSubnetChild}
+                    canMutate={canMutateSubnetChild}
                     onSave={() => void handleSaveScope()}
                     onDelete={() => void handleDeleteScope()}
                   />
@@ -1478,7 +1511,8 @@ export default function NetworksView() {
                     error={zoneError}
                     saving={zoneSaving}
                     deleting={zoneDeleting}
-                    canEdit={canAllocateSubnet}
+                    canCreate={canCreateSubnetChild}
+                    canMutate={canMutateSubnetChild}
                     onSave={() => void handleSaveZone()}
                     onDelete={() => void handleDeleteZone()}
                   />
@@ -1487,7 +1521,7 @@ export default function NetworksView() {
                     grouped={grouped}
                     deviceById={deviceById}
                     releasingId={releasingId}
-                    canEdit={canEdit}
+                    canEdit={canMutateSubnetChild}
                     onUnassign={(id) => void handleUnassign(id)}
                   />
                 </>
@@ -1617,7 +1651,8 @@ function VlanOverviewTable({
                       onClick={() => onSelect(row)}
                       className="font-mono text-xs text-[var(--color-accent)] hover:underline"
                     >
-                      VLAN {row.vlan.vlanId}
+                      {t("VLAN")}
+                      {row.vlan.vlanId}
                     </button>
                   </td>
                   <td>
@@ -1633,7 +1668,9 @@ function VlanOverviewTable({
                     <Mono>
                       {row.subnetCount}
                       {row.subnetCidrs.length > 0
-                        ? ` | ${row.subnetCidrs.join(", ")}`
+                        ? t("| {value1}", {
+                            value1: row.subnetCidrs.join(", "),
+                          })
                         : ""}
                     </Mono>
                   </td>
@@ -1704,7 +1741,7 @@ function NetworkListRow({
           {rowSubnet
             ? rowSubnet.cidr
             : rowVlan
-              ? `VLAN ${rowVlan.vlanId}`
+              ? t("VLAN {vlanId}", { vlanId: rowVlan.vlanId })
               : t("No VLAN tag")}
         </Mono>
         {network.kind === "vlan-only" && (
@@ -1723,7 +1760,8 @@ function NetworkListRow({
               color: rowVlan.color,
             }}
           >
-            VL{rowVlan.vlanId}
+            {t("VL")}
+            {rowVlan.vlanId}
           </span>
         ) : (
           <span className="font-mono text-[10px] text-[var(--color-fg-subtle)]">
@@ -2555,7 +2593,10 @@ function AssignmentsSection({
                         </div>
                         <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">
                           {device
-                            ? `${device.hostname} (${device.deviceType})`
+                            ? t("{hostname} ({deviceType})", {
+                                hostname: device.hostname,
+                                deviceType: device.deviceType,
+                              })
                             : (assignment.description ?? "-")}
                         </div>
                         <div className="col-span-3 flex items-center justify-end gap-2">
@@ -2744,7 +2785,8 @@ function ScopeEditor({
   error,
   saving,
   deleting,
-  canEdit,
+  canCreate,
+  canMutate,
   onSave,
   onDelete,
 }: {
@@ -2759,7 +2801,8 @@ function ScopeEditor({
   error: string;
   saving: boolean;
   deleting: boolean;
-  canEdit: boolean;
+  canCreate: boolean;
+  canMutate: boolean;
   onSave: () => void;
   onDelete: () => void;
 }) {
@@ -2771,7 +2814,7 @@ function ScopeEditor({
           <CardLabel>{t("DHCP")}</CardLabel>
           <CardHeading>{t("Scopes")}</CardHeading>
         </CardTitle>
-        {canEdit && (
+        {canCreate && (
           <Button
             variant="outline"
             size="sm"
@@ -2816,7 +2859,7 @@ function ScopeEditor({
           />
         )}
 
-        {(creating || selectedScopeId) && canEdit && (
+        {((creating && canCreate) || (selectedScopeId && canMutate)) && (
           <div className="space-y-4 rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label={t("Scope name")}>
@@ -2928,7 +2971,8 @@ function ZoneEditor({
   error,
   saving,
   deleting,
-  canEdit,
+  canCreate,
+  canMutate,
   onSave,
   onDelete,
 }: {
@@ -2942,7 +2986,8 @@ function ZoneEditor({
   error: string;
   saving: boolean;
   deleting: boolean;
-  canEdit: boolean;
+  canCreate: boolean;
+  canMutate: boolean;
   onSave: () => void;
   onDelete: () => void;
 }) {
@@ -2954,7 +2999,7 @@ function ZoneEditor({
           <CardLabel>{t("IP zones")}</CardLabel>
           <CardHeading>{t("Static, DHCP, reserved")}</CardHeading>
         </CardTitle>
-        {canEdit && (
+        {canCreate && (
           <Button
             variant="outline"
             size="sm"
@@ -3004,7 +3049,7 @@ function ZoneEditor({
           />
         )}
 
-        {(creating || selectedZoneId) && canEdit && (
+        {((creating && canCreate) || (selectedZoneId && canMutate)) && (
           <div className="space-y-4 rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
             <div className="grid gap-4 md:grid-cols-3">
               <Field label={t("Kind")}>

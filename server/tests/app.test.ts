@@ -1203,6 +1203,143 @@ test("admin restore rejects overlapping subnets without changing current data", 
   );
 });
 
+test("admin restore rejects invalid IPAM children atomically with structured details", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const subnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers,
+    payload: {
+      labId: "lab_home",
+      cidr: "10.67.0.0/24",
+      name: "Restore child validation",
+      gateway: "10.67.0.1",
+    },
+  });
+  assert.equal(subnetRes.statusCode, 201);
+  const subnet = readJson(subnetRes) as { id: string };
+
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers,
+  });
+  const snapshot = readJson(exportRes) as Record<string, unknown> & {
+    data: {
+      subnets: Array<Record<string, unknown>>;
+      dhcpScopes: Array<Record<string, unknown>>;
+      ipZones: Array<Record<string, unknown>>;
+      ipAssignments: Array<Record<string, unknown>>;
+    };
+  };
+  snapshot.data.dhcpScopes.push({
+    id: "scope_restore_valid",
+    subnetId: subnet.id,
+    name: "Valid restore scope",
+    startIp: "10.67.0.100",
+    endIp: "10.67.0.150",
+  });
+  snapshot.data.ipZones.push({
+    id: "zone_restore_valid",
+    subnetId: subnet.id,
+    kind: "dhcp",
+    startIp: "10.67.0.100",
+    endIp: "10.67.0.150",
+  });
+  snapshot.data.ipAssignments.push({
+    id: "assignment_restore_valid",
+    subnetId: subnet.id,
+    ipAddress: "10.67.0.110",
+    assignmentType: "device",
+    allocationMode: "dhcp-reservation",
+    dhcpScopeId: "scope_restore_valid",
+  });
+
+  const rackRes = await app.inject({
+    method: "POST",
+    url: "/api/racks",
+    headers,
+    payload: {
+      labId: "lab_home",
+      name: "Atomic restore sentinel",
+      totalU: 42,
+    },
+  });
+  assert.equal(rackRes.statusCode, 201);
+
+  const cases: Array<{
+    entityType: string;
+    entityId: string;
+    mutate: (copy: typeof snapshot) => void;
+  }> = [
+    {
+      entityType: "subnet",
+      entityId: subnet.id,
+      mutate: (copy) => {
+        copy.data.subnets.find((row) => row.id === subnet.id)!.gateway =
+          "192.0.2.1";
+      },
+    },
+    {
+      entityType: "dhcpScope",
+      entityId: "scope_restore_valid",
+      mutate: (copy) => {
+        copy.data.dhcpScopes.find(
+          (row) => row.id === "scope_restore_valid",
+        )!.startIp = "10.67.0.200";
+      },
+    },
+    {
+      entityType: "ipZone",
+      entityId: "zone_restore_valid",
+      mutate: (copy) => {
+        copy.data.ipZones.find(
+          (row) => row.id === "zone_restore_valid",
+        )!.endIp = "10.68.0.10";
+      },
+    },
+    {
+      entityType: "ipAssignment",
+      entityId: "assignment_restore_valid",
+      mutate: (copy) => {
+        copy.data.ipAssignments.find(
+          (row) => row.id === "assignment_restore_valid",
+        )!.dhcpScopeId = "missing_scope";
+      },
+    },
+  ];
+
+  for (const restoreCase of cases) {
+    const invalidSnapshot = structuredClone(snapshot);
+    restoreCase.mutate(invalidSnapshot);
+    const restoreRes = await app.inject({
+      method: "POST",
+      url: "/api/admin/restore",
+      headers,
+      payload: invalidSnapshot,
+    });
+    assert.equal(restoreRes.statusCode, 422, restoreCase.entityType);
+    const error = readJson(restoreRes) as {
+      code: string;
+      entityType: string;
+      entityId: string;
+      subnetId: string;
+    };
+    assert.equal(error.code, "BACKUP_INTEGRITY_INVALID");
+    assert.equal(error.entityType, restoreCase.entityType);
+    assert.equal(error.entityId, restoreCase.entityId);
+    assert.equal(error.subnetId, subnet.id);
+    const sentinel = db
+      .prepare("SELECT id FROM racks WHERE name = ?")
+      .get("Atomic restore sentinel");
+    assert.ok(
+      sentinel,
+      `${restoreCase.entityType} rejection changed the database`,
+    );
+  }
+});
+
 test("admin restore accepts older backups without subnet gateway and DNS fields", async () => {
   const adminToken = await bootstrapAdmin();
 
@@ -4246,7 +4383,7 @@ test("discovery scan jobs return before the scan runner resolves", async () => {
   assert.equal(startRes.statusCode, 202);
   const started = readJson(startRes) as { job: { id: string; status: string } };
   assert.ok(started.job.id);
-  assert.notEqual(started.job.status, "succeeded");
+  assert.notEqual(started.job.status, "completed");
 
   const running = await waitForDiscoveryScanJobStatus(
     adminToken,
@@ -4256,12 +4393,12 @@ test("discovery scan jobs return before the scan runner resolves", async () => {
   assert.equal(running.result, null);
 
   deferredScan.resolve(makeDiscoveryScanResult({ discoveredCount: 2 }));
-  const succeeded = await waitForDiscoveryScanJobStatus(
+  const completed = await waitForDiscoveryScanJobStatus(
     adminToken,
     started.job.id,
-    "succeeded",
+    "completed",
   );
-  assert.equal(succeeded.result?.discoveredCount, 2);
+  assert.equal(completed.result?.discoveredCount, 2);
 });
 
 test("discovery scan jobs report runner failures", async () => {
@@ -4334,7 +4471,7 @@ test("discovery scan job status requires lab read access", async () => {
   assert.equal(forbiddenRes.statusCode, 403);
 
   deferredScan.resolve(makeDiscoveryScanResult());
-  await waitForDiscoveryScanJobStatus(adminToken, started.job.id, "succeeded");
+  await waitForDiscoveryScanJobStatus(adminToken, started.job.id, "completed");
 });
 
 test("discovery scan schedules can be managed per lab", async () => {
@@ -4468,11 +4605,11 @@ test("running a discovery scan schedule starts a job and records success", async
     job: { id: string; cidr: string; status: string };
   };
   assert.equal(started.job.cidr, "10.42.0.0/30");
-  assert.notEqual(started.job.status, "succeeded");
+  assert.notEqual(started.job.status, "completed");
 
   await waitForDiscoveryScanJobStatus(adminToken, started.job.id, "running");
   deferredScan.resolve(scanResult);
-  await waitForDiscoveryScanJobStatus(adminToken, started.job.id, "succeeded");
+  await waitForDiscoveryScanJobStatus(adminToken, started.job.id, "completed");
 
   const listRes = await app.inject({
     method: "GET",
@@ -6310,25 +6447,39 @@ test("global device type and port template mutations require an administrator", 
 
 test("IP assignments reject cross-lab references and make legacy references inert", async () => {
   const adminToken = await bootstrapAdmin();
-  db.prepare("INSERT INTO labs (id, name) VALUES (?, ?)").run("lab_hidden", "Hidden Lab");
+  db.prepare("INSERT INTO labs (id, name) VALUES (?, ?)").run(
+    "lab_hidden",
+    "Hidden Lab",
+  );
   const editorToken = await createUserAndLogin(adminToken, {
     username: "lab-a-editor",
     displayName: "Lab A Editor",
     password: "lab-a-editor-password",
     role: "editor",
   });
-  const editor = db.prepare("SELECT id FROM users WHERE username = ?").get("lab-a-editor") as { id: string };
-  db.prepare("DELETE FROM userLabAccess WHERE userId = ? AND labId = ?").run(editor.id, "lab_hidden");
+  const editor = db
+    .prepare("SELECT id FROM users WHERE username = ?")
+    .get("lab-a-editor") as { id: string };
+  db.prepare("DELETE FROM userLabAccess WHERE userId = ? AND labId = ?").run(
+    editor.id,
+    "lab_hidden",
+  );
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO devices (id, labId, hostname, deviceType, managementIp, status, placement)
     VALUES ('device_hidden', 'lab_hidden', 'hidden-router', 'router', '10.60.0.10', 'online', 'room')
-  `).run();
+  `,
+  ).run();
   const subnetRes = await app.inject({
     method: "POST",
     url: "/api/subnets",
     headers: { authorization: `Bearer ${adminToken}` },
-    payload: { labId: "lab_home", cidr: "10.50.0.0/24", name: "Visible subnet" },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.50.0.0/24",
+      name: "Visible subnet",
+    },
   });
   const subnet = readJson(subnetRes) as { id: string };
 
@@ -6344,18 +6495,26 @@ test("IP assignments reject cross-lab references and make legacy references iner
     },
   });
   assert.equal(rejected.statusCode, 422);
-  assert.equal((readJson(rejected) as { code: string }).code, "CROSS_LAB_REFERENCE");
+  assert.equal(
+    (readJson(rejected) as { code: string }).code,
+    "CROSS_LAB_REFERENCE",
+  );
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, deviceId)
     VALUES ('legacy_cross_lab', ?, '10.50.0.11', 'device', 'device_hidden')
-  `).run(subnet.id);
+  `,
+  ).run(subnet.id);
   const listRes = await app.inject({
     method: "GET",
     url: `/api/ip-assignments?subnetId=${subnet.id}`,
     headers: { authorization: `Bearer ${editorToken}` },
   });
-  const listed = readJson(listRes) as Array<{ deviceId: string | null; integrity: { state: string } }>;
+  const listed = readJson(listRes) as Array<{
+    deviceId: string | null;
+    integrity: { state: string };
+  }>;
   assert.equal(listed[0]?.deviceId, null);
   assert.equal(listed[0]?.integrity.state, "cross-lab-reference");
 
@@ -6365,8 +6524,102 @@ test("IP assignments reject cross-lab references and make legacy references iner
     headers: { authorization: `Bearer ${editorToken}` },
   });
   assert.equal(deleteRes.statusCode, 204);
-  const hiddenDevice = db.prepare("SELECT managementIp FROM devices WHERE id = ?").get("device_hidden") as { managementIp: string };
+  const hiddenDevice = db
+    .prepare("SELECT managementIp FROM devices WHERE id = ?")
+    .get("device_hidden") as { managementIp: string };
   assert.equal(hiddenDevice.managementIp, "10.60.0.10");
+
+  db.prepare(
+    `
+    INSERT INTO devices (id, labId, hostname, deviceType, status, placement)
+    VALUES (?, 'lab_home', ?, 'server', 'online', 'room')
+  `,
+  ).run("device_visible_a", "visible-a");
+  db.prepare(
+    `
+    INSERT INTO devices (id, labId, hostname, deviceType, status, placement)
+    VALUES (?, 'lab_home', ?, 'server', 'online', 'room')
+  `,
+  ).run("device_visible_b", "visible-b");
+  db.prepare(
+    `
+    INSERT INTO ports (id, deviceId, name, position, kind, linkState)
+    VALUES ('port_visible_b', 'device_visible_b', 'eth0', 1, 'rj45', 'up')
+  `,
+  ).run();
+  db.prepare(
+    `
+    INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, deviceId, portId)
+    VALUES ('legacy_port_mismatch', ?, '10.50.0.12', 'interface', 'device_visible_a', 'port_visible_b')
+  `,
+  ).run(subnet.id);
+
+  const mismatchListRes = await app.inject({
+    method: "GET",
+    url: `/api/ip-assignments?subnetId=${subnet.id}`,
+    headers: { authorization: `Bearer ${editorToken}` },
+  });
+  const mismatchList = readJson(mismatchListRes) as Array<{
+    id: string;
+    portId: string | null;
+    integrity: { state: string; fields: string[] };
+  }>;
+  const mismatch = mismatchList.find(
+    (row) => row.id === "legacy_port_mismatch",
+  );
+  assert.equal(mismatch?.portId, null);
+  assert.equal(mismatch?.integrity.state, "reference-mismatch");
+  assert.deepEqual(mismatch?.integrity.fields, ["portId"]);
+
+  db.prepare(
+    `
+    INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, deviceId, portId)
+    VALUES ('legacy_combined_invalid', ?, '10.50.0.13', 'interface', 'device_hidden', 'port_visible_b')
+  `,
+  ).run(subnet.id);
+  const combinedListRes = await app.inject({
+    method: "GET",
+    url: `/api/ip-assignments?subnetId=${subnet.id}`,
+    headers: { authorization: `Bearer ${editorToken}` },
+  });
+  const combined = (readJson(combinedListRes) as Array<{
+    id: string;
+    deviceId: string | null;
+    portId: string | null;
+    integrity: { state: string; fields: string[] };
+  }>).find((row) => row.id === "legacy_combined_invalid");
+  assert.equal(combined?.deviceId, null);
+  assert.equal(combined?.portId, null);
+  assert.equal(combined?.integrity.state, "cross-lab-reference");
+  assert.deepEqual(combined?.integrity.fields, ["deviceId", "portId"]);
+
+  const reportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/integrity",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  const report = readJson(reportRes) as {
+    assignmentReferences: Array<{ id: string; integrity: { state: string } }>;
+  };
+  assert.equal(
+    report.assignmentReferences.find((row) => row.id === "legacy_port_mismatch")
+      ?.integrity.state,
+    "reference-mismatch",
+  );
+
+  const repairedRes = await app.inject({
+    method: "PATCH",
+    url: "/api/ip-assignments/legacy_port_mismatch",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { portId: null },
+  });
+  assert.equal(repairedRes.statusCode, 200);
+  const repaired = readJson(repairedRes) as {
+    portId: null;
+    integrity: { state: string };
+  };
+  assert.equal(repaired.portId, null);
+  assert.equal(repaired.integrity.state, "ok");
 });
 
 test("subnets are canonicalized, overlaps are rejected, and legacy conflicts are reported", async () => {
@@ -6388,14 +6641,185 @@ test("subnets are canonicalized, overlaps are rejected, and legacy conflicts are
     payload: { labId: "lab_home", cidr: "10.70.0.128/25", name: "Overlap" },
   });
   assert.equal(overlapRes.statusCode, 409);
-  assert.equal((readJson(overlapRes) as { code: string }).code, "SUBNET_OVERLAP");
+  assert.equal(
+    (readJson(overlapRes) as { code: string }).code,
+    "SUBNET_OVERLAP",
+  );
 
-  db.prepare("INSERT INTO subnets (id, labId, cidr, name) VALUES (?, ?, ?, ?)")
-    .run("legacy_overlap", "lab_home", "10.70.0.64/26", "Legacy overlap");
-  const integrityRes = await app.inject({ method: "GET", url: "/api/admin/integrity", headers });
+  db.prepare(
+    "INSERT INTO subnets (id, labId, cidr, name) VALUES (?, ?, ?, ?)",
+  ).run("legacy_overlap", "lab_home", "10.70.0.64/26", "Legacy overlap");
+  const integrityRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/integrity",
+    headers,
+  });
   assert.equal(integrityRes.statusCode, 200);
-  const report = readJson(integrityRes) as { subnetConflicts: Array<{ id: string }> };
-  assert.ok(report.subnetConflicts.some((issue) => issue.id === "legacy_overlap"));
+  const report = readJson(integrityRes) as {
+    subnetConflicts: Array<{ id: string }>;
+  };
+  assert.ok(
+    report.subnetConflicts.some((issue) => issue.id === "legacy_overlap"),
+  );
+});
+
+test("conflicted subnet children are read-only for non-admins and repairable by admins", async () => {
+  const adminToken = await bootstrapAdmin();
+  const editorToken = await createUserAndLogin(adminToken, {
+    username: "conflict-editor",
+    displayName: "Conflict Editor",
+    password: "conflict-editor-password",
+    role: "editor",
+  });
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "conflict-viewer",
+    displayName: "Conflict Viewer",
+    password: "conflict-viewer-password",
+    role: "viewer",
+  });
+  const createSubnetRes = await app.inject({
+    method: "POST",
+    url: "/api/subnets",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      cidr: "10.71.0.0/24",
+      name: "Conflict parent",
+    },
+  });
+  const subnet = readJson(createSubnetRes) as { id: string };
+  db.prepare(
+    "INSERT INTO subnets (id, labId, cidr, name) VALUES (?, ?, ?, ?)",
+  ).run(
+    "legacy_conflict_child",
+    "lab_home",
+    "10.71.0.128/25",
+    "Legacy conflict child",
+  );
+  db.prepare(
+    `
+    INSERT INTO devices (id, labId, hostname, deviceType, status, placement)
+    VALUES ('device_conflict_child', 'lab_home', 'conflict-device', 'server', 'online', 'room')
+  `,
+  ).run();
+  db.prepare(
+    `
+    INSERT INTO dhcpScopes (id, subnetId, name, startIp, endIp)
+    VALUES ('scope_conflict_child', ?, 'Conflict scope', '10.71.0.100', '10.71.0.120')
+  `,
+  ).run(subnet.id);
+  db.prepare(
+    `
+    INSERT INTO ipZones (id, subnetId, kind, startIp, endIp)
+    VALUES ('zone_conflict_child', ?, 'static', '10.71.0.20', '10.71.0.80')
+  `,
+  ).run(subnet.id);
+  db.prepare(
+    `
+    INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, deviceId, hostname)
+    VALUES ('assignment_conflict_child', ?, '10.71.0.30', 'device', 'device_conflict_child', 'conflict-device')
+  `,
+  ).run(subnet.id);
+
+  async function expectConflict(
+    token: string,
+    method: "POST" | "PATCH" | "DELETE",
+    url: string,
+    payload?: Record<string, unknown>,
+    expectedStatus = 403,
+  ) {
+    const response = await app.inject({
+      method,
+      url,
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
+    assert.equal(response.statusCode, expectedStatus, `${method} ${url}`);
+    assert.equal(
+      (readJson(response) as { code: string }).code,
+      "SUBNET_INTEGRITY_CONFLICT",
+    );
+  }
+
+  await expectConflict(
+    editorToken,
+    "POST",
+    "/api/ip-assignments",
+    {
+      subnetId: subnet.id,
+      ipAddress: "10.71.0.40",
+      assignmentType: "device",
+    },
+    409,
+  );
+  await expectConflict(
+    editorToken,
+    "PATCH",
+    "/api/dhcp-scopes/scope_conflict_child",
+    { name: "blocked" },
+  );
+  await expectConflict(
+    editorToken,
+    "DELETE",
+    "/api/ip-zones/zone_conflict_child",
+  );
+  await expectConflict(
+    editorToken,
+    "PATCH",
+    "/api/ip-assignments/assignment_conflict_child",
+    { hostname: "blocked" },
+  );
+  await expectConflict(
+    viewerToken,
+    "DELETE",
+    "/api/ip-assignments/assignment_conflict_child",
+  );
+
+  const metadataRes = await app.inject({
+    method: "PATCH",
+    url: "/api/devices/device_conflict_child",
+    headers: { authorization: `Bearer ${editorToken}` },
+    payload: { hostname: "conflict-device-renamed" },
+  });
+  assert.equal(metadataRes.statusCode, 200);
+  await expectConflict(
+    editorToken,
+    "DELETE",
+    "/api/devices/device_conflict_child",
+  );
+
+  const adminScopePatch = await app.inject({
+    method: "PATCH",
+    url: "/api/dhcp-scopes/scope_conflict_child",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { name: "Admin repaired scope" },
+  });
+  assert.equal(adminScopePatch.statusCode, 200);
+  const adminAssignmentPatch = await app.inject({
+    method: "PATCH",
+    url: "/api/ip-assignments/assignment_conflict_child",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { hostname: "admin-repaired-reference" },
+  });
+  assert.equal(adminAssignmentPatch.statusCode, 200);
+  const adminDeviceDelete = await app.inject({
+    method: "DELETE",
+    url: "/api/devices/device_conflict_child",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(adminDeviceDelete.statusCode, 204);
+  const adminScopeDelete = await app.inject({
+    method: "DELETE",
+    url: "/api/dhcp-scopes/scope_conflict_child",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(adminScopeDelete.statusCode, 204);
+  const adminZoneDelete = await app.inject({
+    method: "DELETE",
+    url: "/api/ip-zones/zone_conflict_child",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(adminZoneDelete.statusCode, 204);
 });
 
 test("discovery jobs enforce global, per-lab, and queued limits", async () => {
@@ -6403,33 +6827,47 @@ test("discovery jobs enforce global, per-lab, and queued limits", async () => {
   process.env.DISCOVERY_SCAN_MAX_ACTIVE_PER_LAB = "1";
   process.env.DISCOVERY_SCAN_MAX_QUEUED = "1";
   const adminToken = await bootstrapAdmin();
-  db.prepare("INSERT INTO labs (id, name) VALUES (?, ?)").run("lab_queue_b", "Queue B");
-  const deferred = new Map<string, ReturnType<typeof createDeferred<ReturnType<typeof makeDiscoveryScanResult>>>>();
+  db.prepare("INSERT INTO labs (id, name) VALUES (?, ?)").run(
+    "lab_queue_b",
+    "Queue B",
+  );
+  const deferred = new Map<
+    string,
+    ReturnType<
+      typeof createDeferred<ReturnType<typeof makeDiscoveryScanResult>>
+    >
+  >();
   setDiscoveryScanRunnerForTests(async (_labId, cidr) => {
     const wait = createDeferred(makeDiscoveryScanResult());
     deferred.set(cidr, wait);
     return wait.promise;
   });
   const headers = { authorization: `Bearer ${adminToken}` };
-  const start = (labId: string, cidr: string) => app.inject({
-    method: "POST",
-    url: "/api/discovery/scan",
-    headers,
-    payload: { labId, cidr },
-  });
+  const start = (labId: string, cidr: string) =>
+    app.inject({
+      method: "POST",
+      url: "/api/discovery/scan",
+      headers,
+      payload: { labId, cidr },
+    });
 
   const first = await start("lab_home", "10.80.0.0/30");
   const queued = await start("lab_home", "10.80.0.4/30");
   const otherLab = await start("lab_queue_b", "10.90.0.0/30");
   assert.equal(first.statusCode, 202);
   assert.equal(otherLab.statusCode, 202);
-  const queuedJob = (readJson(queued) as { job: { status: string; queuePosition: number } }).job;
+  const queuedJob = (
+    readJson(queued) as { job: { status: string; queuePosition: number } }
+  ).job;
   assert.equal(queuedJob.status, "queued");
   assert.equal(queuedJob.queuePosition, 1);
 
   const full = await start("lab_home", "10.80.0.8/30");
   assert.equal(full.statusCode, 429);
-  assert.equal((readJson(full) as { code: string }).code, "DISCOVERY_QUEUE_FULL");
+  assert.equal(
+    (readJson(full) as { code: string }).code,
+    "DISCOVERY_QUEUE_FULL",
+  );
 
   deferred.get("10.80.0.0/30")?.resolve();
   deferred.get("10.90.0.0/30")?.resolve();

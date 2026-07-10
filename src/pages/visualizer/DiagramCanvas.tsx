@@ -1,9 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Background,
@@ -241,7 +236,10 @@ export function DiagramCanvas({
     if (selectedDeviceId && !visibleDeviceIds.has(selectedDeviceId)) {
       setSelectedDeviceId(null);
     }
-    if (selectedCableId && !flowEdges.some((edge) => edge.id === selectedCableId)) {
+    if (
+      selectedCableId &&
+      !flowEdges.some((edge) => edge.id === selectedCableId)
+    ) {
       setSelectedCableId(null);
     }
   }, [flowEdges, selectedCableId, selectedDeviceId, visibleDeviceIds]);
@@ -278,7 +276,8 @@ export function DiagramCanvas({
         const highlighted =
           selectedCableId === edge.id ||
           (selectedDeviceId != null &&
-            (edge.source === selectedDeviceId || edge.target === selectedDeviceId));
+            (edge.source === selectedDeviceId ||
+              edge.target === selectedDeviceId));
         const dimmed =
           Boolean(selectedCableId || selectedDeviceId) && !highlighted;
         return {
@@ -431,7 +430,9 @@ export function DiagramCanvas({
   if (loading) {
     return (
       <div className="grid h-[calc(100vh-8.5rem)] min-h-[620px] place-items-center border-t border-[var(--border-subtle)] bg-[var(--surface-1)]">
-        <div className="rk-panel rounded-[var(--radius-md)] p-5 text-sm text-[var(--text-secondary)]">{t("Building topology diagram...")}</div>
+        <div className="rk-panel rounded-[var(--radius-md)] p-5 text-sm text-[var(--text-secondary)]">
+          {t("Building topology diagram...")}
+        </div>
       </div>
     );
   }
@@ -440,8 +441,14 @@ export function DiagramCanvas({
     return (
       <div className="grid h-[calc(100vh-8.5rem)] min-h-[620px] place-items-center border-t border-[var(--border-subtle)] bg-grid">
         <div className="rk-panel max-w-sm rounded-[var(--radius-md)] p-5 text-center">
-          <div className="text-sm font-semibold text-[var(--text-primary)]">{t("No devices to diagram")}</div>
-          <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">{t("Add devices, ports, and cables to build a draw-style topology map.")}</p>
+          <div className="text-sm font-semibold text-[var(--text-primary)]">
+            {t("No devices to diagram")}
+          </div>
+          <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">
+            {t(
+              "Add devices, ports, and cables to build a draw-style topology map.",
+            )}
+          </p>
         </div>
       </div>
     );
@@ -513,9 +520,14 @@ export function DiagramCanvas({
             <div className="min-w-0 flex-1">
               <div className="rk-kicker">{t("Diagram view")}</div>
               <div className="truncate text-[11px] text-[var(--text-secondary)]">
-                {sections.length} sections | {visibleDeviceCount} shown
-                {hiddenDeviceCount > 0 ? ` / ${hiddenDeviceCount} hidden` : ""} |{" "}
-                {visibleCableCount} visible cables
+                {sections.length} {t("sections |")}
+                {visibleDeviceCount} {t("shown")}
+                {hiddenDeviceCount > 0
+                  ? t("/ {hiddenDeviceCount} hidden", {
+                      hiddenDeviceCount: hiddenDeviceCount,
+                    })
+                  : ""}{" "}
+                | {visibleCableCount} {t("visible cables")}
               </div>
             </div>
             {Object.keys(savedPositions).length +
@@ -523,21 +535,24 @@ export function DiagramCanvas({
               0 && (
               <Button variant="ghost" size="sm" onClick={resetPositions}>
                 <RotateCcw className="size-3.5" />
-                Reset positions
+                {t("Reset positions")}
               </Button>
             )}
           </div>
           <div className="flex w-full max-w-full items-center gap-1.5 overflow-x-auto pb-0.5">
             <DiagramTypeChip
               active={typeFilters.size === 0}
-              label={`All ${model.counts.devices}`}
+              label={t("All {devices}", { devices: model.counts.devices })}
               onClick={() => setTypeFilters(new Set())}
             />
             {model.deviceTypes.map((entry) => (
               <DiagramTypeChip
                 key={entry.type}
                 active={typeFilters.has(entry.type)}
-                label={`${entry.label} ${entry.count}`}
+                label={t("{label} {count}", {
+                  label: entry.label,
+                  count: entry.count,
+                })}
                 onClick={() => toggleTypeFilter(entry.type)}
               />
             ))}
@@ -578,7 +593,10 @@ function DiagramDeviceCard({ data, selected }: NodeProps<DiagramDeviceNode>) {
           : "border-[var(--border-default)]",
       )}
       style={{ width: DEVICE_NODE_WIDTH, height: DEVICE_NODE_HEIGHT }}
-      title={`${data.hostname}${data.address ? ` | ${data.address}` : ""}`}
+      title={t("{hostname}{value2}", {
+        hostname: data.hostname,
+        value2: data.address ? ` | ${data.address}` : "",
+      })}
     >
       <DiagramHandles />
       <span
@@ -607,7 +625,9 @@ function DiagramDeviceCard({ data, selected }: NodeProps<DiagramDeviceNode>) {
             <span className="shrink-0">|</span>
             <span className="shrink-0">{data.portSummary}</span>
             <span className="shrink-0">|</span>
-            <span className="shrink-0">{data.connectionCount} links</span>
+            <span className="shrink-0">
+              {data.connectionCount} {t("links")}
+            </span>
           </div>
         </div>
         <Link
@@ -765,13 +785,20 @@ function DiagramDeviceInspector({
         </div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <InspectorValue label="Address" value={formatNodeAddress(node)} mono />
         <InspectorValue
-          label="Ports"
+          label={t("Address")}
+          value={formatNodeAddress(node)}
+          mono
+        />
+        <InspectorValue
+          label={t("Ports")}
           value={`${node.portSummary.linked}/${node.portSummary.total} linked`}
         />
-        <InspectorValue label="Rack" value={node.rackName || "Loose"} />
-        <InspectorValue label="Room" value={node.roomName || "Unassigned"} />
+        <InspectorValue label={t("Rack")} value={node.rackName || "Loose"} />
+        <InspectorValue
+          label={t("Room")}
+          value={node.roomName || "Unassigned"}
+        />
       </div>
       {virtualRows.length > 0 && (
         <div className="mt-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-1)]">
@@ -814,16 +841,18 @@ function DiagramDeviceInspector({
                         {formatPortLabel(row.port, { includeFace: true })}
                       </Link>
                     ) : (
-                      <span className="text-[var(--text-muted)]">{t("no NIC documented")}</span>
+                      <span className="text-[var(--text-muted)]">
+                        {t("no NIC documented")}
+                      </span>
                     )}
                     <span className="text-[var(--text-muted)]">{"->"}</span>
                     <span className="min-w-0 truncate text-[var(--text-primary)]">
-                      {row.virtualSwitch?.name ?? "No vSwitch"}
+                      {row.virtualSwitch?.name ?? t("No vSwitch")}
                     </span>
                   </div>
                   {row.host && row.host.id !== node.device.id && (
                     <div className="mt-1 truncate text-[10px] text-[var(--text-muted)]">
-                      Host{" "}
+                      {t("Host")}{" "}
                       <Link
                         to={`/devices/${row.host.id}`}
                         className="text-[var(--text-secondary)] transition-colors hover:text-[var(--accent-primary)]"
@@ -847,7 +876,9 @@ function DiagramDeviceInspector({
         </div>
         <div className="max-h-64 overflow-y-auto p-2">
           {connectedCables.length === 0 ? (
-            <div className="px-1 py-2 text-xs text-[var(--text-secondary)]">{t("No visible cable links for the current filter.")}</div>
+            <div className="px-1 py-2 text-xs text-[var(--text-secondary)]">
+              {t("No visible cable links for the current filter.")}
+            </div>
           ) : (
             <div className="space-y-1.5">
               {connectedCables.map((cable) => {
@@ -874,16 +905,16 @@ function DiagramDeviceInspector({
                         style={{ background: cable.color }}
                       />
                       <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--text-primary)]">
-                        {peer?.hostname ?? "Unknown device"}
+                        {peer?.hostname ?? t("Unknown device")}
                       </span>
                       <span className="font-mono text-[9px] uppercase text-[var(--text-muted)]">
-                        {cable.link.cableType || "Cable"}
+                        {cable.link.cableType || t("Cable")}
                       </span>
                     </div>
                     <div className="mt-1 truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-                      {ownPort?.name ?? "port"}
+                      {ownPort?.name ?? t("port")}
                       {" -> "}
-                      {peerPort?.name ?? "port"}
+                      {peerPort?.name ?? t("port")}
                     </div>
                   </div>
                 );
@@ -897,7 +928,7 @@ function DiagramDeviceInspector({
         className="mt-3 inline-flex h-8 items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-default)] px-3 text-xs font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
       >
         <ExternalLink className="size-3.5" />
-        Open device
+        {t("Open device")}
       </Link>
     </div>
   );
@@ -913,22 +944,22 @@ function DiagramCableInspector({ cable }: { cable: VisualizerCable }) {
           className="inline-block size-2.5 rounded-full"
           style={{ background: cable.color }}
         />
-        {cable.link.cableType || "Cable"}
+        {cable.link.cableType || t("Cable")}
       </div>
       <div className="mt-3 grid gap-2">
         <InspectorValue
-          label="From"
+          label={t("From")}
           value={`${cable.fromDevice?.hostname ?? "Unknown"} / ${
             cable.fromPort?.name ?? "port"
           }`}
         />
         <InspectorValue
-          label="To"
+          label={t("To")}
           value={`${cable.toDevice?.hostname ?? "Unknown"} / ${
             cable.toPort?.name ?? "port"
           }`}
         />
-        <InspectorValue label="Length" value={cable.link.cableLength} />
+        <InspectorValue label={t("Length")} value={cable.link.cableLength} />
       </div>
     </div>
   );
@@ -971,9 +1002,7 @@ function buildDiagramLayout(
     (node) =>
       typeFilters.size === 0 || typeFilters.has(node.effectiveDeviceType),
   );
-  const visibleDeviceIds = new Set(
-    visibleNodes.map((node) => node.device.id),
-  );
+  const visibleDeviceIds = new Set(visibleNodes.map((node) => node.device.id));
   const visibleCables = model.cables
     .filter((cable) => cableIsVisible(cable, cableType))
     .filter((cable) => cable.fromDevice && cable.toDevice)
@@ -1061,52 +1090,51 @@ function buildDiagramLayout(
   }
 
   const showLabels = visibleCables.length <= EDGE_LABEL_LIMIT;
-  const flowEdges = visibleCables
-    .map((cable): DiagramFlowEdge => {
-      const offline = !cable.up || cable.unknown;
-      const snmpUp = cable.snmpVerified && cable.up && !offline;
-      const sourceGeometry = cable.fromDevice
-        ? nodeGeometryById.get(cable.fromDevice.id)
-        : undefined;
-      const targetGeometry = cable.toDevice
-        ? nodeGeometryById.get(cable.toDevice.id)
-        : undefined;
-      const handles = chooseEdgeHandles(sourceGeometry, targetGeometry);
-      return {
-        id: cable.link.id,
-        source: cable.fromDevice?.id ?? "",
-        sourceHandle: `source-${handles.source}`,
-        target: cable.toDevice?.id ?? "",
-        targetHandle: `target-${handles.target}`,
-        type: "smoothstep",
-        data: { cableId: cable.link.id },
-        label: showLabels ? cable.link.cableType || undefined : undefined,
-        labelShowBg: true,
-        labelBgPadding: [6, 3],
-        labelBgBorderRadius: 4,
-        labelBgStyle: {
-          fill: "var(--surface-2)",
-          fillOpacity: 0.92,
-          stroke: "var(--border-subtle)",
-        },
-        labelStyle: {
-          fill: "var(--text-tertiary)",
-          fontSize: 10,
-          fontFamily: "var(--font-mono)",
-        },
-        style: {
-          stroke: cable.color,
-          strokeWidth: cable.crossZone ? 3 : snmpUp ? 2.75 : 2.25,
-          strokeOpacity: offline ? 0.38 : snmpUp ? 0.92 : 0.78,
-          strokeDasharray: offline ? "8 7" : undefined,
-          filter: cableNeedsContrastOutline(cable.color)
-            ? "drop-shadow(0 0 2px var(--text-primary))"
-            : undefined,
-          // Firefox: round caps on dashed strokes balloon each dash; solid edges stay round.
-          strokeLinecap: offline ? "butt" : "round",
-        },
-      };
-    });
+  const flowEdges = visibleCables.map((cable): DiagramFlowEdge => {
+    const offline = !cable.up || cable.unknown;
+    const snmpUp = cable.snmpVerified && cable.up && !offline;
+    const sourceGeometry = cable.fromDevice
+      ? nodeGeometryById.get(cable.fromDevice.id)
+      : undefined;
+    const targetGeometry = cable.toDevice
+      ? nodeGeometryById.get(cable.toDevice.id)
+      : undefined;
+    const handles = chooseEdgeHandles(sourceGeometry, targetGeometry);
+    return {
+      id: cable.link.id,
+      source: cable.fromDevice?.id ?? "",
+      sourceHandle: `source-${handles.source}`,
+      target: cable.toDevice?.id ?? "",
+      targetHandle: `target-${handles.target}`,
+      type: "smoothstep",
+      data: { cableId: cable.link.id },
+      label: showLabels ? cable.link.cableType || undefined : undefined,
+      labelShowBg: true,
+      labelBgPadding: [6, 3],
+      labelBgBorderRadius: 4,
+      labelBgStyle: {
+        fill: "var(--surface-2)",
+        fillOpacity: 0.92,
+        stroke: "var(--border-subtle)",
+      },
+      labelStyle: {
+        fill: "var(--text-tertiary)",
+        fontSize: 10,
+        fontFamily: "var(--font-mono)",
+      },
+      style: {
+        stroke: cable.color,
+        strokeWidth: cable.crossZone ? 3 : snmpUp ? 2.75 : 2.25,
+        strokeOpacity: offline ? 0.38 : snmpUp ? 0.92 : 0.78,
+        strokeDasharray: offline ? "8 7" : undefined,
+        filter: cableNeedsContrastOutline(cable.color)
+          ? "drop-shadow(0 0 2px var(--text-primary))"
+          : undefined,
+        // Firefox: round caps on dashed strokes balloon each dash; solid edges stay round.
+        strokeLinecap: offline ? "butt" : "round",
+      },
+    };
+  });
 
   return {
     flowNodes,
@@ -1473,10 +1501,7 @@ function parseSortableIp(value?: string | null) {
   const octets = match.slice(1, 5).map(Number);
   if (octets.some((octet) => octet < 0 || octet > 255)) return null;
   return (
-    octets[0] * 256 ** 3 +
-    octets[1] * 256 ** 2 +
-    octets[2] * 256 +
-    octets[3]
+    octets[0] * 256 ** 3 + octets[1] * 256 ** 2 + octets[2] * 256 + octets[3]
   );
 }
 
@@ -1499,9 +1524,9 @@ function cableHasVisibleEndpoints(
 ) {
   return Boolean(
     cable.fromDevice &&
-      cable.toDevice &&
-      visibleDeviceIds.has(cable.fromDevice.id) &&
-      visibleDeviceIds.has(cable.toDevice.id),
+    cable.toDevice &&
+    visibleDeviceIds.has(cable.fromDevice.id) &&
+    visibleDeviceIds.has(cable.toDevice.id),
   );
 }
 

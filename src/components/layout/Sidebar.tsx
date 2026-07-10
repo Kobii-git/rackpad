@@ -23,11 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { selectLab, useStore } from "@/lib/store";
 import { useI18n } from "@/i18n";
-import {
-  APP_CHANNEL_LABEL,
-  APP_IS_DEV,
-  APP_VERSION_TAG,
-} from "@/lib/version";
+import { APP_CHANNEL_LABEL, APP_IS_DEV, APP_VERSION_TAG } from "@/lib/version";
 
 const baseNavItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -85,7 +81,9 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
       <div className="flex items-center justify-center gap-3 px-2 pb-3 pt-4 xl:justify-start xl:px-4">
         <Logo />
         <div className="hidden min-w-0 xl:block">
-          <div className="text-[15px] font-semibold tracking-normal text-[var(--text-primary)]">{t("Rackpad")}</div>
+          <div className="text-[15px] font-semibold tracking-normal text-[var(--text-primary)]">
+            {t("Rackpad")}
+          </div>
           <div className="text-[11px] text-[var(--text-muted)]">
             {t("Homelab inventory")}
           </div>
@@ -114,7 +112,10 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
           type="button"
           onClick={() => setLabMenuOpen((value) => !value)}
           className="rk-panel-inset flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-2 py-2 text-left transition-[background-color,border-color,box-shadow] duration-150 hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] xl:justify-between xl:px-3"
-          aria-label={`${t("Lab")}: ${lab.name}`}
+          aria-label={t("{value1}: {name}", {
+            value1: t("Lab"),
+            name: lab.name,
+          })}
         >
           <Building2 className="size-4 shrink-0 xl:hidden" />
           <div className="hidden min-w-0 flex-col leading-tight xl:flex">
@@ -225,7 +226,9 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
             className="flex items-center gap-2.5"
             title={
               authExpiresAt
-                ? `Session expires ${new Date(authExpiresAt).toLocaleDateString()}`
+                ? t("Session expires {value1}", {
+                    value1: new Date(authExpiresAt).toLocaleDateString(),
+                  })
                 : undefined
             }
           >
@@ -259,7 +262,14 @@ function Logo() {
         strokeWidth="2"
       />
       {/* rack-mounted units */}
-      <rect x="9" y="8.5" width="14" height="3.4" rx="1" fill="var(--color-accent)" />
+      <rect
+        x="9"
+        y="8.5"
+        width="14"
+        height="3.4"
+        rx="1"
+        fill="var(--color-accent)"
+      />
       <rect
         x="9"
         y="14.3"

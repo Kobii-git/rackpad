@@ -86,7 +86,8 @@ export function ReferenceImageGallery({
   }
 
   async function handleDelete(image: ReferenceImage) {
-    if (!window.confirm(`Delete image ${image.label}?`)) return;
+    if (!window.confirm(t("Delete image {label}?", { label: image.label })))
+      return;
     setDeletingId(image.id);
     setError("");
     try {
@@ -105,8 +106,8 @@ export function ReferenceImageGallery({
           <CardLabel>{t("Pictures")}</CardLabel>
           <CardHeading>
             {entityType === "rack" && face
-              ? `${capitalize(face)} reference`
-              : "Reference images"}
+              ? t("{value1} reference", { value1: capitalize(face) })
+              : t("Reference images")}
           </CardHeading>
         </CardTitle>
         <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
@@ -147,7 +148,7 @@ export function ReferenceImageGallery({
             )}
             <div className="flex items-center justify-between gap-3">
               <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
-                {imageSizeLimitLabel()} max
+                {imageSizeLimitLabel()} {t("max")}
               </Mono>
               <Button
                 size="sm"
@@ -155,7 +156,7 @@ export function ReferenceImageGallery({
                 disabled={saving}
               >
                 <ImagePlus className="size-3.5" />
-                {saving ? "Adding..." : "Choose image"}
+                {saving ? t("Adding...") : t("Choose image")}
               </Button>
             </div>
           </div>
@@ -195,7 +196,9 @@ export function ReferenceImageGallery({
                         variant="ghost"
                         size="icon"
                         onClick={() => openImageAsset(image)}
-                        aria-label={`Open ${image.label} larger`}
+                        aria-label={t("Open {label} larger", {
+                          label: image.label,
+                        })}
                       >
                         <ExternalLink />
                       </Button>
@@ -203,7 +206,9 @@ export function ReferenceImageGallery({
                         variant="ghost"
                         size="icon"
                         onClick={() => downloadImageAsset(image)}
-                        aria-label={`Download ${image.label}`}
+                        aria-label={t("Download {label}", {
+                          label: image.label,
+                        })}
                       >
                         <Download />
                       </Button>
@@ -213,7 +218,9 @@ export function ReferenceImageGallery({
                           size="icon"
                           onClick={() => void handleDelete(image)}
                           disabled={deletingId === image.id}
-                          aria-label={`Delete ${image.label}`}
+                          aria-label={t("Delete {label}", {
+                            label: image.label,
+                          })}
                         >
                           <Trash2 />
                         </Button>

@@ -39,6 +39,7 @@ export function AllocatePanel({
   trigger,
   onAllocated,
 }: AllocatePanelProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
   return (
@@ -47,7 +48,7 @@ export function AllocatePanel({
         {trigger ?? (
           <Button variant="default" size="sm">
             <Plus className="size-3.5" />
-            Allocate
+            {t("Allocate")}
           </Button>
         )}
       </PopoverTrigger>
@@ -84,8 +85,12 @@ function AllocatePanelBody({
     <Tabs defaultValue={defaultTab}>
       <div className="flex items-center justify-between border-b border-[var(--color-line)] px-4 pb-2 pt-3">
         <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">{t("New")}</div>
-          <div className="text-sm font-semibold tracking-tight">{t("Allocate")}</div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
+            {t("New")}
+          </div>
+          <div className="text-sm font-semibold tracking-tight">
+            {t("Allocate")}
+          </div>
         </div>
         <Sparkles className="size-4 text-[var(--color-accent)]" />
       </div>
@@ -216,7 +221,7 @@ function AllocateIpForm({
 
   return (
     <div className="space-y-3 px-4 py-3">
-      <Field label="Subnet">
+      <Field label={t("Subnet")}>
         <Select value={subnetId} onChange={setSubnetId}>
           {subnets.map((entry) => (
             <option key={entry.id} value={entry.id}>
@@ -227,9 +232,9 @@ function AllocateIpForm({
       </Field>
 
       <PreviewBox
-        label="Next available"
+        label={t("Next available")}
         value={previewIp}
-        emptyText="No free static or DHCP reservation IPs in this subnet"
+        emptyText={t("No free static or DHCP reservation IPs in this subnet")}
         unit={[
           subnet ? `· ${subnet.name}` : "",
           preview?.source === "dhcp-reservation" ? "· DHCP reservation" : "",
@@ -238,7 +243,7 @@ function AllocateIpForm({
           .join(" ")}
       />
 
-      <Field label="Allocation">
+      <Field label={t("Allocation")}>
         <div className="grid grid-cols-2 gap-1">
           {(["static", "dhcp-reservation"] as const).map((mode) => (
             <button
@@ -252,14 +257,16 @@ function AllocateIpForm({
                   : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]",
               )}
             >
-              {mode === "dhcp-reservation" ? "DHCP reservation" : "Static"}
+              {mode === "dhcp-reservation"
+                ? t("DHCP reservation")
+                : t("Static")}
             </button>
           ))}
         </div>
       </Field>
 
       {allocationMode === "dhcp-reservation" && (
-        <Field label="DHCP scope">
+        <Field label={t("DHCP scope")}>
           <Select value={effectiveDhcpScopeId} onChange={setDhcpScopeId}>
             {scopesForSubnet.length === 0 && (
               <option value="">{t("No DHCP scope in this subnet")}</option>
@@ -270,11 +277,15 @@ function AllocateIpForm({
               </option>
             ))}
           </Select>
-          <p className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">{t("The address keeps its real assignment type and is marked as a DHCP reservation.")}</p>
+          <p className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
+            {t(
+              "The address keeps its real assignment type and is marked as a DHCP reservation.",
+            )}
+          </p>
         </Field>
       )}
 
-      <Field label="Type">
+      <Field label={t("Type")}>
         <div className="grid grid-cols-4 gap-1">
           {(["device", "vm", "container", "reserved"] as const).map((type) => (
             <button
@@ -294,7 +305,7 @@ function AllocateIpForm({
         </div>
       </Field>
 
-      <Field label="Hostname">
+      <Field label={t("Hostname")}>
         <Input
           value={hostname}
           onChange={(e) => setHostname(e.target.value)}
@@ -303,7 +314,7 @@ function AllocateIpForm({
         />
       </Field>
 
-      <Field label="Description (optional)">
+      <Field label={t("Description (optional)")}>
         <Input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -312,14 +323,18 @@ function AllocateIpForm({
       </Field>
 
       <div className="flex items-center justify-end gap-2 pt-1">
-        <Button variant="ghost" size="sm" onClick={onClose}>{t("Cancel")}</Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          {t("Cancel")}
+        </Button>
         {canRegisterDevice && (
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => setDeviceDrawerOpen(true)}
-          >{t("Allocate & add device")}</Button>
+          >
+            {t("Allocate & add device")}
+          </Button>
         )}
         <Button
           variant="default"
@@ -327,7 +342,7 @@ function AllocateIpForm({
           disabled={!canSubmit || saving}
           onClick={() => void submit()}
         >
-          Allocate{" "}
+          {t("Allocate")}{" "}
           {previewIp && (
             <Mono className="text-[var(--color-bg)]">{previewIp}</Mono>
           )}
@@ -416,7 +431,7 @@ function AllocateVlanForm({
 
   return (
     <div className="space-y-3 px-4 py-3">
-      <Field label="Range">
+      <Field label={t("Range")}>
         <Select value={rangeId} onChange={setRangeId}>
           {ranges.map((entry) => (
             <option key={entry.id} value={entry.id}>
@@ -427,13 +442,13 @@ function AllocateVlanForm({
       </Field>
 
       <PreviewBox
-        label="Next available"
+        label={t("Next available")}
         value={previewId != null ? `VLAN ${previewId}` : null}
-        emptyText="No free VLAN IDs in this range"
+        emptyText={t("No free VLAN IDs in this range")}
         unit={range ? `· ${range.name}` : ""}
       />
 
-      <Field label="Name">
+      <Field label={t("Name")}>
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -442,7 +457,7 @@ function AllocateVlanForm({
         />
       </Field>
 
-      <Field label="Description (optional)">
+      <Field label={t("Description (optional)")}>
         <Input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -451,16 +466,21 @@ function AllocateVlanForm({
       </Field>
 
       <div className="flex items-center justify-end gap-2 pt-1">
-        <Button variant="ghost" size="sm" onClick={onClose}>{t("Cancel")}</Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          {t("Cancel")}
+        </Button>
         <Button
           variant="default"
           size="sm"
           disabled={!canSubmit || saving}
           onClick={() => void submit()}
         >
-          Allocate{" "}
+          {t("Allocate")}{" "}
           {previewId != null && (
-            <Mono className="text-[var(--color-bg)]">VLAN {previewId}</Mono>
+            <Mono className="text-[var(--color-bg)]">
+              {t("VLAN")}
+              {previewId}
+            </Mono>
           )}
         </Button>
       </div>

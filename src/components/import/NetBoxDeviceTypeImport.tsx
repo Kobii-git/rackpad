@@ -47,7 +47,8 @@ export function NetBoxDeviceTypeImport() {
   }, [preview]);
 
   useEffect(() => {
-    if (!canManageTemplates && importMode === "template") setImportMode("device");
+    if (!canManageTemplates && importMode === "template")
+      setImportMode("device");
   }, [canManageTemplates, importMode]);
 
   const importBlocked = useMemo(() => {
@@ -154,7 +155,7 @@ export function NetBoxDeviceTypeImport() {
         </CardTitle>
         <Badge tone="cyan">
           <FileCode2 className="size-3" />
-          preview-first import
+          {t("preview-first import")}
         </Badge>
       </CardHeader>
       <CardBody className="space-y-4">
@@ -166,7 +167,7 @@ export function NetBoxDeviceTypeImport() {
 
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]">
           <Upload className="size-4" />
-          Choose NetBox YAML
+          {t("Choose NetBox YAML")}
           <input
             type="file"
             accept=".yaml,.yml,text/yaml,text/x-yaml,application/x-yaml"
@@ -271,7 +272,12 @@ export function NetBoxDeviceTypeImport() {
                         count: String(preview.deviceDraft.portCount),
                       },
                     )
-                  : `${t("Placement")}: ${preview.deviceDraft.placement} / ${t("Interfaces")}: ${preview.deviceDraft.portCount}`}
+                  : t("{value1}: {placement} / {value3}: {portCount}", {
+                      value1: t("Placement"),
+                      placement: preview.deviceDraft.placement,
+                      value3: t("Interfaces"),
+                      portCount: preview.deviceDraft.portCount,
+                    })}
               </Mono>
             ) : (
               <Mono className="block text-[10px] text-[var(--text-tertiary)]">

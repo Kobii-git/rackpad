@@ -645,12 +645,14 @@ export default function DeviceDetail() {
     if (!device || devicePorts.length === 0) return;
     const name = window.prompt(
       t("Template name"),
-      `${device.hostname} template`,
+      t("{hostname} template", { hostname: device.hostname }),
     );
     if (!name?.trim()) return;
     const description =
-      window.prompt("Template description", `${device.hostname} port layout`) ??
-      "";
+      window.prompt(
+        t("Template description"),
+        t("{hostname} port layout", { hostname: device.hostname }),
+      ) ?? "";
     if (!description.trim()) {
       setPortToolbarError(t("Template description is required."));
       return;
@@ -700,11 +702,13 @@ export default function DeviceDetail() {
         <TopBar subtitle={t("Devices")} title={t("Not found")} />
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
-            <div className="mb-3 text-sm text-[var(--color-fg-subtle)]">{t("Device not found.")}</div>
+            <div className="mb-3 text-sm text-[var(--color-fg-subtle)]">
+              {t("Device not found.")}
+            </div>
             <Button variant="outline" size="sm" asChild>
               <Link to="/devices">
                 <ArrowLeft />
-                Back to devices
+                {t("Back to devices")}
               </Link>
             </Button>
           </div>
@@ -726,7 +730,10 @@ export default function DeviceDetail() {
     if (!device) return;
     if (
       !window.confirm(
-        `Delete ${device.hostname}? This will remove its ports and IP assignments too.`,
+        t(
+          "Delete {hostname}? This will remove its ports and IP assignments too.",
+          { hostname: device.hostname },
+        ),
       )
     ) {
       return;
@@ -864,7 +871,8 @@ export default function DeviceDetail() {
   }
 
   async function handleDeleteImage(image: DeviceImage) {
-    if (!window.confirm(`Delete image ${image.label}?`)) return;
+    if (!window.confirm(t("Delete image {label}?", { label: image.label })))
+      return;
     setImageDeletingId(image.id);
     setImageError("");
     try {
@@ -1067,7 +1075,11 @@ export default function DeviceDetail() {
 
   async function handleDeleteMonitor() {
     if (!selectedMonitor) return;
-    if (!window.confirm(`Delete monitor target "${selectedMonitor.name}"?`)) {
+    if (
+      !window.confirm(
+        t('Delete monitor target "{name}"?', { name: selectedMonitor.name }),
+      )
+    ) {
       return;
     }
 
@@ -1149,7 +1161,12 @@ export default function DeviceDetail() {
 
   async function handleDeleteService() {
     if (!selectedService) return;
-    if (!window.confirm(`Delete service "${selectedService.name}"?`)) return;
+    if (
+      !window.confirm(
+        t('Delete service "{name}"?', { name: selectedService.name }),
+      )
+    )
+      return;
     setServiceDeleting(true);
     setServiceError("");
     try {
@@ -1197,7 +1214,7 @@ export default function DeviceDetail() {
   const showMonitorPathField =
     monitorForm.type === "http" || monitorForm.type === "https";
   const showMonitorSnmpFields = monitorForm.type === "snmp";
-  const monitorTypeDescription = describeMonitorType(monitorForm.type);
+  const monitorTypeDescription = describeMonitorType(monitorForm.type, t);
   const monitorStateTone =
     device.status === "online"
       ? "ok"
@@ -1214,7 +1231,7 @@ export default function DeviceDetail() {
         subtitle={
           rack ? (
             <>
-              Devices |{" "}
+              {t("Devices")} |{" "}
               <Link
                 to={`/racks?rackId=${rack.id}`}
                 className="hover:text-[var(--color-fg-muted)]"
@@ -1261,7 +1278,7 @@ export default function DeviceDetail() {
               disabled={refreshing}
             >
               <RefreshCcw className="size-3.5" />
-              {refreshing ? "Refreshing..." : t("Refresh")}
+              {refreshing ? t("Refreshing...") : t("Refresh")}
             </Button>
             {canEdit && (
               <Button
@@ -1320,15 +1337,21 @@ export default function DeviceDetail() {
                       |
                     </span>
                     {device.placement === "shelf" && parentDevice
-                      ? `${rack.name} | shelf ${parentDevice.hostname}`
-                      : `${rack.name} ${formatRackUnit(device)}`}
+                      ? t("{name} | shelf {hostname}", {
+                          name: rack.name,
+                          hostname: parentDevice.hostname,
+                        })
+                      : t("{name} {value2}", {
+                          name: rack.name,
+                          value2: formatRackUnit(device, t),
+                        })}
                   </>
                 )}
               </div>
             </div>
             <dl className="grid grid-cols-3 gap-x-6 gap-y-1 text-[11px]">
               <Stat
-                label="Mgmt IP / MAC"
+                label={t("Mgmt IP / MAC")}
                 value={formatDeviceAddress(device)}
                 mono
               />
@@ -1341,7 +1364,7 @@ export default function DeviceDetail() {
                 label={t("Ports")}
                 value={`${linkedCount}/${devicePorts.length} linked`}
               />
-              <Stat label="IPs" value={String(displayedDeviceIpCount)} />
+              <Stat label={t("IPs")} value={String(displayedDeviceIpCount)} />
               <Stat label={t("Tags")} value={device.tags?.join(", ") ?? "-"} />
             </dl>
           </div>
@@ -1358,10 +1381,12 @@ export default function DeviceDetail() {
             </TabsTrigger>
             <TabsTrigger value="monitoring">{t("Monitoring")}</TabsTrigger>
             <TabsTrigger value="services">
-              Services | {deviceServiceList.length}
+              {t("Services |")}
+              {deviceServiceList.length}
             </TabsTrigger>
             <TabsTrigger value="images">
-              Images | {deviceImageList.length}
+              {t("Images |")}
+              {deviceImageList.length}
             </TabsTrigger>
             <TabsTrigger value="notes">{t("Notes")}</TabsTrigger>
             <TabsTrigger value="activity">{t("Activity")}</TabsTrigger>
@@ -1378,25 +1403,28 @@ export default function DeviceDetail() {
                 </CardHeader>
                 <CardBody>
                   <dl className="space-y-2 text-xs">
-                    <Row label="Manufacturer" value={device.manufacturer} />
-                    <Row label="Model" value={device.model} mono />
+                    <Row
+                      label={t("Manufacturer")}
+                      value={device.manufacturer}
+                    />
+                    <Row label={t("Model")} value={device.model} mono />
                     <Row label={t("Serial")} value={device.serial} mono />
                     <Row
                       label={t("Type")}
                       value={device.deviceType.replace("_", " ")}
                     />
                     <Row
-                      label="CPU cores"
+                      label={t("CPU cores")}
                       value={formatCapacityValue(device.cpuCores)}
                       mono
                     />
                     <Row
-                      label="Memory"
+                      label={t("Memory")}
                       value={formatCapacityUnit(device.memoryGb, "GB")}
                       mono
                     />
                     <Row
-                      label="Storage"
+                      label={t("Storage")}
                       value={formatCapacityUnit(device.storageGb, "GB")}
                       mono
                     />
@@ -1418,32 +1446,37 @@ export default function DeviceDetail() {
                 <CardBody>
                   <dl className="space-y-2 text-xs">
                     <Row
-                      label="Placement"
-                      value={formatPlacement(device.placement)}
+                      label={t("Placement")}
+                      value={formatPlacement(device.placement, t)}
                     />
-                    <Row label="Rack" value={rack?.name} />
+                    <Row label={t("Rack")} value={rack?.name} />
                     <Row
                       label={
                         device.placement === "wireless"
-                          ? "Connected AP"
+                          ? t("Connected AP")
                           : device.placement === "virtual"
-                            ? "Host device"
+                            ? t("Host device")
                             : device.placement === "shelf"
-                              ? "Rack shelf"
-                              : "Parent"
+                              ? t("Rack shelf")
+                              : t("Parent")
                       }
                       value={parentDevice?.hostname}
                     />
-                    <Row label="Face" value={device.face} />
-                    <Row label="Slot" value={formatRackSlot(device.rackSlot)} />
+                    <Row label={t("Face")} value={device.face} />
                     <Row
-                      label="U position"
+                      label={t("Slot")}
+                      value={formatRackSlot(device.rackSlot, t)}
+                    />
+                    <Row
+                      label={t("U position")}
                       value={
-                        device.startU ? formatRackUnit(device, true) : undefined
+                        device.startU
+                          ? formatRackUnit(device, t, true)
+                          : undefined
                       }
                     />
                     <Row
-                      label="Last seen"
+                      label={t("Last seen")}
                       value={relativeTime(device.lastSeen)}
                     />
                   </dl>
@@ -1456,8 +1489,8 @@ export default function DeviceDetail() {
                       <CardLabel>{t("Relationships")}</CardLabel>
                       <CardHeading>
                         {device.deviceType === "ap"
-                          ? "Connected clients"
-                          : "Hosted / child devices"}
+                          ? t("Connected clients")
+                          : t("Hosted / child devices")}
                       </CardHeading>
                     </CardTitle>
                   </CardHeader>
@@ -1467,15 +1500,15 @@ export default function DeviceDetail() {
                       device.storageGb) && (
                       <div className="mb-3 grid gap-2 md:grid-cols-3">
                         <SummaryPill
-                          label="CPU"
+                          label={t("CPU")}
                           value={`${formatCapacityValue(childCapacity.cpu)} / ${formatCapacityValue(device.cpuCores)}`}
                         />
                         <SummaryPill
-                          label="Memory"
+                          label={t("Memory")}
                           value={`${formatCapacityValue(childCapacity.memory)} / ${formatCapacityValue(device.memoryGb)} GB`}
                         />
                         <SummaryPill
-                          label="Storage"
+                          label={t("Storage")}
                           value={`${formatCapacityValue(childCapacity.storage)} / ${formatCapacityValue(device.storageGb)} GB`}
                         />
                       </div>
@@ -1501,7 +1534,7 @@ export default function DeviceDetail() {
                             <div className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
                               {child.displayName ||
                                 formatDeviceAddress(child) ||
-                                formatPlacement(child.placement)}
+                                formatPlacement(child.placement, t)}
                             </div>
                           </Link>
                         ))}
@@ -1605,11 +1638,12 @@ export default function DeviceDetail() {
                             >
                               {portTemplateApplying
                                 ? t("Saving...")
-                                : "Apply template"}
+                                : t("Apply template")}
                             </Button>
                           </>
                         ) : null}
-                        {devicePorts.length > 0 && currentUser?.role === "admin" ? (
+                        {devicePorts.length > 0 &&
+                        currentUser?.role === "admin" ? (
                           <Button
                             size="sm"
                             variant="outline"
@@ -1642,7 +1676,9 @@ export default function DeviceDetail() {
                     <CardBody>
                       <EmptyState
                         title={t("No ports documented")}
-                        description="Add or template ports for this device to inspect cabling, VLANs, and interface notes here."
+                        description={t(
+                          "Add or template ports for this device to inspect cabling, VLANs, and interface notes here.",
+                        )}
                       />
                       <div className="mt-3 flex justify-center">
                         <Button variant="outline" size="sm" asChild>
@@ -1703,7 +1739,9 @@ export default function DeviceDetail() {
                     <CardHeader>
                       <CardTitle>
                         <CardLabel>{t("Interfaces")}</CardLabel>
-                        <CardHeading>{devicePorts.length} ports</CardHeading>
+                        <CardHeading>
+                          {devicePorts.length} {t("ports")}
+                        </CardHeading>
                       </CardTitle>
                     </CardHeader>
                     <CardBody className="p-0">
@@ -1785,7 +1823,7 @@ export default function DeviceDetail() {
                 </CardHeader>
                 <CardBody className="space-y-3">
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-                    <Field label="Subnet">
+                    <Field label={t("Subnet")}>
                       <Select
                         value={networkForm.subnetId}
                         onChange={(value) => setNetworkField("subnetId", value)}
@@ -1799,7 +1837,7 @@ export default function DeviceDetail() {
                         ))}
                       </Select>
                     </Field>
-                    <Field label="IP address">
+                    <Field label={t("IP address")}>
                       <Input
                         value={networkForm.ipAddress}
                         onChange={(event) =>
@@ -1820,13 +1858,15 @@ export default function DeviceDetail() {
                       >
                         <option value="interface">{t("Interface")}</option>
                         <option value="device">{t("Device")}</option>
-                        <option value="infrastructure">{t("Infrastructure")}</option>
+                        <option value="infrastructure">
+                          {t("Infrastructure")}
+                        </option>
                         <option value="reserved">{t("Reserved")}</option>
                         <option value="vm">{t("VM")}</option>
                         <option value="container">{t("Container")}</option>
                       </Select>
                     </Field>
-                    <Field label="Allocation">
+                    <Field label={t("Allocation")}>
                       <Select
                         value={networkForm.allocationMode}
                         onChange={(value) =>
@@ -1837,10 +1877,12 @@ export default function DeviceDetail() {
                         }
                       >
                         <option value="static">{t("Static")}</option>
-                        <option value="dhcp-reservation">{t("DHCP reservation")}</option>
+                        <option value="dhcp-reservation">
+                          {t("DHCP reservation")}
+                        </option>
                       </Select>
                     </Field>
-                    <Field label="DHCP scope">
+                    <Field label={t("DHCP scope")}>
                       <Select
                         value={networkForm.dhcpScopeId}
                         onChange={(value) =>
@@ -1858,7 +1900,7 @@ export default function DeviceDetail() {
                         ))}
                       </Select>
                     </Field>
-                    <Field label="Port">
+                    <Field label={t("Port")}>
                       <Select
                         value={networkForm.portId}
                         onChange={(value) => setNetworkField("portId", value)}
@@ -1891,10 +1933,10 @@ export default function DeviceDetail() {
                       {networkSaving
                         ? editingAssignmentId
                           ? t("Saving...")
-                          : "Assigning..."
+                          : t("Assigning...")
                         : editingAssignmentId
                           ? t("Update IP")
-                          : "Assign IP"}
+                          : t("Assign IP")}
                     </Button>
                   </div>
                   {networkError && (
@@ -1915,7 +1957,9 @@ export default function DeviceDetail() {
               <CardBody className="p-0">
                 <div className="divide-y divide-[var(--color-line)]">
                   {displayedDeviceIpCount === 0 ? (
-                    <div className="px-4 py-6 text-center text-xs text-[var(--color-fg-subtle)]">{t("No IPs assigned to this device.")}</div>
+                    <div className="px-4 py-6 text-center text-xs text-[var(--color-fg-subtle)]">
+                      {t("No IPs assigned to this device.")}
+                    </div>
                   ) : (
                     <>
                       {hostSharedAssignment && parentDevice && (
@@ -1925,9 +1969,13 @@ export default function DeviceDetail() {
                           </Mono>
                           <div className="col-span-3 text-xs">
                             {parentDevice.hostname}
-                            <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">{t("shared parent address")}</Mono>
+                            <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">
+                              {t("shared parent address")}
+                            </Mono>
                           </div>
-                          <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">{t("Host-network child using parent host IP")}</div>
+                          <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">
+                            {t("Host-network child using parent host IP")}
+                          </div>
                           <div className="col-span-2 flex items-center justify-end">
                             <Badge tone="neutral">{t("host network")}</Badge>
                           </div>
@@ -1986,8 +2034,8 @@ export default function DeviceDetail() {
                                 onClick={() => void handleUnassignIp(ip.id)}
                               >
                                 {releasingId === ip.id
-                                  ? "Releasing..."
-                                  : "Unassign"}
+                                  ? t("Releasing...")
+                                  : t("Unassign")}
                               </Button>
                             </div>
                           </div>
@@ -2012,21 +2060,22 @@ export default function DeviceDetail() {
                     {device.status}
                   </Badge>
                   <Badge tone="neutral">
-                    {activeMonitorCount}/{deviceMonitorList.length} active
-                    targets
+                    {activeMonitorCount}/{deviceMonitorList.length}{" "}
+                    {t("active targets")}
                   </Badge>
                 </div>
               </CardHeader>
               <CardBody className="space-y-4">
                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-fg-subtle)]">
-                  Rackpad runs these checks from the server or Docker container
-                  itself. A device stays
-                  <span className="mx-1 font-mono text-[var(--color-fg)]">{t("unknown")}</span>
-                  until at least one enabled target has run. For near-real-time
-                  link events, forward SNMP v1/v2c or SNMPv3 traps to this
-                  Rackpad host on UDP port 1162 (or map host 162 → container
-                  1162). SNMPv3 traps require a matching lab credential on the
-                  trap source, device, or SNMP monitor.
+                  {t(
+                    "Rackpad runs these checks from the server or Docker container itself. A device stays",
+                  )}
+                  <span className="mx-1 font-mono text-[var(--color-fg)]">
+                    {t("unknown")}
+                  </span>
+                  {t(
+                    "until at least one enabled target has run. For near-real-time link events, forward SNMP v1/v2c or SNMPv3 traps to this Rackpad host on UDP port 1162 (or map host 162 → container 1162). SNMPv3 traps require a matching lab credential on the trap source, device, or SNMP monitor.",
+                  )}
                 </div>
 
                 {canManageMonitoring && device?.labId && (
@@ -2059,7 +2108,11 @@ export default function DeviceDetail() {
                 )}
 
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2">
-                  <div className="text-sm text-[var(--color-fg-subtle)]">{t("Use separate targets for management IPs, storage NICs, service ports, or VIPs on the same device.")}</div>
+                  <div className="text-sm text-[var(--color-fg-subtle)]">
+                    {t(
+                      "Use separate targets for management IPs, storage NICs, service ports, or VIPs on the same device.",
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
@@ -2073,8 +2126,8 @@ export default function DeviceDetail() {
                     >
                       <ShieldCheck className="size-3.5" />
                       {allMonitorsRunning
-                        ? "Running all..."
-                        : "Run all targets"}
+                        ? t("Running all...")
+                        : t("Run all targets")}
                     </Button>
                     {canManageMonitoring && (
                       <Button
@@ -2089,8 +2142,8 @@ export default function DeviceDetail() {
                       >
                         <RefreshCcw className="size-3.5" />
                         {snmpDiscoverLoading
-                          ? "Discovering..."
-                          : "Discover SNMP interfaces"}
+                          ? t("Discovering...")
+                          : t("Discover SNMP interfaces")}
                       </Button>
                     )}
                     {canManageMonitoring && (
@@ -2100,7 +2153,7 @@ export default function DeviceDetail() {
                         onClick={startNewMonitor}
                       >
                         <Plus className="size-3.5" />
-                        Add target
+                        {t("Add target")}
                       </Button>
                     )}
                   </div>
@@ -2117,8 +2170,10 @@ export default function DeviceDetail() {
                       <>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="text-sm text-[var(--color-fg)]">
-                            Found {snmpInterfaces.length} SNMP interface
-                            {snmpInterfaces.length === 1 ? "" : "s"} via IF-MIB.
+                            {t("Found")}
+                            {snmpInterfaces.length} {t("SNMP interface")}
+                            {snmpInterfaces.length === 1 ? "" : t("s")}{" "}
+                            {t("via IF-MIB.")}
                           </div>
                           <Button
                             size="sm"
@@ -2126,8 +2181,8 @@ export default function DeviceDetail() {
                             disabled={snmpImportLoading}
                           >
                             {snmpImportLoading
-                              ? "Creating monitors..."
-                              : "Create ifOperStatus monitors"}
+                              ? t("Creating monitors...")
+                              : t("Create ifOperStatus monitors")}
                           </Button>
                         </div>
                         <div className="max-h-48 space-y-1 overflow-y-auto text-xs text-[var(--color-fg-subtle)]">
@@ -2137,25 +2192,31 @@ export default function DeviceDetail() {
                               className="flex items-center justify-between gap-3 rounded border border-[var(--color-line)] px-2 py-1"
                             >
                               <span className="min-w-0 flex-1 truncate">
-                                {entry.name || entry.descr} (ifIndex{" "}
+                                {entry.name || entry.descr} {t("(ifIndex")}{" "}
                                 {entry.ifIndex})
                                 {entry.matchedPortName ? (
                                   <span className="ml-2 text-[var(--accent-secondary)]">
                                     → {entry.matchedPortName}
                                   </span>
                                 ) : (
-                                  <span className="ml-2 text-[var(--text-muted)]">{t("· no port match")}</span>
+                                  <span className="ml-2 text-[var(--text-muted)]">
+                                    {t("· no port match")}
+                                  </span>
                                 )}
                                 {entry.highSpeedMbps ? (
                                   <span className="ml-2 font-mono text-[var(--text-tertiary)]">
                                     {entry.highSpeedMbps >= 1000
-                                      ? `${entry.highSpeedMbps / 1000}G`
-                                      : `${entry.highSpeedMbps}M`}
+                                      ? t("{value1}G", {
+                                          value1: entry.highSpeedMbps / 1000,
+                                        })
+                                      : t("{highSpeedMbps}M", {
+                                          highSpeedMbps: entry.highSpeedMbps,
+                                        })}
                                   </span>
                                 ) : null}
                               </span>
                               <span className="shrink-0 font-mono">
-                                {entry.operStatusLabel ?? "unknown"}
+                                {entry.operStatusLabel ?? t("unknown")}
                               </span>
                             </div>
                           ))}
@@ -2168,7 +2229,9 @@ export default function DeviceDetail() {
                 <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
                   <div className="space-y-2">
                     {deviceMonitorList.length === 0 ? (
-                      <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-4 text-sm text-[var(--color-fg-subtle)]">{t("No monitor targets documented yet.")}</div>
+                      <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-4 text-sm text-[var(--color-fg-subtle)]">
+                        {t("No monitor targets documented yet.")}
+                      </div>
                     ) : (
                       deviceMonitorList.map((entry) => (
                         <button
@@ -2195,16 +2258,20 @@ export default function DeviceDetail() {
                                     : "neutral"
                               }
                             >
-                              {entry.lastResult ?? "unknown"}
+                              {entry.lastResult ?? t("unknown")}
                             </Badge>
                           </div>
                           <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
                             {entry.type}
-                            {entry.target ? ` | ${entry.target}` : ""}
-                            {entry.port ? `:${entry.port}` : ""}
+                            {entry.target
+                              ? t("| {target}", { target: entry.target })
+                              : ""}
+                            {entry.port
+                              ? t(":{port}", { port: entry.port })
+                              : ""}
                           </div>
                           <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
-                            {entry.lastMessage ?? "No checks have run yet."}
+                            {entry.lastMessage ?? t("No checks have run yet.")}
                           </div>
                         </button>
                       ))
@@ -2215,12 +2282,14 @@ export default function DeviceDetail() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                          {selectedMonitor ? "Monitor editor" : "New target"}
+                          {selectedMonitor
+                            ? t("Monitor editor")
+                            : t("New target")}
                         </div>
                         <div className="text-base font-medium text-[var(--color-fg)]">
                           {selectedMonitor
                             ? selectedMonitor.name
-                            : "Create a new monitor target"}
+                            : t("Create a new monitor target")}
                         </div>
                       </div>
                       {selectedMonitor && (
@@ -2233,7 +2302,7 @@ export default function DeviceDetail() {
                                 : "neutral"
                           }
                         >
-                          {selectedMonitor.lastResult ?? "unknown"}
+                          {selectedMonitor.lastResult ?? t("unknown")}
                         </Badge>
                       )}
                     </div>
@@ -2250,7 +2319,7 @@ export default function DeviceDetail() {
                           }))
                         }
                       />
-                      Enable health checks for this target
+                      {t("Enable health checks for this target")}
                     </label>
 
                     <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-fg-subtle)]">
@@ -2290,7 +2359,7 @@ export default function DeviceDetail() {
                           <option value="snmp">{t("snmp")}</option>
                         </Select>
                       </Field>
-                      <Field label="Target">
+                      <Field label={t("Target")}>
                         <Input
                           value={monitorForm.target}
                           disabled={!canManageMonitoring}
@@ -2303,7 +2372,7 @@ export default function DeviceDetail() {
                           placeholder={t("10.0.10.12 or host.example")}
                         />
                       </Field>
-                      <Field label="Every (minutes)">
+                      <Field label={t("Every (minutes)")}>
                         <Input
                           value={monitorForm.intervalMinutes}
                           disabled={!canManageMonitoring}
@@ -2320,7 +2389,7 @@ export default function DeviceDetail() {
 
                     <div className="grid gap-4 md:grid-cols-2">
                       {showMonitorPortField && (
-                        <Field label="Port">
+                        <Field label={t("Port")}>
                           <Input
                             value={monitorForm.port}
                             disabled={!canManageMonitoring}
@@ -2343,7 +2412,7 @@ export default function DeviceDetail() {
                         </Field>
                       )}
                       {showMonitorPathField && (
-                        <Field label="HTTP path">
+                        <Field label={t("HTTP path")}>
                           <Input
                             value={monitorForm.path}
                             disabled={!canManageMonitoring}
@@ -2361,7 +2430,7 @@ export default function DeviceDetail() {
 
                     {showMonitorSnmpFields && (
                       <div className="grid gap-4 md:grid-cols-2">
-                        <Field label="OID preset">
+                        <Field label={t("OID preset")}>
                           <Select
                             value=""
                             disabled={!canManageMonitoring}
@@ -2398,7 +2467,7 @@ export default function DeviceDetail() {
                             ))}
                           </Select>
                         </Field>
-                        <Field label="Match mode">
+                        <Field label={t("Match mode")}>
                           <Select
                             value={monitorForm.snmpMatchMode}
                             disabled={!canManageMonitoring}
@@ -2417,7 +2486,7 @@ export default function DeviceDetail() {
                             ))}
                           </Select>
                         </Field>
-                        <Field label="Linked port">
+                        <Field label={t("Linked port")}>
                           <Select
                             value={monitorForm.portId}
                             disabled={!canManageMonitoring}
@@ -2450,13 +2519,15 @@ export default function DeviceDetail() {
                               <option key={port.id} value={port.id}>
                                 {port.name}
                                 {port.snmpIfIndex != null
-                                  ? ` (ifIndex ${port.snmpIfIndex})`
+                                  ? t("(ifIndex {snmpIfIndex})", {
+                                      snmpIfIndex: port.snmpIfIndex,
+                                    })
                                   : ""}
                               </option>
                             ))}
                           </Select>
                         </Field>
-                        <Field label="ifIndex">
+                        <Field label={t("ifIndex")}>
                           <Input
                             value={monitorForm.snmpIfIndex}
                             disabled={!canManageMonitoring}
@@ -2469,7 +2540,7 @@ export default function DeviceDetail() {
                             placeholder={t("Optional SNMP ifIndex")}
                           />
                         </Field>
-                        <Field label="Credential">
+                        <Field label={t("Credential")}>
                           <Select
                             value={monitorForm.snmpCredentialId}
                             disabled={!canManageMonitoring}
@@ -2480,15 +2551,18 @@ export default function DeviceDetail() {
                               }))
                             }
                           >
-                            <option value="">{t("Inline community / version")}</option>
+                            <option value="">
+                              {t("Inline community / version")}
+                            </option>
                             {snmpCredentials.map((credential) => (
                               <option key={credential.id} value={credential.id}>
-                                {credential.name} (v{credential.version})
+                                {credential.name} {t("(v")}
+                                {credential.version})
                               </option>
                             ))}
                           </Select>
                         </Field>
-                        <Field label="SNMP version">
+                        <Field label={t("SNMP version")}>
                           <Select
                             value={monitorForm.snmpVersion}
                             disabled={
@@ -2507,7 +2581,7 @@ export default function DeviceDetail() {
                             <option value="1">{t("v1")}</option>
                           </Select>
                         </Field>
-                        <Field label="Community">
+                        <Field label={t("Community")}>
                           <Input
                             value={monitorForm.snmpCommunity}
                             disabled={
@@ -2523,7 +2597,7 @@ export default function DeviceDetail() {
                             placeholder={t("public")}
                           />
                         </Field>
-                        <Field label="OID">
+                        <Field label={t("OID")}>
                           <Input
                             value={monitorForm.snmpOid}
                             disabled={!canManageMonitoring}
@@ -2536,7 +2610,7 @@ export default function DeviceDetail() {
                             placeholder=".1.3.6.1.2.1.2.2.1.8.1"
                           />
                         </Field>
-                        <Field label="Expected value">
+                        <Field label={t("Expected value")}>
                           <Input
                             value={monitorForm.snmpExpectedValue}
                             disabled={!canManageMonitoring}
@@ -2546,7 +2620,9 @@ export default function DeviceDetail() {
                                 snmpExpectedValue: event.target.value,
                               }))
                             }
-                            placeholder={t("Optional, e.g. 1 for ifOperStatus up")}
+                            placeholder={t(
+                              "Optional, e.g. 1 for ifOperStatus up",
+                            )}
                           />
                         </Field>
                       </div>
@@ -2554,7 +2630,7 @@ export default function DeviceDetail() {
 
                     <div className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4 md:grid-cols-3">
                       <MonitorStat
-                        label="Last check"
+                        label={t("Last check")}
                         value={
                           selectedMonitor?.lastCheckAt
                             ? new Date(
@@ -2564,11 +2640,11 @@ export default function DeviceDetail() {
                         }
                       />
                       <MonitorStat
-                        label="Last result"
+                        label={t("Last result")}
                         value={selectedMonitor?.lastResult ?? "unknown"}
                       />
                       <MonitorStat
-                        label="Message"
+                        label={t("Message")}
                         value={
                           selectedMonitor?.lastMessage ??
                           "No checks have run yet."
@@ -2585,7 +2661,11 @@ export default function DeviceDetail() {
                 )}
 
                 {!canManageMonitoring && (
-                  <div className="rounded-[var(--radius-sm)] border border-[var(--color-info)]/30 bg-[var(--color-info-bg)] px-3 py-2 text-sm text-[var(--color-info)]">{t("Only administrators can create, edit, delete, or run active monitor targets.")}</div>
+                  <div className="rounded-[var(--radius-sm)] border border-[var(--color-info)]/30 bg-[var(--color-info-bg)] px-3 py-2 text-sm text-[var(--color-info)]">
+                    {t(
+                      "Only administrators can create, edit, delete, or run active monitor targets.",
+                    )}
+                  </div>
                 )}
 
                 <div className="flex items-center justify-end gap-2">
@@ -2598,7 +2678,7 @@ export default function DeviceDetail() {
                     }
                   >
                     <ShieldCheck className="size-3.5" />
-                    {monitorRunning ? "Running..." : "Run now"}
+                    {monitorRunning ? t("Running...") : t("Run now")}
                   </Button>
                   {canManageMonitoring && selectedMonitor && (
                     <Button
@@ -2608,7 +2688,7 @@ export default function DeviceDetail() {
                       disabled={monitorDeleting}
                     >
                       <Trash2 className="size-3.5" />
-                      {monitorDeleting ? "Deleting..." : "Delete target"}
+                      {monitorDeleting ? t("Deleting...") : t("Delete target")}
                     </Button>
                   )}
                   {canManageMonitoring && (
@@ -2619,10 +2699,10 @@ export default function DeviceDetail() {
                     >
                       <Save className="size-3.5" />
                       {monitorSaving
-                        ? "Saving..."
+                        ? t("Saving...")
                         : selectedMonitor
-                          ? "Save target"
-                          : "Create target"}
+                          ? t("Save target")
+                          : t("Create target")}
                     </Button>
                   )}
                 </div>
@@ -2642,7 +2722,7 @@ export default function DeviceDetail() {
                 {canManageMonitoring && (
                   <Button variant="outline" size="sm" onClick={startNewService}>
                     <Plus className="size-3.5" />
-                    Add service
+                    {t("Add service")}
                   </Button>
                 )}
               </CardHeader>
@@ -2692,12 +2772,14 @@ export default function DeviceDetail() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                          {selectedService ? "Service editor" : "New service"}
+                          {selectedService
+                            ? t("Service editor")
+                            : t("New service")}
                         </div>
                         <div className="text-base font-medium text-[var(--color-fg)]">
                           {selectedService
                             ? selectedService.name
-                            : "Document a service on this device"}
+                            : t("Document a service on this device")}
                         </div>
                       </div>
                       {selectedService && (
@@ -2736,7 +2818,7 @@ export default function DeviceDetail() {
                           ))}
                         </Select>
                       </Field>
-                      <Field label="IP">
+                      <Field label={t("IP")}>
                         <Select
                           value={serviceForm.ipAssignmentId}
                           disabled={!canManageMonitoring}
@@ -2754,7 +2836,7 @@ export default function DeviceDetail() {
                           ))}
                         </Select>
                       </Field>
-                      <Field label="Port">
+                      <Field label={t("Port")}>
                         <Select
                           value={serviceForm.portId}
                           disabled={!canManageMonitoring}
@@ -2768,7 +2850,7 @@ export default function DeviceDetail() {
                           ))}
                         </Select>
                       </Field>
-                      <Field label="VLAN">
+                      <Field label={t("VLAN")}>
                         <Select
                           value={serviceForm.vlanId}
                           disabled={!canManageMonitoring}
@@ -2777,12 +2859,13 @@ export default function DeviceDetail() {
                           <option value="">{t("No VLAN link")}</option>
                           {vlans.map((vlan) => (
                             <option key={vlan.id} value={vlan.id}>
-                              VLAN {vlan.vlanId} · {vlan.name}
+                              {t("VLAN")}
+                              {vlan.vlanId} · {vlan.name}
                             </option>
                           ))}
                         </Select>
                       </Field>
-                      <Field label="Monitor">
+                      <Field label={t("Monitor")}>
                         <Select
                           value={serviceForm.monitorId}
                           disabled={!canManageMonitoring}
@@ -2800,7 +2883,7 @@ export default function DeviceDetail() {
                       </Field>
                     </div>
 
-                    <Field label="URL">
+                    <Field label={t("URL")}>
                       <Input
                         value={serviceForm.url}
                         disabled={!canManageMonitoring}
@@ -2810,7 +2893,7 @@ export default function DeviceDetail() {
                         placeholder={t("https://host.example:8443/")}
                       />
                     </Field>
-                    <Field label="Notes">
+                    <Field label={t("Notes")}>
                       <textarea
                         value={serviceForm.notes}
                         disabled={!canManageMonitoring}
@@ -2819,7 +2902,9 @@ export default function DeviceDetail() {
                         }
                         rows={3}
                         className="rk-control rk-textarea w-full text-sm"
-                        placeholder={t("Owner, role, dependencies, or failover notes...")}
+                        placeholder={t(
+                          "Owner, role, dependencies, or failover notes...",
+                        )}
                       />
                     </Field>
 
@@ -2838,7 +2923,9 @@ export default function DeviceDetail() {
                           disabled={serviceDeleting}
                         >
                           <Trash2 className="size-3.5" />
-                          {serviceDeleting ? "Deleting..." : "Delete service"}
+                          {serviceDeleting
+                            ? t("Deleting...")
+                            : t("Delete service")}
                         </Button>
                       )}
                       {canManageMonitoring && (
@@ -2849,10 +2936,10 @@ export default function DeviceDetail() {
                         >
                           <Save className="size-3.5" />
                           {serviceSaving
-                            ? "Saving..."
+                            ? t("Saving...")
                             : selectedService
-                              ? "Save service"
-                              : "Create service"}
+                              ? t("Save service")
+                              : t("Create service")}
                         </Button>
                       )}
                     </div>
@@ -2891,7 +2978,7 @@ export default function DeviceDetail() {
                     />
                     <div className="flex items-center justify-between gap-3">
                       <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
-                        {imageSizeLimitLabel()} max
+                        {imageSizeLimitLabel()} {t("max")}
                       </Mono>
                       <Button
                         size="sm"
@@ -2899,7 +2986,7 @@ export default function DeviceDetail() {
                         disabled={imageSaving}
                       >
                         <ImagePlus className="size-3.5" />
-                        {imageSaving ? "Adding..." : "Choose image"}
+                        {imageSaving ? t("Adding...") : t("Choose image")}
                       </Button>
                     </div>
                   </CardBody>
@@ -2914,7 +3001,9 @@ export default function DeviceDetail() {
                 <CardHeader>
                   <CardTitle>
                     <CardLabel>{t("Reference")}</CardLabel>
-                    <CardHeading>{deviceImageList.length} images</CardHeading>
+                    <CardHeading>
+                      {deviceImageList.length} {t("images")}
+                    </CardHeading>
                   </CardTitle>
                 </CardHeader>
                 <CardBody>
@@ -2950,7 +3039,9 @@ export default function DeviceDetail() {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleOpenImage(image)}
-                                  aria-label={`Open ${image.label} larger`}
+                                  aria-label={t("Open {label} larger", {
+                                    label: image.label,
+                                  })}
                                 >
                                   <ExternalLink />
                                 </Button>
@@ -2958,7 +3049,9 @@ export default function DeviceDetail() {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleDownloadImage(image)}
-                                  aria-label={`Download ${image.label}`}
+                                  aria-label={t("Download {label}", {
+                                    label: image.label,
+                                  })}
                                 >
                                   <Download />
                                 </Button>
@@ -2970,7 +3063,9 @@ export default function DeviceDetail() {
                                       void handleDeleteImage(image)
                                     }
                                     disabled={imageDeletingId === image.id}
-                                    aria-label={`Delete ${image.label}`}
+                                    aria-label={t("Delete {label}", {
+                                      label: image.label,
+                                    })}
                                   >
                                     <Trash2 />
                                   </Button>
@@ -3009,7 +3104,7 @@ export default function DeviceDetail() {
                     onClick={() => setDrawerOpen(true)}
                   >
                     <Pencil className="size-3.5" />
-                    Edit notes
+                    {t("Edit notes")}
                   </Button>
                 )}
               </CardHeader>
@@ -3044,7 +3139,7 @@ export default function DeviceDetail() {
                   disabled={activityLoading}
                 >
                   <RefreshCcw className="size-3.5" />
-                  {activityLoading ? "Loading..." : "Load more"}
+                  {activityLoading ? t("Loading...") : t("Load more")}
                 </Button>
               </CardHeader>
               <CardBody className="p-0">
@@ -3328,47 +3423,72 @@ function monitorToForm(monitor: DeviceMonitor, device: Device): MonitorForm {
   };
 }
 
-function describeMonitorType(type: MonitorForm["type"]) {
+function describeMonitorType(
+  type: MonitorForm["type"],
+  t: ReturnType<typeof useI18n>["t"],
+) {
   switch (type) {
     case "icmp":
-      return 'ICMP is best for simple reachability. It answers "can the Rackpad server or container reach this host on the network?"';
+      return t(
+        'ICMP is best for simple reachability. It answers "can the Rackpad server or container reach this host on the network?"',
+      );
     case "tcp":
-      return "TCP checks a specific service port from the Rackpad server. Port 22 only shows online when SSH itself is reachable from the server or container.";
+      return t(
+        "TCP checks a specific service port from the Rackpad server. Port 22 only shows online when SSH itself is reachable from the server or container.",
+      );
     case "http":
-      return "HTTP checks fetch a URL from the Rackpad server and expect a successful response.";
+      return t(
+        "HTTP checks fetch a URL from the Rackpad server and expect a successful response.",
+      );
     case "https":
-      return "HTTPS checks fetch a secure URL from the Rackpad server and expect a successful response.";
+      return t(
+        "HTTPS checks fetch a secure URL from the Rackpad server and expect a successful response.",
+      );
     case "snmp":
-      return "SNMP polls one OID from the Rackpad server. Use an expected value for interface checks, such as ifOperStatus = 1 for up.";
+      return t(
+        "SNMP polls one OID from the Rackpad server. Use an expected value for interface checks, such as ifOperStatus = 1 for up.",
+      );
     default:
-      return "Choose a monitor type to enable automated health checks for this device.";
+      return t(
+        "Choose a monitor type to enable automated health checks for this device.",
+      );
   }
 }
 
-function formatPlacement(placement?: Device["placement"]) {
+function formatPlacement(
+  placement: Device["placement"] | undefined,
+  t: ReturnType<typeof useI18n>["t"],
+) {
   switch (placement) {
     case "rack":
-      return "Rack mounted";
+      return t("Rack mounted");
     case "wireless":
-      return "WiFi linked";
+      return t("WiFi / AP linked");
     case "virtual":
-      return "Virtual";
+      return t("Virtual");
     case "shelf":
-      return "On rack shelf";
+      return t("On this shelf / tray");
     case "room":
-      return "Loose / room";
+      return t("Loose / room");
     default:
-      return "Loose / room";
+      return t("Loose / room");
   }
 }
 
-function formatRackSlot(slot?: Device["rackSlot"]) {
-  if (slot === "left") return "Left half";
-  if (slot === "right") return "Right half";
-  return "Full width";
+function formatRackSlot(
+  slot: Device["rackSlot"] | undefined,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  if (slot === "left") return t("Left half");
+  if (slot === "right") return t("Right half");
+  return t("Full width");
 }
 
-function formatRackUnit(device: Device, includeHeight = false) {
+function formatRackUnit(
+  device: Device,
+  t: ReturnType<typeof useI18n>["t"],
+  includeHeight = false,
+) {
   if (!device.startU) return "";
   const heightU = device.heightU ?? 1;
   const range =
@@ -3378,7 +3498,7 @@ function formatRackUnit(device: Device, includeHeight = false) {
   const slot =
     (device.rackSlot ?? "full") === "full"
       ? ""
-      : ` | ${formatRackSlot(device.rackSlot)}`;
+      : ` | ${formatRackSlot(device.rackSlot, t)}`;
   return includeHeight ? `${range}${slot} (${heightU}U)` : `${range}${slot}`;
 }
 

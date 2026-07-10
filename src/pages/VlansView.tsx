@@ -244,7 +244,9 @@ export default function VlansView() {
     return next
       .filter((vlan) => {
         if (!normalizedQuery) return true;
-        const linkedSubnets = subnets.filter((entry) => entry.vlanId === vlan.id);
+        const linkedSubnets = subnets.filter(
+          (entry) => entry.vlanId === vlan.id,
+        );
         const haystack = [
           vlan.vlanId,
           vlan.name,
@@ -299,7 +301,10 @@ export default function VlansView() {
   async function handleDeleteVlan(id: string, name: string, vlanId: number) {
     if (
       !window.confirm(
-        `Delete VLAN ${vlanId} (${name})? Any linked subnet will become unassigned.`,
+        t(
+          "Delete VLAN {vlanId} ({name})? Any linked subnet will become unassigned.",
+          { vlanId: vlanId, name: name },
+        ),
       )
     ) {
       return;
@@ -350,7 +355,12 @@ export default function VlansView() {
 
   async function handleDeleteRange() {
     if (!selectedRange) return;
-    if (!window.confirm(`Delete VLAN range ${selectedRange.name}?`)) return;
+    if (
+      !window.confirm(
+        t("Delete VLAN range {name}?", { name: selectedRange.name }),
+      )
+    )
+      return;
 
     setRangeDeleting(true);
     setRangeError("");
@@ -408,14 +418,12 @@ export default function VlansView() {
         return;
       }
 
-      let vlan:
-        | {
-            vlanId: number;
-            name: string;
-            description?: string;
-            color?: string;
-          }
-        | null = null;
+      let vlan: {
+        vlanId: number;
+        name: string;
+        description?: string;
+        color?: string;
+      } | null = null;
       if (networkForm.mode === "tagged") {
         const parsedVlanId = Number.parseInt(networkForm.vlanId, 10);
         if (!Number.isFinite(parsedVlanId)) {
@@ -447,21 +455,15 @@ export default function VlansView() {
         return;
       }
 
-      let dhcpScope:
-        | {
-            name: string;
-            startIp: string;
-            endIp: string;
-            gateway?: string;
-            dnsServers?: string[];
-            description?: string;
-          }
-        | null = null;
-      if (
-        networkForm.enableDhcp &&
-        dhcpStartIp &&
-        dhcpEndIp
-      ) {
+      let dhcpScope: {
+        name: string;
+        startIp: string;
+        endIp: string;
+        gateway?: string;
+        dnsServers?: string[];
+        description?: string;
+      } | null = null;
+      if (networkForm.enableDhcp && dhcpStartIp && dhcpEndIp) {
         dhcpScope = {
           name:
             networkForm.dhcpName.trim() ||
@@ -562,8 +564,9 @@ export default function VlansView() {
         title={t("VLANs")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {vlans.length} VLANs | {ranges.length} ranges | {totalReserved} IDs
-            reserved
+            {vlans.length} {t("VLANs |")}
+            {ranges.length} {t("ranges |")}
+            {totalReserved} {t("IDs reserved")}
           </span>
         }
         actions={
@@ -590,7 +593,7 @@ export default function VlansView() {
                 }}
               >
                 <Plus className="size-3.5" />
-                Add VLAN range
+                {t("Add VLAN range")}
               </Button>
               <AllocatePanel
                 defaultTab="vlan"
@@ -922,9 +925,9 @@ export default function VlansView() {
                   onClick={() => {
                     setCreatingNetwork(false);
                     setNetworkForm(EMPTY_NETWORK_FORM);
-                  setNetworkError("");
-                }}
-              >
+                    setNetworkError("");
+                  }}
+                >
                   {t("Cancel")}
                 </Button>
                 <Button
@@ -947,7 +950,7 @@ export default function VlansView() {
               <CardHeading>{t("Reserved VLAN ID space | 1-4094")}</CardHeading>
             </CardTitle>
             <Mono className="text-[11px] text-[var(--color-fg-subtle)]">
-              {totalUsed} / {totalReserved} used in reserved ranges
+              {totalUsed} / {totalReserved} {t("used in reserved ranges")}
             </Mono>
           </CardHeader>
           <CardBody>
@@ -967,7 +970,9 @@ export default function VlansView() {
           <CardHeader>
             <CardTitle>
               <CardLabel>{t("Documented VLAN ID ranges")}</CardLabel>
-              <CardHeading>{filteredRanges.length} ranges</CardHeading>
+              <CardHeading>
+                {filteredRanges.length} {t("ranges")}
+              </CardHeading>
             </CardTitle>
           </CardHeader>
           <CardBody className="p-0">
@@ -978,27 +983,37 @@ export default function VlansView() {
                     sortKey="name"
                     sort={rangeSort}
                     onSort={handleRangeSort}
-                  >{t("Range")}</SortableHeader>
+                  >
+                    {t("Range")}
+                  </SortableHeader>
                   <SortableHeader
                     sortKey="ids"
                     sort={rangeSort}
                     onSort={handleRangeSort}
-                  >{t("IDs")}</SortableHeader>
+                  >
+                    {t("IDs")}
+                  </SortableHeader>
                   <SortableHeader
                     sortKey="used"
                     sort={rangeSort}
                     onSort={handleRangeSort}
-                  >{t("Used")}</SortableHeader>
+                  >
+                    {t("Used")}
+                  </SortableHeader>
                   <SortableHeader
                     sortKey="free"
                     sort={rangeSort}
                     onSort={handleRangeSort}
-                  >{t("Free")}</SortableHeader>
+                  >
+                    {t("Free")}
+                  </SortableHeader>
                   <SortableHeader
                     sortKey="purpose"
                     sort={rangeSort}
                     onSort={handleRangeSort}
-                  >{t("Purpose")}</SortableHeader>
+                  >
+                    {t("Purpose")}
+                  </SortableHeader>
                 </tr>
               </thead>
               <tbody>
@@ -1064,14 +1079,14 @@ export default function VlansView() {
             <CardHeader>
               <CardTitle>
                 <CardLabel>
-                  {creatingRange ? "New range" : "Range editor"}
+                  {creatingRange ? t("New range") : t("Range editor")}
                 </CardLabel>
                 <CardHeading>
                   {creatingRange
-                    ? "Create VLAN ID range"
+                    ? t("Create VLAN ID range")
                     : selectedRange
-                      ? `Edit ${selectedRange.name}`
-                      : "Select a range"}
+                      ? t("Edit {name}", { name: selectedRange.name })
+                      : t("Select a range")}
                 </CardHeading>
               </CardTitle>
             </CardHeader>
@@ -1079,7 +1094,7 @@ export default function VlansView() {
               {creatingRange || selectedRange ? (
                 <>
                   <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Name">
+                    <Field label={t("Name")}>
                       <Input
                         value={rangeForm.name}
                         onChange={(event) =>
@@ -1091,7 +1106,7 @@ export default function VlansView() {
                         placeholder={t("Servers")}
                       />
                     </Field>
-                    <Field label="Color">
+                    <Field label={t("Color")}>
                       <ColorInput
                         value={rangeForm.color}
                         onChange={(value) =>
@@ -1102,7 +1117,7 @@ export default function VlansView() {
                     </Field>
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Start VLAN">
+                    <Field label={t("Start VLAN")}>
                       <Input
                         type="number"
                         min={1}
@@ -1117,7 +1132,7 @@ export default function VlansView() {
                         placeholder="100"
                       />
                     </Field>
-                    <Field label="End VLAN">
+                    <Field label={t("End VLAN")}>
                       <Input
                         type="number"
                         min={1}
@@ -1133,7 +1148,7 @@ export default function VlansView() {
                       />
                     </Field>
                   </div>
-                  <Field label="Purpose">
+                  <Field label={t("Purpose")}>
                     <Input
                       value={rangeForm.purpose}
                       onChange={(event) =>
@@ -1160,7 +1175,9 @@ export default function VlansView() {
                         setCreatingRange(false);
                         setRangeError("");
                       }}
-                    >{t("Cancel")}</Button>
+                    >
+                      {t("Cancel")}
+                    </Button>
                     <div className="flex items-center gap-2">
                       {!creatingRange && selectedRange && (
                         <Button
@@ -1170,7 +1187,7 @@ export default function VlansView() {
                           disabled={rangeDeleting}
                         >
                           <Trash2 className="size-3.5" />
-                          {rangeDeleting ? "Deleting..." : "Delete range"}
+                          {rangeDeleting ? t("Deleting...") : t("Delete range")}
                         </Button>
                       )}
                       <Button
@@ -1180,10 +1197,10 @@ export default function VlansView() {
                       >
                         <Save className="size-3.5" />
                         {rangeSaving
-                          ? "Saving..."
+                          ? t("Saving...")
                           : creatingRange
-                            ? "Create range"
-                            : "Save range"}
+                            ? t("Create range")
+                            : t("Save range")}
                       </Button>
                     </div>
                   </div>
@@ -1221,7 +1238,8 @@ export default function VlansView() {
                 const subnetScopes = scopes.filter(
                   (scope) => scope.subnetId === subnet.id,
                 );
-                const subnetAssignments = assignmentsBySubnetId[subnet.id] ?? [];
+                const subnetAssignments =
+                  assignmentsBySubnetId[subnet.id] ?? [];
                 return (
                   <div
                     key={subnet.id}
@@ -1291,16 +1309,23 @@ export default function VlansView() {
             <CardTitle>
               <CardLabel>
                 {selectedRangeId
-                  ? `Filtered by ${ranges.find((range) => range.id === selectedRangeId)?.name}`
-                  : "All VLANs"}
+                  ? t("Filtered by {name}", {
+                      name: ranges.find((range) => range.id === selectedRangeId)
+                        ?.name,
+                    })
+                  : t("All VLANs")}
               </CardLabel>
-              <CardHeading>{filteredVlans.length} configured</CardHeading>
+              <CardHeading>
+                {filteredVlans.length} {t("configured")}
+              </CardHeading>
             </CardTitle>
             {selectedRangeId && (
               <button
                 onClick={() => setSelectedRangeId(undefined)}
                 className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)] hover:text-[var(--color-fg)]"
-              >{t("Clear filter")}</button>
+              >
+                {t("Clear filter")}
+              </button>
             )}
           </CardHeader>
           <CardBody className="border-b border-[var(--border-subtle)]">
@@ -1320,331 +1345,349 @@ export default function VlansView() {
                   active={vlanSort.key === "vlanId"}
                   direction={vlanSort.direction}
                   onClick={() => handleVlanSort("vlanId")}
-                >{t("ID")}</SortButton>
+                >
+                  {t("ID")}
+                </SortButton>
                 <SortButton
                   active={vlanSort.key === "name"}
                   direction={vlanSort.direction}
                   onClick={() => handleVlanSort("name")}
-                >{t("Name")}</SortButton>
+                >
+                  {t("Name")}
+                </SortButton>
                 <SortButton
                   active={vlanSort.key === "subnets"}
                   direction={vlanSort.direction}
                   onClick={() => handleVlanSort("subnets")}
-                >{t("IP ranges")}</SortButton>
+                >
+                  {t("IP ranges")}
+                </SortButton>
               </div>
             </div>
           </CardBody>
           <CardBody className="p-0">
             <div className="divide-y divide-[var(--color-line)]">
-              {filteredVlans
-                .map((vlan) => {
-                  const linkedSubnets = subnets
-                    .filter((entry) => entry.vlanId === vlan.id)
-                    .sort((a, b) =>
-                      a.cidr.localeCompare(b.cidr, undefined, {
-                        numeric: true,
-                      }),
-                    );
-                  const isAddingSubnet = subnetDraftVlanId === vlan.id;
-                  return (
-                    <div key={vlan.id} className="px-4 py-4">
-                      <div className="mb-3 flex items-start gap-4">
-                        <div
-                          className="grid size-12 shrink-0 place-items-center rounded-[var(--radius-sm)] border"
-                          style={{
-                            backgroundColor: `${vlan.color}15`,
-                            borderColor: `${vlan.color}40`,
-                          }}
+              {filteredVlans.map((vlan) => {
+                const linkedSubnets = subnets
+                  .filter((entry) => entry.vlanId === vlan.id)
+                  .sort((a, b) =>
+                    a.cidr.localeCompare(b.cidr, undefined, {
+                      numeric: true,
+                    }),
+                  );
+                const isAddingSubnet = subnetDraftVlanId === vlan.id;
+                return (
+                  <div key={vlan.id} className="px-4 py-4">
+                    <div className="mb-3 flex items-start gap-4">
+                      <div
+                        className="grid size-12 shrink-0 place-items-center rounded-[var(--radius-sm)] border"
+                        style={{
+                          backgroundColor: `${vlan.color}15`,
+                          borderColor: `${vlan.color}40`,
+                        }}
+                      >
+                        <Mono
+                          className="text-sm font-semibold"
+                          style={{ color: vlan.color }}
                         >
-                          <Mono
-                            className="text-sm font-semibold"
-                            style={{ color: vlan.color }}
-                          >
+                          {vlan.vlanId}
+                        </Mono>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-semibold text-[var(--color-fg)]">
+                            {vlan.name}
+                          </h3>
+                          <Hash className="size-3 text-[var(--color-fg-faint)]" />
+                          <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
+                            {t("VLAN")}
                             {vlan.vlanId}
                           </Mono>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-semibold text-[var(--color-fg)]">
-                              {vlan.name}
-                            </h3>
-                            <Hash className="size-3 text-[var(--color-fg-faint)]" />
-                            <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
-                              VLAN {vlan.vlanId}
+                        {vlan.description && (
+                          <div className="mt-0.5 text-[11px] text-[var(--color-fg-subtle)]">
+                            {vlan.description}
+                          </div>
+                        )}
+                        {linkedSubnets.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                            <Mono className="text-[11px] text-[var(--color-fg-muted)]">
+                              {linkedSubnets
+                                .map((subnet) => subnet.cidr)
+                                .join(", ")}
                             </Mono>
+                            <span className="text-[10px] text-[var(--color-fg-faint)]">
+                              |
+                            </span>
+                            <span className="text-[11px] text-[var(--color-fg-subtle)]">
+                              {linkedSubnets.length} {t("linked IP range")}
+                              {linkedSubnets.length === 1 ? "" : t("s")}
+                            </span>
                           </div>
-                          {vlan.description && (
-                            <div className="mt-0.5 text-[11px] text-[var(--color-fg-subtle)]">
-                              {vlan.description}
-                            </div>
-                          )}
-                          {linkedSubnets.length > 0 && (
-                            <div className="mt-1.5 flex flex-wrap items-center gap-3">
-                              <Mono className="text-[11px] text-[var(--color-fg-muted)]">
-                                {linkedSubnets
-                                  .map((subnet) => subnet.cidr)
-                                  .join(", ")}
-                              </Mono>
-                              <span className="text-[10px] text-[var(--color-fg-faint)]">
-                                |
-                              </span>
-                              <span className="text-[11px] text-[var(--color-fg-subtle)]">
-                                {linkedSubnets.length} linked IP range
-                                {linkedSubnets.length === 1 ? "" : "s"}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {canEdit && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSubnetDraftVlanId((current) =>
-                                  current === vlan.id ? null : vlan.id,
-                                );
-                                setSubnetForm({
-                                  cidr: "",
-                                  name:
-                                    linkedSubnets.length === 0
-                                      ? `${vlan.name} subnet`
-                                      : "",
-                                  description: "",
-                                  gateway: "",
-                                  dnsServers: "",
-                                });
-                                setSubnetError("");
-                              }}
-                            >
-                              <Plus className="size-3.5" />
-                              Add IP range
-                            </Button>
-                          )}
-                          {canEdit && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={deletingId === vlan.id}
-                              onClick={() =>
-                                void handleDeleteVlan(
-                                  vlan.id,
-                                  vlan.name,
-                                  vlan.vlanId,
-                                )
-                              }
-                            >
-                              <Trash2 className="size-3.5" />
-                              {deletingId === vlan.id
-                                ? "Deleting..."
-                                : "Delete"}
-                            </Button>
-                          )}
-                        </div>
+                        )}
                       </div>
-                      <div className="space-y-3 pl-16">
-                        <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3">
-                          <div className="mb-2 flex items-center justify-between gap-3">
-                            <div>
-                              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Linked IP ranges")}</div>
-                              <div className="text-xs text-[var(--color-fg-subtle)]">
-                                {linkedSubnets.length > 0
-                                  ? `${linkedSubnets.length} subnet${linkedSubnets.length === 1 ? "" : "s"} linked to VLAN ${vlan.vlanId}`
-                                  : `No subnet linked to VLAN ${vlan.vlanId} yet.`}
-                              </div>
+                      <div className="flex items-center gap-2">
+                        {canEdit && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSubnetDraftVlanId((current) =>
+                                current === vlan.id ? null : vlan.id,
+                              );
+                              setSubnetForm({
+                                cidr: "",
+                                name:
+                                  linkedSubnets.length === 0
+                                    ? `${vlan.name} subnet`
+                                    : "",
+                                description: "",
+                                gateway: "",
+                                dnsServers: "",
+                              });
+                              setSubnetError("");
+                            }}
+                          >
+                            <Plus className="size-3.5" />
+                            {t("Add IP range")}
+                          </Button>
+                        )}
+                        {canEdit && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={deletingId === vlan.id}
+                            onClick={() =>
+                              void handleDeleteVlan(
+                                vlan.id,
+                                vlan.name,
+                                vlan.vlanId,
+                              )
+                            }
+                          >
+                            <Trash2 className="size-3.5" />
+                            {deletingId === vlan.id
+                              ? t("Deleting...")
+                              : t("Delete")}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-3 pl-16">
+                      <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <div>
+                            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                              {t("Linked IP ranges")}
                             </div>
-                            {linkedSubnets.length > 0 && (
-                              <Link
-                                to={`/networks?subnetId=${linkedSubnets[0].id}&vlanId=${vlan.id}`}
-                                className="inline-flex items-center gap-1 text-[11px] text-[var(--color-accent)] hover:text-[var(--color-accent-strong)]"
-                              >
-                                {t("Open network")}
-                                <ChevronRight className="size-3" />
-                              </Link>
-                            )}
+                            <div className="text-xs text-[var(--color-fg-subtle)]">
+                              {linkedSubnets.length > 0
+                                ? t(
+                                    "{length} subnet{value2} linked to VLAN {vlanId}",
+                                    {
+                                      length: linkedSubnets.length,
+                                      value2:
+                                        linkedSubnets.length === 1 ? "" : "s",
+                                      vlanId: vlan.vlanId,
+                                    },
+                                  )
+                                : t("No subnet linked to VLAN {vlanId} yet.", {
+                                    vlanId: vlan.vlanId,
+                                  })}
+                            </div>
                           </div>
+                          {linkedSubnets.length > 0 && (
+                            <Link
+                              to={`/networks?subnetId=${linkedSubnets[0].id}&vlanId=${vlan.id}`}
+                              className="inline-flex items-center gap-1 text-[11px] text-[var(--color-accent)] hover:text-[var(--color-accent-strong)]"
+                            >
+                              {t("Open network")}
+                              <ChevronRight className="size-3" />
+                            </Link>
+                          )}
+                        </div>
 
-                          {linkedSubnets.length > 0 ? (
-                            <div className="space-y-3">
-                              {linkedSubnets.map((subnet) => {
-                                const subnetZones = zones.filter(
-                                  (zone) => zone.subnetId === subnet.id,
-                                );
-                                const subnetScopes = scopes.filter(
-                                  (scope) => scope.subnetId === subnet.id,
-                                );
-                                const subnetAssignments =
-                                  assignmentsBySubnetId[subnet.id] ?? [];
-                                const ipCount = subnetAssignments.length;
-                                return (
-                                  <div
-                                    key={subnet.id}
-                                    className="rounded-[var(--radius-xs)] border border-[var(--color-line)] bg-[var(--color-surface)]/50 p-3"
-                                  >
-                                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                                      <Mono className="text-[11px] text-[var(--color-fg)]">
-                                        {subnet.cidr}
-                                      </Mono>
-                                      <Badge tone="neutral">
-                                        {subnet.name}
-                                      </Badge>
-                                      {subnet.gateway && (
-                                        <span className="text-[11px] text-[var(--color-fg-subtle)]">
-                                          {t("gateway {gateway}", {
-                                            gateway: subnet.gateway,
-                                          })}
-                                        </span>
-                                      )}
-                                      {(subnet.dnsServers ?? []).length > 0 && (
-                                        <span className="text-[11px] text-[var(--color-fg-subtle)]">
-                                          {t("DNS {servers}", {
-                                            servers: (subnet.dnsServers ?? []).join(", "),
-                                          })}
-                                        </span>
-                                      )}
-                                      {subnetScopes.length > 0 && (
-                                        <Badge tone="cyan">
-                                          {t("{count} DHCP", {
-                                            count: subnetScopes.length,
-                                          })}
-                                        </Badge>
-                                      )}
-                                      {subnetZones.length > 0 && (
-                                        <Badge tone="accent">
-                                          {t("{count} zones", {
-                                            count: subnetZones.length,
-                                          })}
-                                        </Badge>
-                                      )}
+                        {linkedSubnets.length > 0 ? (
+                          <div className="space-y-3">
+                            {linkedSubnets.map((subnet) => {
+                              const subnetZones = zones.filter(
+                                (zone) => zone.subnetId === subnet.id,
+                              );
+                              const subnetScopes = scopes.filter(
+                                (scope) => scope.subnetId === subnet.id,
+                              );
+                              const subnetAssignments =
+                                assignmentsBySubnetId[subnet.id] ?? [];
+                              const ipCount = subnetAssignments.length;
+                              return (
+                                <div
+                                  key={subnet.id}
+                                  className="rounded-[var(--radius-xs)] border border-[var(--color-line)] bg-[var(--color-surface)]/50 p-3"
+                                >
+                                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                                    <Mono className="text-[11px] text-[var(--color-fg)]">
+                                      {subnet.cidr}
+                                    </Mono>
+                                    <Badge tone="neutral">{subnet.name}</Badge>
+                                    {subnet.gateway && (
                                       <span className="text-[11px] text-[var(--color-fg-subtle)]">
-                                        {t("{count} assigned", {
-                                          count: ipCount,
+                                        {t("gateway {gateway}", {
+                                          gateway: subnet.gateway,
                                         })}
                                       </span>
-                                      {subnet.description && (
-                                        <span className="text-[11px] text-[var(--color-fg-subtle)]">
-                                          | {subnet.description}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {(subnetZones.length > 0 ||
-                                      subnetScopes.length > 0) && (
-                                      <IpZoneBar
-                                        subnet={subnet}
-                                        zones={subnetZones}
-                                        scopes={subnetScopes}
-                                        assignments={subnetAssignments}
-                                      />
+                                    )}
+                                    {(subnet.dnsServers ?? []).length > 0 && (
+                                      <span className="text-[11px] text-[var(--color-fg-subtle)]">
+                                        {t("DNS {servers}", {
+                                          servers: (
+                                            subnet.dnsServers ?? []
+                                          ).join(", "),
+                                        })}
+                                      </span>
+                                    )}
+                                    {subnetScopes.length > 0 && (
+                                      <Badge tone="cyan">
+                                        {t("{count} DHCP", {
+                                          count: subnetScopes.length,
+                                        })}
+                                      </Badge>
+                                    )}
+                                    {subnetZones.length > 0 && (
+                                      <Badge tone="accent">
+                                        {t("{count} zones", {
+                                          count: subnetZones.length,
+                                        })}
+                                      </Badge>
+                                    )}
+                                    <span className="text-[11px] text-[var(--color-fg-subtle)]">
+                                      {t("{count} assigned", {
+                                        count: ipCount,
+                                      })}
+                                    </span>
+                                    {subnet.description && (
+                                      <span className="text-[11px] text-[var(--color-fg-subtle)]">
+                                        | {subnet.description}
+                                      </span>
                                     )}
                                   </div>
-                                );
-                              })}
-                            </div>
-                          ) : null}
+                                  {(subnetZones.length > 0 ||
+                                    subnetScopes.length > 0) && (
+                                    <IpZoneBar
+                                      subnet={subnet}
+                                      zones={subnetZones}
+                                      scopes={subnetScopes}
+                                      assignments={subnetAssignments}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
 
-                          {isAddingSubnet && canEdit && (
-                            <div className="mt-3 space-y-4 rounded-[var(--radius-xs)] border border-[var(--color-line)] bg-[var(--color-surface)]/60 p-4">
-                              <div className="grid gap-4 md:grid-cols-2">
-                                <Field label="CIDR">
-                                  <Input
-                                    value={subnetForm.cidr}
-                                    onChange={(event) =>
-                                      setSubnetForm((prev) => ({
-                                        ...prev,
-                                        cidr: event.target.value,
-                                      }))
-                                    }
-                                    placeholder="10.0.10.0/24"
-                                  />
-                                </Field>
-                                <Field label="Name">
-                                  <Input
-                                    value={subnetForm.name}
-                                    onChange={(event) =>
-                                      setSubnetForm((prev) => ({
-                                        ...prev,
-                                        name: event.target.value,
-                                      }))
-                                    }
-                                    placeholder={t("Servers management")}
-                                  />
-                                </Field>
-                              </div>
-                              <Field label="Description">
+                        {isAddingSubnet && canEdit && (
+                          <div className="mt-3 space-y-4 rounded-[var(--radius-xs)] border border-[var(--color-line)] bg-[var(--color-surface)]/60 p-4">
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <Field label={t("CIDR")}>
                                 <Input
-                                  value={subnetForm.description}
+                                  value={subnetForm.cidr}
                                   onChange={(event) =>
                                     setSubnetForm((prev) => ({
                                       ...prev,
-                                      description: event.target.value,
+                                      cidr: event.target.value,
                                     }))
                                   }
-                                  placeholder={t("Primary subnet for this VLAN")}
+                                  placeholder="10.0.10.0/24"
                                 />
                               </Field>
-                              <div className="grid gap-4 md:grid-cols-2">
-                                <Field label={t("Gateway")}>
-                                  <Input
-                                    value={subnetForm.gateway}
-                                    onChange={(event) =>
-                                      setSubnetForm((prev) => ({
-                                        ...prev,
-                                        gateway: event.target.value,
-                                      }))
-                                    }
-                                    placeholder="10.0.10.1"
-                                  />
-                                </Field>
-                                <Field label={t("DNS servers")}>
-                                  <Input
-                                    value={subnetForm.dnsServers}
-                                    onChange={(event) =>
-                                      setSubnetForm((prev) => ({
-                                        ...prev,
-                                        dnsServers: event.target.value,
-                                      }))
-                                    }
-                                    placeholder="10.0.10.1, 1.1.1.1"
-                                  />
-                                </Field>
-                              </div>
-
-                              {subnetError && (
-                                <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-sm text-[var(--color-err)]">
-                                  {subnetError}
-                                </div>
-                              )}
-
-                              <div className="flex items-center justify-end gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    setSubnetDraftVlanId(null);
-                                    setSubnetForm(EMPTY_SUBNET_FORM);
-                                    setSubnetError("");
-                                  }}
-                                >{t("Cancel")}</Button>
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    void handleCreateSubnet(vlan.id)
+                              <Field label={t("Name")}>
+                                <Input
+                                  value={subnetForm.name}
+                                  onChange={(event) =>
+                                    setSubnetForm((prev) => ({
+                                      ...prev,
+                                      name: event.target.value,
+                                    }))
                                   }
-                                  disabled={subnetSaving}
-                                >
-                                  <Save className="size-3.5" />
-                                  {subnetSaving
-                                    ? "Creating..."
-                                    : "Create linked range"}
-                                </Button>
-                              </div>
+                                  placeholder={t("Servers management")}
+                                />
+                              </Field>
                             </div>
-                          )}
-                        </div>
+                            <Field label={t("Description")}>
+                              <Input
+                                value={subnetForm.description}
+                                onChange={(event) =>
+                                  setSubnetForm((prev) => ({
+                                    ...prev,
+                                    description: event.target.value,
+                                  }))
+                                }
+                                placeholder={t("Primary subnet for this VLAN")}
+                              />
+                            </Field>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <Field label={t("Gateway")}>
+                                <Input
+                                  value={subnetForm.gateway}
+                                  onChange={(event) =>
+                                    setSubnetForm((prev) => ({
+                                      ...prev,
+                                      gateway: event.target.value,
+                                    }))
+                                  }
+                                  placeholder="10.0.10.1"
+                                />
+                              </Field>
+                              <Field label={t("DNS servers")}>
+                                <Input
+                                  value={subnetForm.dnsServers}
+                                  onChange={(event) =>
+                                    setSubnetForm((prev) => ({
+                                      ...prev,
+                                      dnsServers: event.target.value,
+                                    }))
+                                  }
+                                  placeholder="10.0.10.1, 1.1.1.1"
+                                />
+                              </Field>
+                            </div>
+
+                            {subnetError && (
+                              <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-sm text-[var(--color-err)]">
+                                {subnetError}
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSubnetDraftVlanId(null);
+                                  setSubnetForm(EMPTY_SUBNET_FORM);
+                                  setSubnetError("");
+                                }}
+                              >
+                                {t("Cancel")}
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => void handleCreateSubnet(vlan.id)}
+                                disabled={subnetSaving}
+                              >
+                                <Save className="size-3.5" />
+                                {subnetSaving
+                                  ? t("Creating...")
+                                  : t("Create linked range")}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  );
-                })}
+                  </div>
+                );
+              })}
               {filteredVlans.length === 0 && (
                 <div className="px-4 py-6">
                   <EmptyState
@@ -1756,7 +1799,10 @@ function compareVlans(
           )
         : compareNumber(a.vlanId, b.vlanId);
 
-  return applySortDirection(result || compareNumber(a.vlanId, b.vlanId), sort.direction);
+  return applySortDirection(
+    result || compareNumber(a.vlanId, b.vlanId),
+    sort.direction,
+  );
 }
 
 function countVlansInRange(range: VlanRange, vlans: Vlan[]) {

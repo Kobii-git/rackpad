@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.7.1-dev.0",
+  "version": "1.7.1-dev.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -43,6 +43,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fastify": "^5.2.1",
+    "ipaddr.js": "^2.4.0",
     "lucide-react": "^0.468.0",
     "motion": "^11.15.0",
     "nodemailer": "^9.0.1",

@@ -16,10 +16,13 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("rk-empty flex flex-col items-center text-center", className)}>
-      {Icon ? (
-        <Icon className="mb-2 size-6 text-[var(--text-muted)]" />
-      ) : null}
+    <div
+      className={cn(
+        "rk-empty flex flex-col items-center text-center",
+        className,
+      )}
+    >
+      {Icon ? <Icon className="mb-2 size-6 text-[var(--text-muted)]" /> : null}
       <div className="rk-empty-title">{title}</div>
       {description ? <p className="rk-empty-copy">{description}</p> : null}
       {action ? <div className="mt-3">{action}</div> : null}

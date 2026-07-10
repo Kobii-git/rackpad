@@ -66,11 +66,13 @@ export function DockerImportPanel() {
     setConnectionMode(nextMode);
     setEndpoint((current) => {
       if (nextMode === "socket") {
-        return current.trim().startsWith("unix://") || current.trim().startsWith("/")
+        return current.trim().startsWith("unix://") ||
+          current.trim().startsWith("/")
           ? current
           : DEFAULT_DOCKER_SOCKET_PATH;
       }
-      return current.trim().startsWith("unix://") || current.trim().startsWith("/")
+      return current.trim().startsWith("unix://") ||
+        current.trim().startsWith("/")
         ? ""
         : current;
     });
@@ -91,7 +93,8 @@ export function DockerImportPanel() {
       const result = await api.previewDockerImport({
         endpoint: buildEndpointForRequest(),
         labId: lab.id,
-        token: connectionMode === "http" ? token.trim() || undefined : undefined,
+        token:
+          connectionMode === "http" ? token.trim() || undefined : undefined,
       });
       setContainers(result.containers);
     } catch (err) {
@@ -115,7 +118,8 @@ export function DockerImportPanel() {
     try {
       const created = await importDockerContainerRecord({
         endpoint: buildEndpointForRequest(),
-        token: connectionMode === "http" ? token.trim() || undefined : undefined,
+        token:
+          connectionMode === "http" ? token.trim() || undefined : undefined,
         containerId: selectedContainerId,
         labId: lab.id,
         hostDeviceId,
@@ -222,7 +226,7 @@ export function DockerImportPanel() {
               placeholder={
                 connectionMode === "socket"
                   ? DEFAULT_DOCKER_SOCKET_PATH
-                  : "https://docker.example.internal:2376"
+                  : t("https://docker.example.internal:2376")
               }
               disabled={!canEdit}
             />
@@ -240,7 +244,9 @@ export function DockerImportPanel() {
             </label>
           )}
           <label className="space-y-1 text-sm md:col-span-2">
-            <span className="text-[var(--text-secondary)]">{t("Host device")}</span>
+            <span className="text-[var(--text-secondary)]">
+              {t("Host device")}
+            </span>
             <select
               className="rk-control w-full"
               value={hostDeviceId}
@@ -277,10 +283,7 @@ export function DockerImportPanel() {
           <Button
             size="sm"
             disabled={
-              !canEdit ||
-              importing ||
-              !selectedContainerId ||
-              !hostDeviceId
+              !canEdit || importing || !selectedContainerId || !hostDeviceId
             }
             onClick={() => void handleImport()}
           >

@@ -27,11 +27,16 @@ interface I18nContextValue {
   setLanguage: (language: SupportedLanguage) => void;
   t: (key: TranslationKey, values?: TranslationValues) => string;
   formatRelativeTime: (iso: string | undefined) => string;
+  translationLoadError: boolean;
+  dismissTranslationLoadError: () => void;
 }
 
 const LANGUAGE_STORAGE_KEY = "rackpad.language";
 
-const dictionaryLoaders: Record<Exclude<SupportedLanguage, "en">, () => Promise<TranslationMap>> = {
+const dictionaryLoaders: Record<
+  Exclude<SupportedLanguage, "en">,
+  () => Promise<TranslationMap>
+> = {
   fr: () => import("./locales/fr").then((module) => module.fr),
   de: () => import("./locales/de").then((module) => module.de),
   nl: () => import("./locales/nl").then((module) => module.nl),
@@ -56,40 +61,69 @@ const dictionaryLoaders: Record<Exclude<SupportedLanguage, "en">, () => Promise<
   id: () => import("./locales/id").then((module) => module.id),
   af: () => import("./locales/af").then((module) => module.af),
 };
-const dictionaryCache = new Map<SupportedLanguage, TranslationMap>([["en", en]]);
+const dictionaryCache = new Map<SupportedLanguage, TranslationMap>([
+  ["en", en],
+]);
+const dictionaryLoadPromises = new Map<
+  SupportedLanguage,
+  Promise<TranslationMap>
+>();
+
+function loadDictionary(language: SupportedLanguage) {
+  const cached = dictionaryCache.get(language);
+  if (cached) return Promise.resolve(cached);
+  const pending = dictionaryLoadPromises.get(language);
+  if (pending) return pending;
+  const promise = dictionaryLoaders[
+    language as Exclude<SupportedLanguage, "en">
+  ]()
+    .then((dictionary) => {
+      dictionaryCache.set(language, dictionary);
+      dictionaryLoadPromises.delete(language);
+      return dictionary;
+    })
+    .catch((error: unknown) => {
+      dictionaryLoadPromises.delete(language);
+      throw error;
+    });
+  dictionaryLoadPromises.set(language, promise);
+  return promise;
+}
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const defaultLanguage = useStore((s) => s.uiSettings.defaultLanguage);
-  const [browserLanguage, setBrowserLanguage] = useState<SupportedLanguage | null>(
-    () => readStoredLanguage(),
-  );
-  const requestedLanguage: SupportedLanguage = browserLanguage ?? defaultLanguage ?? "en";
+  const [browserLanguage, setBrowserLanguage] =
+    useState<SupportedLanguage | null>(() => readStoredLanguage());
+  const requestedLanguage: SupportedLanguage =
+    browserLanguage ?? defaultLanguage ?? "en";
   const [language, setActiveLanguage] = useState<SupportedLanguage>("en");
   const [dictionary, setDictionary] = useState<TranslationMap>(en);
+  const [translationLoadError, setTranslationLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function activate() {
       try {
-        const cached = dictionaryCache.get(requestedLanguage);
-        const next = cached ?? await dictionaryLoaders[requestedLanguage as Exclude<SupportedLanguage, "en">]();
+        const next = await loadDictionary(requestedLanguage);
         if (cancelled) return;
-        dictionaryCache.set(requestedLanguage, next);
         setDictionary(next);
         setActiveLanguage(requestedLanguage);
       } catch (error) {
         if (cancelled) return;
-        console.error(`Failed to load ${requestedLanguage} translations.`, error);
+        void error;
         window.localStorage.setItem(LANGUAGE_STORAGE_KEY, "en");
         setBrowserLanguage("en");
         setDictionary(en);
         setActiveLanguage("en");
+        setTranslationLoadError(true);
       }
     }
     void activate();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [requestedLanguage]);
 
   useEffect(() => {
@@ -110,12 +144,32 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const setLanguage = useCallback((nextLanguage: SupportedLanguage) => {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
+    setTranslationLoadError(false);
     setBrowserLanguage(nextLanguage);
   }, []);
 
+  const dismissTranslationLoadError = useCallback(
+    () => setTranslationLoadError(false),
+    [],
+  );
+
   const value = useMemo(
-    () => ({ language, setLanguage, t, formatRelativeTime }),
-    [language, setLanguage, t, formatRelativeTime],
+    () => ({
+      language,
+      setLanguage,
+      t,
+      formatRelativeTime,
+      translationLoadError,
+      dismissTranslationLoadError,
+    }),
+    [
+      language,
+      setLanguage,
+      t,
+      formatRelativeTime,
+      translationLoadError,
+      dismissTranslationLoadError,
+    ],
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
@@ -144,7 +198,9 @@ export function LanguageSelector({
       </span>
       <select
         value={language}
-        onChange={(event) => setLanguage(event.target.value as SupportedLanguage)}
+        onChange={(event) =>
+          setLanguage(event.target.value as SupportedLanguage)
+        }
         className="rk-control h-8 w-full rounded-[var(--radius-sm)] px-2.5 text-sm text-[var(--text-primary)] focus-visible:outline-none"
         aria-label={t("Choose language")}
       >

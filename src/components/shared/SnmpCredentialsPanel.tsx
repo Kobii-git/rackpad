@@ -192,12 +192,13 @@ export function SnmpCredentialsPanel({
                   {credential.name}
                 </div>
                 <div className="text-xs text-[var(--color-fg-subtle)]">
-                  v{credential.version}
+                  {t("v")}
+                  {credential.version}
                   {credential.version === "3" && credential.v3User
-                    ? ` · ${credential.v3User}`
+                    ? t("· {v3User}", { v3User: credential.v3User })
                     : ""}
                   {credential.version !== "3" && credential.hasCommunity
-                    ? ` · ${t("community stored")}`
+                    ? t("· {value1}", { value1: t("community stored") })
                     : ""}
                 </div>
               </div>
@@ -333,7 +334,10 @@ export function SnmpCredentialsPanel({
                 value={form.v3Context}
                 disabled={disabled || saving}
                 onChange={(event) =>
-                  setForm((prev) => ({ ...prev, v3Context: event.target.value }))
+                  setForm((prev) => ({
+                    ...prev,
+                    v3Context: event.target.value,
+                  }))
                 }
                 placeholder={t("Optional")}
               />
@@ -375,6 +379,9 @@ export function snmpCredentialLabel(
   credentialId?: string | null,
   translate?: (key: "Inline community") => string,
 ) {
-  if (!credentialId) return translate?.("Inline community") ?? "Inline community";
-  return credentials.find((entry) => entry.id === credentialId)?.name ?? credentialId;
+  if (!credentialId)
+    return translate?.("Inline community") ?? "Inline community";
+  return (
+    credentials.find((entry) => entry.id === credentialId)?.name ?? credentialId
+  );
 }

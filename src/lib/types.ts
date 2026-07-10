@@ -395,7 +395,11 @@ export interface IpAssignment {
   hostname?: string;
   description?: string;
   integrity?: {
-    state: "ok" | "cross-lab-reference" | "missing-reference";
+    state:
+      | "ok"
+      | "cross-lab-reference"
+      | "missing-reference"
+      | "reference-mismatch";
     fields: Array<"deviceId" | "portId" | "vmId" | "containerId">;
   };
 }
@@ -416,7 +420,10 @@ export interface AdminIntegrityReport {
     subnetLabId: ID;
     ipAddress: string;
     integrity: NonNullable<IpAssignment["integrity"]>;
-    references: Pick<IpAssignment, "deviceId" | "portId" | "vmId" | "containerId">;
+    references: Pick<
+      IpAssignment,
+      "deviceId" | "portId" | "vmId" | "containerId"
+    >;
   }>;
 }
 
@@ -584,7 +591,7 @@ export interface DiscoveryScanResult {
 export type DiscoveryScanJobStatus =
   | "queued"
   | "running"
-  | "succeeded"
+  | "completed"
   | "failed";
 
 export interface DiscoveryScanJob {

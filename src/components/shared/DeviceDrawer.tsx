@@ -252,13 +252,10 @@ export function DeviceDrawer({
       },
     ];
   }, [deviceTypes, form.deviceType]);
-  const builtInDeviceTypes = useMemo(
-    () => {
-      const builtIns = deviceTypes.filter((entry) => entry.builtIn);
-      return builtIns.length > 0 ? builtIns : BUILT_IN_DEVICE_TYPES;
-    },
-    [deviceTypes],
-  );
+  const builtInDeviceTypes = useMemo(() => {
+    const builtIns = deviceTypes.filter((entry) => entry.builtIn);
+    return builtIns.length > 0 ? builtIns : BUILT_IN_DEVICE_TYPES;
+  }, [deviceTypes]);
   const manageableDeviceTypes = useMemo(
     () => availableDeviceTypes.filter((entry) => !entry.builtIn),
     [availableDeviceTypes],
@@ -310,9 +307,7 @@ export function DeviceDrawer({
   const discoveryCandidates = useMemo(() => {
     if (isEdit) return [];
     return discoveredDevices
-      .filter(
-        (entry) => !entry.importedDeviceId && !entry.technicalRole,
-      )
+      .filter((entry) => !entry.importedDeviceId && !entry.technicalRole)
       .sort((a, b) =>
         discoverySortLabel(a).localeCompare(discoverySortLabel(b)),
       );
@@ -351,9 +346,10 @@ export function DeviceDrawer({
       )
     : false;
   const matchingDhcpScope = managementIp
-    ? scopesForSelectedSubnet.find((scope) =>
-        !managementIpInStaticZone &&
-        ipInRange(managementIp, scope.startIp, scope.endIp),
+    ? scopesForSelectedSubnet.find(
+        (scope) =>
+          !managementIpInStaticZone &&
+          ipInRange(managementIp, scope.startIp, scope.endIp),
       )
     : undefined;
   const effectiveDhcpScopeId =
@@ -627,7 +623,12 @@ export function DeviceDrawer({
 
   async function handleDeleteDeviceType() {
     if (!managedType) return;
-    if (!window.confirm(`Delete device type ${managedType.label}?`)) return;
+    if (
+      !window.confirm(
+        t("Delete device type {label}?", { label: managedType.label }),
+      )
+    )
+      return;
     setError("");
     setDeletingManagedType(true);
     try {
@@ -892,15 +893,17 @@ export function DeviceDrawer({
                           </option>
                         ))}
                       </Select>
-                      {currentUser?.role === "admin" && <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setAddingType((value) => !value)}
-                      >
-                        <Plus className="size-3.5" />
-                        {t("Type")}
-                      </Button>}
+                      {currentUser?.role === "admin" && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAddingType((value) => !value)}
+                        >
+                          <Plus className="size-3.5" />
+                          {t("Type")}
+                        </Button>
+                      )}
                     </div>
                     {addingType && currentUser?.role === "admin" && (
                       <div className="mt-2 space-y-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--surface-1)] p-3">
@@ -960,7 +963,9 @@ export function DeviceDrawer({
                                 size="icon"
                                 onClick={() => void handleDeleteDeviceType()}
                                 disabled={deletingManagedType || !managedType}
-                                aria-label={`Delete ${managedType?.label ?? "device type"}`}
+                                aria-label={t("Delete {value1}", {
+                                  value1: managedType?.label ?? "device type",
+                                })}
                               >
                                 <Trash2 />
                               </Button>

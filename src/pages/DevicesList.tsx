@@ -209,8 +209,9 @@ export default function DevicesList() {
   );
   const selectedMonitorCount = useMemo(
     () =>
-      deviceMonitors.filter((monitor) => selectedDeviceIds.has(monitor.deviceId))
-        .length,
+      deviceMonitors.filter((monitor) =>
+        selectedDeviceIds.has(monitor.deviceId),
+      ).length,
     [deviceMonitors, selectedDeviceIds],
   );
   const selectedPortCount = useMemo(
@@ -429,7 +430,7 @@ export default function DevicesList() {
         title={t("Devices")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {devices.length} total
+            {devices.length} {t("total")}
           </span>
         }
         actions={
@@ -453,7 +454,9 @@ export default function DevicesList() {
             className="rk-filter-pill"
             data-active={type === null}
           >
-            <span className="font-mono text-[10px] uppercase tracking-wider">{t("All")}</span>
+            <span className="font-mono text-[10px] uppercase tracking-wider">
+              {t("All")}
+            </span>
             <Mono className="ml-2 text-[10px]">{devices.length}</Mono>
           </button>
           <button
@@ -461,7 +464,9 @@ export default function DevicesList() {
             className="rk-filter-pill"
             data-active={showUnplacedOnly}
           >
-            <span className="font-mono text-[10px] uppercase tracking-wider">{t("Unplaced")}</span>
+            <span className="font-mono text-[10px] uppercase tracking-wider">
+              {t("Unplaced")}
+            </span>
             <Mono className="ml-2 text-[10px]">
               {devices.filter(isUnplacedDevice).length}
             </Mono>
@@ -501,8 +506,12 @@ export default function DevicesList() {
             <CardBody className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <Badge tone="cyan">{selectedDeviceCount} selected</Badge>
-                  <span className="text-sm text-[var(--color-fg-subtle)]">{t("Apply only checked fields to all selected devices.")}</span>
+                  <Badge tone="cyan">
+                    {selectedDeviceCount} {t("selected")}
+                  </Badge>
+                  <span className="text-sm text-[var(--color-fg-subtle)]">
+                    {t("Apply only checked fields to all selected devices.")}
+                  </span>
                 </div>
                 <Button
                   variant="ghost"
@@ -637,7 +646,7 @@ export default function DevicesList() {
                   </Select>
                 </BulkField>
                 <BulkField
-                  label="Manufacturer"
+                  label={t("Manufacturer")}
                   checked={bulkFields.has("manufacturer")}
                   onChecked={() => toggleBulkField("manufacturer")}
                 >
@@ -652,7 +661,7 @@ export default function DevicesList() {
                   />
                 </BulkField>
                 <BulkField
-                  label="Model"
+                  label={t("Model")}
                   checked={bulkFields.has("model")}
                   onChecked={() => toggleBulkField("model")}
                 >
@@ -694,7 +703,7 @@ export default function DevicesList() {
                   </Select>
                 </BulkField>
                 <BulkField
-                  label="CPU cores"
+                  label={t("CPU cores")}
                   checked={bulkFields.has("cpuCores")}
                   onChecked={() => toggleBulkField("cpuCores")}
                 >
@@ -711,7 +720,7 @@ export default function DevicesList() {
                   />
                 </BulkField>
                 <BulkField
-                  label="Memory GB"
+                  label={t("Memory GB")}
                   checked={bulkFields.has("memoryGb")}
                   onChecked={() => toggleBulkField("memoryGb")}
                 >
@@ -729,7 +738,7 @@ export default function DevicesList() {
                   />
                 </BulkField>
                 <BulkField
-                  label="Storage GB"
+                  label={t("Storage GB")}
                   checked={bulkFields.has("storageGb")}
                   onChecked={() => toggleBulkField("storageGb")}
                 >
@@ -749,7 +758,7 @@ export default function DevicesList() {
               </div>
 
               <BulkField
-                label="Capacity & specs"
+                label={t("Capacity & specs")}
                 checked={bulkFields.has("specs")}
                 onChecked={() => toggleBulkField("specs")}
               >
@@ -774,9 +783,11 @@ export default function DevicesList() {
 
               {bulkFields.has("status") && monitoredStatusCount > 0 && (
                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/8 px-3 py-2 text-xs text-[var(--color-fg-subtle)]">
-                  {monitoredStatusCount} selected monitored device
-                  {monitoredStatusCount === 1 ? "" : "s"} may have this status
-                  overwritten by the next monitor result.
+                  {monitoredStatusCount} {t("selected monitored device")}
+                  {monitoredStatusCount === 1 ? "" : t("s")}{" "}
+                  {t(
+                    "may have this status overwritten by the next monitor result.",
+                  )}
                 </div>
               )}
 
@@ -784,9 +795,7 @@ export default function DevicesList() {
                 <Button
                   size="sm"
                   disabled={
-                    bulkSaving ||
-                    bulkFields.size === 0 ||
-                    bulkPlacementInvalid
+                    bulkSaving || bulkFields.size === 0 || bulkPlacementInvalid
                   }
                   onClick={() => void handleBulkSave()}
                 >
@@ -818,42 +827,58 @@ export default function DevicesList() {
                     sortKey="hostname"
                     sort={sort}
                     onSort={handleSort}
-                  >{t("Hostname")}</SortableHeader>
+                  >
+                    {t("Hostname")}
+                  </SortableHeader>
                   <SortableHeader
                     sortKey="type"
                     sort={sort}
                     onSort={handleSort}
-                  >{t("Type")}</SortableHeader>
+                  >
+                    {t("Type")}
+                  </SortableHeader>
                   <SortableHeader
                     sortKey="model"
                     sort={sort}
                     onSort={handleSort}
-                  >{t("Model")}</SortableHeader>
+                  >
+                    {t("Model")}
+                  </SortableHeader>
                   <SortableHeader
                     sortKey="managementIp"
                     sort={sort}
                     onSort={handleSort}
-                  >{t("Mgmt IP")}</SortableHeader>
+                  >
+                    {t("Mgmt IP")}
+                  </SortableHeader>
                   <SortableHeader
                     sortKey="macAddress"
                     sort={sort}
                     onSort={handleSort}
-                  >{t("MAC")}</SortableHeader>
+                  >
+                    {t("MAC")}
+                  </SortableHeader>
                   <SortableHeader
                     sortKey="placement"
                     sort={sort}
                     onSort={handleSort}
-                  >{t("Placement")}</SortableHeader>
+                  >
+                    {t("Placement")}
+                  </SortableHeader>
                   <SortableHeader
                     sortKey="ports"
                     sort={sort}
                     onSort={handleSort}
-                  >{t("Ports")}</SortableHeader>
+                  >
+                    {t("Ports")}
+                  </SortableHeader>
                   <SortableHeader
                     sortKey="status"
                     sort={sort}
                     onSort={handleSort}
-                  >{t("Status")}</SortableHeader>
+                  >
+                    {t("Status")}
+                  </SortableHeader>
                   <Th />
                 </tr>
               </thead>
@@ -885,7 +910,9 @@ export default function DevicesList() {
                             checked={selectedDeviceIds.has(device.id)}
                             onChange={() => toggleDeviceSelection(device.id)}
                             onClick={(event) => event.stopPropagation()}
-                            aria-label={`Select ${device.hostname}`}
+                            aria-label={t("Select {hostname}", {
+                              hostname: device.hostname,
+                            })}
                           />
                         )}
                       </Td>
@@ -911,7 +938,10 @@ export default function DevicesList() {
                       <Td>
                         <Mono className="text-[11px] text-[var(--color-fg-subtle)]">
                           {device.manufacturer
-                            ? `${device.manufacturer} ${device.model}`
+                            ? t("{manufacturer} {model}", {
+                                manufacturer: device.manufacturer,
+                                model: device.model,
+                              })
                             : (device.model ?? "-")}
                         </Mono>
                       </Td>
@@ -928,7 +958,9 @@ export default function DevicesList() {
                       <Td>
                         {device.placement === "virtual" ? (
                           <span className="text-xs">
-                            <span className="text-[var(--color-fg-muted)]">{t("Virtual")}</span>
+                            <span className="text-[var(--color-fg-muted)]">
+                              {t("Virtual")}
+                            </span>
                             {parentDevice && (
                               <>
                                 <span className="mx-1 text-[var(--color-fg-faint)]">
@@ -942,7 +974,9 @@ export default function DevicesList() {
                           </span>
                         ) : device.placement === "wireless" ? (
                           <span className="text-xs">
-                            <span className="text-[var(--color-fg-muted)]">{t("WiFi")}</span>
+                            <span className="text-[var(--color-fg-muted)]">
+                              {t("WiFi")}
+                            </span>
                             {parentDevice && (
                               <>
                                 <span className="mx-1 text-[var(--color-fg-faint)]">
@@ -956,7 +990,9 @@ export default function DevicesList() {
                           </span>
                         ) : device.placement === "shelf" ? (
                           <span className="text-xs">
-                            <span className="text-[var(--color-fg-muted)]">{t("Shelf")}</span>
+                            <span className="text-[var(--color-fg-muted)]">
+                              {t("Shelf")}
+                            </span>
                             {parentDevice && (
                               <>
                                 <span className="mx-1 text-[var(--color-fg-faint)]">
@@ -993,10 +1029,10 @@ export default function DevicesList() {
                         ) : (
                           <span className="text-[var(--color-fg-faint)]">
                             {device.placement === "rack"
-                              ? "Pending placement"
+                              ? t("Pending placement")
                               : room
-                                ? `Room | ${room.name}`
-                                : "Loose / room"}
+                                ? t("Room | {name}", { name: room.name })
+                                : t("Loose / room")}
                           </span>
                         )}
                       </Td>
@@ -1028,7 +1064,9 @@ export default function DevicesList() {
               </tbody>
             </table>
             {filtered.length === 0 && (
-              <div className="px-4 py-8 text-center text-xs text-[var(--color-fg-subtle)]">{t("No devices match your filter.")}</div>
+              <div className="px-4 py-8 text-center text-xs text-[var(--color-fg-subtle)]">
+                {t("No devices match your filter.")}
+              </div>
             )}
           </CardBody>
         </Card>
@@ -1196,7 +1234,9 @@ function formatRackUnit(device: Device) {
   if (!device.startU) return "";
   const heightU = device.heightU ?? 1;
   const range =
-    heightU > 1 ? `U${device.startU}-${device.startU + heightU - 1}` : `U${device.startU}`;
+    heightU > 1
+      ? `U${device.startU}-${device.startU + heightU - 1}`
+      : `U${device.startU}`;
   if (device.rackSlot === "left") return `${range} | left half`;
   if (device.rackSlot === "right") return `${range} | right half`;
   return range;

@@ -595,7 +595,9 @@ export default function MonitoringView() {
                         </td>
                         <td className="px-2 py-2 font-mono text-xs">
                           {entry.sourceIp}
-                          {entry.ifIndex != null ? ` · if${entry.ifIndex}` : ""}
+                          {entry.ifIndex != null
+                            ? t("· if{ifIndex}", { ifIndex: entry.ifIndex })
+                            : ""}
                         </td>
                         <td className="px-2 py-2">{entry.resultAction}</td>
                         <td className="px-2 py-2 text-[var(--color-fg-subtle)]">
@@ -996,7 +998,7 @@ function DeviceMonitorCard({
               checked={selected}
               onChange={(event) => onSelectedChange(event.target.checked)}
               className="mt-1 size-4 shrink-0 accent-[var(--color-accent)]"
-              aria-label={`Select ${device.hostname}`}
+              aria-label={t("Select {hostname}", { hostname: device.hostname })}
             />
           )}
           <div className="min-w-0">
@@ -1096,7 +1098,7 @@ function DeviceMonitorCard({
                         : "neutral"
                   }
                 >
-                  {monitor.lastResult ?? "unknown"}
+                  {monitor.lastResult ?? t("unknown")}
                 </Badge>
               </div>
               <div className="mt-2 space-y-1 text-[11px] text-[var(--text-tertiary)]">
@@ -1177,7 +1179,7 @@ function DeviceMonitorRow({
             checked={selected}
             onChange={(event) => onSelectedChange(event.target.checked)}
             className="size-4 shrink-0 accent-[var(--color-accent)]"
-            aria-label={`Select ${device.hostname}`}
+            aria-label={t("Select {hostname}", { hostname: device.hostname })}
           />
         )}
         <DeviceTypeIcon
@@ -1405,6 +1407,7 @@ function SortButton({
       {children}
       {active && (
         <span className="font-mono text-[9px]" aria-hidden>
+          {/* i18n-ignore -- v is a direction glyph, not visible copy. */}
           {direction === "asc" ? "^" : "v"}
         </span>
       )}

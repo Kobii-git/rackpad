@@ -49,7 +49,7 @@ export function ColorInput({
             style={{ backgroundColor: previewColor }}
           />
           <span className="font-mono text-[11px] text-[var(--color-fg-subtle)]">
-            {selectedPreset?.hex ?? (value.trim() || "auto")}
+            {selectedPreset?.hex ?? (value.trim() || t("auto"))}
           </span>
         </div>
       </div>

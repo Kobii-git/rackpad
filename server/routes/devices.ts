@@ -10,6 +10,7 @@ import {
   assertLabReadFromRow,
   assertLabWrite,
   assertLabWriteFromRow,
+  isGlobalAdmin,
   resolveLabIdsForList,
 } from "../lib/lab-access.js";
 import { createId } from "../lib/ids.js";
@@ -18,6 +19,7 @@ import {
   getPortTemplate,
 } from "../lib/port-templates.js";
 import { validateRackPlacement } from "../lib/rack-placement.js";
+import { assertSubnetChildMutationAllowed } from "../lib/subnet-integrity.js";
 import {
   asObject,
   ensureIpv4,
@@ -970,13 +972,41 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const row = db
       .prepare("SELECT * FROM devices WHERE id = ?")
       .get(req.params.id) as Record<string, unknown> | undefined;
-    if (!assertLabWriteFromRow(req, reply, row)) return;
+    if (!assertLabReadFromRow(req, reply, row)) return;
 
     const portIds = (
       db
         .prepare("SELECT id FROM ports WHERE deviceId = ?")
         .all(req.params.id) as Array<{ id: string }>
     ).map((port) => port.id);
+
+    const assignmentSubnetIds =
+      portIds.length > 0
+        ? (db
+            .prepare(
+              `
+          SELECT DISTINCT subnetId
+          FROM ipAssignments
+          WHERE deviceId = ? OR portId IN (${portIds.map(() => "?").join(", ")})
+        `,
+            )
+            .all(req.params.id, ...portIds) as Array<{ subnetId: string }>)
+        : (db
+            .prepare(
+              `
+          SELECT DISTINCT subnetId
+          FROM ipAssignments
+          WHERE deviceId = ?
+        `,
+            )
+            .all(req.params.id) as Array<{ subnetId: string }>);
+    for (const assignment of assignmentSubnetIds) {
+      assertSubnetChildMutationAllowed(
+        assignment.subnetId,
+        isGlobalAdmin(req.authUser),
+      );
+    }
+    if (!assertLabWriteFromRow(req, reply, row)) return;
 
     const deleteDevice = db.transaction(
       (deviceId: string, devicePortIds: string[]) => {

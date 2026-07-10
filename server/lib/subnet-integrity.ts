@@ -110,6 +110,26 @@ export function assertSubnetIntegrityHealthy(subnetId: string) {
   return subnet
 }
 
+export function assertSubnetChildMutationAllowed(
+  subnetId: string,
+  isAdmin: boolean,
+) {
+  const subnet = db.prepare(
+    'SELECT id, labId, cidr, name FROM subnets WHERE id = ?',
+  ).get(subnetId) as SubnetRow | undefined
+  if (!subnet) throw new ValidationError('Subnet not found.', 404)
+  const integrity = getSubnetIntegrity(subnet)
+  if (integrity.state !== 'ok' && !isAdmin) {
+    throw new ValidationError(
+      'Only an administrator can change existing records on a subnet with an unresolved integrity conflict.',
+      403,
+      'SUBNET_INTEGRITY_CONFLICT',
+      { integrity },
+    )
+  }
+  return subnet
+}
+
 export function normalizeSafeSubnetCidrs() {
   const rows = db.prepare(
     'SELECT id, labId, cidr, name FROM subnets ORDER BY labId, cidr, id',

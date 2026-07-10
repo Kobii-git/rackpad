@@ -1,10 +1,6 @@
 import type { ReactNode } from "react";
 import type { Device, Port, PortLink, VirtualSwitch, Vlan } from "@/lib/types";
-import {
-  cn,
-  formatPortLabel,
-  portTypeColor,
-} from "@/lib/utils";
+import { cn, formatPortLabel, portTypeColor } from "@/lib/utils";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { Mono } from "@/components/shared/Mono";
 import { ArrowRight } from "lucide-react";
@@ -189,115 +185,127 @@ export function PortList({
                 );
               })
             : ports.map((port) => {
-            const link = links[port.id];
-            let otherDevice: Device | undefined;
-            let otherPort: Port | undefined;
-            if (link) {
-              const otherId =
-                link.fromPortId === port.id ? link.toPortId : link.fromPortId;
-              otherPort = portsById[otherId];
-              if (otherPort) otherDevice = devicesById[otherPort.deviceId];
-            }
+                const link = links[port.id];
+                let otherDevice: Device | undefined;
+                let otherPort: Port | undefined;
+                if (link) {
+                  const otherId =
+                    link.fromPortId === port.id
+                      ? link.toPortId
+                      : link.fromPortId;
+                  otherPort = portsById[otherId];
+                  if (otherPort) otherDevice = devicesById[otherPort.deviceId];
+                }
 
-            return (
-              <tr
-                key={port.id}
-                data-selected={selectedPortId === port.id}
-                onClick={() => onSelectPort?.(port.id)}
-                className={cn(onSelectPort ? "cursor-pointer" : "")}
-              >
-                {onTogglePortSelection && (
-                  <Td>
-                    <PortSelectionCheckbox
-                      port={port}
-                      selected={Boolean(selectedPortIds?.has(port.id))}
-                      onToggle={onTogglePortSelection}
-                      t={t}
-                    />
-                  </Td>
-                )}
-                <Td>
-                  <StatusDot link={port.linkState} />
-                </Td>
-                <Td>
-                  <Mono className="text-[var(--text-primary)]">
-                    <span className="inline-flex items-center gap-2">
-                      {formatPortLabel(port)}
-	                      {snmpVerifiedPortIds?.has(port.id) ? (
-	                        <span className="rounded border border-[var(--accent-primary)]/35 bg-[var(--accent-primary)]/10 px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--accent-primary)]">{t("SNMP")}</span>
-	                      ) : null}
-	                      {port.portRole === "aggregate" ? (
-	                        <span className="rounded border border-[var(--accent-secondary)]/35 bg-[var(--accent-secondary)]/10 px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--accent-secondary)]">
-	                          {t("Bond")}
-	                        </span>
-	                      ) : port.aggregatePortId ? (
-	                        <span
-	                          className="rounded border border-[var(--border-default)] bg-[var(--surface-2)] px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]"
-	                          title={t("Member of {name}", {
-	                            name:
-	                              portsById[port.aggregatePortId]?.name ??
-	                              port.aggregatePortId,
-	                          })}
-	                        >
-	                          {t("Member")}
-	                        </span>
-	                      ) : null}
-	                    </span>
-	                  </Mono>
-                </Td>
-                <Td>
-                  <span className="inline-flex items-center gap-2">
-                    <span
-                      className="size-1.5 rounded-[2px]"
-                      style={{ backgroundColor: portTypeColor[port.kind] }}
-                    />
-                    <span className="font-mono text-[11px] text-[var(--text-secondary)]">
-                      {formatPortTypeLabel(t, port.kind)}
-                    </span>
-                  </span>
-                </Td>
-                <Td>
-                  <Mono className="text-[var(--text-tertiary)]">
-                    {port.speed ?? t("n/a")}
-                  </Mono>
-                </Td>
-                <Td>
-                  <div className="text-xs text-[var(--text-secondary)]">
-                    {formatPortModeSummary(
-                      t,
-                      port,
-                      vlansById,
-                      virtualSwitchesById,
+                return (
+                  <tr
+                    key={port.id}
+                    data-selected={selectedPortId === port.id}
+                    onClick={() => onSelectPort?.(port.id)}
+                    className={cn(onSelectPort ? "cursor-pointer" : "")}
+                  >
+                    {onTogglePortSelection && (
+                      <Td>
+                        <PortSelectionCheckbox
+                          port={port}
+                          selected={Boolean(selectedPortIds?.has(port.id))}
+                          onToggle={onTogglePortSelection}
+                          t={t}
+                        />
+                      </Td>
                     )}
-                  </div>
-                </Td>
-                <Td>
-                  {otherDevice && otherPort ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs">
-                      <ArrowRight className="size-3 text-[var(--accent-secondary)]" />
-                      <span>{otherDevice.hostname}</span>
-                      <span className="text-[var(--text-muted)]">:</span>
-                      <Mono className="text-[var(--accent-secondary)]">
-                        {formatPortLabel(otherPort, { includeFace: true })}
+                    <Td>
+                      <StatusDot link={port.linkState} />
+                    </Td>
+                    <Td>
+                      <Mono className="text-[var(--text-primary)]">
+                        <span className="inline-flex items-center gap-2">
+                          {formatPortLabel(port)}
+                          {snmpVerifiedPortIds?.has(port.id) ? (
+                            <span className="rounded border border-[var(--accent-primary)]/35 bg-[var(--accent-primary)]/10 px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--accent-primary)]">
+                              {t("SNMP")}
+                            </span>
+                          ) : null}
+                          {port.portRole === "aggregate" ? (
+                            <span className="rounded border border-[var(--accent-secondary)]/35 bg-[var(--accent-secondary)]/10 px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--accent-secondary)]">
+                              {t("Bond")}
+                            </span>
+                          ) : port.aggregatePortId ? (
+                            <span
+                              className="rounded border border-[var(--border-default)] bg-[var(--surface-2)] px-1 py-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]"
+                              title={t("Member of {name}", {
+                                name:
+                                  portsById[port.aggregatePortId]?.name ??
+                                  port.aggregatePortId,
+                              })}
+                            >
+                              {t("Member")}
+                            </span>
+                          ) : null}
+                        </span>
                       </Mono>
-                    </span>
-                  ) : (
-                    <span className="text-xs text-[var(--text-muted)]">—</span>
-                  )}
-                </Td>
-                <Td>
-                  {link ? (
-                    <span className="font-mono text-[11px] text-[var(--text-tertiary)]">
-                      {link.cableType || t("Cable")}
-                      {link.cableLength ? ` | ${link.cableLength}` : ""}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-[var(--text-muted)]">—</span>
-                  )}
-                </Td>
-              </tr>
-            );
-          })}
+                    </Td>
+                    <Td>
+                      <span className="inline-flex items-center gap-2">
+                        <span
+                          className="size-1.5 rounded-[2px]"
+                          style={{ backgroundColor: portTypeColor[port.kind] }}
+                        />
+                        <span className="font-mono text-[11px] text-[var(--text-secondary)]">
+                          {formatPortTypeLabel(t, port.kind)}
+                        </span>
+                      </span>
+                    </Td>
+                    <Td>
+                      <Mono className="text-[var(--text-tertiary)]">
+                        {port.speed ?? t("n/a")}
+                      </Mono>
+                    </Td>
+                    <Td>
+                      <div className="text-xs text-[var(--text-secondary)]">
+                        {formatPortModeSummary(
+                          t,
+                          port,
+                          vlansById,
+                          virtualSwitchesById,
+                        )}
+                      </div>
+                    </Td>
+                    <Td>
+                      {otherDevice && otherPort ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs">
+                          <ArrowRight className="size-3 text-[var(--accent-secondary)]" />
+                          <span>{otherDevice.hostname}</span>
+                          <span className="text-[var(--text-muted)]">:</span>
+                          <Mono className="text-[var(--accent-secondary)]">
+                            {formatPortLabel(otherPort, { includeFace: true })}
+                          </Mono>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">
+                          —
+                        </span>
+                      )}
+                    </Td>
+                    <Td>
+                      {link ? (
+                        <span className="font-mono text-[11px] text-[var(--text-tertiary)]">
+                          {link.cableType || t("Cable")}
+                          {link.cableLength
+                            ? t("| {cableLength}", {
+                                cableLength: link.cableLength,
+                              })
+                            : ""}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">
+                          —
+                        </span>
+                      )}
+                    </Td>
+                  </tr>
+                );
+              })}
         </tbody>
       </table>
     </div>
@@ -412,7 +420,10 @@ function buildPatchPanelRows(ports: Port[]): PatchPanelRow[] {
   );
 }
 
-function resolvePatchPanelLinkState(front?: Port, rear?: Port): Port["linkState"] {
+function resolvePatchPanelLinkState(
+  front?: Port,
+  rear?: Port,
+): Port["linkState"] {
   if (front?.linkState === "up" || rear?.linkState === "up") return "up";
   if (front?.linkState === "unknown" || rear?.linkState === "unknown") {
     return "unknown";
@@ -504,7 +515,10 @@ function renderPatchPanelCable(
       </span>
       <span>
         {link
-          ? `${link.cableType || t("Cable")}${link.cableLength ? ` | ${link.cableLength}` : ""}`
+          ? t("{value1}{value2}", {
+              value1: link.cableType || t("Cable"),
+              value2: link.cableLength ? ` | ${link.cableLength}` : "",
+            })
           : "—"}
       </span>
     </div>

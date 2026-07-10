@@ -1,0 +1,2402 @@
+[
+  {
+    "key": "Rackpad",
+    "reason": "Product name"
+  },
+  {
+    "key": "WiFi",
+    "reason": "Networking standard name"
+  },
+  {
+    "key": "VLAN",
+    "reason": "Networking acronym"
+  },
+  {
+    "key": "VLANs",
+    "reason": "Networking acronym"
+  },
+  {
+    "key": "IPAM",
+    "reason": "Networking acronym"
+  },
+  {
+    "key": "NetBox device types",
+    "reason": "Product name with technical object"
+  },
+  {
+    "key": "Import NetBox YAML",
+    "reason": "Product name and file format"
+  },
+  {
+    "key": "OID",
+    "reason": "SNMP acronym"
+  },
+  {
+    "key": "DHCP",
+    "reason": "Networking acronym"
+  },
+  {
+    "key": "VM",
+    "reason": "Technical acronym"
+  },
+  {
+    "key": "CPU",
+    "reason": "Technical acronym"
+  },
+  {
+    "key": "IP",
+    "reason": "Networking acronym"
+  },
+  {
+    "key": "CIDR",
+    "reason": "Networking acronym"
+  },
+  {
+    "key": "SSIDs",
+    "reason": "Networking acronym"
+  },
+  {
+    "key": "5 GHz",
+    "reason": "Technical unit"
+  },
+  {
+    "key": "6 GHz",
+    "reason": "Technical unit"
+  },
+  {
+    "key": "AP",
+    "reason": "Networking acronym"
+  },
+  {
+    "key": "SSID",
+    "reason": "Networking acronym"
+  },
+  {
+    "key": "Excel",
+    "reason": "Product name"
+  },
+  {
+    "key": "RJ45",
+    "reason": "Connector standard"
+  },
+  {
+    "key": "SFP",
+    "reason": "Connector standard"
+  },
+  {
+    "key": "SFP+",
+    "reason": "Connector standard"
+  },
+  {
+    "key": "QSFP",
+    "reason": "Connector standard"
+  },
+  {
+    "key": "USB",
+    "reason": "Connector standard"
+  },
+  {
+    "key": "ICMP",
+    "reason": "Protocol acronym"
+  },
+  {
+    "key": "HTTP",
+    "reason": "Protocol acronym"
+  },
+  {
+    "key": "HTTPS",
+    "reason": "Protocol acronym"
+  },
+  {
+    "key": "TCP",
+    "reason": "Protocol acronym"
+  },
+  {
+    "key": "SNMP",
+    "reason": "Protocol acronym"
+  },
+  {
+    "key": "SMTP / Email",
+    "reason": "Protocol acronym"
+  },
+  {
+    "key": "MD5",
+    "reason": "Algorithm name"
+  },
+  {
+    "key": "SHA",
+    "reason": "Algorithm name"
+  },
+  {
+    "key": "Ubiquiti",
+    "reason": "Vendor name"
+  },
+  {
+    "key": "UniFi Network",
+    "reason": "Product name"
+  },
+  {
+    "key": "Windows",
+    "reason": "Product name"
+  },
+  {
+    "key": "WPA2/WPA3 Personal",
+    "reason": "Networking standard name"
+  },
+  {
+    "key": "Docker / Portainer",
+    "reason": "Product names"
+  },
+  {
+    "key": "U-height",
+    "reason": "Rack measurement term"
+  },
+  {
+    "key": "VLAN ID",
+    "reason": "Networking acronym"
+  },
+  {
+    "key": "VLAN 1",
+    "reason": "Technical identifier"
+  },
+  {
+    "key": "Français",
+    "reason": "Native language name"
+  },
+  {
+    "key": "oidc",
+    "reason": "Protocol identifier"
+  },
+  {
+    "key": "v1",
+    "reason": "Protocol version"
+  },
+  {
+    "key": "v2c",
+    "reason": "Protocol version"
+  },
+  {
+    "key": "v3",
+    "reason": "Protocol version"
+  },
+  {
+    "key": "icmp",
+    "reason": "Protocol identifier"
+  },
+  {
+    "key": "snmp",
+    "reason": "Protocol identifier"
+  },
+  {
+    "key": "tcp",
+    "reason": "Protocol identifier"
+  },
+  {
+    "key": "http",
+    "reason": "Protocol identifier"
+  },
+  {
+    "key": "https",
+    "reason": "Protocol identifier"
+  },
+  {
+    "key": "authNoPriv",
+    "reason": "SNMP security level"
+  },
+  {
+    "key": "authPriv (AES128)",
+    "reason": "SNMP security level and cipher"
+  },
+  {
+    "key": "10G",
+    "reason": "Port speed"
+  },
+  {
+    "key": "VLAN {number}",
+    "reason": "Technical identifier"
+  },
+  {
+    "key": "VLAN {vlanId} - {name}",
+    "reason": "Technical identifier with user data"
+  },
+  {
+    "key": "access | VLAN {vlan}",
+    "reason": "Technical port-mode identifier"
+  },
+  {
+    "key": "/health",
+    "reason": "Example URL path"
+  },
+  {
+    "key": "10.0.10.12 or host.example",
+    "reason": "Technical example"
+  },
+  {
+    "key": "aa:bb:cc:dd:ee:ff",
+    "reason": "MAC address example"
+  },
+  {
+    "key": "1G, 10G, virtio...",
+    "reason": "Port speed and driver examples"
+  },
+  {
+    "key": "e.g. aa:bb:cc:dd:ee:ff",
+    "reason": "MAC address example"
+  },
+  {
+    "key": "e.g. C9300-48P",
+    "reason": "Hardware model example"
+  },
+  {
+    "key": "e.g. FOC2134X0AB",
+    "reason": "Serial number example"
+  },
+  {
+    "key": "https://discord.com/api/webhooks/...",
+    "reason": "Technical URL example"
+  },
+  {
+    "key": "https://host.example:8443/",
+    "reason": "Technical URL example"
+  },
+  {
+    "key": "smtp.example.com",
+    "reason": "Technical hostname example"
+  },
+  {
+    "key": "rackpad@example.com",
+    "reason": "Technical email example"
+  },
+  {
+    "key": "Lab",
+    "locales": ["af"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Labs",
+    "locales": ["af"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Admin",
+    "locales": ["af", "de", "id"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Discord webhook URL",
+    "locales": ["af"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Metadata",
+    "locales": ["af", "id"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "HTTP / Portainer",
+    "locales": ["af", "de", "fa", "id", "nl", "pl", "tr", "uk"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Docker API URL",
+    "locales": ["af", "ja"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Subnet",
+    "locales": ["af", "id", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "admin",
+    "locales": ["af", "ar", "id"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Filter",
+    "locales": ["af"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Filters",
+    "locales": ["af", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Status",
+    "locales": ["af", "de", "id", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Model",
+    "locales": ["af", "id", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Gateway/DNS",
+    "locales": ["af", "de", "it", "nl", "pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "{ip} is in {scope}.",
+    "locales": ["af"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Interval",
+    "locales": ["af", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Gateway",
+    "locales": ["af"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "dhcp",
+    "locales": ["af", "ar", "fa", "he", "id", "ja", "pt", "tr", "uk", "vi"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Band",
+    "locales": ["af", "de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Radio",
+    "locales": ["af", "de", "es", "fr", "id", "it", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "+{vlanCreates} VLAN / +{subnetCreates} subnet",
+    "locales": ["af"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Subnet CIDR",
+    "locales": ["af", "id"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "DNS {servers}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "he",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "{count} DHCP",
+    "locales": [
+      "af",
+      "bn",
+      "de",
+      "fa",
+      "fr",
+      "he",
+      "id",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Bond",
+    "locales": ["af", "nl", "pl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Slot",
+    "locales": ["af", "pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "0.5m, 3m...",
+    "locales": ["af", "ko"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "123456:ABCDEF...",
+    "locales": [
+      "af",
+      "ar",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "tr",
+      "uk"
+    ],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "80 MHz",
+    "locales": ["af", "bn", "de", "fr", "it", "nl", "pl", "tr", "vi"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Adapters",
+    "locales": ["af", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Cat6a, DAC, OM4...",
+    "locales": [
+      "af",
+      "bn",
+      "de",
+      "es",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "th",
+      "tr",
+      "uk"
+    ],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "DHCP res",
+    "locales": ["af"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Diagram",
+    "locales": ["af", "id", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Gi1/0/1",
+    "locales": [
+      "af",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "th",
+      "tr",
+      "uk",
+      "vi"
+    ],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "ID",
+    "locales": ["af", "it", "ja", "pt", "uk", "vi"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Linux",
+    "locales": [
+      "af",
+      "de",
+      "fr",
+      "id",
+      "it",
+      "ja",
+      "nl",
+      "pt",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "MAC",
+    "locales": [
+      "af",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "id",
+      "it",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "tr",
+      "uk",
+      "vi"
+    ],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Markdown",
+    "locales": ["af", "he"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Mgmt IP",
+    "locales": ["af", "he", "uk"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Windows Server, Ubuntu, Debian...",
+    "locales": ["af", "de", "he", "it", "nl", "pl", "ru", "uk"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "IPAM CSV",
+    "locales": ["ar", "fa", "he", "ja", "ko", "pl", "uk", "zh", "zh-TW"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "2.4 GHz",
+    "locales": ["bn"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "{slotName} · {band} · Ch {channel}",
+    "locales": ["bn", "fa", "he", "pl", "uk", "zh-TW"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Hardware",
+    "locales": ["de", "it", "nl", "pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Online",
+    "locales": ["de", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Offline",
+    "locales": ["de", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Name",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Layout",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Hostname *",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Position",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Administrator",
+    "locales": ["de", "id", "pl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Version",
+    "locales": ["de", "fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Optional",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Normal",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Hostname",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Pause",
+    "locales": ["de", "fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "{count} VLANs",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "VMs",
+    "locales": ["de", "he", "pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "{count} APs",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Controller: {name}",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Radios",
+    "locales": ["de", "fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Signal",
+    "locales": ["de", "fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Controller",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Signal (dBm)",
+    "locales": ["de", "fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "APs",
+    "locales": ["de", "fa", "he", "pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Port {number}",
+    "locales": ["de", "fr", "pl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Cloud Key Gen2 Plus",
+    "locales": ["de", "fa", "he", "id", "it", "pt", "uk", "vi"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Home-Main",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Management",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Rack A",
+    "locales": ["de", "pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "radio0",
+    "locales": ["de", "es", "fa", "fr", "id", "it", "nl", "pl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "SSID (optional)",
+    "locales": ["de"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Interfaces",
+    "locales": ["es", "fr", "nl", "pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Color",
+    "locales": ["es"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "vSwitch-Servers",
+    "locales": ["fa", "he", "vi"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Ports",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Administration",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Section",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Allocation",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Port",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Documentation",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Message",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Actions",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Mode",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Interface",
+    "locales": ["fr", "nl", "pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Direct",
+    "locales": ["fr", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Source",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Action",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Total",
+    "locales": ["fr", "pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Client",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Zones",
+    "locales": ["fr", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Console",
+    "locales": ["fr", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "clients",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Concave",
+    "locales": ["fr"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Ch {channel}",
+    "locales": ["he", "pl", "uk"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "WiFi CSV",
+    "locales": ["he", "ja", "ko", "uk", "zh", "zh-TW"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Audit",
+    "locales": ["id"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "editor",
+    "locales": ["id", "pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Label",
+    "locales": ["id"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Privacy",
+    "locales": ["it", "nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Dashboard",
+    "locales": ["nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Native VLAN",
+    "locales": ["nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Compact",
+    "locales": ["nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Context",
+    "locales": ["nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Start VLAN",
+    "locales": ["nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Servers",
+    "locales": ["nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "uplink",
+    "locales": ["nl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Link",
+    "locales": ["pl"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Editor",
+    "locales": ["pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Host uplinks",
+    "locales": ["pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "IDs",
+    "locales": ["pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "prod, lab, core",
+    "locales": ["uk"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Email",
+    "locales": ["vi"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "-{value1}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{hostname}{value2}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{value1}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{value1} {hostname}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{value1} {label}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{value1} #{value2}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{value1}: {name}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{value1}{value2}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "| {frontMounted}F/{rearMounted}R",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "id",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "dBm",
+    "locales": [
+      "af",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "tr",
+      "vi"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "https://docker.example.internal:2376",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "Mgmt IP / MAC",
+    "locales": ["af", "fa", "he"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "Monitor",
+    "locales": ["af", "nl"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "ops@example.com, noc@example.com",
+    "locales": [
+      "af",
+      "bn",
+      "de",
+      "he",
+      "hi",
+      "id",
+      "ko",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "OS",
+    "locales": ["af", "ja"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "SSL/TLS",
+    "locales": [
+      "af",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "U",
+    "locales": [
+      "af",
+      "de",
+      "fa",
+      "fr",
+      "he",
+      "it",
+      "ja",
+      "nl",
+      "pl",
+      "uk",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "URL",
+    "locales": [
+      "af",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pt",
+      "th",
+      "uk",
+      "vi"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "v",
+    "locales": [
+      "af",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pt",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "VLAN {vlanId}",
+    "locales": [
+      "af",
+      "bn",
+      "de",
+      "fa",
+      "fr",
+      "he",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "tr",
+      "uk",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": ":{port}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "· {note}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "· {v3User}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "· {value1}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "\"{query}\"",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ko",
+      "nl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "(ifIndex",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "fa",
+      "he",
+      "ja",
+      "ko",
+      "pt",
+      "tr",
+      "uk"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "(ifIndex {snmpIfIndex})",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "ja",
+      "ko",
+      "nl",
+      "pt",
+      "tr",
+      "uk",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "(v",
+    "locales": [
+      "af",
+      "bn",
+      "es",
+      "fa",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pt",
+      "th",
+      "tr",
+      "vi"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{detail}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{highSpeedMbps}M",
+    "locales": [
+      "af",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "tr",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{hostname} ({deviceType})",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{label} {count}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{manufacturer} {model}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{name} {value2}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{name}{value2}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{pct}%",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{startIp} -> {endIp}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{value1}: {placement} / {value3}: {portCount}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{value1}G",
+    "locales": [
+      "af",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "{vlanId} - {name}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "| {cableLength}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "| {channelWidth}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "| {length}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "| {target}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "| {txPower}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "| {value1}",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "D",
+    "locales": [
+      "af",
+      "de",
+      "fa",
+      "id",
+      "it",
+      "ja",
+      "nl",
+      "pl",
+      "pt",
+      "tr",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "ifIndex",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "fa",
+      "he",
+      "hi",
+      "id",
+      "ja",
+      "ko",
+      "pt",
+      "th",
+      "tr",
+      "uk"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "mgmt:",
+    "locales": ["af", "bn", "fa", "he", "uk"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "R /",
+    "locales": [
+      "af",
+      "de",
+      "fa",
+      "he",
+      "id",
+      "ko",
+      "nl",
+      "pl",
+      "tr",
+      "uk",
+      "vi"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "RAM GB",
+    "locales": ["af", "he", "id", "ko", "pl", "pt", "tr"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "s",
+    "locales": [
+      "af",
+      "bn",
+      "de",
+      "es",
+      "fr",
+      "id",
+      "it",
+      "ja",
+      "nl",
+      "pl",
+      "tr",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "slot:",
+    "locales": ["af", "it", "pt"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "via IF-MIB.",
+    "locales": ["af", "fr", "nl", "pt"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "VL",
+    "locales": [
+      "af",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "tr",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "IPs",
+    "locales": ["de", "pt"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "online",
+    "locales": ["de", "nl"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "· if{ifIndex}",
+    "locales": ["de", "he", "ja"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "max",
+    "locales": ["de"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "cables",
+    "locales": ["es"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "total",
+    "locales": ["es", "fr", "pt"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "Total U",
+    "locales": ["es", "fr", "pt"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "pages",
+    "locales": ["fr"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "Parent",
+    "locales": ["fr"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "ports",
+    "locales": ["fr"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "zones",
+    "locales": ["fr", "nl"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "Selected:",
+    "locales": ["hi"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "Disk GB",
+    "locales": ["id", "tr"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "Cross-zone",
+    "locales": ["nl"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "Download {label}",
+    "locales": ["nl"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "Update {name}",
+    "locales": ["nl"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "importer",
+    "locales": ["pl"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "links",
+    "locales": ["pt"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "Discord / Telegram / Email",
+    "locales": ["uk"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "Fit",
+    "locales": ["uk"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "U |",
+    "locales": ["af", "de", "es", "fa", "fr", "he", "it", "nl", "tr", "uk"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "VLANs |",
+    "locales": ["bn", "de", "pt"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "cables |",
+    "locales": ["es"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "Images |",
+    "locales": ["fr"],
+    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
+  },
+  {
+    "key": "({count})",
+    "locales": [
+      "af",
+      "ar",
+      "bn",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nl",
+      "pl",
+      "pt",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, product name, or placeholder-only format verified after translation."
+  },
+  {
+    "key": "Hyper-V / Proxmox",
+    "locales": [
+      "af",
+      "de",
+      "fa",
+      "fr",
+      "he",
+      "id",
+      "ja",
+      "nl",
+      "pl",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-TW"
+    ],
+    "reason": "Locale-invariant technical notation, product name, or placeholder-only format verified after translation."
+  },
+  {
+    "key": "auto",
+    "locales": ["de", "nl", "pl"],
+    "reason": "Locale-invariant technical notation, product name, or placeholder-only format verified after translation."
+  },
+  {
+    "key": "port",
+    "locales": ["fr"],
+    "reason": "Locale-invariant technical notation, product name, or placeholder-only format verified after translation."
+  }
+]

@@ -6,7 +6,11 @@ import { Badge } from "@/components/ui/Badge";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { logout, useStore } from "@/lib/store";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/Popover";
 
 interface TopBarProps {
   title?: string;
@@ -46,16 +50,28 @@ export function TopBar({ title, subtitle, meta, actions }: TopBarProps) {
       </div>
 
       <div className="flex min-w-0 shrink-0 items-center gap-1.5 xl:gap-2">
-        {actions && <div className="hidden items-center gap-2 2xl:flex">{actions}</div>}
+        {actions && (
+          <div className="hidden items-center gap-2 2xl:flex">{actions}</div>
+        )}
         {actions && (
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="icon" className="2xl:hidden" aria-label={t("Actions")}>
+              <Button
+                variant="outline"
+                size="icon"
+                className="2xl:hidden"
+                aria-label={t("Actions")}
+              >
                 <EllipsisVertical className="size-4" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-auto max-w-[calc(100vw-1rem)] p-3 2xl:hidden">
-              <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>
+            <PopoverContent
+              align="end"
+              className="w-auto max-w-[calc(100vw-1rem)] p-3 2xl:hidden"
+            >
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {actions}
+              </div>
             </PopoverContent>
           </Popover>
         )}
@@ -94,7 +110,12 @@ export function TopBar({ title, subtitle, meta, actions }: TopBarProps) {
             >
               {initials(currentUser.displayName || currentUser.username)}
             </div>
-            <Button variant="ghost" size="sm" onClick={() => void logout()} aria-label={t("Sign out")}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void logout()}
+              aria-label={t("Sign out")}
+            >
               <LogOut className="size-3.5" />
               <span className="hidden 2xl:inline">{t("Sign out")}</span>
             </Button>

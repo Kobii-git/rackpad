@@ -104,7 +104,7 @@ type DiscoveryScanRunner = (
   cidr: string,
 ) => Promise<DiscoveryScanResult>;
 
-type DiscoveryScanJobStatus = "queued" | "running" | "succeeded" | "failed";
+type DiscoveryScanJobStatus = "queued" | "running" | "completed" | "failed";
 
 export type DiscoveryScanJob = {
   id: string;
@@ -1194,9 +1194,10 @@ function cleanupDiscoveryScanJobs() {
   }
   const completed = [...discoveryScanJobs.values()]
     .filter((job) => !isActiveDiscoveryScanJob(job))
-    .sort((left, right) =>
-      Date.parse(right.finishedAt ?? right.updatedAt) -
-      Date.parse(left.finishedAt ?? left.updatedAt),
+    .sort(
+      (left, right) =>
+        Date.parse(right.finishedAt ?? right.updatedAt) -
+        Date.parse(left.finishedAt ?? left.updatedAt),
     );
   for (const job of completed.slice(DISCOVERY_SCAN_MAX_COMPLETED)) {
     discoveryScanJobs.delete(job.id);
@@ -1204,7 +1205,9 @@ function cleanupDiscoveryScanJobs() {
 }
 
 function queuedDiscoveryScanJobs() {
-  return [...discoveryScanJobs.values()].filter((job) => job.status === "queued");
+  return [...discoveryScanJobs.values()].filter(
+    (job) => job.status === "queued",
+  );
 }
 
 function serializeDiscoveryScanJob(
@@ -1275,11 +1278,16 @@ function startDiscoveryScanJob(
   }
 
   const limits = discoveryQueueLimits();
-  const running = [...discoveryScanJobs.values()].filter((job) => job.status === "running");
+  const running = [...discoveryScanJobs.values()].filter(
+    (job) => job.status === "running",
+  );
   const activeForLab = running.filter((job) => job.labId === labId).length;
   const canStartImmediately =
     running.length < limits.global && activeForLab < limits.perLab;
-  if (queuedDiscoveryScanJobs().length >= limits.queued && !canStartImmediately) {
+  if (
+    queuedDiscoveryScanJobs().length >= limits.queued &&
+    !canStartImmediately
+  ) {
     throw new ValidationError(
       "The discovery scan queue is full. Try again after an active scan finishes.",
       429,
@@ -1347,7 +1355,7 @@ async function executeDiscoveryScanJob(id: string) {
 
   try {
     const result = await discoveryScanRunner(job.labId, job.cidr);
-    job.status = "succeeded";
+    job.status = "completed";
     job.result = result;
     job.error = null;
     for (const scheduleId of job.scheduleIds) {
@@ -1423,8 +1431,12 @@ export async function runDiscoveryScanSchedule(
     throw new ValidationError(completed.error ?? "Discovery scan failed.");
   }
   const updatedSchedule = getDiscoveryScanScheduleRow(id);
-  if (!updatedSchedule) throw new ValidationError("Discovery scan schedule not found.", 404);
-  return { schedule: parseDiscoveryScanSchedule(updatedSchedule), scan: completed.result };
+  if (!updatedSchedule)
+    throw new ValidationError("Discovery scan schedule not found.", 404);
+  return {
+    schedule: parseDiscoveryScanSchedule(updatedSchedule),
+    scan: completed.result,
+  };
 }
 
 export async function runDueDiscoveryScanSchedules() {
@@ -1448,12 +1460,14 @@ export async function runDueDiscoveryScanSchedules() {
     ) {
       continue;
     }
-    runs.push(runDiscoveryScanSchedule(schedule.id).catch((err) => {
-      console.warn(
-        `[rackpad] Scheduled discovery scan failed for ${schedule.cidr}:`,
-        err instanceof Error ? err.message : err,
-      );
-    }));
+    runs.push(
+      runDiscoveryScanSchedule(schedule.id).catch((err) => {
+        console.warn(
+          `[rackpad] Scheduled discovery scan failed for ${schedule.cidr}:`,
+          err instanceof Error ? err.message : err,
+        );
+      }),
+    );
   }
   await Promise.allSettled(runs);
 }

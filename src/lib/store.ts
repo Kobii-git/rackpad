@@ -3916,7 +3916,7 @@ function resultFromDiscoveryScanJob(job: DiscoveryScanJob) {
   if (job.status === "failed") {
     throw new Error(job.error || "Discovery scan failed.");
   }
-  if (job.status !== "succeeded" || !job.result) {
+  if (job.status !== "completed" || !job.result) {
     throw new Error("Discovery scan finished without a result.");
   }
   return job.result;

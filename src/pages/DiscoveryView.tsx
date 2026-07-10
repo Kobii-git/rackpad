@@ -139,7 +139,9 @@ export default function DiscoveryView() {
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [draft, setDraft] = useState<DiscoveryDraft | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [activeScanJob, setActiveScanJob] = useState<DiscoveryScanJob | null>(null);
+  const [activeScanJob, setActiveScanJob] = useState<DiscoveryScanJob | null>(
+    null,
+  );
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [runningScheduleId, setRunningScheduleId] = useState<string | null>(
     null,
@@ -466,7 +468,12 @@ export default function DiscoveryView() {
   }
 
   async function handleDeleteSchedule(schedule: DiscoveryScanSchedule) {
-    if (!window.confirm(`Delete discovery schedule ${schedule.cidr}?`)) return;
+    if (
+      !window.confirm(
+        t("Delete discovery schedule {cidr}?", { cidr: schedule.cidr }),
+      )
+    )
+      return;
     setDeletingScheduleId(schedule.id);
     setError("");
     try {
@@ -509,7 +516,13 @@ export default function DiscoveryView() {
 
   async function handleDelete() {
     if (!selected) return;
-    if (!window.confirm(`Delete discovered host ${selected.ipAddress}?`))
+    if (
+      !window.confirm(
+        t("Delete discovered host {ipAddress}?", {
+          ipAddress: selected.ipAddress,
+        }),
+      )
+    )
       return;
     setDeleting(true);
     setError("");
@@ -715,7 +728,10 @@ export default function DiscoveryView() {
                 <Search className="size-3.5" />
                 {scanning
                   ? activeScanJob?.status === "queued"
-                    ? `${t("Queued")} #${activeScanJob.queuePosition ?? 1}`
+                    ? t("{value1} #{value2}", {
+                        value1: t("Queued"),
+                        value2: activeScanJob.queuePosition ?? 1,
+                      })
                     : t("Scanning...")
                   : scanTarget === "all"
                     ? t("Scan all")
@@ -726,7 +742,7 @@ export default function DiscoveryView() {
         }
       />
 
-      <div className="flex flex-1 flex-col gap-5 overflow-hidden px-6 py-5">
+      <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
         <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
           <DiscoveryStat
             label={t("Total")}
@@ -1056,8 +1072,11 @@ export default function DiscoveryView() {
           </div>
         )}
 
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-          <div className="order-2 min-w-0 flex-1 overflow-y-auto">
+        <div className="grid min-h-[22rem] gap-3 xl:grid-cols-[minmax(22rem,1fr)_minmax(20rem,0.4fr)] xl:items-start">
+          <div
+            className="min-h-[22rem] min-w-0 xl:max-h-[42rem] xl:overflow-y-auto"
+            data-testid="discovery-inbox"
+          >
             <Card>
               <CardHeader>
                 <CardTitle>
@@ -1150,12 +1169,12 @@ export default function DiscoveryView() {
                                 className="size-3.5 text-[var(--color-accent)]"
                               />
                               <span className="capitalize text-[var(--color-fg-muted)]">
-                                {device.deviceType ?? "endpoint"}
+                                {device.deviceType ?? t("endpoint")}
                               </span>
                             </span>
                           </Td>
                           <Td className="capitalize text-[var(--color-fg-muted)]">
-                            {device.placement ?? "room"}
+                            {device.placement ?? t("room")}
                           </Td>
                           <Td>
                             <div className="space-y-0.5 text-[11px] text-[var(--color-fg-subtle)]">
@@ -1234,7 +1253,7 @@ export default function DiscoveryView() {
             </Card>
           </div>
 
-          <div className="order-1 w-full shrink-0 overflow-y-auto">
+          <div className="min-w-0 w-full">
             <Card>
               <CardHeader>
                 <CardTitle>
@@ -1592,7 +1611,9 @@ function ScanSummary({
               <span className="font-medium text-[var(--color-fg)]">
                 {diagnostic.message}
               </span>
-              {diagnostic.detail ? ` ${diagnostic.detail}` : ""}
+              {diagnostic.detail
+                ? t("{detail}", { detail: diagnostic.detail })
+                : ""}
             </div>
           ))}
         </div>

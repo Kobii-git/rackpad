@@ -6,7 +6,9 @@ export function MarkdownPreview({ content }: { content: string }) {
   const blocks = parseBlocks(content);
   if (blocks.length === 0) {
     return (
-      <div className="text-sm text-[var(--color-fg-subtle)]">{t("Nothing documented yet.")}</div>
+      <div className="text-sm text-[var(--color-fg-subtle)]">
+        {t("Nothing documented yet.")}
+      </div>
     );
   }
   return (

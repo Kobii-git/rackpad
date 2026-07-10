@@ -371,13 +371,15 @@ export default function WifiView() {
                             <div className="text-[11px] text-[var(--color-fg-subtle)]">
                               {[controller.vendor, controller.model]
                                 .filter(Boolean)
-                                .join(" | ") || t("Standalone controller record")}
+                                .join(" | ") ||
+                                t("Standalone controller record")}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge tone="accent">
                               {t("{count} APs", {
-                                count: apCountByControllerId[controller.id] ?? 0,
+                                count:
+                                  apCountByControllerId[controller.id] ?? 0,
                               })}
                             </Badge>
                             {canEdit && (
@@ -656,10 +658,14 @@ export default function WifiView() {
                                           channel: radio.channel,
                                         })}
                                         {radio.channelWidth
-                                          ? ` | ${radio.channelWidth}`
+                                          ? t("| {channelWidth}", {
+                                              channelWidth: radio.channelWidth,
+                                            })
                                           : ""}
                                         {radio.txPower
-                                          ? ` | ${radio.txPower}`
+                                          ? t("| {txPower}", {
+                                              txPower: radio.txPower,
+                                            })
                                           : ""}
                                       </div>
                                     </div>
@@ -761,7 +767,7 @@ export default function WifiView() {
                                           )}
                                           {association?.signalDbm != null && (
                                             <span>
-                                              {association.signalDbm} dBm
+                                              {association.signalDbm} {t("dBm")}
                                             </span>
                                           )}
                                           {formatDeviceAddress(client) && (
@@ -773,7 +779,9 @@ export default function WifiView() {
                                         <div className="text-[11px] text-[var(--color-fg-subtle)]">
                                           {t("Last seen {time}", {
                                             time: association?.lastSeen
-                                              ? relativeTime(association.lastSeen)
+                                              ? relativeTime(
+                                                  association.lastSeen,
+                                                )
                                               : relativeTime(client.lastSeen),
                                           })}
                                         </div>
@@ -829,11 +837,15 @@ export default function WifiView() {
                     <table className="min-w-full text-left text-sm">
                       <thead>
                         <tr className="border-b border-[var(--color-line)] text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                          <th className="pb-2 pr-3 font-medium">{t("Client")}</th>
+                          <th className="pb-2 pr-3 font-medium">
+                            {t("Client")}
+                          </th>
                           <th className="pb-2 pr-3 font-medium">{t("AP")}</th>
                           <th className="pb-2 pr-3 font-medium">{t("SSID")}</th>
                           <th className="pb-2 pr-3 font-medium">{t("Band")}</th>
-                          <th className="pb-2 pr-3 font-medium">{t("Signal")}</th>
+                          <th className="pb-2 pr-3 font-medium">
+                            {t("Signal")}
+                          </th>
                           <th className="pb-2 pr-3 font-medium">
                             {t("Last seen")}
                           </th>
@@ -1115,10 +1127,7 @@ export default function WifiView() {
   );
 }
 
-function editorTitle(
-  editor: EditorState,
-  t: ReturnType<typeof useI18n>["t"],
-) {
+function editorTitle(editor: EditorState, t: ReturnType<typeof useI18n>["t"]) {
   switch (editor.kind) {
     case "controller":
       return editor.controller ? t("Edit controller") : t("Add controller");
@@ -1148,13 +1157,9 @@ function editorSubtitle(
         "Define the wireless network name, security, VLAN, and visual identity.",
       );
     case "accessPoint":
-      return t(
-        "Configure controller, location, and firmware for {hostname}.",
-        {
-          hostname:
-            deviceById[editor.deviceId]?.hostname ?? editor.deviceId,
-        },
-      );
+      return t("Configure controller, location, and firmware for {hostname}.", {
+        hostname: deviceById[editor.deviceId]?.hostname ?? editor.deviceId,
+      });
     case "radio":
       return t(
         "Document the band, channel, and broadcast SSIDs for {hostname}.",
@@ -1166,8 +1171,7 @@ function editorSubtitle(
     case "association":
       return t("Link {hostname} to an AP, radio, and SSID.", {
         hostname:
-          deviceById[editor.clientDeviceId]?.hostname ??
-          editor.clientDeviceId,
+          deviceById[editor.clientDeviceId]?.hostname ?? editor.clientDeviceId,
       });
   }
 }
@@ -1364,7 +1368,9 @@ function ControllerEditor({
             setForm((prev) => ({ ...prev, notes: event.target.value }))
           }
           className={TEXTAREA_CLASS}
-          placeholder={t("What this controller manages, where it runs, and any caveats.")}
+          placeholder={t(
+            "What this controller manages, where it runs, and any caveats.",
+          )}
         />
       </Field>
 
@@ -1650,7 +1656,9 @@ function AccessPointEditor({
             setForm((prev) => ({ ...prev, notes: event.target.value }))
           }
           className={TEXTAREA_CLASS}
-          placeholder={t("Coverage area, mounting notes, or maintenance reminders.")}
+          placeholder={t(
+            "Coverage area, mounting notes, or maintenance reminders.",
+          )}
         />
       </Field>
 
@@ -1859,7 +1867,11 @@ function RadioEditor({
             disabled={saving || !form.slotName.trim() || !form.channel.trim()}
           >
             <Save className="size-3.5" />
-            {saving ? t("Saving...") : radio ? t("Save radio") : t("Create radio")}
+            {saving
+              ? t("Saving...")
+              : radio
+                ? t("Save radio")
+                : t("Create radio")}
           </Button>
         </div>
       </div>
@@ -2109,7 +2121,9 @@ function AssociationEditor({
             setForm((prev) => ({ ...prev, notes: event.target.value }))
           }
           className={TEXTAREA_CLASS}
-          placeholder={t("Why this client is pinned here, roaming behavior, or signal caveats.")}
+          placeholder={t(
+            "Why this client is pinned here, roaming behavior, or signal caveats.",
+          )}
         />
       </Field>
 
@@ -2151,8 +2165,13 @@ function AssociationEditor({
 }
 
 function SignalPill({ signalDbm }: { signalDbm: number }) {
+  const { t } = useI18n();
   const tone = signalDbm >= -60 ? "ok" : signalDbm >= -70 ? "warn" : "err";
-  return <Badge tone={tone}>{signalDbm} dBm</Badge>;
+  return (
+    <Badge tone={tone}>
+      {signalDbm} {t("dBm")}
+    </Badge>
+  );
 }
 
 function toLocalInputValue(iso: string) {

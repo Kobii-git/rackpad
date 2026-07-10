@@ -1,10 +1,6 @@
 import { motion } from "motion/react";
 import type { Device, Port, PortLink, VirtualSwitch, Vlan } from "@/lib/types";
-import {
-  cn,
-  formatPortLabel,
-  portTypeColor,
-} from "@/lib/utils";
+import { cn, formatPortLabel, portTypeColor } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -322,7 +318,13 @@ function PortCell({
             </span>
           </div>
           <span className="text-[var(--text-tertiary)]">
-            {formatPortModeSummary(t, port, vlansById, virtualSwitchesById, false)}
+            {formatPortModeSummary(
+              t,
+              port,
+              vlansById,
+              virtualSwitchesById,
+              false,
+            )}
           </span>
           {port.virtualSwitchId ? (
             <span className="text-[var(--accent-secondary)]">
@@ -333,24 +335,23 @@ function PortCell({
               })}
             </span>
           ) : null}
-	          {snmpVerified ? (
-	            <span className="text-[var(--accent-primary)]">
-	              {t("SNMP verified link state")}
-	            </span>
-	          ) : null}
-	          {port.portRole === "aggregate" ? (
-	            <span className="text-[var(--accent-secondary)]">
-	              {t("Aggregate port")}
-	            </span>
-	          ) : port.aggregatePortId ? (
-	            <span className="text-[var(--text-tertiary)]">
-	              {t("Member of {name}", {
-	                name:
-	                  portsById[port.aggregatePortId]?.name ??
-	                  port.aggregatePortId,
-	              })}
-	            </span>
-	          ) : null}
+          {snmpVerified ? (
+            <span className="text-[var(--accent-primary)]">
+              {t("SNMP verified link state")}
+            </span>
+          ) : null}
+          {port.portRole === "aggregate" ? (
+            <span className="text-[var(--accent-secondary)]">
+              {t("Aggregate port")}
+            </span>
+          ) : port.aggregatePortId ? (
+            <span className="text-[var(--text-tertiary)]">
+              {t("Member of {name}", {
+                name:
+                  portsById[port.aggregatePortId]?.name ?? port.aggregatePortId,
+              })}
+            </span>
+          ) : null}
           {isLinked && otherDevice && otherPort ? (
             <span className="text-[var(--accent-secondary)]">
               {t("linked to {hostname}:{portLabel}", {
@@ -364,7 +365,9 @@ function PortCell({
           {link && (
             <span className="text-[var(--text-tertiary)]">
               {link.cableType || t("Cable")}{" "}
-              {link.cableLength ? `| ${link.cableLength}` : ""}
+              {link.cableLength
+                ? t("| {cableLength}", { cableLength: link.cableLength })
+                : ""}
             </span>
           )}
         </div>

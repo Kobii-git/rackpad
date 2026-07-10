@@ -8,7 +8,7 @@ export type AssignmentReferenceField =
   | 'containerId'
 
 export interface AssignmentIntegrity {
-  state: 'ok' | 'cross-lab-reference' | 'missing-reference'
+  state: 'ok' | 'cross-lab-reference' | 'missing-reference' | 'reference-mismatch'
   fields: AssignmentReferenceField[]
 }
 
@@ -94,6 +94,7 @@ export function inspectAssignmentReferences(
 ): AssignmentIntegrity {
   const crossLabFields: AssignmentReferenceField[] = []
   const missingFields: AssignmentReferenceField[] = []
+  const mismatchFields: AssignmentReferenceField[] = []
 
   if (references.deviceId) {
     const device = deviceById(references.deviceId)
@@ -104,6 +105,9 @@ export function inspectAssignmentReferences(
     const port = portById(references.portId)
     if (!port) missingFields.push('portId')
     else if (port.labId !== subnetLabId) crossLabFields.push('portId')
+    else if (references.deviceId && port.deviceId !== references.deviceId) {
+      mismatchFields.push('portId')
+    }
   }
   for (const field of ['vmId', 'containerId'] as const) {
     const targetId = references[field]
@@ -113,7 +117,16 @@ export function inspectAssignmentReferences(
   }
 
   if (crossLabFields.length > 0) {
-    return { state: 'cross-lab-reference', fields: crossLabFields }
+    return {
+      state: 'cross-lab-reference',
+      fields: [...new Set([...crossLabFields, ...mismatchFields, ...missingFields])],
+    }
+  }
+  if (mismatchFields.length > 0) {
+    return {
+      state: 'reference-mismatch',
+      fields: [...new Set([...mismatchFields, ...missingFields])],
+    }
   }
   if (missingFields.length > 0) {
     return { state: 'missing-reference', fields: missingFields }

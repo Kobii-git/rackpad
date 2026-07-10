@@ -176,7 +176,8 @@ export default function CableView() {
     return [...ports]
       .filter(
         (port) =>
-          (!linkedPortIds.has(port.id) || selectedEndpointPortIds.has(port.id)) &&
+          (!linkedPortIds.has(port.id) ||
+            selectedEndpointPortIds.has(port.id)) &&
           !port.aggregatePortId,
       )
       .sort((a, b) =>
@@ -290,11 +291,12 @@ export default function CableView() {
   return (
     <>
       <TopBar
-        subtitle="Connections"
+        subtitle={t("Connections")}
         title={t("Cables")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {portLinks.length} cables | {Object.keys(byType).length} types
+            {portLinks.length} {t("cables |")}
+            {Object.keys(byType).length} {t("types")}
           </span>
         }
       />
@@ -307,11 +309,13 @@ export default function CableView() {
                 <CardLabel>{t("Create")}</CardLabel>
                 <CardHeading>{t("Patch a new cable")}</CardHeading>
               </CardTitle>
-              <Badge tone="cyan">{availablePorts.length} free ports</Badge>
+              <Badge tone="cyan">
+                {availablePorts.length} {t("free ports")}
+              </Badge>
             </CardHeader>
             <CardBody className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
-                <Field label="From port">
+                <Field label={t("From port")}>
                   <Select
                     value={createForm.fromPortId}
                     onChange={(value) =>
@@ -326,7 +330,7 @@ export default function CableView() {
                     ))}
                   </Select>
                 </Field>
-                <Field label="To port">
+                <Field label={t("To port")}>
                   <Select
                     value={createForm.toPortId}
                     onChange={(value) =>
@@ -346,7 +350,7 @@ export default function CableView() {
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
-                <Field label="Cable type">
+                <Field label={t("Cable type")}>
                   <Input
                     value={createForm.cableType}
                     onChange={(e) =>
@@ -358,7 +362,7 @@ export default function CableView() {
                     placeholder={t("Cat6a, DAC, OM4...")}
                   />
                 </Field>
-                <Field label="Length">
+                <Field label={t("Length")}>
                   <Input
                     value={createForm.cableLength}
                     onChange={(e) =>
@@ -370,7 +374,7 @@ export default function CableView() {
                     placeholder={t("0.5m, 3m...")}
                   />
                 </Field>
-                <Field label="Color">
+                <Field label={t("Color")}>
                   <ColorInput
                     value={createForm.color}
                     onChange={(value) =>
@@ -381,7 +385,7 @@ export default function CableView() {
                 </Field>
               </div>
 
-              <Field label="Notes">
+              <Field label={t("Notes")}>
                 <textarea
                   value={createForm.notes}
                   onChange={(e) =>
@@ -413,7 +417,7 @@ export default function CableView() {
                   onClick={() => void handleCreateCable()}
                 >
                   <Plus className="size-3.5" />
-                  {creating ? "Creating..." : "Create cable"}
+                  {creating ? t("Creating...") : t("Create cable")}
                 </Button>
               </div>
             </CardBody>
@@ -424,11 +428,11 @@ export default function CableView() {
               <CardTitle>
                 <CardLabel>{t("Inspector")}</CardLabel>
                 <CardHeading>
-                  {selectedLink ? "Selected cable" : "Select a cable"}
+                  {selectedLink ? t("Selected cable") : t("Select a cable")}
                 </CardHeading>
               </CardTitle>
               {selectedLink && (
-                <Badge>{selectedLink.cableType ?? "Cable"}</Badge>
+                <Badge>{selectedLink.cableType ?? t("Cable")}</Badge>
               )}
             </CardHeader>
             <CardBody>
@@ -443,7 +447,9 @@ export default function CableView() {
               ) : (
                 <div className="space-y-4">
                   <div className="rk-panel-inset rounded-[var(--radius-md)] p-3">
-                    <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">{t("Endpoints")}</div>
+                    <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
+                      {t("Endpoints")}
+                    </div>
                     <CableEndpoints
                       link={selectedLink}
                       portById={portById}
@@ -452,7 +458,7 @@ export default function CableView() {
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-2">
-                    <Field label="From port">
+                    <Field label={t("From port")}>
                       <Select
                         value={editForm.fromPortId}
                         onChange={(value) =>
@@ -471,7 +477,7 @@ export default function CableView() {
                           ))}
                       </Select>
                     </Field>
-                    <Field label="To port">
+                    <Field label={t("To port")}>
                       <Select
                         value={editForm.toPortId}
                         onChange={(value) =>
@@ -493,7 +499,7 @@ export default function CableView() {
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-3">
-                    <Field label="Cable type">
+                    <Field label={t("Cable type")}>
                       <Input
                         value={editForm.cableType}
                         onChange={(e) =>
@@ -505,7 +511,7 @@ export default function CableView() {
                         placeholder={t("Cat6a, DAC, OM4...")}
                       />
                     </Field>
-                    <Field label="Length">
+                    <Field label={t("Length")}>
                       <Input
                         value={editForm.cableLength}
                         onChange={(e) =>
@@ -517,7 +523,7 @@ export default function CableView() {
                         placeholder={t("0.5m, 3m...")}
                       />
                     </Field>
-                    <Field label="Color">
+                    <Field label={t("Color")}>
                       <ColorInput
                         value={editForm.color}
                         onChange={(value) =>
@@ -528,7 +534,7 @@ export default function CableView() {
                     </Field>
                   </div>
 
-                  <Field label="Notes">
+                  <Field label={t("Notes")}>
                     <textarea
                       value={editForm.notes}
                       onChange={(e) =>
@@ -558,8 +564,8 @@ export default function CableView() {
                       >
                         <Trash2 className="size-3.5" />
                         {deletingId === selectedLink.id
-                          ? "Removing..."
-                          : "Delete cable"}
+                          ? t("Removing...")
+                          : t("Delete cable")}
                       </Button>
                     )}
                     <Button
@@ -573,7 +579,7 @@ export default function CableView() {
                       onClick={() => void handleSaveCable()}
                     >
                       <Save className="size-3.5" />
-                      {saving ? "Saving..." : "Save changes"}
+                      {saving ? t("Saving...") : t("Save changes")}
                     </Button>
                   </div>
                 </div>
@@ -591,7 +597,9 @@ export default function CableView() {
                 : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
             }`}
           >
-            <span className="font-mono text-[10px] uppercase tracking-wider">{t("All")}</span>
+            <span className="font-mono text-[10px] uppercase tracking-wider">
+              {t("All")}
+            </span>
             <Mono className="ml-2 text-[10px]">{portLinks.length}</Mono>
           </button>
           {Object.entries(byType).map(([type, count]) => (
@@ -628,7 +636,9 @@ export default function CableView() {
           <CardHeader>
             <CardTitle>
               <CardLabel>{t("Inventory")}</CardLabel>
-              <CardHeading>{filtered.length} cables</CardHeading>
+              <CardHeading>
+                {filtered.length} {t("cables")}
+              </CardHeading>
             </CardTitle>
             <CableIcon className="size-4 text-[var(--color-fg-subtle)]" />
           </CardHeader>
@@ -637,20 +647,42 @@ export default function CableView() {
               <table className="rk-table">
                 <thead>
                   <tr>
-                    <SortableHeader sortKey="from" sort={sort} onSort={handleSort}>{t("From")}</SortableHeader>
+                    <SortableHeader
+                      sortKey="from"
+                      sort={sort}
+                      onSort={handleSort}
+                    >
+                      {t("From")}
+                    </SortableHeader>
                     <Th />
-                    <SortableHeader sortKey="to" sort={sort} onSort={handleSort}>{t("To")}</SortableHeader>
-                    <SortableHeader sortKey="type" sort={sort} onSort={handleSort}>{t("Type")}</SortableHeader>
+                    <SortableHeader
+                      sortKey="to"
+                      sort={sort}
+                      onSort={handleSort}
+                    >
+                      {t("To")}
+                    </SortableHeader>
+                    <SortableHeader
+                      sortKey="type"
+                      sort={sort}
+                      onSort={handleSort}
+                    >
+                      {t("Type")}
+                    </SortableHeader>
                     <SortableHeader
                       sortKey="length"
                       sort={sort}
                       onSort={handleSort}
-                    >{t("Length")}</SortableHeader>
+                    >
+                      {t("Length")}
+                    </SortableHeader>
                     <SortableHeader
                       sortKey="color"
                       sort={sort}
                       onSort={handleSort}
-                    >{t("Color")}</SortableHeader>
+                    >
+                      {t("Color")}
+                    </SortableHeader>
                   </tr>
                 </thead>
                 <tbody>
@@ -697,7 +729,7 @@ export default function CableView() {
                           </div>
                         </Td>
                         <Td>
-                          <Badge>{link.cableType ?? "Unknown"}</Badge>
+                          <Badge>{link.cableType ?? t("Unknown")}</Badge>
                         </Td>
                         <Td>
                           <Mono className="text-[var(--color-fg-muted)]">
@@ -731,7 +763,9 @@ export default function CableView() {
                 </tbody>
               </table>
               {filtered.length === 0 && (
-                <div className="px-4 py-8 text-center text-xs text-[var(--color-fg-subtle)]">{t("No cables match your filter.")}</div>
+                <div className="px-4 py-8 text-center text-xs text-[var(--color-fg-subtle)]">
+                  {t("No cables match your filter.")}
+                </div>
               )}
             </div>
           </CardBody>
@@ -793,6 +827,7 @@ function CableEndpoints({
   portById: Record<string, Port>;
   deviceById: Record<string, Device>;
 }) {
+  const { t } = useI18n();
   const fromPort = portById[link.fromPortId];
   const toPort = portById[link.toPortId];
   const fromDevice = fromPort ? deviceById[fromPort.deviceId] : undefined;
@@ -800,13 +835,13 @@ function CableEndpoints({
 
   return (
     <div className="inline-flex items-center gap-1.5 text-xs">
-      <span>{fromDevice?.hostname ?? "Unknown device"}</span>
+      <span>{fromDevice?.hostname ?? t("Unknown device")}</span>
       <span className="text-[var(--color-fg-faint)]">:</span>
       <Mono className="text-[var(--color-cyan)]">
         {formatPortLabel(fromPort, { includeFace: true })}
       </Mono>
       <ArrowRight className="size-3 text-[var(--color-fg-subtle)]" />
-      <span>{toDevice?.hostname ?? "Unknown device"}</span>
+      <span>{toDevice?.hostname ?? t("Unknown device")}</span>
       <span className="text-[var(--color-fg-faint)]">:</span>
       <Mono className="text-[var(--color-cyan)]">
         {formatPortLabel(toPort, { includeFace: true })}

@@ -266,7 +266,10 @@ export default function ComputeView() {
   async function handleDeleteBridge(virtualSwitch: VirtualSwitch) {
     if (
       !window.confirm(
-        `Delete virtual switch "${virtualSwitch.name}"? Ports mapped to it will keep their VLAN settings but lose bridge membership.`,
+        t(
+          'Delete virtual switch "{name}"? Ports mapped to it will keep their VLAN settings but lose bridge membership.',
+          { name: virtualSwitch.name },
+        ),
       )
     ) {
       return;
@@ -291,11 +294,12 @@ export default function ComputeView() {
   return (
     <>
       <TopBar
-        subtitle="Virtualization inventory"
+        subtitle={t("Virtualization inventory")}
         title={t("Compute")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {hosts.length} hosts | {vms.length} VMs
+            {hosts.length} {t("hosts |")}
+            {vms.length} {t("VMs")}
           </span>
         }
         actions={
@@ -314,7 +318,7 @@ export default function ComputeView() {
                 }}
               >
                 <Plus className="size-3.5" />
-                Add host
+                {t("Add host")}
               </Button>
               <Button
                 variant="outline"
@@ -329,7 +333,7 @@ export default function ComputeView() {
                 }}
               >
                 <Plus className="size-3.5" />
-                Add VM
+                {t("Add VM")}
               </Button>
             </div>
           ) : undefined
@@ -339,24 +343,24 @@ export default function ComputeView() {
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <div className="mb-4 grid gap-3 md:grid-cols-4">
           <ComputeStat
-            label="Hosts"
+            label={t("Hosts")}
             value={String(hosts.length)}
-            hint="Potential virtualization hosts"
+            hint={t("Potential virtualization hosts")}
           />
           <ComputeStat
-            label="Active hosts"
+            label={t("Active hosts")}
             value={String(activeHosts.length)}
-            hint="Hosts with at least one guest"
+            hint={t("Hosts with at least one guest")}
           />
           <ComputeStat
-            label="VMs"
+            label={t("VMs")}
             value={String(vms.length)}
-            hint="Virtual devices documented in this lab"
+            hint={t("Virtual devices documented in this lab")}
           />
           <ComputeStat
-            label="Unassigned VMs"
+            label={t("Unassigned VMs")}
             value={String(unassignedVms.length)}
-            hint="Guests not linked to a host yet"
+            hint={t("Guests not linked to a host yet")}
           />
         </div>
 
@@ -365,7 +369,9 @@ export default function ComputeView() {
             <CardHeader>
               <CardTitle>
                 <CardLabel>{t("Hosts")}</CardLabel>
-                <CardHeading>{t("Virtualization and compute nodes")}</CardHeading>
+                <CardHeading>
+                  {t("Virtualization and compute nodes")}
+                </CardHeading>
               </CardTitle>
             </CardHeader>
             <CardBody className="space-y-4">
@@ -395,7 +401,7 @@ export default function ComputeView() {
                               </CardTitle>
                               <Badge tone="accent">
                                 <Cpu className="size-3" />
-                                {guests.length} VMs
+                                {guests.length} {t("VMs")}
                               </Badge>
                             </CardHeader>
                             <CardBody className="space-y-3">
@@ -414,17 +420,17 @@ export default function ComputeView() {
                               capacity.storage.total ? (
                                 <div className="grid gap-2 md:grid-cols-3">
                                   <CapacityMeter
-                                    label="CPU"
+                                    label={t("CPU")}
                                     unit="cores"
                                     {...capacity.cpu}
                                   />
                                   <CapacityMeter
-                                    label="Memory"
+                                    label={t("Memory")}
                                     unit="GB"
                                     {...capacity.memory}
                                   />
                                   <CapacityMeter
-                                    label="Storage"
+                                    label={t("Storage")}
                                     unit="GB"
                                     {...capacity.storage}
                                   />
@@ -504,7 +510,7 @@ export default function ComputeView() {
                                     }}
                                   >
                                     <Plus className="size-3.5" />
-                                    Add VM on host
+                                    {t("Add VM on host")}
                                   </Button>
                                 </div>
                               )}
@@ -517,7 +523,9 @@ export default function ComputeView() {
 
                   {emptyHosts.length > 0 && (
                     <div>
-                      <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Hosts without guests yet")}</div>
+                      <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                        {t("Hosts without guests yet")}
+                      </div>
                       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                         {emptyHosts.map((host) => (
                           <div
@@ -618,7 +626,7 @@ export default function ComputeView() {
                       <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
                         {device.displayName ||
                           formatDeviceAddress(device) ||
-                          "No host selected yet"}
+                          t("No host selected yet")}
                       </div>
                     </Link>
                   ))}
@@ -714,17 +722,21 @@ function VirtualSwitchSection({
   return (
     <div className={compact ? "mt-3 space-y-2" : "space-y-3"}>
       <div className="flex items-center justify-between gap-2">
-        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Virtual switches")}</div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+          {t("Virtual switches")}
+        </div>
         {canEdit ? (
           <Button variant="outline" size="sm" onClick={onCreate}>
             <Plus className="size-3.5" />
-            Add bridge
+            {t("Add bridge")}
           </Button>
         ) : null}
       </div>
 
       {virtualSwitches.length === 0 && !editorOpen ? (
-        <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-[11px] text-[var(--color-fg-subtle)]">{t("No host bridges documented yet.")}</div>
+        <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-[11px] text-[var(--color-fg-subtle)]">
+          {t("No host bridges documented yet.")}
+        </div>
       ) : null}
 
       {virtualSwitches.length > 0 ? (
@@ -762,8 +774,9 @@ function VirtualSwitchSection({
                       <Badge tone={tone}>{virtualSwitch.kind}</Badge>
                     </div>
                     <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
-                      {members.length} member ports | {hostUplinkPorts.length}{" "}
-                      host uplinks | {guestPorts.length} guest NICs
+                      {members.length} {t("member ports |")}
+                      {hostUplinkPorts.length} {t("host uplinks |")}
+                      {guestPorts.length} {t("guest NICs")}
                     </div>
                     {virtualSwitch.notes ? (
                       <div className="mt-1 text-[11px] text-[var(--text-muted)]">
@@ -772,7 +785,9 @@ function VirtualSwitchSection({
                     ) : null}
                     <div className="mt-3 space-y-2">
                       <div>
-                        <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Host uplinks")}</div>
+                        <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                          {t("Host uplinks")}
+                        </div>
                         {hostUplinkPorts.length > 0 ? (
                           <div className="flex flex-wrap gap-2">
                             {hostUplinkPorts.map((port) => (
@@ -792,14 +807,18 @@ function VirtualSwitchSection({
                         ) : (
                           <div className="text-[11px] text-[var(--text-tertiary)]">
                             {virtualSwitch.kind === "external"
-                              ? "No host uplinks assigned yet."
-                              : "This bridge type does not require a physical host uplink."}
+                              ? t("No host uplinks assigned yet.")
+                              : t(
+                                  "This bridge type does not require a physical host uplink.",
+                                )}
                           </div>
                         )}
                       </div>
 
                       <div>
-                        <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Guest members")}</div>
+                        <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                          {t("Guest members")}
+                        </div>
                         {guestPorts.length > 0 ? (
                           <div className="grid gap-1.5">
                             {guestPorts.map((port) => {
@@ -833,7 +852,11 @@ function VirtualSwitchSection({
                             })}
                           </div>
                         ) : (
-                          <div className="text-[11px] text-[var(--text-tertiary)]">{t("No VM or guest NICs are mapped to this bridge yet.")}</div>
+                          <div className="text-[11px] text-[var(--text-tertiary)]">
+                            {t(
+                              "No VM or guest NICs are mapped to this bridge yet.",
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -849,7 +872,9 @@ function VirtualSwitchSection({
                             hostUplinkPorts.map((port) => port.id),
                           )
                         }
-                        aria-label={`Edit ${virtualSwitch.name}`}
+                        aria-label={t("Edit {name}", {
+                          name: virtualSwitch.name,
+                        })}
                       >
                         <Pencil className="size-3.5" />
                       </Button>
@@ -857,7 +882,9 @@ function VirtualSwitchSection({
                         variant="ghost"
                         size="icon"
                         onClick={() => onDelete(virtualSwitch)}
-                        aria-label={`Delete ${virtualSwitch.name}`}
+                        aria-label={t("Delete {name}", {
+                          name: virtualSwitch.name,
+                        })}
                         disabled={bridgeDeletingId === virtualSwitch.id}
                       >
                         <Trash2 className="size-3.5" />
@@ -876,7 +903,7 @@ function VirtualSwitchSection({
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
               <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-                {editingId ? "Edit bridge" : "New bridge"}
+                {editingId ? t("Edit bridge") : t("New bridge")}
               </div>
               <div className="text-sm font-medium text-[var(--text-primary)]">
                 {host.hostname}
@@ -888,7 +915,7 @@ function VirtualSwitchSection({
           </div>
 
           <div className="space-y-3">
-            <ComputeField label="Name">
+            <ComputeField label={t("Name")}>
               <Input
                 value={bridgeForm.name}
                 onChange={(event) =>
@@ -901,7 +928,7 @@ function VirtualSwitchSection({
               />
             </ComputeField>
 
-            <ComputeField label="Bridge type">
+            <ComputeField label={t("Bridge type")}>
               <ComputeSelect
                 value={bridgeForm.kind}
                 onChange={(event) =>
@@ -919,7 +946,7 @@ function VirtualSwitchSection({
               </ComputeSelect>
             </ComputeField>
 
-            <ComputeField label="Notes">
+            <ComputeField label={t("Notes")}>
               <textarea
                 value={bridgeForm.notes}
                 onChange={(event) =>
@@ -930,13 +957,17 @@ function VirtualSwitchSection({
                 }
                 rows={3}
                 className="w-full resize-none rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-2.5 py-2 text-sm text-[var(--color-fg)] focus-visible:border-[var(--color-accent-soft)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-accent-soft)]"
-                placeholder={t("External uplink bridge for guest and management networks")}
+                placeholder={t(
+                  "External uplink bridge for guest and management networks",
+                )}
               />
             </ComputeField>
 
             {bridgeForm.kind === "external" ? (
               <div className="space-y-2">
-                <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Host uplink ports")}</div>
+                <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                  {t("Host uplink ports")}
+                </div>
                 {sortedHostPorts.length > 0 ? (
                   <div className="grid gap-2 sm:grid-cols-2">
                     {sortedHostPorts.map((port) => {
@@ -981,8 +1012,9 @@ function VirtualSwitchSection({
                           </div>
                           {assignedElsewhere ? (
                             <div className="mt-1 text-[11px] text-[var(--warning)]">
-                              Currently on {assignedElsewhere.name}. Saving here
-                              will move it.
+                              {t("Currently on")}
+                              {assignedElsewhere.name}
+                              {t(". Saving here will move it.")}
                             </div>
                           ) : null}
                         </button>
@@ -990,14 +1022,26 @@ function VirtualSwitchSection({
                     })}
                   </div>
                 ) : (
-                  <div className="text-[11px] text-[var(--color-fg-subtle)]">{t("No host ports are documented on this device yet. Add them in the Ports workspace first.")}</div>
+                  <div className="text-[11px] text-[var(--color-fg-subtle)]">
+                    {t(
+                      "No host ports are documented on this device yet. Add them in the Ports workspace first.",
+                    )}
+                  </div>
                 )}
               </div>
             ) : (
-              <div className="text-[11px] text-[var(--color-fg-subtle)]">{t("Internal and private bridges do not use physical host uplinks. Guest NICs can still join this bridge from the Ports workspace.")}</div>
+              <div className="text-[11px] text-[var(--color-fg-subtle)]">
+                {t(
+                  "Internal and private bridges do not use physical host uplinks. Guest NICs can still join this bridge from the Ports workspace.",
+                )}
+              </div>
             )}
 
-            <div className="text-[11px] text-[var(--color-fg-subtle)]">{t("VM and guest NIC membership remains available from the Ports workspace, and member NICs are summarized above for quick review.")}</div>
+            <div className="text-[11px] text-[var(--color-fg-subtle)]">
+              {t(
+                "VM and guest NIC membership remains available from the Ports workspace, and member NICs are summarized above for quick review.",
+              )}
+            </div>
 
             {bridgeError ? (
               <div className="text-xs text-[var(--color-err)]">
@@ -1006,14 +1050,16 @@ function VirtualSwitchSection({
             ) : null}
 
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={onCancel}>{t("Cancel")}</Button>
+              <Button variant="ghost" size="sm" onClick={onCancel}>
+                {t("Cancel")}
+              </Button>
               <Button size="sm" onClick={onSave} disabled={bridgeSaving}>
                 <Save className="size-3.5" />
                 {bridgeSaving
-                  ? "Saving..."
+                  ? t("Saving...")
                   : editingId
-                    ? "Save bridge"
-                    : "Create bridge"}
+                    ? t("Save bridge")
+                    : t("Create bridge")}
               </Button>
             </div>
           </div>

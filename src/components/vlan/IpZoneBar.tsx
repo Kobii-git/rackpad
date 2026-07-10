@@ -67,7 +67,9 @@ export function IpZoneBar({
 
   if (combined.length === 0) {
     return (
-      <div className="text-[11px] text-[var(--text-tertiary)]">{t("No zones documented for this subnet.")}</div>
+      <div className="text-[11px] text-[var(--text-tertiary)]">
+        {t("No zones documented for this subnet.")}
+      </div>
     );
   }
 
@@ -112,7 +114,7 @@ export function IpZoneBar({
                       style={{ color }}
                     >
                       {ZONE_LABEL[zone.kind]}
-                      {zone.kind === "dhcp" ? ` ${pct}%` : ""}
+                      {zone.kind === "dhcp" ? t("{pct}%", { pct: pct }) : ""}
                     </span>
                   )}
                 </button>
@@ -122,14 +124,19 @@ export function IpZoneBar({
                   <div className="font-medium" style={{ color }}>
                     {ZONE_LABEL[zone.kind]}
                   </div>
-                  <Mono className="text-[var(--text-tertiary)]">{`${zone.startIp} -> ${zone.endIp}`}</Mono>
+                  <Mono className="text-[var(--text-tertiary)]">
+                    {t("{startIp} -> {endIp}", {
+                      startIp: zone.startIp,
+                      endIp: zone.endIp,
+                    })}
+                  </Mono>
                   <div className="text-[var(--text-tertiary)]">
                     {usageLabel}
                   </div>
                   {zone.description && (
                     <div className="text-[var(--text-muted)]">
                       {zone.description}
-                      {zone.derived ? " (derived from DHCP scope)" : ""}
+                      {zone.derived ? t("(derived from DHCP scope)") : ""}
                     </div>
                   )}
                 </div>
@@ -158,7 +165,8 @@ export function IpZoneBar({
                   style={{ backgroundColor: ZONE_COLOR[kind] }}
                 />
                 <span>
-                  {ZONE_LABEL[kind]} {count > 1 && `(${count})`}
+                  {ZONE_LABEL[kind]}{" "}
+                  {count > 1 && t("({count})", { count: count })}
                 </span>
               </span>
             );
@@ -186,7 +194,7 @@ export function IpZoneBar({
                   key={`${zone.id}:summary`}
                   className="rounded-[var(--radius-xs)] border border-[var(--border-subtle)] bg-[var(--surface-1)] px-2 py-1 font-mono text-[10px] text-[var(--text-secondary)]"
                 >
-                  {zone.description ?? "DHCP"} {assigned}/{size} ({pct}%)
+                  {zone.description ?? t("DHCP")} {assigned}/{size} ({pct}%)
                 </span>
               );
             })}

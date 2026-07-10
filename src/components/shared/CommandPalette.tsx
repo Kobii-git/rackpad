@@ -416,7 +416,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                   <EmptyState
                     icon={Search}
                     title={t("No results")}
-                    description={`"${query}"`}
+                    description={t('"{query}"', { query: query })}
                   />
                 ) : (
                   <div className="py-1.5">
@@ -500,7 +500,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                 <KbdHint keys="↵" label={t("Open")} />
                 <KbdHint keys="esc" label={t("Close")} />
                 <span className="ml-auto font-mono text-[10px] text-[var(--color-fg-faint)]">
-                  {results.length} result{results.length !== 1 ? "s" : ""}
+                  {results.length} {t("result")}
+                  {results.length !== 1 ? t("s") : ""}
                 </span>
               </div>
             </div>

@@ -104,7 +104,10 @@ export default function LabsPage() {
     if (!canManage || !editingLab) return;
     if (
       !window.confirm(
-        `Delete lab ${editingLab.name}? This removes its racks, devices, VLANs, and IPAM data.`,
+        t(
+          "Delete lab {name}? This removes its racks, devices, VLANs, and IPAM data.",
+          { name: editingLab.name },
+        ),
       )
     ) {
       return;
@@ -127,11 +130,11 @@ export default function LabsPage() {
   return (
     <>
       <TopBar
-        subtitle="Workspace"
+        subtitle={t("Workspace")}
         title={t("Labs")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {labs.length} total
+            {labs.length} {t("total")}
           </span>
         }
         actions={
@@ -147,7 +150,7 @@ export default function LabsPage() {
               }}
             >
               <Plus className="size-3.5" />
-              Add lab
+              {t("Add lab")}
             </Button>
           ) : undefined
         }
@@ -168,13 +171,15 @@ export default function LabsPage() {
                 >
                   <CardHeader>
                     <CardTitle>
-                      <CardLabel>{active ? "Current lab" : t("Lab")}</CardLabel>
+                      <CardLabel>
+                        {active ? t("Current lab") : t("Lab")}
+                      </CardLabel>
                       <CardHeading>{lab.name}</CardHeading>
                     </CardTitle>
                     {active ? (
                       <Badge tone="accent">
                         <Check className="size-3" />
-                        Active
+                        {t("Active")}
                       </Badge>
                     ) : (
                       <Button
@@ -184,14 +189,14 @@ export default function LabsPage() {
                         disabled={pendingSwitchId === lab.id}
                       >
                         {pendingSwitchId === lab.id
-                          ? "Switching..."
-                          : "Use lab"}
+                          ? t("Switching...")
+                          : t("Use lab")}
                       </Button>
                     )}
                   </CardHeader>
                   <CardBody className="space-y-3">
                     <MetaRow
-                      label="Location"
+                      label={t("Location")}
                       value={lab.location || "Not set"}
                     />
                     <MetaRow
@@ -210,7 +215,7 @@ export default function LabsPage() {
                           }}
                         >
                           <Pencil className="size-3.5" />
-                          {editing ? "Editing" : t("Edit")}
+                          {editing ? t("Editing") : t("Edit")}
                         </Button>
                       </div>
                     )}
@@ -226,16 +231,18 @@ export default function LabsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>{creating ? "New lab" : "Lab editor"}</CardLabel>
+                  <CardLabel>
+                    {creating ? t("New lab") : t("Lab editor")}
+                  </CardLabel>
                   <CardHeading>
                     {creating
-                      ? "Create lab workspace"
-                      : `Update ${editingLab?.name}`}
+                      ? t("Create lab workspace")
+                      : t("Update {name}", { name: editingLab?.name })}
                   </CardHeading>
                 </CardTitle>
               </CardHeader>
               <CardBody className="space-y-4">
-                <Field label="Lab name">
+                <Field label={t("Lab name")}>
                   <Input
                     value={form.name}
                     onChange={(event) =>
@@ -244,7 +251,7 @@ export default function LabsPage() {
                     placeholder={t("Home Lab")}
                   />
                 </Field>
-                <Field label="Location">
+                <Field label={t("Location")}>
                   <Input
                     value={form.location}
                     onChange={(event) =>
@@ -267,7 +274,9 @@ export default function LabsPage() {
                       }))
                     }
                     className="w-full resize-none rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-2.5 py-2 text-sm text-[var(--color-fg)] focus-visible:border-[var(--color-accent-soft)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-accent-soft)]"
-                    placeholder={t("What this lab is for, where it lives, who owns it...")}
+                    placeholder={t(
+                      "What this lab is for, where it lives, who owns it...",
+                    )}
                   />
                 </Field>
 
@@ -286,7 +295,9 @@ export default function LabsPage() {
                       setEditingLabId(null);
                       setError("");
                     }}
-                  >{t("Cancel")}</Button>
+                  >
+                    {t("Cancel")}
+                  </Button>
                   <div className="flex items-center gap-2">
                     {!creating && labs.length > 1 && editingLab && (
                       <Button
@@ -296,7 +307,7 @@ export default function LabsPage() {
                         disabled={deleting}
                       >
                         <Trash2 className="size-3.5" />
-                        {deleting ? "Deleting..." : "Delete lab"}
+                        {deleting ? t("Deleting...") : t("Delete lab")}
                       </Button>
                     )}
                     <Button
@@ -306,10 +317,10 @@ export default function LabsPage() {
                     >
                       <Save className="size-3.5" />
                       {saving
-                        ? "Saving..."
+                        ? t("Saving...")
                         : creating
-                          ? "Create lab"
-                          : "Save lab"}
+                          ? t("Create lab")
+                          : t("Save lab")}
                     </Button>
                   </div>
                 </div>

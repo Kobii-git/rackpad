@@ -65,8 +65,9 @@ export default function Dashboard() {
   const linkedVlanIds = new Set(
     subnets.map((subnet) => subnet.vlanId).filter(Boolean),
   );
-  const vlanOnlyCount = vlans.filter((vlan) => !linkedVlanIds.has(vlan.id))
-    .length;
+  const vlanOnlyCount = vlans.filter(
+    (vlan) => !linkedVlanIds.has(vlan.id),
+  ).length;
   const networkCount = subnets.length + vlanOnlyCount;
   const uncabledPorts = Math.max(0, ports.length - cabledPortIds.size);
   const portsWithoutSpeed = ports.filter((port) => !port.speed).length;
@@ -148,8 +149,9 @@ export default function Dashboard() {
               {lab.name}
             </span>
             <span className="font-mono text-[10px] text-[var(--text-muted)]">
-              {rooms.length} rooms | {racks.length} racks | {devices.length}{" "}
-              devices
+              {rooms.length} {t("rooms |")}
+              {racks.length} {t("racks |")}
+              {devices.length} {t("devices")}
             </span>
           </>
         }
@@ -161,9 +163,12 @@ export default function Dashboard() {
           <DashboardMetric
             to="/monitoring"
             icon={AlertTriangle}
-            label="Needs attention"
+            label={t("Needs attention")}
             value={attentionDevices.length + monitorIssues.length}
-            hint={`${attentionDevices.length} devices, ${monitorIssues.length} monitors`}
+            hint={t("{length} devices, {length2} monitors", {
+              length: attentionDevices.length,
+              length2: monitorIssues.length,
+            })}
             tone={
               attentionDevices.length + monitorIssues.length > 0 ? "warn" : "ok"
             }
@@ -171,25 +176,33 @@ export default function Dashboard() {
           <DashboardMetric
             to="/networks"
             icon={Network}
-            label="Network IPs used"
+            label={t("Network IPs used")}
             value={`${ipUsagePct}%`}
-            hint={`${ipAssignments.length}/${totalUsableIps || 0} usable addresses`}
+            hint={t("{length}/{value2} usable addresses", {
+              length: ipAssignments.length,
+              value2: totalUsableIps || 0,
+            })}
             tone={ipUsagePct > 85 ? "warn" : "info"}
           />
           <DashboardMetric
             to="/ports"
             icon={Cable}
-            label="Ports cabled"
+            label={t("Ports cabled")}
             value={`${cabledPortIds.size}/${ports.length}`}
-            hint={`${uncabledPorts} uncabled, ${snmpVerifiedPortIds.size} SNMP verified`}
+            hint={t("{uncabledPorts} uncabled, {size} SNMP verified", {
+              uncabledPorts: uncabledPorts,
+              size: snmpVerifiedPortIds.size,
+            })}
             tone={uncabledPorts > 0 ? "neutral" : "ok"}
           />
           <DashboardMetric
             to="/discovery"
             icon={ClipboardList}
-            label="Discovery queue"
+            label={t("Discovery queue")}
             value={newDiscoveries}
-            hint={`${discoveredDevices.length} discovered hosts total`}
+            hint={t("{length} discovered hosts total", {
+              length: discoveredDevices.length,
+            })}
             tone={newDiscoveries > 0 ? "warn" : "neutral"}
           />
         </div>
@@ -201,7 +214,7 @@ export default function Dashboard() {
                 <CardHeading>{t("Device status issues")}</CardHeading>
               </CardTitle>
               <Badge tone={attentionDevices.length > 0 ? "warn" : "ok"}>
-                {attentionDevices.length} open
+                {attentionDevices.length} {t("open")}
               </Badge>
             </CardHeader>
             <CardBody className="max-h-96 space-y-2 overflow-y-auto pr-1">
@@ -247,7 +260,7 @@ export default function Dashboard() {
                 <CardHeading>{t("Monitor targets")}</CardHeading>
               </CardTitle>
               <Badge tone={monitorIssues.length > 0 ? "warn" : "ok"}>
-                {enabledMonitors.length} enabled
+                {enabledMonitors.length} {t("enabled")}
               </Badge>
             </CardHeader>
             <CardBody className="max-h-96 space-y-2 overflow-y-auto pr-1">
@@ -271,11 +284,11 @@ export default function Dashboard() {
                             monitor.lastResult === "offline" ? "err" : "neutral"
                           }
                         >
-                          {monitor.lastResult ?? "unknown"}
+                          {monitor.lastResult ?? t("unknown")}
                         </Badge>
                       </div>
                       <div className="mt-1 truncate text-[11px] text-[var(--text-tertiary)]">
-                        {monitor.name} | {monitor.target ?? "no target"}
+                        {monitor.name} | {monitor.target ?? t("no target")}
                       </div>
                     </Link>
                   );
@@ -292,11 +305,16 @@ export default function Dashboard() {
               <Link
                 to="/audit-log"
                 className="text-xs text-[var(--accent-primary)] hover:underline"
-              >{t("View all")}</Link>
+              >
+                {t("View all")}
+              </Link>
             </CardHeader>
             <CardBody className="space-y-2">
               {recentActivity.length === 0 ? (
-                <EmptyState icon={Activity} title={t("No audit activity yet")} />
+                <EmptyState
+                  icon={Activity}
+                  title={t("No audit activity yet")}
+                />
               ) : (
                 recentActivity.map((entry) => (
                   <Link
@@ -329,28 +347,32 @@ export default function Dashboard() {
             </CardHeader>
             <CardBody className="space-y-3">
               <CoverageRow
-                label="Rack utilization"
+                label={t("Rack utilization")}
                 value={`${rackUtilization}%`}
                 pct={rackUtilization}
               />
               <CoverageRow
-                label="Cabled ports"
+                label={t("Cabled ports")}
                 value={`${cabledPortIds.size}/${ports.length}`}
                 pct={Math.round(
                   (cabledPortIds.size / Math.max(1, ports.length)) * 100,
                 )}
               />
               <CoverageRow
-                label="Network IPs used"
+                label={t("Network IPs used")}
                 value={`${ipUsagePct}%`}
                 pct={ipUsagePct}
               />
               <div className="grid grid-cols-3 gap-2 pt-1">
-                <MiniStat icon={Server} label="Racks" value={racks.length} />
-                <MiniStat icon={Wifi} label="Rooms" value={rooms.length} />
+                <MiniStat
+                  icon={Server}
+                  label={t("Racks")}
+                  value={racks.length}
+                />
+                <MiniStat icon={Wifi} label={t("Rooms")} value={rooms.length} />
                 <MiniStat
                   icon={HardDrive}
-                  label="Unplaced"
+                  label={t("Unplaced")}
                   value={unplacedDevices}
                   to="/devices?placement=unplaced"
                 />
@@ -400,17 +422,17 @@ export default function Dashboard() {
             <CardBody className="space-y-2">
               <GapRow
                 to="/ports"
-                label="SNMP verified ports"
+                label={t("SNMP verified ports")}
                 value={snmpVerifiedPortIds.size}
               />
               <GapRow
                 to="/ports"
-                label="Ports without speed"
+                label={t("Ports without speed")}
                 value={portsWithoutSpeed}
               />
               <GapRow
                 to="/ports"
-                label="Ports without cable"
+                label={t("Ports without cable")}
                 value={uncabledPorts}
               />
               <GapRow

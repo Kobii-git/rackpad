@@ -630,10 +630,12 @@ export function VisualizerCanvas({
               <CardTitle>
                 <CardLabel>
                   {model.layoutMode === "pyramid"
-                    ? "Pyramid view"
-                    : "Grouped zones"}
+                    ? t("Pyramid view")
+                    : t("Grouped zones")}
                 </CardLabel>
-                <CardHeading>{t("Physical and logical cable paths")}</CardHeading>
+                <CardHeading>
+                  {t("Physical and logical cable paths")}
+                </CardHeading>
               </CardTitle>
               <div className="flex items-center gap-2">
                 <div className="relative">
@@ -685,12 +687,16 @@ export function VisualizerCanvas({
                   variant={healthOverlay ? "secondary" : "outline"}
                   size="sm"
                   onClick={onToggleHealth}
-                >{t("1 Health")}</Button>
+                >
+                  {t("1 Health")}
+                </Button>
                 <Button
                   variant={traceMode.enabled ? "secondary" : "outline"}
                   size="sm"
                   onClick={toggleTraceMode}
-                >{t("2 Trace")}</Button>
+                >
+                  {t("2 Trace")}
+                </Button>
               </div>
             </CardHeader>
             <CardBody className="min-h-0 flex-1 p-0">
@@ -716,9 +722,11 @@ export function VisualizerCanvas({
                 <div className="absolute left-4 top-4 z-[70] flex gap-2">
                   <Button variant="outline" size="sm" onClick={fitToViewport}>
                     <LocateFixed className="size-3.5" />
-                    Fit
+                    {t("Fit")}
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={resetView}>{t("Reset")}</Button>
+                  <Button variant="ghost" size="sm" onClick={resetView}>
+                    {t("Reset")}
+                  </Button>
                 </div>
                 <div
                   className="absolute left-0 top-0 origin-top-left transition-transform duration-150 ease-out"
@@ -827,7 +835,9 @@ export function VisualizerCanvas({
           <div className="flex h-full min-h-0 flex-col gap-3">
             <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-1)] px-2 py-2">
               {!sidePanelCollapsed && (
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">{t("Context")}</span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
+                  {t("Context")}
+                </span>
               )}
               <Button
                 variant="ghost"
@@ -835,8 +845,8 @@ export function VisualizerCanvas({
                 onClick={() => setSidePanelCollapsed((value) => !value)}
                 aria-label={
                   sidePanelCollapsed
-                    ? "Expand visualizer side panel"
-                    : "Collapse visualizer side panel"
+                    ? t("Expand visualizer side panel")
+                    : t("Collapse visualizer side panel")
                 }
                 className="ml-auto"
               >
@@ -958,7 +968,7 @@ function ZonePanels({
           }}
         >
           <ZoneHeader
-            eyebrow="Pyramid view"
+            eyebrow={t("Pyramid view")}
             title={t("Master and endpoint map")}
             stats={`${model.counts.devices} devices | ${model.counts.cables} links`}
           />
@@ -979,12 +989,16 @@ function ZonePanels({
         }}
       >
         <ZoneHeader
-          eyebrow="Rack zone"
+          eyebrow={t("Rack zone")}
           title={t("Rack elevations")}
           stats={`${model.rackZone.sections.length} rooms | ${model.rackZone.racks.length} racks`}
         />
         {model.rackZone.sections.length === 0 ? (
-          <div className="absolute left-6 right-6 top-24 rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] p-4 text-sm text-[var(--text-tertiary)]">{t("Add racks or enable room-only sections to place room inventory in this zone.")}</div>
+          <div className="absolute left-6 right-6 top-24 rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] p-4 text-sm text-[var(--text-tertiary)]">
+            {t(
+              "Add racks or enable room-only sections to place room inventory in this zone.",
+            )}
+          </div>
         ) : (
           <>
             {model.rackZone.sections.map((section) => (
@@ -1028,7 +1042,7 @@ function ZonePanels({
         }}
       >
         <ZoneHeader
-          eyebrow="Room / loose zone"
+          eyebrow={t("Room / loose zone")}
           title={t("Hosted, rooms, and loose inventory")}
           stats={`${model.roomZone.stats.total} devices | ${model.roomZone.stats.online} online | ${model.roomZone.stats.down} down`}
         />
@@ -1100,8 +1114,9 @@ function RackRoomSectionView({
             </div>
           </div>
           <Mono className="shrink-0 text-[9px] text-[var(--text-tertiary)]">
-            {section.stats.racks} racks | {section.stats.devices} devices |{" "}
-            {section.stats.cables} links
+            {section.stats.racks} {t("racks |")}
+            {section.stats.devices} {t("devices |")} {section.stats.cables}{" "}
+            {t("links")}
           </Mono>
         </div>
       </div>
@@ -1132,15 +1147,21 @@ function RackPanelView({
       }}
     >
       <div className="border-b border-[var(--border-subtle)] px-3 py-3">
-        <div className="rk-kicker">{panel.rack.location ?? "Rack"}</div>
+        <div className="rk-kicker">{panel.rack.location ?? t("Rack")}</div>
         <div className="mt-1 truncate text-sm font-semibold text-[var(--text-primary)]">
           {panel.rack.name}
         </div>
         <Mono className="text-[10px] text-[var(--text-tertiary)]">
-          {panel.stats.totalU}U | {panel.stats.mounted} mounted |{" "}
-          {panel.stats.freeU}U free | {faceModeLabel(panel.faceMode)}
+          {panel.stats.totalU}
+          {t("U |")}
+          {panel.stats.mounted} {t("mounted |")} {panel.stats.freeU}
+          {t("U free |")}
+          {faceModeLabel(panel.faceMode, t)}
           {panel.stats.rearMounted > 0 && panel.faceMode === "both"
-            ? ` | ${panel.stats.frontMounted}F/${panel.stats.rearMounted}R`
+            ? t("| {frontMounted}F/{rearMounted}R", {
+                frontMounted: panel.stats.frontMounted,
+                rearMounted: panel.stats.rearMounted,
+              })
             : ""}
         </Mono>
       </div>
@@ -1155,8 +1176,12 @@ function RackPanelView({
       >
         {panel.stats.rearMounted > 0 && panel.faceMode === "both" && (
           <>
-            <span className="pointer-events-none absolute left-3 top-1 z-10 rounded-[var(--radius-xs)] bg-[rgb(0_0_0_/_0.32)] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">{t("Front")}</span>
-            <span className="pointer-events-none absolute right-3 top-1 z-10 rounded-[var(--radius-xs)] bg-[rgb(0_0_0_/_0.32)] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">{t("Rear")}</span>
+            <span className="pointer-events-none absolute left-3 top-1 z-10 rounded-[var(--radius-xs)] bg-[rgb(0_0_0_/_0.32)] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+              {t("Front")}
+            </span>
+            <span className="pointer-events-none absolute right-3 top-1 z-10 rounded-[var(--radius-xs)] bg-[rgb(0_0_0_/_0.32)] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+              {t("Rear")}
+            </span>
           </>
         )}
         {panel.bands.map((band) => (
@@ -1200,15 +1225,19 @@ function RackBandView({
   const { t } = useI18n();
   const label = band.collapsed ? band.label : "";
   const className = `absolute left-0 right-0 border-b border-[rgb(255_255_255_/_0.018)] text-center font-mono text-[8px] transition-colors ${
-        band.collapsed
-          ? "bg-[rgb(255_255_255_/_0.018)] text-[var(--text-tertiary)] hover:bg-[rgb(255_255_255_/_0.035)]"
-          : band.occupied
-            ? "bg-[rgb(255_255_255_/_0.028)]"
-            : "bg-[rgb(255_255_255_/_0.01)]"
-      }`;
+    band.collapsed
+      ? "bg-[rgb(255_255_255_/_0.018)] text-[var(--text-tertiary)] hover:bg-[rgb(255_255_255_/_0.035)]"
+      : band.occupied
+        ? "bg-[rgb(255_255_255_/_0.028)]"
+        : "bg-[rgb(255_255_255_/_0.01)]"
+  }`;
   const style = { top: band.y, height: band.height };
   if (!band.expandKey) {
-    return <div aria-hidden="true" className={className} style={style}>{label}</div>;
+    return (
+      <div aria-hidden="true" className={className} style={style}>
+        {label}
+      </div>
+    );
   }
   return (
     <button
@@ -1217,7 +1246,10 @@ function RackBandView({
       onClick={() => onToggleRackRun(band.expandKey!)}
       className={className}
       style={style}
-      aria-label={`${t("Open")} ${band.label}`}
+      aria-label={t("{value1} {label}", {
+        value1: t("Open"),
+        label: band.label,
+      })}
     >
       {label}
     </button>
@@ -1235,6 +1267,7 @@ function RoomGroupView({
   zoneY: number;
   onToggleGroup: (key: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
@@ -1259,7 +1292,8 @@ function RoomGroupView({
           </div>
         </div>
         <Mono className="text-[9px] text-[var(--text-tertiary)]">
-          {group.total} | {group.online} up | {group.down} down
+          {group.total} | {group.online} {t("up |")}
+          {group.down} {t("down")}
         </Mono>
       </div>
     </button>
@@ -1357,7 +1391,10 @@ function DeviceCard({
         data-visualizer-interactive="true"
         className="absolute inset-0 z-0 rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)]"
         onClick={onSelect}
-        aria-label={`${t("Select")} ${node.device.hostname}`}
+        aria-label={t("{value1} {hostname}", {
+          value1: t("Select"),
+          hostname: node.device.hostname,
+        })}
         title={node.device.hostname}
       />
       <span
@@ -1660,7 +1697,7 @@ function VisualizerLayoutPanel({
       </CardHeader>
       <CardBody className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
-          <LayoutField label="Cable routing">
+          <LayoutField label={t("Cable routing")}>
             <select
               value={cableLayout}
               onChange={(event) =>
@@ -1676,10 +1713,10 @@ function VisualizerLayoutPanel({
               <option value="straight">{t("Straight")}</option>
             </select>
           </LayoutField>
-          <LayoutField label="Labels">
+          <LayoutField label={t("Labels")}>
             <SidePanelToggle
               checked={readableLabels}
-              label="Readable"
+              label={t("Readable")}
               ariaLabel="Use wider visualizer cards with larger labels"
               onChange={onToggleReadableLabels}
             />
@@ -1688,7 +1725,7 @@ function VisualizerLayoutPanel({
         {model.layoutMode === "grouped" && (
           <>
             <div className="grid grid-cols-2 gap-2">
-              <LayoutField label="Rack face">
+              <LayoutField label={t("Rack face")}>
                 <select
                   value={rackFaceMode}
                   onChange={(event) =>
@@ -1704,7 +1741,7 @@ function VisualizerLayoutPanel({
                   <option value="both">{t("Both")}</option>
                 </select>
               </LayoutField>
-              <LayoutField label="Rack width">
+              <LayoutField label={t("Rack width")}>
                 <select
                   value={rackScale}
                   onChange={(event) =>
@@ -1721,7 +1758,7 @@ function VisualizerLayoutPanel({
               </LayoutField>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <LayoutField label="Shelf layout">
+              <LayoutField label={t("Shelf layout")}>
                 <select
                   value={shelfLayout}
                   onChange={(event) =>
@@ -1737,10 +1774,10 @@ function VisualizerLayoutPanel({
                   <option value="expanded">{t("Expanded")}</option>
                 </select>
               </LayoutField>
-              <LayoutField label="Loose devices">
+              <LayoutField label={t("Loose devices")}>
                 <SidePanelToggle
                   checked={looseDevicePlacement === "below-racks"}
-                  label="Below racks"
+                  label={t("Below racks")}
                   ariaLabel="Place loose devices below racks"
                   onChange={onToggleLooseDevicePlacement}
                 />
@@ -1748,7 +1785,7 @@ function VisualizerLayoutPanel({
             </div>
             <SidePanelToggle
               checked={includeRoomOnlySections}
-              label="No rack required"
+              label={t("No rack required")}
               ariaLabel="Place rooms without racks in rack zone"
               onChange={onToggleRoomOnlySections}
             />
@@ -1761,7 +1798,9 @@ function VisualizerLayoutPanel({
             className="w-full"
             onClick={onResetCustomNodePositions}
             disabled={!hasCustomNodePositions}
-          >{t("Reset node positions")}</Button>
+          >
+            {t("Reset node positions")}
+          </Button>
         )}
       </CardBody>
     </Card>
@@ -1903,29 +1942,29 @@ function VisualizerSidePanel({
         <div className="space-y-2">
           <VisualizerRailStat
             icon={Server}
-            label="Devices"
+            label={t("Devices")}
             value={model.counts.devices}
-            hint={`${model.rackZone.racks.length} racks`}
+            hint={t("{length} racks", { length: model.rackZone.racks.length })}
           />
           <VisualizerRailStat
             icon={Cable}
-            label="Cables"
+            label={t("Cables")}
             value={visibleCables.length}
-            hint="shown"
+            hint={t("shown")}
           />
         </div>
         <div className="space-y-2">
           <VisualizerRailStat
             icon={Route}
-            label="Cross-zone"
+            label={t("Cross-zone")}
             value={model.counts.crossZone}
-            hint="links"
+            hint={t("links")}
           />
           <VisualizerRailStat
             icon={Network}
-            label="Patch panel"
+            label={t("Patch panel")}
             value={model.counts.patchPanel}
-            hint="handoffs"
+            hint={t("handoffs")}
           />
         </div>
       </div>
@@ -1952,14 +1991,17 @@ function VisualizerSidePanel({
         <CardBody className="flex max-h-32 flex-wrap gap-2 overflow-y-auto">
           <TypeChip
             active={typeFilters.size === 0}
-            label={`All ${model.counts.devices}`}
+            label={t("All {devices}", { devices: model.counts.devices })}
             onClick={() => setTypeFilters(new Set())}
           />
           {model.deviceTypes.map((entry) => (
             <TypeChip
               key={entry.type}
               active={typeFilters.has(entry.type)}
-              label={`${entry.label} ${entry.count}`}
+              label={t("{label} {count}", {
+                label: entry.label,
+                count: entry.count,
+              })}
               onClick={() => toggleTypeFilter(entry.type)}
             />
           ))}
@@ -2127,8 +2169,8 @@ function Inspector({
               {selectedNode
                 ? selectedNode.device.hostname
                 : selectedCable
-                  ? "Selected cable"
-                  : "Select a link"}
+                  ? t("Selected cable")
+                  : t("Select a link")}
             </CardHeading>
           </CardTitle>
           {selectedNode && (
@@ -2137,7 +2179,7 @@ function Inspector({
             </Badge>
           )}
           {selectedCable && (
-            <Badge>{selectedCable.link.cableType ?? "Cable"}</Badge>
+            <Badge>{selectedCable.link.cableType ?? t("Cable")}</Badge>
           )}
         </CardHeader>
         <CardBody className="space-y-4">
@@ -2181,7 +2223,9 @@ function Inspector({
         <CardHeader>
           <CardTitle>
             <CardLabel>{t("Visible links")}</CardLabel>
-            <CardHeading>{model.cables.length} cables</CardHeading>
+            <CardHeading>
+              {model.cables.length} {t("cables")}
+            </CardHeading>
           </CardTitle>
         </CardHeader>
         <CardBody
@@ -2197,11 +2241,12 @@ function Inspector({
             >
               <div className="min-w-0">
                 <div className="truncate text-xs text-[var(--text-primary)]">
-                  {cable.fromDevice?.hostname ?? "Unknown"} to{" "}
-                  {cable.toDevice?.hostname ?? "Unknown"}
+                  {cable.fromDevice?.hostname ?? t("Unknown")} {t("to")}{" "}
+                  {cable.toDevice?.hostname ?? t("Unknown")}
                 </div>
                 <Mono className="text-[10px] text-[var(--text-tertiary)]">
-                  {cable.fromPort?.name ?? "?"} to {cable.toPort?.name ?? "?"}
+                  {cable.fromPort?.name ?? "?"} {t("to")}
+                  {cable.toPort?.name ?? "?"}
                 </Mono>
               </div>
               <span
@@ -2237,20 +2282,20 @@ function DeviceInspector({
       <Button size="sm" asChild>
         <Link to={`/devices/${node.device.id}`}>
           <ExternalLink className="size-3.5" />
-          Open device
+          {t("Open device")}
         </Link>
       </Button>
       <div className="grid grid-cols-2 gap-2">
-        <InfoBox label="IP" value={node.device.managementIp} mono />
-        <InfoBox label="MAC" value={node.macAddress} mono />
-        <InfoBox label="Type" value={typeLabel(node.device.deviceType)} />
-        <InfoBox label="Placement" value={placementLabel(node)} />
+        <InfoBox label={t("IP")} value={node.device.managementIp} mono />
+        <InfoBox label={t("MAC")} value={node.macAddress} mono />
+        <InfoBox label={t("Type")} value={typeLabel(node.device.deviceType)} />
+        <InfoBox label={t("Placement")} value={placementLabel(node, t)} />
         <InfoBox
-          label="Ports"
-          value={`${node.portSummary.linked}/${node.portSummary.total} linked`}
+          label={t("Ports")}
+          value={`${node.portSummary.linked}/${node.portSummary.total} ${t("linked")}`}
         />
         <InfoBox
-          label="Vendor"
+          label={t("Vendor")}
           value={node.vendor ?? node.device.manufacturer}
         />
       </div>
@@ -2261,7 +2306,9 @@ function DeviceInspector({
           className="max-h-80 space-y-2 overflow-y-auto pr-1"
         >
           {neighbors.length === 0 ? (
-            <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] p-3 text-xs text-[var(--text-tertiary)]">{t("No documented cable neighbors.")}</div>
+            <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] p-3 text-xs text-[var(--text-tertiary)]">
+              {t("No documented cable neighbors.")}
+            </div>
           ) : (
             neighbors.map((neighbor) => (
               <div
@@ -2277,16 +2324,21 @@ function DeviceInspector({
                     {neighbor.device.hostname}
                   </span>
                   <Mono className="text-[10px] text-[var(--text-tertiary)]">
-                    {neighbor.port.name} to {neighbor.peerPort.name}
+                    {neighbor.port.name} {t("to")}
+                    {neighbor.peerPort.name}
                     {neighbor.link.cableLength
-                      ? ` | ${neighbor.link.cableLength}`
+                      ? t("| {cableLength}", {
+                          cableLength: neighbor.link.cableLength,
+                        })
                       : ""}
                   </Mono>
                 </button>
                 <Link
                   to={`/devices/${neighbor.device.id}`}
                   className="shrink-0 rounded-[var(--radius-xs)] border border-[var(--border-subtle)] px-2 py-1 text-[10px] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
-                >{t("Open")}</Link>
+                >
+                  {t("Open")}
+                </Link>
                 <span
                   className="size-3 shrink-0 rounded-full border border-[var(--border-subtle)]"
                   style={{ background: neighbor.color }}
@@ -2311,13 +2363,13 @@ function CableInspector({
   return (
     <div className="space-y-3">
       <EndpointButton
-        label="From"
+        label={t("From")}
         device={cable.fromDevice}
         port={cable.fromPort}
         onClick={() => cable.fromDevice && onSelectDevice(cable.fromDevice.id)}
       />
       <EndpointButton
-        label="To"
+        label={t("To")}
         device={cable.toDevice}
         port={cable.toPort}
         onClick={() => cable.toDevice && onSelectDevice(cable.toDevice.id)}
@@ -2335,10 +2387,10 @@ function CableInspector({
         )}
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <InfoBox label="Type" value={cable.link.cableType} />
-        <InfoBox label="Length" value={cable.link.cableLength} />
-        <InfoBox label="Color" value={cable.link.color} />
-        <InfoBox label="Notes" value={cable.link.notes} />
+        <InfoBox label={t("Type")} value={cable.link.cableType} />
+        <InfoBox label={t("Length")} value={cable.link.cableLength} />
+        <InfoBox label={t("Color")} value={cable.link.color} />
+        <InfoBox label={t("Notes")} value={cable.link.notes} />
       </div>
     </div>
   );
@@ -2354,8 +2406,8 @@ function TraceSummary({
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const traceText = useMemo(
-    () => formatTraceText(model, result),
-    [model, result],
+    () => formatTraceText(model, result, t),
+    [model, result, t],
   );
 
   async function copyTrace() {
@@ -2424,7 +2476,9 @@ function TraceSummary({
               </div>
               <Mono className="mt-1 block text-[10px] text-[var(--text-tertiary)]">
                 {segment.kind}
-                {segment.length ? ` | ${segment.length}` : ""}
+                {segment.length
+                  ? t("| {length}", { length: segment.length })
+                  : ""}
               </Mono>
             </div>
           );
@@ -2442,13 +2496,17 @@ function uniquePortLinks(model: VisualizerModel) {
   ];
 }
 
-function formatTraceText(model: VisualizerModel, result: TraceResult) {
+function formatTraceText(
+  model: VisualizerModel,
+  result: TraceResult,
+  t: ReturnType<typeof useI18n>["t"],
+) {
   return result.segments
     .map((segment, index) => {
       const fromDevice = model.deviceById[segment.fromPort.deviceId];
       const toDevice = model.deviceById[segment.toPort.deviceId];
       const length = segment.length ? ` | ${segment.length}` : "";
-      return `#${index + 1} ${fromDevice?.hostname ?? "Unknown"} ${segment.fromPort.name} -> ${toDevice?.hostname ?? "Unknown"} ${segment.toPort.name} (${segment.kind}${length})`;
+      return `#${index + 1} ${fromDevice?.hostname ?? t("Unknown")} ${segment.fromPort.name} -> ${toDevice?.hostname ?? t("Unknown")} ${segment.toPort.name} (${segment.kind}${length})`;
     })
     .join("\n");
 }
@@ -2464,6 +2522,7 @@ function EndpointButton({
   port?: Port;
   onClick: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
@@ -2474,12 +2533,12 @@ function EndpointButton({
       <div className="min-w-0">
         <div className="rk-kicker">{label}</div>
         <div className="mt-1 truncate text-sm font-medium text-[var(--text-primary)]">
-          {device?.hostname ?? "Unknown device"}
+          {device?.hostname ?? t("Unknown device")}
         </div>
         <Mono className="text-[10px] text-[var(--text-tertiary)]">
           {port
             ? formatPortEndpointLabel(port, device, { includeFace: true })
-            : "Unknown port"}
+            : t("Unknown port")}
         </Mono>
       </div>
       {device && (
@@ -2573,8 +2632,12 @@ function NoCableBanner({ onDismiss }: { onDismiss: () => void }) {
   return (
     <div className="absolute left-24 right-24 top-4 z-[80] flex items-center justify-between gap-4 rounded-[var(--radius-md)] border border-[var(--accent-primary-border)] bg-[color-mix(in_srgb,var(--surface-2)_92%,black)] px-4 py-3 shadow-[var(--shadow-card)]">
       <div>
-        <div className="text-sm font-semibold text-[var(--text-primary)]">{t("No cables documented yet.")}</div>
-        <div className="text-xs text-[var(--text-tertiary)]">{t("Patch a cable in Cables to see connections here.")}</div>
+        <div className="text-sm font-semibold text-[var(--text-primary)]">
+          {t("No cables documented yet.")}
+        </div>
+        <div className="text-xs text-[var(--text-tertiary)]">
+          {t("Patch a cable in Cables to see connections here.")}
+        </div>
       </div>
       <Button
         variant="ghost"
@@ -2598,13 +2661,14 @@ function TraceBanner({ traceMode }: { traceMode: TraceModeState }) {
 }
 
 function Legend() {
+  const { t } = useI18n();
   return (
     <div className="absolute bottom-4 right-4 z-[60] rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--surface-1)_82%,transparent)] px-3 py-2 font-mono text-[9px] uppercase tracking-wider text-[var(--text-tertiary)]">
-      <span className="text-[var(--success)]">●</span> online{" "}
-      <span className="text-[var(--neutral)]">●</span> unknown{" "}
-      <span className="text-[var(--danger)]">●</span> down{" "}
-      <span className="text-[var(--accent-secondary)]">━</span> linked{" "}
-      <span className="text-[var(--text-tertiary)]">┄</span> unknown
+      <span className="text-[var(--success)]">●</span> {t("online")}{" "}
+      <span className="text-[var(--neutral)]">●</span> {t("unknown")}{" "}
+      <span className="text-[var(--danger)]">●</span> {t("down")}{" "}
+      <span className="text-[var(--accent-secondary)]">━</span> {t("linked")}{" "}
+      <span className="text-[var(--text-tertiary)]">┄</span> {t("unknown")}
     </div>
   );
 }
@@ -2639,8 +2703,14 @@ function VisualizerNoDevices() {
           <div className="mx-auto grid size-12 place-items-center rounded-[var(--radius-lg)] border border-[var(--accent-secondary-border)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary)]">
             <Network className="size-5" />
           </div>
-          <h2 className="mt-4 text-lg font-semibold text-[var(--text-primary)]">{t("Add racks, devices, and cables to see your topology")}</h2>
-          <p className="mt-2 text-sm text-[var(--text-tertiary)]">{t("The Visualizer is generated from Rackpad inventory, so it becomes useful as soon as your first devices and patch cables are documented.")}</p>
+          <h2 className="mt-4 text-lg font-semibold text-[var(--text-primary)]">
+            {t("Add racks, devices, and cables to see your topology")}
+          </h2>
+          <p className="mt-2 text-sm text-[var(--text-tertiary)]">
+            {t(
+              "The Visualizer is generated from Rackpad inventory, so it becomes useful as soon as your first devices and patch cables are documented.",
+            )}
+          </p>
           <div className="mt-5 flex justify-center gap-3">
             <Button asChild>
               <Link to="/racks">{t("Go to Racks")}</Link>
@@ -2671,15 +2741,18 @@ function healthBadgeTone(health: VisualizerNode["health"]) {
   return "neutral";
 }
 
-function placementLabel(node: VisualizerNode) {
+function placementLabel(
+  node: VisualizerNode,
+  t: ReturnType<typeof useI18n>["t"],
+) {
   if (node.rackId) {
-    const rack = node.rackName ?? "Rack";
+    const rack = node.rackName ?? t("Rack");
     const prefix = node.roomName ? `${node.roomName} | ${rack}` : rack;
     const rackSlot =
       node.device.rackSlot === "left"
-        ? " | left half"
+        ? ` | ${t("Left half")}`
         : node.device.rackSlot === "right"
-          ? " | right half"
+          ? ` | ${t("Right half")}`
           : "";
     return `${prefix} | ${node.device.startU ? `U${node.device.startU}` : "rack"}${
       node.device.heightU ? ` / ${node.device.heightU}U` : ""
@@ -2689,13 +2762,24 @@ function placementLabel(node: VisualizerNode) {
     return node.device.placement
       ? `${node.roomName} | ${node.device.placement}`
       : node.roomName;
-  if (node.device.placement) return node.device.placement;
-  return "Room / loose";
+  if (node.device.placement) {
+    return {
+      rack: t("Rack mounted"),
+      wireless: t("WiFi / AP linked"),
+      virtual: t("Virtual"),
+      shelf: t("On this shelf / tray"),
+      room: t("Loose / room"),
+    }[node.device.placement];
+  }
+  return t("Loose / room");
 }
 
-function faceModeLabel(mode: RackPanel["faceMode"]) {
-  if (mode === "both") return "front + rear";
-  return mode;
+function faceModeLabel(
+  mode: RackPanel["faceMode"],
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  if (mode === "both") return `${t("Front")} + ${t("Rear")}`;
+  return mode === "front" ? t("Front") : t("Rear");
 }
 
 function clamp(value: number, min: number, max: number) {

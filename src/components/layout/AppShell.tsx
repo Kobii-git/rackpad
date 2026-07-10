@@ -9,7 +9,7 @@ import { initializeApp, loadAll, useStore } from "@/lib/store";
 import { useI18n } from "@/i18n";
 
 export function AppShell() {
-  const { t } = useI18n();
+  const { t, translationLoadError, dismissTranslationLoadError } = useI18n();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const authReady = useStore((s) => s.authReady);
   const authLoading = useStore((s) => s.authLoading);
@@ -56,7 +56,7 @@ export function AppShell() {
             {!authReady || !currentUser ? (
               showLoadingCard ? (
                 <CenteredStatus
-                  eyebrow="Rackpad"
+                  eyebrow={t("Rackpad")}
                   title={authLoading ? t("Signing in…") : t("Starting up…")}
                   body={t("One moment.")}
                 />
@@ -65,8 +65,10 @@ export function AppShell() {
               )
             ) : !loaded ? (
               <CenteredStatus
-                eyebrow="Rackpad"
-                title={loading ? t("Loading your lab…") : t("Couldn't load data")}
+                eyebrow={t("Rackpad")}
+                title={
+                  loading ? t("Loading your lab…") : t("Couldn't load data")
+                }
                 body={
                   loading
                     ? t("Fetching your inventory.")
@@ -91,6 +93,32 @@ export function AppShell() {
           open={paletteOpen}
           onClose={() => setPaletteOpen(false)}
         />
+      )}
+      {translationLoadError && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 right-4 z-50 max-w-sm rounded-[var(--radius-md)] border border-[var(--warning-border)] bg-[var(--color-bg)] p-4 shadow-[var(--shadow-elev)]"
+        >
+          <div className="text-sm font-semibold text-[var(--color-fg)]">
+            {t("Language unavailable")}
+          </div>
+          <p className="mt-1 text-sm text-[var(--color-fg-subtle)]">
+            {t(
+              "Rackpad couldn't load the selected language. English is active instead.",
+            )}
+          </p>
+          <div className="mt-3 flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={t("Dismiss language error")}
+              onClick={dismissTranslationLoadError}
+            >
+              {t("Dismiss")}
+            </Button>
+          </div>
+        </div>
       )}
     </TooltipProvider>
   );

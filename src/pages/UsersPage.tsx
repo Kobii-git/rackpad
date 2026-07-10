@@ -35,7 +35,12 @@ import type {
   UserRole,
 } from "@/lib/types";
 import { APP_VERSION_LABEL } from "@/lib/version";
-import { LANGUAGE_NATIVE_NAMES, LANGUAGE_OPTIONS, LanguageSelector, useI18n } from "@/i18n";
+import {
+  LANGUAGE_NATIVE_NAMES,
+  LANGUAGE_OPTIONS,
+  LanguageSelector,
+  useI18n,
+} from "@/i18n";
 import {
   Download,
   Languages,
@@ -72,13 +77,19 @@ function roleChipLabel(role: UserRole, t: ReturnType<typeof useI18n>["t"]) {
   return t("Viewer");
 }
 
-function defaultLabRoles(labs: Lab[], role: UserRole): Record<string, LabRole | "none"> {
+function defaultLabRoles(
+  labs: Lab[],
+  role: UserRole,
+): Record<string, LabRole | "none"> {
   if (role === "admin") return {};
   const labRole: LabRole = role === "viewer" ? "viewer" : "editor";
   return Object.fromEntries(labs.map((lab) => [lab.id, labRole]));
 }
 
-function labRolesFromUser(user: AppUser, labs: Lab[]): Record<string, LabRole | "none"> {
+function labRolesFromUser(
+  user: AppUser,
+  labs: Lab[],
+): Record<string, LabRole | "none"> {
   return Object.fromEntries(
     labs.map((lab) => {
       const entry = user.labAccess?.find((access) => access.labId === lab.id);
@@ -87,9 +98,14 @@ function labRolesFromUser(user: AppUser, labs: Lab[]): Record<string, LabRole | 
   );
 }
 
-function labAccessPayload(labRoles: Record<string, LabRole | "none">): LabAccessEntry[] {
+function labAccessPayload(
+  labRoles: Record<string, LabRole | "none">,
+): LabAccessEntry[] {
   return Object.entries(labRoles)
-    .filter((entry): entry is [string, LabRole] => entry[1] === "editor" || entry[1] === "viewer")
+    .filter(
+      (entry): entry is [string, LabRole] =>
+        entry[1] === "editor" || entry[1] === "viewer",
+    )
     .map(([labId, role]) => ({ labId, role }));
 }
 
@@ -146,7 +162,8 @@ export default function UsersPage() {
   const [languageSaving, setLanguageSaving] = useState(false);
   const [languageError, setLanguageError] = useState("");
   const [languageSuccess, setLanguageSuccess] = useState("");
-  const [integrityReport, setIntegrityReport] = useState<AdminIntegrityReport | null>(null);
+  const [integrityReport, setIntegrityReport] =
+    useState<AdminIntegrityReport | null>(null);
   const [integrityLoading, setIntegrityLoading] = useState(false);
   const [integrityError, setIntegrityError] = useState("");
 
@@ -160,7 +177,11 @@ export default function UsersPage() {
     try {
       setIntegrityReport(await api.getAdminIntegrity());
     } catch (err) {
-      setIntegrityError(err instanceof Error ? err.message : "Failed to load data integrity report.");
+      setIntegrityError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load data integrity report.",
+      );
     } finally {
       setIntegrityLoading(false);
     }
@@ -336,8 +357,7 @@ export default function UsersPage() {
         role: form.role,
         disabled: form.disabled,
         password: form.password.trim() ? form.password : undefined,
-        labAccess:
-          form.role === "admin" ? [] : labAccessPayload(form.labRoles),
+        labAccess: form.role === "admin" ? [] : labAccessPayload(form.labRoles),
       });
       setSelectedUserId(updated.id);
       setForm((prev) => ({ ...prev, password: "" }));
@@ -350,7 +370,12 @@ export default function UsersPage() {
 
   async function handleDelete() {
     if (!selectedUser) return;
-    if (!window.confirm(`Delete user ${selectedUser.username}?`)) return;
+    if (
+      !window.confirm(
+        t("Delete user {username}?", { username: selectedUser.username }),
+      )
+    )
+      return;
 
     setDeleting(true);
     setError("");
@@ -388,7 +413,9 @@ export default function UsersPage() {
     }
     if (
       !window.confirm(
-        "Restore this backup and replace the current database contents? You will need to sign in again.",
+        t(
+          "Restore this backup and replace the current database contents? You will need to sign in again.",
+        ),
       )
     ) {
       return;
@@ -401,7 +428,7 @@ export default function UsersPage() {
       const raw = await restoreFile.text();
       const snapshot = JSON.parse(raw) as unknown;
       await restoreAdminBackupSnapshot(snapshot);
-      window.alert("Backup restored. Please sign in again.");
+      window.alert(t("Backup restored. Please sign in again."));
     } catch (err) {
       setRestoreError(
         err instanceof Error ? err.message : "Failed to restore backup.",
@@ -471,13 +498,26 @@ export default function UsersPage() {
   async function clearInvalidAssignmentReferences(
     issue: AdminIntegrityReport["assignmentReferences"][number],
   ) {
-    if (!window.confirm(`Clear invalid target references from ${issue.ipAddress}?`)) return;
-    const patch = Object.fromEntries(issue.integrity.fields.map((field) => [field, null]));
+    if (
+      !window.confirm(
+        t("Clear invalid target references from {ipAddress}?", {
+          ipAddress: issue.ipAddress,
+        }),
+      )
+    )
+      return;
+    const patch = Object.fromEntries(
+      issue.integrity.fields.map((field) => [field, null]),
+    );
     try {
       await api.updateIpAssignment(issue.id, patch);
       await loadIntegrityReport();
     } catch (err) {
-      setIntegrityError(err instanceof Error ? err.message : "Failed to clear invalid references.");
+      setIntegrityError(
+        err instanceof Error
+          ? err.message
+          : "Failed to clear invalid references.",
+      );
     }
   }
 
@@ -509,7 +549,9 @@ export default function UsersPage() {
       <div className="flex flex-1 overflow-hidden">
         <div className="flex w-72 shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-bg-2)]/40">
           <div className="border-b border-[var(--color-line)] px-4 py-3">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">{t("Accounts")}</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
+              {t("Accounts")}
+            </span>
           </div>
           <div className="flex-1 overflow-y-auto py-2">
             {users.map((user) => {
@@ -547,12 +589,16 @@ export default function UsersPage() {
                     <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
                       @{user.username}
                     </span>
-                    <Badge tone={user.authProvider === "oidc" ? "info" : "neutral"}>
-                      {user.authProvider === "oidc" ? "oidc" : "local"}
+                    <Badge
+                      tone={user.authProvider === "oidc" ? "info" : "neutral"}
+                    >
+                      {user.authProvider === "oidc" ? t("oidc") : t("local")}
                     </Badge>
                   </div>
                   {user.disabled && (
-                    <div className="mt-1 text-[11px] text-[var(--color-err)]">{t("Disabled")}</div>
+                    <div className="mt-1 text-[11px] text-[var(--color-err)]">
+                      {t("Disabled")}
+                    </div>
                   )}
                 </button>
               );
@@ -568,40 +614,88 @@ export default function UsersPage() {
                   <CardLabel>{t("Data integrity")}</CardLabel>
                   <CardHeading>{t("IPAM repair queue")}</CardHeading>
                 </CardTitle>
-                <Button variant="outline" size="sm" onClick={() => void loadIntegrityReport()} disabled={integrityLoading}>
-                  {integrityLoading ? "Checking..." : "Recheck"}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadIntegrityReport()}
+                  disabled={integrityLoading}
+                >
+                  {integrityLoading ? t("Checking...") : t("Recheck")}
                 </Button>
               </CardHeader>
               <CardBody className="space-y-3">
-                {integrityError && <div className="text-sm text-[var(--color-err)]">{integrityError}</div>}
-                {integrityReport && integrityReport.subnetConflicts.length === 0 && integrityReport.assignmentReferences.length === 0 ? (
-                  <div className="rounded-[var(--radius-sm)] border border-[var(--color-ok)]/30 bg-[var(--color-ok)]/10 px-3 py-2 text-sm text-[var(--color-ok)]">{t("No IPAM integrity issues detected.")}</div>
+                {integrityError && (
+                  <div className="text-sm text-[var(--color-err)]">
+                    {integrityError}
+                  </div>
+                )}
+                {integrityReport &&
+                integrityReport.subnetConflicts.length === 0 &&
+                integrityReport.assignmentReferences.length === 0 ? (
+                  <div className="rounded-[var(--radius-sm)] border border-[var(--color-ok)]/30 bg-[var(--color-ok)]/10 px-3 py-2 text-sm text-[var(--color-ok)]">
+                    {t("No IPAM integrity issues detected.")}
+                  </div>
                 ) : null}
                 {integrityReport?.subnetConflicts.map((issue) => (
-                  <div key={issue.id} className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10 p-3 text-sm">
+                  <div
+                    key={issue.id}
+                    className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10 p-3 text-sm"
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <div className="font-medium text-[var(--color-fg)]">{issue.name} · {issue.cidr}</div>
+                        <div className="font-medium text-[var(--color-fg)]">
+                          {issue.name} · {issue.cidr}
+                        </div>
                         <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
                           {issue.integrity.state === "invalid-cidr"
-                            ? "Invalid legacy CIDR"
-                            : `Overlaps ${issue.integrity.conflicts.map((conflict) => conflict.cidr).join(", ")}`}
-                          {` · ${issue.childCounts.assignments} assignments · ${issue.childCounts.dhcpScopes} scopes · ${issue.childCounts.zones} zones`}
+                            ? t("Invalid legacy CIDR")
+                            : t("Overlaps {value1}", {
+                                value1: issue.integrity.conflicts
+                                  .map((conflict) => conflict.cidr)
+                                  .join(", "),
+                              })}
+                          {t(
+                            "· {assignments} assignments · {dhcpScopes} scopes · {zones} zones",
+                            {
+                              assignments: issue.childCounts.assignments,
+                              dhcpScopes: issue.childCounts.dhcpScopes,
+                              zones: issue.childCounts.zones,
+                            },
+                          )}
                         </div>
                       </div>
-                      <a className="text-xs font-medium text-[var(--color-accent)] hover:underline" href={`/networks?subnetId=${encodeURIComponent(issue.id)}`}>{t("Repair subnet")}</a>
+                      <a
+                        className="text-xs font-medium text-[var(--color-accent)] hover:underline"
+                        href={`/networks?subnetId=${encodeURIComponent(issue.id)}`}
+                      >
+                        {t("Repair subnet")}
+                      </a>
                     </div>
                   </div>
                 ))}
                 {integrityReport?.assignmentReferences.map((issue) => (
-                  <div key={issue.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--color-err)]/25 bg-[var(--color-err)]/10 p-3 text-sm">
+                  <div
+                    key={issue.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--color-err)]/25 bg-[var(--color-err)]/10 p-3 text-sm"
+                  >
                     <div>
-                      <div className="font-medium text-[var(--color-fg)]">{issue.ipAddress}</div>
+                      <div className="font-medium text-[var(--color-fg)]">
+                        {issue.ipAddress}
+                      </div>
                       <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
-                        {issue.integrity.state} · {issue.integrity.fields.join(", ")}
+                        {issue.integrity.state} ·{" "}
+                        {issue.integrity.fields.join(", ")}
                       </div>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => void clearInvalidAssignmentReferences(issue)}>{t("Clear invalid references")}</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        void clearInvalidAssignmentReferences(issue)
+                      }
+                    >
+                      {t("Clear invalid references")}
+                    </Button>
                   </div>
                 ))}
               </CardBody>
@@ -672,12 +766,12 @@ export default function UsersPage() {
               <CardHeader>
                 <CardTitle>
                   <CardLabel>
-                    {creating ? "New account" : "User details"}
+                    {creating ? t("New account") : t("User details")}
                   </CardLabel>
                   <CardHeading>
                     {creating
-                      ? "Create user"
-                      : (selectedUser?.displayName ?? "Select a user")}
+                      ? t("Create user")
+                      : (selectedUser?.displayName ?? t("Select a user"))}
                   </CardHeading>
                 </CardTitle>
                 <div className="flex items-center gap-2">
@@ -701,10 +795,12 @@ export default function UsersPage() {
                             : "neutral"
                         }
                       >
-                        {selectedUser.authProvider === "oidc" ? "oidc" : "local"}
+                        {selectedUser.authProvider === "oidc"
+                          ? t("oidc")
+                          : t("local")}
                       </Badge>
                       <Badge tone={selectedUser.disabled ? "err" : "ok"}>
-                        {selectedUser.disabled ? "disabled" : "active"}
+                        {selectedUser.disabled ? t("disabled") : t("active")}
                       </Badge>
                     </>
                   )}
@@ -714,7 +810,7 @@ export default function UsersPage() {
                 {selectedUser || creating ? (
                   <>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <Field label="Username">
+                      <Field label={t("Username")}>
                         <Input
                           value={form.username}
                           onChange={(event) =>
@@ -726,7 +822,7 @@ export default function UsersPage() {
                           placeholder={t("username")}
                         />
                       </Field>
-                      <Field label="Display name">
+                      <Field label={t("Display name")}>
                         <Input
                           value={form.displayName}
                           onChange={(event) =>
@@ -741,7 +837,9 @@ export default function UsersPage() {
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
-                      <Field label={creating ? "Password" : "Reset password"}>
+                      <Field
+                        label={creating ? t("Password") : t("Reset password")}
+                      >
                         <Input
                           type="password"
                           value={form.password}
@@ -753,8 +851,8 @@ export default function UsersPage() {
                           }
                           placeholder={
                             creating
-                              ? "At least 10 characters"
-                              : "Leave blank to keep current password"
+                              ? t("At least 10 characters")
+                              : t("Leave blank to keep current password")
                           }
                         />
                       </Field>
@@ -807,7 +905,9 @@ export default function UsersPage() {
                                 className="h-9 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg-2)] px-2 text-sm text-[var(--color-fg)]"
                                 value={form.labRoles[lab.id] ?? "none"}
                                 onChange={(event) => {
-                                  const value = event.target.value as LabRole | "none";
+                                  const value = event.target.value as
+                                    | LabRole
+                                    | "none";
                                   setForm((prev) => ({
                                     ...prev,
                                     labRoles: {
@@ -844,27 +944,27 @@ export default function UsersPage() {
                           }))
                         }
                       />
-                      Disable this account
+                      {t("Disable this account")}
                     </label>
 
                     {selectedUser && (
                       <div className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4 md:grid-cols-2">
                         <Stat
-                          label="Auth source"
+                          label={t("Auth source")}
                           value={
                             selectedUser.authProvider === "oidc"
                               ? `OIDC${selectedUser.oidcIssuer ? ` | ${selectedUser.oidcIssuer}` : ""}`
-                              : "Local password"
+                              : t("Local password")
                           }
                         />
                         <Stat
-                          label="Created"
+                          label={t("Created")}
                           value={new Date(
                             selectedUser.createdAt,
                           ).toLocaleString()}
                         />
                         <Stat
-                          label="Last login"
+                          label={t("Last login")}
                           value={
                             selectedUser.lastLoginAt
                               ? new Date(
@@ -885,8 +985,9 @@ export default function UsersPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 text-xs text-[var(--color-fg-subtle)]">
                         <UserRound className="size-3.5" />
-                        Viewer is read-only, editor can manage inventory, admin
-                        can manage users and backups.
+                        {t(
+                          "Viewer is read-only, editor can manage inventory, admin can manage users and backups.",
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         {selectedUser && (
@@ -897,7 +998,7 @@ export default function UsersPage() {
                             disabled={deleting}
                           >
                             <Trash2 className="size-3.5" />
-                            {deleting ? "Deleting..." : "Delete"}
+                            {deleting ? t("Deleting...") : t("Delete")}
                           </Button>
                         )}
                         <Button
@@ -907,10 +1008,10 @@ export default function UsersPage() {
                         >
                           <Save className="size-3.5" />
                           {saving
-                            ? "Saving..."
+                            ? t("Saving...")
                             : creating
-                              ? "Create user"
-                              : "Save changes"}
+                              ? t("Create user")
+                              : t("Save changes")}
                         </Button>
                       </div>
                     </div>
@@ -935,9 +1036,19 @@ export default function UsersPage() {
               </CardHeader>
               <CardBody className="space-y-4">
                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
-                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Export snapshot")}</div>
-                  <div className="mt-2 text-sm text-[var(--color-fg)]">{t("Download a full JSON backup of racks, devices, ports, cables, VLANs, IPAM, monitors, audit history, and user accounts.")}</div>
-                  <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">{t("Backups include password hashes for local users, so keep the file somewhere private.")}</div>
+                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                    {t("Export snapshot")}
+                  </div>
+                  <div className="mt-2 text-sm text-[var(--color-fg)]">
+                    {t(
+                      "Download a full JSON backup of racks, devices, ports, cables, VLANs, IPAM, monitors, audit history, and user accounts.",
+                    )}
+                  </div>
+                  <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
+                    {t(
+                      "Backups include password hashes for local users, so keep the file somewhere private.",
+                    )}
+                  </div>
                 </div>
 
                 {exportError && (
@@ -953,9 +1064,19 @@ export default function UsersPage() {
                 )}
 
                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
-                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("Restore snapshot")}</div>
-                  <div className="mt-2 text-sm text-[var(--color-fg)]">{t("Import a Rackpad JSON backup and replace the current database contents.")}</div>
-                  <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">{t("Restoring signs out the current session and reloads the restored users, templates, inventory, IPAM, and audit data.")}</div>
+                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                    {t("Restore snapshot")}
+                  </div>
+                  <div className="mt-2 text-sm text-[var(--color-fg)]">
+                    {t(
+                      "Import a Rackpad JSON backup and replace the current database contents.",
+                    )}
+                  </div>
+                  <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
+                    {t(
+                      "Restoring signs out the current session and reloads the restored users, templates, inventory, IPAM, and audit data.",
+                    )}
+                  </div>
                   <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
                     <input
                       type="file"
@@ -972,12 +1093,13 @@ export default function UsersPage() {
                       disabled={restoring || !restoreFile}
                     >
                       <Upload className="size-3.5" />
-                      {restoring ? "Restoring..." : "Restore backup"}
+                      {restoring ? t("Restoring...") : t("Restore backup")}
                     </Button>
                   </div>
                   {restoreFile && (
                     <div className="mt-2 text-xs text-[var(--color-fg-subtle)]">
-                      Selected: {restoreFile.name}
+                      {t("Selected:")}
+                      {restoreFile.name}
                     </div>
                   )}
                 </div>
@@ -989,14 +1111,18 @@ export default function UsersPage() {
                 )}
 
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs text-[var(--color-fg-subtle)]">{t("Use this before Docker updates or test-database resets so you have a clean checkpoint.")}</div>
+                  <div className="text-xs text-[var(--color-fg-subtle)]">
+                    {t(
+                      "Use this before Docker updates or test-database resets so you have a clean checkpoint.",
+                    )}
+                  </div>
                   <Button
                     size="sm"
                     onClick={() => void handleExport()}
                     disabled={exporting}
                   >
                     <Download className="size-3.5" />
-                    {exporting ? "Preparing..." : "Download backup"}
+                    {exporting ? t("Preparing...") : t("Download backup")}
                   </Button>
                 </div>
               </CardBody>
@@ -1010,11 +1136,15 @@ export default function UsersPage() {
                 </CardTitle>
                 <Badge tone="info">
                   <BellRing className="size-3" />
-                  Discord / Telegram / Email
+                  {t("Discord / Telegram / Email")}
                 </Badge>
               </CardHeader>
               <CardBody className="space-y-4">
-                <div className="text-sm text-[var(--color-fg-subtle)]">{t("Rackpad can alert when targets go down, when they recover, and when they stay offline long enough to need another reminder.")}</div>
+                <div className="text-sm text-[var(--color-fg-subtle)]">
+                  {t(
+                    "Rackpad can alert when targets go down, when they recover, and when they stay offline long enough to need another reminder.",
+                  )}
+                </div>
 
                 <label className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-fg)]">
                   <input
@@ -1028,7 +1158,7 @@ export default function UsersPage() {
                     }
                     disabled={alertsLoading}
                   />
-                  Enable notifications
+                  {t("Enable notifications")}
                 </label>
 
                 <label className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-fg)]">
@@ -1043,7 +1173,7 @@ export default function UsersPage() {
                     }
                     disabled={alertsLoading}
                   />
-                  Notify when a device or monitor target goes down
+                  {t("Notify when a device or monitor target goes down")}
                 </label>
 
                 <label className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-fg)]">
@@ -1058,7 +1188,7 @@ export default function UsersPage() {
                     }
                     disabled={alertsLoading}
                   />
-                  Notify again when a device recovers
+                  {t("Notify again when a device recovers")}
                 </label>
 
                 <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
@@ -1074,9 +1204,9 @@ export default function UsersPage() {
                       }
                       disabled={alertsLoading}
                     />
-                    Repeat reminders while a target stays offline
+                    {t("Repeat reminders while a target stays offline")}
                   </label>
-                  <Field label="Repeat every (minutes)">
+                  <Field label={t("Repeat every (minutes)")}>
                     <Input
                       type="number"
                       min={1}
@@ -1097,7 +1227,7 @@ export default function UsersPage() {
                   </Field>
                 </div>
 
-                <Field label="Discord webhook URL">
+                <Field label={t("Discord webhook URL")}>
                   <Input
                     value={alertSettings.discordWebhookUrl ?? ""}
                     onChange={(event) =>
@@ -1112,7 +1242,7 @@ export default function UsersPage() {
                 </Field>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Telegram bot token">
+                  <Field label={t("Telegram bot token")}>
                     <Input
                       value={alertSettings.telegramBotToken ?? ""}
                       onChange={(event) =>
@@ -1125,7 +1255,7 @@ export default function UsersPage() {
                       disabled={alertsLoading}
                     />
                   </Field>
-                  <Field label="Telegram chat ID">
+                  <Field label={t("Telegram chat ID")}>
                     <Input
                       value={alertSettings.telegramChatId ?? ""}
                       onChange={(event) =>
@@ -1143,8 +1273,12 @@ export default function UsersPage() {
                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
-                      <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">{t("SMTP / Email")}</div>
-                      <div className="mt-1 text-sm text-[var(--color-fg-subtle)]">{t("Recipients can be comma or newline separated.")}</div>
+                      <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                        {t("SMTP / Email")}
+                      </div>
+                      <div className="mt-1 text-sm text-[var(--color-fg-subtle)]">
+                        {t("Recipients can be comma or newline separated.")}
+                      </div>
                     </div>
                     <label className="flex items-center gap-2 text-sm text-[var(--color-fg)]">
                       <input
@@ -1158,12 +1292,12 @@ export default function UsersPage() {
                         }
                         disabled={alertsLoading}
                       />
-                      SSL/TLS
+                      {t("SSL/TLS")}
                     </label>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="SMTP host">
+                    <Field label={t("SMTP host")}>
                       <Input
                         value={alertSettings.smtpHost ?? ""}
                         onChange={(event) =>
@@ -1176,7 +1310,7 @@ export default function UsersPage() {
                         disabled={alertsLoading}
                       />
                     </Field>
-                    <Field label="SMTP port">
+                    <Field label={t("SMTP port")}>
                       <Input
                         type="number"
                         min={1}
@@ -1196,7 +1330,7 @@ export default function UsersPage() {
                   </div>
 
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <Field label="SMTP username">
+                    <Field label={t("SMTP username")}>
                       <Input
                         value={alertSettings.smtpUsername ?? ""}
                         onChange={(event) =>
@@ -1209,7 +1343,7 @@ export default function UsersPage() {
                         disabled={alertsLoading}
                       />
                     </Field>
-                    <Field label="SMTP password">
+                    <Field label={t("SMTP password")}>
                       <Input
                         type="password"
                         value={alertSettings.smtpPassword ?? ""}
@@ -1226,7 +1360,7 @@ export default function UsersPage() {
                   </div>
 
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <Field label="From address">
+                    <Field label={t("From address")}>
                       <Input
                         value={alertSettings.smtpFrom ?? ""}
                         onChange={(event) =>
@@ -1239,7 +1373,7 @@ export default function UsersPage() {
                         disabled={alertsLoading}
                       />
                     </Field>
-                    <Field label="Recipients">
+                    <Field label={t("Recipients")}>
                       <textarea
                         value={alertSettings.smtpTo ?? ""}
                         onChange={(event) =>
@@ -1248,7 +1382,7 @@ export default function UsersPage() {
                             smtpTo: event.target.value || null,
                           }))
                         }
-                        placeholder={"ops@example.com, noc@example.com"}
+                        placeholder={t("ops@example.com, noc@example.com")}
                         rows={3}
                         disabled={alertsLoading}
                         className="w-full resize-none rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-2.5 py-2 text-sm text-[var(--color-fg)] placeholder:text-[var(--color-fg-faint)] focus-visible:border-[var(--color-accent-soft)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-accent-soft)]"
@@ -1270,7 +1404,11 @@ export default function UsersPage() {
                 )}
 
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs text-[var(--color-fg-subtle)]">{t("Configure at least one channel, then save before sending a test alert.")}</div>
+                  <div className="text-xs text-[var(--color-fg-subtle)]">
+                    {t(
+                      "Configure at least one channel, then save before sending a test alert.",
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
@@ -1279,7 +1417,7 @@ export default function UsersPage() {
                       disabled={alertsLoading || alertTesting}
                     >
                       <BellRing className="size-3.5" />
-                      {alertTesting ? "Sending..." : "Send test"}
+                      {alertTesting ? t("Sending...") : t("Send test")}
                     </Button>
                     <Button
                       size="sm"
@@ -1287,7 +1425,7 @@ export default function UsersPage() {
                       disabled={alertsLoading || alertSaving}
                     >
                       <Save className="size-3.5" />
-                      {alertSaving ? "Saving..." : "Save notifications"}
+                      {alertSaving ? t("Saving...") : t("Save notifications")}
                     </Button>
                   </div>
                 </div>
@@ -1300,7 +1438,9 @@ export default function UsersPage() {
                   <CardLabel>{t("Alerting")}</CardLabel>
                   <CardHeading>{t("Recent alert activity")}</CardHeading>
                 </CardTitle>
-                <Badge tone="neutral">{alertHistory.length} entries</Badge>
+                <Badge tone="neutral">
+                  {alertHistory.length} {t("entries")}
+                </Badge>
               </CardHeader>
               <CardBody>
                 {alertHistoryError && (
@@ -1310,7 +1450,9 @@ export default function UsersPage() {
                 )}
 
                 {alertHistoryLoading ? (
-                  <div className="text-sm text-[var(--color-fg-subtle)]">{t("Loading alert history...")}</div>
+                  <div className="text-sm text-[var(--color-fg-subtle)]">
+                    {t("Loading alert history...")}
+                  </div>
                 ) : alertHistory.length === 0 ? (
                   <EmptyState title={t("No alert activity recorded yet.")} />
                 ) : (

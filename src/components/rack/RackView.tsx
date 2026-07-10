@@ -10,6 +10,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/Tooltip";
+import { useI18n } from "@/i18n";
 
 interface RackViewProps {
   rack: Rack;
@@ -55,7 +56,9 @@ function buildSlots(rack: Rack): Slot[] {
 
 function buildTiles(rack: Rack, devices: Device[], face: RackFace): RackTile[] {
   return devices
-    .filter((device) => (device.face ?? "front") === face && device.startU != null)
+    .filter(
+      (device) => (device.face ?? "front") === face && device.startU != null,
+    )
     .map((device) => {
       const heightU = Math.max(1, device.heightU ?? 1);
       const topU = Math.min(rack.totalU, (device.startU ?? 1) + heightU - 1);
@@ -81,6 +84,7 @@ export function RackView({
   onSelectDevice,
   selectedDeviceId,
 }: RackViewProps) {
+  const { t } = useI18n();
   const faces: RackFace[] = face === "both" ? ["front", "rear"] : [face];
   return (
     <div className="flex flex-wrap items-start gap-4">
@@ -114,6 +118,7 @@ function RackFaceView({
   onSelectDevice?: (deviceId: string) => void;
   selectedDeviceId?: string;
 }) {
+  const { t } = useI18n();
   const slots = useMemo(() => buildSlots(rack), [rack]);
   const tiles = useMemo(
     () => buildTiles(rack, devices, face),
@@ -146,7 +151,8 @@ function RackFaceView({
             {rack.name} | {face}
           </span>
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
-            {rack.totalU}U
+            {rack.totalU}
+            {t("U")}
           </span>
         </div>
 
@@ -184,7 +190,9 @@ function RackFaceView({
 
         <div className="flex items-center justify-between border-t border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_46%,transparent)] px-3 py-2">
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-            {tiles.length} devices | {emptyCount}U free
+            {tiles.length} {t("devices |")}
+            {emptyCount}
+            {t("U free")}
           </span>
         </div>
       </div>
@@ -193,6 +201,7 @@ function RackFaceView({
 }
 
 function RackRail({ slots, side }: { slots: Slot[]; side: "left" | "right" }) {
+  const { t } = useI18n();
   return (
     <div
       className={cn(
@@ -259,6 +268,7 @@ function DeviceTile({
   onClick: () => void;
   style: CSSProperties;
 }) {
+  const { t } = useI18n();
   const tone = statusColor[device.status];
   const glow = statusGlow[device.status];
   const deviceAccent =
@@ -307,7 +317,7 @@ function DeviceTile({
             >
               <img
                 src={image.dataUrl}
-                alt={`${device.hostname} reference`}
+                alt={t("{hostname} reference", { hostname: device.hostname })}
                 className="h-full w-full object-cover"
                 loading="lazy"
               />
@@ -325,7 +335,9 @@ function DeviceTile({
             </span>
             <span className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
               {childDevices.length > 0
-                ? `${childDevices.length} devices on shelf`
+                ? t("{length} devices on shelf", {
+                    length: childDevices.length,
+                  })
                 : [device.manufacturer, device.model]
                     .filter(Boolean)
                     .join(" ") || device.deviceType.replace("_", " ")}
@@ -352,10 +364,15 @@ function DeviceTile({
           )}
 
           <span className="relative z-10 shrink-0 rounded-[999px] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.04)] px-1.5 py-0.5 font-mono text-[10px] uppercase text-[var(--text-muted)]">
-            U{device.startU}
-            {heightU > 1 ? `-${(device.startU ?? 0) + heightU - 1}` : ""}
+            {t("U")}
+            {device.startU}
+            {heightU > 1
+              ? t("-{value1}", { value1: (device.startU ?? 0) + heightU - 1 })
+              : ""}
             {(device.rackSlot ?? "full") !== "full"
-              ? ` ${device.rackSlot === "left" ? "L" : "R"}`
+              ? t("{value1}", {
+                  value1: device.rackSlot === "left" ? "L" : "R",
+                })
               : ""}
           </span>
 
@@ -374,17 +391,20 @@ function DeviceTile({
           </span>
           {formatDeviceAddress(device) && (
             <span className="text-[var(--text-tertiary)]">
-              mgmt: {formatDeviceAddress(device)}
+              {t("mgmt:")}
+              {formatDeviceAddress(device)}
             </span>
           )}
           {(device.rackSlot ?? "full") !== "full" && (
             <span className="text-[var(--text-tertiary)]">
-              slot: {device.rackSlot === "left" ? "left half" : "right half"}
+              {t("slot:")}
+              {device.rackSlot === "left" ? t("left half") : t("right half")}
             </span>
           )}
           {childDevices.length > 0 && (
             <span className="text-[var(--text-tertiary)]">
-              shelf: {childDevices.map((child) => child.hostname).join(", ")}
+              {t("shelf:")}
+              {childDevices.map((child) => child.hostname).join(", ")}
             </span>
           )}
         </div>
@@ -394,6 +414,7 @@ function DeviceTile({
 }
 
 function EmptySlot() {
+  const { t } = useI18n();
   return (
     <div
       className="border-y border-[rgb(255_255_255_/_0.03)] bg-[var(--surface-1)]"

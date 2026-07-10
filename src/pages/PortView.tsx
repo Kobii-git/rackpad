@@ -182,8 +182,7 @@ function blankTemplateForm(
     };
   }
 
-  const isVirtualWorkload =
-    deviceType === "vm" || deviceType === "container";
+  const isVirtualWorkload = deviceType === "vm" || deviceType === "container";
   const defaultKind: Port["kind"] = isVirtualWorkload ? "virtual" : "rj45";
   const defaultSpeed = isVirtualWorkload ? "virtio" : "";
   return {
@@ -303,9 +302,8 @@ export default function PortView() {
   const [bulkPortFields, setBulkPortFields] = useState<
     Set<keyof BulkPortFormState>
   >(new Set());
-  const [bulkPortForm, setBulkPortForm] = useState<BulkPortFormState>(
-    EMPTY_BULK_PORT_FORM,
-  );
+  const [bulkPortForm, setBulkPortForm] =
+    useState<BulkPortFormState>(EMPTY_BULK_PORT_FORM);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkError, setBulkError] = useState("");
   const [aggregateSaving, setAggregateSaving] = useState(false);
@@ -562,7 +560,9 @@ export default function PortView() {
   useEffect(() => {
     const portIds = new Set(ports.map((port) => port.id));
     setSelectedPortIds((current) => {
-      const next = new Set([...current].filter((portId) => portIds.has(portId)));
+      const next = new Set(
+        [...current].filter((portId) => portIds.has(portId)),
+      );
       return next.size === current.size ? current : next;
     });
   }, [ports]);
@@ -643,7 +643,9 @@ export default function PortView() {
       .filter((value): value is string => Boolean(value))
       .map(Number);
     const next =
-      usedNumbers.length > 0 ? Math.max(...usedNumbers.filter(Number.isFinite)) + 1 : 1;
+      usedNumbers.length > 0
+        ? Math.max(...usedNumbers.filter(Number.isFinite)) + 1
+        : 1;
     return `Bond${Number.isFinite(next) && next > 0 ? next : 1}`;
   }, [devicePorts]);
 
@@ -689,7 +691,9 @@ export default function PortView() {
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Failed to update port."));
+      setError(
+        err instanceof Error ? err.message : t("Failed to update port."),
+      );
     } finally {
       setSaving(false);
     }
@@ -706,7 +710,9 @@ export default function PortView() {
       await deletePortRecord(selectedPort.id);
       setSelectedPortId(undefined);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Failed to delete port."));
+      setError(
+        err instanceof Error ? err.message : t("Failed to delete port."),
+      );
     } finally {
       setDeleting(false);
     }
@@ -831,7 +837,9 @@ export default function PortView() {
       setCreatingTemplate(false);
     } catch (err) {
       setTemplateError(
-        err instanceof Error ? err.message : t("Failed to delete port template."),
+        err instanceof Error
+          ? err.message
+          : t("Failed to delete port template."),
       );
     } finally {
       setTemplateDeleting(false);
@@ -904,7 +912,9 @@ export default function PortView() {
       setBulkPortForm(EMPTY_BULK_PORT_FORM);
     } catch (err) {
       setBulkError(
-        err instanceof Error ? err.message : t("Failed to update selected ports."),
+        err instanceof Error
+          ? err.message
+          : t("Failed to update selected ports."),
       );
     } finally {
       setBulkSaving(false);
@@ -1255,20 +1265,29 @@ export default function PortView() {
                             </div>
                             <div className="mt-1 text-xs text-[var(--color-fg-muted)]">
                               {selectedPortsCanAggregate
-                                ? t("Create {name} from the selected member ports.", {
-                                    name: nextAggregateName,
-                                  })
-                                : t("Select two or more free physical ports to create a bond.")}
+                                ? t(
+                                    "Create {name} from the selected member ports.",
+                                    {
+                                      name: nextAggregateName,
+                                    },
+                                  )
+                                : t(
+                                    "Select two or more free physical ports to create a bond.",
+                                  )}
                             </div>
                           </div>
                           <Button
                             size="sm"
                             variant="secondary"
-                            disabled={!selectedPortsCanAggregate || aggregateSaving}
+                            disabled={
+                              !selectedPortsCanAggregate || aggregateSaving
+                            }
                             onClick={() => void handleCreateAggregate()}
                           >
                             <Network className="size-3.5" />
-                            {aggregateSaving ? t("Saving...") : t("Create bond")}
+                            {aggregateSaving
+                              ? t("Saving...")
+                              : t("Create bond")}
                           </Button>
                         </div>
                       </div>
@@ -1414,7 +1433,7 @@ export default function PortView() {
                       </CardHeading>
                     </CardTitle>
                     {(selectedPort || creating) && (
-                      <Badge tone="cyan">{form?.kind ?? "port"}</Badge>
+                      <Badge tone="cyan">{form?.kind ?? t("port")}</Badge>
                     )}
                   </CardHeader>
                   <CardBody>
@@ -1477,7 +1496,10 @@ export default function PortView() {
                               onChange={(event) =>
                                 setForm((prev) =>
                                   prev
-                                    ? { ...prev, macAddress: event.target.value }
+                                    ? {
+                                        ...prev,
+                                        macAddress: event.target.value,
+                                      }
                                     : prev,
                                 )
                               }
@@ -1657,7 +1679,10 @@ export default function PortView() {
                                         className="rounded-[var(--radius-xs)] border border-[var(--color-accent-soft)]/40 bg-[var(--color-accent)]/10 px-2 py-1 text-xs text-[var(--color-fg)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/15"
                                       >
                                         {vlan
-                                          ? `${vlan.vlanId} - ${vlan.name}`
+                                          ? t("{vlanId} - {name}", {
+                                              vlanId: vlan.vlanId,
+                                              name: vlan.name,
+                                            })
                                           : vlanId}{" "}
                                         ×
                                       </button>
@@ -1744,9 +1769,12 @@ export default function PortView() {
                               </div>
                             ) : selectedAggregatePort ? (
                               <div className="text-xs text-[var(--color-fg-muted)]">
-                                {t("Member of {name}. Cable the aggregate port instead.", {
-                                  name: selectedAggregatePort.name,
-                                })}
+                                {t(
+                                  "Member of {name}. Cable the aggregate port instead.",
+                                  {
+                                    name: selectedAggregatePort.name,
+                                  },
+                                )}
                               </div>
                             ) : (
                               <div className="text-xs text-[var(--color-fg-subtle)]">
@@ -1802,7 +1830,9 @@ export default function PortView() {
                               <Button
                                 variant="destructive"
                                 size="sm"
-                                onClick={() => void handleDeleteSelectedAggregate()}
+                                onClick={() =>
+                                  void handleDeleteSelectedAggregate()
+                                }
                                 disabled={deleting}
                               >
                                 <Trash2 className="size-3.5" />
@@ -1952,7 +1982,10 @@ export default function PortView() {
                                   name: event.target.value,
                                 }))
                               }
-                              disabled={Boolean(selectedTemplate?.builtIn) || !canManageTemplates}
+                              disabled={
+                                Boolean(selectedTemplate?.builtIn) ||
+                                !canManageTemplates
+                              }
                               placeholder={t("48-port access switch")}
                             />
                           </Field>
@@ -1965,7 +1998,10 @@ export default function PortView() {
                                   description: event.target.value,
                                 }))
                               }
-                              disabled={Boolean(selectedTemplate?.builtIn) || !canManageTemplates}
+                              disabled={
+                                Boolean(selectedTemplate?.builtIn) ||
+                                !canManageTemplates
+                              }
                               placeholder={t("Common layout for edge switches")}
                             />
                           </Field>
@@ -1982,7 +2018,10 @@ export default function PortView() {
                                 <button
                                   key={deviceType.id}
                                   type="button"
-                                  disabled={Boolean(selectedTemplate?.builtIn) || !canManageTemplates}
+                                  disabled={
+                                    Boolean(selectedTemplate?.builtIn) ||
+                                    !canManageTemplates
+                                  }
                                   onClick={() =>
                                     setTemplateForm((prev) => ({
                                       ...prev,
@@ -2171,7 +2210,9 @@ export default function PortView() {
                                         }))
                                       }
                                     >
-                                      <option value="front">{t("Front")}</option>
+                                      <option value="front">
+                                        {t("Front")}
+                                      </option>
                                       <option value="rear">{t("Rear")}</option>
                                     </Select>
                                   </Field>
@@ -2232,7 +2273,8 @@ export default function PortView() {
                             )}
                             {!creatingTemplate &&
                               selectedTemplate &&
-                              !selectedTemplate.builtIn && canManageTemplates && (
+                              !selectedTemplate.builtIn &&
+                              canManageTemplates && (
                                 <Button
                                   variant="destructive"
                                   size="sm"
@@ -2245,20 +2287,21 @@ export default function PortView() {
                                     : t("Delete")}
                                 </Button>
                               )}
-                            {!selectedTemplate?.builtIn && canManageTemplates && (
-                              <Button
-                                size="sm"
-                                onClick={() => void handleSaveTemplate()}
-                                disabled={templateSaving}
-                              >
-                                <Save className="size-3.5" />
-                                {templateSaving
-                                  ? t("Saving...")
-                                  : creatingTemplate
-                                    ? t("Create template")
-                                    : t("Save template")}
-                              </Button>
-                            )}
+                            {!selectedTemplate?.builtIn &&
+                              canManageTemplates && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => void handleSaveTemplate()}
+                                  disabled={templateSaving}
+                                >
+                                  <Save className="size-3.5" />
+                                  {templateSaving
+                                    ? t("Saving...")
+                                    : creatingTemplate
+                                      ? t("Create template")
+                                      : t("Save template")}
+                                </Button>
+                              )}
                           </div>
                         </div>
                       </div>

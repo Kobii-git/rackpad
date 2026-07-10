@@ -90,9 +90,12 @@ export function VlanRangeBar({
                 </TooltipTrigger>
                 <TooltipContent>
                   <div className="text-[11px]">
-                    <div className="font-mono text-[var(--text-tertiary)]">{t("unallocated")}</div>
+                    <div className="font-mono text-[var(--text-tertiary)]">
+                      {t("unallocated")}
+                    </div>
                     <div>
-                      VLAN {segment.start}-{segment.end} | {total} IDs free
+                      {t("VLAN")}
+                      {segment.start}-{segment.end} | {total} {t("IDs free")}
                     </div>
                   </div>
                 </TooltipContent>
@@ -156,10 +159,12 @@ export function VlanRangeBar({
                     {segment.range.name}
                   </div>
                   <div className="text-[var(--text-tertiary)]">
-                    VLAN {segment.range.startVlan}-{segment.range.endVlan}
+                    {t("VLAN")}
+                    {segment.range.startVlan}-{segment.range.endVlan}
                   </div>
                   <div className="text-[var(--text-tertiary)]">
-                    {inRangeUsed} used | {total - inRangeUsed} free
+                    {inRangeUsed} {t("used |")}
+                    {total - inRangeUsed} {t("free")}
                   </div>
                   {segment.range.purpose && (
                     <div className="text-[var(--text-muted)]">
@@ -175,7 +180,9 @@ export function VlanRangeBar({
 
       <div className="flex items-center justify-between px-1 font-mono text-[9px] text-[var(--text-muted)]">
         <span>{t("VLAN 1")}</span>
-        <span className="normal-case tracking-normal">{t("defined ranges sized for visibility")}</span>
+        <span className="normal-case tracking-normal">
+          {t("defined ranges sized for visibility")}
+        </span>
         <span>4094</span>
       </div>
 
