@@ -89,6 +89,7 @@ function testCable(
     unknown: false,
     crossZone: false,
     snmpVerified: false,
+    logicalAggregate: false,
   };
 }
 
@@ -214,6 +215,48 @@ test("custom device type parents drive visualizer grouping and counts", () => {
   assert.deepEqual(model.deviceTypes, [
     { type: "switch", label: "Switch", count: 2 },
   ]);
+});
+
+test("visualizer marks aggregate endpoint links as logical LAG links", () => {
+  const devices = [testDevice("lag-a"), testDevice("lag-b")];
+  const ports: Port[] = [
+    {
+      ...testPort("lag-a", "lag-a-bond", 1),
+      name: "Bond1",
+      kind: "virtual",
+      portRole: "aggregate",
+    },
+    {
+      ...testPort("lag-b", "lag-b-bond", 1),
+      name: "Bond1",
+      kind: "virtual",
+      portRole: "aggregate",
+    },
+  ];
+  const model = buildVisualizerModel({
+    racks: [],
+    rooms: [],
+    devices,
+    deviceTypes: [],
+    ports,
+    portLinks: [
+      {
+        id: "lag-link",
+        fromPortId: "lag-a-bond",
+        toPortId: "lag-b-bond",
+        cableType: "lacp",
+      },
+    ],
+    deviceMonitors: [],
+    subnets: [],
+    vlans: [],
+    discoveredDevices: [],
+    virtualSwitches: [],
+    expandedRackRuns: new Set(),
+    collapsedGroups: new Set(),
+  });
+
+  assert.equal(model.cables[0]?.logicalAggregate, true);
 });
 
 test("manual visualizer order controls sections, racks, groups, and group devices", () => {

@@ -244,7 +244,7 @@ Recommended workflow:
 
 - test new work from `beta`
 - merge validated fixes and features into `main`
-- create version tags like `v1.5.2` from `main`
+- create version tags like `v1.6.7` from `main`
 
 If you want the newest testing build instead of the latest stable tag:
 
@@ -409,12 +409,12 @@ curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/inst
 ```
 
 Use `RACKPAD_TAG=latest` if you want the newest stable GHCR image,
-`RACKPAD_TAG=1.5.10` if you want a specific release, or `RACKPAD_TAG=beta` if
+`RACKPAD_TAG=1.6.7` if you want a specific release, or `RACKPAD_TAG=beta` if
 you want the newest testing image:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
-RACKPAD_TAG=1.5.10 bash /tmp/install-rackpad.sh
+RACKPAD_TAG=1.6.7 bash /tmp/install-rackpad.sh
 ```
 
 Open:
@@ -431,7 +431,7 @@ cd /opt/rackpad
 sudo curl -fsSLo compose.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.release.yml
 sudo tee .env >/dev/null <<'EOF'
 RACKPAD_IMAGE=ghcr.io/kobii-git/rackpad
-RACKPAD_TAG=1.5.10
+RACKPAD_TAG=latest
 RACKPAD_PORT=3000
 MONITOR_INTERVAL_MS=300000
 TRUST_PROXY=0

@@ -1560,11 +1560,13 @@ function CableSvg({
   const opacity = traceActive ? 1 : dimmed ? 0.06 : active ? 1 : 0.5;
   const strokeWidth = traceActive ? 5.5 : active ? 5 : cable.up ? 2.6 : 2;
   // Firefox: round caps on dashed strokes balloon each dash segment; use butt for dashes only.
-  const strokeDasharray = cable.unknown
-    ? "7 6"
-    : cable.bothOnline
-      ? "12 10"
-      : undefined;
+  const strokeDasharray = cable.logicalAggregate
+    ? "3 3 10 3"
+    : cable.unknown
+      ? "7 6"
+      : cable.bothOnline
+        ? "12 10"
+        : undefined;
   const strokeLinecap = strokeDasharray ? "butt" : "round";
   return (
     <g>
@@ -2179,7 +2181,12 @@ function Inspector({
             </Badge>
           )}
           {selectedCable && (
-            <Badge>{selectedCable.link.cableType ?? t("Cable")}</Badge>
+            <div className="flex items-center gap-1.5">
+              {selectedCable.logicalAggregate && (
+                <Badge>{t("Aggregate port")}</Badge>
+              )}
+              <Badge>{selectedCable.link.cableType ?? t("Cable")}</Badge>
+            </div>
           )}
         </CardHeader>
         <CardBody className="space-y-4">
@@ -2387,6 +2394,9 @@ function CableInspector({
         )}
       </div>
       <div className="grid grid-cols-2 gap-2">
+        {cable.logicalAggregate && (
+          <InfoBox label={t("Port bonding")} value={t("Aggregate port")} />
+        )}
         <InfoBox label={t("Type")} value={cable.link.cableType} />
         <InfoBox label={t("Length")} value={cable.link.cableLength} />
         <InfoBox label={t("Color")} value={cable.link.color} />

@@ -31,12 +31,6 @@ function getLinkLabRow(linkId: string) {
   `).get(linkId) as { id: string; labId: string } | undefined
 }
 
-function ensureCableEndpoint(port: { aggregatePortId: string | null }) {
-  if (port.aggregatePortId) {
-    throw new Error('Aggregate member ports cannot be cabled directly. Cable the aggregate port instead.')
-  }
-}
-
 export const cablesRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { labId?: string } }>('/', async (req, reply) => {
     if (!req.authUser) {
@@ -95,13 +89,6 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     }
     if (!assertLabWrite(req, reply, fromPort.labId)) return
     if (!assertLabWrite(req, reply, toPort.labId)) return
-    try {
-      ensureCableEndpoint(fromPort)
-      ensureCableEndpoint(toPort)
-    } catch (error) {
-      return reply.status(409).send({ error: error instanceof Error ? error.message : 'Invalid cable endpoint.' })
-    }
-
     const existing = db.prepare(`
       SELECT id
       FROM portLinks
@@ -154,13 +141,6 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!assertLabWrite(req, reply, fromPort.labId)) return
       if (!assertLabWrite(req, reply, toPort.labId)) return
-      try {
-        ensureCableEndpoint(fromPort)
-        ensureCableEndpoint(toPort)
-      } catch (error) {
-        return reply.status(409).send({ error: error instanceof Error ? error.message : 'Invalid cable endpoint.' })
-      }
-
       const conflicting = db.prepare(`
         SELECT id
         FROM portLinks

@@ -190,6 +190,7 @@ export interface VisualizerCable {
   unknown: boolean;
   crossZone: boolean;
   snmpVerified: boolean;
+  logicalAggregate: boolean;
 }
 
 export interface VisualizerNeighbor {

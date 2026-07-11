@@ -938,7 +938,9 @@ function DiagramCableInspector({ cable }: { cable: VisualizerCable }) {
   const { t } = useI18n();
   return (
     <div>
-      <div className="rk-kicker">{t("Cable")}</div>
+      <div className="rk-kicker">
+        {cable.logicalAggregate ? t("Aggregate port") : t("Cable")}
+      </div>
       <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
         <span
           className="inline-block size-2.5 rounded-full"
@@ -1126,7 +1128,11 @@ function buildDiagramLayout(
         stroke: cable.color,
         strokeWidth: cable.crossZone ? 3 : snmpUp ? 2.75 : 2.25,
         strokeOpacity: offline ? 0.38 : snmpUp ? 0.92 : 0.78,
-        strokeDasharray: offline ? "8 7" : undefined,
+        strokeDasharray: cable.logicalAggregate
+          ? "3 3 10 3"
+          : offline
+            ? "8 7"
+            : undefined,
         filter: cableNeedsContrastOutline(cable.color)
           ? "drop-shadow(0 0 2px var(--text-primary))"
           : undefined,

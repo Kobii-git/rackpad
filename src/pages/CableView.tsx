@@ -154,7 +154,7 @@ export default function CableView() {
 
   const availablePorts = useMemo(() => {
     return [...ports]
-      .filter((port) => !linkedPortIds.has(port.id) && !port.aggregatePortId)
+      .filter((port) => !linkedPortIds.has(port.id))
       .sort((a, b) =>
         portOptionLabel(a, deviceById).localeCompare(
           portOptionLabel(b, deviceById),
@@ -165,6 +165,9 @@ export default function CableView() {
   const selectedLink = selectedLinkId
     ? portLinks.find((link) => link.id === selectedLinkId)
     : undefined;
+  const selectedLinkIsLogical = selectedLink
+    ? isLogicalAggregateLink(selectedLink, portById)
+    : false;
   const selectedEndpointPortIds = useMemo(
     () =>
       new Set(
@@ -176,9 +179,7 @@ export default function CableView() {
     return [...ports]
       .filter(
         (port) =>
-          (!linkedPortIds.has(port.id) ||
-            selectedEndpointPortIds.has(port.id)) &&
-          !port.aggregatePortId,
+          !linkedPortIds.has(port.id) || selectedEndpointPortIds.has(port.id),
       )
       .sort((a, b) =>
         portOptionLabel(a, deviceById).localeCompare(
@@ -432,7 +433,10 @@ export default function CableView() {
                 </CardHeading>
               </CardTitle>
               {selectedLink && (
-                <Badge>{selectedLink.cableType ?? t("Cable")}</Badge>
+                <div className="flex items-center gap-1.5">
+                  {selectedLinkIsLogical && <Badge>{t("Aggregate port")}</Badge>}
+                  <Badge>{selectedLink.cableType ?? t("Cable")}</Badge>
+                </div>
               )}
             </CardHeader>
             <CardBody>
@@ -729,7 +733,12 @@ export default function CableView() {
                           </div>
                         </Td>
                         <Td>
-                          <Badge>{link.cableType ?? t("Unknown")}</Badge>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {isLogicalAggregateLink(link, portById) && (
+                              <Badge>{t("Aggregate port")}</Badge>
+                            )}
+                            <Badge>{link.cableType ?? t("Unknown")}</Badge>
+                          </div>
                         </Td>
                         <Td>
                           <Mono className="text-[var(--color-fg-muted)]">
@@ -857,6 +866,16 @@ function portOptionLabel(port: Port, deviceById: Record<string, Device>) {
     includeSpeed: true,
   });
   return port.portRole === "aggregate" ? `${label} (bond)` : label;
+}
+
+function isLogicalAggregateLink(
+  link: PortLink,
+  portById: Record<string, Port>,
+) {
+  return (
+    portById[link.fromPortId]?.portRole === "aggregate" ||
+    portById[link.toPortId]?.portRole === "aggregate"
+  );
 }
 
 function compareCables(

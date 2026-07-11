@@ -396,8 +396,9 @@ test("cabling map stops at broken passive endpoints", () => {
   );
 });
 
-test("cabling map marks aggregate members as cabled through aggregate", () => {
+test("cabling map separates logical aggregate links from member paths", () => {
   const server = makeDevice({ id: "lag_server", hostname: "lag-server" });
+  const peer = makeDevice({ id: "lag_peer", hostname: "lag-peer" });
   const ports = [
     makePort({
       id: "bond_1",
@@ -412,14 +413,118 @@ test("cabling map marks aggregate members as cabled through aggregate", () => {
       name: "eth1",
       aggregatePortId: "bond_1",
     }),
+    makePort({
+      id: "bond_peer",
+      deviceId: "lag_peer",
+      name: "Bond1",
+      kind: "virtual",
+      portRole: "aggregate",
+    }),
   ];
 
   const lines = buildCablingMapLines(
-    { deviceId: "lag_server", devices: [server], ports, portLinks: [] },
+    {
+      deviceId: "lag_server",
+      devices: [server, peer],
+      ports,
+      portLinks: [
+        {
+          id: "logical_lag",
+          fromPortId: "bond_1",
+          toPortId: "bond_peer",
+          cableType: "lacp",
+        },
+      ],
+    },
     "direct",
   );
 
-  assert.equal(lines[1].text, "lag-server eth1 -> cable aggregate Bond1");
+  assert.equal(
+    lines.find((line) => line.portId === "bond_1")?.text,
+    "lag-server Bond1 -> lag-peer Bond1 (logical LAG)",
+  );
+  assert.equal(
+    lines.find((line) => line.portId === "eth_1")?.text,
+    "lag-server eth1 -> spare (member of Bond1)",
+  );
+});
+
+test("cabling map follows a bonded member through its physical patch path", () => {
+  const server = makeDevice({ id: "lag_server", hostname: "lag-server" });
+  const patch = makeDevice({
+    id: "lag_patch",
+    hostname: "lag-patch",
+    deviceType: "patch_panel",
+  });
+  const switchDevice = makeDevice({ id: "lag_switch", hostname: "lag-switch" });
+  const ports = [
+    makePort({
+      id: "bond_1",
+      deviceId: "lag_server",
+      name: "Bond1",
+      kind: "virtual",
+      portRole: "aggregate",
+    }),
+    makePort({
+      id: "eth_1",
+      deviceId: "lag_server",
+      name: "eth1",
+      aggregatePortId: "bond_1",
+    }),
+    makePort({
+      id: "patch_front",
+      deviceId: "lag_patch",
+      name: "F1",
+      position: 1,
+      face: "front",
+    }),
+    makePort({
+      id: "patch_rear",
+      deviceId: "lag_patch",
+      name: "R1",
+      position: 1,
+      face: "rear",
+    }),
+    makePort({
+      id: "switch_1",
+      deviceId: "lag_switch",
+      name: "Gi1",
+    }),
+  ];
+  const portLinks: PortLink[] = [
+    {
+      id: "member_to_patch",
+      fromPortId: "eth_1",
+      toPortId: "patch_front",
+    },
+    {
+      id: "patch_to_switch",
+      fromPortId: "patch_rear",
+      toPortId: "switch_1",
+    },
+  ];
+  const input = {
+    deviceId: "lag_server",
+    devices: [server, patch, switchDevice],
+    ports,
+    portLinks,
+  };
+
+  assert.equal(
+    buildCablingMapLines(input, "direct").find((line) => line.portId === "eth_1")
+      ?.text,
+    "lag-server eth1 -> lag-patch F1 (member of Bond1)",
+  );
+  assert.equal(
+    buildCablingMapLines(input, "active").find((line) => line.portId === "eth_1")
+      ?.text,
+    "lag-server eth1 -> lag-switch Gi1 (member of Bond1)",
+  );
+  assert.equal(
+    buildCablingMapLines(input, "full").find((line) => line.portId === "eth_1")
+      ?.text,
+    "lag-server eth1 --cable--> lag-patch F1 --passive--> lag-patch R1 --cable--> lag-switch Gi1 (member of Bond1)",
+  );
 });
 
 test("cabling map stops loops instead of walking forever", () => {

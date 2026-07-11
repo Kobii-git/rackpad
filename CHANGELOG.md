@@ -8,6 +8,59 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.1-beta.1] - 2026-07-11
+
+### Added
+
+- Added administrator integrity reporting and repair support for legacy subnet
+  conflicts and invalid IP-assignment references.
+- Added a bounded, fair Discovery scan queue with deduplication, queue
+  positions, per-lab limits, and completed-job retention.
+- Added responsive and accessibility browser coverage for Dashboard, Devices,
+  Networks, Discovery, and Visualizer across English, French, and Arabic RTL.
+
+### Changed
+
+- Bond/LAG member ports now keep their real physical cables while aggregate
+  ports represent an independent logical L2 link.
+- Monitoring and Docker HTTP targets now use pinned, redirect-safe DNS
+  resolution that permits private/ULA networks but blocks host-local,
+  metadata, multicast, and other special-purpose destinations.
+- Non-English dictionaries now load lazily with bundled-English fallback, and
+  visible application copy uses explicit translation keys across all locales.
+- Global device-type, port-template, and NetBox-template mutations now require
+  an administrator.
+- Docker publishing now retains provenance/SBOM attestations and prevents
+  prerelease tags from updating the stable `latest` image.
+
+### Fixed
+
+- Enforced canonical, non-overlapping subnets and cross-lab assignment
+  references across normal writes, imports, SNMP sync, and backup restore.
+- Expanded backup preflight validation for gateways, DHCP scopes, zones,
+  reservations, VLAN/lab relationships, and assignment/scope relationships;
+  rejected restores remain atomic.
+- Fixed Discovery scans that could outlive reverse proxies, standardized the
+  completed status, and made the Discovery workspace vertically reachable at
+  supported desktop widths.
+- Fixed same-lab assignment port/device mismatches, non-admin redaction, and
+  conflicted-subnet child mutation permissions.
+- Fixed physical LAG paths through patch panels while preserving existing
+  aggregate links and backups.
+
+### Test notes
+
+- Upgrade a populated `1.7.0-beta.4` volume and confirm IPAM, DHCP, assignments,
+  aggregates, cables, backups, and integrity reporting remain intact.
+- Retest a slow routed Discovery subnet and confirm the request queues, polls,
+  completes without a 504, and refreshes the inbox.
+- At 1024x768, confirm the Discovery inbox has usable height, precedes the
+  Inspector, and remains vertically reachable.
+- Cable two LAG members through separate patch panels, retain a logical
+  aggregate link, and verify direct, active-endpoint, and full-path maps.
+- Switch between English, French, and Arabic; confirm RTL direction, preserved
+  hostnames, lazy locale loading, and no serious accessibility findings.
+
 ## [1.7.0-beta.4] - 2026-07-04
 
 ### Added

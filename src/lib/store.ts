@@ -2229,16 +2229,6 @@ export async function createCable(input: CreateCableInput): Promise<PortLink> {
   if (fromPort.id === toPort.id) {
     throw new Error("A port cannot be connected to itself.");
   }
-  if (fromPort.aggregatePortId) {
-    throw new Error(
-      `${fromPort.name} is a bond member. Cable the aggregate port instead.`,
-    );
-  }
-  if (toPort.aggregatePortId) {
-    throw new Error(
-      `${toPort.name} is a bond member. Cable the aggregate port instead.`,
-    );
-  }
   if (
     state.portLinks.some((link) =>
       [link.fromPortId, link.toPortId].includes(fromPort.id),
@@ -2442,19 +2432,6 @@ export async function updateCable(
   }
   const nextFromPortId = String(patch.fromPortId ?? existing.fromPortId);
   const nextToPortId = String(patch.toPortId ?? existing.toPortId);
-  const nextFromPort = state.ports.find((port) => port.id === nextFromPortId);
-  const nextToPort = state.ports.find((port) => port.id === nextToPortId);
-  if (nextFromPort?.aggregatePortId) {
-    throw new Error(
-      `${nextFromPort.name} is a bond member. Cable the aggregate port instead.`,
-    );
-  }
-  if (nextToPort?.aggregatePortId) {
-    throw new Error(
-      `${nextToPort.name} is a bond member. Cable the aggregate port instead.`,
-    );
-  }
-
   const updated = await api.updatePortLink(id, patch);
 
   setState((prev) => ({

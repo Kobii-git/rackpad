@@ -101,9 +101,6 @@ function validateMemberPorts(input: {
     ) {
       throw new ValidationError("One of the selected ports is already in an aggregate.");
     }
-    if (portHasCable(port.id)) {
-      throw new ValidationError("Aggregate member ports cannot already be cabled.");
-    }
     members.push(port);
   }
 

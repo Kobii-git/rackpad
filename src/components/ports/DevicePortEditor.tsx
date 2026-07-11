@@ -597,7 +597,7 @@ export function DevicePortEditor({
                   </div>
                 ) : (
                   <div className="text-xs text-[var(--color-fg-muted)]">
-                    {t("Member of {name}. Cable the aggregate port instead.", {
+                    {t("Member of {name}", {
                       name: aggregatePort?.name ?? t("Unknown"),
                     })}
                   </div>

@@ -83,6 +83,7 @@ network` flow can create single VLAN networks directly.
 
 ## Things intentionally not modeled yet
 
-Rackpad does not yet model port bonds/LAGs or half-width rack unit placement.
-Those need their own data model and validation pass, so they are kept separate
-from the low-risk Networks/IPAM simplification work.
+Rackpad does not yet model VRFs/routing domains or shared switch fabric
+capacity. Subnet overlap is therefore forbidden within a lab, and report
+capacity remains based on documented port links rather than chassis backplane
+throughput.

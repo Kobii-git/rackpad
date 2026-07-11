@@ -1735,6 +1735,8 @@ function buildCable(input: {
     snmpVerified:
       input.snmpVerifiedPortIds.has(fromPort.id) &&
       input.snmpVerifiedPortIds.has(toPort.id),
+    logicalAggregate:
+      fromPort.portRole === "aggregate" || toPort.portRole === "aggregate",
   };
 }
 

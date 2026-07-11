@@ -525,10 +525,9 @@ export default function PortView() {
       selectedBulkPorts.filter(
         (port) =>
           (port.portRole ?? "physical") === "physical" &&
-          !port.aggregatePortId &&
-          !linkByPortId[port.id],
+          !port.aggregatePortId,
       ),
-    [linkByPortId, selectedBulkPorts],
+    [selectedBulkPorts],
   );
   const selectedPortsCanAggregate =
     selectedBulkPorts.length >= 2 &&
@@ -1769,12 +1768,9 @@ export default function PortView() {
                               </div>
                             ) : selectedAggregatePort ? (
                               <div className="text-xs text-[var(--color-fg-muted)]">
-                                {t(
-                                  "Member of {name}. Cable the aggregate port instead.",
-                                  {
-                                    name: selectedAggregatePort.name,
-                                  },
-                                )}
+                                {t("Member of {name}", {
+                                  name: selectedAggregatePort.name,
+                                })}
                               </div>
                             ) : (
                               <div className="text-xs text-[var(--color-fg-subtle)]">

@@ -93,15 +93,7 @@ function buildLineForPort(
   mode: CablingMapMode,
 ): CablingMapLine {
   const start = formatEndpoint(context.device, port);
-  if (port.aggregatePortId) {
-    const aggregate = context.portById.get(port.aggregatePortId);
-    return {
-      portId: port.id,
-      portName: port.name,
-      status: "aggregate-member",
-      text: `${start} -> cable aggregate ${aggregate?.name ?? port.aggregatePortId}`,
-    };
-  }
+  const topologySuffix = portTopologySuffix(context.portById, port);
 
   if (mode === "direct") {
     const link = context.linkByPortId.get(port.id);
@@ -110,26 +102,26 @@ function buildLineForPort(
       return {
         portId: port.id,
         portName: port.name,
-        status: "spare",
-        text: `${start} -> spare`,
+        status: port.aggregatePortId ? "aggregate-member" : "spare",
+        text: `${start} -> ${port.portRole === "aggregate" ? "unlinked" : "spare"}${topologySuffix}`,
       };
     }
     return {
       portId: port.id,
       portName: port.name,
       status: "linked",
-      text: `${start} -> ${formatEndpoint(context.deviceById.get(peer.deviceId), peer)}`,
+      text: `${start} -> ${formatEndpoint(context.deviceById.get(peer.deviceId), peer)}${topologySuffix}`,
     };
   }
 
   const result = walkCablePath(context, port);
   if (result.segments.length === 0 || !result.endpoint) {
-    return {
-      portId: port.id,
-      portName: port.name,
-      status: "spare",
-      text: `${start} -> spare`,
-    };
+      return {
+        portId: port.id,
+        portName: port.name,
+        status: port.aggregatePortId ? "aggregate-member" : "spare",
+        text: `${start} -> ${port.portRole === "aggregate" ? "unlinked" : "spare"}${topologySuffix}`,
+      };
   }
 
   if (mode === "active") {
@@ -143,7 +135,7 @@ function buildLineForPort(
       text: `${start} -> ${formatEndpoint(
         context.deviceById.get(result.endpoint.deviceId),
         result.endpoint,
-      )}${suffix}${passiveSuffix}`,
+      )}${suffix}${passiveSuffix}${topologySuffix}`,
     };
   }
 
@@ -151,8 +143,15 @@ function buildLineForPort(
     portId: port.id,
     portName: port.name,
     status: result.status,
-    text: formatFullPath(context, port, result),
+    text: `${formatFullPath(context, port, result)}${topologySuffix}`,
   };
+}
+
+function portTopologySuffix(portById: Map<string, Port>, port: Port) {
+  if (port.portRole === "aggregate") return " (logical LAG)";
+  if (!port.aggregatePortId) return "";
+  const aggregate = portById.get(port.aggregatePortId);
+  return ` (member of ${aggregate?.name ?? port.aggregatePortId})`;
 }
 
 function walkCablePath(

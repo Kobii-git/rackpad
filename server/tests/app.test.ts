@@ -3883,54 +3883,36 @@ test("ports can be updated and deleted with a custom MAC address", async () => {
   assert.equal(ports.length, 0);
 });
 
-test("port aggregates use a cabled aggregate endpoint and block member cabling", async () => {
+test("port aggregates preserve physical member cables and a separate logical link", async () => {
   const adminToken = await bootstrapAdmin();
 
-  const switchRes = await app.inject({
-    method: "POST",
-    url: "/api/devices",
-    headers: {
-      authorization: `Bearer ${adminToken}`,
-    },
-    payload: {
-      labId: "lab_home",
-      hostname: "lag-switch",
-      deviceType: "switch",
-      status: "online",
-    },
-  });
-  assert.equal(switchRes.statusCode, 201);
-  const switchDevice = readJson(switchRes) as { id: string };
+  async function createDevice(hostname: string, deviceType: string) {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/devices",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { labId: "lab_home", hostname, deviceType, status: "online" },
+    });
+    assert.equal(res.statusCode, 201);
+    return readJson(res) as { id: string };
+  }
 
-  const serverRes = await app.inject({
-    method: "POST",
-    url: "/api/devices",
-    headers: {
-      authorization: `Bearer ${adminToken}`,
-    },
-    payload: {
-      labId: "lab_home",
-      hostname: "lag-server",
-      deviceType: "server",
-      status: "online",
-    },
-  });
-  assert.equal(serverRes.statusCode, 201);
-  const serverDevice = readJson(serverRes) as { id: string };
-
-  async function createPort(deviceId: string, name: string) {
+  async function createPort(
+    deviceId: string,
+    name: string,
+    options: { face?: "front" | "rear"; position?: number } = {},
+  ) {
     const res = await app.inject({
       method: "POST",
       url: "/api/ports",
-      headers: {
-        authorization: `Bearer ${adminToken}`,
-      },
+      headers: { authorization: `Bearer ${adminToken}` },
       payload: {
         deviceId,
         name,
         kind: "rj45",
         linkState: "down",
         speed: "1G",
+        ...options,
       },
     });
     assert.equal(res.statusCode, 201);
@@ -3941,10 +3923,50 @@ test("port aggregates use a cabled aggregate endpoint and block member cabling",
     };
   }
 
+  async function createCable(fromPortId: string, toPortId: string) {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/port-links",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { fromPortId, toPortId, cableType: "copper" },
+    });
+    assert.equal(res.statusCode, 201);
+    return readJson(res) as { id: string };
+  }
+
+  const switchDevice = await createDevice("lag-switch", "switch");
+  const serverDevice = await createDevice("lag-server", "server");
+  const patchA = await createDevice("patch-a", "patch_panel");
+  const patchB = await createDevice("patch-b", "patch_panel");
   const sw1 = await createPort(switchDevice.id, "Gi0/1");
   const sw2 = await createPort(switchDevice.id, "Gi0/2");
   const sw3 = await createPort(switchDevice.id, "Gi0/3");
-  const serverPort = await createPort(serverDevice.id, "eno1");
+  const sw4 = await createPort(switchDevice.id, "Gi0/4");
+  const server1 = await createPort(serverDevice.id, "eno1");
+  const server2 = await createPort(serverDevice.id, "eno2");
+  const server3 = await createPort(serverDevice.id, "eno3");
+  const patchAFront = await createPort(patchA.id, "F1", {
+    face: "front",
+    position: 1,
+  });
+  const patchARear = await createPort(patchA.id, "R1", {
+    face: "rear",
+    position: 1,
+  });
+  const patchBFront = await createPort(patchB.id, "F1", {
+    face: "front",
+    position: 1,
+  });
+  const patchBRear = await createPort(patchB.id, "R1", {
+    face: "rear",
+    position: 1,
+  });
+  const physicalCableIds = [
+    (await createCable(sw1.id, patchAFront.id)).id,
+    (await createCable(patchARear.id, server1.id)).id,
+    (await createCable(sw2.id, patchBFront.id)).id,
+    (await createCable(patchBRear.id, server2.id)).id,
+  ];
 
   const createAggregateRes = await app.inject({
     method: "POST",
@@ -3971,6 +3993,22 @@ test("port aggregates use a cabled aggregate endpoint and block member cabling",
     [createdAggregate.aggregate.id, createdAggregate.aggregate.id],
   );
 
+  const serverAggregateRes = await app.inject({
+    method: "POST",
+    url: "/api/port-aggregates",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      deviceId: serverDevice.id,
+      name: "Bond1",
+      speed: "2G",
+      memberPortIds: [server1.id, server2.id],
+    },
+  });
+  assert.equal(serverAggregateRes.statusCode, 201);
+  const serverAggregate = readJson(serverAggregateRes) as {
+    aggregate: { id: string };
+  };
+
   const genericMemberDeleteRes = await app.inject({
     method: "DELETE",
     url: `/api/ports/${sw1.id}`,
@@ -3991,20 +4029,18 @@ test("port aggregates use a cabled aggregate endpoint and block member cabling",
   assert.equal(genericAggregateDeleteRes.statusCode, 409);
   assert.match(genericAggregateDeleteRes.body, /aggregate delete flow/i);
 
-  const memberCableRes = await app.inject({
+  const logicalLinkRes = await app.inject({
     method: "POST",
     url: "/api/port-links",
-    headers: {
-      authorization: `Bearer ${adminToken}`,
-    },
+    headers: { authorization: `Bearer ${adminToken}` },
     payload: {
-      fromPortId: sw1.id,
-      toPortId: serverPort.id,
-      cableType: "copper",
+      fromPortId: createdAggregate.aggregate.id,
+      toPortId: serverAggregate.aggregate.id,
+      cableType: "lacp",
     },
   });
-  assert.equal(memberCableRes.statusCode, 409);
-  assert.match(memberCableRes.body, /aggregate/i);
+  assert.equal(logicalLinkRes.statusCode, 201);
+  const logicalLink = readJson(logicalLinkRes) as { id: string };
 
   const updateAggregateRes = await app.inject({
     method: "PATCH",
@@ -4025,20 +4061,22 @@ test("port aggregates use a cabled aggregate endpoint and block member cabling",
     [sw2.id, sw3.id].sort(),
   );
 
-  const aggregateCableRes = await app.inject({
-    method: "POST",
-    url: "/api/port-links",
-    headers: {
-      authorization: `Bearer ${adminToken}`,
-    },
-    payload: {
-      fromPortId: createdAggregate.aggregate.id,
-      toPortId: serverPort.id,
-      cableType: "lacp",
-    },
+  const postAggregateMemberCable = await createCable(sw3.id, server3.id);
+  physicalCableIds.push(postAggregateMemberCable.id);
+  const moveMemberCableRes = await app.inject({
+    method: "PATCH",
+    url: `/api/port-links/${postAggregateMemberCable.id}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { fromPortId: sw4.id },
   });
-  assert.equal(aggregateCableRes.statusCode, 201);
-  const cable = readJson(aggregateCableRes) as { id: string };
+  assert.equal(moveMemberCableRes.statusCode, 200);
+  const restoreMemberCableRes = await app.inject({
+    method: "PATCH",
+    url: `/api/port-links/${postAggregateMemberCable.id}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { fromPortId: sw3.id },
+  });
+  assert.equal(restoreMemberCableRes.statusCode, 200);
 
   const blockedDeleteRes = await app.inject({
     method: "DELETE",
@@ -4051,7 +4089,7 @@ test("port aggregates use a cabled aggregate endpoint and block member cabling",
 
   const deleteCableRes = await app.inject({
     method: "DELETE",
-    url: `/api/port-links/${cable.id}`,
+    url: `/api/port-links/${logicalLink.id}`,
     headers: {
       authorization: `Bearer ${adminToken}`,
     },
@@ -4086,6 +4124,18 @@ test("port aggregates use a cabled aggregate endpoint and block member cabling",
   assert.equal(
     portsAfterDelete.some((port) => port.aggregatePortId),
     false,
+  );
+
+  const linksAfterDeleteRes = await app.inject({
+    method: "GET",
+    url: "/api/port-links?labId=lab_home",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(linksAfterDeleteRes.statusCode, 200);
+  const linksAfterDelete = readJson(linksAfterDeleteRes) as Array<{ id: string }>;
+  assert.deepEqual(
+    physicalCableIds.every((id) => linksAfterDelete.some((link) => link.id === id)),
+    true,
   );
 });
 
@@ -4144,6 +4194,53 @@ test("port aggregates are included in backup export and restore", async () => {
   assert.equal(aggregateRes.statusCode, 201);
   const aggregate = readJson(aggregateRes) as { aggregate: { id: string } };
 
+  const peerDeviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      hostname: "backup-lag-peer",
+      deviceType: "switch",
+      status: "online",
+    },
+  });
+  assert.equal(peerDeviceRes.statusCode, 201);
+  const peerDevice = readJson(peerDeviceRes) as { id: string };
+  async function createPeerPort(name: string) {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ports",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        deviceId: peerDevice.id,
+        name,
+        kind: "rj45",
+        linkState: "down",
+      },
+    });
+    assert.equal(res.statusCode, 201);
+    return readJson(res) as { id: string };
+  }
+  const physicalPeer = await createPeerPort("Gi1");
+  const logicalPeer = await createPeerPort("Port-channel1");
+  async function createLink(fromPortId: string, toPortId: string, cableType: string) {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/port-links",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { fromPortId, toPortId, cableType },
+    });
+    assert.equal(res.statusCode, 201);
+    return readJson(res) as { id: string };
+  }
+  const physicalLink = await createLink(first.id, physicalPeer.id, "copper");
+  const logicalLink = await createLink(
+    aggregate.aggregate.id,
+    logicalPeer.id,
+    "lacp",
+  );
+
   const exportRes = await app.inject({
     method: "GET",
     url: "/api/admin/export",
@@ -4160,6 +4257,7 @@ test("port aggregates are included in backup export and restore", async () => {
         portRole?: string;
         aggregatePortId?: string | null;
       }>;
+      portLinks: Array<{ id: string; fromPortId: string; toPortId: string }>;
     };
   };
   assert.equal(
@@ -4170,6 +4268,14 @@ test("port aggregates are included in backup export and restore", async () => {
   assert.equal(
     snapshot.data.ports.find((port) => port.id === first.id)?.aggregatePortId,
     aggregate.aggregate.id,
+  );
+  assert.equal(
+    snapshot.data.portLinks.some((link) => link.id === physicalLink.id),
+    true,
+  );
+  assert.equal(
+    snapshot.data.portLinks.some((link) => link.id === logicalLink.id),
+    true,
   );
 
   const restoreRes = await app.inject({
@@ -4214,6 +4320,16 @@ test("port aggregates are included in backup export and restore", async () => {
     restoredPorts.find((port) => port.id === second.id)?.aggregatePortId,
     aggregate.aggregate.id,
   );
+
+  const linksRes = await app.inject({
+    method: "GET",
+    url: "/api/port-links?labId=lab_home",
+    headers: { authorization: `Bearer ${refreshedToken}` },
+  });
+  assert.equal(linksRes.statusCode, 200);
+  const restoredLinks = readJson(linksRes) as Array<{ id: string }>;
+  assert.equal(restoredLinks.some((link) => link.id === physicalLink.id), true);
+  assert.equal(restoredLinks.some((link) => link.id === logicalLink.id), true);
 });
 
 test("wifi ports and device services can be managed", async () => {

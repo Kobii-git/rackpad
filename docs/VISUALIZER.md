@@ -88,6 +88,18 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
 - Cables between two online devices get a subtle low-contrast dash pulse.
 - Hovering or selecting a cable fades unrelated cables and highlights endpoint devices.
 
+## Link Aggregation
+
+Rackpad keeps the physical and logical layers separate for bonds, LAGs, and
+port channels. Cable each physical member port through its real patch-panel or
+direct path. The aggregate port can have its own independent logical link to
+the peer aggregate. Removing a member or deleting an unlinked aggregate does
+not remove the member's physical cable.
+
+Logical aggregate links use a distinct pattern and an Aggregate port badge in
+Visualizer and Diagram inspectors. Cabling maps follow physical member paths
+and annotate the aggregate membership.
+
 ## Port Strips
 
 Each device card shows a compact port strip on the right edge:
