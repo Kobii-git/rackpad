@@ -1,8 +1,5 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Community Discord
-    url: https://discord.gg/g25tEafYDX
-    about: Questions, setup help, and community discussion
   - name: Contributing guide
     url: https://github.com/Kobii-git/Rackpad/blob/main/CONTRIBUTING.md
     about: Setup, branching, validation, and i18n rules
