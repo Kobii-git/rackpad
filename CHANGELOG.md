@@ -8,6 +8,50 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.1] - 2026-07-16
+
+### Added
+
+- Added scheduled and queued Discovery scanning with safe CIDR fan-out,
+  technical-address handling, and clearer job progress.
+- Added port bonding/LAG inventory, physical-member cable paths, copyable
+  cabling maps, and half-width rack placement.
+- Added administrator integrity reporting and repair tools for legacy subnet
+  and IP-assignment conflicts.
+- Added lazy app-wide localization and responsive accessibility coverage across
+  English, French, Arabic RTL, and supported desktop widths.
+
+### Fixed
+
+- Enforced canonical, non-overlapping subnets and same-lab relationships across
+  normal writes, imports, SNMP sync, and atomic backup restore.
+- Hardened Docker and monitoring targets against unsafe DNS and redirect paths,
+  and restricted global inventory-template mutations to administrators.
+- Preserved physical LAG cables and patch-panel paths independently from their
+  logical aggregate links.
+- Kept the Discovery Inbox scrollable when stacked, prevented the Inspector
+  from covering rows, and expanded the Inspector beside the Inbox on wide
+  layouts.
+
+### Changed
+
+- Promoted the smoke-tested `1.7.1-beta.2` release candidate to stable
+  `1.7.1`.
+- Docker publishing now retains provenance and SBOM attestations while only
+  stable branches or stable tags update `latest`.
+
+### Test notes
+
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, client tests, CodeQL, Trivy, and the complete browser
+  and accessibility suite.
+- Pulled and smoke-tested the published beta image at 1248x1195 and 1711x1150;
+  health, bootstrap, login, version display, stacked panel separation, Inbox
+  overflow, full-height Inspector layout, and internal Inspector scrolling
+  passed.
+- After upgrading, confirm existing subnets, assignments, aggregates, cables,
+  backups, and Discovery records remain intact.
+
 ## [1.7.1-beta.2] - 2026-07-16
 
 ### Added
