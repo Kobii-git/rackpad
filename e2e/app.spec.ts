@@ -94,13 +94,35 @@ test("responsive and serious accessibility matrix passes for supported modes", a
           .toBe(mode.direction);
         if (route === "/discovery") {
           const inbox = page.getByTestId("discovery-inbox");
+          const inspector = page.getByTestId("discovery-inspector");
           await inbox.scrollIntoViewIfNeeded();
           await expect(inbox).toBeVisible();
-          const box = await inbox.boundingBox();
+          await expect(inspector).toBeVisible();
+          const [box, inspectorBox] = await Promise.all([
+            inbox.boundingBox(),
+            inspector.boundingBox(),
+          ]);
           expect(
             box?.height ?? 0,
             `Discovery inbox collapsed in ${mode.name} at ${viewport.width}px`,
           ).toBeGreaterThanOrEqual(352);
+          if (viewport.width < 1280) {
+            expect(
+              await inbox.evaluate(
+                (element) => getComputedStyle(element).overflowY,
+              ),
+              `Discovery inbox cannot scroll in ${mode.name} at ${viewport.width}px`,
+            ).toBe("auto");
+            expect(
+              inspectorBox?.y ?? 0,
+              `Discovery inspector overlaps the inbox in ${mode.name} at ${viewport.width}px`,
+            ).toBeGreaterThanOrEqual((box?.y ?? 0) + (box?.height ?? 0) + 10);
+          } else {
+            expect(
+              inspectorBox?.height ?? 0,
+              `Discovery inspector stayed too short in ${mode.name} at ${viewport.width}px`,
+            ).toBeGreaterThanOrEqual(600);
+          }
         }
         const overflows = await page.evaluate(
           () =>

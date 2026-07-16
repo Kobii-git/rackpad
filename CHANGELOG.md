@@ -8,6 +8,29 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.1-beta.2] - 2026-07-16
+
+### Added
+
+- Added responsive regression checks for Discovery Inbox scrolling, stacked
+  panel separation, and wide Inspector height.
+
+### Fixed
+
+- Kept the Discovery Inbox vertically scrollable when the Inspector stacks
+  below it, preventing the Inspector from covering discovered-host rows.
+- Expanded the Inspector to the full Discovery working height on wide layouts
+  while retaining its internal scroll for longer records.
+
+### Test notes
+
+- At 1248x1195 with enough discovered hosts to overflow the Inbox, confirm the
+  Inbox scrolls and the Inspector starts below it without overlap.
+- At 1711x1150, confirm the Inspector uses the available height beside the
+  Inbox and its form still scrolls internally.
+- Verified `npm run check:i18n`, `npm run build`, `npm run lint`,
+  `npm run test:server`, and the responsive/accessibility browser matrix.
+
 ## [1.7.1-beta.1] - 2026-07-11
 
 ### Added

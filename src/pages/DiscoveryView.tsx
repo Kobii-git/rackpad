@@ -1072,9 +1072,9 @@ export default function DiscoveryView() {
           </div>
         )}
 
-        <div className="grid min-h-[22rem] gap-3 xl:grid-cols-[minmax(22rem,1fr)_minmax(20rem,0.4fr)] xl:items-start">
+        <div className="grid min-h-[22rem] gap-3 xl:grid-cols-[minmax(22rem,1fr)_minmax(20rem,0.4fr)]">
           <div
-            className="min-h-[22rem] min-w-0 xl:max-h-[42rem] xl:overflow-y-auto"
+            className="max-h-[42rem] min-h-[22rem] min-w-0 overflow-y-auto"
             data-testid="discovery-inbox"
           >
             <Card>
@@ -1253,9 +1253,12 @@ export default function DiscoveryView() {
             </Card>
           </div>
 
-          <div className="min-w-0 w-full">
-            <Card>
-              <CardHeader>
+          <div className="w-full min-w-0">
+            <Card
+              className="flex h-full flex-col"
+              data-testid="discovery-inspector"
+            >
+              <CardHeader className="shrink-0">
                 <CardTitle>
                   <CardLabel>{t("Inspector")}</CardLabel>
                   <CardHeading>
@@ -1266,7 +1269,7 @@ export default function DiscoveryView() {
                 </CardTitle>
                 {selected && <DiscoveryBadge status={selected.status} />}
               </CardHeader>
-              <CardBody className="max-h-[22rem] space-y-4 overflow-y-auto">
+              <CardBody className="min-h-0 flex-1 max-h-[22rem] space-y-4 overflow-y-auto xl:max-h-[38rem]">
                 {!selected || !draft ? (
                   <EmptyState
                     icon={Search}
