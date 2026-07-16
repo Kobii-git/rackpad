@@ -8,6 +8,11 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+### Added
+
+- Added the Rackpad community Discord to the README, support guide, and GitHub
+  issue chooser.
+
 ## [1.7.1-beta.2] - 2026-07-16
 
 ### Added

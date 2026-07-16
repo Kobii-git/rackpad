@@ -5,6 +5,7 @@
 [![Container](https://img.shields.io/badge/ghcr.io-rackpad-2496ed?logo=docker&logoColor=white)](https://github.com/Kobii-git/rackpad/pkgs/container/rackpad)
 [![License](https://img.shields.io/github/license/Kobii-git/rackpad?color=success)](./LICENSE)
 [![Stars](https://img.shields.io/github/stars/Kobii-git/rackpad?style=flat)](https://github.com/Kobii-git/rackpad/stargazers)
+[![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/g25tEafYDX)
 
 Rackpad is a self-hosted infrastructure inventory and operations workspace for homelabs, small racks, network rooms, and lab environments. It brings racks, devices, ports, cables, VLANs, IPAM, WiFi, compute, discovery, monitoring, docs, images, labs, and an admin area into one clean app.
 
@@ -50,6 +51,7 @@ If `rackpad.co.za` is unavailable, the repo still contains the core material you
 - [SNMP implementation plan & outstanding work](./docs/SNMP_IMPLEMENTATION_PLAN.md)
 - [Documentation and images guide](./docs/DOCUMENTATION.md)
 - [Security policy](./SECURITY.md)
+- [Community Discord](https://discord.gg/g25tEafYDX)
 - [Changelog](./CHANGELOG.md)
 - [MIT license](./LICENSE)
 - [Support notes](./SUPPORT.md)

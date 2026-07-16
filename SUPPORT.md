@@ -5,6 +5,9 @@ than a managed service.
 
 ## Getting help
 
+For questions, setup help, and community discussion, join the
+[Rackpad community Discord](https://discord.gg/g25tEafYDX).
+
 When filing an issue or asking for help, include:
 
 - Rackpad version or commit
