@@ -84,7 +84,6 @@ export function RackView({
   onSelectDevice,
   selectedDeviceId,
 }: RackViewProps) {
-  const { t } = useI18n();
   const faces: RackFace[] = face === "both" ? ["front", "rear"] : [face];
   return (
     <div className="flex flex-wrap items-start gap-4">
@@ -201,7 +200,6 @@ function RackFaceView({
 }
 
 function RackRail({ slots, side }: { slots: Slot[]; side: "left" | "right" }) {
-  const { t } = useI18n();
   return (
     <div
       className={cn(
@@ -414,7 +412,6 @@ function DeviceTile({
 }
 
 function EmptySlot() {
-  const { t } = useI18n();
   return (
     <div
       className="border-y border-[rgb(255_255_255_/_0.03)] bg-[var(--surface-1)]"

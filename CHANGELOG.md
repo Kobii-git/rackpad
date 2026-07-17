@@ -8,6 +8,26 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+### Changed
+
+- Refreshed supported runtime and development dependencies within their
+  existing major versions while retaining Node 22 and TypeScript 6.
+
+### Fixed
+
+- Removed a file-system race from the i18n UI scanner by reading verified
+  regular files through a single descriptor and skipping symbolic links.
+- Removed unused rack translation bindings and stale cable endpoint
+  calculations reported by CodeQL.
+
+### Test notes
+
+- Verified a clean `npm ci`, `npm run check:i18n`, `npm run build`,
+  `npm run lint`, `npm run test:server`, `npm run test:client`,
+  `npm run test:e2e`, and `npm run check:bundle`.
+- Verified zero `npm audit` vulnerabilities and a production Docker image
+  build on Node 22.
+
 ## [1.7.1-beta.2] - 2026-07-16
 
 ### Added

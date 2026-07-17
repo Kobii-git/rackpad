@@ -2430,8 +2430,6 @@ export async function updateCable(
       patch[key] = changes[key] ?? null;
     }
   }
-  const nextFromPortId = String(patch.fromPortId ?? existing.fromPortId);
-  const nextToPortId = String(patch.toPortId ?? existing.toPortId);
   const updated = await api.updatePortLink(id, patch);
 
   setState((prev) => ({

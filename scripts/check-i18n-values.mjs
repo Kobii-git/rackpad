@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 /** Validate locale parity, translation quality, placeholders, and explicit UI copy. */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+} from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -166,14 +173,33 @@ if (/^import[\s\S]*?from\s+["']\.\/locales\//m.test(i18nRuntime)) {
 }
 
 function scanUiDirectory(directory) {
-  for (const name of readdirSync(directory)) {
-    const filePath = join(directory, name);
-    if (statSync(filePath).isDirectory()) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const filePath = join(directory, entry.name);
+    if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory()) {
       scanUiDirectory(filePath);
       continue;
     }
-    if (!filePath.endsWith(".tsx")) continue;
-    const content = readFileSync(filePath, "utf8");
+    if (!entry.isFile() || !filePath.endsWith(".tsx")) continue;
+
+    let descriptor;
+    try {
+      descriptor = openSync(
+        filePath,
+        constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+      );
+    } catch (error) {
+      if (error?.code === "ELOOP") continue;
+      throw error;
+    }
+
+    let content;
+    try {
+      if (!fstatSync(descriptor).isFile()) continue;
+      content = readFileSync(descriptor, "utf8");
+    } finally {
+      closeSync(descriptor);
+    }
     const sourceFile = ts.createSourceFile(
       filePath,
       content,
