@@ -10,6 +10,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import dgram from "node:dgram";
+import { execFileSync } from "node:child_process";
 
 const tempDir = mkdtempSync(path.join(os.tmpdir(), "rackpad-tests-"));
 const spaDistDir = path.resolve(process.cwd(), "dist");
@@ -27,6 +28,8 @@ const { setDockerHttpJsonFetcherForTests } =
   await import("../lib/docker-import.js");
 const { resetLocalUserPassword } = await import("../lib/password-reset.js");
 const { parseIeeeOuiText } = await import("../lib/oui.js");
+const { cidrOverlaps, ipToInt } = await import("../lib/ip-cidr.js");
+const { resolveSnmpSessionForTarget } = await import("../lib/snmp-session.js");
 const {
   expandDiscoveryCidrs,
   expandDiscoveryScanChunks,
@@ -517,6 +520,7 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
   });
 
   assert.equal(demoBootstrapRes.statusCode, 201);
+  const demoToken = (readJson(demoBootstrapRes) as { token: string }).token;
 
   const demoState = {
     labs: db.prepare("SELECT COUNT(*) AS count FROM labs").get() as {
@@ -537,6 +541,469 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
   assert.ok(demoState.racks.count > 0);
   assert.ok(demoState.devices.count > 0);
   assert.ok(demoState.vlanRanges.count > 0);
+
+  assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+
+  const builtInTypes = [
+    "switch",
+    "router",
+    "firewall",
+    "server",
+    "rack_shelf",
+    "ap",
+    "endpoint",
+    "vm",
+    "container",
+    "patch_panel",
+    "brush_panel",
+    "blanking_panel",
+    "storage",
+    "pdu",
+    "ups",
+    "kvm",
+    "other",
+  ];
+  const seededTypes = new Set(
+    (
+      db.prepare("SELECT DISTINCT deviceType FROM devices").all() as Array<{
+        deviceType: string;
+      }>
+    ).map((row) => row.deviceType),
+  );
+  for (const deviceType of builtInTypes) {
+    assert.ok(seededTypes.has(deviceType), `missing device type ${deviceType}`);
+  }
+  assert.ok(seededTypes.has("laser_cutter"));
+  assert.ok(
+    db
+      .prepare(
+        "SELECT id FROM discoveredDevices WHERE importedDeviceId = 'd_laser_cutter' AND status = 'imported'",
+      )
+      .get(),
+  );
+
+  const requiredPortKinds = [
+    "rj45",
+    "sfp",
+    "sfp_plus",
+    "qsfp",
+    "fiber",
+    "power",
+    "console",
+    "usb",
+    "virtual",
+    "wifi",
+  ];
+  const seededPortKinds = new Set(
+    (
+      db.prepare("SELECT DISTINCT kind FROM ports").all() as Array<{
+        kind: string;
+      }>
+    ).map((row) => row.kind),
+  );
+  for (const kind of requiredPortKinds) {
+    assert.ok(seededPortKinds.has(kind), `missing port kind ${kind}`);
+  }
+  assert.ok(
+    db
+      .prepare(
+        "SELECT id FROM ports WHERE mode = 'trunk' AND allowedVlanIds IS NOT NULL",
+      )
+      .get(),
+  );
+  assert.ok(
+    db.prepare("SELECT id FROM ports WHERE portRole = 'aggregate'").get(),
+  );
+  assert.equal(
+    Number(
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM ports WHERE aggregatePortId IS NOT NULL",
+          )
+          .get() as { count: number }
+      ).count,
+    ),
+    2,
+  );
+  assert.ok(
+    db.prepare("SELECT id FROM virtualSwitches WHERE kind = 'external'").get(),
+  );
+  assert.ok(
+    db.prepare("SELECT id FROM virtualSwitches WHERE kind = 'internal'").get(),
+  );
+
+  const requiredMonitorTypes = ["icmp", "tcp", "http", "https", "snmp"];
+  const monitorTypes = new Set(
+    (
+      db.prepare("SELECT DISTINCT type FROM deviceMonitors").all() as Array<{
+        type: string;
+      }>
+    ).map((row) => row.type),
+  );
+  for (const type of requiredMonitorTypes) {
+    assert.ok(monitorTypes.has(type), `missing monitor type ${type}`);
+  }
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM deviceMonitors WHERE enabled != 0",
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  const demoV3Before = db
+    .prepare("SELECT * FROM deviceMonitors WHERE id = 'mon_ups_snmp_v3'")
+    .get() as Record<string, unknown>;
+  assert.equal(demoV3Before.snmpVersion, "3");
+  assert.equal(demoV3Before.snmpCommunity, null);
+  assert.equal(demoV3Before.snmpMatchMode, "any");
+  const demoV3RoundTripRes = await app.inject({
+    method: "PATCH",
+    url: "/api/device-monitors/mon_ups_snmp_v3",
+    headers: { authorization: `Bearer ${demoToken}` },
+    payload: { enabled: false },
+  });
+  assert.equal(demoV3RoundTripRes.statusCode, 200, demoV3RoundTripRes.body);
+  assert.deepEqual(
+    db
+      .prepare("SELECT * FROM deviceMonitors WHERE id = 'mon_ups_snmp_v3'")
+      .get(),
+    demoV3Before,
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM deviceMonitors WHERE snmpCommunity IS NOT NULL AND TRIM(snmpCommunity) != ''",
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.deepEqual(
+    (
+      db
+        .prepare(
+          "SELECT DISTINCT version FROM snmpCredentials ORDER BY version",
+        )
+        .all() as Array<{ version: string }>
+    ).map((row) => row.version),
+    ["1", "2c", "3"],
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM snmpCredentials WHERE communityEnc IS NOT NULL OR v3AuthPassEnc IS NOT NULL OR v3PrivPassEnc IS NOT NULL",
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.ok(db.prepare("SELECT id FROM snmpTrapSources LIMIT 1").get());
+  assert.ok(db.prepare("SELECT id FROM snmpTrapLog LIMIT 1").get());
+
+  const requiredServiceTypes = [
+    "dhcp",
+    "dns",
+    "vpn",
+    "ntp",
+    "snmp",
+    "syslog",
+    "http",
+    "https",
+    "database",
+    "app",
+    "custom",
+  ];
+  const serviceTypes = new Set(
+    (
+      db
+        .prepare("SELECT DISTINCT serviceType FROM deviceServices")
+        .all() as Array<{
+        serviceType: string;
+      }>
+    ).map((row) => row.serviceType),
+  );
+  for (const type of requiredServiceTypes) {
+    assert.ok(serviceTypes.has(type), `missing service type ${type}`);
+  }
+
+  const assignmentTypes = new Set(
+    (
+      db
+        .prepare("SELECT DISTINCT assignmentType FROM ipAssignments")
+        .all() as Array<{ assignmentType: string }>
+    ).map((row) => row.assignmentType),
+  );
+  for (const type of [
+    "device",
+    "interface",
+    "vm",
+    "container",
+    "reserved",
+    "infrastructure",
+  ]) {
+    assert.ok(assignmentTypes.has(type), `missing assignment type ${type}`);
+  }
+
+  const semanticZones = db
+    .prepare(
+      "SELECT subnetId, kind, startIp, endIp FROM ipZones WHERE kind IN ('reserved', 'infrastructure')",
+    )
+    .all() as Array<{
+    subnetId: string;
+    kind: string;
+    startIp: string;
+    endIp: string;
+  }>;
+  const semanticAssignments = db
+    .prepare(
+      "SELECT id, subnetId, ipAddress, assignmentType FROM ipAssignments WHERE assignmentType IN ('reserved', 'infrastructure')",
+    )
+    .all() as Array<{
+    id: string;
+    subnetId: string;
+    ipAddress: string;
+    assignmentType: string;
+  }>;
+  for (const assignment of semanticAssignments) {
+    const address = ipToInt(assignment.ipAddress);
+    assert.ok(
+      semanticZones.some(
+        (zone) =>
+          zone.subnetId === assignment.subnetId &&
+          zone.kind === assignment.assignmentType &&
+          address >= ipToInt(zone.startIp) &&
+          address <= ipToInt(zone.endIp),
+      ),
+      `${assignment.id} is outside its ${assignment.assignmentType} zone`,
+    );
+  }
+  assert.ok(
+    db
+      .prepare(
+        "SELECT id FROM ipAssignments WHERE allocationMode = 'dhcp-reservation' AND dhcpScopeId IS NOT NULL",
+      )
+      .get(),
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          `
+          SELECT COUNT(*) AS count
+          FROM ipAssignments a
+          LEFT JOIN devices d ON d.id = a.vmId
+          WHERE a.assignmentType = 'vm' AND d.id IS NULL
+        `,
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          `
+          SELECT COUNT(*) AS count
+          FROM ipAssignments a
+          LEFT JOIN devices d ON d.id = a.containerId
+          WHERE a.assignmentType = 'container' AND d.id IS NULL
+        `,
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+
+  const subnets = db
+    .prepare("SELECT id, labId, cidr FROM subnets ORDER BY labId, cidr")
+    .all() as Array<{ id: string; labId: string; cidr: string }>;
+  for (let left = 0; left < subnets.length; left += 1) {
+    for (let right = left + 1; right < subnets.length; right += 1) {
+      if (subnets[left].labId !== subnets[right].labId) continue;
+      assert.equal(
+        cidrOverlaps(subnets[left].cidr, subnets[right].cidr),
+        false,
+        `${subnets[left].id} overlaps ${subnets[right].id}`,
+      );
+    }
+  }
+  const dhcpZones = db
+    .prepare(
+      "SELECT subnetId, startIp, endIp FROM ipZones WHERE kind = 'dhcp'",
+    )
+    .all() as Array<{
+    subnetId: string;
+    startIp: string;
+    endIp: string;
+  }>;
+  const demoDhcpScopes = db
+    .prepare("SELECT id, subnetId, startIp, endIp FROM dhcpScopes")
+    .all() as Array<{
+    id: string;
+    subnetId: string;
+    startIp: string;
+    endIp: string;
+  }>;
+  for (const scope of demoDhcpScopes) {
+    assert.ok(
+      dhcpZones.some(
+        (zone) =>
+          zone.subnetId === scope.subnetId &&
+          ipToInt(scope.startIp) >= ipToInt(zone.startIp) &&
+          ipToInt(scope.endIp) <= ipToInt(zone.endIp),
+      ),
+      `${scope.id} is not covered by a DHCP zone`,
+    );
+  }
+  assert.equal(
+    (
+      db
+        .prepare(
+          `
+          SELECT COUNT(*) AS count
+          FROM devices a
+          JOIN devices b ON a.id < b.id
+            AND a.rackId = b.rackId
+            AND COALESCE(a.face, 'front') = COALESCE(b.face, 'front')
+            AND COALESCE(a.rackSlot, 'full') = COALESCE(b.rackSlot, 'full')
+            AND a.startU <= b.startU + b.heightU - 1
+            AND b.startU <= a.startU + a.heightU - 1
+          WHERE a.rackId IS NOT NULL AND a.startU IS NOT NULL AND b.startU IS NOT NULL
+        `,
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          `
+            SELECT COUNT(*) AS count FROM (
+              SELECT subnetId, ipAddress
+              FROM ipAssignments
+              GROUP BY subnetId, ipAddress
+              HAVING COUNT(*) > 1
+            )
+          `,
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.deepEqual(
+    (
+      db
+        .prepare(
+          `
+            SELECT DISTINCT d.id
+            FROM devices d
+            JOIN ports p ON p.deviceId = d.id AND p.kind = 'rj45'
+            JOIN portLinks l ON l.fromPortId = p.id OR l.toPortId = p.id
+            WHERE d.deviceType IN ('pdu', 'ups')
+            ORDER BY d.id
+          `,
+        )
+        .all() as Array<{ id: string }>
+    ).map((row) => row.id),
+    ["d_pdu_cmp", "d_pdu_net", "d_ups"],
+  );
+  assert.ok(
+    db
+      .prepare(
+        `
+          SELECT id
+          FROM portLinks
+          WHERE id = 'l_ups_pdu_power'
+            AND fromPortId = 'p_d_ups_1'
+            AND toPortId = 'p_d_pdu_net_input'
+            AND cableType = 'IEC C19'
+        `,
+      )
+      .get(),
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          `
+          SELECT COUNT(*) AS count FROM (
+            SELECT portId FROM (
+              SELECT fromPortId AS portId FROM portLinks
+              UNION ALL
+              SELECT toPortId AS portId FROM portLinks
+            ) GROUP BY portId HAVING COUNT(*) > 1
+          )
+        `,
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM users WHERE username != 'admin' AND disabled != 1",
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM users WHERE username != 'admin' AND passwordHash LIKE 'scrypt:%'",
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM discoveryScanSchedules WHERE enabled != 0",
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM dockerImportSources WHERE enabled != 0 OR tokenEnc IS NOT NULL",
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.ok(
+    db
+      .prepare(
+        "SELECT id FROM discoveredDevices WHERE technicalRole IS NOT NULL",
+      )
+      .get(),
+  );
+  assert.ok(db.prepare("SELECT id FROM referenceImages LIMIT 1").get());
+  assert.ok(
+    db.prepare("SELECT id FROM documentationDeviceLinks LIMIT 1").get(),
+  );
+  const alertSettings = db
+    .prepare("SELECT value FROM appSettings WHERE key = 'alertSettings'")
+    .get() as { value: string };
+  assert.equal(JSON.parse(alertSettings.value).enabled, false);
 });
 
 test("viewer accounts are read-only", async () => {
@@ -1032,7 +1499,7 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
     },
     payload: snapshot,
   });
-  assert.equal(restoreRes.statusCode, 200);
+  assert.equal(restoreRes.statusCode, 200, restoreRes.body);
 
   const oldSessionRes = await app.inject({
     method: "GET",
@@ -1340,7 +1807,7 @@ test("admin restore rejects invalid IPAM children atomically with structured det
   }
 });
 
-test("admin restore accepts older backups without subnet gateway and DNS fields", async () => {
+test("admin restore accepts older backups without subnet, rack-slot, or Docker enabled fields", async () => {
   const adminToken = await bootstrapAdmin();
 
   const rackRes = await app.inject({
@@ -1377,6 +1844,25 @@ test("admin restore accepts older backups without subnet gateway and DNS fields"
     },
   });
   assert.equal(deviceRes.statusCode, 201);
+  const legacyDevice = readJson(deviceRes) as { id: string };
+
+  const documentationMonitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: legacyDevice.id,
+      name: "Legacy documentation target",
+      type: "none",
+      enabled: true,
+    },
+  });
+  assert.equal(documentationMonitorRes.statusCode, 200);
+  const documentationMonitor = readJson(documentationMonitorRes) as {
+    id: string;
+  };
 
   const subnetRes = await app.inject({
     method: "POST",
@@ -1394,6 +1880,27 @@ test("admin restore accepts older backups without subnet gateway and DNS fields"
   });
   assert.equal(subnetRes.statusCode, 201);
 
+  const legacyDockerTimestamp = new Date().toISOString();
+  db.prepare(
+    `
+      INSERT INTO dockerImportSources
+        (id, labId, name, endpoint, tokenEnc, lastSyncAt, lastSyncStatus, lastSyncMessage, enabled, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+  ).run(
+    "docker_legacy_enabled_default",
+    "lab_home",
+    "Legacy Docker source",
+    "https://8.8.4.4:2376",
+    null,
+    null,
+    null,
+    null,
+    0,
+    legacyDockerTimestamp,
+    legacyDockerTimestamp,
+  );
+
   const exportRes = await app.inject({
     method: "GET",
     url: "/api/admin/export",
@@ -1406,6 +1913,8 @@ test("admin restore accepts older backups without subnet gateway and DNS fields"
     data: {
       devices: Array<Record<string, unknown>>;
       subnets: Array<Record<string, unknown>>;
+      dockerImportSources: Array<Record<string, unknown>>;
+      deviceMonitors: Array<Record<string, unknown>>;
     };
   };
   const legacySnapshot = {
@@ -1423,6 +1932,16 @@ test("admin restore accepts older backups without subnet gateway and DNS fields"
         delete legacySubnet.dnsServers;
         return legacySubnet;
       }),
+      dockerImportSources: snapshot.data.dockerImportSources.map((source) => {
+        const legacySource = { ...source };
+        delete legacySource.enabled;
+        return legacySource;
+      }),
+      deviceMonitors: snapshot.data.deviceMonitors.map((monitor) =>
+        monitor.id === documentationMonitor.id
+          ? { ...monitor, enabled: 1 }
+          : monitor,
+      ),
     },
   };
 
@@ -1434,7 +1953,7 @@ test("admin restore accepts older backups without subnet gateway and DNS fields"
     },
     payload: legacySnapshot,
   });
-  assert.equal(restoreRes.statusCode, 200);
+  assert.equal(restoreRes.statusCode, 200, restoreRes.body);
 
   const loginRes = await app.inject({
     method: "POST",
@@ -1484,6 +2003,15 @@ test("admin restore accepts older backups without subnet gateway and DNS fields"
   );
   assert.ok(restoredDevice);
   assert.equal(restoredDevice.rackSlot, "full");
+
+  const restoredDockerSource = db
+    .prepare("SELECT enabled FROM dockerImportSources WHERE id = ?")
+    .get("docker_legacy_enabled_default") as { enabled: number };
+  assert.equal(restoredDockerSource.enabled, 1);
+  const restoredDocumentationMonitor = db
+    .prepare("SELECT enabled FROM deviceMonitors WHERE id = ?")
+    .get(documentationMonitor.id) as { enabled: number };
+  assert.equal(restoredDocumentationMonitor.enabled, 0);
 });
 
 test("admin restore preserves parent-linked devices even when children sort before their host", async () => {
@@ -3263,6 +3791,501 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   assert.ok(result.lastResult === "online" || result.lastResult === "offline");
 });
 
+test("inline SNMPv3 sessions never fall back to v2c public", () => {
+  assert.throws(
+    () =>
+      resolveSnmpSessionForTarget({
+        deviceId: "missing-device",
+        labId: "lab_home",
+        host: "192.0.2.12",
+        snmpVersion: "3",
+        snmpCommunity: null,
+      }),
+    /usable SNMPv3 credential/i,
+  );
+});
+
+test("disabled monitors preserve configuration and reject manual runs without changing state", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers,
+    payload: {
+      labId: "lab_home",
+      hostname: "disabled-monitor-switch",
+      deviceType: "switch",
+      status: "online",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const portRes = await app.inject({
+    method: "POST",
+    url: "/api/ports",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "Gi0/24",
+      kind: "rj45",
+      linkState: "up",
+      snmpIfIndex: 24,
+    },
+  });
+  assert.equal(portRes.statusCode, 201);
+  const port = readJson(portRes) as { id: string };
+
+  const credentialRes = await app.inject({
+    method: "POST",
+    url: "/api/snmp-credentials",
+    headers,
+    payload: {
+      labId: "lab_home",
+      name: "Disabled monitor credential",
+      version: "2c",
+      community: "test-readonly",
+    },
+  });
+  assert.equal(credentialRes.statusCode, 201);
+  const credential = readJson(credentialRes) as { id: string };
+
+  const httpMonitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "Disabled management UI",
+      type: "https",
+      target: "192.0.2.10",
+      port: 8443,
+      path: "/healthz",
+      intervalMs: 180_000,
+      enabled: false,
+    },
+  });
+  assert.equal(httpMonitorRes.statusCode, 200);
+  const httpMonitor = readJson(httpMonitorRes) as { id: string };
+  const httpUpdateRes = await app.inject({
+    method: "PATCH",
+    url: `/api/device-monitors/${httpMonitor.id}`,
+    headers,
+    payload: {
+      name: "Disabled management UI example",
+      type: "https",
+      target: "192.0.2.10",
+      port: 8443,
+      path: "/ready",
+      intervalMs: 240_000,
+      enabled: false,
+    },
+  });
+  assert.equal(httpUpdateRes.statusCode, 200);
+  assert.deepEqual(
+    (({ type, target, port, path, intervalMs, enabled }) => ({
+      type,
+      target,
+      port,
+      path,
+      intervalMs,
+      enabled,
+    }))(readJson(httpUpdateRes) as Record<string, unknown>),
+    {
+      type: "https",
+      target: "192.0.2.10",
+      port: 8443,
+      path: "/ready",
+      intervalMs: 240_000,
+      enabled: false,
+    },
+  );
+
+  const monitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "Disabled uplink",
+      type: "snmp",
+      target: "127.0.0.1",
+      port: 1161,
+      snmpVersion: "2c",
+      snmpCommunity: "test-readonly",
+      snmpOid: "1.3.6.1.2.1.2.2.1.8.24",
+      snmpExpectedValue: "1",
+      snmpMatchMode: "equals",
+      portId: port.id,
+      snmpIfIndex: 24,
+      snmpCredentialId: credential.id,
+      intervalMs: 120_000,
+      enabled: false,
+    },
+  });
+  assert.equal(monitorRes.statusCode, 200);
+  const monitor = readJson(monitorRes) as { id: string };
+
+  const historicalCheckAt = "2026-07-20T08:00:00.000Z";
+  const historicalAlertAt = "2026-07-20T08:01:00.000Z";
+  db.prepare(
+    `
+      UPDATE deviceMonitors
+      SET lastCheckAt = ?, lastAlertAt = ?, lastResult = 'online',
+          lastMessage = 'Historical interface result.'
+      WHERE id = ?
+    `,
+  ).run(historicalCheckAt, historicalAlertAt, monitor.id);
+
+  const updateRes = await app.inject({
+    method: "PATCH",
+    url: `/api/device-monitors/${monitor.id}`,
+    headers,
+    payload: {
+      name: "Disabled uplink example",
+      type: "snmp",
+      target: "127.0.0.1",
+      port: 1161,
+      snmpVersion: "2c",
+      snmpCommunity: "test-readonly",
+      snmpOid: "1.3.6.1.2.1.2.2.1.8.24",
+      snmpExpectedValue: "1",
+      snmpMatchMode: "equals",
+      portId: port.id,
+      snmpIfIndex: 24,
+      snmpCredentialId: credential.id,
+      intervalMs: 120_000,
+      enabled: false,
+    },
+  });
+  assert.equal(updateRes.statusCode, 200);
+  const updated = readJson(updateRes) as Record<string, unknown>;
+  assert.deepEqual(
+    {
+      name: updated.name,
+      type: updated.type,
+      target: updated.target,
+      port: updated.port,
+      snmpVersion: updated.snmpVersion,
+      snmpCommunity: updated.snmpCommunity,
+      snmpOid: updated.snmpOid,
+      snmpExpectedValue: updated.snmpExpectedValue,
+      snmpMatchMode: updated.snmpMatchMode,
+      portId: updated.portId,
+      snmpIfIndex: updated.snmpIfIndex,
+      snmpCredentialId: updated.snmpCredentialId,
+      intervalMs: updated.intervalMs,
+      enabled: updated.enabled,
+      lastCheckAt: updated.lastCheckAt,
+      lastAlertAt: updated.lastAlertAt,
+      lastResult: updated.lastResult,
+      lastMessage: updated.lastMessage,
+    },
+    {
+      name: "Disabled uplink example",
+      type: "snmp",
+      target: "127.0.0.1",
+      port: 1161,
+      snmpVersion: "2c",
+      snmpCommunity: "test-readonly",
+      snmpOid: "1.3.6.1.2.1.2.2.1.8.24",
+      snmpExpectedValue: "1",
+      snmpMatchMode: "equals",
+      portId: port.id,
+      snmpIfIndex: 24,
+      snmpCredentialId: credential.id,
+      intervalMs: 120_000,
+      enabled: false,
+      lastCheckAt: historicalCheckAt,
+      lastAlertAt: historicalAlertAt,
+      lastResult: "online",
+      lastMessage: "Historical interface result.",
+    },
+  );
+
+  const stateBeforeRun = {
+    monitor: db
+      .prepare("SELECT * FROM deviceMonitors WHERE id = ?")
+      .get(monitor.id),
+    device: db.prepare("SELECT * FROM devices WHERE id = ?").get(device.id),
+    port: db.prepare("SELECT * FROM ports WHERE id = ?").get(port.id),
+  };
+  const runRes = await app.inject({
+    method: "POST",
+    url: `/api/device-monitors/${monitor.id}/run`,
+    headers,
+  });
+  assert.equal(runRes.statusCode, 409);
+  assert.match(runRes.body, /disabled/i);
+  assert.deepEqual(
+    {
+      monitor: db
+        .prepare("SELECT * FROM deviceMonitors WHERE id = ?")
+        .get(monitor.id),
+      device: db.prepare("SELECT * FROM devices WHERE id = ?").get(device.id),
+      port: db.prepare("SELECT * FROM ports WHERE id = ?").get(port.id),
+    },
+    stateBeforeRun,
+  );
+
+  const noneMonitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "Documentation only",
+      type: "none",
+      enabled: true,
+    },
+  });
+  assert.equal(noneMonitorRes.statusCode, 200);
+  const noneMonitor = readJson(noneMonitorRes) as {
+    id: string;
+    enabled: boolean;
+  };
+  assert.equal(noneMonitor.enabled, false);
+  const runNoneRes = await app.inject({
+    method: "POST",
+    url: `/api/device-monitors/${noneMonitor.id}/run`,
+    headers,
+  });
+  assert.equal(runNoneRes.statusCode, 409);
+
+  const v3ProfileRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "Disabled SNMPv3 profile",
+      type: "snmp",
+      target: "192.0.2.12",
+      port: 161,
+      snmpVersion: "3",
+      snmpCommunity: null,
+      snmpOid: "1.3.6.1.2.1.33.1.2.4.0",
+      snmpExpectedValue: null,
+      snmpMatchMode: "any",
+      portId: port.id,
+      snmpIfIndex: 24,
+      intervalMs: 300_000,
+      enabled: false,
+    },
+  });
+  assert.equal(v3ProfileRes.statusCode, 200, v3ProfileRes.body);
+  const v3Profile = readJson(v3ProfileRes) as {
+    id: string;
+    snmpVersion: string;
+    snmpCommunity: string | null;
+  };
+  assert.equal(v3Profile.snmpVersion, "3");
+  assert.equal(v3Profile.snmpCommunity, null);
+
+  const v3HistoricalCheckAt = "2026-07-20T09:00:00.000Z";
+  db.prepare(
+    `
+      UPDATE deviceMonitors
+      SET lastCheckAt = ?, lastResult = 'offline',
+          lastMessage = 'Historical SNMPv3 result.'
+      WHERE id = ?
+    `,
+  ).run(v3HistoricalCheckAt, v3Profile.id);
+  const v3MonitorBeforeUpdate = db
+    .prepare("SELECT * FROM deviceMonitors WHERE id = ?")
+    .get(v3Profile.id);
+
+  const v3PartialUpdateRes = await app.inject({
+    method: "PATCH",
+    url: `/api/device-monitors/${v3Profile.id}`,
+    headers,
+    payload: { enabled: false },
+  });
+  assert.equal(
+    v3PartialUpdateRes.statusCode,
+    200,
+    v3PartialUpdateRes.body,
+  );
+  const v3PartialUpdate = readJson(v3PartialUpdateRes) as Record<
+    string,
+    unknown
+  >;
+  assert.equal(v3PartialUpdate.snmpVersion, "3");
+  assert.equal(v3PartialUpdate.snmpCommunity, null);
+  assert.equal(v3PartialUpdate.snmpOid, "1.3.6.1.2.1.33.1.2.4.0");
+  assert.equal(v3PartialUpdate.snmpMatchMode, "any");
+  assert.equal(v3PartialUpdate.portId, port.id);
+  assert.equal(v3PartialUpdate.snmpIfIndex, 24);
+  assert.equal(v3PartialUpdate.lastCheckAt, v3HistoricalCheckAt);
+  assert.equal(v3PartialUpdate.lastResult, "offline");
+  assert.deepEqual(
+    db
+      .prepare("SELECT * FROM deviceMonitors WHERE id = ?")
+      .get(v3Profile.id),
+    v3MonitorBeforeUpdate,
+  );
+
+  const v3EmptyCommunityRes = await app.inject({
+    method: "PATCH",
+    url: `/api/device-monitors/${v3Profile.id}`,
+    headers,
+    payload: { enabled: false, snmpCommunity: "" },
+  });
+  assert.equal(v3EmptyCommunityRes.statusCode, 200);
+  assert.equal(
+    (readJson(v3EmptyCommunityRes) as { snmpCommunity: string | null })
+      .snmpCommunity,
+    null,
+  );
+
+  const v3StateBeforeActivation = {
+    monitor: db
+      .prepare("SELECT * FROM deviceMonitors WHERE id = ?")
+      .get(v3Profile.id),
+    device: db.prepare("SELECT * FROM devices WHERE id = ?").get(device.id),
+    port: db.prepare("SELECT * FROM ports WHERE id = ?").get(port.id),
+  };
+  const invalidV3ActivationRes = await app.inject({
+    method: "PATCH",
+    url: `/api/device-monitors/${v3Profile.id}`,
+    headers,
+    payload: { enabled: true },
+  });
+  assert.equal(invalidV3ActivationRes.statusCode, 400);
+  assert.match(invalidV3ActivationRes.body, /usable SNMPv3 credential/i);
+  assert.deepEqual(
+    {
+      monitor: db
+        .prepare("SELECT * FROM deviceMonitors WHERE id = ?")
+        .get(v3Profile.id),
+      device: db.prepare("SELECT * FROM devices WHERE id = ?").get(device.id),
+      port: db.prepare("SELECT * FROM ports WHERE id = ?").get(port.id),
+    },
+    v3StateBeforeActivation,
+  );
+  const invalidV3CreateCount = (
+    db.prepare("SELECT COUNT(*) AS count FROM deviceMonitors").get() as {
+      count: number;
+    }
+  ).count;
+  const invalidV3CreateRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "Invalid active SNMPv3",
+      type: "snmp",
+      target: "192.0.2.13",
+      snmpVersion: "3",
+      snmpOid: "1.3.6.1.2.1.1.3.0",
+      enabled: true,
+    },
+  });
+  assert.equal(invalidV3CreateRes.statusCode, 400);
+  assert.equal(
+    (
+      db.prepare("SELECT COUNT(*) AS count FROM deviceMonitors").get() as {
+        count: number;
+      }
+    ).count,
+    invalidV3CreateCount,
+  );
+
+  const usableV3CredentialRes = await app.inject({
+    method: "POST",
+    url: "/api/snmp-credentials",
+    headers,
+    payload: {
+      labId: "lab_home",
+      name: "Usable monitor v3",
+      version: "3",
+      v3User: "monitor-user",
+      v3AuthProto: "SHA",
+      v3AuthPassword: "monitor-auth-pass",
+      v3PrivProto: "none",
+    },
+  });
+  assert.equal(usableV3CredentialRes.statusCode, 201);
+  const usableV3Credential = readJson(usableV3CredentialRes) as { id: string };
+  const validV3CreateRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "Valid active SNMPv3",
+      type: "snmp",
+      target: "192.0.2.14",
+      snmpVersion: "3",
+      snmpCredentialId: usableV3Credential.id,
+      snmpOid: "1.3.6.1.2.1.1.3.0",
+      enabled: true,
+    },
+  });
+  assert.equal(validV3CreateRes.statusCode, 200, validV3CreateRes.body);
+  assert.deepEqual(
+    (({ snmpVersion, snmpCommunity, snmpCredentialId, enabled }) => ({
+      snmpVersion,
+      snmpCommunity,
+      snmpCredentialId,
+      enabled,
+    }))(
+      readJson(validV3CreateRes) as {
+        snmpVersion: string;
+        snmpCommunity: string | null;
+        snmpCredentialId: string;
+        enabled: boolean;
+      },
+    ),
+    {
+      snmpVersion: "3",
+      snmpCommunity: null,
+      snmpCredentialId: usableV3Credential.id,
+      enabled: true,
+    },
+  );
+
+  const clearV3SecretRes = await app.inject({
+    method: "PATCH",
+    url: `/api/snmp-credentials/${usableV3Credential.id}`,
+    headers,
+    payload: { clearV3AuthPassword: true },
+  });
+  assert.equal(clearV3SecretRes.statusCode, 200);
+  const invalidClearedCredentialCount = (
+    db.prepare("SELECT COUNT(*) AS count FROM deviceMonitors").get() as {
+      count: number;
+    }
+  ).count;
+  const invalidClearedCredentialRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "SNMPv3 with cleared secret",
+      type: "snmp",
+      target: "192.0.2.15",
+      snmpVersion: "3",
+      snmpCredentialId: usableV3Credential.id,
+      snmpOid: "1.3.6.1.2.1.1.3.0",
+      enabled: true,
+    },
+  });
+  assert.equal(invalidClearedCredentialRes.statusCode, 400);
+  assert.equal(
+    (
+      db.prepare("SELECT COUNT(*) AS count FROM deviceMonitors").get() as {
+        count: number;
+      }
+    ).count,
+    invalidClearedCredentialCount,
+  );
+});
+
 test("lab-scoped SNMP credentials store encrypted secrets and can be tested", async () => {
   const adminToken = await bootstrapAdmin();
 
@@ -4132,9 +5155,13 @@ test("port aggregates preserve physical member cables and a separate logical lin
     headers: { authorization: `Bearer ${adminToken}` },
   });
   assert.equal(linksAfterDeleteRes.statusCode, 200);
-  const linksAfterDelete = readJson(linksAfterDeleteRes) as Array<{ id: string }>;
+  const linksAfterDelete = readJson(linksAfterDeleteRes) as Array<{
+    id: string;
+  }>;
   assert.deepEqual(
-    physicalCableIds.every((id) => linksAfterDelete.some((link) => link.id === id)),
+    physicalCableIds.every((id) =>
+      linksAfterDelete.some((link) => link.id === id),
+    ),
     true,
   );
 });
@@ -4224,7 +5251,11 @@ test("port aggregates are included in backup export and restore", async () => {
   }
   const physicalPeer = await createPeerPort("Gi1");
   const logicalPeer = await createPeerPort("Port-channel1");
-  async function createLink(fromPortId: string, toPortId: string, cableType: string) {
+  async function createLink(
+    fromPortId: string,
+    toPortId: string,
+    cableType: string,
+  ) {
     const res = await app.inject({
       method: "POST",
       url: "/api/port-links",
@@ -4328,8 +5359,14 @@ test("port aggregates are included in backup export and restore", async () => {
   });
   assert.equal(linksRes.statusCode, 200);
   const restoredLinks = readJson(linksRes) as Array<{ id: string }>;
-  assert.equal(restoredLinks.some((link) => link.id === physicalLink.id), true);
-  assert.equal(restoredLinks.some((link) => link.id === logicalLink.id), true);
+  assert.equal(
+    restoredLinks.some((link) => link.id === physicalLink.id),
+    true,
+  );
+  assert.equal(
+    restoredLinks.some((link) => link.id === logicalLink.id),
+    true,
+  );
 });
 
 test("wifi ports and device services can be managed", async () => {
@@ -6394,8 +7431,100 @@ interfaces:
   assert.equal(imported.ports[0]?.name, "eth0");
 });
 
+test("Docker source migration enables existing rows by default", async () => {
+  const legacyPath = path.join(tempDir, "docker-source-v31.db");
+  const { default: Database } = await import("better-sqlite3");
+  const initializeDatabase = () =>
+    execFileSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        "await import('./server/db.ts')",
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          DATABASE_PATH: legacyPath,
+          NODE_ENV: "test",
+        },
+        stdio: "pipe",
+      },
+    );
+
+  initializeDatabase();
+  const legacy = new Database(legacyPath);
+  legacy.exec(`
+    INSERT INTO labs (id, name, description, location)
+    VALUES ('lab_home', 'Migration test', NULL, NULL);
+
+    INSERT INTO dockerImportSources (
+      id, labId, name, endpoint, enabled, createdAt, updatedAt
+    ) VALUES (
+      'docksrc_legacy', 'lab_home', 'Legacy Docker',
+      'https://8.8.8.8:2376', 0, '2026-07-20T00:00:00.000Z',
+      '2026-07-20T00:00:00.000Z'
+    );
+
+    DROP INDEX idx_docker_import_sources_enabled;
+    DROP INDEX idx_docker_import_sources_lab_id;
+
+    CREATE TABLE dockerImportSourcesV31 (
+      id TEXT PRIMARY KEY,
+      labId TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      tokenEnc TEXT,
+      lastSyncAt TEXT,
+      lastSyncStatus TEXT,
+      lastSyncMessage TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      UNIQUE(labId, endpoint)
+    );
+    INSERT INTO dockerImportSourcesV31 (
+      id, labId, name, endpoint, tokenEnc, lastSyncAt, lastSyncStatus,
+      lastSyncMessage, createdAt, updatedAt
+    )
+    SELECT id, labId, name, endpoint, tokenEnc, lastSyncAt, lastSyncStatus,
+      lastSyncMessage, createdAt, updatedAt
+    FROM dockerImportSources;
+    DROP TABLE dockerImportSources;
+    ALTER TABLE dockerImportSourcesV31 RENAME TO dockerImportSources;
+    CREATE INDEX idx_docker_import_sources_lab_id
+      ON dockerImportSources (labId);
+    UPDATE schemaVersion
+    SET version = 31, updatedAt = '2026-07-20T00:00:00.000Z'
+    WHERE id = 1;
+  `);
+  legacy.close();
+
+  initializeDatabase();
+
+  const migrated = new Database(legacyPath, { readonly: true });
+  const source = migrated
+    .prepare("SELECT enabled FROM dockerImportSources WHERE id = ?")
+    .get("docksrc_legacy") as { enabled: number };
+  const version = migrated
+    .prepare("SELECT version FROM schemaVersion WHERE id = 1")
+    .get() as { version: number };
+  assert.equal(source.enabled, 1);
+  assert.equal(version.version, 32);
+  migrated.close();
+});
+
 test("docker import stores a sync source and refreshes container status", async () => {
   const adminToken = await bootstrapAdmin();
+  const enabledColumn = (
+    db.prepare("PRAGMA table_info(dockerImportSources)").all() as Array<{
+      name: string;
+      dflt_value: string | null;
+    }>
+  ).find((column) => column.name === "enabled");
+  assert.equal(enabledColumn?.dflt_value, "1");
   const viewerToken = await createUserAndLogin(adminToken, {
     username: "viewer-docker",
     displayName: "Viewer Docker",
@@ -6420,6 +7549,7 @@ test("docker import stores a sync source and refreshes container status", async 
   const authHeaders: Array<string | null> = [];
   let state = "running";
   let status = "Up 3 minutes";
+  let includeSecondContainer = false;
   setDockerHttpJsonFetcherForTests(async (url, headers) => {
     requestedUrls.push(url.toString());
     authHeaders.push(headers?.Authorization ?? null);
@@ -6431,6 +7561,17 @@ test("docker import stores a sync source and refreshes container status", async 
         State: state,
         Status: status,
       },
+      ...(includeSecondContainer
+        ? [
+            {
+              Id: "container-def456",
+              Names: ["/homepage"],
+              Image: "ghcr.io/gethomepage/homepage:latest",
+              State: state,
+              Status: status,
+            },
+          ]
+        : []),
     ];
   });
 
@@ -6480,10 +7621,114 @@ test("docker import stores a sync source and refreshes container status", async 
       id: string;
       endpoint: string;
       tokenEnc: string | null;
+      enabled: number;
     };
     assert.equal(source.endpoint, "https://8.8.8.8/api/endpoints/2/docker");
     assert.ok(source.tokenEnc);
     assert.notEqual(source.tokenEnc, "portainer-token");
+    assert.equal(source.enabled, 1);
+
+    const sourceBeforeInvalidPatches = db
+      .prepare(
+        "SELECT enabled, updatedAt FROM dockerImportSources WHERE id = ?",
+      )
+      .get(source.id);
+    for (const payload of [
+      {},
+      { enabled: null },
+      { enabled: "false" },
+      { enabled: 0 },
+    ]) {
+      const invalidToggleRes = await app.inject({
+        method: "PATCH",
+        url: `/api/imports/docker/sources/${source.id}`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload,
+      });
+      assert.equal(invalidToggleRes.statusCode, 400);
+      assert.deepEqual(
+        db
+          .prepare(
+            "SELECT enabled, updatedAt FROM dockerImportSources WHERE id = ?",
+          )
+          .get(source.id),
+        sourceBeforeInvalidPatches,
+      );
+    }
+
+    const sourcesRes = await app.inject({
+      method: "GET",
+      url: "/api/imports/docker/sources?labId=lab_home",
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(sourcesRes.statusCode, 200);
+    assert.equal(
+      (readJson(sourcesRes) as Array<{ enabled: boolean }>)[0]?.enabled,
+      true,
+    );
+
+    const disableRes = await app.inject({
+      method: "PATCH",
+      url: `/api/imports/docker/sources/${source.id}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { enabled: false },
+    });
+    assert.equal(disableRes.statusCode, 200);
+    assert.equal((readJson(disableRes) as { enabled: boolean }).enabled, false);
+
+    includeSecondContainer = true;
+    const secondImportRes = await app.inject({
+      method: "POST",
+      url: "/api/imports/docker/import",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        endpoint: "https://8.8.8.8/api/endpoints/2/docker/",
+        containerId: "container-def456",
+        labId: "lab_home",
+        hostDeviceId: host.id,
+      },
+    });
+    assert.equal(secondImportRes.statusCode, 201);
+    assert.equal(
+      (
+        db
+          .prepare("SELECT enabled FROM dockerImportSources WHERE id = ?")
+          .get(source.id) as { enabled: number }
+      ).enabled,
+      0,
+    );
+
+    const fetchCountBeforeBlockedSync = requestedUrls.length;
+    const blockedManualSyncRes = await app.inject({
+      method: "POST",
+      url: "/api/imports/docker/sync",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { labId: "lab_home", sourceId: source.id },
+    });
+    assert.equal(blockedManualSyncRes.statusCode, 409);
+    assert.match(blockedManualSyncRes.body, /disabled/i);
+
+    const skippedBulkSyncRes = await app.inject({
+      method: "POST",
+      url: "/api/imports/docker/sync",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { labId: "lab_home" },
+    });
+    assert.equal(skippedBulkSyncRes.statusCode, 200);
+    assert.equal(
+      (readJson(skippedBulkSyncRes) as { sources: number }).sources,
+      0,
+    );
+    assert.equal(requestedUrls.length, fetchCountBeforeBlockedSync);
+
+    const enableRes = await app.inject({
+      method: "PATCH",
+      url: `/api/imports/docker/sources/${source.id}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { enabled: true },
+    });
+    assert.equal(enableRes.statusCode, 200);
+    assert.equal((readJson(enableRes) as { enabled: boolean }).enabled, true);
 
     const link = db
       .prepare("SELECT * FROM dockerContainerLinks WHERE deviceId = ?")
@@ -6511,11 +7756,14 @@ test("docker import stores a sync source and refreshes container status", async 
       failed: number;
       devices: Array<{ id: string; status: string }>;
     };
-    assert.equal(sync.updated, 1);
+    assert.equal(sync.updated, 2);
     assert.equal(sync.missing, 0);
     assert.equal(sync.failed, 0);
-    assert.equal(sync.devices[0]?.id, imported.id);
-    assert.equal(sync.devices[0]?.status, "offline");
+    assert.ok(
+      sync.devices.some(
+        (device) => device.id === imported.id && device.status === "offline",
+      ),
+    );
 
     const updatedLink = db
       .prepare(
@@ -6698,12 +7946,14 @@ test("IP assignments reject cross-lab references and make legacy references iner
     url: `/api/ip-assignments?subnetId=${subnet.id}`,
     headers: { authorization: `Bearer ${editorToken}` },
   });
-  const combined = (readJson(combinedListRes) as Array<{
-    id: string;
-    deviceId: string | null;
-    portId: string | null;
-    integrity: { state: string; fields: string[] };
-  }>).find((row) => row.id === "legacy_combined_invalid");
+  const combined = (
+    readJson(combinedListRes) as Array<{
+      id: string;
+      deviceId: string | null;
+      portId: string | null;
+      integrity: { state: string; fields: string[] };
+    }>
+  ).find((row) => row.id === "legacy_combined_invalid");
   assert.equal(combined?.deviceId, null);
   assert.equal(combined?.portId, null);
   assert.equal(combined?.integrity.state, "cross-lab-reference");

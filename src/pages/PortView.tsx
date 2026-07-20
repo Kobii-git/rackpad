@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
@@ -328,6 +328,8 @@ export default function PortView() {
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateDeleting, setTemplateDeleting] = useState(false);
   const [templateError, setTemplateError] = useState("");
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const inspectorScrollRef = useRef<HTMLDivElement>(null);
 
   const deviceById = useMemo(() => {
     return devices.reduce<Record<string, Device>>((acc, device) => {
@@ -466,7 +468,13 @@ export default function PortView() {
         (deviceEntry) => deviceEntry.id === selectedDeviceId,
       )
     ) {
-      setSelectedDeviceId(filteredPortBearingDevices[0].id);
+      const preferred = [...filteredPortBearingDevices].sort((left, right) => {
+        const portDifference =
+          (portsByDeviceId[right.id]?.length ?? 0) -
+          (portsByDeviceId[left.id]?.length ?? 0);
+        return portDifference || left.hostname.localeCompare(right.hostname);
+      })[0];
+      setSelectedDeviceId(preferred.id);
       setSelectedPortId(undefined);
     }
   }, [
@@ -476,6 +484,7 @@ export default function PortView() {
     requestedPortId,
     selectedDeviceId,
     selectedPortId,
+    portsByDeviceId,
   ]);
 
   const device = deviceById[selectedDeviceId];
@@ -524,8 +533,7 @@ export default function PortView() {
     () =>
       selectedBulkPorts.filter(
         (port) =>
-          (port.portRole ?? "physical") === "physical" &&
-          !port.aggregatePortId,
+          (port.portRole ?? "physical") === "physical" && !port.aggregatePortId,
       ),
     [selectedBulkPorts],
   );
@@ -628,6 +636,10 @@ export default function PortView() {
     setTemplateError("");
   }, [creatingTemplate, selectedTemplate]);
 
+  useEffect(() => {
+    inspectorScrollRef.current?.scrollTo({ top: 0 });
+  }, [creating, selectedDeviceId, selectedPortId, selectedPortIds]);
+
   const isVisualGrid =
     device &&
     (device.deviceType === "switch" || device.deviceType === "router");
@@ -722,6 +734,7 @@ export default function PortView() {
     setSelectedTemplateId(undefined);
     setTemplateForm(blankTemplateForm(device?.deviceType ?? "switch"));
     setTemplateError("");
+    setTemplateModalOpen(true);
   }
 
   function beginTemplateFromDevice() {
@@ -748,6 +761,7 @@ export default function PortView() {
           : blankTemplateForm(device.deviceType).ports,
     });
     setTemplateError("");
+    setTemplateModalOpen(true);
   }
 
   async function handleSaveTemplate() {
@@ -793,6 +807,7 @@ export default function PortView() {
         });
         setCreatingTemplate(false);
         setSelectedTemplateId(created.id);
+        setTemplateModalOpen(false);
         return;
       }
 
@@ -810,6 +825,7 @@ export default function PortView() {
           position: index + 1,
         })),
       });
+      setTemplateModalOpen(false);
     } catch (err) {
       setTemplateError(
         err instanceof Error ? err.message : t("Failed to save port template."),
@@ -834,6 +850,7 @@ export default function PortView() {
       await deletePortTemplateRecord(selectedTemplate.id);
       setSelectedTemplateId(undefined);
       setCreatingTemplate(false);
+      setTemplateModalOpen(false);
     } catch (err) {
       setTemplateError(
         err instanceof Error
@@ -1021,6 +1038,7 @@ export default function PortView() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Select
+                  ariaLabel={t("Device type")}
                   value={deviceTypeFilter}
                   onChange={(value) =>
                     setDeviceTypeFilter(value as DeviceType | "all")
@@ -1034,6 +1052,7 @@ export default function PortView() {
                   ))}
                 </Select>
                 <Select
+                  ariaLabel={t("Filter ports, VLANs, peers, bridges...")}
                   value={portLinkFilter}
                   onChange={(value) =>
                     setPortLinkFilter(value as PortLinkFilter)
@@ -1235,7 +1254,11 @@ export default function PortView() {
                 )}
               </div>
 
-              <div className="col-span-12 min-h-0 space-y-5 overflow-y-auto pr-1 xl:col-span-4">
+              <div
+                ref={inspectorScrollRef}
+                data-testid="ports-inspector"
+                className="col-span-12 min-h-0 space-y-5 overflow-y-auto pr-1 xl:col-span-4"
+              >
                 {canEdit && selectedBulkPorts.length > 0 && (
                   <Card>
                     <CardHeader>
@@ -1944,6 +1967,7 @@ export default function PortView() {
                               setCreatingTemplate(false);
                               setSelectedTemplateId(template.id);
                               setTemplateError("");
+                              setTemplateModalOpen(true);
                             }}
                             className={`rounded-[var(--radius-xs)] border px-2.5 py-1 text-left text-xs transition-colors ${
                               active
@@ -1966,338 +1990,391 @@ export default function PortView() {
                       })}
                     </div>
 
-                    {creatingTemplate || selectedTemplate ? (
-                      <div className="space-y-4 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <Field label={t("Template name")}>
-                            <Input
-                              value={templateForm.name}
-                              onChange={(event) =>
-                                setTemplateForm((prev) => ({
-                                  ...prev,
-                                  name: event.target.value,
-                                }))
-                              }
-                              disabled={
-                                Boolean(selectedTemplate?.builtIn) ||
-                                !canManageTemplates
-                              }
-                              placeholder={t("48-port access switch")}
-                            />
-                          </Field>
-                          <Field label={t("Description")}>
-                            <Input
-                              value={templateForm.description}
-                              onChange={(event) =>
-                                setTemplateForm((prev) => ({
-                                  ...prev,
-                                  description: event.target.value,
-                                }))
-                              }
-                              disabled={
-                                Boolean(selectedTemplate?.builtIn) ||
-                                !canManageTemplates
-                              }
-                              placeholder={t("Common layout for edge switches")}
-                            />
-                          </Field>
-                        </div>
-
-                        <Field label={t("Applies to")}>
-                          <div className="flex flex-wrap gap-2">
-                            {portDeviceTypeOptions.map((deviceType) => {
-                              const selected =
-                                templateForm.deviceTypes.includes(
-                                  deviceType.id,
-                                );
-                              return (
-                                <button
-                                  key={deviceType.id}
-                                  type="button"
+                    {templateModalOpen &&
+                    (creatingTemplate || selectedTemplate) ? (
+                      <div
+                        data-testid="port-template-dialog"
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={
+                          creatingTemplate
+                            ? t("New template")
+                            : (selectedTemplate?.name ?? t("Port templates"))
+                        }
+                      >
+                        <div className="rk-panel flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[var(--radius-lg)]">
+                          <div className="flex shrink-0 items-center justify-between gap-4 border-b border-[var(--color-line)] px-5 py-4">
+                            <div className="min-w-0">
+                              <div className="rk-kicker">{t("Templates")}</div>
+                              <div className="truncate text-base font-semibold text-[var(--text-primary)]">
+                                {creatingTemplate
+                                  ? t("New template")
+                                  : selectedTemplate?.name}
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setCreatingTemplate(false);
+                                setTemplateModalOpen(false);
+                              }}
+                            >
+                              {t("Close")}
+                            </Button>
+                          </div>
+                          <div
+                            data-testid="port-template-scroll-region"
+                            className="flex-1 space-y-4 overflow-y-auto p-5"
+                          >
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <Field label={t("Template name")}>
+                                <Input
+                                  value={templateForm.name}
+                                  onChange={(event) =>
+                                    setTemplateForm((prev) => ({
+                                      ...prev,
+                                      name: event.target.value,
+                                    }))
+                                  }
                                   disabled={
                                     Boolean(selectedTemplate?.builtIn) ||
                                     !canManageTemplates
                                   }
-                                  onClick={() =>
+                                  placeholder={t("48-port access switch")}
+                                />
+                              </Field>
+                              <Field label={t("Description")}>
+                                <Input
+                                  value={templateForm.description}
+                                  onChange={(event) =>
                                     setTemplateForm((prev) => ({
                                       ...prev,
-                                      deviceTypes: selected
-                                        ? prev.deviceTypes.filter(
-                                            (entry) => entry !== deviceType.id,
-                                          )
-                                        : [...prev.deviceTypes, deviceType.id],
+                                      description: event.target.value,
                                     }))
                                   }
-                                  className={`rounded-[var(--radius-xs)] border px-2 py-1 text-xs capitalize transition-colors ${
-                                    selected
-                                      ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"
-                                      : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
-                                  } disabled:cursor-default disabled:opacity-70`}
-                                >
-                                  {deviceType.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </Field>
-
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-                              {t("Port layout")}
+                                  disabled={
+                                    Boolean(selectedTemplate?.builtIn) ||
+                                    !canManageTemplates
+                                  }
+                                  placeholder={t(
+                                    "Common layout for edge switches",
+                                  )}
+                                />
+                              </Field>
                             </div>
-                            {!selectedTemplate?.builtIn && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  setTemplateForm((prev) =>
-                                    appendTemplatePorts(prev),
-                                  )
-                                }
-                              >
-                                <Plus className="size-3.5" />
-                                {isPatchPanelTemplate(templateForm)
-                                  ? t("Add jack")
-                                  : t("Add port")}
-                              </Button>
-                            )}
-                          </div>
 
-                          <div className="space-y-2">
-                            {templateForm.ports.map((port, index) => (
-                              <div
-                                key={index}
-                                className="grid grid-cols-12 gap-2 rounded-[var(--radius-xs)] border border-[var(--color-line)] p-2"
-                              >
-                                <div className="col-span-3">
-                                  <Field
-                                    label={t("Port {number}", {
-                                      number: index + 1,
-                                    })}
-                                  >
-                                    <Input
-                                      value={port.name}
-                                      disabled={Boolean(
-                                        selectedTemplate?.builtIn,
-                                      )}
-                                      onChange={(event) =>
-                                        setTemplateForm((prev) => ({
-                                          ...prev,
-                                          ports: prev.ports.map(
-                                            (entry, entryIndex) =>
-                                              entryIndex === index
-                                                ? {
-                                                    ...entry,
-                                                    name: event.target.value,
-                                                  }
-                                                : entry,
-                                          ),
-                                        }))
+                            <Field label={t("Applies to")}>
+                              <div className="flex flex-wrap gap-2">
+                                {portDeviceTypeOptions.map((deviceType) => {
+                                  const selected =
+                                    templateForm.deviceTypes.includes(
+                                      deviceType.id,
+                                    );
+                                  return (
+                                    <button
+                                      key={deviceType.id}
+                                      type="button"
+                                      disabled={
+                                        Boolean(selectedTemplate?.builtIn) ||
+                                        !canManageTemplates
                                       }
-                                      placeholder={t("Gi1/0/1")}
-                                    />
-                                  </Field>
-                                </div>
-                                <div className="col-span-2">
-                                  <Field label={t("Kind")}>
-                                    <Select
-                                      value={port.kind}
-                                      disabled={Boolean(
-                                        selectedTemplate?.builtIn,
-                                      )}
-                                      onChange={(value) =>
-                                        setTemplateForm((prev) => ({
-                                          ...prev,
-                                          ports: prev.ports.map(
-                                            (entry, entryIndex) =>
-                                              entryIndex === index
-                                                ? {
-                                                    ...entry,
-                                                    kind: value as Port["kind"],
-                                                  }
-                                                : entry,
-                                          ),
-                                        }))
-                                      }
-                                    >
-                                      {PORT_KINDS.map((kind) => (
-                                        <option key={kind} value={kind}>
-                                          {kind}
-                                        </option>
-                                      ))}
-                                    </Select>
-                                  </Field>
-                                </div>
-                                <div className="col-span-2">
-                                  <Field label={t("Speed")}>
-                                    <Input
-                                      value={port.speed}
-                                      disabled={Boolean(
-                                        selectedTemplate?.builtIn,
-                                      )}
-                                      onChange={(event) =>
-                                        setTemplateForm((prev) => ({
-                                          ...prev,
-                                          ports: prev.ports.map(
-                                            (entry, entryIndex) =>
-                                              entryIndex === index
-                                                ? {
-                                                    ...entry,
-                                                    speed: event.target.value,
-                                                  }
-                                                : entry,
-                                          ),
-                                        }))
-                                      }
-                                      placeholder={t("10G")}
-                                    />
-                                  </Field>
-                                </div>
-                                <div className="col-span-2">
-                                  <Field label={t("Mode")}>
-                                    <Select
-                                      value={port.mode}
-                                      disabled={Boolean(
-                                        selectedTemplate?.builtIn,
-                                      )}
-                                      onChange={(value) =>
-                                        setTemplateForm((prev) => ({
-                                          ...prev,
-                                          ports: prev.ports.map(
-                                            (entry, entryIndex) =>
-                                              entryIndex === index
-                                                ? {
-                                                    ...entry,
-                                                    mode: value as TemplatePortFormState["mode"],
-                                                  }
-                                                : entry,
-                                          ),
-                                        }))
-                                      }
-                                    >
-                                      {PORT_MODES.map((mode) => (
-                                        <option key={mode} value={mode}>
-                                          {t(PORT_MODE_KEYS[mode])}
-                                        </option>
-                                      ))}
-                                    </Select>
-                                  </Field>
-                                </div>
-                                <div className="col-span-2">
-                                  <Field label={t("Face")}>
-                                    <Select
-                                      value={port.face}
-                                      disabled={Boolean(
-                                        selectedTemplate?.builtIn,
-                                      )}
-                                      onChange={(value) =>
-                                        setTemplateForm((prev) => ({
-                                          ...prev,
-                                          ports: prev.ports.map(
-                                            (entry, entryIndex) =>
-                                              entryIndex === index
-                                                ? {
-                                                    ...entry,
-                                                    face: value as TemplatePortFormState["face"],
-                                                  }
-                                                : entry,
-                                          ),
-                                        }))
-                                      }
-                                    >
-                                      <option value="front">
-                                        {t("Front")}
-                                      </option>
-                                      <option value="rear">{t("Rear")}</option>
-                                    </Select>
-                                  </Field>
-                                </div>
-                                <div className="col-span-1 flex items-end justify-end">
-                                  {!selectedTemplate?.builtIn && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
                                       onClick={() =>
                                         setTemplateForm((prev) => ({
                                           ...prev,
-                                          ports:
-                                            prev.ports.length === 1
-                                              ? prev.ports
-                                              : prev.ports.filter(
-                                                  (_, entryIndex) =>
-                                                    entryIndex !== index,
-                                                ),
+                                          deviceTypes: selected
+                                            ? prev.deviceTypes.filter(
+                                                (entry) =>
+                                                  entry !== deviceType.id,
+                                              )
+                                            : [
+                                                ...prev.deviceTypes,
+                                                deviceType.id,
+                                              ],
                                         }))
                                       }
-                                      aria-label={t("Remove port")}
+                                      className={`rounded-[var(--radius-xs)] border px-2 py-1 text-xs capitalize transition-colors ${
+                                        selected
+                                          ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"
+                                          : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
+                                      } disabled:cursor-default disabled:opacity-70`}
+                                    >
+                                      {deviceType.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </Field>
+
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                                  {t("Port layout")}
+                                </div>
+                                {!selectedTemplate?.builtIn && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      setTemplateForm((prev) =>
+                                        appendTemplatePorts(prev),
+                                      )
+                                    }
+                                  >
+                                    <Plus className="size-3.5" />
+                                    {isPatchPanelTemplate(templateForm)
+                                      ? t("Add jack")
+                                      : t("Add port")}
+                                  </Button>
+                                )}
+                              </div>
+
+                              <div className="space-y-2">
+                                {templateForm.ports.map((port, index) => (
+                                  <div
+                                    key={index}
+                                    className="grid gap-3 rounded-[var(--radius-xs)] border border-[var(--color-line)] p-3 md:grid-cols-[minmax(12rem,2fr)_repeat(4,minmax(7rem,1fr))_auto]"
+                                  >
+                                    <div>
+                                      <Field
+                                        label={t("Port {number}", {
+                                          number: index + 1,
+                                        })}
+                                      >
+                                        <Input
+                                          value={port.name}
+                                          disabled={Boolean(
+                                            selectedTemplate?.builtIn,
+                                          )}
+                                          onChange={(event) =>
+                                            setTemplateForm((prev) => ({
+                                              ...prev,
+                                              ports: prev.ports.map(
+                                                (entry, entryIndex) =>
+                                                  entryIndex === index
+                                                    ? {
+                                                        ...entry,
+                                                        name: event.target
+                                                          .value,
+                                                      }
+                                                    : entry,
+                                              ),
+                                            }))
+                                          }
+                                          placeholder={t("Gi1/0/1")}
+                                        />
+                                      </Field>
+                                    </div>
+                                    <div>
+                                      <Field label={t("Kind")}>
+                                        <Select
+                                          value={port.kind}
+                                          disabled={Boolean(
+                                            selectedTemplate?.builtIn,
+                                          )}
+                                          onChange={(value) =>
+                                            setTemplateForm((prev) => ({
+                                              ...prev,
+                                              ports: prev.ports.map(
+                                                (entry, entryIndex) =>
+                                                  entryIndex === index
+                                                    ? {
+                                                        ...entry,
+                                                        kind: value as Port["kind"],
+                                                      }
+                                                    : entry,
+                                              ),
+                                            }))
+                                          }
+                                        >
+                                          {PORT_KINDS.map((kind) => (
+                                            <option key={kind} value={kind}>
+                                              {kind}
+                                            </option>
+                                          ))}
+                                        </Select>
+                                      </Field>
+                                    </div>
+                                    <div>
+                                      <Field label={t("Speed")}>
+                                        <Input
+                                          value={port.speed}
+                                          disabled={Boolean(
+                                            selectedTemplate?.builtIn,
+                                          )}
+                                          onChange={(event) =>
+                                            setTemplateForm((prev) => ({
+                                              ...prev,
+                                              ports: prev.ports.map(
+                                                (entry, entryIndex) =>
+                                                  entryIndex === index
+                                                    ? {
+                                                        ...entry,
+                                                        speed:
+                                                          event.target.value,
+                                                      }
+                                                    : entry,
+                                              ),
+                                            }))
+                                          }
+                                          placeholder={t("10G")}
+                                        />
+                                      </Field>
+                                    </div>
+                                    <div>
+                                      <Field label={t("Mode")}>
+                                        <Select
+                                          value={port.mode}
+                                          disabled={Boolean(
+                                            selectedTemplate?.builtIn,
+                                          )}
+                                          onChange={(value) =>
+                                            setTemplateForm((prev) => ({
+                                              ...prev,
+                                              ports: prev.ports.map(
+                                                (entry, entryIndex) =>
+                                                  entryIndex === index
+                                                    ? {
+                                                        ...entry,
+                                                        mode: value as TemplatePortFormState["mode"],
+                                                      }
+                                                    : entry,
+                                              ),
+                                            }))
+                                          }
+                                        >
+                                          {PORT_MODES.map((mode) => (
+                                            <option key={mode} value={mode}>
+                                              {t(PORT_MODE_KEYS[mode])}
+                                            </option>
+                                          ))}
+                                        </Select>
+                                      </Field>
+                                    </div>
+                                    <div>
+                                      <Field label={t("Face")}>
+                                        <Select
+                                          value={port.face}
+                                          disabled={Boolean(
+                                            selectedTemplate?.builtIn,
+                                          )}
+                                          onChange={(value) =>
+                                            setTemplateForm((prev) => ({
+                                              ...prev,
+                                              ports: prev.ports.map(
+                                                (entry, entryIndex) =>
+                                                  entryIndex === index
+                                                    ? {
+                                                        ...entry,
+                                                        face: value as TemplatePortFormState["face"],
+                                                      }
+                                                    : entry,
+                                              ),
+                                            }))
+                                          }
+                                        >
+                                          <option value="front">
+                                            {t("Front")}
+                                          </option>
+                                          <option value="rear">
+                                            {t("Rear")}
+                                          </option>
+                                        </Select>
+                                      </Field>
+                                    </div>
+                                    <div className="flex items-end justify-end">
+                                      {!selectedTemplate?.builtIn && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() =>
+                                            setTemplateForm((prev) => ({
+                                              ...prev,
+                                              ports:
+                                                prev.ports.length === 1
+                                                  ? prev.ports
+                                                  : prev.ports.filter(
+                                                      (_, entryIndex) =>
+                                                        entryIndex !== index,
+                                                    ),
+                                            }))
+                                          }
+                                          aria-label={t("Remove port")}
+                                        >
+                                          <Trash2 className="size-3.5" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {templateError && (
+                              <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-sm text-[var(--color-err)]">
+                                {templateError}
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-xs text-[var(--color-fg-subtle)]">
+                                {selectedTemplate?.builtIn
+                                  ? t(
+                                      "Built-in templates are read-only but can still be applied to devices.",
+                                    )
+                                  : t(
+                                      "Custom templates become available immediately in the device drawer.",
+                                    )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {canManageTemplates && creatingTemplate && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setCreatingTemplate(false);
+                                      setTemplateModalOpen(false);
+                                    }}
+                                  >
+                                    {t("Cancel")}
+                                  </Button>
+                                )}
+                                {!creatingTemplate &&
+                                  selectedTemplate &&
+                                  !selectedTemplate.builtIn &&
+                                  canManageTemplates && (
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() =>
+                                        void handleDeleteTemplate()
+                                      }
+                                      disabled={templateDeleting}
                                     >
                                       <Trash2 className="size-3.5" />
+                                      {templateDeleting
+                                        ? t("Deleting...")
+                                        : t("Delete")}
                                     </Button>
                                   )}
-                                </div>
+                                {!selectedTemplate?.builtIn &&
+                                  canManageTemplates && (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => void handleSaveTemplate()}
+                                      disabled={templateSaving}
+                                    >
+                                      <Save className="size-3.5" />
+                                      {templateSaving
+                                        ? t("Saving...")
+                                        : creatingTemplate
+                                          ? t("Create template")
+                                          : t("Save template")}
+                                    </Button>
+                                  )}
                               </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {templateError && (
-                          <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-sm text-[var(--color-err)]">
-                            {templateError}
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-xs text-[var(--color-fg-subtle)]">
-                            {selectedTemplate?.builtIn
-                              ? t(
-                                  "Built-in templates are read-only but can still be applied to devices.",
-                                )
-                              : t(
-                                  "Custom templates become available immediately in the device drawer.",
-                                )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {canManageTemplates && creatingTemplate && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setCreatingTemplate(false)}
-                              >
-                                {t("Cancel")}
-                              </Button>
-                            )}
-                            {!creatingTemplate &&
-                              selectedTemplate &&
-                              !selectedTemplate.builtIn &&
-                              canManageTemplates && (
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => void handleDeleteTemplate()}
-                                  disabled={templateDeleting}
-                                >
-                                  <Trash2 className="size-3.5" />
-                                  {templateDeleting
-                                    ? t("Deleting...")
-                                    : t("Delete")}
-                                </Button>
-                              )}
-                            {!selectedTemplate?.builtIn &&
-                              canManageTemplates && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => void handleSaveTemplate()}
-                                  disabled={templateSaving}
-                                >
-                                  <Save className="size-3.5" />
-                                  {templateSaving
-                                    ? t("Saving...")
-                                    : creatingTemplate
-                                      ? t("Create template")
-                                      : t("Save template")}
-                                </Button>
-                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -2355,14 +2432,17 @@ function Select({
   onChange,
   children,
   disabled,
+  ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
   children: ReactNode;
   disabled?: boolean;
+  ariaLabel?: string;
 }) {
   return (
     <select
+      aria-label={ariaLabel}
       value={value}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}

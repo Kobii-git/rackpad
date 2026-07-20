@@ -452,7 +452,7 @@ export default function ReportsView() {
                             type={type as never}
                             className="size-4 text-[var(--accent-primary)]"
                           />
-                          <span className="min-w-0 flex-1 truncate text-xs capitalize text-[var(--text-secondary)]">
+                          <span className="min-w-0 flex-1 text-xs capitalize leading-tight text-[var(--text-secondary)]">
                             {type.replace("_", " ")}
                           </span>
                           <Mono className="text-[var(--text-primary)]">

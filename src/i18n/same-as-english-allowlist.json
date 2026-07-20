@@ -283,11 +283,6 @@
     "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
   },
   {
-    "key": "Discord webhook URL",
-    "locales": ["af"],
-    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
-  },
-  {
     "key": "Metadata",
     "locales": ["af", "id"],
     "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
@@ -2308,11 +2303,6 @@
   {
     "key": "links",
     "locales": ["pt"],
-    "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
-  },
-  {
-    "key": "Discord / Telegram / Email",
-    "locales": ["uk"],
     "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
   },
   {

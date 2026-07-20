@@ -140,7 +140,7 @@ export default function MonitoringView() {
   const activeDeviceMonitorMap = useMemo(() => {
     return deviceMonitors.reduce<Record<string, DeviceMonitor[]>>(
       (acc, monitor) => {
-        if (!monitor.enabled || monitor.type === "none") return acc;
+        if (!isMonitorActive(monitor)) return acc;
         (acc[monitor.deviceId] ??= []).push(monitor);
         return acc;
       },
@@ -211,6 +211,10 @@ export default function MonitoringView() {
       ).length,
       monitorTargets: inventoryDevices.reduce(
         (sum, entry) => sum + entry.monitors.length,
+        0,
+      ),
+      configuredTargets: inventoryDevices.reduce(
+        (sum, entry) => sum + entry.allMonitors.length,
         0,
       ),
       offline: inventoryDevices.filter(
@@ -434,7 +438,7 @@ export default function MonitoringView() {
       for (const device of selectedDevices) {
         const monitors = allDeviceMonitorMap[device.id] ?? [];
         for (const monitor of monitors) {
-          if (!monitor.enabled) continue;
+          if (!isMonitorActive(monitor)) continue;
           await updateDeviceMonitorConfig(monitor.id, { enabled: false });
           updated += 1;
         }
@@ -499,8 +503,12 @@ export default function MonitoringView() {
           />
           <MonitorStat
             label={t("Targets")}
-            value={String(stats.monitorTargets)}
-            hint={t("Enabled ICMP/TCP/HTTP probes")}
+            value={`${stats.monitorTargets} / ${stats.configuredTargets}`}
+            hint={
+              <>
+                {t("Enabled")} / {t("Configured")}
+              </>
+            }
           />
           <MonitorStat
             label={t("Online")}
@@ -906,12 +914,14 @@ export default function MonitoringView() {
                 }
               />
             ) : (
-              filteredDevices.map(({ device, monitors, rollupStatus }) =>
+              filteredDevices.map(
+                ({ device, monitors, allMonitors, rollupStatus }) =>
                 layout === "compact" ? (
                   <DeviceMonitorRow
                     key={device.id}
                     device={device}
                     monitors={monitors}
+                    configuredMonitors={allMonitors}
                     rollupStatus={rollupStatus}
                     selected={selectedDeviceIds.has(device.id)}
                     onSelectedChange={(selected) =>
@@ -926,6 +936,7 @@ export default function MonitoringView() {
                     key={device.id}
                     device={device}
                     monitors={monitors}
+                    configuredMonitors={allMonitors}
                     rollupStatus={rollupStatus}
                     selected={selectedDeviceIds.has(device.id)}
                     onSelectedChange={(selected) =>
@@ -948,6 +959,7 @@ export default function MonitoringView() {
 function DeviceMonitorCard({
   device,
   monitors,
+  configuredMonitors,
   rollupStatus,
   selected,
   onSelectedChange,
@@ -957,6 +969,7 @@ function DeviceMonitorCard({
 }: {
   device: Device;
   monitors: DeviceMonitor[];
+  configuredMonitors: DeviceMonitor[];
   rollupStatus: MonitorRollupStatus;
   selected: boolean;
   onSelectedChange: (selected: boolean) => void;
@@ -989,7 +1002,11 @@ function DeviceMonitorCard({
   );
 
   return (
-    <div className="rk-panel-inset rounded-[var(--radius-md)] p-4">
+    <div
+      data-testid="device-monitor-card"
+      data-device-id={device.id}
+      className="rk-panel-inset rounded-[var(--radius-md)] p-4"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           {canManageMonitoring && (
@@ -1030,7 +1047,10 @@ function DeviceMonitorCard({
                   })}
                 </span>
               )}
-              <span>{t("{count} target(s)", { count: monitors.length })}</span>
+              <span>
+                {t("Enabled")}: {monitors.length} | {t("Configured")}: {" "}
+                {configuredMonitors.length}
+              </span>
               {latestCheckAt && (
                 <span>
                   {t("Last checked {time}", {
@@ -1053,12 +1073,12 @@ function DeviceMonitorCard({
               {t("{count} unknown", { count: unknownMonitors.length })}
             </Badge>
           )}
-          {monitors.length > 0 && (
+          {configuredMonitors.length > 0 && (
             <Button
               variant="outline"
               size="sm"
               onClick={onRun}
-              disabled={!canManageMonitoring || running}
+              disabled={!canManageMonitoring || running || monitors.length === 0}
             >
               <Activity className="size-3.5" />
               {running ? t("Checking...") : t("Check now")}
@@ -1067,7 +1087,7 @@ function DeviceMonitorCard({
         </div>
       </div>
 
-      {monitors.length === 0 ? (
+      {configuredMonitors.length === 0 ? (
         <div className="mt-4 rounded-[var(--radius-sm)] border border-dashed border-[var(--border-default)] px-3 py-2 text-xs text-[var(--text-tertiary)]">
           {t(
             "No active monitor targets. Select this device and use Enable ICMP to add one in bulk.",
@@ -1075,7 +1095,7 @@ function DeviceMonitorCard({
         </div>
       ) : (
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {monitors.map((monitor) => (
+          {configuredMonitors.map((monitor) => (
             <div
               key={monitor.id}
               className="rk-panel rounded-[var(--radius-md)] p-3"
@@ -1089,17 +1109,21 @@ function DeviceMonitorCard({
                     {monitor.type}
                   </div>
                 </div>
-                <Badge
-                  tone={
-                    monitor.lastResult === "online"
-                      ? "ok"
-                      : monitor.lastResult === "offline"
-                        ? "err"
-                        : "neutral"
-                  }
-                >
-                  {monitor.lastResult ?? t("unknown")}
-                </Badge>
+                {isMonitorActive(monitor) ? (
+                  <Badge
+                    tone={
+                      monitor.lastResult === "online"
+                        ? "ok"
+                        : monitor.lastResult === "offline"
+                          ? "err"
+                          : "neutral"
+                    }
+                  >
+                    {monitor.lastResult ?? t("unknown")}
+                  </Badge>
+                ) : (
+                  <Badge tone="neutral">{t("Disabled")}</Badge>
+                )}
               </div>
               <div className="mt-2 space-y-1 text-[11px] text-[var(--text-tertiary)]">
                 <div>
@@ -1131,6 +1155,7 @@ function DeviceMonitorCard({
 function DeviceMonitorRow({
   device,
   monitors,
+  configuredMonitors,
   rollupStatus,
   selected,
   onSelectedChange,
@@ -1140,6 +1165,7 @@ function DeviceMonitorRow({
 }: {
   device: Device;
   monitors: DeviceMonitor[];
+  configuredMonitors: DeviceMonitor[];
   rollupStatus: MonitorRollupStatus;
   selected: boolean;
   onSelectedChange: (selected: boolean) => void;
@@ -1165,13 +1191,22 @@ function DeviceMonitorRow({
   const unknownCount = monitors.filter(
     (monitor) => monitor.lastResult === "unknown" || !monitor.lastResult,
   ).length;
-  const targetSummary = monitors
+  const disabledCount = configuredMonitors.length - monitors.length;
+  const targetSummary = configuredMonitors
     .slice(0, 3)
-    .map((monitor) => `${monitor.name}:${monitor.lastResult ?? "unknown"}`)
+    .map((monitor) =>
+      isMonitorActive(monitor)
+        ? `${monitor.name}:${monitor.lastResult ?? "unknown"}`
+        : `${monitor.name}:${t("Disabled")}`,
+    )
     .join(" | ");
 
   return (
-    <div className="grid grid-cols-12 items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2">
+    <div
+      data-testid="device-monitor-row"
+      data-device-id={device.id}
+      className="grid grid-cols-12 items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2"
+    >
       <div className="col-span-12 flex min-w-0 items-center gap-2 md:col-span-3">
         {canManageMonitoring && (
           <input
@@ -1200,7 +1235,7 @@ function DeviceMonitorRow({
         </Badge>
       </div>
       <Mono className="col-span-4 text-[10px] text-[var(--text-tertiary)] md:col-span-2">
-        {t("{count} targets", { count: monitors.length })}
+        {monitors.length} / {configuredMonitors.length} {t("Enabled")}
       </Mono>
       <div className="col-span-12 truncate text-xs text-[var(--text-tertiary)] md:col-span-3">
         {targetSummary || formatDeviceAddress(device) || t("No target summary")}
@@ -1216,6 +1251,11 @@ function DeviceMonitorRow({
             {t("{count} unknown", { count: unknownCount })}
           </Badge>
         )}
+        {disabledCount > 0 && (
+          <Badge tone="neutral">
+            {disabledCount} {t("Disabled")}
+          </Badge>
+        )}
         {latestCheckAt && (
           <span className="text-[11px] text-[var(--text-tertiary)]">
             {formatRelativeTime(latestCheckAt)}
@@ -1223,12 +1263,12 @@ function DeviceMonitorRow({
         )}
       </div>
       <div className="col-span-4 flex justify-end md:col-span-1">
-        {monitors.length > 0 && (
+        {configuredMonitors.length > 0 && (
           <Button
             variant="outline"
             size="sm"
             onClick={onRun}
-            disabled={!canManageMonitoring || running}
+            disabled={!canManageMonitoring || running || monitors.length === 0}
           >
             <Activity className="size-3.5" />
             {running ? t("Checking...") : t("Check")}
@@ -1237,6 +1277,10 @@ function DeviceMonitorRow({
       </div>
     </div>
   );
+}
+
+function isMonitorActive(monitor: DeviceMonitor) {
+  return monitor.enabled && monitor.type !== "none";
 }
 
 function formatMonitorTarget(monitor: DeviceMonitor) {
@@ -1305,7 +1349,7 @@ function MonitorStat({
 }: {
   label: string;
   value: string;
-  hint: string;
+  hint: ReactNode;
   tone?: "neutral" | "ok" | "err";
 }) {
   const toneClass =

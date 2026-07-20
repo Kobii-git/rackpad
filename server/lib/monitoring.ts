@@ -5,6 +5,7 @@ import { sendMonitorTransitionAlert } from './alerts.js'
 import { requestPinnedUrl } from './net-guard.js'
 import { snmpGet, SNMP_VERSIONS, type SnmpVersion } from './snmp.js'
 import { resolveMonitorSnmpSession } from './snmp-session.js'
+import { ValidationError } from './validation.js'
 import {
   evaluateSnmpMatch,
   isIfOperStatusOid,
@@ -113,17 +114,12 @@ export async function runMonitorCheck(id: string) {
   }
 
   const monitor = parseMonitor(row)
-  const checkedAt = new Date().toISOString()
 
   if (!monitor.enabled || monitor.type === 'none') {
-    await persistMonitorResult(monitor, {
-      checkedAt,
-      result: 'unknown',
-      message: 'Health checks disabled.',
-    })
-    return parseMonitor(db.prepare('SELECT * FROM deviceMonitors WHERE id = ?').get(id) as Record<string, unknown>)
+    throw new ValidationError('Monitor target is disabled.', 409)
   }
 
+  const checkedAt = new Date().toISOString()
   const result = await executeCheck(monitor)
   await persistMonitorResult(monitor, { checkedAt, ...result })
   return parseMonitor(db.prepare('SELECT * FROM deviceMonitors WHERE id = ?').get(id) as Record<string, unknown>)

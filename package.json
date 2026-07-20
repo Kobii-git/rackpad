@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.7.2-dev.0",
+  "version": "1.7.2-dev.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -20,7 +20,7 @@
     "test:e2e": "playwright test",
     "test": "npm run check:i18n && npm run test:server && npm run test:client && npm run test:e2e",
     "lint": "eslint .",
-    "check:i18n": "node scripts/check-i18n-values.mjs",
+    "check:i18n": "node --test scripts/i18n-value-rules.test.mjs && node scripts/check-i18n-values.mjs",
     "check:bundle": "node scripts/check-bundle-size.mjs",
     "check": "npm run lint && npm run test && npm run build && npm run check:bundle",
     "preview": "vite preview",

@@ -25,6 +25,7 @@ export interface DockerImportSource {
   name: string;
   endpoint: string;
   hasToken: boolean;
+  enabled: boolean;
   lastSyncAt?: string | null;
   lastSyncStatus?: string | null;
   lastSyncMessage?: string | null;
@@ -244,7 +245,9 @@ export async function buildDockerApiUrl(endpoint: string, apiPath: string) {
   return url;
 }
 
-export function parseDockerContainersJson(data: unknown): DockerContainerPreview[] {
+export function parseDockerContainersJson(
+  data: unknown,
+): DockerContainerPreview[] {
   if (!Array.isArray(data)) {
     throw new ValidationError("Docker API response must be a JSON array.");
   }
@@ -257,8 +260,10 @@ export function parseDockerContainersJson(data: unknown): DockerContainerPreview
       String(names[0] ?? row.Name ?? row.name ?? id)
         .replace(/^\//, "")
         .trim() || id;
-    const image = String(row.Image ?? row.image ?? "unknown").trim() || "unknown";
-    const state = String(row.State ?? row.state ?? "unknown").trim() || "unknown";
+    const image =
+      String(row.Image ?? row.image ?? "unknown").trim() || "unknown";
+    const state =
+      String(row.State ?? row.state ?? "unknown").trim() || "unknown";
     const status = String(row.Status ?? row.status ?? state).trim() || state;
 
     if (!id) {
@@ -291,9 +296,7 @@ function fetchDockerSocketJson(
           const statusCode = response.statusCode ?? 0;
           if (statusCode < 200 || statusCode >= 300) {
             reject(
-              new ValidationError(
-                `Docker socket returned HTTP ${statusCode}.`,
-              ),
+              new ValidationError(`Docker socket returned HTTP ${statusCode}.`),
             );
             return;
           }
@@ -370,7 +373,9 @@ function fetchDockerHttpJson(
             try {
               resolve(JSON.parse(body) as unknown);
             } catch {
-              reject(new ValidationError("Docker endpoint returned invalid JSON."));
+              reject(
+                new ValidationError("Docker endpoint returned invalid JSON."),
+              );
             }
           });
         });
@@ -388,10 +393,14 @@ export async function fetchDockerContainersPreview(
     const { socketPath } = normalizeDockerSocketEndpoint(endpoint);
     let payload: unknown;
     try {
-      payload = await fetchDockerSocketJson(socketPath, "/containers/json?all=1");
+      payload = await fetchDockerSocketJson(
+        socketPath,
+        "/containers/json?all=1",
+      );
     } catch (error) {
       if (error instanceof ValidationError) throw error;
-      const message = error instanceof Error ? error.message : "Request failed.";
+      const message =
+        error instanceof Error ? error.message : "Request failed.";
       throw new ValidationError(`Could not reach Docker socket: ${message}`);
     }
     return parseDockerContainersJson(payload);
@@ -442,6 +451,7 @@ function parseSource(row: Record<string, unknown>): DockerImportSource {
     name: String(row.name),
     endpoint: String(row.endpoint),
     hasToken: Boolean(row.tokenEnc),
+    enabled: Number(row.enabled ?? 1) === 1,
     lastSyncAt: row.lastSyncAt ? String(row.lastSyncAt) : null,
     lastSyncStatus: row.lastSyncStatus ? String(row.lastSyncStatus) : null,
     lastSyncMessage: row.lastSyncMessage ? String(row.lastSyncMessage) : null,
@@ -507,7 +517,9 @@ export function upsertDockerImportSource(input: {
     : encryptDockerToken(input.token);
   const now = new Date().toISOString();
   const existing = db
-    .prepare("SELECT * FROM dockerImportSources WHERE labId = ? AND endpoint = ?")
+    .prepare(
+      "SELECT * FROM dockerImportSources WHERE labId = ? AND endpoint = ?",
+    )
     .get(input.labId, endpoint) as DockerImportSourceRow | undefined;
 
   if (existing) {
@@ -530,8 +542,8 @@ export function upsertDockerImportSource(input: {
     `
     INSERT INTO dockerImportSources (
       id, labId, name, endpoint, tokenEnc,
-      lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
+      lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt, enabled
+    ) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, 1)
   `,
   ).run(
     id,
@@ -689,6 +701,9 @@ export async function syncDockerImportSource(sourceId: string) {
     result.errors.push("Docker import source not found.");
     return result;
   }
+  if (!source.enabled) {
+    throw new ValidationError("Docker import source is disabled.", 409);
+  }
 
   result.sources = 1;
   const syncedAt = new Date().toISOString();
@@ -709,7 +724,9 @@ export async function syncDockerImportSource(sourceId: string) {
       source.endpoint,
       decryptDockerToken(source),
     );
-    const byId = new Map(containers.map((container) => [container.id, container]));
+    const byId = new Map(
+      containers.map((container) => [container.id, container]),
+    );
 
     for (const link of links) {
       const container = byId.get(link.containerId);
@@ -757,7 +774,9 @@ export async function syncDockerImportSource(sourceId: string) {
 
 export async function syncDockerImportSourcesForLab(labId: string) {
   const rows = db
-    .prepare("SELECT id FROM dockerImportSources WHERE labId = ? ORDER BY name, id")
+    .prepare(
+      "SELECT id FROM dockerImportSources WHERE labId = ? AND enabled = 1 ORDER BY name, id",
+    )
     .all(labId) as Array<{ id: string }>;
   const result = emptySyncResult();
   for (const row of rows) {
@@ -768,7 +787,9 @@ export async function syncDockerImportSourcesForLab(labId: string) {
 
 export async function syncDockerImportSources() {
   const rows = db
-    .prepare("SELECT id FROM dockerImportSources ORDER BY labId, name, id")
+    .prepare(
+      "SELECT id FROM dockerImportSources WHERE enabled = 1 ORDER BY labId, name, id",
+    )
     .all() as Array<{ id: string }>;
   const result = emptySyncResult();
   for (const row of rows) {

@@ -906,8 +906,7 @@ export default function UsersPage() {
                                 value={form.labRoles[lab.id] ?? "none"}
                                 onChange={(event) => {
                                   const value = event.target.value as
-                                    | LabRole
-                                    | "none";
+                                    LabRole | "none";
                                   setForm((prev) => ({
                                     ...prev,
                                     labRoles: {
@@ -982,16 +981,17 @@ export default function UsersPage() {
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 text-xs text-[var(--color-fg-subtle)]">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+                      <div className="flex min-w-0 items-center gap-2 text-xs text-[var(--color-fg-subtle)]">
                         <UserRound className="size-3.5" />
                         {t(
                           "Viewer is read-only, editor can manage inventory, admin can manage users and backups.",
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                         {selectedUser && (
                           <Button
+                            className="shrink-0"
                             variant="destructive"
                             size="sm"
                             onClick={() => void handleDelete()}
@@ -1002,6 +1002,7 @@ export default function UsersPage() {
                           </Button>
                         )}
                         <Button
+                          className="shrink-0"
                           size="sm"
                           onClick={() => void handleSave()}
                           disabled={saving}
@@ -1081,6 +1082,7 @@ export default function UsersPage() {
                     <input
                       type="file"
                       accept="application/json"
+                      aria-label={t("Restore snapshot")}
                       onChange={(event) => {
                         setRestoreFile(event.target.files?.[0] ?? null);
                         setRestoreError("");
@@ -1088,6 +1090,7 @@ export default function UsersPage() {
                       className="block w-full text-sm text-[var(--color-fg-subtle)] file:mr-3 file:rounded-[var(--radius-xs)] file:border file:border-[var(--color-line)] file:bg-[var(--color-surface)] file:px-3 file:py-1.5 file:text-sm file:text-[var(--color-fg)]"
                     />
                     <Button
+                      className="shrink-0"
                       size="sm"
                       onClick={() => void handleRestore()}
                       disabled={restoring || !restoreFile}
@@ -1110,13 +1113,14 @@ export default function UsersPage() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs text-[var(--color-fg-subtle)]">
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+                  <div className="min-w-0 text-xs text-[var(--color-fg-subtle)]">
                     {t(
                       "Use this before Docker updates or test-database resets so you have a clean checkpoint.",
                     )}
                   </div>
                   <Button
+                    className="shrink-0 self-end"
                     size="sm"
                     onClick={() => void handleExport()}
                     disabled={exporting}
@@ -1403,14 +1407,15 @@ export default function UsersPage() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs text-[var(--color-fg-subtle)]">
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+                  <div className="min-w-0 text-xs text-[var(--color-fg-subtle)]">
                     {t(
                       "Configure at least one channel, then save before sending a test alert.",
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                     <Button
+                      className="shrink-0"
                       variant="outline"
                       size="sm"
                       onClick={() => void handleTestAlert()}
@@ -1420,6 +1425,7 @@ export default function UsersPage() {
                       {alertTesting ? t("Sending...") : t("Send test")}
                     </Button>
                     <Button
+                      className="shrink-0"
                       size="sm"
                       onClick={() => void handleSaveAlerts()}
                       disabled={alertsLoading || alertSaving}
@@ -1439,7 +1445,8 @@ export default function UsersPage() {
                   <CardHeading>{t("Recent alert activity")}</CardHeading>
                 </CardTitle>
                 <Badge tone="neutral">
-                  {alertHistory.length} {t("entries")}
+                  {alertHistory.length}{" "}
+                  {t(alertHistory.length === 1 ? "entry" : "entries")}
                 </Badge>
               </CardHeader>
               <CardBody>
@@ -1510,21 +1517,26 @@ function RolePicker({
 }) {
   const { t } = useI18n();
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div
+      data-testid="admin-role-picker"
+      className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+    >
       {(["viewer", "editor", "admin"] as const).map((role) => (
         <button
           key={role}
           type="button"
           onClick={() => onChange(role)}
-          className={`rounded-[var(--radius-xs)] border px-2 py-2 text-xs capitalize transition-colors ${
+          className={`min-w-0 rounded-[var(--radius-xs)] border px-2 py-2 text-xs capitalize transition-colors ${
             value === role
               ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent-strong)]"
               : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
           }`}
         >
-          <span className="inline-flex items-center gap-1">
-            <Shield className="size-3.5" />
-            {roleChipLabel(role, t)}
+          <span className="flex min-w-0 items-center justify-center gap-1">
+            <Shield className="size-3.5 shrink-0" />
+            <span className="min-w-0 break-words text-center leading-tight">
+              {roleChipLabel(role, t)}
+            </span>
           </span>
         </button>
       ))}

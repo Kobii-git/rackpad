@@ -326,7 +326,7 @@ export default function DocumentationView() {
           </div>
         </aside>
 
-        <main className="flex-1 overflow-hidden px-4 py-4">
+        <main className="flex-1 overflow-y-auto px-4 py-4 xl:overflow-hidden">
           {!selectedPage ? (
             <Card className="mx-auto mt-16 max-w-xl">
               <CardHeader>
@@ -357,8 +357,11 @@ export default function DocumentationView() {
               </CardBody>
             </Card>
           ) : (
-            <div className="grid h-full min-h-0 grid-cols-12 gap-4">
-              <section className="docs-editor-pane screen-only col-span-12 flex min-h-0 xl:col-span-6">
+            <div className="grid min-h-0 grid-cols-12 gap-4 xl:h-full">
+              <section
+                className="docs-editor-pane screen-only col-span-12 flex min-h-0 xl:col-span-6 xl:h-full"
+                data-testid="documentation-editor"
+              >
                 <Card className="flex min-h-0 w-full flex-col">
                   <CardHeader>
                     <CardTitle>
@@ -377,13 +380,14 @@ export default function DocumentationView() {
                       </Button>
                     )}
                   </CardHeader>
-                  <CardBody className="flex min-h-0 flex-1 flex-col gap-3">
+                  <CardBody className="flex min-h-0 flex-1 flex-col gap-3 xl:overflow-y-auto">
                     {error && (
                       <div className="rounded-[var(--radius-sm)] border border-[var(--color-err)]/30 bg-[var(--color-err)]/10 px-3 py-2 text-sm text-[var(--color-err)]">
                         {error}
                       </div>
                     )}
                     <Input
+                      aria-label={t("Edit page")}
                       value={draftTitle}
                       onChange={(event) => setDraftTitle(event.target.value)}
                       disabled={!canEdit}
@@ -456,10 +460,11 @@ export default function DocumentationView() {
                     )}
                     <textarea
                       ref={editorRef}
+                      aria-label={t("Markdown")}
                       value={draftContent}
                       onChange={(event) => setDraftContent(event.target.value)}
                       disabled={!canEdit}
-                      className="rk-control rk-textarea min-h-[640px] flex-1 resize-none font-mono text-xs leading-5 text-[var(--color-fg)] xl:min-h-0"
+                      className="rk-control rk-textarea min-h-[36rem] flex-1 resize-none font-mono text-xs leading-5 text-[var(--color-fg)] xl:min-h-64"
                     />
                     <div className="flex items-center justify-between gap-3">
                       <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
@@ -481,7 +486,10 @@ export default function DocumentationView() {
                 </Card>
               </section>
 
-              <section className="docs-print-preview col-span-12 flex min-h-0 xl:col-span-6">
+              <section
+                className="docs-print-preview col-span-12 flex min-h-0 xl:col-span-6 xl:h-full"
+                data-testid="documentation-preview"
+              >
                 <Card className="flex min-h-0 w-full flex-col">
                   <CardHeader className="screen-only">
                     <CardTitle>
@@ -491,7 +499,7 @@ export default function DocumentationView() {
                       </CardHeading>
                     </CardTitle>
                   </CardHeader>
-                  <CardBody className="min-h-[640px] flex-1 overflow-y-auto xl:min-h-0">
+                  <CardBody className="min-h-[36rem] flex-1 overflow-y-auto xl:min-h-0">
                     <div className="docs-print-header print-only">
                       <h1>{draftTitle || selectedPage.title}</h1>
                       <p>

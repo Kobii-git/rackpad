@@ -16,7 +16,6 @@ import { ReferenceImageGallery } from "@/components/shared/ReferenceImageGallery
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
 import { RackView } from "@/components/rack/RackView";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
@@ -701,16 +700,31 @@ export default function RackViewPage() {
                     </div>
                   </div>
 
-                  <Tabs
-                    value={face}
-                    onValueChange={(value) => setFace(value as RackDisplayFace)}
+                  <div
+                    role="group"
+                    aria-label={t("Rack face")}
+                    className="flex items-center gap-1 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_42%,transparent)] p-1"
                   >
-                    <TabsList>
-                      <TabsTrigger value="front">{t("Front")}</TabsTrigger>
-                      <TabsTrigger value="rear">{t("Rear")}</TabsTrigger>
-                      <TabsTrigger value="both">{t("Both")}</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
+                    {(["front", "rear", "both"] as const).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        aria-pressed={face === option}
+                        onClick={() => setFace(option)}
+                        className={cn(
+                          "relative rounded-[var(--radius-sm)] px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.13em] text-[var(--text-tertiary)] transition-[background-color,color,box-shadow] duration-150 hover:bg-[rgb(255_255_255_/_0.035)] hover:text-[var(--text-primary)] focus-visible:outline-none",
+                          face === option &&
+                            "bg-[var(--accent-primary-soft)] text-[var(--accent-primary-hover)] shadow-[0_0_0_1px_var(--accent-primary-border)_inset]",
+                        )}
+                      >
+                        {option === "front"
+                          ? t("Front")
+                          : option === "rear"
+                            ? t("Rear")
+                            : t("Both")}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div

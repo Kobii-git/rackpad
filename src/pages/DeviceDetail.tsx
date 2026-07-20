@@ -77,7 +77,13 @@ import {
   ShieldCheck,
   Trash2,
 } from "lucide-react";
-import { formatPortLabel, relativeTime, statusLabel } from "@/lib/utils";
+import {
+  cidrBounds,
+  formatPortLabel,
+  intToIp,
+  relativeTime,
+  statusLabel,
+} from "@/lib/utils";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { deviceTypeMatchesTemplate } from "@/lib/device-types";
 import {
@@ -94,7 +100,7 @@ type MonitorForm = {
   target: string;
   port: string;
   path: string;
-  snmpVersion: "1" | "2c";
+  snmpVersion: NonNullable<DeviceMonitor["snmpVersion"]>;
   snmpCommunity: string;
   snmpOid: string;
   snmpExpectedValue: string;
@@ -411,6 +417,16 @@ export default function DeviceDetail() {
       return acc;
     }, {});
   }, [subnets]);
+  const networkAddressPlaceholder = useMemo(() => {
+    const subnet = subnetById[networkForm.subnetId];
+    if (!subnet) return t("IP address");
+    try {
+      const bounds = cidrBounds(subnet.cidr);
+      return intToIp(bounds.network + (bounds.size > 2 ? 1 : 0));
+    } catch {
+      return t("IP address");
+    }
+  }, [networkForm.subnetId, subnetById, t]);
   const scopesForNetworkSubnet = useMemo(
     () => scopes.filter((scope) => scope.subnetId === networkForm.subnetId),
     [networkForm.subnetId, scopes],
@@ -988,7 +1004,7 @@ export default function DeviceDetail() {
       const payload = {
         name: monitorForm.name.trim() || null,
         enabled: monitorForm.enabled,
-        type: monitorForm.enabled ? monitorForm.type : "none",
+        type: monitorForm.type,
         target: monitorForm.target.trim() || null,
         port:
           usesPort && monitorForm.port.trim()
@@ -997,7 +1013,7 @@ export default function DeviceDetail() {
         path: usesPath ? monitorForm.path.trim() || null : null,
         snmpVersion: usesSnmp ? monitorForm.snmpVersion : null,
         snmpCommunity: usesSnmp
-          ? monitorForm.snmpCommunity.trim() || "public"
+          ? monitorForm.snmpCommunity.trim() || null
           : null,
         snmpOid: usesSnmp ? monitorForm.snmpOid.trim() || null : null,
         snmpExpectedValue: usesSnmp
@@ -1822,28 +1838,33 @@ export default function DeviceDetail() {
                   ) : null}
                 </CardHeader>
                 <CardBody className="space-y-3">
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-                    <Field label={t("Subnet")}>
-                      <Select
-                        value={networkForm.subnetId}
-                        onChange={(value) => setNetworkField("subnetId", value)}
-                        disabled={subnets.length === 0}
-                      >
-                        <option value="">{t("Select subnet")}</option>
-                        {subnets.map((subnet) => (
-                          <option key={subnet.id} value={subnet.id}>
-                            {subnet.cidr} - {subnet.name}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="md:col-span-2 xl:col-span-2">
+                      <Field label={t("Subnet")}>
+                        <Select
+                          value={networkForm.subnetId}
+                          onChange={(value) =>
+                            setNetworkField("subnetId", value)
+                          }
+                          disabled={subnets.length === 0}
+                        >
+                          <option value="">{t("Select subnet")}</option>
+                          {subnets.map((subnet) => (
+                            <option key={subnet.id} value={subnet.id}>
+                              {subnet.cidr} - {subnet.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                    </div>
                     <Field label={t("IP address")}>
                       <Input
+                        data-testid="network-address-input"
                         value={networkForm.ipAddress}
                         onChange={(event) =>
                           setNetworkField("ipAddress", event.target.value)
                         }
-                        placeholder="192.168.10.1"
+                        placeholder={networkAddressPlaceholder}
                       />
                     </Field>
                     <Field label={t("Type")}>
@@ -1963,20 +1984,20 @@ export default function DeviceDetail() {
                   ) : (
                     <>
                       {hostSharedAssignment && parentDevice && (
-                        <div className="grid grid-cols-12 items-center gap-3 px-4 py-2">
-                          <Mono className="col-span-3 text-[var(--color-fg)]">
+                        <div className="grid gap-3 px-4 py-3 xl:grid-cols-12 xl:items-center">
+                          <Mono className="xl:col-span-2 text-[var(--color-fg)]">
                             {hostSharedAssignment.ipAddress}
                           </Mono>
-                          <div className="col-span-3 text-xs">
+                          <div className="text-xs xl:col-span-2">
                             {parentDevice.hostname}
                             <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">
                               {t("shared parent address")}
                             </Mono>
                           </div>
-                          <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">
+                          <div className="text-[11px] text-[var(--color-fg-subtle)] xl:col-span-4">
                             {t("Host-network child using parent host IP")}
                           </div>
-                          <div className="col-span-2 flex items-center justify-end">
+                          <div className="flex flex-wrap items-center gap-2 xl:col-span-4 xl:justify-end">
                             <Badge tone="neutral">{t("host network")}</Badge>
                           </div>
                         </div>
@@ -1990,12 +2011,12 @@ export default function DeviceDetail() {
                         .map((ip) => (
                           <div
                             key={ip.id}
-                            className="grid grid-cols-12 items-center gap-3 px-4 py-2"
+                            className="grid gap-3 px-4 py-3 xl:grid-cols-12 xl:items-center"
                           >
-                            <Mono className="col-span-3 text-[var(--color-fg)]">
+                            <Mono className="text-[var(--color-fg)] xl:col-span-2">
                               {ip.ipAddress}
                             </Mono>
-                            <div className="col-span-3 text-xs">
+                            <div className="text-xs xl:col-span-2">
                               {subnetById[ip.subnetId]?.name ??
                                 ip.hostname ??
                                 "-"}
@@ -2003,7 +2024,7 @@ export default function DeviceDetail() {
                                 {subnetById[ip.subnetId]?.cidr ?? ""}
                               </Mono>
                             </div>
-                            <div className="col-span-4 text-[11px] text-[var(--color-fg-subtle)]">
+                            <div className="text-[11px] text-[var(--color-fg-subtle)] xl:col-span-3">
                               <div>{ip.description ?? "-"}</div>
                               {ip.portId && portById[ip.portId] && (
                                 <Mono className="mt-0.5 block text-[10px] text-[var(--color-fg-muted)]">
@@ -2013,7 +2034,7 @@ export default function DeviceDetail() {
                                 </Mono>
                               )}
                             </div>
-                            <div className="col-span-2 flex items-center justify-end gap-2">
+                            <div className="flex flex-wrap items-center gap-2 xl:col-span-5 xl:justify-end">
                               {ip.allocationMode === "dhcp-reservation" && (
                                 <Badge tone="neutral">{t("DHCP res")}</Badge>
                               )}
@@ -2236,6 +2257,8 @@ export default function DeviceDetail() {
                       deviceMonitorList.map((entry) => (
                         <button
                           key={entry.id}
+                          data-testid="device-monitor-target"
+                          data-monitor-id={entry.id}
                           type="button"
                           onClick={() => setSelectedMonitorId(entry.id)}
                           className={[
@@ -2249,17 +2272,21 @@ export default function DeviceDetail() {
                             <div className="text-sm font-medium text-[var(--color-fg)]">
                               {entry.name}
                             </div>
-                            <Badge
-                              tone={
-                                entry.lastResult === "online"
-                                  ? "ok"
-                                  : entry.lastResult === "offline"
-                                    ? "err"
-                                    : "neutral"
-                              }
-                            >
-                              {entry.lastResult ?? t("unknown")}
-                            </Badge>
+                            {entry.enabled && entry.type !== "none" ? (
+                              <Badge
+                                tone={
+                                  entry.lastResult === "online"
+                                    ? "ok"
+                                    : entry.lastResult === "offline"
+                                      ? "err"
+                                      : "neutral"
+                                }
+                              >
+                                {entry.lastResult ?? t("unknown")}
+                              </Badge>
+                            ) : (
+                              <Badge tone="neutral">{t("Disabled")}</Badge>
+                            )}
                           </div>
                           <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
                             {entry.type}
@@ -2278,7 +2305,10 @@ export default function DeviceDetail() {
                     )}
                   </div>
 
-                  <div className="space-y-4 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4">
+                  <div
+                    data-testid="device-monitor-editor"
+                    className="space-y-4 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4"
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
@@ -2292,26 +2322,34 @@ export default function DeviceDetail() {
                             : t("Create a new monitor target")}
                         </div>
                       </div>
-                      {selectedMonitor && (
-                        <Badge
-                          tone={
-                            selectedMonitor.lastResult === "online"
-                              ? "ok"
-                              : selectedMonitor.lastResult === "offline"
-                                ? "err"
-                                : "neutral"
-                          }
-                        >
-                          {selectedMonitor.lastResult ?? t("unknown")}
-                        </Badge>
-                      )}
+                      {selectedMonitor &&
+                        (selectedMonitor.enabled &&
+                        selectedMonitor.type !== "none" ? (
+                          <Badge
+                            tone={
+                              selectedMonitor.lastResult === "online"
+                                ? "ok"
+                                : selectedMonitor.lastResult === "offline"
+                                  ? "err"
+                                  : "neutral"
+                            }
+                          >
+                            {selectedMonitor.lastResult ?? t("unknown")}
+                          </Badge>
+                        ) : (
+                          <Badge tone="neutral">{t("Disabled")}</Badge>
+                        ))}
                     </div>
 
                     <label className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-fg)]">
                       <input
                         type="checkbox"
-                        checked={monitorForm.enabled}
-                        disabled={!canManageMonitoring}
+                        checked={
+                          monitorForm.enabled && monitorForm.type !== "none"
+                        }
+                        disabled={
+                          !canManageMonitoring || monitorForm.type === "none"
+                        }
                         onChange={(event) =>
                           setMonitorForm((prev) => ({
                             ...prev,
@@ -2347,6 +2385,7 @@ export default function DeviceDetail() {
                             setMonitorForm((prev) => ({
                               ...prev,
                               type: value as MonitorForm["type"],
+                              enabled: value === "none" ? false : prev.enabled,
                             }))
                           }
                           disabled={!canManageMonitoring}
@@ -2544,12 +2583,17 @@ export default function DeviceDetail() {
                           <Select
                             value={monitorForm.snmpCredentialId}
                             disabled={!canManageMonitoring}
-                            onChange={(value) =>
+                            onChange={(value) => {
+                              const credential = snmpCredentials.find(
+                                (entry) => entry.id === value,
+                              );
                               setMonitorForm((prev) => ({
                                 ...prev,
                                 snmpCredentialId: value,
-                              }))
-                            }
+                                snmpVersion:
+                                  credential?.version ?? prev.snmpVersion,
+                              }));
+                            }}
                           >
                             <option value="">
                               {t("Inline community / version")}
@@ -2579,6 +2623,7 @@ export default function DeviceDetail() {
                           >
                             <option value="2c">{t("v2c")}</option>
                             <option value="1">{t("v1")}</option>
+                            <option value="3">{t("v3")}</option>
                           </Select>
                         </Field>
                         <Field label={t("Community")}>
@@ -2628,28 +2673,35 @@ export default function DeviceDetail() {
                       </div>
                     )}
 
-                    <div className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4 md:grid-cols-3">
-                      <MonitorStat
-                        label={t("Last check")}
-                        value={
-                          selectedMonitor?.lastCheckAt
-                            ? new Date(
-                                selectedMonitor.lastCheckAt,
-                              ).toLocaleString()
-                            : "Never"
-                        }
-                      />
-                      <MonitorStat
-                        label={t("Last result")}
-                        value={selectedMonitor?.lastResult ?? "unknown"}
-                      />
-                      <MonitorStat
-                        label={t("Message")}
-                        value={
-                          selectedMonitor?.lastMessage ??
-                          "No checks have run yet."
-                        }
-                      />
+                    <div className="space-y-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
+                      {selectedMonitor &&
+                        (!selectedMonitor.enabled ||
+                          selectedMonitor.type === "none") && (
+                          <div className="rk-kicker">{t("History")}</div>
+                        )}
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <MonitorStat
+                          label={t("Last check")}
+                          value={
+                            selectedMonitor?.lastCheckAt
+                              ? new Date(
+                                  selectedMonitor.lastCheckAt,
+                                ).toLocaleString()
+                              : t("Never")
+                          }
+                        />
+                        <MonitorStat
+                          label={t("Last result")}
+                          value={selectedMonitor?.lastResult ?? t("unknown")}
+                        />
+                        <MonitorStat
+                          label={t("Message")}
+                          value={
+                            selectedMonitor?.lastMessage ??
+                            t("No checks have run yet.")
+                          }
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2674,7 +2726,11 @@ export default function DeviceDetail() {
                     size="sm"
                     onClick={() => void handleRunMonitor()}
                     disabled={
-                      !canManageMonitoring || monitorRunning || !selectedMonitor
+                      !canManageMonitoring ||
+                      monitorRunning ||
+                      !selectedMonitor ||
+                      !selectedMonitor.enabled ||
+                      selectedMonitor.type === "none"
                     }
                   >
                     <ShieldCheck className="size-3.5" />
@@ -3400,16 +3456,18 @@ function buildNewMonitorForm(
 function monitorToForm(monitor: DeviceMonitor, device: Device): MonitorForm {
   return {
     name: monitor.name,
-    enabled: monitor.enabled,
+    enabled: monitor.enabled && monitor.type !== "none",
     type: monitor.type,
     target: monitor.target ?? device.managementIp ?? "",
     port: monitor.port != null ? String(monitor.port) : "",
     path: monitor.path ?? "",
     snmpVersion:
-      monitor.snmpVersion === "1" || monitor.snmpVersion === "2c"
+      monitor.snmpVersion === "1" ||
+      monitor.snmpVersion === "2c" ||
+      monitor.snmpVersion === "3"
         ? monitor.snmpVersion
         : "2c",
-    snmpCommunity: monitor.snmpCommunity ?? "public",
+    snmpCommunity: monitor.snmpCommunity ?? "",
     snmpOid: monitor.snmpOid ?? "",
     snmpExpectedValue: monitor.snmpExpectedValue ?? "",
     snmpMatchMode: monitor.snmpMatchMode ?? "equals",

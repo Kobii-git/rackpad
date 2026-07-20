@@ -1,6 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
-import { assertGlobalAdmin, assertLabWrite } from "../lib/lab-access.js";
+import {
+  assertGlobalAdmin,
+  assertLabRead,
+  assertLabWrite,
+} from "../lib/lab-access.js";
 import {
   buildNetboxDeviceDraft,
   buildNetboxPortTemplateDraft,
@@ -16,12 +20,14 @@ import {
   buildDockerContainerSpecs,
   fetchDockerContainersPreview,
   linkDockerContainerDevice,
+  listDockerImportSources,
   syncDockerImportSource,
   syncDockerImportSourcesForLab,
   upsertDockerImportSource,
 } from "../lib/docker-import.js";
 import {
   asObject,
+  optionalBoolean,
   optionalEnum,
   optionalString,
   requiredString,
@@ -30,6 +36,42 @@ import {
 const NETBOX_IMPORT_MODES = ["template", "device"] as const;
 
 export const importsRoutes: FastifyPluginAsync = async (app) => {
+  app.get<{ Querystring: { labId?: string } }>(
+    "/docker/sources",
+    async (req, reply) => {
+      const labId = requiredString(req.query, "labId", { maxLength: 80 });
+      if (!assertLabRead(req, reply, labId)) return;
+      return listDockerImportSources(labId);
+    },
+  );
+
+  app.patch<{ Params: { id: string } }>(
+    "/docker/sources/:id",
+    async (req, reply) => {
+      const source = db
+        .prepare("SELECT id, labId FROM dockerImportSources WHERE id = ?")
+        .get(req.params.id) as { id: string; labId: string } | undefined;
+      if (!source) {
+        return reply
+          .status(404)
+          .send({ error: "Docker import source not found." });
+      }
+      if (!assertLabWrite(req, reply, source.labId)) return;
+      const body = asObject(req.body);
+      const enabled = optionalBoolean(body, "enabled");
+      if (enabled == null) {
+        return reply.status(400).send({ error: "enabled is required." });
+      }
+      const updatedAt = new Date().toISOString();
+      db.prepare(
+        "UPDATE dockerImportSources SET enabled = ?, updatedAt = ? WHERE id = ?",
+      ).run(enabled ? 1 : 0, updatedAt, source.id);
+      return listDockerImportSources(source.labId).find(
+        (entry) => entry.id === source.id,
+      );
+    },
+  );
+
   app.post("/netbox-device-type/preview", async (req, reply) => {
     if (!req.authUser) {
       return reply.status(401).send({ error: "Authentication required." });
@@ -201,7 +243,10 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
     const token = optionalString(body, "token", { maxLength: 500 });
     if (!assertLabWrite(req, reply, labId)) return;
 
-    const containers = await fetchDockerContainersPreview(endpoint, token ?? undefined);
+    const containers = await fetchDockerContainersPreview(
+      endpoint,
+      token ?? undefined,
+    );
     return { containers };
   });
 
@@ -211,8 +256,12 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
     const token = optionalString(body, "token", { maxLength: 500 });
     const containerId = requiredString(body, "containerId", { maxLength: 120 });
     const labId = requiredString(body, "labId", { maxLength: 80 });
-    const hostDeviceId = requiredString(body, "hostDeviceId", { maxLength: 80 });
-    const hostnameOverride = optionalString(body, "hostname", { maxLength: 120 });
+    const hostDeviceId = requiredString(body, "hostDeviceId", {
+      maxLength: 80,
+    });
+    const hostnameOverride = optionalString(body, "hostname", {
+      maxLength: 120,
+    });
 
     if (!assertLabWrite(req, reply, labId)) return;
 
@@ -223,10 +272,15 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: "Host device not found in lab." });
     }
 
-    const containers = await fetchDockerContainersPreview(endpoint, token ?? undefined);
+    const containers = await fetchDockerContainersPreview(
+      endpoint,
+      token ?? undefined,
+    );
     const container = containers.find((entry) => entry.id === containerId);
     if (!container) {
-      return reply.status(404).send({ error: "Container not found in preview." });
+      return reply
+        .status(404)
+        .send({ error: "Container not found in preview." });
     }
 
     const hostname = hostnameOverride ?? container.name.slice(0, 120);
@@ -308,7 +362,9 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
         .prepare("SELECT id, labId FROM dockerImportSources WHERE id = ?")
         .get(sourceId) as { id: string; labId: string } | undefined;
       if (!source || source.labId !== labId) {
-        return reply.status(404).send({ error: "Docker import source not found." });
+        return reply
+          .status(404)
+          .send({ error: "Docker import source not found." });
       }
       return syncDockerImportSource(sourceId);
     }

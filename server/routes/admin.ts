@@ -186,7 +186,7 @@ const exportBackupSnapshot = db.transaction(
           .all(),
         dockerImportSources: db
           .prepare(
-            "SELECT id, labId, name, endpoint, NULL AS tokenEnc, lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt FROM dockerImportSources ORDER BY labId, name, id",
+            "SELECT id, labId, name, endpoint, NULL AS tokenEnc, lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt, enabled FROM dockerImportSources ORDER BY labId, name, id",
           )
           .all(),
         dockerContainerLinks: db
@@ -978,8 +978,8 @@ const restoreBackupSnapshot = db.transaction(
     const insertDockerImportSource = db.prepare(`
     INSERT INTO dockerImportSources (
       id, labId, name, endpoint, tokenEnc,
-      lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt, enabled
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDockerContainerLink = db.prepare(`
     INSERT INTO dockerContainerLinks (
@@ -1111,6 +1111,7 @@ const restoreBackupSnapshot = db.transaction(
         row.lastSyncMessage ?? null,
         row.createdAt ?? new Date().toISOString(),
         row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+        row.enabled == null ? 1 : Number(Boolean(row.enabled)),
       );
     }
     for (const row of devices) {
@@ -1453,7 +1454,7 @@ const restoreBackupSnapshot = db.transaction(
         row.snmpIfIndex ?? null,
         row.snmpCredentialId ?? null,
         row.intervalMs ?? null,
-        Number(row.enabled ?? 0),
+        row.type === "none" ? 0 : Number(row.enabled ?? 0),
         row.sortOrder ?? 0,
         row.lastCheckAt ?? null,
         row.lastAlertAt ?? null,

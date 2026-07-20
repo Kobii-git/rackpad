@@ -399,7 +399,7 @@ export default function Dashboard() {
                       className="size-4 text-[var(--accent-primary)]"
                     />
                     <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                      <span className="truncate text-xs font-medium capitalize text-[var(--text-primary)]">
+                      <span className="min-w-0 text-xs font-medium capitalize leading-tight text-[var(--text-primary)]">
                         {type.replace("_", " ")}
                       </span>
                       <Mono className="text-[10px] text-[var(--text-tertiary)]">

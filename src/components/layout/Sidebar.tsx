@@ -88,14 +88,17 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
             {t("Homelab inventory")}
           </div>
         </div>
-        <div className="ml-auto hidden flex-col items-end gap-1 xl:flex">
-          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
+        <div
+          className="ml-auto hidden shrink-0 flex-col items-end gap-1 xl:flex"
+          data-testid="sidebar-version"
+        >
+          <span className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             {APP_VERSION_TAG}
           </span>
           {APP_CHANNEL_LABEL && (
             <span
               className={cn(
-                "rounded-full border px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.16em]",
+                "whitespace-nowrap rounded-full border px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em]",
                 APP_IS_DEV
                   ? "border-[var(--color-info)]/40 bg-[var(--color-info)]/10 text-[var(--color-info)]"
                   : "border-[var(--color-warn)]/35 bg-[var(--color-warn)]/10 text-[var(--color-warn)]",

@@ -12,6 +12,7 @@ import type {
   DeviceMonitor,
   DiscoveredSnmpInterface,
   DocumentationPage,
+  DockerImportSource,
   DiscoveredDevice,
   DiscoveryScanJobResponse,
   DiscoveryScanResult,
@@ -274,7 +275,9 @@ export type MonitorPatch = Nullable<
 export interface NetworkCreateInput {
   labId: ID;
   vlan?: (Omit<Vlan, "id" | "labId"> & { id?: string }) | null;
-  subnet: Omit<Subnet, "id" | "labId" | "vlanId" | "integrity"> & { id?: string };
+  subnet: Omit<Subnet, "id" | "labId" | "vlanId" | "integrity"> & {
+    id?: string;
+  };
   dhcpScope?: (Omit<DhcpScope, "id" | "subnetId"> & { id?: string }) | null;
   zones?: Array<Omit<IpZone, "id" | "subnetId"> & { id?: string }>;
 }
@@ -892,6 +895,19 @@ export const api = {
     });
   },
 
+  getDockerImportSources(labId: string) {
+    return request<DockerImportSource[]>("/imports/docker/sources", undefined, {
+      labId,
+    });
+  },
+
+  updateDockerImportSource(id: string, input: { enabled: boolean }) {
+    return request<DockerImportSource>(`/imports/docker/sources/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  },
+
   getDocumentationLinks(params?: { deviceId?: string; pageId?: string }) {
     return request<DocumentationDeviceLink[]>(
       "/documentation/links",
@@ -1184,8 +1200,9 @@ export const api = {
     deviceId: string;
     target?: string;
     port?: number;
-    snmpVersion?: "1" | "2c";
+    snmpVersion?: "1" | "2c" | "3";
     snmpCommunity?: string;
+    snmpCredentialId?: string;
     timeoutMs?: number;
   }) {
     return request<{
@@ -1202,8 +1219,9 @@ export const api = {
     deviceId: string;
     target?: string;
     port?: number;
-    snmpVersion?: "1" | "2c";
+    snmpVersion?: "1" | "2c" | "3";
     snmpCommunity?: string;
+    snmpCredentialId?: string;
     timeoutMs?: number;
     ifIndexes?: number[];
     skipExisting?: boolean;

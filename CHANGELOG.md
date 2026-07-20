@@ -8,23 +8,96 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+### Added
+
+- Rebuilt the opt-in demo bootstrap as one server-owned, referentially valid
+  dataset covering all built-in device and port kinds, network allocation
+  modes, device services, monitor types, SNMP profiles/traps, documentation
+  links, rack/room images, disabled sample accounts, discovery states, and a
+  real imported custom laser-cutter device.
+- Added review-only sample Proxmox and Hyper-V inventory controls that stage
+  representative hosts, workloads, switches, ports, VLANs, specs, and IPs
+  without writing until the administrator chooses **Import selected**.
+- Added persisted enable/disable controls for Docker import sources, including
+  a Disabled badge and safe backup compatibility for older snapshots.
+
 ### Changed
 
+- Made Ports select the populated device with the most ports by default, moved
+  port-template editing into a responsive full-width dialog, and reset the
+  Inspector scroll position whenever its editing context changes.
+- Expanded the responsive browser matrix to 1024x768, 1280x720, 1440x900, and
+  1920x1200 across light/dark English, French, and Arabic RTL, with route and
+  demo-lab smoke coverage.
+- Kept every demo monitor disabled by default while showing its historical
+  configuration, separated active and configured target counts, and prevented
+  disabled examples from running or affecting monitoring rollups.
 - Refreshed supported runtime and development dependencies within their
   existing major versions while retaining Node 22 and TypeScript 6.
 
 ### Fixed
 
+- Corrected responsive sizing, wrapping, scrolling, and clipping in Discovery,
+  Documentation, shared tables, 1U rack tiles, ColorInput, Device Network
+  allocations, Admin role/actions, the sidebar version label, and compact
+  device-type labels.
+- Localized Discovery timestamps, added count-aware alert-history singular
+  labels, and preserved Discord and Telegram product names in every locale.
+- Prevented disabled Docker sources from scheduled, bulk, and manual sync while
+  preserving existing sources as enabled through the migration and older
+  backup restores.
+- Preserved an already-disabled Docker source when importing another container
+  from its endpoint; only explicit source controls can re-enable it.
+- Corrected reserved, infrastructure, and DHCP-zone demo ranges, and added
+  management cabling for both PDUs and the UPS plus a valid UPS-to-PDU IEC
+  power path.
+- Kept Discovery scan summaries and translated Admin actions from shrinking,
+  restored localized notification descriptions while retaining the exact
+  Discord and Telegram product names, and made Audit tables scroll on both
+  axes at constrained heights.
+- Fixed full-route accessibility gaps in rack face controls, WiFi edit actions,
+  Ports filters, Documentation fields, the backup picker, and keyboard access
+  for scrollable Audit, Imports, and Markdown code regions.
 - Removed a file-system race from the i18n UI scanner by reading verified
   regular files through a single descriptor and skipping symbolic links.
 - Removed unused rack translation bindings and stale cable endpoint
   calculations reported by CodeQL.
+- Preserved disabled HTTP and SNMP monitor configurations during edits, blocked
+  manual runs for disabled or documentation-only targets without changing
+  historical state, and presented disabled targets neutrally in detail, card,
+  and compact monitoring layouts.
+- Rejected missing, null, and non-boolean Docker source enablement updates
+  without touching the source row, while retaining explicit enable/disable
+  toggles.
+- Localized the Proxmox and Hyper-V sample-review controls in every locale and
+  hardened i18n validation for exact standalone product names, English-only
+  notification labels, and stale allowlist entries.
+- Preserved nullable SNMP configuration during partial and disabled-target
+  edits, added SNMPv3 form support, and rejected active SNMPv3 targets without
+  a usable v3 credential while blocking legacy runtime fallback to v2c.
+- Treated documentation-only monitor targets as disabled throughout monitoring
+  presentation and actions, including normalization during backup restore.
+- Hardened protected product-name validation against Unicode combining-mark,
+  connector, and join-control mutations for Discord, Telegram, Proxmox, and
+  Hyper-V.
 
 ### Test notes
 
 - Verified a clean `npm ci`, `npm run check:i18n`, `npm run build`,
   `npm run lint`, `npm run test:server`, `npm run test:client`,
   `npm run test:e2e`, and `npm run check:bundle`.
+- Smoke-tested fresh demo and empty-workspace bootstraps, both demo labs, every
+  primary route, the responsive locale/theme matrix, and the corrected UI in a
+  live browser; `bash -n scripts/collect-proxmox.sh` also passes.
+- Added migration, backup, disabled-source import/sync, demo-monitor, DHCP/IP
+  zone, PDU/UPS link, intercepted Discovery scan, localized Admin, pluralization,
+  table-scroll, template-dialog, and disabled-monitor regressions.
+- Added no-mutation disabled-monitor run tests, disabled HTTP/SNMP edit tests,
+  strict Docker toggle validation, compact monitoring rollup checks, and
+  Spanish sample-import coverage at 1024px.
+- Added SNMPv3 nullable-field round trips, atomic invalid-activation checks,
+  legacy documentation-monitor restore coverage, and Unicode brand-boundary
+  regressions.
 - Verified zero `npm audit` vulnerabilities and a production Docker image
   build on Node 22.
 

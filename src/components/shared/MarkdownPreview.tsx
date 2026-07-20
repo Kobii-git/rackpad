@@ -44,6 +44,7 @@ function parseBlocks(content: string) {
       blocks.push(
         <pre
           key={`code-${index}`}
+          tabIndex={0}
           className="overflow-auto rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-3 font-mono text-xs text-[var(--color-fg)]"
         >
           <code>{codeLines.join("\n")}</code>
@@ -215,6 +216,7 @@ function renderTable(table: MarkdownTable, index: number) {
   return (
     <div
       key={`table-${index}`}
+      tabIndex={0}
       className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--color-line)]"
     >
       <table className="min-w-full border-collapse text-left text-sm text-[var(--color-fg)]">

@@ -276,12 +276,16 @@ function DeviceTile({
     <Tooltip>
       <TooltipTrigger asChild>
         <motion.button
+          data-testid="rack-device-tile"
+          data-height-u={heightU}
+          data-hostname={device.hostname}
           initial={{ opacity: 0, x: -4 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
           onClick={onClick}
           className={cn(
-            "group absolute flex items-center gap-2 px-3 text-left",
+            "group absolute flex items-center text-left",
+            heightU > 1 ? "gap-2 px-3" : "gap-1 px-2",
             "overflow-hidden rounded-[var(--radius-xs)] border border-[rgb(255_255_255_/_0.06)] transition-colors",
             selected
               ? "bg-[var(--surface-selected)] shadow-[inset_0_0_0_1px_var(--border-selected)]"
@@ -306,43 +310,48 @@ function DeviceTile({
             aria-hidden
           />
 
-          {image ? (
-            <span
-              className={cn(
-                "relative z-10 shrink-0 overflow-hidden rounded-[var(--radius-xs)] border border-[var(--border-subtle)] bg-black/20",
-                heightU > 1 ? "h-[calc(100%-8px)] w-16" : "size-6",
-              )}
-            >
-              <img
-                src={image.dataUrl}
-                alt={t("{hostname} reference", { hostname: device.hostname })}
-                className="h-full w-full object-cover"
-                loading="lazy"
+          {heightU > 1 &&
+            (image ? (
+              <span className="relative z-10 h-[calc(100%-8px)] w-16 shrink-0 overflow-hidden rounded-[var(--radius-xs)] border border-[var(--border-subtle)] bg-black/20">
+                <img
+                  src={image.dataUrl}
+                  alt={t("{hostname} reference", {
+                    hostname: device.hostname,
+                  })}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </span>
+            ) : (
+              <DeviceTypeIcon
+                type={device.deviceType}
+                className="relative z-10 size-4 shrink-0 text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text-primary)]"
               />
-            </span>
-          ) : (
-            <DeviceTypeIcon
-              type={device.deviceType}
-              className="relative z-10 size-4 shrink-0 text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text-primary)]"
-            />
-          )}
+            ))}
 
-          <div className="relative z-10 min-w-0 flex flex-1 flex-col leading-tight">
+          <div
+            className={cn(
+              "relative z-10 min-w-0 flex-1 leading-tight",
+              heightU > 1 ? "flex flex-col" : "flex items-center",
+            )}
+          >
             <span className="truncate text-[13px] font-semibold tracking-normal text-[var(--text-primary)]">
               {device.hostname}
             </span>
-            <span className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-              {childDevices.length > 0
-                ? t("{length} devices on shelf", {
-                    length: childDevices.length,
-                  })
-                : [device.manufacturer, device.model]
-                    .filter(Boolean)
-                    .join(" ") || device.deviceType.replace("_", " ")}
-            </span>
+            {heightU > 1 && (
+              <span className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
+                {childDevices.length > 0
+                  ? t("{length} devices on shelf", {
+                      length: childDevices.length,
+                    })
+                  : [device.manufacturer, device.model]
+                      .filter(Boolean)
+                      .join(" ") || device.deviceType.replace("_", " ")}
+              </span>
+            )}
           </div>
 
-          {childDevices.length > 0 && (
+          {heightU > 1 && childDevices.length > 0 && (
             <span className="relative z-10 flex max-w-[9rem] shrink-0 gap-1 overflow-hidden">
               {childDevices.slice(0, 5).map((child) => (
                 <span
@@ -361,18 +370,20 @@ function DeviceTile({
             </span>
           )}
 
-          <span className="relative z-10 shrink-0 rounded-[999px] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.04)] px-1.5 py-0.5 font-mono text-[10px] uppercase text-[var(--text-muted)]">
-            {t("U")}
-            {device.startU}
-            {heightU > 1
-              ? t("-{value1}", { value1: (device.startU ?? 0) + heightU - 1 })
-              : ""}
-            {(device.rackSlot ?? "full") !== "full"
-              ? t("{value1}", {
-                  value1: device.rackSlot === "left" ? "L" : "R",
-                })
-              : ""}
-          </span>
+          {heightU > 1 && (
+            <span className="relative z-10 shrink-0 rounded-[999px] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.04)] px-1.5 py-0.5 font-mono text-[10px] uppercase text-[var(--text-muted)]">
+              {t("U")}
+              {device.startU}
+              {t("-{value1}", {
+                value1: (device.startU ?? 0) + heightU - 1,
+              })}
+              {(device.rackSlot ?? "full") !== "full"
+                ? t("{value1}", {
+                    value1: device.rackSlot === "left" ? "L" : "R",
+                  })
+                : ""}
+            </span>
+          )}
 
           <span className="relative z-10">
             <StatusDot status={device.status} />
