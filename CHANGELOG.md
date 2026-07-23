@@ -8,6 +8,20 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.2-beta.1] - 2026-07-24
+
+### Fixed
+
+- Made table-scroll browser coverage deterministic across runner data volume
+  and font metrics by forcing both overflow axes inside the test before
+  verifying the scroll container.
+
+### Test notes
+
+- Re-ran the complete release validation and responsive/accessibility browser
+  matrix after the hosted beta.0 test exposed the font-metric-dependent
+  assertion.
+
 ## [1.7.2-beta.0] - 2026-07-23
 
 ### Added

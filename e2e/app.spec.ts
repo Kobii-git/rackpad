@@ -333,10 +333,20 @@ test("UI regression surfaces remain reachable and unclipped", async ({
     expect(
       await shell.evaluate((element) => getComputedStyle(element).overflowX),
     ).toBe("auto");
-    const scrollState = await shell.evaluate((element) => ({
-      horizontal: element.scrollWidth > element.clientWidth + 1,
-      vertical: element.scrollHeight > element.clientHeight + 1,
-    }));
+    const scrollState = await shell.evaluate((element) => {
+      // Data volume and font metrics can let a table fit exactly on some
+      // runners. Add a test-only probe so this verifies both scroll axes
+      // without requiring production content to overflow when it already fits.
+      const probe = document.createElement("div");
+      probe.setAttribute("aria-hidden", "true");
+      probe.style.width = `${element.clientWidth + 64}px`;
+      probe.style.height = `${element.clientHeight + 64}px`;
+      element.append(probe);
+      return {
+        horizontal: element.scrollWidth > element.clientWidth + 1,
+        vertical: element.scrollHeight > element.clientHeight + 1,
+      };
+    });
     expect(scrollState.horizontal, `${route} had no horizontal overflow`).toBe(
       true,
     );
