@@ -35,7 +35,8 @@ See the [changelog](./CHANGELOG.md) for what landed in each release.
 
 ## Quick links
 
-If `rackpad.co.za` is unavailable, the repo still contains the core material you need:
+Rackpad's public website is [rackpad.net](https://rackpad.net). The repo also
+contains the core material you need:
 
 - [Installation guide](./INSTALL.md)
 - [Proxmox install notes](./docs/PROXMOX.md)

@@ -8,6 +8,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.2-beta.0] - 2026-07-23
+
 ### Added
 
 - Rebuilt the opt-in demo bootstrap as one server-owned, referentially valid
@@ -34,6 +36,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   disabled examples from running or affecting monitoring rollups.
 - Refreshed supported runtime and development dependencies within their
   existing major versions while retaining Node 22 and TypeScript 6.
+- Updated repository website references to
+  [rackpad.net](https://rackpad.net).
 
 ### Fixed
 
@@ -80,6 +84,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Hardened protected product-name validation against Unicode combining-mark,
   connector, and join-control mutations for Discord, Telegram, Proxmox, and
   Hyper-V.
+- Cleared newly published high-severity dependency advisories by using patched
+  `shell-quote`, `fast-uri`, and `find-my-way` releases.
 
 ### Test notes
 
@@ -1784,7 +1790,7 @@ work into the main release.
 
 ### Added
 
-- A standalone IIS-friendly Rackpad website and legal/support pack for `rackpad.co.za`, prepared outside the application repository for separate hosting.
+- A standalone IIS-friendly Rackpad website and legal/support pack for `rackpad.net`, prepared outside the application repository for separate hosting.
 - Root project governance files: `LICENSE`, `NOTICE.md`, `SECURITY.md`, and `SUPPORT.md`.
 - A richer compute bridge workflow so virtualization hosts can model `external`, `internal`, and `private` virtual switches directly from the Compute workspace.
 
