@@ -99,6 +99,7 @@ export default function MonitoringView() {
   const [bulkMonitorName, setBulkMonitorName] = useState("");
   const [bulkMonitorPort, setBulkMonitorPort] = useState("");
   const [bulkMonitorPath, setBulkMonitorPath] = useState("/");
+  const [bulkIgnoreTlsErrors, setBulkIgnoreTlsErrors] = useState(false);
   const [bulkRunFirstCheck, setBulkRunFirstCheck] = useState(false);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<Set<string>>(
     () => new Set(),
@@ -400,6 +401,8 @@ export default function MonitoringView() {
           target: device.managementIp,
           port: bulkMonitorType === "icmp" ? undefined : parsedPort,
           path: monitorPath,
+          ignoreTlsErrors:
+            bulkMonitorType === "https" && bulkIgnoreTlsErrors,
           enabled: true,
         };
         const monitor = existing
@@ -723,7 +726,7 @@ export default function MonitoringView() {
         </div>
 
         {canManageMonitoring && (
-          <Card>
+          <Card data-testid="bulk-monitoring-panel">
             <CardBody className="space-y-3 p-3">
               <button
                 type="button"
@@ -819,6 +822,28 @@ export default function MonitoringView() {
                       {t("Run first check")}
                     </label>
                   </div>
+                  {bulkMonitorType === "https" && (
+                    <label className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-[var(--color-warn)]/35 bg-[var(--color-warn)]/8 px-3 py-2 text-xs text-[var(--text-secondary)]">
+                      <input
+                        type="checkbox"
+                        checked={bulkIgnoreTlsErrors}
+                        onChange={(event) =>
+                          setBulkIgnoreTlsErrors(event.target.checked)
+                        }
+                        className="mt-0.5 accent-[var(--color-warn)]"
+                      />
+                      <span>
+                        <span className="block font-medium text-[var(--text-primary)]">
+                          {t("Ignore TLS certificate errors")}
+                        </span>
+                        <span>
+                          {t(
+                            "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.",
+                          )}
+                        </span>
+                      </span>
+                    </label>
+                  )}
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     <Button
                       variant="outline"
@@ -1132,6 +1157,11 @@ function DeviceMonitorCard({
                   </span>{" "}
                   <Mono>{formatMonitorTarget(monitor)}</Mono>
                 </div>
+                {monitor.type === "https" && monitor.ignoreTlsErrors && (
+                  <div>
+                    <Badge tone="warn">{t("TLS verification off")}</Badge>
+                  </div>
+                )}
                 <div>
                   <span className="text-[var(--text-muted)]">
                     {t("Last check")}:
@@ -1192,6 +1222,9 @@ function DeviceMonitorRow({
     (monitor) => monitor.lastResult === "unknown" || !monitor.lastResult,
   ).length;
   const disabledCount = configuredMonitors.length - monitors.length;
+  const insecureTlsCount = configuredMonitors.filter(
+    (monitor) => monitor.type === "https" && monitor.ignoreTlsErrors,
+  ).length;
   const targetSummary = configuredMonitors
     .slice(0, 3)
     .map((monitor) =>
@@ -1255,6 +1288,9 @@ function DeviceMonitorRow({
           <Badge tone="neutral">
             {disabledCount} {t("Disabled")}
           </Badge>
+        )}
+        {insecureTlsCount > 0 && (
+          <Badge tone="warn">{t("TLS verification off")}</Badge>
         )}
         {latestCheckAt && (
           <span className="text-[11px] text-[var(--text-tertiary)]">

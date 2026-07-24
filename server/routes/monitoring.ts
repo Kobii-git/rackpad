@@ -242,6 +242,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     const target = targetInput == null ? targetInput : ensureHostTarget(targetInput, 'target')
     const path = optionalString(body, 'path', { maxLength: 200 })
     const port = optionalInteger(body, 'port', { min: 1, max: 65535 })
+    const ignoreTlsErrors = optionalBoolean(body, 'ignoreTlsErrors') ?? false
     const snmpVersionInput = optionalEnum(body, 'snmpVersion', SNMP_VERSIONS)
     const snmpCommunityInput = optionalString(body, 'snmpCommunity', { maxLength: 120 })
     const snmpOid = optionalString(body, 'snmpOid', { maxLength: 160 })
@@ -291,6 +292,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
         target,
         port,
         path,
+        ignoreTlsErrors,
         snmpVersion,
         snmpCommunity,
         snmpOid,
@@ -306,7 +308,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
         lastResult,
         lastMessage
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
     `).run(
       id,
       deviceId,
@@ -315,6 +317,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
       normalizedTarget,
       type === 'snmp' ? port ?? 161 : port ?? null,
       type === 'snmp' ? null : path ?? null,
+      type === 'https' && ignoreTlsErrors ? 1 : 0,
       type === 'snmp' ? snmpVersion : null,
       type === 'snmp' ? snmpCommunity : null,
       type === 'snmp' ? snmpOid : null,
@@ -349,6 +352,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     const target = targetInput == null ? targetInput : ensureHostTarget(targetInput, 'target')
     const path = optionalString(body, 'path', { maxLength: 200 })
     const port = optionalInteger(body, 'port', { min: 1, max: 65535 })
+    const ignoreTlsErrors = optionalBoolean(body, 'ignoreTlsErrors')
     const snmpVersion = optionalEnum(body, 'snmpVersion', SNMP_VERSIONS)
     const snmpCommunity = optionalString(body, 'snmpCommunity', { maxLength: 120 })
     const snmpOid = optionalString(body, 'snmpOid', { maxLength: 160 })
@@ -369,6 +373,11 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
         ? (current.path == null ? null : String(current.path))
         : path
     const nextPort = port === undefined ? (current.port == null ? null : Number(current.port)) : port
+    const nextIgnoreTlsErrors = nextType === 'https'
+      ? ignoreTlsErrors === undefined
+        ? Number(current.ignoreTlsErrors ?? 0) === 1
+        : Boolean(ignoreTlsErrors)
+      : false
     const nextSnmpVersion = nextType === 'snmp'
       ? snmpVersion === undefined
         ? (current.snmpVersion ? String(current.snmpVersion) as (typeof SNMP_VERSIONS)[number] : '2c')
@@ -446,6 +455,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
         target = ?,
         port = ?,
         path = ?,
+        ignoreTlsErrors = ?,
         snmpVersion = ?,
         snmpCommunity = ?,
         snmpOid = ?,
@@ -463,6 +473,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
       nextTarget,
       nextType === 'snmp' ? nextPort ?? 161 : nextPort ?? null,
       nextPath ?? null,
+      nextIgnoreTlsErrors ? 1 : 0,
       nextSnmpVersion,
       nextSnmpCommunity,
       nextSnmpOid,

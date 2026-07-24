@@ -259,6 +259,7 @@ export type MonitorPatch = Nullable<
     | "target"
     | "port"
     | "path"
+    | "ignoreTlsErrors"
     | "snmpVersion"
     | "snmpCommunity"
     | "snmpOid"

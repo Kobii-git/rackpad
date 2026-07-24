@@ -31,6 +31,10 @@ const { parseIeeeOuiText } = await import("../lib/oui.js");
 const { cidrOverlaps, ipToInt } = await import("../lib/ip-cidr.js");
 const { resolveSnmpSessionForTarget } = await import("../lib/snmp-session.js");
 const {
+  setNetworkHostLookupForTests,
+  setPinnedRequestTransportForTests,
+} = await import("../lib/net-guard.js");
+const {
   expandDiscoveryCidrs,
   expandDiscoveryScanChunks,
   parseArpScanOutput,
@@ -54,6 +58,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   resetDiscoveryScanJobsForTests();
+  setNetworkHostLookupForTests(null);
+  setPinnedRequestTransportForTests(null);
   await app.close();
 });
 
@@ -1443,6 +1449,40 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
   });
   assert.equal(scheduleRes.statusCode, 201);
 
+  const monitorDeviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      hostname: "backup-tls-monitor",
+      deviceType: "server",
+      status: "unknown",
+    },
+  });
+  assert.equal(monitorDeviceRes.statusCode, 201);
+  const monitorDevice = readJson(monitorDeviceRes) as { id: string };
+
+  const monitorRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      deviceId: monitorDevice.id,
+      name: "Self-signed backup target",
+      type: "https",
+      target: "self-signed-backup.example",
+      ignoreTlsErrors: true,
+      enabled: false,
+    },
+  });
+  assert.equal(monitorRes.statusCode, 200);
+  const monitor = readJson(monitorRes) as { id: string };
+
   const exportRes = await app.inject({
     method: "GET",
     url: "/api/admin/export",
@@ -1464,6 +1504,10 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
         intervalMs: number;
         enabled: number | boolean;
       }>;
+      deviceMonitors: Array<{
+        id: string;
+        ignoreTlsErrors?: number | boolean;
+      }>;
     };
   };
   const exportedSubnet = snapshot.data.subnets.find(
@@ -1476,6 +1520,10 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
   );
   assert.equal(exportedSchedule?.name, "Restore scan");
   assert.equal(exportedSchedule?.intervalMs, 600_000);
+  const exportedMonitor = snapshot.data.deviceMonitors.find(
+    (entry) => entry.id === monitor.id,
+  );
+  assert.equal(exportedMonitor?.ignoreTlsErrors, 1);
 
   const postExportRackRes = await app.inject({
     method: "POST",
@@ -1598,6 +1646,10 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
     ),
     true,
   );
+  const restoredMonitor = db
+    .prepare("SELECT ignoreTlsErrors FROM deviceMonitors WHERE id = ?")
+    .get(monitor.id) as { ignoreTlsErrors: number };
+  assert.equal(restoredMonitor.ignoreTlsErrors, 1);
 });
 
 test("admin restore rejects overlapping subnets without changing current data", async () => {
@@ -1807,7 +1859,7 @@ test("admin restore rejects invalid IPAM children atomically with structured det
   }
 });
 
-test("admin restore accepts older backups without subnet, rack-slot, or Docker enabled fields", async () => {
+test("admin restore accepts older backups without subnet, rack-slot, Docker enabled, or monitor TLS fields", async () => {
   const adminToken = await bootstrapAdmin();
 
   const rackRes = await app.inject({
@@ -1937,11 +1989,14 @@ test("admin restore accepts older backups without subnet, rack-slot, or Docker e
         delete legacySource.enabled;
         return legacySource;
       }),
-      deviceMonitors: snapshot.data.deviceMonitors.map((monitor) =>
-        monitor.id === documentationMonitor.id
-          ? { ...monitor, enabled: 1 }
-          : monitor,
-      ),
+      deviceMonitors: snapshot.data.deviceMonitors.map((monitor) => {
+        const legacyMonitor = { ...monitor };
+        delete legacyMonitor.ignoreTlsErrors;
+        if (legacyMonitor.id === documentationMonitor.id) {
+          legacyMonitor.enabled = 1;
+        }
+        return legacyMonitor;
+      }),
     },
   };
 
@@ -2009,9 +2064,13 @@ test("admin restore accepts older backups without subnet, rack-slot, or Docker e
     .get("docker_legacy_enabled_default") as { enabled: number };
   assert.equal(restoredDockerSource.enabled, 1);
   const restoredDocumentationMonitor = db
-    .prepare("SELECT enabled FROM deviceMonitors WHERE id = ?")
-    .get(documentationMonitor.id) as { enabled: number };
+    .prepare("SELECT enabled, ignoreTlsErrors FROM deviceMonitors WHERE id = ?")
+    .get(documentationMonitor.id) as {
+    enabled: number;
+    ignoreTlsErrors: number;
+  };
   assert.equal(restoredDocumentationMonitor.enabled, 0);
+  assert.equal(restoredDocumentationMonitor.ignoreTlsErrors, 0);
 });
 
 test("admin restore preserves parent-linked devices even when children sort before their host", async () => {
@@ -3789,6 +3848,111 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   assert.equal(result.type, "tcp");
   assert.ok(result.lastCheckAt);
   assert.ok(result.lastResult === "online" || result.lastResult === "offline");
+});
+
+test("HTTPS monitors keep certificate verification secure by default and can opt out per target", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers,
+    payload: {
+      labId: "lab_home",
+      hostname: "tls-monitor-01",
+      deviceType: "server",
+      status: "unknown",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const secureRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "Verified HTTPS",
+      type: "https",
+      target: "secure-monitor.example",
+      path: "/health",
+      enabled: true,
+    },
+  });
+  assert.equal(secureRes.statusCode, 200);
+  const secureMonitor = readJson(secureRes) as {
+    id: string;
+    ignoreTlsErrors: boolean;
+  };
+  assert.equal(secureMonitor.ignoreTlsErrors, false);
+
+  const insecureRes = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "Self-signed HTTPS",
+      type: "https",
+      target: "self-signed-monitor.example",
+      path: "/health",
+      ignoreTlsErrors: true,
+      enabled: true,
+    },
+  });
+  assert.equal(insecureRes.statusCode, 200);
+  const insecureMonitor = readJson(insecureRes) as {
+    id: string;
+    ignoreTlsErrors: boolean;
+  };
+  assert.equal(insecureMonitor.ignoreTlsErrors, true);
+  assert.equal(
+    (
+      db
+        .prepare("SELECT ignoreTlsErrors FROM deviceMonitors WHERE id = ?")
+        .get(insecureMonitor.id) as { ignoreTlsErrors: number }
+    ).ignoreTlsErrors,
+    1,
+  );
+
+  const certificateChecks: boolean[] = [];
+  setNetworkHostLookupForTests(async () => [
+    { address: "10.20.30.40", family: 4 },
+  ]);
+  setPinnedRequestTransportForTests(async (_url, _resolved, options) => {
+    certificateChecks.push(options.rejectUnauthorized);
+    return { statusCode: 204 };
+  });
+
+  for (const monitorId of [secureMonitor.id, insecureMonitor.id]) {
+    const runRes = await app.inject({
+      method: "POST",
+      url: `/api/device-monitors/${monitorId}/run`,
+      headers,
+    });
+    assert.equal(runRes.statusCode, 200);
+    assert.equal(
+      (readJson(runRes) as { lastResult: string }).lastResult,
+      "online",
+    );
+  }
+  assert.deepEqual(certificateChecks, [true, false]);
+
+  const clearRes = await app.inject({
+    method: "PATCH",
+    url: `/api/device-monitors/${insecureMonitor.id}`,
+    headers,
+    payload: {
+      type: "http",
+    },
+  });
+  assert.equal(clearRes.statusCode, 200);
+  assert.equal(
+    (readJson(clearRes) as { ignoreTlsErrors: boolean }).ignoreTlsErrors,
+    false,
+  );
 });
 
 test("inline SNMPv3 sessions never fall back to v2c public", () => {
@@ -7431,7 +7595,7 @@ interfaces:
   assert.equal(imported.ports[0]?.name, "eth0");
 });
 
-test("Docker source migration enables existing rows by default", async () => {
+test("Docker and monitor TLS migrations default existing rows safely", async () => {
   const legacyPath = path.join(tempDir, "docker-source-v31.db");
   const { default: Database } = await import("better-sqlite3");
   const initializeDatabase = () =>
@@ -7496,6 +7660,7 @@ test("Docker source migration enables existing rows by default", async () => {
     ALTER TABLE dockerImportSourcesV31 RENAME TO dockerImportSources;
     CREATE INDEX idx_docker_import_sources_lab_id
       ON dockerImportSources (labId);
+    ALTER TABLE deviceMonitors DROP COLUMN ignoreTlsErrors;
     UPDATE schemaVersion
     SET version = 31, updatedAt = '2026-07-20T00:00:00.000Z'
     WHERE id = 1;
@@ -7511,8 +7676,15 @@ test("Docker source migration enables existing rows by default", async () => {
   const version = migrated
     .prepare("SELECT version FROM schemaVersion WHERE id = 1")
     .get() as { version: number };
+  const tlsColumn = (
+    migrated.prepare("PRAGMA table_info(deviceMonitors)").all() as Array<{
+      name: string;
+      dflt_value: string | null;
+    }>
+  ).find((column) => column.name === "ignoreTlsErrors");
   assert.equal(source.enabled, 1);
-  assert.equal(version.version, 32);
+  assert.equal(tlsColumn?.dflt_value, "0");
+  assert.equal(version.version, 33);
   migrated.close();
 });
 

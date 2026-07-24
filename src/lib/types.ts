@@ -530,6 +530,7 @@ export interface DeviceMonitor {
   target?: string | null;
   port?: number | null;
   path?: string | null;
+  ignoreTlsErrors: boolean;
   snmpVersion?: "1" | "2c" | "3" | null;
   snmpCommunity?: string | null;
   snmpOid?: string | null;

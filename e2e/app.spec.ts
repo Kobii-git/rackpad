@@ -635,6 +635,193 @@ test("UI regression surfaces remain reachable and unclipped", async ({
   ).toBeTruthy();
 });
 
+test("duplicate device MACs can be grouped and filtered without blocking inventory", async ({
+  page,
+  request,
+}) => {
+  await authenticate(page);
+  const headers = { authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(16).slice(-6);
+  const duplicateMac = `02:aa:bb:${suffix.slice(0, 2)}:${suffix.slice(2, 4)}:${suffix.slice(4, 6)}`;
+  const deviceNames = [
+    `duplicate-mac-a-${suffix}`,
+    `duplicate-mac-b-${suffix}`,
+    `unique-mac-${suffix}`,
+  ];
+  const createdDeviceIds: string[] = [];
+
+  try {
+    for (const [index, hostname] of deviceNames.entries()) {
+      const response = await request.post("/api/devices", {
+        headers,
+        data: {
+          labId: "lab_home",
+          hostname,
+          deviceType: "endpoint",
+          managementIp: `10.254.10.${index + 10}`,
+          macAddress:
+            index < 2
+              ? index === 0
+                ? duplicateMac
+                : duplicateMac.replaceAll(":", "-").toUpperCase()
+              : `02:ff:ee:${suffix.slice(0, 2)}:${suffix.slice(2, 4)}:${suffix.slice(4, 6)}`,
+          status: "unknown",
+        },
+      });
+      expect(response.status()).toBe(201);
+      createdDeviceIds.push(((await response.json()) as { id: string }).id);
+    }
+
+    await page.goto("/devices");
+    await page
+      .getByRole("button", { name: /Duplicate MACs/ })
+      .click();
+    await expect(page).toHaveURL(/mac=duplicates/);
+
+    const summary = page.getByTestId("duplicate-mac-summary");
+    await expect(summary).toBeVisible();
+    const group = summary
+      .getByTestId("duplicate-mac-group")
+      .filter({ hasText: duplicateMac });
+    await expect(group).toContainText(deviceNames[0]);
+    await expect(group).toContainText(deviceNames[1]);
+    await expect(group).toContainText("10.254.10.10");
+    await expect(group).toContainText("10.254.10.11");
+
+    const table = page.locator("table");
+    await expect(
+      table.getByRole("link", { name: deviceNames[0], exact: true }),
+    ).toBeVisible();
+    await expect(
+      table.getByRole("link", { name: deviceNames[1], exact: true }),
+    ).toBeVisible();
+    await expect(
+      table.getByRole("link", { name: deviceNames[2], exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      table.locator('tr[data-duplicate-mac="true"]').filter({
+        hasText: deviceNames[0],
+      }),
+    ).toContainText("Duplicate");
+  } finally {
+    for (const deviceId of createdDeviceIds.reverse()) {
+      await request.delete(`/api/devices/${deviceId}`, { headers });
+    }
+  }
+});
+
+test("HTTPS certificate bypass is explicit in individual and bulk monitor setup", async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(90_000);
+  await authenticate(page);
+  const headers = { authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(16).slice(-6);
+  let deviceId = "";
+
+  try {
+    const deviceRes = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        hostname: `tls-monitor-${suffix}`,
+        deviceType: "server",
+        managementIp: "10.254.20.20",
+        status: "unknown",
+      },
+    });
+    expect(deviceRes.status()).toBe(201);
+    deviceId = ((await deviceRes.json()) as { id: string }).id;
+
+    const monitorRes = await request.post("/api/device-monitors", {
+      headers,
+      data: {
+        deviceId,
+        name: "Self-signed UI",
+        type: "https",
+        target: "10.254.20.20",
+        port: 8443,
+        path: "/health",
+        enabled: false,
+      },
+    });
+    expect(monitorRes.status()).toBe(200);
+    const monitor = (await monitorRes.json()) as { id: string };
+
+    await page.goto(`/devices/${deviceId}`);
+    await page.getByRole("tab", { name: "Monitoring" }).click();
+    await page
+      .locator(
+        `[data-testid="device-monitor-target"][data-monitor-id="${monitor.id}"]`,
+      )
+      .click();
+    const editor = page.getByTestId("device-monitor-editor");
+    const tlsToggle = editor.getByRole("checkbox", {
+      name: /Ignore TLS certificate errors/,
+    });
+    await expect(tlsToggle).toBeVisible();
+    await expect(tlsToggle).not.toBeChecked();
+    await tlsToggle.check();
+
+    const updateRequest = page.waitForRequest(
+      (candidate) =>
+        candidate.method() === "PATCH" &&
+        candidate.url().endsWith(`/api/device-monitors/${monitor.id}`),
+    );
+    await page.getByRole("button", { name: "Save target" }).click();
+    expect((await updateRequest).postDataJSON()).toMatchObject({
+      type: "https",
+      ignoreTlsErrors: true,
+    });
+    await expect(
+      page
+        .locator(
+          `[data-testid="device-monitor-target"][data-monitor-id="${monitor.id}"]`,
+        )
+        .getByText("TLS verification off"),
+    ).toBeVisible();
+
+    await page.goto("/monitoring");
+    const deviceCard = page.locator(
+      `[data-testid="device-monitor-card"][data-device-id="${deviceId}"]`,
+    );
+    await expect(deviceCard.getByText("TLS verification off")).toBeVisible();
+    await deviceCard
+      .getByRole("checkbox", { name: `Select tls-monitor-${suffix}` })
+      .check();
+
+    const bulkPanel = page.getByTestId("bulk-monitoring-panel");
+    await bulkPanel.getByRole("button").first().click();
+    await bulkPanel.getByLabel("Type").selectOption("https");
+    await bulkPanel.getByLabel("Port").fill("9443");
+    await bulkPanel.getByLabel("Path").fill("/bulk-health");
+    await bulkPanel
+      .getByRole("checkbox", { name: /Ignore TLS certificate errors/ })
+      .check();
+
+    const createRequest = page.waitForRequest(
+      (candidate) =>
+        candidate.method() === "POST" &&
+        candidate.url().endsWith("/api/device-monitors"),
+    );
+    await bulkPanel
+      .getByRole("button", { name: "Add / enable target" })
+      .click();
+    expect((await createRequest).postDataJSON()).toMatchObject({
+      deviceId,
+      type: "https",
+      port: 9443,
+      path: "/bulk-health",
+      ignoreTlsErrors: true,
+    });
+  } finally {
+    if (deviceId) {
+      await request.delete(`/api/devices/${deviceId}`, { headers });
+    }
+  }
+});
+
 test("legacy enabled none monitors stay effectively disabled", async ({
   page,
 }) => {

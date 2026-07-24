@@ -950,6 +950,7 @@ const restoreBackupSnapshot = db.transaction(
       target,
       port,
       path,
+      ignoreTlsErrors,
       snmpVersion,
       snmpCommunity,
       snmpOid,
@@ -966,7 +967,7 @@ const restoreBackupSnapshot = db.transaction(
       lastResult,
       lastMessage
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertSnmpCredential = db.prepare(`
     INSERT INTO snmpCredentials (
@@ -1445,6 +1446,7 @@ const restoreBackupSnapshot = db.transaction(
         row.target ?? null,
         row.port ?? null,
         row.path ?? null,
+        Number(row.ignoreTlsErrors ?? 0) === 1 ? 1 : 0,
         row.snmpVersion ?? null,
         row.snmpCommunity ?? null,
         row.snmpOid ?? null,

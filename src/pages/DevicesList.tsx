@@ -25,7 +25,15 @@ import type {
   Rack,
   Room,
 } from "@/lib/types";
-import { ChevronRight, Filter, Plus, Save, Trash2, X } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronRight,
+  Filter,
+  Plus,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 import { statusLabel } from "@/lib/utils";
 import { deviceTypeLabel } from "@/lib/device-types";
 import {
@@ -111,7 +119,9 @@ export default function DevicesList() {
   const [bulkError, setBulkError] = useState("");
   const typeParam = searchParams.get("type");
   const placementParam = searchParams.get("placement");
+  const macParam = searchParams.get("mac");
   const showUnplacedOnly = placementParam === "unplaced";
+  const showDuplicateMacs = macParam === "duplicates";
 
   useEffect(() => {
     if (typeParam && typeParam !== type) {
@@ -159,11 +169,43 @@ export default function DevicesList() {
     }, {});
   }, [ports]);
 
+  const duplicateMacGroups = useMemo(() => {
+    const groups = new Map<string, Device[]>();
+    for (const device of devices) {
+      const macAddress = canonicalMacAddress(device.macAddress);
+      if (!macAddress) continue;
+      const entries = groups.get(macAddress) ?? [];
+      entries.push(device);
+      groups.set(macAddress, entries);
+    }
+    return [...groups.entries()]
+      .filter(([, entries]) => entries.length > 1)
+      .map(([macAddress, entries]) => ({
+        macAddress,
+        devices: [...entries].sort((a, b) =>
+          a.hostname.localeCompare(b.hostname),
+        ),
+      }))
+      .sort((a, b) => a.macAddress.localeCompare(b.macAddress));
+  }, [devices]);
+
+  const duplicateMacDeviceIds = useMemo(
+    () =>
+      new Set(
+        duplicateMacGroups.flatMap((group) =>
+          group.devices.map((device) => device.id),
+        ),
+      ),
+    [duplicateMacGroups],
+  );
+
   const filtered = useMemo(() => {
     return devices
       .filter((device) => {
         if (type && device.deviceType !== type) return false;
         if (showUnplacedOnly && !isUnplacedDevice(device)) return false;
+        if (showDuplicateMacs && !duplicateMacDeviceIds.has(device.id))
+          return false;
         if (!query) return true;
         const haystack = [
           device.hostname,
@@ -194,12 +236,14 @@ export default function DevicesList() {
   }, [
     deviceById,
     devices,
+    duplicateMacDeviceIds,
     portsByDeviceId,
     query,
     rackById,
     roomById,
     sort,
     showUnplacedOnly,
+    showDuplicateMacs,
     type,
   ]);
   const selectedDeviceCount = selectedDeviceIds.size;
@@ -416,6 +460,16 @@ export default function DevicesList() {
     setSearchParams(nextParams);
   }
 
+  function setDuplicateMacFilter(duplicatesOnly: boolean) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (duplicatesOnly) {
+      nextParams.set("mac", "duplicates");
+    } else {
+      nextParams.delete("mac");
+    }
+    setSearchParams(nextParams);
+  }
+
   const typeCounts = useMemo(() => {
     return devices.reduce<Record<string, number>>((acc, device) => {
       acc[device.deviceType] = (acc[device.deviceType] ?? 0) + 1;
@@ -471,6 +525,19 @@ export default function DevicesList() {
               {devices.filter(isUnplacedDevice).length}
             </Mono>
           </button>
+          <button
+            onClick={() => setDuplicateMacFilter(!showDuplicateMacs)}
+            className="rk-filter-pill"
+            data-active={showDuplicateMacs}
+          >
+            <AlertTriangle className="size-3" />
+            <span className="font-mono text-[10px] uppercase tracking-wider">
+              {t("Duplicate MACs")}
+            </span>
+            <Mono className="text-[10px]">
+              {duplicateMacDeviceIds.size}
+            </Mono>
+          </button>
           {deviceTypes.map((entry) => {
             const count = typeCounts[entry.id] ?? 0;
             if (count === 0) return null;
@@ -500,6 +567,77 @@ export default function DevicesList() {
             className="pl-7"
           />
         </div>
+
+        {showDuplicateMacs && (
+          <Card data-testid="duplicate-mac-summary">
+            <CardBody className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="rk-kicker">{t("Duplicate MAC addresses")}</div>
+                  <div className="mt-1 text-sm text-[var(--color-fg-subtle)]">
+                    {t(
+                      "{groups} duplicate group(s) across {devices} device(s).",
+                      {
+                        groups: duplicateMacGroups.length,
+                        devices: duplicateMacDeviceIds.size,
+                      },
+                    )}
+                  </div>
+                </div>
+                <Badge tone={duplicateMacGroups.length > 0 ? "warn" : "ok"}>
+                  {duplicateMacDeviceIds.size} {t("affected")}
+                </Badge>
+              </div>
+
+              {duplicateMacGroups.length === 0 ? (
+                <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] px-3 py-4 text-sm text-[var(--color-fg-subtle)]">
+                  {t("No duplicate device MAC addresses found.")}
+                </div>
+              ) : (
+                <div className="grid gap-2 xl:grid-cols-2">
+                  {duplicateMacGroups.map((group) => (
+                    <div
+                      key={group.macAddress}
+                      data-testid="duplicate-mac-group"
+                      className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/6 p-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <Mono className="text-xs text-[var(--color-fg)]">
+                          {group.macAddress}
+                        </Mono>
+                        <Badge tone="warn">
+                          {group.devices.length} {t("devices")}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 divide-y divide-[var(--color-line)]">
+                        {group.devices.map((device) => (
+                          <div
+                            key={device.id}
+                            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 text-xs"
+                          >
+                            <Link
+                              to={`/devices/${device.id}`}
+                              className="font-medium text-[var(--color-fg)] hover:text-[var(--color-accent)]"
+                            >
+                              {device.hostname}
+                            </Link>
+                            <div className="flex items-center gap-3 text-[var(--color-fg-subtle)]">
+                              <Mono>{device.managementIp ?? t("No IP")}</Mono>
+                              <span className="inline-flex items-center gap-1.5">
+                                <StatusDot status={device.status} />
+                                {statusLabel[device.status]}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        )}
 
         {canEdit && selectedDeviceCount > 0 && (
           <Card>
@@ -884,6 +1022,7 @@ export default function DevicesList() {
               </thead>
               <tbody>
                 {filtered.map((device) => {
+                  const hasDuplicateMac = duplicateMacDeviceIds.has(device.id);
                   const devicePorts = portsByDeviceId[device.id] ?? [];
                   const linked = devicePorts.filter(
                     (port) => port.linkState === "up",
@@ -901,7 +1040,11 @@ export default function DevicesList() {
                     <tr
                       key={device.id}
                       data-selected={selectedDeviceIds.has(device.id)}
-                      className="group"
+                      data-duplicate-mac={hasDuplicateMac || undefined}
+                      className={[
+                        "group",
+                        hasDuplicateMac ? "bg-[var(--color-warn)]/5" : "",
+                      ].join(" ")}
                     >
                       <Td className="w-px">
                         {canEdit && (
@@ -951,9 +1094,14 @@ export default function DevicesList() {
                         </Mono>
                       </Td>
                       <Td>
-                        <Mono className="text-[var(--color-fg)]">
-                          {device.macAddress ?? "-"}
-                        </Mono>
+                        <div className="flex items-center gap-2">
+                          <Mono className="text-[var(--color-fg)]">
+                            {device.macAddress ?? "-"}
+                          </Mono>
+                          {hasDuplicateMac && (
+                            <Badge tone="warn">{t("Duplicate")}</Badge>
+                          )}
+                        </div>
                       </Td>
                       <Td>
                         {device.placement === "virtual" ? (
@@ -1189,6 +1337,13 @@ function compareDevices(
 
 function deviceModelSortValue(device: Device) {
   return [device.manufacturer, device.model].filter(Boolean).join(" ");
+}
+
+function canonicalMacAddress(value?: string | null) {
+  if (!value) return null;
+  const compact = value.trim().replace(/[:.\-\s]/g, "").toLowerCase();
+  if (!/^[0-9a-f]{12}$/.test(compact)) return null;
+  return compact.match(/.{2}/g)?.join(":") ?? null;
 }
 
 function devicePlacementSortValue(

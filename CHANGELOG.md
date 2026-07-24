@@ -8,6 +8,45 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.2-beta.2] - 2026-07-24
+
+### Added
+
+- Added a **Duplicate MACs** Devices filter that groups canonical matching
+  device MAC addresses, highlights affected inventory rows, and links each
+  duplicate to its device detail page.
+- Added an explicit per-target **Ignore TLS certificate errors** option for
+  HTTPS monitoring, including individual and bulk setup plus warning badges
+  wherever insecure targets are shown.
+
+### Changed
+
+- Kept HTTPS certificate verification enabled by default and limited the
+  bypass to HTTPS targets, clearing it automatically when a monitor changes to
+  another type.
+- Localized the duplicate-MAC and TLS warning interface across every supported
+  language.
+
+### Fixed
+
+- Preserved the HTTPS certificate-bypass setting through backup export and
+  restore while defaulting older backups safely to certificate verification.
+- Carried the explicit certificate-verification policy across validated HTTP
+  redirects without weakening Rackpad's pinned-host and reserved-address
+  protections.
+
+### Test notes
+
+- On **Devices**, select **Duplicate MACs** and confirm equivalent colon,
+  hyphen, and case variants group together while unique devices are filtered
+  out.
+- On an HTTPS monitor, enable **Ignore TLS certificate errors**, save it, and
+  confirm the warning appears in Device detail and Monitoring views; verify
+  bulk HTTPS target creation offers the same explicit option.
+- Verified secure defaults, self-signed-target execution, redirect handling,
+  schema migration, backup round trips, legacy-backup defaults, all locales,
+  and the duplicate-MAC and TLS browser flows.
+
 ## [1.7.2-beta.1] - 2026-07-24
 
 ### Fixed

@@ -19,6 +19,7 @@ type PinnedRequestTransport = (
     headers: Record<string, string>;
     method: "GET" | "POST";
     body?: string;
+    rejectUnauthorized: boolean;
   },
 ) => Promise<PinnedRequestResult>;
 let pinnedRequestTransport: PinnedRequestTransport = performPinnedRequest;
@@ -100,6 +101,7 @@ export async function requestPinnedUrl(
     headers?: Record<string, string>;
     method?: "GET" | "POST";
     body?: string;
+    rejectUnauthorized?: boolean;
   } = {},
 ): Promise<{ statusCode: number; url: URL }> {
   const timeoutMs = options.timeoutMs ?? 5_000;
@@ -117,6 +119,7 @@ export async function requestPinnedUrl(
     headers: options.headers ?? {},
     method: options.method ?? "GET",
     body: options.body,
+    rejectUnauthorized: options.rejectUnauthorized ?? true,
   });
 
   if (status.statusCode >= 300 && status.statusCode < 400 && status.location) {
@@ -140,6 +143,7 @@ export function buildPinnedRequestOptions(
   resolved: LookupAddress,
   headers: Record<string, string> = {},
   method: "GET" | "POST" = "GET",
+  rejectUnauthorized = true,
 ): http.RequestOptions & https.RequestOptions {
   const requestOptions: http.RequestOptions & https.RequestOptions = {
     protocol: input.protocol,
@@ -157,6 +161,9 @@ export function buildPinnedRequestOptions(
   if (input.protocol === "https:" && net.isIP(input.hostname) === 0) {
     requestOptions.servername = input.hostname;
   }
+  if (input.protocol === "https:") {
+    requestOptions.rejectUnauthorized = rejectUnauthorized;
+  }
   return requestOptions;
 }
 
@@ -168,6 +175,7 @@ function performPinnedRequest(
     headers: Record<string, string>;
     method: "GET" | "POST";
     body?: string;
+    rejectUnauthorized: boolean;
   },
 ) {
   return new Promise<PinnedRequestResult>((resolve, reject) => {
@@ -176,6 +184,7 @@ function performPinnedRequest(
       resolved,
       options.headers,
       options.method,
+      options.rejectUnauthorized,
     );
     const request =
       input.protocol === "https:"

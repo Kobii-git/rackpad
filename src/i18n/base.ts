@@ -1822,6 +1822,16 @@ export const en = {
   "HTTPS checks fetch a secure URL from the Rackpad server and expect a successful response.": "HTTPS checks fetch a secure URL from the Rackpad server and expect a successful response.",
   "SNMP polls one OID from the Rackpad server. Use an expected value for interface checks, such as ifOperStatus = 1 for up.": "SNMP polls one OID from the Rackpad server. Use an expected value for interface checks, such as ifOperStatus = 1 for up.",
   "Choose a monitor type to enable automated health checks for this device.": "Choose a monitor type to enable automated health checks for this device.",
+  "Duplicate MACs": "Duplicate MACs",
+  "Duplicate MAC addresses": "Duplicate MAC addresses",
+  "{groups} duplicate group(s) across {devices} device(s).": "{groups} duplicate group(s) across {devices} device(s).",
+  "affected": "affected",
+  "No duplicate device MAC addresses found.": "No duplicate device MAC addresses found.",
+  "No IP": "No IP",
+  "Duplicate": "Duplicate",
+  "TLS verification off": "TLS verification off",
+  "Ignore TLS certificate errors": "Ignore TLS certificate errors",
+  "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

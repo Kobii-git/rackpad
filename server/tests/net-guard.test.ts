@@ -92,16 +92,30 @@ test("pinned HTTP requests preserve Host and TLS SNI", () => {
   assert.equal(options.port, 8443);
   assert.equal(options.path, "/health?full=1");
   assert.equal(options.servername, "monitor.example");
+  assert.equal(options.rejectUnauthorized, true);
   assert.deepEqual(options.headers, {
     Accept: "application/json",
     Host: "monitor.example:8443",
   });
 });
 
+test("pinned HTTPS requests can explicitly disable certificate verification", () => {
+  const options = buildPinnedRequestOptions(
+    new URL("https://monitor.example/health"),
+    { address: "10.20.30.40", family: 4 },
+    {},
+    "GET",
+    false,
+  );
+
+  assert.equal(options.rejectUnauthorized, false);
+});
+
 test("redirects are re-resolved and revalidated before connecting", async () => {
   const resolvedHosts: string[] = [];
   const requestedHosts: string[] = [];
   const methods: Array<{ method: string; body?: string }> = [];
+  const certificateChecks: boolean[] = [];
   setNetworkHostLookupForTests(async (host) => {
     resolvedHosts.push(host);
     return [{ address: "10.20.30.40", family: 4 }];
@@ -109,6 +123,7 @@ test("redirects are re-resolved and revalidated before connecting", async () => 
   setPinnedRequestTransportForTests(async (url, _resolved, options) => {
     requestedHosts.push(url.hostname);
     methods.push({ method: options.method, body: options.body });
+    certificateChecks.push(options.rejectUnauthorized);
     return url.hostname === "first.example"
       ? { statusCode: 302, location: "https://second.example/final" }
       : { statusCode: 204 };
@@ -120,6 +135,7 @@ test("redirects are re-resolved and revalidated before connecting", async () => 
       {
         method: "POST",
         body: "payload",
+        rejectUnauthorized: false,
       },
     );
     assert.equal(result.url.toString(), "https://second.example/final");
@@ -129,6 +145,7 @@ test("redirects are re-resolved and revalidated before connecting", async () => 
       { method: "POST", body: "payload" },
       { method: "GET", body: undefined },
     ]);
+    assert.deepEqual(certificateChecks, [false, false]);
   } finally {
     setPinnedRequestTransportForTests(null);
     setNetworkHostLookupForTests(null);

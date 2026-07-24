@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 32;
+const CURRENT_SCHEMA_VERSION = 33;
 
 export const db = new Database(DB_PATH);
 
@@ -934,6 +934,12 @@ const SCHEMA_MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS idx_docker_import_sources_enabled
         ON dockerImportSources (enabled, labId);
+    `,
+  },
+  {
+    version: 33,
+    sql: `
+      ALTER TABLE deviceMonitors ADD COLUMN ignoreTlsErrors INTEGER NOT NULL DEFAULT 0;
     `,
   },
 ] as const;

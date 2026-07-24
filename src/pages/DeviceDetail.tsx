@@ -100,6 +100,7 @@ type MonitorForm = {
   target: string;
   port: string;
   path: string;
+  ignoreTlsErrors: boolean;
   snmpVersion: NonNullable<DeviceMonitor["snmpVersion"]>;
   snmpCommunity: string;
   snmpOid: string;
@@ -152,6 +153,7 @@ const EMPTY_MONITOR_FORM: MonitorForm = {
   target: "",
   port: "",
   path: "",
+  ignoreTlsErrors: false,
   snmpVersion: "2c",
   snmpCommunity: "public",
   snmpOid: "",
@@ -1011,6 +1013,8 @@ export default function DeviceDetail() {
             ? Number.parseInt(monitorForm.port, 10)
             : null,
         path: usesPath ? monitorForm.path.trim() || null : null,
+        ignoreTlsErrors:
+          monitorForm.type === "https" && monitorForm.ignoreTlsErrors,
         snmpVersion: usesSnmp ? monitorForm.snmpVersion : null,
         snmpCommunity: usesSnmp
           ? monitorForm.snmpCommunity.trim() || null
@@ -2297,6 +2301,14 @@ export default function DeviceDetail() {
                               ? t(":{port}", { port: entry.port })
                               : ""}
                           </div>
+                          {entry.type === "https" &&
+                            entry.ignoreTlsErrors && (
+                              <div className="mt-2">
+                                <Badge tone="warn">
+                                  {t("TLS verification off")}
+                                </Badge>
+                              </div>
+                            )}
                           <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
                             {entry.lastMessage ?? t("No checks have run yet.")}
                           </div>
@@ -2466,6 +2478,33 @@ export default function DeviceDetail() {
                         </Field>
                       )}
                     </div>
+
+                    {monitorForm.type === "https" && (
+                      <label className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-[var(--color-warn)]/35 bg-[var(--color-warn)]/8 px-3 py-2 text-sm text-[var(--color-fg)]">
+                        <input
+                          type="checkbox"
+                          checked={monitorForm.ignoreTlsErrors}
+                          disabled={!canManageMonitoring}
+                          onChange={(event) =>
+                            setMonitorForm((prev) => ({
+                              ...prev,
+                              ignoreTlsErrors: event.target.checked,
+                            }))
+                          }
+                          className="mt-0.5 accent-[var(--color-warn)]"
+                        />
+                        <span>
+                          <span className="block font-medium">
+                            {t("Ignore TLS certificate errors")}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-[var(--color-fg-subtle)]">
+                            {t(
+                              "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.",
+                            )}
+                          </span>
+                        </span>
+                      </label>
+                    )}
 
                     {showMonitorSnmpFields && (
                       <div className="grid gap-4 md:grid-cols-2">
@@ -3441,6 +3480,7 @@ function buildNewMonitorForm(
     target: defaultTarget,
     port: "",
     path: "",
+    ignoreTlsErrors: false,
     snmpVersion: "2c",
     snmpCommunity: "public",
     snmpOid: "",
@@ -3461,6 +3501,7 @@ function monitorToForm(monitor: DeviceMonitor, device: Device): MonitorForm {
     target: monitor.target ?? device.managementIp ?? "",
     port: monitor.port != null ? String(monitor.port) : "",
     path: monitor.path ?? "",
+    ignoreTlsErrors: monitor.ignoreTlsErrors,
     snmpVersion:
       monitor.snmpVersion === "1" ||
       monitor.snmpVersion === "2c" ||

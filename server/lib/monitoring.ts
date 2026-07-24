@@ -27,6 +27,7 @@ export interface DeviceMonitor {
   target?: string | null
   port?: number | null
   path?: string | null
+  ignoreTlsErrors: boolean
   snmpVersion?: SnmpVersion | null
   snmpCommunity?: string | null
   snmpOid?: string | null
@@ -55,6 +56,7 @@ export function parseMonitor(row: Record<string, unknown>): DeviceMonitor {
     target: row.target ? String(row.target) : null,
     port: row.port == null ? null : Number(row.port),
     path: row.path ? String(row.path) : null,
+    ignoreTlsErrors: Number(row.ignoreTlsErrors ?? 0) === 1,
     snmpVersion: row.snmpVersion ? String(row.snmpVersion) as SnmpVersion : null,
     snmpCommunity: row.snmpCommunity ? String(row.snmpCommunity) : null,
     snmpOid: row.snmpOid ? String(row.snmpOid) : null,
@@ -253,7 +255,11 @@ async function executeCheck(monitor: DeviceMonitor) {
       const path = monitor.path?.trim() || '/'
       const host = net.isIP(monitor.target) === 6 ? `[${monitor.target}]` : monitor.target
       const url = new URL(`${monitor.type}://${host}:${port}${path.startsWith('/') ? path : `/${path}`}`)
-      const res = await requestPinnedUrl(url, { timeoutMs: 5_000, maxRedirects: 3 })
+      const res = await requestPinnedUrl(url, {
+        timeoutMs: 5_000,
+        maxRedirects: 3,
+        rejectUnauthorized: !monitor.ignoreTlsErrors,
+      })
       if (res.statusCode < 200 || res.statusCode >= 300) {
         return { result: 'offline' as const, message: `${res.url} returned ${res.statusCode}.` }
       }
