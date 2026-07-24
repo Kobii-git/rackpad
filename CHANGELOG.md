@@ -8,6 +8,40 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.2-beta.3] - 2026-07-24
+
+### Added
+
+- Added explicit typed handling for the valid SNMP `noSuchObject`,
+  `noSuchInstance`, and `endOfMibView` exception values across SNMPv2c and
+  SNMPv3 responses.
+
+### Changed
+
+- Missing SNMP OIDs now record an **Unknown** monitor result and set linked
+  interface state to unknown without disabling the monitor or marking the
+  device offline.
+- SNMP column walks stop cleanly at exception responses, while credential
+  tests report the returned exception and OID as a readable failure.
+
+### Fixed
+
+- Prevented rejected asynchronous monitor checks from escaping their error
+  boundary and terminating the Rackpad process.
+- Isolated scheduled monitor failures so one broken target cannot stop later
+  checks or place Docker into a repeating restart loop.
+- Prevented SNMP exception values from satisfying permissive monitor match
+  modes such as **Any value**.
+
+### Test notes
+
+- Verify an SNMP monitor whose OID has disappeared records **Unknown**, keeps
+  the monitor enabled, and leaves its linked interface and device out of an
+  offline state.
+- Verified all three SNMP exception tags, column-walk termination, credential
+  failure reporting, ordinary SNMP values, malformed responses, and continued
+  scheduled polling after a failed monitor.
+
 ## [1.7.2-beta.2] - 2026-07-24
 
 ### Added

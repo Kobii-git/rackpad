@@ -16,10 +16,10 @@ import {
   boundedSnmpTimeoutMs,
   decodeInteger,
   decodeObjectIdentifier,
-  decodeSnmpValue,
+  decodeSnmpResponseValue,
   normalizeOid,
   readTlv,
-  type SnmpValue,
+  type SnmpResponse,
 } from "./snmp.js";
 
 export const SNMP_V3_AUTH_PROTOCOLS = ["MD5", "SHA"] as const;
@@ -405,7 +405,7 @@ function parseSnmpV3ResponsePacket(
   session: SnmpV3Session,
   engine: SnmpEngineState,
   expectedRequestId: number,
-): SnmpValue {
+): SnmpResponse {
   const root = readTlv(packet, 0);
   let offset = root.valueStart;
   offset = readTlv(packet, offset).nextOffset;
@@ -479,11 +479,11 @@ function parseSnmpV3ResponsePacket(
   const oid = readTlv(scopedPduValue, variableBinding.valueStart);
   const value = readTlv(scopedPduValue, oid.nextOffset);
 
-  return {
-    oid: decodeObjectIdentifier(oid.value),
-    value: decodeSnmpValue(value.tag, value.value),
-    type: "integer",
-  };
+  return decodeSnmpResponseValue(
+    decodeObjectIdentifier(oid.value),
+    value.tag,
+    value.value,
+  );
 }
 
 function sendSnmpV3(
@@ -491,7 +491,7 @@ function sendSnmpV3(
   message: Buffer,
   requestId: number,
   engine: SnmpEngineState,
-): Promise<SnmpValue> {
+): Promise<SnmpResponse> {
   const socket = dgram.createSocket("udp4");
   const timeoutMs = boundedSnmpTimeoutMs(session.timeoutMs);
 
@@ -593,7 +593,7 @@ export async function snmpV3Request(
   session: SnmpV3Session,
   oid: string,
   mode: "get" | "getNext",
-): Promise<SnmpValue> {
+): Promise<SnmpResponse> {
   const normalizedOid = normalizeOid(oid);
   let engine = engineCache.get(cacheKey(session));
   if (!engine) {
@@ -620,14 +620,14 @@ export async function snmpV3Request(
 export function snmpV3Get(
   session: SnmpV3Session,
   oid: string,
-): Promise<SnmpValue> {
+): Promise<SnmpResponse> {
   return snmpV3Request(session, oid, "get");
 }
 
 export function snmpV3GetNext(
   session: SnmpV3Session,
   oid: string,
-): Promise<SnmpValue> {
+): Promise<SnmpResponse> {
   return snmpV3Request(session, oid, "getNext");
 }
 

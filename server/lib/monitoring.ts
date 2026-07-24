@@ -89,7 +89,11 @@ export function startMonitoringLoop(defaultIntervalMs: number) {
   if (intervalHandle) clearInterval(intervalHandle)
 
   intervalHandle = setInterval(() => {
-    void runDueChecks(defaultIntervalMs)
+    void runDueChecks(defaultIntervalMs).catch((error) => {
+      console.error(
+        `[rackpad] Monitoring cycle failed: ${monitorErrorMessage(error)}`,
+      )
+    })
   }, defaultIntervalMs)
   intervalHandle.unref?.()
 
@@ -104,7 +108,13 @@ export async function runDueChecks(defaultIntervalMs: number) {
   for (const monitor of monitors) {
     const dueEvery = monitor.intervalMs ?? defaultIntervalMs
     if (!monitor.lastCheckAt || Date.now() - Date.parse(monitor.lastCheckAt) >= dueEvery) {
-      await runMonitorCheck(monitor.id)
+      try {
+        await runMonitorCheck(monitor.id)
+      } catch (error) {
+        console.error(
+          `[rackpad] Scheduled monitor check failed for ${monitor.id}: ${monitorErrorMessage(error)}`,
+        )
+      }
     }
   }
 }
@@ -242,12 +252,12 @@ async function executeCheck(monitor: DeviceMonitor) {
     }
 
     if (monitor.type === 'icmp') {
-      return runIcmpProbe(monitor.target)
+      return await runIcmpProbe(monitor.target)
     }
 
     if (monitor.type === 'tcp') {
       const port = monitor.port ?? 22
-      return tcpCheck(monitor.target, port)
+      return await tcpCheck(monitor.target, port)
     }
 
     if (monitor.type === 'http' || monitor.type === 'https') {
@@ -267,7 +277,7 @@ async function executeCheck(monitor: DeviceMonitor) {
     }
 
     if (monitor.type === 'snmp') {
-      return snmpCheck(monitor)
+      return await snmpCheck(monitor)
     }
 
     return { result: 'unknown' as const, message: 'Unknown check type.' }
@@ -408,6 +418,12 @@ async function snmpCheck(monitor: DeviceMonitor): Promise<MonitorResult> {
 
   const session = resolveMonitorSnmpSession(monitor, device)
   const response = await snmpGet(session, monitor.snmpOid)
+  if (response.kind === 'exception') {
+    return {
+      result: 'unknown',
+      message: `SNMP ${monitor.target}:${port} OID ${response.oid} is not present on the device (${response.exception}).`,
+    }
+  }
   const expected = monitor.snmpExpectedValue?.trim()
   const message = `SNMP ${monitor.target}:${port} ${response.oid} = ${response.value}`
   const matchMode = monitor.snmpMatchMode ?? (expected ? 'equals' : 'any')
@@ -430,6 +446,10 @@ async function snmpCheck(monitor: DeviceMonitor): Promise<MonitorResult> {
     result: 'offline',
     message: `${message} (expected ${expected || 'match'} via ${matchMode}).`,
   }
+}
+
+function monitorErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unexpected monitoring failure.'
 }
 
 function syncMonitorPortState(

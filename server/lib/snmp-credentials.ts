@@ -306,6 +306,11 @@ export async function testSnmpCredential(
   const { snmpGet } = await import('./snmp.js')
   const session = buildSnmpSessionFromCredential(credential, target)
   const response = await snmpGet(session, '1.3.6.1.2.1.1.3.0')
+  if (response.kind === 'exception') {
+    throw new Error(
+      `SNMP agent returned ${response.exception} for ${response.oid}.`,
+    )
+  }
   return {
     oid: response.oid,
     value: response.value,

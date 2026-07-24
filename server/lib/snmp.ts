@@ -5,11 +5,27 @@ import { snmpV3Get, snmpV3GetNext, type SnmpV3Session } from './snmp-v3.js'
 export const SNMP_VERSIONS = ['1', '2c', '3'] as const
 export type SnmpVersion = (typeof SNMP_VERSIONS)[number]
 
+export const SNMP_EXCEPTION_TYPES = [
+  'noSuchObject',
+  'noSuchInstance',
+  'endOfMibView',
+] as const
+export type SnmpExceptionType = (typeof SNMP_EXCEPTION_TYPES)[number]
+
 export interface SnmpValue {
+  kind: 'value'
   oid: string
   value: string
   type: string
 }
+
+export interface SnmpException {
+  kind: 'exception'
+  oid: string
+  exception: SnmpExceptionType
+}
+
+export type SnmpResponse = SnmpValue | SnmpException
 
 export interface SnmpV1V2Session {
   host: string
@@ -42,14 +58,14 @@ export function boundedSnmpTimeoutMs(timeoutMs: number) {
   return SNMP_TIMEOUT_BUCKETS_MS[bucketIndex] ?? DEFAULT_SNMP_TIMEOUT_MS
 }
 
-export function snmpGet(session: SnmpSession, oid: string): Promise<SnmpValue> {
+export function snmpGet(session: SnmpSession, oid: string): Promise<SnmpResponse> {
   if (session.version === '3') {
     return snmpV3Get(session, oid)
   }
   return snmpRequest(session, oid, 'get')
 }
 
-export function snmpGetNext(session: SnmpSession, oid: string): Promise<SnmpValue> {
+export function snmpGetNext(session: SnmpSession, oid: string): Promise<SnmpResponse> {
   if (session.version === '3') {
     return snmpV3GetNext(session, oid)
   }
@@ -67,6 +83,9 @@ export async function snmpWalkColumn(
 
   for (let index = 0; index < maxRows; index += 1) {
     const response = await snmpGetNext(session, currentOid)
+    if (response.kind === 'exception') {
+      break
+    }
     const responseOid = normalizeOid(response.oid)
     if (!responseOid.startsWith(`${prefix}.`) && responseOid !== prefix) {
       break
@@ -82,7 +101,7 @@ function snmpRequest(
   session: SnmpV1V2Session,
   oid: string,
   mode: 'get' | 'getNext',
-): Promise<SnmpValue> {
+): Promise<SnmpResponse> {
   const socket = dgram.createSocket('udp4')
   const requestId = randomInt(1, 0x7fffffff)
   const pduTag = mode === 'get' ? 0xa0 : 0xa1
@@ -167,7 +186,7 @@ function buildSnmpRequest(
   )
 }
 
-function parseSnmpResponse(packet: Buffer, expectedRequestId: number): SnmpValue {
+function parseSnmpResponse(packet: Buffer, expectedRequestId: number): SnmpResponse {
   const root = readTlv(packet, 0)
   if (root.tag !== 0x30) throw new Error('SNMP response was not a sequence.')
 
@@ -214,17 +233,11 @@ function parseSnmpResponse(packet: Buffer, expectedRequestId: number): SnmpValue
   const oid = readTlv(packet, variableBinding.valueStart)
   if (oid.tag !== 0x06) throw new Error('SNMP variable binding did not include an OID.')
   const value = readTlv(packet, oid.nextOffset)
-  if (value.tag === 0x80 || value.tag === 0x81 || value.tag === 0x82) {
-    throw new Error(
-      `SNMP agent returned ${snmpValueType(value.tag)} for ${decodeObjectIdentifier(oid.value)}.`,
-    )
-  }
-
-  return {
-    oid: decodeObjectIdentifier(oid.value),
-    value: decodeSnmpValue(value.tag, value.value),
-    type: snmpValueType(value.tag),
-  }
+  return decodeSnmpResponseValue(
+    decodeObjectIdentifier(oid.value),
+    value.tag,
+    value.value,
+  )
 }
 
 export function normalizeOid(value: string) {
@@ -389,6 +402,35 @@ export function decodeSnmpValue(tag: number, value: Buffer) {
     return value.reduce((total, byte) => total * 256n + BigInt(byte), 0n).toString()
   }
   return value.toString('hex')
+}
+
+export function decodeSnmpResponseValue(
+  oid: string,
+  tag: number,
+  value: Buffer,
+): SnmpResponse {
+  const exception = snmpExceptionType(tag)
+  if (exception) {
+    return {
+      kind: 'exception',
+      oid,
+      exception,
+    }
+  }
+
+  return {
+    kind: 'value',
+    oid,
+    value: decodeSnmpValue(tag, value),
+    type: snmpValueType(tag),
+  }
+}
+
+function snmpExceptionType(tag: number): SnmpExceptionType | null {
+  if (tag === 0x80) return 'noSuchObject'
+  if (tag === 0x81) return 'noSuchInstance'
+  if (tag === 0x82) return 'endOfMibView'
+  return null
 }
 
 function snmpValueType(tag: number) {

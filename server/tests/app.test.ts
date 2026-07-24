@@ -3850,6 +3850,342 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   assert.ok(result.lastResult === "online" || result.lastResult === "offline");
 });
 
+test("SNMP exception responses stay unknown and never satisfy match modes", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers,
+    payload: {
+      labId: "lab_home",
+      hostname: "snmp-exception-switch",
+      deviceType: "switch",
+      status: "online",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const portRes = await app.inject({
+    method: "POST",
+    url: "/api/ports",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "Gi0/1",
+      kind: "rj45",
+      linkState: "up",
+      snmpIfIndex: 1,
+    },
+  });
+  assert.equal(portRes.statusCode, 201);
+  const port = readJson(portRes) as { id: string };
+
+  const exceptionCases = [
+    { tag: 0x80 as const, name: "noSuchObject" },
+    { tag: 0x81 as const, name: "noSuchInstance" },
+    { tag: 0x82 as const, name: "endOfMibView" },
+  ];
+
+  for (const exceptionCase of exceptionCases) {
+    const responder = await createSnmpExceptionResponder(exceptionCase.tag);
+    try {
+      const address = responder.server.address();
+      if (typeof address === "string") {
+        throw new Error("SNMP test server did not expose a UDP port.");
+      }
+      db.prepare("UPDATE ports SET linkState = 'up' WHERE id = ?").run(port.id);
+
+      const monitorRes = await app.inject({
+        method: "POST",
+        url: "/api/device-monitors",
+        headers,
+        payload: {
+          deviceId: device.id,
+          name: `Missing OID ${exceptionCase.name}`,
+          type: "snmp",
+          target: "127.0.0.1",
+          port: address.port,
+          snmpVersion: "2c",
+          snmpCommunity: "public",
+          snmpOid: "1.3.6.1.2.1.2.2.1.8.1",
+          snmpMatchMode: "any",
+          portId: port.id,
+          snmpIfIndex: 1,
+          enabled: true,
+        },
+      });
+      assert.equal(monitorRes.statusCode, 200);
+      const monitor = readJson(monitorRes) as { id: string };
+
+      const runRes = await app.inject({
+        method: "POST",
+        url: `/api/device-monitors/${monitor.id}/run`,
+        headers,
+      });
+      assert.equal(runRes.statusCode, 200);
+      const result = readJson(runRes) as {
+        enabled: boolean;
+        lastResult: string;
+        lastMessage: string;
+      };
+      assert.equal(result.enabled, true);
+      assert.equal(result.lastResult, "unknown");
+      assert.match(result.lastMessage, /OID 1\.3\.6\.1\.2\.1\.2\.2\.1\.8\.1/);
+      assert.match(result.lastMessage, new RegExp(exceptionCase.name));
+      assert.equal(responder.requestCount(), 1);
+
+      const storedPort = db
+        .prepare("SELECT linkState FROM ports WHERE id = ?")
+        .get(port.id) as { linkState: string };
+      assert.equal(storedPort.linkState, "unknown");
+
+      const storedDevice = db
+        .prepare("SELECT status FROM devices WHERE id = ?")
+        .get(device.id) as { status: string };
+      assert.notEqual(storedDevice.status, "offline");
+    } finally {
+      await closeUdpServer(responder.server);
+    }
+  }
+});
+
+test("SNMP walks stop and credential tests fail clearly on exception responses", async () => {
+  const { decodeSnmpResponseValue, snmpWalkColumn } = await import(
+    "../lib/snmp.js"
+  );
+  const decodedValue = decodeSnmpResponseValue(
+    "1.3.6.1.2.1.1.3.0",
+    0x02,
+    Buffer.from([1]),
+  );
+  assert.deepEqual(decodedValue, {
+    kind: "value",
+    oid: "1.3.6.1.2.1.1.3.0",
+    value: "1",
+    type: "integer",
+  });
+  const decodedException = decodeSnmpResponseValue(
+    "1.3.6.1.2.1.1.3.0",
+    0x81,
+    Buffer.alloc(0),
+  );
+  assert.deepEqual(decodedException, {
+    kind: "exception",
+    oid: "1.3.6.1.2.1.1.3.0",
+    exception: "noSuchInstance",
+  });
+
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const credentialRes = await app.inject({
+    method: "POST",
+    url: "/api/snmp-credentials",
+    headers,
+    payload: {
+      labId: "lab_home",
+      name: "Missing uptime",
+      version: "2c",
+      community: "public",
+    },
+  });
+  assert.equal(credentialRes.statusCode, 201);
+  const credential = readJson(credentialRes) as { id: string };
+
+  const responder = await createSnmpExceptionResponder(0x82);
+  try {
+    const address = responder.server.address();
+    if (typeof address === "string") {
+      throw new Error("SNMP test server did not expose a UDP port.");
+    }
+    const session = {
+      host: "127.0.0.1",
+      port: address.port,
+      version: "2c" as const,
+      community: "public",
+      timeoutMs: 1000,
+    };
+    const rows = await snmpWalkColumn(
+      session,
+      "1.3.6.1.2.1.2.2.1.8",
+      5,
+    );
+    assert.deepEqual(rows, []);
+    assert.equal(responder.requestCount(), 1);
+
+    const testRes = await app.inject({
+      method: "POST",
+      url: `/api/snmp-credentials/${credential.id}/test`,
+      headers,
+      payload: {
+        target: "127.0.0.1",
+        port: address.port,
+        timeoutMs: 1000,
+      },
+    });
+    assert.equal(testRes.statusCode, 502);
+    assert.match(testRes.body, /endOfMibView/);
+  } finally {
+    await closeUdpServer(responder.server);
+  }
+});
+
+test("scheduled monitoring contains rejected checks and continues the cycle", async () => {
+  const { runDueChecks } = await import("../lib/monitoring.js");
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers,
+    payload: {
+      labId: "lab_home",
+      hostname: "monitor-cycle-switch",
+      deviceType: "switch",
+      status: "unknown",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201);
+  const device = readJson(deviceRes) as { id: string };
+
+  const exceptionResponder = await createSnmpExceptionResponder(0x81);
+  const malformedServer = await createMalformedSnmpResponder();
+  const healthyServer = await createSnmpIntegerResponder(1);
+  try {
+    const exceptionAddress = exceptionResponder.server.address();
+    const malformedAddress = malformedServer.address();
+    const healthyAddress = healthyServer.address();
+    if (
+      typeof exceptionAddress === "string" ||
+      typeof malformedAddress === "string" ||
+      typeof healthyAddress === "string"
+    ) {
+      throw new Error("SNMP test server did not expose a UDP port.");
+    }
+
+    const monitorIds: string[] = [];
+    for (const monitorConfig of [
+      {
+        name: "A missing OID",
+        port: exceptionAddress.port,
+      },
+      {
+        name: "B malformed response",
+        port: malformedAddress.port,
+      },
+      {
+        name: "C forced persistence failure",
+        port: healthyAddress.port,
+      },
+      {
+        name: "D healthy response",
+        port: healthyAddress.port,
+      },
+    ]) {
+      const monitorRes = await app.inject({
+        method: "POST",
+        url: "/api/device-monitors",
+        headers,
+        payload: {
+          deviceId: device.id,
+          name: monitorConfig.name,
+          type: "snmp",
+          target: "127.0.0.1",
+          port: monitorConfig.port,
+          snmpVersion: "2c",
+          snmpCommunity: "public",
+          snmpOid: "1.3.6.1.2.1.1.3.0",
+          snmpMatchMode: "any",
+          intervalMs: 1000,
+          enabled: true,
+        },
+      });
+      assert.equal(monitorRes.statusCode, 200);
+      monitorIds.push((readJson(monitorRes) as { id: string }).id);
+    }
+
+    db.exec(`
+      CREATE TRIGGER fail_scheduled_monitor_update
+      BEFORE UPDATE OF lastCheckAt ON deviceMonitors
+      WHEN OLD.name = 'C forced persistence failure'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced scheduled monitor failure');
+      END;
+    `);
+
+    const monitorErrors: string[] = [];
+    const originalConsoleError = console.error;
+    console.error = (...args: unknown[]) => {
+      monitorErrors.push(args.map(String).join(" "));
+    };
+    try {
+      await runDueChecks(1000);
+    } finally {
+      console.error = originalConsoleError;
+      db.exec("DROP TRIGGER fail_scheduled_monitor_update;");
+    }
+
+    const missingOidMonitor = db
+      .prepare(
+        "SELECT lastCheckAt, lastResult, lastMessage FROM deviceMonitors WHERE id = ?",
+      )
+      .get(monitorIds[0]) as {
+      lastCheckAt: string;
+      lastResult: string;
+      lastMessage: string;
+    };
+    assert.ok(missingOidMonitor.lastCheckAt);
+    assert.equal(missingOidMonitor.lastResult, "unknown");
+    assert.match(missingOidMonitor.lastMessage, /noSuchInstance/);
+    assert.equal(exceptionResponder.requestCount(), 1);
+
+    const malformedMonitor = db
+      .prepare(
+        "SELECT lastCheckAt, lastResult, lastMessage FROM deviceMonitors WHERE id = ?",
+      )
+      .get(monitorIds[1]) as {
+      lastCheckAt: string;
+      lastResult: string;
+      lastMessage: string;
+    };
+    assert.ok(malformedMonitor.lastCheckAt);
+    assert.equal(malformedMonitor.lastResult, "offline");
+    assert.match(malformedMonitor.lastMessage, /SNMP packet/);
+
+    const failedPersistenceMonitor = db
+      .prepare(
+        "SELECT lastCheckAt, lastResult FROM deviceMonitors WHERE id = ?",
+      )
+      .get(monitorIds[2]) as {
+      lastCheckAt: string | null;
+      lastResult: string | null;
+    };
+    assert.equal(failedPersistenceMonitor.lastCheckAt, null);
+    assert.equal(failedPersistenceMonitor.lastResult, null);
+    assert.equal(monitorErrors.length, 1);
+    assert.match(monitorErrors[0] ?? "", new RegExp(monitorIds[2] ?? ""));
+    assert.match(monitorErrors[0] ?? "", /forced scheduled monitor failure/);
+
+    const healthyMonitor = db
+      .prepare(
+        "SELECT lastCheckAt, lastResult FROM deviceMonitors WHERE id = ?",
+      )
+      .get(monitorIds[3]) as {
+      lastCheckAt: string;
+      lastResult: string;
+    };
+    assert.ok(healthyMonitor.lastCheckAt);
+    assert.equal(healthyMonitor.lastResult, "online");
+  } finally {
+    await closeUdpServer(exceptionResponder.server);
+    await closeUdpServer(malformedServer);
+    await closeUdpServer(healthyServer);
+  }
+});
+
 test("HTTPS monitors keep certificate verification secure by default and can opt out per target", async () => {
   const adminToken = await bootstrapAdmin();
   const headers = { authorization: `Bearer ${adminToken}` };
@@ -8580,10 +8916,36 @@ async function createDiscoveryScanScheduleForTest(adminToken: string) {
 }
 
 async function createSnmpIntegerResponder(value: number) {
+  return createSnmpResponder((request) =>
+    buildSnmpIntegerResponse(request, value),
+  );
+}
+
+async function createSnmpExceptionResponder(
+  exceptionTag: 0x80 | 0x81 | 0x82,
+) {
+  let requestCount = 0;
+  const server = await createSnmpResponder((request) => {
+    requestCount += 1;
+    return buildSnmpExceptionResponse(request, exceptionTag);
+  });
+  return {
+    server,
+    requestCount: () => requestCount,
+  };
+}
+
+async function createMalformedSnmpResponder() {
+  return createSnmpResponder(() => Buffer.from([0]));
+}
+
+async function createSnmpResponder(
+  buildResponse: (request: Buffer) => Buffer,
+) {
   const server = dgram.createSocket("udp4");
   server.on("message", (packet, remote) => {
     try {
-      const response = buildSnmpIntegerResponse(packet, value);
+      const response = buildResponse(packet);
       server.send(response, remote.port, remote.address);
     } catch {
       // Ignore malformed SNMP packets in the test responder.
@@ -8616,9 +8978,23 @@ function closeUdpServer(server: dgram.Socket) {
 }
 
 function buildSnmpIntegerResponse(request: Buffer, value: number) {
+  return buildSnmpResponse(request, testBerInteger(value));
+}
+
+function buildSnmpExceptionResponse(
+  request: Buffer,
+  exceptionTag: 0x80 | 0x81 | 0x82,
+) {
+  return buildSnmpResponse(
+    request,
+    testBerTlv(exceptionTag, Buffer.alloc(0)),
+  );
+}
+
+function buildSnmpResponse(request: Buffer, value: Buffer) {
   const parsed = parseSnmpRequest(request);
   const variableBinding = testBerSequence(
-    Buffer.concat([testBerTlv(0x06, parsed.oid), testBerInteger(value)]),
+    Buffer.concat([testBerTlv(0x06, parsed.oid), value]),
   );
   const variableBindings = testBerSequence(variableBinding);
   const pdu = testBerTlv(
