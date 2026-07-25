@@ -1837,6 +1837,9 @@ export const en = {
   "TLS verification off": "TLS verification off",
   "Ignore TLS certificate errors": "Ignore TLS certificate errors",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.",
+  "Download text": "Download text",
+  "Download image": "Download image",
+  "Internal pass-through": "Internal pass-through",
 } as const;
 
 export type TranslationKey = keyof typeof en;

@@ -1839,4 +1839,7 @@ export const fa = {
   "TLS verification off": "تأیید TLS خاموش است",
   "Ignore TLS certificate errors": "نادیده گرفتن خطاهای گواهی TLS",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "گواهی‌های خودامضا، منقضی یا نامنطبق را مجاز می‌کند. فقط برای اهداف مورد اعتماد استفاده کنید.",
+  "Download text": "دانلود متن",
+  "Download image": "دانلود تصویر",
+  "Internal pass-through": "عبور داخلی",
 } satisfies TranslationMap;

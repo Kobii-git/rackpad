@@ -1839,4 +1839,7 @@ export const ar = {
   "TLS verification off": "التحقق من TLS متوقف",
   "Ignore TLS certificate errors": "تجاهل أخطاء شهادة TLS",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "يسمح بالشهادات الموقعة ذاتيًا أو المنتهية أو غير المتطابقة. استخدمه فقط مع الأهداف الموثوقة.",
+  "Download text": "تنزيل النص",
+  "Download image": "تنزيل الصورة",
+  "Internal pass-through": "تمرير داخلي",
 } satisfies TranslationMap;

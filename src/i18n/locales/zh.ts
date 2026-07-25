@@ -1839,4 +1839,7 @@ export const zh = {
   "TLS verification off": "TLS 验证已关闭",
   "Ignore TLS certificate errors": "忽略 TLS 证书错误",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "允许自签名、已过期或不匹配的证书。仅用于受信任的目标。",
+  "Download text": "下载文本",
+  "Download image": "下载图片",
+  "Internal pass-through": "内部直通",
 } satisfies TranslationMap;

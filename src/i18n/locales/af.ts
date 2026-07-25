@@ -1839,4 +1839,7 @@ export const af = {
   "TLS verification off": "TLS-verifikasie af",
   "Ignore TLS certificate errors": "Ignoreer TLS-sertifikaatfoute",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Laat selfondertekende, vervalde of nie-ooreenstemmende sertifikate toe. Gebruik slegs vir vertroude teikens.",
+  "Download text": "Laai teks af",
+  "Download image": "Laai prent af",
+  "Internal pass-through": "Interne deurverbinding",
 } satisfies TranslationMap;

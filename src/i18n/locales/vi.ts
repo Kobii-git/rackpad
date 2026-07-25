@@ -1839,4 +1839,7 @@ export const vi = {
   "TLS verification off": "Đã tắt xác minh TLS",
   "Ignore TLS certificate errors": "Bỏ qua lỗi chứng chỉ TLS",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Cho phép chứng chỉ tự ký, hết hạn hoặc không khớp. Chỉ sử dụng cho các đích đáng tin cậy.",
+  "Download text": "Tải văn bản",
+  "Download image": "Tải hình ảnh",
+  "Internal pass-through": "Kết nối chuyển tiếp nội bộ",
 } satisfies TranslationMap;

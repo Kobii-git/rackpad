@@ -1839,4 +1839,7 @@ export const es = {
   "TLS verification off": "Verificación TLS desactivada",
   "Ignore TLS certificate errors": "Ignorar errores de certificado TLS",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Permite certificados autofirmados, caducados o que no coinciden. Úselo solo para destinos de confianza.",
+  "Download text": "Descargar texto",
+  "Download image": "Descargar imagen",
+  "Internal pass-through": "Paso interno",
 } satisfies TranslationMap;

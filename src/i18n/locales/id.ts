@@ -1839,4 +1839,7 @@ export const id = {
   "TLS verification off": "Verifikasi TLS nonaktif",
   "Ignore TLS certificate errors": "Abaikan kesalahan sertifikat TLS",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Mengizinkan sertifikat yang ditandatangani sendiri, kedaluwarsa, atau tidak cocok. Gunakan hanya untuk target tepercaya.",
+  "Download text": "Unduh teks",
+  "Download image": "Unduh gambar",
+  "Internal pass-through": "Lintasan internal",
 } satisfies TranslationMap;

@@ -122,6 +122,11 @@ modify port records.
 If no path exists, Rackpad shows that no documented path was found. Usually this
 means one or more cable links or patch-panel pass-through records are missing.
 
+When a path is available, the trace summary can be copied, downloaded as text,
+or downloaded as a standalone PNG. The image groups patch-panel front and rear
+ports into one device card, preserves documented cable colors and lengths, and
+includes the available room, rack, face, and U-position context.
+
 ## Empty States
 
 - If no devices exist, the Visualizer shows links to `Racks` and `Cables`.

@@ -1,4 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
+import { readFile } from "node:fs/promises";
 import {
   expect,
   test,
@@ -236,6 +237,35 @@ test("all primary routes load without document overflow in both demo labs", asyn
       ).toBeTruthy();
     }
   }
+});
+
+test("visualizer trace downloads a standalone PNG", async ({ page }) => {
+  await authenticate(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/visualizer");
+  await expect(page.locator("h1").first()).toBeVisible();
+
+  await page.getByTestId("visualizer-trace-toggle").click();
+  await page
+    .getByTestId("trace-device-select")
+    .selectOption({ label: "unifi-01" });
+  await page.getByTestId("trace-port-select").selectOption("p_d_unifi_1");
+  await page.getByTestId("trace-submit").click();
+  await expect(page.getByTestId("trace-download-image")).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("trace-download-image").click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(
+    "rackpad-trace-unifi-01-eth0-to-sw-tor-01-24.png",
+  );
+
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  const png = await readFile(downloadPath!);
+  expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+  expect(png.readUInt32BE(16)).toBeGreaterThan(0);
+  expect(png.readUInt32BE(20)).toBeGreaterThan(0);
 });
 
 test("UI regression surfaces remain reachable and unclipped", async ({

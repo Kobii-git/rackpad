@@ -1839,4 +1839,7 @@ export const uk = {
   "TLS verification off": "Перевірку TLS вимкнено",
   "Ignore TLS certificate errors": "Ігнорувати помилки сертифіката TLS",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Дозволяє самопідписані, прострочені або невідповідні сертифікати. Використовуйте лише для довірених цілей.",
+  "Download text": "Завантажити текст",
+  "Download image": "Завантажити зображення",
+  "Internal pass-through": "Внутрішнє наскрізне з’єднання",
 } satisfies TranslationMap;

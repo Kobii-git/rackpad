@@ -1839,4 +1839,7 @@ export const ko = {
   "TLS verification off": "TLS 검증 꺼짐",
   "Ignore TLS certificate errors": "TLS 인증서 오류 무시",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "자체 서명, 만료 또는 불일치 인증서를 허용합니다. 신뢰할 수 있는 대상에만 사용하세요.",
+  "Download text": "텍스트 다운로드",
+  "Download image": "이미지 다운로드",
+  "Internal pass-through": "내부 패스스루",
 } satisfies TranslationMap;

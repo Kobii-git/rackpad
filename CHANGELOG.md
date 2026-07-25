@@ -8,6 +8,21 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.3-beta.1] - 2026-07-26
+
+### Added
+
+- Added standalone PNG downloads for Visualizer cable traces, including device
+  placement, port faces, cable colors and lengths, and grouped patch-panel
+  pass-throughs.
+
+### Test notes
+
+- Trace a direct cable and a multi-hop patch-panel path, then confirm
+  **Download image** produces a readable PNG in light, dark, and RTL modes.
+- Confirm long device and port names wrap in the exported image and that
+  **Copy** and **Download text** still work.
+
 ## [1.7.3-beta.0] - 2026-07-25
 
 ### Added

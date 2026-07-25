@@ -1839,4 +1839,7 @@ export const tr = {
   "TLS verification off": "TLS doğrulaması kapalı",
   "Ignore TLS certificate errors": "TLS sertifika hatalarını yoksay",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Kendinden imzalı, süresi dolmuş veya eşleşmeyen sertifikalara izin verir. Yalnızca güvenilen hedefler için kullanın.",
+  "Download text": "Metni indir",
+  "Download image": "Görseli indir",
+  "Internal pass-through": "Dahili geçiş",
 } satisfies TranslationMap;

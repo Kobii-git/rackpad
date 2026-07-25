@@ -1839,4 +1839,7 @@ export const ru = {
   "TLS verification off": "Проверка TLS отключена",
   "Ignore TLS certificate errors": "Игнорировать ошибки сертификата TLS",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Разрешает самоподписанные, просроченные или несовпадающие сертификаты. Используйте только для доверенных целей.",
+  "Download text": "Скачать текст",
+  "Download image": "Скачать изображение",
+  "Internal pass-through": "Внутреннее сквозное соединение",
 } satisfies TranslationMap;

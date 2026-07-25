@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.7.3-beta.0",
+  "version": "1.7.3-beta.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -16,7 +16,7 @@
     "build": "npm run build:client && npm run build:server",
     "start": "node dist-server/index.js",
     "test:server": "node --import tsx --test server/tests/**/*.test.ts",
-    "test:client": "node --import tsx --test src/pages/visualizer/model.test.ts",
+    "test:client": "node --import tsx --test src/pages/visualizer/*.test.ts",
     "test:e2e": "playwright test",
     "test": "npm run check:i18n && npm run test:server && npm run test:client && npm run test:e2e",
     "lint": "eslint .",

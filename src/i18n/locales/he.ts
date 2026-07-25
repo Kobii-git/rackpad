@@ -1839,4 +1839,7 @@ export const he = {
   "TLS verification off": "אימות TLS כבוי",
   "Ignore TLS certificate errors": "התעלם משגיאות אישור TLS",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "מאפשר אישורים בחתימה עצמית, שפג תוקפם או שאינם תואמים. יש להשתמש רק עבור יעדים מהימנים.",
+  "Download text": "הורדת טקסט",
+  "Download image": "הורדת תמונה",
+  "Internal pass-through": "מעבר פנימי",
 } satisfies TranslationMap;

@@ -1839,4 +1839,7 @@ export const hi = {
   "TLS verification off": "TLS सत्यापन बंद",
   "Ignore TLS certificate errors": "TLS प्रमाणपत्र त्रुटियों को अनदेखा करें",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "स्व-हस्ताक्षरित, समाप्त या बेमेल प्रमाणपत्रों की अनुमति देता है। केवल विश्वसनीय लक्ष्यों के लिए उपयोग करें।",
+  "Download text": "टेक्स्ट डाउनलोड करें",
+  "Download image": "छवि डाउनलोड करें",
+  "Internal pass-through": "आंतरिक पास-थ्रू",
 } satisfies TranslationMap;

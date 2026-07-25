@@ -1839,4 +1839,7 @@ export const ja = {
   "TLS verification off": "TLS 検証オフ",
   "Ignore TLS certificate errors": "TLS 証明書エラーを無視",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "自己署名、期限切れ、または不一致の証明書を許可します。信頼できるターゲットにのみ使用してください。",
+  "Download text": "テキストをダウンロード",
+  "Download image": "画像をダウンロード",
+  "Internal pass-through": "内部パススルー",
 } satisfies TranslationMap;

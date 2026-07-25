@@ -16,6 +16,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  Image,
   LocateFixed,
   Network,
   PanelRightClose,
@@ -64,6 +65,7 @@ import {
   visualizerCableLaneIndexes,
   visualizerCablePath,
 } from "./model";
+import { buildTraceImageSvg, downloadTraceImagePng } from "./trace-image";
 import type {
   RackBand,
   RackPanel,
@@ -694,6 +696,7 @@ export function VisualizerCanvas({
                   variant={traceMode.enabled ? "secondary" : "outline"}
                   size="sm"
                   onClick={toggleTraceMode}
+                  data-testid="visualizer-trace-toggle"
                 >
                   {t("2 Trace")}
                 </Button>
@@ -2099,6 +2102,7 @@ function TracePicker({
               value={deviceId}
               onChange={(event) => setDeviceId(event.target.value)}
               className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
+              data-testid="trace-device-select"
             >
               {traceDevices.map((node) => (
                 <option key={node.device.id} value={node.device.id}>
@@ -2112,6 +2116,7 @@ function TracePicker({
               value={portId}
               onChange={(event) => setPortId(event.target.value)}
               className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
+              data-testid="trace-port-select"
             >
               {devicePorts.map((port) => (
                 <option key={port.id} value={port.id}>
@@ -2129,6 +2134,7 @@ function TracePicker({
           className="w-full"
           disabled={!deviceId || !portId}
           onClick={() => onTracePortSelect(deviceId, portId)}
+          data-testid="trace-submit"
         >
           {traceMode.firstPortId ? t("Trace to port") : t("Set start port")}
         </Button>
@@ -2415,6 +2421,8 @@ function TraceSummary({
 }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const [preparingImage, setPreparingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const traceText = useMemo(
     () => formatTraceText(model, result, t),
     [model, result, t],
@@ -2426,8 +2434,33 @@ function TraceSummary({
     window.setTimeout(() => setCopied(false), 1400);
   }
 
-  function downloadTrace() {
+  function downloadTraceText() {
     downloadText("rackpad-trace-path.txt", traceText);
+  }
+
+  async function downloadTraceImage() {
+    setPreparingImage(true);
+    setImageError(null);
+    try {
+      const traceImage = buildTraceImageSvg(model, result, {
+        cable: t("Cable"),
+        direction: document.documentElement.dir === "rtl" ? "rtl" : "ltr",
+        front: t("Front"),
+        rear: t("Rear"),
+        internalPassThrough: t("Internal pass-through"),
+        length: t("Length"),
+        rack: t("Rack"),
+        room: t("Room"),
+        unknown: t("Unknown"),
+        deviceType: typeLabel,
+        hops: (count) => t("{count} hops", { count }),
+      });
+      await downloadTraceImagePng(traceImage);
+    } catch {
+      setImageError(t("Something went wrong. Try again."));
+    } finally {
+      setPreparingImage(false);
+    }
   }
 
   return (
@@ -2446,6 +2479,8 @@ function TraceSummary({
             size="sm"
             onClick={() => void copyTrace()}
             disabled={!traceText}
+            aria-label={t("Copy")}
+            data-testid="trace-copy-text"
           >
             <Copy className="size-3.5" />
             {copied ? t("Copied") : t("Copy")}
@@ -2453,14 +2488,36 @@ function TraceSummary({
           <Button
             variant="outline"
             size="sm"
-            onClick={downloadTrace}
+            onClick={downloadTraceText}
             disabled={!traceText}
+            aria-label={t("Download text")}
+            data-testid="trace-download-text"
           >
             <Download className="size-3.5" />
-            {t("Download")}
+            {t("Download text")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void downloadTraceImage()}
+            disabled={!traceText || preparingImage}
+            aria-label={t("Download image")}
+            data-testid="trace-download-image"
+          >
+            <Image className="size-3.5" />
+            {preparingImage ? t("Preparing...") : t("Download image")}
           </Button>
         </div>
       </div>
+      {imageError && (
+        <div
+          role="alert"
+          className="mt-2 text-xs text-[var(--danger)]"
+          data-testid="trace-image-error"
+        >
+          {imageError}
+        </div>
+      )}
       <div className="mt-3 space-y-2">
         {result.segments.map((segment, index) => {
           const fromDevice = model.deviceById[segment.fromPort.deviceId];

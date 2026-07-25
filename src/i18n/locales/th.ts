@@ -1839,4 +1839,7 @@ export const th = {
   "TLS verification off": "ปิดการตรวจสอบ TLS",
   "Ignore TLS certificate errors": "ละเว้นข้อผิดพลาดใบรับรอง TLS",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "อนุญาตใบรับรองที่ลงนามด้วยตนเอง หมดอายุ หรือไม่ตรงกัน ใช้เฉพาะกับเป้าหมายที่เชื่อถือได้",
+  "Download text": "ดาวน์โหลดข้อความ",
+  "Download image": "ดาวน์โหลดรูปภาพ",
+  "Internal pass-through": "การเชื่อมต่อภายใน",
 } satisfies TranslationMap;

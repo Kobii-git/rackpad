@@ -1839,4 +1839,7 @@ export const bn = {
   "TLS verification off": "TLS যাচাই বন্ধ",
   "Ignore TLS certificate errors": "TLS সার্টিফিকেট ত্রুটি উপেক্ষা করুন",
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "স্ব-স্বাক্ষরিত, মেয়াদোত্তীর্ণ বা অমিল সার্টিফিকেটের অনুমতি দেয়। শুধুমাত্র বিশ্বস্ত টার্গেটের জন্য ব্যবহার করুন।",
+  "Download text": "টেক্সট ডাউনলোড করুন",
+  "Download image": "ছবি ডাউনলোড করুন",
+  "Internal pass-through": "অভ্যন্তরীণ পাস-থ্রু",
 } satisfies TranslationMap;
