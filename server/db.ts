@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 33;
+const CURRENT_SCHEMA_VERSION = 34;
 
 export const db = new Database(DB_PATH);
 
@@ -940,6 +940,12 @@ const SCHEMA_MIGRATIONS = [
     version: 33,
     sql: `
       ALTER TABLE deviceMonitors ADD COLUMN ignoreTlsErrors INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
+  {
+    version: 34,
+    sql: `
+      ALTER TABLE devices ADD COLUMN ignoreDuplicateMac INTEGER NOT NULL DEFAULT 0;
     `,
   },
 ] as const;

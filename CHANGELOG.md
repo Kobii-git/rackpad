@@ -8,6 +8,32 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.3-beta.0] - 2026-07-25
+
+### Added
+
+- Added a live filtered-versus-total device count beside inventory search.
+- Added persistent controls for ignoring legitimate duplicate MAC groups and
+  revealing or restoring ignored warnings.
+
+### Changed
+
+- Duplicate MAC counts, warning highlights, and the duplicate-only filter now
+  exclude ignored groups while automatically surfacing groups with new,
+  unignored members.
+
+### Fixed
+
+- Reset duplicate-MAC ignore state when a device MAC address changes so stale
+  exceptions do not hide a new conflict.
+
+### Test notes
+
+- On **Devices**, ignore a duplicate MAC group and confirm it disappears from
+  warnings and the duplicate-only list; enable **Show ignored** to restore it.
+- Search and combine Device filters and confirm the count beside search always
+  shows the filtered number against total inventory.
+
 ## [1.7.2-beta.3] - 2026-07-24
 
 ### Added

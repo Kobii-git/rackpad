@@ -1465,6 +1465,18 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
   assert.equal(monitorDeviceRes.statusCode, 201);
   const monitorDevice = readJson(monitorDeviceRes) as { id: string };
 
+  const ignoreDuplicateRes = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${monitorDevice.id}`,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      ignoreDuplicateMac: true,
+    },
+  });
+  assert.equal(ignoreDuplicateRes.statusCode, 200);
+
   const monitorRes = await app.inject({
     method: "POST",
     url: "/api/device-monitors",
@@ -1508,6 +1520,10 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
         id: string;
         ignoreTlsErrors?: number | boolean;
       }>;
+      devices: Array<{
+        id: string;
+        ignoreDuplicateMac?: number | boolean;
+      }>;
     };
   };
   const exportedSubnet = snapshot.data.subnets.find(
@@ -1524,6 +1540,10 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
     (entry) => entry.id === monitor.id,
   );
   assert.equal(exportedMonitor?.ignoreTlsErrors, 1);
+  const exportedIgnoredDevice = snapshot.data.devices.find(
+    (entry) => entry.id === monitorDevice.id,
+  );
+  assert.equal(exportedIgnoredDevice?.ignoreDuplicateMac, 1);
 
   const postExportRackRes = await app.inject({
     method: "POST",
@@ -1650,6 +1670,10 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
     .prepare("SELECT ignoreTlsErrors FROM deviceMonitors WHERE id = ?")
     .get(monitor.id) as { ignoreTlsErrors: number };
   assert.equal(restoredMonitor.ignoreTlsErrors, 1);
+  const restoredIgnoredDevice = db
+    .prepare("SELECT ignoreDuplicateMac FROM devices WHERE id = ?")
+    .get(monitorDevice.id) as { ignoreDuplicateMac: number };
+  assert.equal(restoredIgnoredDevice.ignoreDuplicateMac, 1);
 });
 
 test("admin restore rejects overlapping subnets without changing current data", async () => {
@@ -1859,7 +1883,7 @@ test("admin restore rejects invalid IPAM children atomically with structured det
   }
 });
 
-test("admin restore accepts older backups without subnet, rack-slot, Docker enabled, or monitor TLS fields", async () => {
+test("admin restore accepts older backups without subnet, rack-slot, Docker, monitor TLS, or duplicate MAC fields", async () => {
   const adminToken = await bootstrapAdmin();
 
   const rackRes = await app.inject({
@@ -1976,6 +2000,7 @@ test("admin restore accepts older backups without subnet, rack-slot, Docker enab
       devices: snapshot.data.devices.map((device) => {
         const legacyDevice = { ...device };
         delete legacyDevice.rackSlot;
+        delete legacyDevice.ignoreDuplicateMac;
         return legacyDevice;
       }),
       subnets: snapshot.data.subnets.map((subnet) => {
@@ -2052,12 +2077,14 @@ test("admin restore accepts older backups without subnet, rack-slot, Docker enab
   const devices = readJson(devicesRes) as Array<{
     hostname: string;
     rackSlot: string;
+    ignoreDuplicateMac: boolean;
   }>;
   const restoredDevice = devices.find(
     (device) => device.hostname === "legacy-rack-slot-device",
   );
   assert.ok(restoredDevice);
   assert.equal(restoredDevice.rackSlot, "full");
+  assert.equal(restoredDevice.ignoreDuplicateMac, false);
 
   const restoredDockerSource = db
     .prepare("SELECT enabled FROM dockerImportSources WHERE id = ?")
@@ -2488,6 +2515,92 @@ test("bulk device updates accept custom types and wireless placement", async () 
         entry.clientDeviceId === device.id && entry.apDeviceId === ap.id,
     ),
   );
+});
+
+test("duplicate MAC ignore state persists, validates, bulk updates, and resets on MAC changes", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const deviceIds: string[] = [];
+
+  for (const hostname of ["duplicate-ignore-a", "duplicate-ignore-b"]) {
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/api/devices",
+      headers,
+      payload: {
+        labId: "lab_home",
+        hostname,
+        deviceType: "endpoint",
+        macAddress: "02:aa:bb:cc:dd:01",
+        status: "unknown",
+      },
+    });
+    assert.equal(createRes.statusCode, 201);
+    const created = readJson(createRes) as {
+      id: string;
+      ignoreDuplicateMac: boolean;
+    };
+    assert.equal(created.ignoreDuplicateMac, false);
+    deviceIds.push(created.id);
+  }
+
+  const patchRes = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${deviceIds[0]}`,
+    headers,
+    payload: { ignoreDuplicateMac: true },
+  });
+  assert.equal(patchRes.statusCode, 200);
+  assert.equal(
+    (readJson(patchRes) as { ignoreDuplicateMac: boolean }).ignoreDuplicateMac,
+    true,
+  );
+
+  const invalidRes = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${deviceIds[0]}`,
+    headers,
+    payload: { ignoreDuplicateMac: "yes" },
+  });
+  assert.equal(invalidRes.statusCode, 400);
+  assert.match(invalidRes.body, /true or false/i);
+
+  const bulkRes = await app.inject({
+    method: "POST",
+    url: "/api/devices/bulk",
+    headers,
+    payload: {
+      deviceIds,
+      changes: { ignoreDuplicateMac: true },
+    },
+  });
+  assert.equal(bulkRes.statusCode, 200);
+  const bulkUpdated = readJson(bulkRes) as {
+    updated: number;
+    devices: Array<{ ignoreDuplicateMac: boolean }>;
+  };
+  assert.equal(bulkUpdated.updated, 2);
+  assert.deepEqual(
+    bulkUpdated.devices.map((device) => device.ignoreDuplicateMac),
+    [true, true],
+  );
+
+  const macChangeRes = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${deviceIds[0]}`,
+    headers,
+    payload: {
+      macAddress: "02:aa:bb:cc:dd:02",
+      ignoreDuplicateMac: true,
+    },
+  });
+  assert.equal(macChangeRes.statusCode, 200);
+  const macChanged = readJson(macChangeRes) as {
+    macAddress: string;
+    ignoreDuplicateMac: boolean;
+  };
+  assert.equal(macChanged.macAddress, "02:aa:bb:cc:dd:02");
+  assert.equal(macChanged.ignoreDuplicateMac, false);
 });
 
 test("bulk device updates roll back earlier writes when a later device fails validation", async () => {
@@ -7931,7 +8044,7 @@ interfaces:
   assert.equal(imported.ports[0]?.name, "eth0");
 });
 
-test("Docker and monitor TLS migrations default existing rows safely", async () => {
+test("Docker, monitor TLS, and duplicate MAC migrations default existing rows safely", async () => {
   const legacyPath = path.join(tempDir, "docker-source-v31.db");
   const { default: Database } = await import("better-sqlite3");
   const initializeDatabase = () =>
@@ -7997,6 +8110,7 @@ test("Docker and monitor TLS migrations default existing rows safely", async () 
     CREATE INDEX idx_docker_import_sources_lab_id
       ON dockerImportSources (labId);
     ALTER TABLE deviceMonitors DROP COLUMN ignoreTlsErrors;
+    ALTER TABLE devices DROP COLUMN ignoreDuplicateMac;
     UPDATE schemaVersion
     SET version = 31, updatedAt = '2026-07-20T00:00:00.000Z'
     WHERE id = 1;
@@ -8018,9 +8132,16 @@ test("Docker and monitor TLS migrations default existing rows safely", async () 
       dflt_value: string | null;
     }>
   ).find((column) => column.name === "ignoreTlsErrors");
+  const duplicateMacColumn = (
+    migrated.prepare("PRAGMA table_info(devices)").all() as Array<{
+      name: string;
+      dflt_value: string | null;
+    }>
+  ).find((column) => column.name === "ignoreDuplicateMac");
   assert.equal(source.enabled, 1);
   assert.equal(tlsColumn?.dflt_value, "0");
-  assert.equal(version.version, 33);
+  assert.equal(duplicateMacColumn?.dflt_value, "0");
+  assert.equal(version.version, 34);
   migrated.close();
 });
 

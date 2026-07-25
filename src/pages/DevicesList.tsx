@@ -71,6 +71,12 @@ interface BulkDeviceForm {
   specs: string;
 }
 
+interface DuplicateMacGroup {
+  macAddress: string;
+  devices: Device[];
+  ignored: boolean;
+}
+
 const EMPTY_BULK_DEVICE_FORM: BulkDeviceForm = {
   tags: "",
   placement: "",
@@ -117,6 +123,12 @@ export default function DevicesList() {
   );
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkError, setBulkError] = useState("");
+  const [showIgnoredDuplicateMacs, setShowIgnoredDuplicateMacs] =
+    useState(false);
+  const [duplicateMacSaving, setDuplicateMacSaving] = useState<string | null>(
+    null,
+  );
+  const [duplicateMacError, setDuplicateMacError] = useState("");
   const typeParam = searchParams.get("type");
   const placementParam = searchParams.get("placement");
   const macParam = searchParams.get("mac");
@@ -169,7 +181,7 @@ export default function DevicesList() {
     }, {});
   }, [ports]);
 
-  const duplicateMacGroups = useMemo(() => {
+  const allDuplicateMacGroups = useMemo<DuplicateMacGroup[]>(() => {
     const groups = new Map<string, Device[]>();
     for (const device of devices) {
       const macAddress = canonicalMacAddress(device.macAddress);
@@ -185,9 +197,25 @@ export default function DevicesList() {
         devices: [...entries].sort((a, b) =>
           a.hostname.localeCompare(b.hostname),
         ),
+        ignored: entries.every((device) => device.ignoreDuplicateMac === true),
       }))
       .sort((a, b) => a.macAddress.localeCompare(b.macAddress));
   }, [devices]);
+
+  const duplicateMacGroups = useMemo(
+    () => allDuplicateMacGroups.filter((group) => !group.ignored),
+    [allDuplicateMacGroups],
+  );
+  const ignoredDuplicateMacGroups = useMemo(
+    () => allDuplicateMacGroups.filter((group) => group.ignored),
+    [allDuplicateMacGroups],
+  );
+
+  useEffect(() => {
+    if (showIgnoredDuplicateMacs && ignoredDuplicateMacGroups.length === 0) {
+      setShowIgnoredDuplicateMacs(false);
+    }
+  }, [ignoredDuplicateMacGroups.length, showIgnoredDuplicateMacs]);
 
   const duplicateMacDeviceIds = useMemo(
     () =>
@@ -198,13 +226,33 @@ export default function DevicesList() {
       ),
     [duplicateMacGroups],
   );
+  const ignoredDuplicateMacDeviceIds = useMemo(
+    () =>
+      new Set(
+        ignoredDuplicateMacGroups.flatMap((group) =>
+          group.devices.map((device) => device.id),
+        ),
+      ),
+    [ignoredDuplicateMacGroups],
+  );
+  const visibleDuplicateMacGroups = showIgnoredDuplicateMacs
+    ? allDuplicateMacGroups
+    : duplicateMacGroups;
+  const visibleDuplicateMacDeviceIds = useMemo(() => {
+    if (!showIgnoredDuplicateMacs) return duplicateMacDeviceIds;
+    return new Set([...duplicateMacDeviceIds, ...ignoredDuplicateMacDeviceIds]);
+  }, [
+    duplicateMacDeviceIds,
+    ignoredDuplicateMacDeviceIds,
+    showIgnoredDuplicateMacs,
+  ]);
 
   const filtered = useMemo(() => {
     return devices
       .filter((device) => {
         if (type && device.deviceType !== type) return false;
         if (showUnplacedOnly && !isUnplacedDevice(device)) return false;
-        if (showDuplicateMacs && !duplicateMacDeviceIds.has(device.id))
+        if (showDuplicateMacs && !visibleDuplicateMacDeviceIds.has(device.id))
           return false;
         if (!query) return true;
         const haystack = [
@@ -236,7 +284,6 @@ export default function DevicesList() {
   }, [
     deviceById,
     devices,
-    duplicateMacDeviceIds,
     portsByDeviceId,
     query,
     rackById,
@@ -245,6 +292,7 @@ export default function DevicesList() {
     showUnplacedOnly,
     showDuplicateMacs,
     type,
+    visibleDuplicateMacDeviceIds,
   ]);
   const selectedDeviceCount = selectedDeviceIds.size;
   const selectedDevices = useMemo(
@@ -466,8 +514,29 @@ export default function DevicesList() {
       nextParams.set("mac", "duplicates");
     } else {
       nextParams.delete("mac");
+      setShowIgnoredDuplicateMacs(false);
     }
     setSearchParams(nextParams);
+  }
+
+  async function setDuplicateMacGroupIgnored(
+    group: DuplicateMacGroup,
+    ignored: boolean,
+  ) {
+    setDuplicateMacSaving(group.macAddress);
+    setDuplicateMacError("");
+    try {
+      await bulkUpdateDevices({
+        deviceIds: group.devices.map((device) => device.id),
+        changes: { ignoreDuplicateMac: ignored },
+      });
+    } catch (err) {
+      setDuplicateMacError(
+        err instanceof Error ? err.message : t("Failed to update devices."),
+      );
+    } finally {
+      setDuplicateMacSaving(null);
+    }
   }
 
   const typeCounts = useMemo(() => {
@@ -558,14 +627,25 @@ export default function DevicesList() {
           })}
         </div>
 
-        <div className="relative max-w-md">
-          <Filter className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t("Search hostname, model, IP, MAC, tag...")}
-            className="pl-7"
-          />
+        <div className="flex max-w-2xl flex-wrap items-center gap-2">
+          <div className="relative min-w-0 flex-1 basis-64">
+            <Filter className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t("Search hostname, model, IP, MAC, tag...")}
+              className="pl-7"
+            />
+          </div>
+          <Mono
+            data-testid="device-filter-count"
+            className="whitespace-nowrap text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]"
+          >
+            {t("{filtered} of {total} devices", {
+              filtered: filtered.length,
+              total: devices.length,
+            })}
+          </Mono>
         </div>
 
         {showDuplicateMacs && (
@@ -584,30 +664,79 @@ export default function DevicesList() {
                     )}
                   </div>
                 </div>
-                <Badge tone={duplicateMacGroups.length > 0 ? "warn" : "ok"}>
-                  {duplicateMacDeviceIds.size} {t("affected")}
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] px-2.5 py-1.5 text-xs text-[var(--color-fg-subtle)]">
+                    <input
+                      type="checkbox"
+                      checked={showIgnoredDuplicateMacs}
+                      disabled={ignoredDuplicateMacGroups.length === 0}
+                      onChange={(event) =>
+                        setShowIgnoredDuplicateMacs(event.target.checked)
+                      }
+                    />
+                    {t("Show ignored")}
+                    <Mono className="text-[10px]">
+                      {ignoredDuplicateMacGroups.length}
+                    </Mono>
+                  </label>
+                  <Badge
+                    tone={duplicateMacGroups.length > 0 ? "warn" : "ok"}
+                  >
+                    {duplicateMacDeviceIds.size} {t("affected")}
+                  </Badge>
+                </div>
               </div>
 
-              {duplicateMacGroups.length === 0 ? (
+              {visibleDuplicateMacGroups.length === 0 ? (
                 <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] px-3 py-4 text-sm text-[var(--color-fg-subtle)]">
                   {t("No duplicate device MAC addresses found.")}
                 </div>
               ) : (
                 <div className="grid gap-2 xl:grid-cols-2">
-                  {duplicateMacGroups.map((group) => (
+                  {visibleDuplicateMacGroups.map((group) => (
                     <div
                       key={group.macAddress}
                       data-testid="duplicate-mac-group"
-                      className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/6 p-3"
+                      data-ignored={group.ignored || undefined}
+                      className={[
+                        "rounded-[var(--radius-sm)] border p-3",
+                        group.ignored
+                          ? "border-[var(--color-line)] bg-[var(--color-bg-2)]"
+                          : "border-[var(--color-warn)]/30 bg-[var(--color-warn)]/6",
+                      ].join(" ")}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <Mono className="text-xs text-[var(--color-fg)]">
                           {group.macAddress}
                         </Mono>
-                        <Badge tone="warn">
-                          {group.devices.length} {t("devices")}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge tone={group.ignored ? "neutral" : "warn"}>
+                            {group.ignored ? (
+                              t("Ignored duplicate")
+                            ) : (
+                              <>
+                                {group.devices.length} {t("devices")}
+                              </>
+                            )}
+                          </Badge>
+                          {canEdit && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={duplicateMacSaving !== null}
+                              onClick={() =>
+                                void setDuplicateMacGroupIgnored(
+                                  group,
+                                  !group.ignored,
+                                )
+                              }
+                            >
+                              {group.ignored
+                                ? t("Restore duplicate warning")
+                                : t("Ignore duplicate")}
+                            </Button>
+                          )}
+                        </div>
                       </div>
                       <div className="mt-2 divide-y divide-[var(--color-line)]">
                         {group.devices.map((device) => (
@@ -633,6 +762,11 @@ export default function DevicesList() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+              {duplicateMacError && (
+                <div className="text-xs text-[var(--color-err)]">
+                  {duplicateMacError}
                 </div>
               )}
             </CardBody>
@@ -1023,6 +1157,10 @@ export default function DevicesList() {
               <tbody>
                 {filtered.map((device) => {
                   const hasDuplicateMac = duplicateMacDeviceIds.has(device.id);
+                  const hasIgnoredDuplicateMac =
+                    showDuplicateMacs &&
+                    showIgnoredDuplicateMacs &&
+                    ignoredDuplicateMacDeviceIds.has(device.id);
                   const devicePorts = portsByDeviceId[device.id] ?? [];
                   const linked = devicePorts.filter(
                     (port) => port.linkState === "up",
@@ -1041,6 +1179,9 @@ export default function DevicesList() {
                       key={device.id}
                       data-selected={selectedDeviceIds.has(device.id)}
                       data-duplicate-mac={hasDuplicateMac || undefined}
+                      data-ignored-duplicate-mac={
+                        hasIgnoredDuplicateMac || undefined
+                      }
                       className={[
                         "group",
                         hasDuplicateMac ? "bg-[var(--color-warn)]/5" : "",
@@ -1100,6 +1241,11 @@ export default function DevicesList() {
                           </Mono>
                           {hasDuplicateMac && (
                             <Badge tone="warn">{t("Duplicate")}</Badge>
+                          )}
+                          {hasIgnoredDuplicateMac && (
+                            <Badge tone="neutral">
+                              {t("Ignored duplicate")}
+                            </Badge>
                           )}
                         </div>
                       </Td>

@@ -121,6 +121,7 @@ export interface Device {
   serial?: string;
   managementIp?: string;
   macAddress?: string | null;
+  ignoreDuplicateMac?: boolean;
   status: DeviceStatus;
   placement?: DevicePlacement;
   parentDeviceId?: ID;

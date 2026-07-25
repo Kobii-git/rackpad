@@ -24,6 +24,7 @@ import {
   asObject,
   ensureIpv4,
   ensureIsoDate,
+  optionalBoolean,
   optionalEnum,
   optionalInteger,
   optionalNumber,
@@ -54,7 +55,10 @@ const DEVICE_NETWORK_MODES = ["normal", "host-shared"] as const;
 const JSON_COLS = ["tags"] as const;
 
 function parseDevice(row: Record<string, unknown>) {
-  return parseRow(row, [...JSON_COLS]);
+  return {
+    ...parseRow(row, [...JSON_COLS]),
+    ignoreDuplicateMac: Number(row.ignoreDuplicateMac ?? 0) === 1,
+  };
 }
 
 function derivePlacement(input: {
@@ -465,6 +469,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
       max: 1024 * 1024 * 10,
     });
     const tags = optionalStringArray(changes, "tags", { maxItems: 30 });
+    const ignoreDuplicateMac = optionalBoolean(changes, "ignoreDuplicateMac");
 
     // Pre-flight: confirm every device exists and is writable BEFORE any write,
     // so the bulk update applies atomically (no partial changes on failure).
@@ -528,6 +533,10 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         if (tags !== undefined) {
           updates.push("tags = ?");
           values.push(tags ? JSON.stringify(tags) : null);
+        }
+        if (ignoreDuplicateMac !== undefined) {
+          updates.push("ignoreDuplicateMac = ?");
+          values.push(ignoreDuplicateMac ? 1 : 0);
         }
 
         const placementFieldsChanging =
@@ -835,12 +844,24 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
       values.push(validateRoom(roomId, String(device.labId)));
     }
 
+    let macAddressChanged = false;
     if ("macAddress" in body) {
       const macAddress = normalizeMacAddress(
         optionalString(body, "macAddress", { maxLength: 32 }),
       );
       updates.push("macAddress = ?");
       values.push(macAddress);
+      macAddressChanged = macAddress !== (device.macAddress ?? null);
+      if (macAddressChanged) {
+        updates.push("ignoreDuplicateMac = ?");
+        values.push(0);
+      }
+    }
+
+    const ignoreDuplicateMac = optionalBoolean(body, "ignoreDuplicateMac");
+    if (ignoreDuplicateMac !== undefined && !macAddressChanged) {
+      updates.push("ignoreDuplicateMac = ?");
+      values.push(ignoreDuplicateMac ? 1 : 0);
     }
 
     if ("snmpCredentialId" in body) {

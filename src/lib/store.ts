@@ -617,6 +617,7 @@ function normalizeDeviceChanges(
     "deviceType",
     "status",
     "networkMode",
+    "ignoreDuplicateMac",
   ] as const;
 
   for (const key of nullableKeys) {

@@ -673,14 +673,32 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
     }
 
     await page.goto("/devices");
+    const filterCount = page.getByTestId("device-filter-count");
+    await expect(filterCount).toHaveText(/\d+ of \d+ devices/);
+    const totalMatch = (await filterCount.textContent())?.match(
+      /(\d+) of (\d+) devices/,
+    );
+    expect(totalMatch).toBeTruthy();
+    const initialTotal = Number(totalMatch?.[2]);
+    const search = page.getByPlaceholder(
+      "Search hostname, model, IP, MAC, tag...",
+    );
+    await search.fill(deviceNames[2]);
+    await expect(filterCount).toHaveText(`1 of ${initialTotal} devices`);
+    await search.clear();
+    await expect(filterCount).toHaveText(
+      `${initialTotal} of ${initialTotal} devices`,
+    );
+
     await page
       .getByRole("button", { name: /Duplicate MACs/ })
       .click();
     await expect(page).toHaveURL(/mac=duplicates/);
+    await expect(filterCount).toHaveText(`2 of ${initialTotal} devices`);
 
     const summary = page.getByTestId("duplicate-mac-summary");
     await expect(summary).toBeVisible();
-    const group = summary
+    let group = summary
       .getByTestId("duplicate-mac-group")
       .filter({ hasText: duplicateMac });
     await expect(group).toContainText(deviceNames[0]);
@@ -703,6 +721,67 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
         hasText: deviceNames[0],
       }),
     ).toContainText("Duplicate");
+
+    await group.getByRole("button", { name: "Ignore duplicate" }).click();
+    await expect(
+      summary
+        .getByTestId("duplicate-mac-group")
+        .filter({ hasText: duplicateMac }),
+    ).toHaveCount(0);
+    await expect(filterCount).toHaveText(`0 of ${initialTotal} devices`);
+
+    const thirdDuplicateName = `duplicate-mac-c-${suffix}`;
+    const thirdDuplicateRes = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        hostname: thirdDuplicateName,
+        deviceType: "endpoint",
+        managementIp: "10.254.10.13",
+        macAddress: duplicateMac,
+        status: "unknown",
+      },
+    });
+    expect(thirdDuplicateRes.status()).toBe(201);
+    createdDeviceIds.push(
+      ((await thirdDuplicateRes.json()) as { id: string }).id,
+    );
+
+    await page.reload();
+    const expandedTotal = initialTotal + 1;
+    await expect(filterCount).toHaveText(`3 of ${expandedTotal} devices`);
+    group = summary
+      .getByTestId("duplicate-mac-group")
+      .filter({ hasText: duplicateMac });
+    await expect(group).toContainText(thirdDuplicateName);
+
+    await group.getByRole("button", { name: "Ignore duplicate" }).click();
+    await expect(group).toHaveCount(0);
+    await expect(filterCount).toHaveText(`0 of ${expandedTotal} devices`);
+
+    await summary
+      .getByRole("checkbox", { name: /Show ignored/ })
+      .check();
+    group = summary
+      .getByTestId("duplicate-mac-group")
+      .filter({ hasText: duplicateMac });
+    await expect(group).toHaveAttribute("data-ignored", "true");
+    await expect(group).toContainText("Ignored duplicate");
+    await expect(filterCount).toHaveText(`3 of ${expandedTotal} devices`);
+    await expect(
+      table.locator('tr[data-ignored-duplicate-mac="true"]').filter({
+        hasText: thirdDuplicateName,
+      }),
+    ).toContainText("Ignored duplicate");
+
+    await group
+      .getByRole("button", { name: "Restore duplicate warning" })
+      .click();
+    await expect(group).not.toHaveAttribute("data-ignored", "true");
+    await expect(
+      group.getByRole("button", { name: "Ignore duplicate" }),
+    ).toBeVisible();
+    await expect(filterCount).toHaveText(`3 of ${expandedTotal} devices`);
   } finally {
     for (const deviceId of createdDeviceIds.reverse()) {
       await request.delete(`/api/devices/${deviceId}`, { headers });
