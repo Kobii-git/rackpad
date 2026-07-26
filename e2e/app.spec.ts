@@ -69,6 +69,20 @@ async function authenticate(page: Page, language = "en") {
   );
 }
 
+async function expectTracePngDownload(page: Page, expectedFilename: string) {
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("trace-download-image").click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(expectedFilename);
+
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  const png = await readFile(downloadPath!);
+  expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+  expect(png.readUInt32BE(16)).toBeGreaterThan(0);
+  expect(png.readUInt32BE(20)).toBeGreaterThan(0);
+}
+
 test("responsive and serious accessibility matrix passes for supported modes", async ({
   page,
 }) => {
@@ -239,10 +253,75 @@ test("all primary routes load without document overflow in both demo labs", asyn
   }
 });
 
-test("visualizer trace downloads a standalone PNG", async ({ page }) => {
+test("visualizer trace downloads standalone PNGs under the production CSP", async ({
+  page,
+}) => {
+  await page.route("**/api/ports", async (route) => {
+    const response = await route.fetch();
+    const ports = (await response.json()) as Array<Record<string, unknown>>;
+    await route.fulfill({
+      response,
+      json: [
+        ...ports.filter(
+          (port) =>
+            !(
+              port.deviceId === "d_pp24" &&
+              port.name === "1" &&
+              port.face === "rear"
+            ),
+        ),
+        {
+          id: "p_e2e_pp24_1_rear",
+          deviceId: "d_pp24",
+          name: "1",
+          position: 1,
+          kind: "rj45",
+          speed: "1G",
+          linkState: "up",
+          mode: "access",
+          vlanId: null,
+          allowedVlanIds: null,
+          description: null,
+          face: "rear",
+          virtualSwitchId: null,
+          snmpIfIndex: null,
+          macAddress: null,
+          portRole: "physical",
+          aggregatePortId: null,
+        },
+      ],
+    });
+  });
+  await page.route("**/api/port-links", async (route) => {
+    const response = await route.fetch();
+    const links = (await response.json()) as Array<Record<string, unknown>>;
+    await route.fulfill({
+      response,
+      json: [
+        ...links.filter(
+          (link) =>
+            link.fromPortId !== "p_d_fw_3" &&
+            link.toPortId !== "p_d_fw_3",
+        ),
+        {
+          id: "l_e2e_patch_trace",
+          fromPortId: "p_d_fw_3",
+          toPortId: "p_e2e_pp24_1_rear",
+          cableType: "Cat6",
+          cableLength: "2m",
+          color: "orange",
+          notes: null,
+        },
+      ],
+    });
+  });
+
   await authenticate(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/visualizer");
+  const visualizerResponse = await page.goto("/visualizer");
+  expect(
+    visualizerResponse?.headers()["content-security-policy"],
+  ).toContain("img-src 'self' data: blob:");
   await expect(page.locator("h1").first()).toBeVisible();
 
   await page.getByTestId("visualizer-trace-toggle").click();
@@ -252,20 +331,26 @@ test("visualizer trace downloads a standalone PNG", async ({ page }) => {
   await page.getByTestId("trace-port-select").selectOption("p_d_unifi_1");
   await page.getByTestId("trace-submit").click();
   await expect(page.getByTestId("trace-download-image")).toBeVisible();
-
-  const downloadPromise = page.waitForEvent("download");
-  await page.getByTestId("trace-download-image").click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe(
+  await expectTracePngDownload(
+    page,
     "rackpad-trace-unifi-01-eth0-to-sw-tor-01-24.png",
   );
 
-  const downloadPath = await download.path();
-  expect(downloadPath).not.toBeNull();
-  const png = await readFile(downloadPath!);
-  expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
-  expect(png.readUInt32BE(16)).toBeGreaterThan(0);
-  expect(png.readUInt32BE(20)).toBeGreaterThan(0);
+  await page.goto("/visualizer");
+  await expect(page.locator("h1").first()).toBeVisible();
+  await page.getByTestId("visualizer-trace-toggle").click();
+  await page
+    .getByTestId("trace-device-select")
+    .selectOption({ label: "fw-01" });
+  await page.getByTestId("trace-port-select").selectOption("p_d_fw_3");
+  await page.getByTestId("trace-submit").click();
+  await expect(page.getByText("Trace hops").locator("..")).toContainText(
+    "3 hops",
+  );
+  await expectTracePngDownload(
+    page,
+    "rackpad-trace-fw-01-igb2-to-sw-tor-01-1.png",
+  );
 });
 
 test("UI regression surfaces remain reachable and unclipped", async ({

@@ -8,6 +8,19 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.3-beta.2] - 2026-07-26
+
+### Fixed
+
+- Restored production Visualizer trace PNG downloads by allowing client-generated
+  image blob URLs under Rackpad's image-only Content Security Policy directive.
+
+### Test notes
+
+- Verify direct and multi-hop patch-panel trace PNG downloads complete without
+  an error in a deployed beta instance.
+- Confirm **Copy** and **Download text** remain unchanged.
+
 ## [1.7.3-beta.1] - 2026-07-26
 
 ### Added

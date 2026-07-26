@@ -11,6 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import dgram from "node:dgram";
 import { execFileSync } from "node:child_process";
+import { CONTENT_SECURITY_POLICY } from "../security-headers.js";
 
 const tempDir = mkdtempSync(path.join(os.tmpdir(), "rackpad-tests-"));
 const spaDistDir = path.resolve(process.cwd(), "dist");
@@ -442,6 +443,25 @@ test("non-api app routes serve the SPA index on refresh", async () => {
       /<div id="root"><\/div>/i.test(res.body),
     "expected a SPA index document",
   );
+});
+
+test("responses allow trace image blob URLs only through img-src", async () => {
+  const responses = [
+    await app.inject({ method: "GET", url: "/compute" }),
+    await app.inject({ method: "GET", url: "/api/auth/status" }),
+  ];
+
+  for (const response of responses) {
+    const policy = response.headers["content-security-policy"];
+    assert.equal(policy, CONTENT_SECURITY_POLICY);
+    assert.deepEqual(
+      policy
+        ?.split(";")
+        .map((directive) => directive.trim())
+        .filter((directive) => directive.includes("blob:")),
+      ["img-src 'self' data: blob:"],
+    );
+  }
 });
 
 test("IEEE OUI parser supports MA-L, MA-M, and MA-S prefixes", () => {

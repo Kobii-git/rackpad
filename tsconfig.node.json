@@ -15,5 +15,5 @@
     "outDir": "./.tsbuild/tsconfig.node",
     "strict": true
   },
-  "include": ["vite.config.ts"]
+  "include": ["vite.config.ts", "server/security-headers.ts"]
 }
