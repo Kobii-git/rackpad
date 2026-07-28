@@ -182,6 +182,9 @@ export type VirtualSwitchPatch = Nullable<
   Pick<VirtualSwitch, "name" | "kind" | "membersShareHostIp" | "notes">
 >;
 export type PortLinkPatch = Nullable<Omit<PortLink, "id">>;
+export type PortLinkBulkPatch = Nullable<
+  Pick<PortLink, "cableType" | "cableLength" | "color">
+>;
 export type PortTemplatePatch = Nullable<
   Pick<PortTemplate, "name" | "description" | "deviceTypes" | "ports">
 >;
@@ -991,6 +994,13 @@ export const api = {
   updatePortLink(id: string, body: PortLinkPatch) {
     return request<PortLink>(`/port-links/${id}`, {
       method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  bulkUpdatePortLinks(body: { linkIds: string[]; changes: PortLinkBulkPatch }) {
+    return request<{ updated: number; links: PortLink[] }>("/port-links/bulk", {
+      method: "POST",
       body: JSON.stringify(body),
     });
   },

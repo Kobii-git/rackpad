@@ -42,6 +42,7 @@ interface TraceImagePort {
 interface TraceImageDeviceBlock {
   kind: "device";
   deviceId: string;
+  deviceType: string;
   title: string;
   detail: string;
   placement: string;
@@ -219,6 +220,7 @@ function createDeviceBlock(
   const block: TraceImageDeviceBlock = {
     kind: "device",
     deviceId: port.deviceId,
+    deviceType: effectiveType,
     title: device?.hostname || labels.unknown,
     detail: detail || labels.unknown,
     placement: placementParts.join(" / "),
@@ -316,6 +318,7 @@ function renderDeviceBlock(
     `<g>`,
     `<rect x="${x}" y="${y}" width="${CARD_WIDTH}" height="${layout.height}" rx="14" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" />`,
     `<path d="M ${x + 14} ${y} H ${cardRight - 14} Q ${cardRight} ${y} ${cardRight} ${y + 14} V ${y + 10} H ${x} V ${y + 14} Q ${x} ${y} ${x + 14} ${y} Z" fill="${block.accent}" />`,
+    renderDeviceIcon(block.deviceType, cardRight - 58, y + 20),
   ];
 
   let cursorY = y + 34;
@@ -377,6 +380,71 @@ function renderDeviceBlock(
 
   parts.push(`</g>`);
   return parts.join("");
+}
+
+const TRACE_DEVICE_ICONS: Record<string, string> = {
+  network:
+    '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/><circle cx="17" cy="16" r="1"/>',
+  shield:
+    '<path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/><path d="m9 12 2 2 4-4"/>',
+  server:
+    '<rect x="3" y="2" width="18" height="8" rx="2"/><rect x="3" y="14" width="18" height="8" rx="2"/><path d="M7 6h.01M7 18h.01M11 6h6M11 18h6"/>',
+  boxes:
+    '<path d="m12 2 8 4.5v9L12 20l-8-4.5v-9L12 2Z"/><path d="m4.3 6.7 7.7 4.4 7.7-4.4M12 11.1V20"/>',
+  wifi: '<path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 20h.01"/>',
+  monitor:
+    '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  cable:
+    '<path d="M6 3v5M4 3h4M18 16v5M16 21h4M6 8a6 6 0 0 0 6 6h0a6 6 0 0 1 6 6"/>',
+  minus: '<path d="M5 12h14"/>',
+  storage:
+    '<path d="M4 6h16M4 10h16M6 2h12l2 4v14H4V6l2-4Z"/><path d="M8 16h.01M12 16h4"/>',
+  power: '<path d="M12 2v10M7.1 4.9a8 8 0 1 0 9.8 0"/>',
+  battery:
+    '<rect x="2" y="6" width="18" height="12" rx="2"/><path d="M22 10v4M6 12h8M10 8v8"/>',
+};
+
+function renderDeviceIcon(type: string, x: number, y: number) {
+  const key = traceDeviceIconKey(type);
+  return [
+    `<g data-device-icon="${key}">`,
+    `<rect x="${x}" y="${y}" width="38" height="38" rx="9" fill="#f8fafc" stroke="#cbd5e1" />`,
+    `<g transform="translate(${x + 7} ${y + 7})" fill="none" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">`,
+    TRACE_DEVICE_ICONS[key],
+    `</g>`,
+    `</g>`,
+  ].join("");
+}
+
+function traceDeviceIconKey(type: string) {
+  switch (type) {
+    case "switch":
+    case "router":
+      return "network";
+    case "firewall":
+      return "shield";
+    case "server":
+      return "server";
+    case "ap":
+    case "access_point":
+      return "wifi";
+    case "endpoint":
+    case "kvm":
+      return "monitor";
+    case "patch_panel":
+    case "brush_panel":
+      return "cable";
+    case "blanking_panel":
+      return "minus";
+    case "storage":
+      return "storage";
+    case "pdu":
+      return "power";
+    case "ups":
+      return "battery";
+    default:
+      return "boxes";
+  }
 }
 
 function renderConnectorBlock(layout: TraceImageBlockLayout, y: number) {

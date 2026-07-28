@@ -1842,4 +1842,8 @@ export const ko = {
   "Download text": "텍스트 다운로드",
   "Download image": "이미지 다운로드",
   "Internal pass-through": "내부 패스스루",
+  "IP mismatches": "IP 불일치",
+  "No IP mismatches found.": "IP 불일치가 없습니다.",
+  "Cable trace image": "케이블 추적 이미지",
+  "Review": "검토",
 } satisfies TranslationMap;

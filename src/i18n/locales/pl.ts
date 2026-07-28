@@ -1842,4 +1842,8 @@ export const pl = {
   "Download text": "Pobierz tekst",
   "Download image": "Pobierz obraz",
   "Internal pass-through": "Wewnętrzne przejście",
+  "IP mismatches": "Niezgodności adresów IP",
+  "No IP mismatches found.": "Nie znaleziono niezgodności adresów IP.",
+  "Cable trace image": "Obraz śledzenia kabla",
+  "Review": "Sprawdź",
 } satisfies TranslationMap;

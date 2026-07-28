@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Device, Port, PortLink, Rack, Room } from "@/lib/types";
+import type {
+  Device,
+  DeviceTypeDefinition,
+  Port,
+  PortLink,
+  Rack,
+  Room,
+} from "@/lib/types";
 import { buildVisualizerModel, tracePorts } from "./model";
 import { buildTraceImageSvg, type TraceImageLabels } from "./trace-image";
 
@@ -54,12 +61,13 @@ function buildModel(input: {
   links: PortLink[];
   racks?: Rack[];
   rooms?: Room[];
+  deviceTypes?: DeviceTypeDefinition[];
 }) {
   return buildVisualizerModel({
     racks: input.racks ?? [],
     rooms: input.rooms ?? [],
     devices: input.devices,
-    deviceTypes: [],
+    deviceTypes: input.deviceTypes ?? [],
     ports: input.ports,
     portLinks: input.links,
     deviceMonitors: [],
@@ -136,6 +144,56 @@ test("trace image renders escaped endpoint metadata and a safe filename", () => 
   assert.match(image.svg, /Cable · Cat6/);
   assert.match(image.svg, /Length: 3m/);
   assert.match(image.svg, /1 hops · Length: 3m/);
+  assert.match(image.svg, /data-device-icon="shield"/);
+  assert.match(image.svg, /data-device-icon="server"/);
+  assert.doesNotMatch(image.svg, /(?:href|src)=/);
+});
+
+test("trace image icons inherit custom device parents and fall back safely", () => {
+  const devices = [
+    device("custom-firewall", { deviceType: "edge_security" }),
+    device("custom-unknown", { deviceType: "special_appliance" }),
+  ];
+  const ports = [
+    port("custom_firewall_port", "custom-firewall", "wan0"),
+    port("custom_unknown_port", "custom-unknown", "eth0"),
+  ];
+  const model = buildModel({
+    devices,
+    ports,
+    deviceTypes: [
+      {
+        id: "edge_security",
+        label: "Edge security",
+        parentType: "firewall",
+        builtIn: false,
+      },
+      {
+        id: "special_appliance",
+        label: "Special appliance",
+        builtIn: false,
+      },
+    ],
+    links: [
+      {
+        id: "custom_icons",
+        fromPortId: "custom_firewall_port",
+        toPortId: "custom_unknown_port",
+      },
+    ],
+  });
+  const result = tracePorts(
+    model,
+    "custom_firewall_port",
+    "custom_unknown_port",
+  );
+  assert.ok(result);
+
+  const image = buildTraceImageSvg(model, result, labels);
+  assert.equal((image.svg.match(/data-device-icon="shield"/g) ?? []).length, 1);
+  assert.equal((image.svg.match(/data-device-icon="boxes"/g) ?? []).length, 1);
+  assert.match(image.svg, /^<svg[^>]+>/);
+  assert.match(image.svg, /<\/svg>$/);
 });
 
 test("trace image groups a patch-panel pass-through into one device card", () => {

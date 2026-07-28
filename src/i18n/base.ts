@@ -1840,6 +1840,10 @@ export const en = {
   "Download text": "Download text",
   "Download image": "Download image",
   "Internal pass-through": "Internal pass-through",
+  "IP mismatches": "IP mismatches",
+  "No IP mismatches found.": "No IP mismatches found.",
+  "Cable trace image": "Cable trace image",
+  "Review": "Review",
 } as const;
 
 export type TranslationKey = keyof typeof en;

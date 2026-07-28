@@ -6,12 +6,14 @@ interface ColorInputProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 export function ColorInput({
   value,
   onChange,
   placeholder = "#4a78c4 or blue",
+  disabled = false,
 }: ColorInputProps) {
   const { t } = useI18n();
   const normalizedValue = value.trim().toLowerCase();
@@ -27,6 +29,7 @@ export function ColorInput({
       <div className="flex flex-wrap gap-2">
         <select
           value={selectedPreset?.value ?? ""}
+          disabled={disabled}
           onChange={(event) => {
             const preset = COLOR_PRESETS.find(
               (entry) => entry.value === event.target.value,
@@ -59,6 +62,7 @@ export function ColorInput({
 
       <Input
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
       />

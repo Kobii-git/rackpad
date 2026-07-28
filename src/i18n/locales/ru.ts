@@ -1842,4 +1842,8 @@ export const ru = {
   "Download text": "Скачать текст",
   "Download image": "Скачать изображение",
   "Internal pass-through": "Внутреннее сквозное соединение",
+  "IP mismatches": "Несоответствия IP",
+  "No IP mismatches found.": "Несоответствия IP не найдены.",
+  "Cable trace image": "Изображение трассировки кабеля",
+  "Review": "Проверить",
 } satisfies TranslationMap;

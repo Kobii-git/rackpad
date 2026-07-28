@@ -1842,4 +1842,8 @@ export const vi = {
   "Download text": "Tải văn bản",
   "Download image": "Tải hình ảnh",
   "Internal pass-through": "Kết nối chuyển tiếp nội bộ",
+  "IP mismatches": "IP không khớp",
+  "No IP mismatches found.": "Không tìm thấy IP không khớp.",
+  "Cable trace image": "Hình ảnh đường đi cáp",
+  "Review": "Xem lại",
 } satisfies TranslationMap;

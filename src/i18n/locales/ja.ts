@@ -1842,4 +1842,8 @@ export const ja = {
   "Download text": "テキストをダウンロード",
   "Download image": "画像をダウンロード",
   "Internal pass-through": "内部パススルー",
+  "IP mismatches": "IP の不一致",
+  "No IP mismatches found.": "IP の不一致は見つかりませんでした。",
+  "Cable trace image": "ケーブルトレース画像",
+  "Review": "確認",
 } satisfies TranslationMap;

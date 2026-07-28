@@ -1842,4 +1842,8 @@ export const ar = {
   "Download text": "تنزيل النص",
   "Download image": "تنزيل الصورة",
   "Internal pass-through": "تمرير داخلي",
+  "IP mismatches": "حالات عدم تطابق IP",
+  "No IP mismatches found.": "لم يتم العثور على حالات عدم تطابق IP.",
+  "Cable trace image": "صورة تتبع الكابل",
+  "Review": "مراجعة",
 } satisfies TranslationMap;

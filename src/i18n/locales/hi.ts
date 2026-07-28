@@ -1842,4 +1842,8 @@ export const hi = {
   "Download text": "टेक्स्ट डाउनलोड करें",
   "Download image": "छवि डाउनलोड करें",
   "Internal pass-through": "आंतरिक पास-थ्रू",
+  "IP mismatches": "IP विसंगतियाँ",
+  "No IP mismatches found.": "कोई IP विसंगति नहीं मिली।",
+  "Cable trace image": "केबल ट्रेस छवि",
+  "Review": "समीक्षा",
 } satisfies TranslationMap;

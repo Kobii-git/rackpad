@@ -1842,4 +1842,8 @@ export const tr = {
   "Download text": "Metni indir",
   "Download image": "Görseli indir",
   "Internal pass-through": "Dahili geçiş",
+  "IP mismatches": "IP uyuşmazlıkları",
+  "No IP mismatches found.": "IP uyuşmazlığı bulunamadı.",
+  "Cable trace image": "Kablo izleme görseli",
+  "Review": "İncele",
 } satisfies TranslationMap;

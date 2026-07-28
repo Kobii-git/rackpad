@@ -1842,4 +1842,8 @@ export const he = {
   "Download text": "הורדת טקסט",
   "Download image": "הורדת תמונה",
   "Internal pass-through": "מעבר פנימי",
+  "IP mismatches": "אי-התאמות IP",
+  "No IP mismatches found.": "לא נמצאו אי-התאמות IP.",
+  "Cable trace image": "תמונת מעקב כבל",
+  "Review": "בדיקה",
 } satisfies TranslationMap;

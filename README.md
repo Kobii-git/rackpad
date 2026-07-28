@@ -191,6 +191,7 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - DHCP reservation allocation from IP zones instead of treating the whole DHCP scope as assignable
 - Direct links between devices, ports, IPAM assignments, racks, rooms, dashboard cards, reports, and visualizer inspector entries
 - Bulk device status edits and bulk delete with dependency cleanup
+- Atomic bulk cable type, length, and color edits across selected inventory rows
 - Audit log writes for the main workflows
 - User bootstrap, login, logout, and user management
 - Optional OIDC login with PKCE, role mapping, and Authentik-style issuer/debug guidance

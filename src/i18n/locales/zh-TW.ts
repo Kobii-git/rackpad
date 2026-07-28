@@ -1842,4 +1842,8 @@ export const zhTW = {
   "Download text": "下載文字",
   "Download image": "下載圖片",
   "Internal pass-through": "內部直通",
+  "IP mismatches": "IP 不一致",
+  "No IP mismatches found.": "找不到 IP 不一致。",
+  "Cable trace image": "纜線追蹤影像",
+  "Review": "檢查",
 } satisfies TranslationMap;

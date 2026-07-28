@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { CablingMapPanel } from "@/components/shared/CablingMapPanel";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -223,11 +228,26 @@ const EMPTY_SERVICE_FORM: ServiceForm = {
 
 const NEW_MONITOR_ID = "__new_monitor__";
 const NEW_SERVICE_ID = "__new_service__";
+const DEVICE_DETAIL_TABS = new Set([
+  "overview",
+  "ports",
+  "network",
+  "monitoring",
+  "services",
+  "images",
+  "notes",
+  "activity",
+]);
 
 export default function DeviceDetail() {
   const { t } = useI18n();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab") ?? "overview";
+  const selectedTab = DEVICE_DETAIL_TABS.has(requestedTab)
+    ? requestedTab
+    : "overview";
   const currentUser = useStore((s) => s.currentUser);
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
@@ -1390,7 +1410,18 @@ export default function DeviceDetail() {
           </div>
         </Card>
 
-        <Tabs defaultValue="overview">
+        <Tabs
+          value={selectedTab}
+          onValueChange={(nextTab) => {
+            const nextParams = new URLSearchParams(searchParams);
+            if (nextTab === "overview") {
+              nextParams.delete("tab");
+            } else {
+              nextParams.set("tab", nextTab);
+            }
+            setSearchParams(nextParams, { replace: true });
+          }}
+        >
           <TabsList>
             <TabsTrigger value="overview">{t("Overview")}</TabsTrigger>
             <TabsTrigger value="ports">

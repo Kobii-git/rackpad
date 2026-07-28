@@ -61,6 +61,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const documentationPages = useStore((s) => s.documentationPages);
   const vlans = useStore((s) => s.vlans);
   const ipAssignments = useStore((s) => s.ipAssignments);
+  const deviceById = useMemo(
+    () => new Map(devices.map((device) => [device.id, device])),
+    [devices],
+  );
 
   const pages = useMemo<SearchResult[]>(
     () => [
@@ -240,6 +244,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     }
 
     for (const assignment of ipAssignments) {
+      const owner =
+        !assignment.integrity || assignment.integrity.state === "ok"
+          ? deviceById.get(assignment.deviceId ?? "")
+          : undefined;
       const haystack = [
         assignment.ipAddress,
         assignment.hostname,
@@ -253,10 +261,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           id: assignment.id,
           group: "IPs",
           title: assignment.ipAddress,
-          subtitle: [assignment.hostname, assignment.assignmentType]
+          subtitle: [
+            owner?.hostname ?? assignment.hostname,
+            assignment.assignmentType,
+          ]
             .filter(Boolean)
             .join(" · "),
-          href: `/networks?subnetId=${assignment.subnetId}`,
+          href: owner
+            ? `/devices/${owner.id}?tab=network`
+            : `/networks?subnetId=${assignment.subnetId}`,
           Icon: Network,
         });
       }
@@ -287,7 +300,16 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     }
 
     return out;
-  }, [devices, documentationPages, ipAssignments, pages, query, t, vlans]);
+  }, [
+    deviceById,
+    devices,
+    documentationPages,
+    ipAssignments,
+    pages,
+    query,
+    t,
+    vlans,
+  ]);
 
   const grouped = useMemo(() => {
     const groups: {

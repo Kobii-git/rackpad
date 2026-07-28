@@ -8,6 +8,37 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.3-beta.3] - 2026-07-29
+
+### Added
+
+- Added an in-app, responsive preview for Visualizer cable trace images while
+  keeping PNG download available in both the trace summary and preview; device
+  cards now include their type icon in both formats.
+- Added device inventory search across attached IP assignments, an **IP
+  mismatches** filter, and direct Network-tab review links.
+- Added atomic bulk editing for cable type, length, and color across selected
+  physical or aggregate-link inventory rows.
+
+### Changed
+
+- Global IP search now identifies an assignment's owning device and opens its
+  Network tab, while retaining the subnet fallback for unowned assignments.
+
+### Fixed
+
+- Fixed device and global search omitting valid attached IP assignments that
+  differ from a device's management address.
+
+### Test notes
+
+- Search Devices by a non-management assigned IP, filter **IP mismatches**, and
+  confirm **Review** opens the owning device's Network tab.
+- Preview direct and multi-hop cable traces, close the dialog by button and
+  Escape, confirm device icons appear, and download the PNG from the preview.
+- Select individual and filtered cable rows, bulk update type, length, and
+  color, then confirm an enabled blank field clears only that metadata.
+
 ## [1.7.3-beta.2] - 2026-07-26
 
 ### Fixed

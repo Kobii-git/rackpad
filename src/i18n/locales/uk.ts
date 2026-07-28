@@ -1842,4 +1842,8 @@ export const uk = {
   "Download text": "Завантажити текст",
   "Download image": "Завантажити зображення",
   "Internal pass-through": "Внутрішнє наскрізне з’єднання",
+  "IP mismatches": "Невідповідності IP",
+  "No IP mismatches found.": "Невідповідностей IP не знайдено.",
+  "Cable trace image": "Зображення трасування кабелю",
+  "Review": "Переглянути",
 } satisfies TranslationMap;

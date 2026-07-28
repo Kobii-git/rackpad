@@ -4,6 +4,7 @@ import {
   expect,
   test,
   type APIRequestContext,
+  type Locator,
   type Page,
 } from "@playwright/test";
 import packageJson from "../package.json" with { type: "json" };
@@ -69,9 +70,13 @@ async function authenticate(page: Page, language = "en") {
   );
 }
 
-async function expectTracePngDownload(page: Page, expectedFilename: string) {
+async function expectTracePngDownload(
+  page: Page,
+  expectedFilename: string,
+  trigger: Locator = page.getByTestId("trace-download-image"),
+) {
   const downloadPromise = page.waitForEvent("download");
-  await page.getByTestId("trace-download-image").click();
+  await trigger.click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe(expectedFilename);
 
@@ -256,6 +261,30 @@ test("all primary routes load without document overflow in both demo labs", asyn
 test("visualizer trace downloads standalone PNGs under the production CSP", async ({
   page,
 }) => {
+  await page.addInitScript(() => {
+    const originalCreateObjectUrl = URL.createObjectURL.bind(URL);
+    const originalRevokeObjectUrl = URL.revokeObjectURL.bind(URL);
+    const traceObjectUrls = {
+      created: [] as string[],
+      revoked: [] as string[],
+      svgByUrl: {} as Record<string, string>,
+    };
+    Object.assign(window, { __traceObjectUrls: traceObjectUrls });
+    URL.createObjectURL = (object) => {
+      const url = originalCreateObjectUrl(object);
+      traceObjectUrls.created.push(url);
+      if (object instanceof Blob && object.type.startsWith("image/svg+xml")) {
+        void object.text().then((svg) => {
+          traceObjectUrls.svgByUrl[url] = svg;
+        });
+      }
+      return url;
+    };
+    URL.revokeObjectURL = (url) => {
+      traceObjectUrls.revoked.push(url);
+      originalRevokeObjectUrl(url);
+    };
+  });
   await page.route("**/api/ports", async (route) => {
     const response = await route.fetch();
     const ports = (await response.json()) as Array<Record<string, unknown>>;
@@ -300,8 +329,7 @@ test("visualizer trace downloads standalone PNGs under the production CSP", asyn
       json: [
         ...links.filter(
           (link) =>
-            link.fromPortId !== "p_d_fw_3" &&
-            link.toPortId !== "p_d_fw_3",
+            link.fromPortId !== "p_d_fw_3" && link.toPortId !== "p_d_fw_3",
         ),
         {
           id: "l_e2e_patch_trace",
@@ -319,9 +347,9 @@ test("visualizer trace downloads standalone PNGs under the production CSP", asyn
   await authenticate(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   const visualizerResponse = await page.goto("/visualizer");
-  expect(
-    visualizerResponse?.headers()["content-security-policy"],
-  ).toContain("img-src 'self' data: blob:");
+  expect(visualizerResponse?.headers()["content-security-policy"]).toContain(
+    "img-src 'self' data: blob:",
+  );
   await expect(page.locator("h1").first()).toBeVisible();
 
   await page.getByTestId("visualizer-trace-toggle").click();
@@ -331,6 +359,36 @@ test("visualizer trace downloads standalone PNGs under the production CSP", asyn
   await page.getByTestId("trace-port-select").selectOption("p_d_unifi_1");
   await page.getByTestId("trace-submit").click();
   await expect(page.getByTestId("trace-download-image")).toBeVisible();
+  await page.getByTestId("trace-preview-image").click();
+  const directDialog = page.getByTestId("trace-image-dialog");
+  const directPreview = page.getByTestId("trace-preview-svg");
+  await expect(directDialog).toBeVisible();
+  await expect(directPreview).toHaveAttribute("width", "640");
+  const directDimensions = await directPreview.evaluate((image) => ({
+    height: Number(image.getAttribute("height")),
+    naturalHeight: (image as HTMLImageElement).naturalHeight,
+    naturalWidth: (image as HTMLImageElement).naturalWidth,
+    url: (image as HTMLImageElement).src,
+  }));
+  expect(directDimensions.height).toBeGreaterThan(0);
+  expect(directDimensions.naturalWidth).toBe(640);
+  expect(directDimensions.naturalHeight).toBe(directDimensions.height);
+  await page.getByTestId("trace-preview-close").click();
+  await expect(directDialog).toHaveCount(0);
+  await expect(page.getByTestId("trace-preview-image")).toBeFocused();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (url) =>
+          (
+            window as typeof window & {
+              __traceObjectUrls: { revoked: string[] };
+            }
+          ).__traceObjectUrls.revoked.includes(url),
+        directDimensions.url,
+      ),
+    )
+    .toBeTruthy();
   await expectTracePngDownload(
     page,
     "rackpad-trace-unifi-01-eth0-to-sw-tor-01-24.png",
@@ -347,10 +405,284 @@ test("visualizer trace downloads standalone PNGs under the production CSP", asyn
   await expect(page.getByText("Trace hops").locator("..")).toContainText(
     "3 hops",
   );
+  await page.getByTestId("trace-preview-image").click();
+  const multiHopDialog = page.getByTestId("trace-image-dialog");
+  const multiHopPreview = page.getByTestId("trace-preview-svg");
+  await expect(multiHopDialog).toBeVisible();
+  const multiHopPreviewState = await multiHopPreview.evaluate((image) => ({
+    height: Number(image.getAttribute("height")),
+    url: (image as HTMLImageElement).src,
+  }));
+  expect(multiHopPreviewState.height).toBeGreaterThan(directDimensions.height);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (url) =>
+          (
+            window as typeof window & {
+              __traceObjectUrls: { svgByUrl: Record<string, string> };
+            }
+          ).__traceObjectUrls.svgByUrl[url] ?? "",
+        multiHopPreviewState.url,
+      ),
+    )
+    .toContain("Internal pass-through");
+  const multiHopSvg = await page.evaluate(
+    (url) =>
+      (
+        window as typeof window & {
+          __traceObjectUrls: { svgByUrl: Record<string, string> };
+        }
+      ).__traceObjectUrls.svgByUrl[url],
+    multiHopPreviewState.url,
+  );
+  expect(multiHopSvg).toContain("fw-01");
+  expect(multiHopSvg).toContain("sw-tor-01");
+  expect(multiHopSvg).toContain('data-device-icon="shield"');
+  expect(multiHopSvg).toContain('data-device-icon="network"');
+  await page.keyboard.press("Escape");
+  await expect(multiHopDialog).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (url) =>
+          (
+            window as typeof window & {
+              __traceObjectUrls: { revoked: string[] };
+            }
+          ).__traceObjectUrls.revoked.includes(url),
+        multiHopPreviewState.url,
+      ),
+    )
+    .toBeTruthy();
+
+  await page.getByTestId("trace-preview-image").click();
   await expectTracePngDownload(
     page,
     "rackpad-trace-fw-01-igb2-to-sw-tor-01-1.png",
+    page.getByTestId("trace-preview-download-image"),
   );
+  await page.getByTestId("trace-preview-close").click();
+});
+
+test("cables support atomic bulk metadata editing for physical and aggregate links", async ({
+  browser,
+  page,
+  request,
+}) => {
+  await authenticate(page);
+  const headers = { authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(16).slice(-7);
+  const deviceIds: string[] = [];
+  let viewerId = "";
+
+  async function createDevice(hostname: string) {
+    const response = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        hostname,
+        deviceType: "switch",
+        status: "online",
+      },
+    });
+    expect(response.status()).toBe(201);
+    const device = (await response.json()) as { id: string };
+    deviceIds.push(device.id);
+    return device;
+  }
+
+  async function createPort(deviceId: string, name: string) {
+    const response = await request.post("/api/ports", {
+      headers,
+      data: {
+        deviceId,
+        name,
+        kind: "rj45",
+        linkState: "down",
+        speed: "1G",
+      },
+    });
+    expect(response.status()).toBe(201);
+    return (await response.json()) as { id: string };
+  }
+
+  try {
+    const leftHostname = `bulk-cable-left-${suffix}`;
+    const rightHostname = `bulk-cable-right-${suffix}`;
+    const leftDevice = await createDevice(leftHostname);
+    const rightDevice = await createDevice(rightHostname);
+    const leftMembers = [
+      await createPort(leftDevice.id, "Gi0/1"),
+      await createPort(leftDevice.id, "Gi0/2"),
+    ];
+    const rightMembers = [
+      await createPort(rightDevice.id, "Gi0/1"),
+      await createPort(rightDevice.id, "Gi0/2"),
+    ];
+    const leftPhysical = await createPort(leftDevice.id, "Gi0/3");
+    const rightPhysical = await createPort(rightDevice.id, "Gi0/3");
+
+    const [leftAggregateResponse, rightAggregateResponse] = await Promise.all([
+      request.post("/api/port-aggregates", {
+        headers,
+        data: {
+          deviceId: leftDevice.id,
+          name: "Port-channel1",
+          memberPortIds: leftMembers.map((port) => port.id),
+        },
+      }),
+      request.post("/api/port-aggregates", {
+        headers,
+        data: {
+          deviceId: rightDevice.id,
+          name: "Port-channel1",
+          memberPortIds: rightMembers.map((port) => port.id),
+        },
+      }),
+    ]);
+    expect(leftAggregateResponse.status()).toBe(201);
+    expect(rightAggregateResponse.status()).toBe(201);
+    const leftAggregate = (await leftAggregateResponse.json()) as {
+      aggregate: { id: string };
+    };
+    const rightAggregate = (await rightAggregateResponse.json()) as {
+      aggregate: { id: string };
+    };
+
+    const [physicalResponse, logicalResponse] = await Promise.all([
+      request.post("/api/port-links", {
+        headers,
+        data: {
+          fromPortId: leftPhysical.id,
+          toPortId: rightPhysical.id,
+          cableType: "Cat5e",
+          cableLength: "1m",
+          color: "gray",
+        },
+      }),
+      request.post("/api/port-links", {
+        headers,
+        data: {
+          fromPortId: leftAggregate.aggregate.id,
+          toPortId: rightAggregate.aggregate.id,
+          cableType: "lacp",
+          cableLength: "logical",
+          color: "gray",
+        },
+      }),
+    ]);
+    expect(physicalResponse.status()).toBe(201);
+    expect(logicalResponse.status()).toBe(201);
+    const physicalLink = (await physicalResponse.json()) as { id: string };
+    const logicalLink = (await logicalResponse.json()) as { id: string };
+
+    await page.goto("/cables");
+    const physicalCheckbox = page.getByTestId(
+      `cable-select-${physicalLink.id}`,
+    );
+    const logicalCheckbox = page.getByTestId(`cable-select-${logicalLink.id}`);
+    await expect(physicalCheckbox).toBeVisible();
+    await expect(logicalCheckbox).toBeVisible();
+    await expect(
+      logicalCheckbox.locator("xpath=ancestor::tr").getByText("Aggregate port"),
+    ).toBeVisible();
+
+    await physicalCheckbox
+      .locator("xpath=ancestor::tr")
+      .getByText(leftHostname)
+      .click();
+    await expect(
+      page.getByText("Selected cable", { exact: true }),
+    ).toBeVisible();
+
+    await physicalCheckbox.check();
+    await logicalCheckbox.check();
+    const bulkEditor = page.getByTestId("cable-bulk-editor");
+    await expect(bulkEditor).toContainText("2 selected");
+    await page.getByTestId("bulk-cable-type-enabled").check();
+    await page.getByTestId("bulk-cable-length-enabled").check();
+    await page.getByTestId("bulk-cable-color-enabled").check();
+    await page.getByTestId("bulk-cable-type").fill("Cat6a");
+    await page.getByTestId("bulk-cable-length").fill("3m");
+    await page.getByTestId("bulk-cable-color").locator("input").fill("purple");
+    await page.getByTestId("bulk-cable-apply").click();
+    await expect(bulkEditor).toHaveCount(0);
+
+    for (const linkId of [physicalLink.id, logicalLink.id]) {
+      const response = await request.get(`/api/port-links/${linkId}`, {
+        headers,
+      });
+      expect(response.ok()).toBeTruthy();
+      const link = (await response.json()) as {
+        cableType: string;
+        cableLength: string;
+        color: string;
+      };
+      expect(link).toMatchObject({
+        cableType: "Cat6a",
+        cableLength: "3m",
+        color: "purple",
+      });
+    }
+
+    const search = page.getByPlaceholder(
+      "Search by device, port, type, color...",
+    );
+    await search.fill(suffix);
+    await page.getByTestId("cable-select-all").check();
+    await expect(page.getByTestId("cable-bulk-editor")).toContainText(
+      "2 selected",
+    );
+    await page.getByTestId("bulk-cable-length-enabled").check();
+    await page.getByTestId("bulk-cable-apply").click();
+    await expect(page.getByTestId("cable-bulk-editor")).toHaveCount(0);
+
+    for (const linkId of [physicalLink.id, logicalLink.id]) {
+      const response = await request.get(`/api/port-links/${linkId}`, {
+        headers,
+      });
+      expect(
+        ((await response.json()) as { cableLength: string | null }).cableLength,
+      ).toBeNull();
+    }
+
+    const viewerResponse = await request.post("/api/users", {
+      headers,
+      data: {
+        username: `cable-viewer-${suffix}`,
+        displayName: "Cable Viewer",
+        password: "cable-viewer-password",
+        role: "viewer",
+      },
+    });
+    expect(viewerResponse.status()).toBe(201);
+    viewerId = ((await viewerResponse.json()) as { id: string }).id;
+    const viewerLogin = await request.post("/api/auth/login", {
+      data: {
+        username: `cable-viewer-${suffix}`,
+        password: "cable-viewer-password",
+      },
+    });
+    expect(viewerLogin.ok()).toBeTruthy();
+    const viewerToken = ((await viewerLogin.json()) as { token: string }).token;
+    const viewerContext = await browser.newContext();
+    const viewerPage = await viewerContext.newPage();
+    await viewerPage.addInitScript((authToken) => {
+      localStorage.setItem("rackpad.auth.token", authToken);
+    }, viewerToken);
+    await viewerPage.goto("http://127.0.0.1:5173/cables");
+    await expect(viewerPage.getByTestId("cable-select-all")).toHaveCount(0);
+    await expect(viewerPage.getByTestId("cable-bulk-editor")).toHaveCount(0);
+    await viewerContext.close();
+  } finally {
+    if (viewerId) {
+      await request.delete(`/api/users/${viewerId}`, { headers });
+    }
+    for (const deviceId of deviceIds) {
+      await request.delete(`/api/devices/${deviceId}`, { headers });
+    }
+  }
 });
 
 test("UI regression surfaces remain reachable and unclipped", async ({
@@ -415,7 +747,10 @@ test("UI regression surfaces remain reachable and unclipped", async ({
   await page
     .locator('select[aria-label="Discovery scan target"]:visible')
     .selectOption("s_default");
-  await page.getByRole("button", { name: "Scan subnet" }).filter({ visible: true }).click();
+  await page
+    .getByRole("button", { name: "Scan subnet" })
+    .filter({ visible: true })
+    .click();
   const scanSummary = page.getByTestId("discovery-scan-summary");
   await expect(scanSummary).toBeVisible();
   await expect(scanSummary).toContainText("254 hosts");
@@ -472,12 +807,12 @@ test("UI regression surfaces remain reachable and unclipped", async ({
       element.scrollLeft = element.scrollWidth;
       element.scrollTop = element.scrollHeight;
     });
-    expect(await shell.evaluate((element) => element.scrollLeft)).toBeGreaterThan(
-      0,
-    );
-    expect(await shell.evaluate((element) => element.scrollTop)).toBeGreaterThan(
-      0,
-    );
+    expect(
+      await shell.evaluate((element) => element.scrollLeft),
+    ).toBeGreaterThan(0);
+    expect(
+      await shell.evaluate((element) => element.scrollTop),
+    ).toBeGreaterThan(0);
   }
 
   await page.goto("/racks");
@@ -517,9 +852,7 @@ test("UI regression surfaces remain reachable and unclipped", async ({
   await expect
     .poll(() => inspector.evaluate((element) => element.scrollTop))
     .toBe(0);
-  await page
-    .getByRole("button", { name: "4x2.5G + 2x10G Firewall" })
-    .click();
+  await page.getByRole("button", { name: "4x2.5G + 2x10G Firewall" }).click();
   const templateDialog = page.getByTestId("port-template-dialog");
   await expect(templateDialog).toBeVisible();
   const dialogBox = await templateDialog.boundingBox();
@@ -563,9 +896,7 @@ test("UI regression surfaces remain reachable and unclipped", async ({
   await expect(
     monitorEditor.getByText("Disabled", { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Run now" }),
-  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Run now" })).toBeDisabled();
   await expect(monitorEditor).toContainText("Firewall UI");
   await expect(monitorEditor).toContainText("History");
   await expect(monitorEditor).toContainText("Last result");
@@ -647,9 +978,7 @@ test("UI regression surfaces remain reachable and unclipped", async ({
     firewallMonitoring.getByRole("button", { name: "Check now" }),
   ).toBeDisabled();
   await expect(firewallMonitoring).not.toContainText("Last checked");
-  await page
-    .getByRole("button", { name: "Show compact monitor rows" })
-    .click();
+  await page.getByRole("button", { name: "Show compact monitor rows" }).click();
   const firewallMonitorRow = page.locator(
     '[data-testid="device-monitor-row"][data-device-id="d_fw"]',
   );
@@ -669,15 +998,17 @@ test("UI regression surfaces remain reachable and unclipped", async ({
       .filter({ visible: true }),
   ).toBeDisabled();
 
-  await page.goto(
-    "/ports?deviceId=d_pdu_net&portId=p_d_pdu_net_mgmt",
-  );
-  await expect(page.getByText("Management", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("sw-tor-01", { exact: true }).first()).toBeVisible();
-  await page.goto(
-    "/ports?deviceId=d_pdu_net&portId=p_d_pdu_net_input",
-  );
-  await expect(page.getByText("Power input", { exact: true }).first()).toBeVisible();
+  await page.goto("/ports?deviceId=d_pdu_net&portId=p_d_pdu_net_mgmt");
+  await expect(
+    page.getByText("Management", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("sw-tor-01", { exact: true }).first(),
+  ).toBeVisible();
+  await page.goto("/ports?deviceId=d_pdu_net&portId=p_d_pdu_net_input");
+  await expect(
+    page.getByText("Power input", { exact: true }).first(),
+  ).toBeVisible();
   await expect(page.getByText("ups-01", { exact: true }).first()).toBeVisible();
 
   await page.goto("/networks");
@@ -805,9 +1136,7 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
       `${initialTotal} of ${initialTotal} devices`,
     );
 
-    await page
-      .getByRole("button", { name: /Duplicate MACs/ })
-      .click();
+    await page.getByRole("button", { name: /Duplicate MACs/ }).click();
     await expect(page).toHaveURL(/mac=duplicates/);
     await expect(filterCount).toHaveText(`2 of ${initialTotal} devices`);
 
@@ -874,9 +1203,7 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
     await expect(group).toHaveCount(0);
     await expect(filterCount).toHaveText(`0 of ${expandedTotal} devices`);
 
-    await summary
-      .getByRole("checkbox", { name: /Show ignored/ })
-      .check();
+    await summary.getByRole("checkbox", { name: /Show ignored/ }).check();
     group = summary
       .getByTestId("duplicate-mac-group")
       .filter({ hasText: duplicateMac });
@@ -900,6 +1227,141 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
   } finally {
     for (const deviceId of createdDeviceIds.reverse()) {
       await request.delete(`/api/devices/${deviceId}`, { headers });
+    }
+  }
+});
+
+test("assigned IPs are searchable and management mismatches link to Network review", async ({
+  page,
+  request,
+}) => {
+  await authenticate(page);
+  const headers = { authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(16).slice(-6);
+  const subnetOctet = (Number.parseInt(suffix.slice(-2), 16) % 200) + 20;
+  const cidr = `198.18.${subnetOctet}.0/24`;
+  const managementIp = `198.18.${subnetOctet}.80`;
+  const assignedIp = `198.18.${subnetOctet}.96`;
+  const unownedIp = `198.18.${subnetOctet}.98`;
+  const hostname = `ip-mismatch-${suffix}`;
+  let subnetId = "";
+  let deviceId = "";
+  const assignmentIds: string[] = [];
+
+  try {
+    const subnetResponse = await request.post("/api/subnets", {
+      headers,
+      data: {
+        labId: "lab_home",
+        cidr,
+        name: `IP mismatch E2E ${suffix}`,
+      },
+    });
+    expect(subnetResponse.status()).toBe(201);
+    subnetId = ((await subnetResponse.json()) as { id: string }).id;
+
+    const deviceResponse = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        hostname,
+        deviceType: "endpoint",
+        managementIp,
+        status: "unknown",
+      },
+    });
+    expect(deviceResponse.status()).toBe(201);
+    deviceId = ((await deviceResponse.json()) as { id: string }).id;
+
+    for (const assignment of [
+      {
+        ipAddress: assignedIp,
+        assignmentType: "device",
+        deviceId,
+        hostname,
+        description: "Recorded device-level assignment",
+      },
+      {
+        ipAddress: unownedIp,
+        assignmentType: "reserved",
+        hostname: `unowned-${suffix}`,
+        description: "Unowned assignment fallback",
+      },
+    ]) {
+      const assignmentResponse = await request.post("/api/ip-assignments", {
+        headers,
+        data: { subnetId, ...assignment },
+      });
+      expect(assignmentResponse.status()).toBe(201);
+      assignmentIds.push(
+        ((await assignmentResponse.json()) as { id: string }).id,
+      );
+    }
+
+    await page.goto("/devices");
+    const search = page.getByPlaceholder(
+      "Search hostname, model, IP, MAC, tag...",
+    );
+    await search.fill(assignedIp);
+    const assignedAddressIndicator = page.getByTestId("matched-assigned-ip");
+    await expect(assignedAddressIndicator).toContainText(assignedIp);
+    const matchingDeviceRow = page.locator("tbody tr").filter({
+      hasText: hostname,
+    });
+    await expect(matchingDeviceRow).toContainText(managementIp);
+    await expect(matchingDeviceRow).toContainText(assignedIp);
+
+    await search.clear();
+    await page.getByRole("button", { name: /IP mismatches/ }).click();
+    await expect(page).toHaveURL(/ip=mismatch/);
+    const mismatch = page
+      .getByTestId("ip-mismatch-device")
+      .filter({ hasText: hostname });
+    await expect(mismatch).toContainText(managementIp);
+    await expect(mismatch).toContainText(assignedIp);
+    await mismatch.getByRole("link", { name: "Review" }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/devices/${deviceId}\\?tab=network`),
+    );
+    await expect(page.getByRole("tab", { name: /Network/ })).toHaveAttribute(
+      "data-state",
+      "active",
+    );
+    await expect(page.getByText(assignedIp, { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Search..." }).click();
+    const globalSearch = page.getByPlaceholder("Search commands");
+    await globalSearch.fill(assignedIp);
+    const ownedIpResult = page
+      .locator("button")
+      .filter({ hasText: assignedIp })
+      .filter({ hasText: hostname });
+    await expect(ownedIpResult).toBeVisible();
+    await ownedIpResult.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/devices/${deviceId}\\?tab=network`),
+    );
+
+    await page.getByRole("button", { name: "Search..." }).click();
+    await page.getByPlaceholder("Search commands").fill(unownedIp);
+    const unownedIpResult = page
+      .locator("button")
+      .filter({ hasText: unownedIp })
+      .filter({ hasText: `unowned-${suffix}` });
+    await expect(unownedIpResult).toBeVisible();
+    await unownedIpResult.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/networks\\?subnetId=${subnetId}`),
+    );
+  } finally {
+    for (const assignmentId of assignmentIds.reverse()) {
+      await request.delete(`/api/ip-assignments/${assignmentId}`, { headers });
+    }
+    if (deviceId) {
+      await request.delete(`/api/devices/${deviceId}`, { headers });
+    }
+    if (subnetId) {
+      await request.delete(`/api/subnets/${subnetId}`, { headers });
     }
   }
 });
@@ -1066,10 +1528,10 @@ test("legacy enabled none monitors stay effectively disabled", async ({
   );
   await expect(upsCard.getByText("Disabled", { exact: true })).toHaveCount(2);
   await expect(upsCard.getByText("offline", { exact: true })).toHaveCount(0);
-  await expect(upsCard.getByRole("button", { name: "Check now" })).toBeDisabled();
-  await page
-    .getByRole("button", { name: "Show compact monitor rows" })
-    .click();
+  await expect(
+    upsCard.getByRole("button", { name: "Check now" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Show compact monitor rows" }).click();
   const upsRow = page.locator(
     '[data-testid="device-monitor-row"][data-device-id="d_ups"]',
   );
@@ -1207,7 +1669,10 @@ test("localized Admin controls stay contained and alert counts pluralize", async
         vertical: element.scrollHeight <= element.clientHeight + 1,
         flexShrink: getComputedStyle(element).flexShrink,
       }));
-      expect(geometry.horizontal, `${name} overflowed horizontally`).toBeTruthy();
+      expect(
+        geometry.horizontal,
+        `${name} overflowed horizontally`,
+      ).toBeTruthy();
       expect(geometry.vertical, `${name} overflowed vertically`).toBeTruthy();
       expect(geometry.flexShrink, `${name} was allowed to shrink`).toBe("0");
     }

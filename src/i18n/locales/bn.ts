@@ -1842,4 +1842,8 @@ export const bn = {
   "Download text": "টেক্সট ডাউনলোড করুন",
   "Download image": "ছবি ডাউনলোড করুন",
   "Internal pass-through": "অভ্যন্তরীণ পাস-থ্রু",
+  "IP mismatches": "IP অমিল",
+  "No IP mismatches found.": "কোনো IP অমিল পাওয়া যায়নি।",
+  "Cable trace image": "কেবল ট্রেস ছবি",
+  "Review": "পর্যালোচনা",
 } satisfies TranslationMap;

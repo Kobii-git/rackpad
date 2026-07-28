@@ -1842,4 +1842,8 @@ export const th = {
   "Download text": "ดาวน์โหลดข้อความ",
   "Download image": "ดาวน์โหลดรูปภาพ",
   "Internal pass-through": "การเชื่อมต่อภายใน",
+  "IP mismatches": "IP ไม่ตรงกัน",
+  "No IP mismatches found.": "ไม่พบ IP ที่ไม่ตรงกัน",
+  "Cable trace image": "รูปภาพเส้นทางสายเคเบิล",
+  "Review": "ตรวจสอบ",
 } satisfies TranslationMap;

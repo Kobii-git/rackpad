@@ -31,10 +31,8 @@ const { resetLocalUserPassword } = await import("../lib/password-reset.js");
 const { parseIeeeOuiText } = await import("../lib/oui.js");
 const { cidrOverlaps, ipToInt } = await import("../lib/ip-cidr.js");
 const { resolveSnmpSessionForTarget } = await import("../lib/snmp-session.js");
-const {
-  setNetworkHostLookupForTests,
-  setPinnedRequestTransportForTests,
-} = await import("../lib/net-guard.js");
+const { setNetworkHostLookupForTests, setPinnedRequestTransportForTests } =
+  await import("../lib/net-guard.js");
 const {
   expandDiscoveryCidrs,
   expandDiscoveryScanChunks,
@@ -861,9 +859,7 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
     }
   }
   const dhcpZones = db
-    .prepare(
-      "SELECT subnetId, startIp, endIp FROM ipZones WHERE kind = 'dhcp'",
-    )
+    .prepare("SELECT subnetId, startIp, endIp FROM ipZones WHERE kind = 'dhcp'")
     .all() as Array<{
     subnetId: string;
     startIp: string;
@@ -4086,9 +4082,8 @@ test("SNMP exception responses stay unknown and never satisfy match modes", asyn
 });
 
 test("SNMP walks stop and credential tests fail clearly on exception responses", async () => {
-  const { decodeSnmpResponseValue, snmpWalkColumn } = await import(
-    "../lib/snmp.js"
-  );
+  const { decodeSnmpResponseValue, snmpWalkColumn } =
+    await import("../lib/snmp.js");
   const decodedValue = decodeSnmpResponseValue(
     "1.3.6.1.2.1.1.3.0",
     0x02,
@@ -4140,11 +4135,7 @@ test("SNMP walks stop and credential tests fail clearly on exception responses",
       community: "public",
       timeoutMs: 1000,
     };
-    const rows = await snmpWalkColumn(
-      session,
-      "1.3.6.1.2.1.2.2.1.8",
-      5,
-    );
+    const rows = await snmpWalkColumn(session, "1.3.6.1.2.1.2.2.1.8", 5);
     assert.deepEqual(rows, []);
     assert.equal(responder.requestCount(), 1);
 
@@ -4736,11 +4727,7 @@ test("disabled monitors preserve configuration and reject manual runs without ch
     headers,
     payload: { enabled: false },
   });
-  assert.equal(
-    v3PartialUpdateRes.statusCode,
-    200,
-    v3PartialUpdateRes.body,
-  );
+  assert.equal(v3PartialUpdateRes.statusCode, 200, v3PartialUpdateRes.body);
   const v3PartialUpdate = readJson(v3PartialUpdateRes) as Record<
     string,
     unknown
@@ -4754,9 +4741,7 @@ test("disabled monitors preserve configuration and reject manual runs without ch
   assert.equal(v3PartialUpdate.lastCheckAt, v3HistoricalCheckAt);
   assert.equal(v3PartialUpdate.lastResult, "offline");
   assert.deepEqual(
-    db
-      .prepare("SELECT * FROM deviceMonitors WHERE id = ?")
-      .get(v3Profile.id),
+    db.prepare("SELECT * FROM deviceMonitors WHERE id = ?").get(v3Profile.id),
     v3MonitorBeforeUpdate,
   );
 
@@ -5537,6 +5522,231 @@ test("ports can be updated and deleted with a custom MAC address", async () => {
   assert.equal(listRes.statusCode, 200);
   const ports = readJson(listRes) as Array<{ id: string }>;
   assert.equal(ports.length, 0);
+});
+
+test("bulk cable updates are validated, deduplicated, permission-aware, and atomic", async () => {
+  const adminToken = await bootstrapAdmin();
+  const adminHeaders = { authorization: `Bearer ${adminToken}` };
+
+  const workLabRes = await app.inject({
+    method: "POST",
+    url: "/api/labs",
+    headers: adminHeaders,
+    payload: { id: "lab_bulk_cables", name: "Bulk cable lab" },
+  });
+  assert.equal(workLabRes.statusCode, 201);
+
+  async function createDevice(labId: string, hostname: string) {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/devices",
+      headers: adminHeaders,
+      payload: { labId, hostname, deviceType: "switch", status: "online" },
+    });
+    assert.equal(res.statusCode, 201);
+    return readJson(res) as { id: string };
+  }
+
+  async function createPort(deviceId: string, name: string) {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ports",
+      headers: adminHeaders,
+      payload: {
+        deviceId,
+        name,
+        kind: "rj45",
+        linkState: "down",
+        speed: "1G",
+      },
+    });
+    assert.equal(res.statusCode, 201);
+    return readJson(res) as { id: string };
+  }
+
+  async function createCable(labId: string, suffix: string, notes: string) {
+    const fromDevice = await createDevice(labId, `bulk-${suffix}-a`);
+    const toDevice = await createDevice(labId, `bulk-${suffix}-b`);
+    const fromPort = await createPort(fromDevice.id, "eth0");
+    const toPort = await createPort(toDevice.id, "eth0");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/port-links",
+      headers: adminHeaders,
+      payload: {
+        fromPortId: fromPort.id,
+        toPortId: toPort.id,
+        cableType: "Cat5e",
+        cableLength: "1m",
+        color: "gray",
+        notes,
+      },
+    });
+    assert.equal(res.statusCode, 201);
+    return readJson(res) as {
+      id: string;
+      cableType: string;
+      cableLength: string;
+      color: string;
+      notes: string;
+    };
+  }
+
+  const first = await createCable("lab_home", "home-1", "keep first");
+  const second = await createCable("lab_home", "home-2", "keep second");
+  const otherLab = await createCable("lab_bulk_cables", "work-1", "keep work");
+
+  const updateRes = await app.inject({
+    method: "POST",
+    url: "/api/port-links/bulk",
+    headers: adminHeaders,
+    payload: {
+      linkIds: [first.id, second.id, first.id],
+      changes: {
+        cableType: "Cat6a",
+        cableLength: "3m",
+        color: "blue",
+      },
+    },
+  });
+  assert.equal(updateRes.statusCode, 200, updateRes.body);
+  const updated = readJson(updateRes) as {
+    updated: number;
+    links: Array<{
+      id: string;
+      cableType: string;
+      cableLength: string;
+      color: string;
+      notes: string;
+    }>;
+  };
+  assert.equal(updated.updated, 2);
+  assert.deepEqual(
+    updated.links.map((link) => link.id),
+    [first.id, second.id],
+  );
+  assert.ok(
+    updated.links.every(
+      (link) =>
+        link.cableType === "Cat6a" &&
+        link.cableLength === "3m" &&
+        link.color === "blue",
+    ),
+  );
+  assert.deepEqual(
+    updated.links.map((link) => link.notes),
+    ["keep first", "keep second"],
+  );
+
+  const clearRes = await app.inject({
+    method: "POST",
+    url: "/api/port-links/bulk",
+    headers: adminHeaders,
+    payload: {
+      linkIds: [first.id],
+      changes: { cableLength: null },
+    },
+  });
+  assert.equal(clearRes.statusCode, 200);
+  assert.equal(
+    (readJson(clearRes) as { links: Array<{ cableLength: null }> }).links[0]
+      ?.cableLength,
+    null,
+  );
+  assert.equal(
+    (
+      db
+        .prepare("SELECT cableType FROM portLinks WHERE id = ?")
+        .get(otherLab.id) as { cableType: string }
+    ).cableType,
+    "Cat5e",
+  );
+
+  for (const invalidPayload of [
+    { linkIds: [], changes: { color: "red" } },
+    { linkIds: [first.id], changes: {} },
+    { linkIds: [first.id], changes: { notes: "not supported" } },
+    { linkIds: [first.id], changes: { color: "x".repeat(41) } },
+    {
+      linkIds: Array.from({ length: 501 }, (_, index) => `link_${index}`),
+      changes: { color: "red" },
+    },
+  ]) {
+    const invalidRes = await app.inject({
+      method: "POST",
+      url: "/api/port-links/bulk",
+      headers: adminHeaders,
+      payload: invalidPayload,
+    });
+    assert.equal(invalidRes.statusCode, 400, invalidRes.body);
+  }
+
+  const beforeMissingPreflight = db
+    .prepare("SELECT color FROM portLinks WHERE id = ?")
+    .get(first.id) as { color: string };
+  const missingRes = await app.inject({
+    method: "POST",
+    url: "/api/port-links/bulk",
+    headers: adminHeaders,
+    payload: {
+      linkIds: [first.id, "missing_bulk_cable"],
+      changes: { color: "orange" },
+    },
+  });
+  assert.equal(missingRes.statusCode, 400);
+  assert.equal(
+    (
+      db.prepare("SELECT color FROM portLinks WHERE id = ?").get(first.id) as {
+        color: string;
+      }
+    ).color,
+    beforeMissingPreflight.color,
+  );
+
+  const limitedUserRes = await app.inject({
+    method: "POST",
+    url: "/api/users",
+    headers: adminHeaders,
+    payload: {
+      username: "bulk-cable-home-editor",
+      displayName: "Bulk Cable Home Editor",
+      password: "bulk-cable-password",
+      role: "editor",
+      labAccess: [{ labId: "lab_home", role: "editor" }],
+    },
+  });
+  assert.equal(limitedUserRes.statusCode, 201);
+  const limitedLoginRes = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: {
+      username: "bulk-cable-home-editor",
+      password: "bulk-cable-password",
+    },
+  });
+  assert.equal(limitedLoginRes.statusCode, 200);
+  const limitedToken = (readJson(limitedLoginRes) as { token: string }).token;
+  const beforePermissionPreflight = db
+    .prepare("SELECT color FROM portLinks WHERE id = ?")
+    .get(second.id) as { color: string };
+  const forbiddenRes = await app.inject({
+    method: "POST",
+    url: "/api/port-links/bulk",
+    headers: { authorization: `Bearer ${limitedToken}` },
+    payload: {
+      linkIds: [second.id, otherLab.id],
+      changes: { color: "green" },
+    },
+  });
+  assert.equal(forbiddenRes.statusCode, 403);
+  assert.equal(
+    (
+      db.prepare("SELECT color FROM portLinks WHERE id = ?").get(second.id) as {
+        color: string;
+      }
+    ).color,
+    beforePermissionPreflight.color,
+  );
 });
 
 test("port aggregates preserve physical member cables and a separate logical link", async () => {
@@ -9062,9 +9272,7 @@ async function createSnmpIntegerResponder(value: number) {
   );
 }
 
-async function createSnmpExceptionResponder(
-  exceptionTag: 0x80 | 0x81 | 0x82,
-) {
+async function createSnmpExceptionResponder(exceptionTag: 0x80 | 0x81 | 0x82) {
   let requestCount = 0;
   const server = await createSnmpResponder((request) => {
     requestCount += 1;
@@ -9080,9 +9288,7 @@ async function createMalformedSnmpResponder() {
   return createSnmpResponder(() => Buffer.from([0]));
 }
 
-async function createSnmpResponder(
-  buildResponse: (request: Buffer) => Buffer,
-) {
+async function createSnmpResponder(buildResponse: (request: Buffer) => Buffer) {
   const server = dgram.createSocket("udp4");
   server.on("message", (packet, remote) => {
     try {
@@ -9126,10 +9332,7 @@ function buildSnmpExceptionResponse(
   request: Buffer,
   exceptionTag: 0x80 | 0x81 | 0x82,
 ) {
-  return buildSnmpResponse(
-    request,
-    testBerTlv(exceptionTag, Buffer.alloc(0)),
-  );
+  return buildSnmpResponse(request, testBerTlv(exceptionTag, Buffer.alloc(0)));
 }
 
 function buildSnmpResponse(request: Buffer, value: Buffer) {

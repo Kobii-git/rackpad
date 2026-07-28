@@ -44,6 +44,11 @@ import {
   toggleSort,
   type SortState,
 } from "@/lib/sort";
+import {
+  findManagementIpMismatches,
+  indexValidDeviceIpAssignments,
+  matchingAssignedIps,
+} from "@/lib/device-ip-consistency";
 
 type SortKey =
   | "hostname"
@@ -103,6 +108,7 @@ export default function DevicesList() {
   const wifiSsids = useStore((s) => s.wifiSsids);
   const racks = useStore((s) => s.racks);
   const ports = useStore((s) => s.ports);
+  const ipAssignments = useStore((s) => s.ipAssignments);
   const deviceMonitors = useStore((s) => s.deviceMonitors);
   const canEdit = canEditInventory(currentUser);
   const [query, setQuery] = useState("");
@@ -132,8 +138,10 @@ export default function DevicesList() {
   const typeParam = searchParams.get("type");
   const placementParam = searchParams.get("placement");
   const macParam = searchParams.get("mac");
+  const ipParam = searchParams.get("ip");
   const showUnplacedOnly = placementParam === "unplaced";
   const showDuplicateMacs = macParam === "duplicates";
+  const showIpMismatches = ipParam === "mismatch";
 
   useEffect(() => {
     if (typeParam && typeParam !== type) {
@@ -246,6 +254,18 @@ export default function DevicesList() {
     ignoredDuplicateMacDeviceIds,
     showIgnoredDuplicateMacs,
   ]);
+  const assignmentsByDeviceId = useMemo(
+    () => indexValidDeviceIpAssignments(ipAssignments),
+    [ipAssignments],
+  );
+  const ipMismatches = useMemo(
+    () => findManagementIpMismatches(devices, assignmentsByDeviceId),
+    [assignmentsByDeviceId, devices],
+  );
+  const ipMismatchDeviceIds = useMemo(
+    () => new Set(ipMismatches.map((entry) => entry.device.id)),
+    [ipMismatches],
+  );
 
   const filtered = useMemo(() => {
     return devices
@@ -254,13 +274,19 @@ export default function DevicesList() {
         if (showUnplacedOnly && !isUnplacedDevice(device)) return false;
         if (showDuplicateMacs && !visibleDuplicateMacDeviceIds.has(device.id))
           return false;
+        if (showIpMismatches && !ipMismatchDeviceIds.has(device.id))
+          return false;
         if (!query) return true;
+        const assignedIps = (assignmentsByDeviceId.get(device.id) ?? []).map(
+          (assignment) => assignment.ipAddress,
+        );
         const haystack = [
           device.hostname,
           device.displayName,
           device.manufacturer,
           device.model,
           device.managementIp,
+          ...assignedIps,
           device.macAddress,
           device.deviceType,
           ...(device.tags ?? []),
@@ -282,8 +308,10 @@ export default function DevicesList() {
         ),
       );
   }, [
+    assignmentsByDeviceId,
     deviceById,
     devices,
+    ipMismatchDeviceIds,
     portsByDeviceId,
     query,
     rackById,
@@ -291,6 +319,7 @@ export default function DevicesList() {
     sort,
     showUnplacedOnly,
     showDuplicateMacs,
+    showIpMismatches,
     type,
     visibleDuplicateMacDeviceIds,
   ]);
@@ -519,6 +548,16 @@ export default function DevicesList() {
     setSearchParams(nextParams);
   }
 
+  function setIpMismatchFilter(mismatchesOnly: boolean) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (mismatchesOnly) {
+      nextParams.set("ip", "mismatch");
+    } else {
+      nextParams.delete("ip");
+    }
+    setSearchParams(nextParams);
+  }
+
   async function setDuplicateMacGroupIgnored(
     group: DuplicateMacGroup,
     ignored: boolean,
@@ -606,6 +645,17 @@ export default function DevicesList() {
             <Mono className="text-[10px]">
               {duplicateMacDeviceIds.size}
             </Mono>
+          </button>
+          <button
+            onClick={() => setIpMismatchFilter(!showIpMismatches)}
+            className="rk-filter-pill"
+            data-active={showIpMismatches}
+          >
+            <AlertTriangle className="size-3" />
+            <span className="font-mono text-[10px] uppercase tracking-wider">
+              {t("IP mismatches")}
+            </span>
+            <Mono className="text-[10px]">{ipMismatches.length}</Mono>
           </button>
           {deviceTypes.map((entry) => {
             const count = typeCounts[entry.id] ?? 0;
@@ -767,6 +817,70 @@ export default function DevicesList() {
               {duplicateMacError && (
                 <div className="text-xs text-[var(--color-err)]">
                   {duplicateMacError}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        )}
+
+        {showIpMismatches && (
+          <Card data-testid="ip-mismatch-summary">
+            <CardBody className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="rk-kicker">{t("IP mismatches")}</div>
+                <Badge tone={ipMismatches.length > 0 ? "warn" : "ok"}>
+                  {ipMismatches.length} {t("affected")}
+                </Badge>
+              </div>
+              {ipMismatches.length === 0 ? (
+                <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] px-3 py-4 text-sm text-[var(--color-fg-subtle)]">
+                  {t("No IP mismatches found.")}
+                </div>
+              ) : (
+                <div className="grid gap-2 xl:grid-cols-2">
+                  {ipMismatches.map(({ device, assignments }) => (
+                    <div
+                      key={device.id}
+                      data-testid="ip-mismatch-device"
+                      className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/6 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <Link
+                            to={`/devices/${device.id}?tab=network`}
+                            className="font-medium text-[var(--color-fg)] hover:text-[var(--color-accent)]"
+                          >
+                            {device.hostname}
+                          </Link>
+                          <div className="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-2">
+                            <div>
+                              <div className="rk-kicker">
+                                {t("Management IP")}
+                              </div>
+                              <Mono className="mt-1 block text-[var(--color-fg)]">
+                                {device.managementIp}
+                              </Mono>
+                            </div>
+                            <div>
+                              <div className="rk-kicker">
+                                {t("IP assignments")}
+                              </div>
+                              <Mono className="mt-1 block text-[var(--color-fg)]">
+                                {assignments
+                                  .map((assignment) => assignment.ipAddress)
+                                  .join(", ")}
+                              </Mono>
+                            </div>
+                          </div>
+                        </div>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/devices/${device.id}?tab=network`}>
+                            {t("Review")}
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardBody>
@@ -1157,6 +1271,11 @@ export default function DevicesList() {
               <tbody>
                 {filtered.map((device) => {
                   const hasDuplicateMac = duplicateMacDeviceIds.has(device.id);
+                  const matchedAssignedIps = matchingAssignedIps(
+                    assignmentsByDeviceId.get(device.id),
+                    query,
+                    device.managementIp,
+                  );
                   const hasIgnoredDuplicateMac =
                     showDuplicateMacs &&
                     showIgnoredDuplicateMacs &&
@@ -1179,6 +1298,9 @@ export default function DevicesList() {
                       key={device.id}
                       data-selected={selectedDeviceIds.has(device.id)}
                       data-duplicate-mac={hasDuplicateMac || undefined}
+                      data-ip-mismatch={
+                        ipMismatchDeviceIds.has(device.id) || undefined
+                      }
                       data-ignored-duplicate-mac={
                         hasIgnoredDuplicateMac || undefined
                       }
@@ -1230,9 +1352,19 @@ export default function DevicesList() {
                         </Mono>
                       </Td>
                       <Td>
-                        <Mono className="text-[var(--color-fg)]">
-                          {device.managementIp ?? "-"}
-                        </Mono>
+                        <div>
+                          <Mono className="text-[var(--color-fg)]">
+                            {device.managementIp ?? "-"}
+                          </Mono>
+                          {matchedAssignedIps.length > 0 && (
+                            <Mono
+                              data-testid="matched-assigned-ip"
+                              className="mt-0.5 block text-[10px] text-[var(--color-warn)]"
+                            >
+                              {t("Assigned")}: {matchedAssignedIps.join(", ")}
+                            </Mono>
+                          )}
+                        </div>
                       </Td>
                       <Td>
                         <div className="flex items-center gap-2">

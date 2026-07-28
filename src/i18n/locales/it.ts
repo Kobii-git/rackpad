@@ -1842,4 +1842,8 @@ export const it = {
   "Download text": "Scarica testo",
   "Download image": "Scarica immagine",
   "Internal pass-through": "Passaggio interno",
+  "IP mismatches": "Incongruenze IP",
+  "No IP mismatches found.": "Nessuna incongruenza IP trovata.",
+  "Cable trace image": "Immagine del percorso del cavo",
+  "Review": "Rivedi",
 } satisfies TranslationMap;

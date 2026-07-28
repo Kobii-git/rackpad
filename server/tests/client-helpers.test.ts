@@ -4,6 +4,12 @@ import {
   buildCablingMapLines,
   buildCablingMapText,
 } from "../../src/lib/cabling-map.ts";
+import {
+  findManagementIpMismatches,
+  hasManagementIpMismatch,
+  indexValidDeviceIpAssignments,
+  matchingAssignedIps,
+} from "../../src/lib/device-ip-consistency.ts";
 import { buildManagementAssignmentPatch } from "../../src/lib/management-assignment-sync.ts";
 import { summarizeNetworkCapacity } from "../../src/lib/report-capacity.ts";
 import type {
@@ -39,6 +45,87 @@ function makePort(overrides: Partial<Port>): Port {
     ...overrides,
   } as Port;
 }
+
+test("device IP assignment index excludes invalid references and supports assigned-IP search", () => {
+  const assignments = [
+    {
+      id: "assignment_2",
+      subnetId: "subnet_1",
+      ipAddress: "192.168.10.96",
+      assignmentType: "device",
+      deviceId: "device_1",
+    },
+    {
+      id: "assignment_1",
+      subnetId: "subnet_1",
+      ipAddress: "192.168.10.20",
+      assignmentType: "interface",
+      deviceId: "device_1",
+      portId: "port_1",
+    },
+    {
+      id: "assignment_invalid",
+      subnetId: "subnet_1",
+      ipAddress: "192.168.10.99",
+      assignmentType: "device",
+      deviceId: "device_1",
+      integrity: { state: "missing-reference", fields: ["deviceId"] },
+    },
+  ] satisfies IpAssignment[];
+
+  const index = indexValidDeviceIpAssignments(assignments);
+  assert.deepEqual(
+    index.get("device_1")?.map((assignment) => assignment.ipAddress),
+    ["192.168.10.20", "192.168.10.96"],
+  );
+  assert.deepEqual(
+    matchingAssignedIps(index.get("device_1"), ".96", "192.168.10.80"),
+    ["192.168.10.96"],
+  );
+});
+
+test("management IP mismatch detection is conservative", () => {
+  const device = makeDevice({ managementIp: "192.168.10.80" });
+  const mismatch = {
+    id: "assignment_mismatch",
+    subnetId: "subnet_1",
+    ipAddress: "192.168.10.96",
+    assignmentType: "device",
+    deviceId: device.id,
+  } satisfies IpAssignment;
+  const interfaceAddress = {
+    ...mismatch,
+    id: "assignment_interface",
+    assignmentType: "interface",
+    portId: "port_1",
+  } satisfies IpAssignment;
+  const matching = {
+    ...mismatch,
+    id: "assignment_match",
+    ipAddress: device.managementIp!,
+  } satisfies IpAssignment;
+
+  assert.equal(hasManagementIpMismatch(device, [mismatch]), true);
+  assert.equal(hasManagementIpMismatch(device, [interfaceAddress]), false);
+  assert.equal(
+    hasManagementIpMismatch(device, [mismatch, interfaceAddress, matching]),
+    false,
+  );
+  assert.equal(
+    hasManagementIpMismatch(
+      makeDevice({ id: "no_management", managementIp: undefined }),
+      [mismatch],
+    ),
+    false,
+  );
+  assert.equal(hasManagementIpMismatch(device, []), false);
+
+  const index = indexValidDeviceIpAssignments([mismatch]);
+  assert.deepEqual(
+    findManagementIpMismatches([device], index).map((entry) => entry.device.id),
+    [device.id],
+  );
+});
 
 test("management IP sync preserves assignment semantics for unrelated device edits", () => {
   const existingAssignment = {

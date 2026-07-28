@@ -1842,4 +1842,8 @@ export const af = {
   "Download text": "Laai teks af",
   "Download image": "Laai prent af",
   "Internal pass-through": "Interne deurverbinding",
+  "IP mismatches": "IP-wanpassings",
+  "No IP mismatches found.": "Geen IP-wanpassings gevind nie.",
+  "Cable trace image": "Kabelspoorbeeld",
+  "Review": "Hersien",
 } satisfies TranslationMap;

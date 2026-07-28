@@ -1842,4 +1842,8 @@ export const fa = {
   "Download text": "دانلود متن",
   "Download image": "دانلود تصویر",
   "Internal pass-through": "عبور داخلی",
+  "IP mismatches": "عدم تطابق‌های IP",
+  "No IP mismatches found.": "هیچ عدم تطابق IP یافت نشد.",
+  "Cable trace image": "تصویر ردیابی کابل",
+  "Review": "بررسی",
 } satisfies TranslationMap;

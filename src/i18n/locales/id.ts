@@ -1842,4 +1842,8 @@ export const id = {
   "Download text": "Unduh teks",
   "Download image": "Unduh gambar",
   "Internal pass-through": "Lintasan internal",
+  "IP mismatches": "Ketidakcocokan IP",
+  "No IP mismatches found.": "Tidak ditemukan ketidakcocokan IP.",
+  "Cable trace image": "Gambar penelusuran kabel",
+  "Review": "Tinjau",
 } satisfies TranslationMap;
