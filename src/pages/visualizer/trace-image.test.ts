@@ -131,7 +131,7 @@ test("trace image renders escaped endpoint metadata and a safe filename", () => 
   const result = tracePorts(model, "edge_port", "server_port");
   assert.ok(result);
 
-  const image = buildTraceImageSvg(model, result, labels);
+  const image = buildTraceImageSvg(model, result, labels, "light");
   assert.equal(image.width, 640);
   assert.equal(
     image.filename,
@@ -147,6 +147,47 @@ test("trace image renders escaped endpoint metadata and a safe filename", () => 
   assert.match(image.svg, /data-device-icon="shield"/);
   assert.match(image.svg, /data-device-icon="server"/);
   assert.doesNotMatch(image.svg, /(?:href|src)=/);
+});
+
+test("trace image embeds standalone light and dark palettes", () => {
+  const devices = [
+    device("source", { deviceType: "switch" }),
+    device("target", { deviceType: "server" }),
+  ];
+  const ports = [
+    port("source_port", "source", "eth0"),
+    port("target_port", "target", "eth0"),
+  ];
+  const model = buildModel({
+    devices,
+    ports,
+    links: [
+      {
+        id: "themed_trace",
+        fromPortId: "source_port",
+        toPortId: "target_port",
+        cableLength: "1m",
+      },
+    ],
+  });
+  const result = tracePorts(model, "source_port", "target_port");
+  assert.ok(result);
+
+  const light = buildTraceImageSvg(model, result, labels, "light");
+  const dark = buildTraceImageSvg(model, result, labels, "dark");
+
+  assert.match(light.svg, /data-theme="light"/);
+  assert.match(light.svg, /<rect width="640"[^>]+fill="#f8fafc"/);
+  assert.match(light.svg, /fill="#ffffff" stroke="#94a3b8"/);
+  assert.match(dark.svg, /data-theme="dark"/);
+  assert.match(dark.svg, /<rect width="640"[^>]+fill="#070a0f"/);
+  assert.match(dark.svg, /fill="#141d2c" stroke="#526071"/);
+  assert.match(dark.svg, /fill="#edf2f7"/);
+  assert.match(dark.svg, /stroke="#bdc7d2"/);
+  assert.notEqual(light.svg, dark.svg);
+  assert.doesNotMatch(light.svg, /var\(--/);
+  assert.doesNotMatch(dark.svg, /var\(--/);
+  assert.doesNotMatch(dark.svg, /(?:href|src)=/);
 });
 
 test("trace image icons inherit custom device parents and fall back safely", () => {
@@ -189,7 +230,7 @@ test("trace image icons inherit custom device parents and fall back safely", () 
   );
   assert.ok(result);
 
-  const image = buildTraceImageSvg(model, result, labels);
+  const image = buildTraceImageSvg(model, result, labels, "light");
   assert.equal((image.svg.match(/data-device-icon="shield"/g) ?? []).length, 1);
   assert.equal((image.svg.match(/data-device-icon="boxes"/g) ?? []).length, 1);
   assert.match(image.svg, /^<svg[^>]+>/);
@@ -241,12 +282,12 @@ test("trace image groups a patch-panel pass-through into one device card", () =>
     ["cable", "patch", "cable"],
   );
 
-  const image = buildTraceImageSvg(model, result, labels);
+  const image = buildTraceImageSvg(model, result, labels, "light");
   assert.equal((image.svg.match(/>pp-01</g) ?? []).length, 1);
   assert.match(image.svg, /01 \(Front\)/);
   assert.match(image.svg, /01 \(Rear\)/);
   assert.match(image.svg, /Internal pass-through/);
-  assert.match(image.svg, /3 hops · Length: 2m \+ 5m/);
+  assert.match(image.svg, /3 hops · Length: 7m/);
   assert.ok(image.height > 800);
 });
 
@@ -275,10 +316,15 @@ test("trace image wraps long labels, supports RTL, and rejects unsafe colors", (
   const result = tracePorts(model, "source_port", "target_port");
   assert.ok(result);
 
-  const image = buildTraceImageSvg(model, result, {
-    ...labels,
-    direction: "rtl",
-  });
+  const image = buildTraceImageSvg(
+    model,
+    result,
+    {
+      ...labels,
+      direction: "rtl",
+    },
+    "light",
+  );
   assert.match(image.svg, /direction="rtl"/);
   assert.match(image.svg, /direction="ltr" unicode-bidi="embed"/);
   assert.match(image.svg, /<text x="594"[^>]+text-anchor="start"/);

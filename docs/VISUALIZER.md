@@ -128,7 +128,14 @@ scrollable preview shows the same localized SVG used to create the PNG and
 keeps **Download image** available inside the dialog. The image groups
 patch-panel front and rear ports into one device card, preserves documented
 cable colors and lengths, adds the device-type icon to each card, and includes
-the available room, rack, face, and U-position context.
+the available room, rack, face, and U-position context. Preview and PNG colors
+automatically match the active Rackpad light or dark theme.
+
+Rackpad calculates the total when every physical cable has a recognized metric
+or imperial length, including conversions between `mm`, `cm`, `m`, `km`, `in`,
+`ft`, and `yd`. Missing lengths show **Unknown**. Unsupported free-form values
+remain visible as an expression rather than being partially or incorrectly
+calculated.
 
 ## Empty States
 

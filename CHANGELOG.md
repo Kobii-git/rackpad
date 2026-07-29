@@ -8,6 +8,24 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.3-beta.4] - 2026-07-29
+
+### Fixed
+
+- Trace image previews and PNG downloads now use the active Rackpad light or
+  dark theme with a self-contained export palette.
+- Trace summaries now calculate compatible documented cable lengths instead of
+  displaying an unevaluated expression, while retaining free-form values when
+  they cannot be parsed safely.
+
+### Test notes
+
+- Preview and download the same direct or multi-hop trace in light and dark
+  mode, then confirm the image colors match the active Rackpad theme.
+- Trace cables with lengths `6ft`, `25ft`, `3ft`, and `1ft` and confirm the
+  total reads `35ft`; missing values should show **Unknown**, while unsupported
+  free-form values should remain visible as entered.
+
 ## [1.7.3-beta.3] - 2026-07-29
 
 ### Added

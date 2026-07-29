@@ -262,6 +262,7 @@ test("visualizer trace downloads standalone PNGs under the production CSP", asyn
   page,
 }) => {
   await page.addInitScript(() => {
+    localStorage.setItem("rackpad-theme", "dark");
     const originalCreateObjectUrl = URL.createObjectURL.bind(URL);
     const originalRevokeObjectUrl = URL.revokeObjectURL.bind(URL);
     const traceObjectUrls = {
@@ -327,16 +328,20 @@ test("visualizer trace downloads standalone PNGs under the production CSP", asyn
     await route.fulfill({
       response,
       json: [
-        ...links.filter(
-          (link) =>
-            link.fromPortId !== "p_d_fw_3" && link.toPortId !== "p_d_fw_3",
-        ),
+        ...links
+          .filter(
+            (link) =>
+              link.fromPortId !== "p_d_fw_3" && link.toPortId !== "p_d_fw_3",
+          )
+          .map((link) =>
+            link.id === "l_1" ? { ...link, cableLength: "29ft" } : link,
+          ),
         {
           id: "l_e2e_patch_trace",
           fromPortId: "p_d_fw_3",
           toPortId: "p_e2e_pp24_1_rear",
           cableType: "Cat6",
-          cableLength: "2m",
+          cableLength: "6ft",
           color: "orange",
           notes: null,
         },
@@ -373,6 +378,19 @@ test("visualizer trace downloads standalone PNGs under the production CSP", asyn
   expect(directDimensions.height).toBeGreaterThan(0);
   expect(directDimensions.naturalWidth).toBe(640);
   expect(directDimensions.naturalHeight).toBe(directDimensions.height);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (url) =>
+          (
+            window as typeof window & {
+              __traceObjectUrls: { svgByUrl: Record<string, string> };
+            }
+          ).__traceObjectUrls.svgByUrl[url] ?? "",
+        directDimensions.url,
+      ),
+    )
+    .toContain('data-theme="dark"');
   await page.getByTestId("trace-preview-close").click();
   await expect(directDialog).toHaveCount(0);
   await expect(page.getByTestId("trace-preview-image")).toBeFocused();
@@ -404,6 +422,9 @@ test("visualizer trace downloads standalone PNGs under the production CSP", asyn
   await page.getByTestId("trace-submit").click();
   await expect(page.getByText("Trace hops").locator("..")).toContainText(
     "3 hops",
+  );
+  await expect(page.getByText("Trace hops").locator("..")).toContainText(
+    "35ft",
   );
   await page.getByTestId("trace-preview-image").click();
   const multiHopDialog = page.getByTestId("trace-image-dialog");
@@ -440,6 +461,9 @@ test("visualizer trace downloads standalone PNGs under the production CSP", asyn
   expect(multiHopSvg).toContain("sw-tor-01");
   expect(multiHopSvg).toContain('data-device-icon="shield"');
   expect(multiHopSvg).toContain('data-device-icon="network"');
+  expect(multiHopSvg).toContain('data-theme="dark"');
+  expect(multiHopSvg).toContain('fill="#070a0f"');
+  expect(multiHopSvg).toContain("3 hops · Length: 35ft");
   await page.keyboard.press("Escape");
   await expect(multiHopDialog).toHaveCount(0);
   await expect
@@ -457,6 +481,50 @@ test("visualizer trace downloads standalone PNGs under the production CSP", asyn
     .toBeTruthy();
 
   await page.getByTestId("trace-preview-image").click();
+  await expectTracePngDownload(
+    page,
+    "rackpad-trace-fw-01-igb2-to-sw-tor-01-1.png",
+    page.getByTestId("trace-preview-download-image"),
+  );
+  await page.getByTestId("trace-preview-close").click();
+
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.classList.contains("light")),
+    )
+    .toBeTruthy();
+  await page.getByTestId("trace-preview-image").click();
+  const lightPreview = page.getByTestId("trace-preview-svg");
+  const lightPreviewUrl = await lightPreview.evaluate(
+    (image) => (image as HTMLImageElement).src,
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (url) =>
+          (
+            window as typeof window & {
+              __traceObjectUrls: { svgByUrl: Record<string, string> };
+            }
+          ).__traceObjectUrls.svgByUrl[url] ?? "",
+        lightPreviewUrl,
+      ),
+    )
+    .not.toBe("");
+  const lightSvg = await page.evaluate(
+    (url) =>
+      (
+        window as typeof window & {
+          __traceObjectUrls: { svgByUrl: Record<string, string> };
+        }
+      ).__traceObjectUrls.svgByUrl[url],
+    lightPreviewUrl,
+  );
+  expect(lightSvg).toContain('data-theme="light"');
+  expect(lightSvg).toContain('fill="#f8fafc"');
+  expect(lightSvg).toContain("3 hops · Length: 35ft");
+  expect(lightSvg).not.toBe(multiHopSvg);
   await expectTracePngDownload(
     page,
     "rackpad-trace-fw-01-igb2-to-sw-tor-01-1.png",

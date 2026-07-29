@@ -11,7 +11,106 @@ const INTERNAL_CONNECTION_HEIGHT = 36;
 const BLOCK_GAP = 14;
 const FOOTER_HEIGHT = 58;
 const MAX_CANVAS_DIMENSION = 16_384;
-const DEFAULT_CABLE_COLOR = "#0f766e";
+
+export type TraceImageTheme = "dark" | "light";
+
+interface TraceImagePalette {
+  background: string;
+  card: string;
+  cardBorder: string;
+  connectorCard: string;
+  connectorDetail: string;
+  connectorTitle: string;
+  connectorTrack: string;
+  defaultCable: string;
+  footerDivider: string;
+  footerText: string;
+  iconBackground: string;
+  iconBorder: string;
+  iconStroke: string;
+  patchBorder: string;
+  patchLine: string;
+  patchPill: string;
+  patchText: string;
+  portBackground: string;
+  portBorder: string;
+  portText: string;
+  primaryText: string;
+  secondaryText: string;
+  tertiaryText: string;
+  deviceAccents: Record<string, string>;
+}
+
+const TRACE_IMAGE_PALETTES: Record<TraceImageTheme, TraceImagePalette> = {
+  light: {
+    background: "#f8fafc",
+    card: "#ffffff",
+    cardBorder: "#94a3b8",
+    connectorCard: "#ffffff",
+    connectorDetail: "#475569",
+    connectorTitle: "#0f172a",
+    connectorTrack: "#334155",
+    defaultCable: "#0f766e",
+    footerDivider: "#cbd5e1",
+    footerText: "#334155",
+    iconBackground: "#f8fafc",
+    iconBorder: "#cbd5e1",
+    iconStroke: "#334155",
+    patchBorder: "#c4b5fd",
+    patchLine: "#7c3aed",
+    patchPill: "#ffffff",
+    patchText: "#5b21b6",
+    portBackground: "#f1f5f9",
+    portBorder: "#cbd5e1",
+    portText: "#1e293b",
+    primaryText: "#0f172a",
+    secondaryText: "#334155",
+    tertiaryText: "#64748b",
+    deviceAccents: {
+      switch: "#0284c7",
+      patch_panel: "#7c3aed",
+      ap: "#dc2626",
+      firewall: "#ea580c",
+      server: "#d97706",
+      endpoint: "#16a34a",
+      default: "#0f766e",
+    },
+  },
+  dark: {
+    background: "#070a0f",
+    card: "#141d2c",
+    cardBorder: "#526071",
+    connectorCard: "#141d2c",
+    connectorDetail: "#bdc7d2",
+    connectorTitle: "#edf2f7",
+    connectorTrack: "#637082",
+    defaultCable: "#4dc8d7",
+    footerDivider: "#334155",
+    footerText: "#bdc7d2",
+    iconBackground: "#0c121b",
+    iconBorder: "#334155",
+    iconStroke: "#bdc7d2",
+    patchBorder: "#8f8cff",
+    patchLine: "#a78bfa",
+    patchPill: "#1c283c",
+    patchText: "#ddd6fe",
+    portBackground: "#0c121b",
+    portBorder: "#334155",
+    portText: "#edf2f7",
+    primaryText: "#edf2f7",
+    secondaryText: "#bdc7d2",
+    tertiaryText: "#8d9aaa",
+    deviceAccents: {
+      switch: "#4dc8d7",
+      patch_panel: "#a78bfa",
+      ap: "#de6666",
+      firewall: "#f29d38",
+      server: "#ead043",
+      endpoint: "#59c36a",
+      default: "#41c7b5",
+    },
+  },
+};
 
 export interface TraceImageLabels {
   cable: string;
@@ -72,8 +171,10 @@ export function buildTraceImageSvg(
   model: VisualizerModel,
   result: TraceResult,
   labels: TraceImageLabels,
+  theme: TraceImageTheme,
 ): TraceImageExport {
-  const blocks = buildTraceImageBlocks(model, result, labels);
+  const palette = TRACE_IMAGE_PALETTES[theme];
+  const blocks = buildTraceImageBlocks(model, result, labels, palette);
   const layouts = blocks.map((block) => layoutBlock(block));
   const blocksHeight = layouts.reduce(
     (total, layout) => total + layout.height,
@@ -88,8 +189,8 @@ export function buildTraceImageSvg(
   for (const layout of layouts) {
     body.push(
       layout.block.kind === "device"
-        ? renderDeviceBlock(layout, y, labels)
-        : renderConnectorBlock(layout, y),
+        ? renderDeviceBlock(layout, y, labels, palette)
+        : renderConnectorBlock(layout, y, palette),
     );
     y += layout.height + BLOCK_GAP;
   }
@@ -100,8 +201,8 @@ export function buildTraceImageSvg(
       : result.totalCableLengthLabel;
   const footerY = height - IMAGE_PADDING - FOOTER_HEIGHT;
   body.push(
-    `<line x1="${IMAGE_PADDING}" y1="${footerY}" x2="${IMAGE_WIDTH - IMAGE_PADDING}" y2="${footerY}" stroke="#cbd5e1" />`,
-    `<text x="${IMAGE_WIDTH / 2}" y="${footerY + 28}" text-anchor="middle" fill="#334155" font-size="14" font-weight="600">${escapeXml(
+    `<line x1="${IMAGE_PADDING}" y1="${footerY}" x2="${IMAGE_WIDTH - IMAGE_PADDING}" y2="${footerY}" stroke="${palette.footerDivider}" />`,
+    `<text x="${IMAGE_WIDTH / 2}" y="${footerY + 28}" text-anchor="middle" fill="${palette.footerText}" font-size="14" font-weight="600">${escapeXml(
       `${labels.hops(result.segments.length)} · ${labels.length}: ${totalLength}`,
     )}</text>`,
   );
@@ -109,9 +210,9 @@ export function buildTraceImageSvg(
   const filename = buildTraceImageFilename(model, result, labels.unknown);
   const title = `${labels.cable}: ${filename.replace(/\.png$/, "")}`;
   const svg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${IMAGE_WIDTH}" height="${height}" viewBox="0 0 ${IMAGE_WIDTH} ${height}" direction="${labels.direction}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${IMAGE_WIDTH}" height="${height}" viewBox="0 0 ${IMAGE_WIDTH} ${height}" direction="${labels.direction}" data-theme="${theme}">`,
     `<title>${escapeXml(title)}</title>`,
-    `<rect width="${IMAGE_WIDTH}" height="${height}" fill="#f8fafc" />`,
+    `<rect width="${IMAGE_WIDTH}" height="${height}" fill="${palette.background}" />`,
     `<g font-family="Inter, IBM Plex Sans, Arial, sans-serif">`,
     ...body,
     `</g>`,
@@ -155,17 +256,23 @@ function buildTraceImageBlocks(
   model: VisualizerModel,
   result: TraceResult,
   labels: TraceImageLabels,
+  palette: TraceImagePalette,
 ): TraceImageBlock[] {
   const firstSegment = result.segments[0];
   if (!firstSegment) return [];
 
   const blocks: TraceImageBlock[] = [];
-  let current = createDeviceBlock(model, firstSegment.fromPort, labels);
+  let current = createDeviceBlock(
+    model,
+    firstSegment.fromPort,
+    labels,
+    palette,
+  );
 
   for (const segment of result.segments) {
     if (current.deviceId !== segment.fromPort.deviceId) {
       blocks.push(current);
-      current = createDeviceBlock(model, segment.fromPort, labels);
+      current = createDeviceBlock(model, segment.fromPort, labels, palette);
     } else {
       addPort(current, segment.fromPort, labels);
     }
@@ -180,8 +287,10 @@ function buildTraceImageBlocks(
     }
 
     blocks.push(current);
-    blocks.push(createConnectorBlock(segment.link, segment.color, labels));
-    current = createDeviceBlock(model, segment.toPort, labels);
+    blocks.push(
+      createConnectorBlock(segment.link, segment.color, labels, palette),
+    );
+    current = createDeviceBlock(model, segment.toPort, labels, palette);
   }
 
   blocks.push(current);
@@ -192,6 +301,7 @@ function createDeviceBlock(
   model: VisualizerModel,
   port: Port,
   labels: TraceImageLabels,
+  palette: TraceImagePalette,
 ): TraceImageDeviceBlock {
   const device = model.deviceById[port.deviceId];
   const node = model.nodesByDeviceId[port.deviceId];
@@ -224,7 +334,7 @@ function createDeviceBlock(
     title: device?.hostname || labels.unknown,
     detail: detail || labels.unknown,
     placement: placementParts.join(" / "),
-    accent: deviceAccent(effectiveType),
+    accent: deviceAccent(effectiveType, palette),
     ports: [],
     internalAfterPortIds: new Set(),
   };
@@ -254,13 +364,14 @@ function createConnectorBlock(
   link: PortLink | undefined,
   color: string,
   labels: TraceImageLabels,
+  palette: TraceImagePalette,
 ): TraceImageConnectorBlock {
   const label = link?.cableType
     ? `${labels.cable} · ${link.cableType}`
     : labels.cable;
   return {
     kind: "connector",
-    color: safeExportColor(color || link?.color),
+    color: safeExportColor(color || link?.color, palette.defaultCable),
     label,
     detail: link?.cableLength ? `${labels.length}: ${link.cableLength}` : "",
   };
@@ -307,6 +418,7 @@ function renderDeviceBlock(
   layout: TraceImageBlockLayout,
   y: number,
   labels: TraceImageLabels,
+  palette: TraceImagePalette,
 ) {
   const block = layout.block as TraceImageDeviceBlock;
   const x = IMAGE_PADDING;
@@ -316,15 +428,15 @@ function renderDeviceBlock(
     labels.direction === "rtl" ? cardRight - 22 : technicalTextX;
   const parts = [
     `<g>`,
-    `<rect x="${x}" y="${y}" width="${CARD_WIDTH}" height="${layout.height}" rx="14" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" />`,
+    `<rect x="${x}" y="${y}" width="${CARD_WIDTH}" height="${layout.height}" rx="14" fill="${palette.card}" stroke="${palette.cardBorder}" stroke-width="1.5" />`,
     `<path d="M ${x + 14} ${y} H ${cardRight - 14} Q ${cardRight} ${y} ${cardRight} ${y + 14} V ${y + 10} H ${x} V ${y + 14} Q ${x} ${y} ${x + 14} ${y} Z" fill="${block.accent}" />`,
-    renderDeviceIcon(block.deviceType, cardRight - 58, y + 20),
+    renderDeviceIcon(block.deviceType, cardRight - 58, y + 20, palette),
   ];
 
   let cursorY = y + 34;
   parts.push(
     renderTextLines(layout.titleLines, technicalTextX, cursorY, {
-      fill: "#0f172a",
+      fill: palette.primaryText,
       fontSize: 20,
       fontWeight: 700,
       lineHeight: 23,
@@ -334,7 +446,7 @@ function renderDeviceBlock(
   cursorY += layout.titleLines.length * 23 + 5;
   parts.push(
     renderTextLines(layout.detailLines, technicalTextX, cursorY, {
-      fill: "#334155",
+      fill: palette.secondaryText,
       fontSize: 14,
       fontWeight: 600,
       lineHeight: 18,
@@ -345,7 +457,7 @@ function renderDeviceBlock(
   if (layout.placementLines.length > 0) {
     parts.push(
       renderTextLines(layout.placementLines, localizedTextX, cursorY, {
-        fill: "#64748b",
+        fill: palette.tertiaryText,
         fontSize: 13,
         fontWeight: 400,
         lineHeight: 17,
@@ -358,8 +470,8 @@ function renderDeviceBlock(
 
   for (const port of block.ports) {
     parts.push(
-      `<rect x="${x + 12}" y="${cursorY}" width="${CARD_WIDTH - 24}" height="${PORT_HEIGHT - 8}" rx="7" fill="#f1f5f9" stroke="#cbd5e1" />`,
-      `<text x="${IMAGE_WIDTH / 2}" y="${cursorY + 24}" text-anchor="middle" direction="ltr" unicode-bidi="embed" fill="#1e293b" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="14" font-weight="650">${escapeXml(
+      `<rect x="${x + 12}" y="${cursorY}" width="${CARD_WIDTH - 24}" height="${PORT_HEIGHT - 8}" rx="7" fill="${palette.portBackground}" stroke="${palette.portBorder}" />`,
+      `<text x="${IMAGE_WIDTH / 2}" y="${cursorY + 24}" text-anchor="middle" direction="ltr" unicode-bidi="embed" fill="${palette.portText}" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="14" font-weight="650">${escapeXml(
         port.label,
       )}</text>`,
     );
@@ -368,9 +480,9 @@ function renderDeviceBlock(
     if (block.internalAfterPortIds.has(port.id)) {
       const connectionCenter = cursorY + INTERNAL_CONNECTION_HEIGHT / 2;
       parts.push(
-        `<line x1="${IMAGE_WIDTH / 2}" y1="${cursorY - 4}" x2="${IMAGE_WIDTH / 2}" y2="${cursorY + INTERNAL_CONNECTION_HEIGHT + 4}" stroke="#7c3aed" stroke-width="4" stroke-dasharray="5 4" />`,
-        `<rect x="${IMAGE_WIDTH / 2 - 112}" y="${connectionCenter - 13}" width="224" height="26" rx="13" fill="#ffffff" stroke="#c4b5fd" />`,
-        `<text x="${IMAGE_WIDTH / 2}" y="${connectionCenter + 5}" text-anchor="middle" fill="#5b21b6" font-size="12" font-weight="650">${escapeXml(
+        `<line x1="${IMAGE_WIDTH / 2}" y1="${cursorY - 4}" x2="${IMAGE_WIDTH / 2}" y2="${cursorY + INTERNAL_CONNECTION_HEIGHT + 4}" stroke="${palette.patchLine}" stroke-width="4" stroke-dasharray="5 4" />`,
+        `<rect x="${IMAGE_WIDTH / 2 - 112}" y="${connectionCenter - 13}" width="224" height="26" rx="13" fill="${palette.patchPill}" stroke="${palette.patchBorder}" />`,
+        `<text x="${IMAGE_WIDTH / 2}" y="${connectionCenter + 5}" text-anchor="middle" fill="${palette.patchText}" font-size="12" font-weight="650">${escapeXml(
           labels.internalPassThrough,
         )}</text>`,
       );
@@ -404,12 +516,17 @@ const TRACE_DEVICE_ICONS: Record<string, string> = {
     '<rect x="2" y="6" width="18" height="12" rx="2"/><path d="M22 10v4M6 12h8M10 8v8"/>',
 };
 
-function renderDeviceIcon(type: string, x: number, y: number) {
+function renderDeviceIcon(
+  type: string,
+  x: number,
+  y: number,
+  palette: TraceImagePalette,
+) {
   const key = traceDeviceIconKey(type);
   return [
     `<g data-device-icon="${key}">`,
-    `<rect x="${x}" y="${y}" width="38" height="38" rx="9" fill="#f8fafc" stroke="#cbd5e1" />`,
-    `<g transform="translate(${x + 7} ${y + 7})" fill="none" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">`,
+    `<rect x="${x}" y="${y}" width="38" height="38" rx="9" fill="${palette.iconBackground}" stroke="${palette.iconBorder}" />`,
+    `<g transform="translate(${x + 7} ${y + 7})" fill="none" stroke="${palette.iconStroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">`,
     TRACE_DEVICE_ICONS[key],
     `</g>`,
     `</g>`,
@@ -447,7 +564,11 @@ function traceDeviceIconKey(type: string) {
   }
 }
 
-function renderConnectorBlock(layout: TraceImageBlockLayout, y: number) {
+function renderConnectorBlock(
+  layout: TraceImageBlockLayout,
+  y: number,
+  palette: TraceImagePalette,
+) {
   const block = layout.block as TraceImageConnectorBlock;
   const centerX = IMAGE_WIDTH / 2;
   const labelHeight =
@@ -455,14 +576,14 @@ function renderConnectorBlock(layout: TraceImageBlockLayout, y: number) {
   const labelY = y + (layout.height - labelHeight) / 2;
   const parts = [
     `<g>`,
-    `<line x1="${centerX}" y1="${y - BLOCK_GAP}" x2="${centerX}" y2="${y + layout.height + BLOCK_GAP}" stroke="#334155" stroke-width="9" />`,
+    `<line x1="${centerX}" y1="${y - BLOCK_GAP}" x2="${centerX}" y2="${y + layout.height + BLOCK_GAP}" stroke="${palette.connectorTrack}" stroke-width="9" />`,
     `<line x1="${centerX}" y1="${y - BLOCK_GAP}" x2="${centerX}" y2="${y + layout.height + BLOCK_GAP}" stroke="${block.color}" stroke-width="5" />`,
-    `<rect x="${centerX - 184}" y="${labelY}" width="368" height="${labelHeight}" rx="12" fill="#ffffff" stroke="#94a3b8" />`,
+    `<rect x="${centerX - 184}" y="${labelY}" width="368" height="${labelHeight}" rx="12" fill="${palette.connectorCard}" stroke="${palette.cardBorder}" />`,
   ];
   let cursorY = labelY + 23;
   parts.push(
     renderTextLines(layout.titleLines, centerX, cursorY, {
-      fill: "#0f172a",
+      fill: palette.connectorTitle,
       fontSize: 14,
       fontWeight: 700,
       lineHeight: 18,
@@ -473,7 +594,7 @@ function renderConnectorBlock(layout: TraceImageBlockLayout, y: number) {
   if (layout.detailLines.length > 0) {
     parts.push(
       renderTextLines(layout.detailLines, centerX, cursorY, {
-        fill: "#475569",
+        fill: palette.connectorDetail,
         fontSize: 13,
         fontWeight: 400,
         lineHeight: 17,
@@ -577,35 +698,20 @@ function splitLongWord(value: string, maxCharacters: number) {
   return chunks;
 }
 
-function safeExportColor(value?: string | null) {
+function safeExportColor(value: string | null | undefined, fallback: string) {
   const normalized = normalizeColorToCss(value);
-  if (!normalized) return DEFAULT_CABLE_COLOR;
+  if (!normalized) return fallback;
   if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalized)) return normalized;
   if (/^[a-z]{3,24}$/i.test(normalized)) return normalized;
   if (/^(?:rgb|hsl)a?\([\d\s.,%+-]+\)$/i.test(normalized)) {
     return normalized;
   }
-  return DEFAULT_CABLE_COLOR;
+  return fallback;
 }
 
-function deviceAccent(type: string) {
-  switch (type) {
-    case "switch":
-      return "#0284c7";
-    case "patch_panel":
-      return "#7c3aed";
-    case "access_point":
-    case "ap":
-      return "#dc2626";
-    case "firewall":
-      return "#ea580c";
-    case "server":
-      return "#d97706";
-    case "endpoint":
-      return "#16a34a";
-    default:
-      return "#0f766e";
-  }
+function deviceAccent(type: string, palette: TraceImagePalette) {
+  const key = type === "access_point" ? "ap" : type;
+  return palette.deviceAccents[key] ?? palette.deviceAccents.default;
 }
 
 function escapeXml(value: string) {

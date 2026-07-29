@@ -70,6 +70,7 @@ import {
   buildTraceImageSvg,
   downloadTraceImagePng,
   type TraceImageExport,
+  type TraceImageTheme,
 } from "./trace-image";
 import type {
   RackBand,
@@ -2472,19 +2473,29 @@ function TraceSummary({
   }
 
   function buildTraceImage() {
-    return buildTraceImageSvg(model, result, {
-      cable: t("Cable"),
-      direction: document.documentElement.dir === "rtl" ? "rtl" : "ltr",
-      front: t("Front"),
-      rear: t("Rear"),
-      internalPassThrough: t("Internal pass-through"),
-      length: t("Length"),
-      rack: t("Rack"),
-      room: t("Room"),
-      unknown: t("Unknown"),
-      deviceType: typeLabel,
-      hops: (count) => t("{count} hops", { count }),
-    });
+    const theme: TraceImageTheme = document.documentElement.classList.contains(
+      "light",
+    )
+      ? "light"
+      : "dark";
+    return buildTraceImageSvg(
+      model,
+      result,
+      {
+        cable: t("Cable"),
+        direction: document.documentElement.dir === "rtl" ? "rtl" : "ltr",
+        front: t("Front"),
+        rear: t("Rear"),
+        internalPassThrough: t("Internal pass-through"),
+        length: t("Length"),
+        rack: t("Rack"),
+        room: t("Room"),
+        unknown: t("Unknown"),
+        deviceType: typeLabel,
+        hops: (count) => t("{count} hops", { count }),
+      },
+      theme,
+    );
   }
 
   function openTraceImagePreview() {
@@ -2675,7 +2686,7 @@ function TraceSummary({
                   {imageError}
                 </div>
               )}
-              <div className="flex-1 overflow-auto bg-[#e2e8f0] p-4">
+              <div className="flex-1 overflow-auto bg-[var(--surface-1)] p-4">
                 <img
                   src={activeImagePreview.url}
                   alt={t("Cable trace image")}
