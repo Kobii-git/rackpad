@@ -611,7 +611,8 @@
   }
 
   .rk-table-shell {
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
     border: 1px solid var(--border-default);
     border-radius: var(--radius-md);
     background: var(--surface-1);

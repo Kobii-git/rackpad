@@ -13,6 +13,10 @@ import { listMonitors, MONITOR_TYPES, parseMonitor, reconcileDeviceMonitorRollup
 import { discoverIfMibInterfaces, formatSnmpHighSpeedMbps, interfaceMonitorName } from '../lib/snmp-if-mib.js'
 import { matchPortForInterface } from '../lib/snmp-match.js'
 import { resolveSnmpSessionForTarget } from '../lib/snmp-session.js'
+import {
+  buildSnmpSessionFromCredential,
+  loadSnmpCredentialSecrets,
+} from '../lib/snmp-credentials.js'
 import { validateSnmpOid } from '../lib/snmp.js'
 import {
   asObject,
@@ -238,8 +242,9 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     const target = targetInput == null ? targetInput : ensureHostTarget(targetInput, 'target')
     const path = optionalString(body, 'path', { maxLength: 200 })
     const port = optionalInteger(body, 'port', { min: 1, max: 65535 })
-    const snmpVersion = optionalEnum(body, 'snmpVersion', SNMP_VERSIONS) ?? '2c'
-    const snmpCommunity = optionalString(body, 'snmpCommunity', { maxLength: 120 }) ?? 'public'
+    const ignoreTlsErrors = optionalBoolean(body, 'ignoreTlsErrors') ?? false
+    const snmpVersionInput = optionalEnum(body, 'snmpVersion', SNMP_VERSIONS)
+    const snmpCommunityInput = optionalString(body, 'snmpCommunity', { maxLength: 120 })
     const snmpOid = optionalString(body, 'snmpOid', { maxLength: 160 })
     const snmpExpectedValue = optionalString(body, 'snmpExpectedValue', { maxLength: 200 })
     const snmpMatchMode = optionalEnum(body, 'snmpMatchMode', SNMP_MATCH_MODES) ?? 'equals'
@@ -261,6 +266,21 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     validateSnmpOid(snmpOid)
     const validatedPortId = validateMonitorPortId(deviceId, linkedPortId)
     const validatedCredentialId = validateMonitorCredentialId(device.labId, snmpCredentialId)
+    const snmpVersion =
+      snmpVersionInput ?? getSnmpCredentialVersion(validatedCredentialId) ?? '2c'
+    const snmpCommunity =
+      snmpCommunityInput === undefined && !validatedCredentialId && snmpVersion !== '3'
+        ? 'public'
+        : snmpCommunityInput ?? null
+    validateEnabledSnmpV3Configuration({
+      type,
+      enabled,
+      device,
+      target: normalizedTarget,
+      port: port ?? 161,
+      snmpVersion,
+      snmpCredentialId: validatedCredentialId,
+    })
 
     const id = createId('mon')
     db.prepare(`
@@ -272,6 +292,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
         target,
         port,
         path,
+        ignoreTlsErrors,
         snmpVersion,
         snmpCommunity,
         snmpOid,
@@ -287,7 +308,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
         lastResult,
         lastMessage
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
     `).run(
       id,
       deviceId,
@@ -296,6 +317,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
       normalizedTarget,
       type === 'snmp' ? port ?? 161 : port ?? null,
       type === 'snmp' ? null : path ?? null,
+      type === 'https' && ignoreTlsErrors ? 1 : 0,
       type === 'snmp' ? snmpVersion : null,
       type === 'snmp' ? snmpCommunity : null,
       type === 'snmp' ? snmpOid : null,
@@ -330,6 +352,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     const target = targetInput == null ? targetInput : ensureHostTarget(targetInput, 'target')
     const path = optionalString(body, 'path', { maxLength: 200 })
     const port = optionalInteger(body, 'port', { min: 1, max: 65535 })
+    const ignoreTlsErrors = optionalBoolean(body, 'ignoreTlsErrors')
     const snmpVersion = optionalEnum(body, 'snmpVersion', SNMP_VERSIONS)
     const snmpCommunity = optionalString(body, 'snmpCommunity', { maxLength: 120 })
     const snmpOid = optionalString(body, 'snmpOid', { maxLength: 160 })
@@ -350,6 +373,11 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
         ? (current.path == null ? null : String(current.path))
         : path
     const nextPort = port === undefined ? (current.port == null ? null : Number(current.port)) : port
+    const nextIgnoreTlsErrors = nextType === 'https'
+      ? ignoreTlsErrors === undefined
+        ? Number(current.ignoreTlsErrors ?? 0) === 1
+        : Boolean(ignoreTlsErrors)
+      : false
     const nextSnmpVersion = nextType === 'snmp'
       ? snmpVersion === undefined
         ? (current.snmpVersion ? String(current.snmpVersion) as (typeof SNMP_VERSIONS)[number] : '2c')
@@ -357,8 +385,8 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
       : null
     const nextSnmpCommunity = nextType === 'snmp'
       ? snmpCommunity === undefined
-        ? (current.snmpCommunity == null ? 'public' : String(current.snmpCommunity))
-        : snmpCommunity ?? 'public'
+        ? (current.snmpCommunity == null ? null : String(current.snmpCommunity))
+        : snmpCommunity
       : null
     const nextSnmpOid = nextType === 'snmp'
       ? snmpOid === undefined
@@ -405,6 +433,19 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
       throw new ValidationError('SNMP OID is required for SNMP health checks.')
     }
     validateSnmpOid(nextSnmpOid)
+    const device = getDeviceLabRow(String(current.deviceId))
+    if (!device) {
+      return reply.status(404).send({ error: 'Device not found.' })
+    }
+    validateEnabledSnmpV3Configuration({
+      type: nextType,
+      enabled: nextEnabled,
+      device,
+      target: nextTarget,
+      port: nextPort ?? 161,
+      snmpVersion: nextSnmpVersion,
+      snmpCredentialId: nextSnmpCredentialId,
+    })
 
     db.prepare(`
       UPDATE deviceMonitors
@@ -414,6 +455,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
         target = ?,
         port = ?,
         path = ?,
+        ignoreTlsErrors = ?,
         snmpVersion = ?,
         snmpCommunity = ?,
         snmpOid = ?,
@@ -431,6 +473,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
       nextTarget,
       nextType === 'snmp' ? nextPort ?? 161 : nextPort ?? null,
       nextPath ?? null,
+      nextIgnoreTlsErrors ? 1 : 0,
       nextSnmpVersion,
       nextSnmpCommunity,
       nextSnmpOid,
@@ -573,6 +616,51 @@ function validateMonitorCredentialId(labId: string, credentialId: string | null 
     throw new ValidationError('SNMP credential must belong to the selected lab.')
   }
   return credentialId
+}
+
+function getSnmpCredentialVersion(credentialId: string | null) {
+  if (!credentialId) return null
+  const row = db
+    .prepare('SELECT version FROM snmpCredentials WHERE id = ?')
+    .get(credentialId) as { version: (typeof SNMP_VERSIONS)[number] } | undefined
+  return row?.version ?? null
+}
+
+function validateEnabledSnmpV3Configuration(input: {
+  type: (typeof MONITOR_TYPES)[number]
+  enabled: boolean
+  device: NonNullable<ReturnType<typeof getDeviceLabRow>>
+  target: string | null
+  port: number
+  snmpVersion: (typeof SNMP_VERSIONS)[number] | null
+  snmpCredentialId: string | null
+}) {
+  if (!input.enabled || input.type !== 'snmp') return
+
+  const effectiveCredentialId = input.snmpCredentialId ?? input.device.snmpCredentialId ?? null
+  let credential: ReturnType<typeof loadSnmpCredentialSecrets> | null = null
+  if (effectiveCredentialId) {
+    try {
+      credential = loadSnmpCredentialSecrets(effectiveCredentialId, input.device.labId)
+    } catch {
+      throw new ValidationError('Enabled SNMPv3 monitors require a usable SNMPv3 credential.')
+    }
+  }
+
+  const requiresV3 = input.snmpVersion === '3' || credential?.version === '3'
+  if (!requiresV3) return
+  if (!credential || credential.version !== '3') {
+    throw new ValidationError('Enabled SNMPv3 monitors require a usable SNMPv3 credential.')
+  }
+
+  try {
+    buildSnmpSessionFromCredential(credential, {
+      host: input.target ?? '127.0.0.1',
+      port: input.port,
+    })
+  } catch {
+    throw new ValidationError('Enabled SNMPv3 monitors require a usable SNMPv3 credential.')
+  }
 }
 
 function validateMonitorPortId(deviceId: string, portId: string | null | undefined) {

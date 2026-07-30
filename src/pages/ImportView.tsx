@@ -396,6 +396,193 @@ const PROVIDER_COPY: Record<
   },
 };
 
+const SAMPLE_IMPORTS: Record<ImportProvider, HyperVPayload> = {
+  hyperv: {
+    schema: "rackpad.hyperv.inventory.v1",
+    provider: "hyperv",
+    collectedAt: "2026-07-20T08:00:00.000Z",
+    host: {
+      computerName: "sample-hv-01",
+      fqdn: "sample-hv-01.example.invalid",
+      manufacturer: "Dell",
+      model: "PowerEdge R650",
+      logicalProcessors: 32,
+      memoryGb: 128,
+      osCaption: "Microsoft Windows Server 2025 Datacenter",
+      osVersion: "10.0.26100",
+      hostIpAddresses: ["192.0.2.20"],
+    },
+    switches: [
+      {
+        id: "sample-hv-external",
+        name: "External-LAN",
+        kind: "external",
+        netAdapterName: "Ethernet 2",
+        allowManagementOS: true,
+      },
+      {
+        id: "sample-hv-private",
+        name: "Private-Lab",
+        kind: "private",
+        allowManagementOS: false,
+      },
+    ],
+    hostAdapters: [
+      {
+        name: "Ethernet 2",
+        interfaceDescription: "Intel X710 10GbE",
+        macAddress: "02:00:00:00:02:20",
+        status: "Up",
+        linkSpeed: "10 Gbps",
+        ipAddresses: ["192.0.2.20"],
+      },
+    ],
+    vms: [
+      {
+        id: "sample-hv-vm-web",
+        name: "sample-web-01",
+        state: "Running",
+        generation: 2,
+        processorCount: 4,
+        memoryAssignedGb: 8,
+        storageGb: 120,
+        guestOsName: "Windows Server 2025",
+        networkAdapters: [
+          {
+            id: "sample-hv-vnic-web",
+            name: "Network Adapter",
+            switchName: "External-LAN",
+            macAddress: "02:00:00:00:02:21",
+            status: "Up",
+            connected: true,
+            ipAddresses: ["192.0.2.101"],
+            vlan: { mode: "access", accessVlanId: 30 },
+          },
+        ],
+      },
+      {
+        id: "sample-hv-vm-build",
+        name: "sample-build-01",
+        state: "Off",
+        generation: 2,
+        processorCount: 8,
+        memoryStartupGb: 16,
+        dynamicMemoryEnabled: true,
+        storageGb: 250,
+        guestOsName: "Ubuntu 24.04 LTS",
+        networkAdapters: [
+          {
+            id: "sample-hv-vnic-build",
+            name: "Build NIC",
+            switchName: "Private-Lab",
+            macAddress: "02:00:00:00:02:22",
+            status: "Down",
+            connected: true,
+            ipAddresses: ["192.0.2.102"],
+            vlan: { mode: "trunk", nativeVlanId: 10, allowedVlanIds: [10, 40] },
+          },
+        ],
+      },
+    ],
+  },
+  proxmox: {
+    schema: "rackpad.proxmox.inventory.v1",
+    provider: "proxmox",
+    collectedAt: "2026-07-20T08:00:00.000Z",
+    host: {
+      computerName: "sample-pve-04",
+      nodeName: "sample-pve-04",
+      manufacturer: "Supermicro",
+      model: "SYS-111C-NR",
+      logicalProcessors: 48,
+      memoryGb: 256,
+      osCaption: "Proxmox VE",
+      pveVersion: "9.0",
+      kernelVersion: "6.14.8-2-pve",
+      hostIpAddresses: ["192.0.2.30"],
+    },
+    switches: [
+      {
+        id: "sample-vmbr0",
+        name: "vmbr0",
+        kind: "external",
+        notes: "VLAN-aware sample bridge",
+      },
+      {
+        id: "sample-vmbr1",
+        name: "vmbr1",
+        kind: "internal",
+        notes: "Storage-only sample bridge",
+      },
+    ],
+    hostAdapters: [
+      {
+        name: "eno1",
+        interfaceDescription: "Intel E810 25GbE",
+        macAddress: "02:00:00:00:02:30",
+        status: "up",
+        linkSpeed: "25 Gbps",
+        ipAddresses: ["192.0.2.30"],
+      },
+    ],
+    vms: [
+      {
+        id: "qemu/240",
+        vmid: 240,
+        kind: "qemu",
+        vmType: "qemu",
+        name: "sample-proxmox-vm",
+        state: "running",
+        processorCount: 6,
+        memoryStartupGb: 12,
+        storageGb: 160,
+        guestOsName: "Debian 13",
+        onBoot: true,
+        networkAdapters: [
+          {
+            id: "net0",
+            name: "net0",
+            switchName: "vmbr0",
+            macAddress: "02:00:00:00:02:31",
+            status: "up",
+            connected: true,
+            ipAddresses: ["192.0.2.131"],
+            vlan: { mode: "access", accessVlanId: 10 },
+            model: "virtio",
+          },
+        ],
+      },
+      {
+        id: "lxc/241",
+        vmid: 241,
+        kind: "lxc",
+        vmType: "lxc",
+        name: "sample-proxmox-container",
+        state: "running",
+        processorCount: 2,
+        memoryStartupGb: 2,
+        storageGb: 24,
+        unprivileged: true,
+        onBoot: true,
+        networkAdapters: [
+          {
+            id: "net0",
+            name: "eth0",
+            switchName: "vmbr1",
+            macAddress: "02:00:00:00:02:32",
+            status: "up",
+            connected: true,
+            ipAddresses: ["192.0.2.132"],
+            vlan: { mode: "trunk", nativeVlanId: 40, allowedVlanIds: [40, 50] },
+            model: "veth",
+          },
+        ],
+      },
+    ],
+    summary: { node: "sample-pve-04", qemu: 1, lxc: 1, workloads: 2 },
+  },
+};
+
 export default function ImportView() {
   const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
@@ -482,12 +669,7 @@ export default function ImportView() {
           "This file does not look like a Rackpad Hyper-V or Proxmox inventory export.",
         );
       }
-      const provider = providerForPayload(parsed);
-      setPayload(parsed);
-      setHostDraft(hostToDraft(parsed, provider));
-      setVmDrafts(
-        parsed.vms.map((vm, index) => vmToDraft(vm, index, provider)),
-      );
+      stagePayload(parsed);
     } catch (error) {
       setPayload(null);
       setHostDraft(null);
@@ -498,6 +680,24 @@ export default function ImportView() {
     } finally {
       event.target.value = "";
     }
+  }
+
+  function stagePayload(parsed: HyperVPayload) {
+    if (!Array.isArray(parsed.vms)) {
+      throw new Error(
+        "This file does not look like a Rackpad Hyper-V or Proxmox inventory export.",
+      );
+    }
+    const provider = providerForPayload(parsed);
+    setPayload(parsed);
+    setHostDraft(hostToDraft(parsed, provider));
+    setVmDrafts(parsed.vms.map((vm, index) => vmToDraft(vm, index, provider)));
+    setParseError("");
+    setImportLog([]);
+  }
+
+  function loadSample(provider: ImportProvider) {
+    stagePayload(structuredClone(SAMPLE_IMPORTS[provider]));
   }
 
   async function handleImport() {
@@ -672,16 +872,37 @@ export default function ImportView() {
                   <CollectorDownload provider="hyperv" />
                   <CollectorDownload provider="proxmox" />
                 </div>
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]">
-                  <Upload className="size-4" />
-                  {t("Choose import JSON")}
-                  <input
-                    type="file"
-                    accept="application/json,.json"
-                    className="hidden"
-                    onChange={(event) => void handleFile(event)}
-                  />
-                </label>
+                <div className="flex flex-wrap gap-2">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]">
+                    <Upload className="size-4" />
+                    {t("Choose import JSON")}
+                    <input
+                      type="file"
+                      accept="application/json,.json"
+                      className="hidden"
+                      onChange={(event) => void handleFile(event)}
+                    />
+                  </label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadSample("proxmox")}
+                  >
+                    {t("Load sample Proxmox")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadSample("hyperv")}
+                  >
+                    {t("Load sample Hyper-V")}
+                  </Button>
+                </div>
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  {t(
+                    "Samples populate this review only. Nothing is written until Import selected.",
+                  )}
+                </p>
                 {parseError && (
                   <div className="rounded-[var(--radius-md)] border border-[var(--danger-border)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">
                     {parseError}
@@ -930,7 +1151,10 @@ function ProviderRunbook({ provider }: { provider: ImportProvider }) {
                 {step.description}
               </p>
               {step.command && (
-                <pre className="mt-2 overflow-x-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.22)] p-3 font-mono text-[11px] leading-5 text-[var(--text-secondary)]">
+                <pre
+                  tabIndex={0}
+                  className="mt-2 overflow-x-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.22)] p-3 font-mono text-[11px] leading-5 text-[var(--text-secondary)]"
+                >
                   {step.command}
                 </pre>
               )}
@@ -947,7 +1171,10 @@ function ProviderRunbook({ provider }: { provider: ImportProvider }) {
               <div className="text-[11px] font-medium text-[var(--text-secondary)]">
                 {entry.label}
               </div>
-              <pre className="mt-1 overflow-x-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.22)] p-3 font-mono text-[11px] leading-5 text-[var(--text-secondary)]">
+              <pre
+                tabIndex={0}
+                className="mt-1 overflow-x-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.22)] p-3 font-mono text-[11px] leading-5 text-[var(--text-secondary)]"
+              >
                 {entry.command}
               </pre>
             </div>
@@ -1455,7 +1682,10 @@ function CollectorDownload({ provider }: { provider: ImportProvider }) {
       <p className="mt-3 text-xs leading-5 text-[var(--text-tertiary)]">
         {copy.summary}
       </p>
-      <pre className="mt-3 overflow-x-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.22)] p-3 font-mono text-[11px] text-[var(--text-secondary)]">
+      <pre
+        tabIndex={0}
+        className="mt-3 overflow-x-auto rounded-[var(--radius-sm)] bg-[rgb(0_0_0_/_0.22)] p-3 font-mono text-[11px] text-[var(--text-secondary)]"
+      >
         {copy.command}
       </pre>
     </div>

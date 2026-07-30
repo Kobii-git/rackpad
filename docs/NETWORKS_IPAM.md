@@ -13,6 +13,25 @@ read-only, and shown in the administrator data-integrity panel. An administrator
 must move a conflicted subnet to a non-overlapping CIDR or explicitly delete it;
 Rackpad never merges or deletes legacy IPAM data automatically.
 
+## Finding assigned IPs
+
+Device inventory search includes every valid IP assignment attached directly to
+the device, not just its management IP. When an assigned address matches the
+search, Rackpad shows that address beneath the management IP so the result is
+easy to identify.
+
+Use the **IP mismatches** filter on `Devices` to find a conservative class of
+inconsistency: a device has a management IP and one or more device-level IP
+assignments, but none of those assignments records the management IP.
+Interface assignments do not trigger this warning, and an extra device address
+is allowed when a matching management assignment also exists. Choose
+**Review** to open the device's Network tab and resolve the records manually;
+Rackpad does not change either address automatically.
+
+Global search also identifies the owning device for assigned IPs and opens its
+Network tab directly. An assignment without an owning device continues to open
+its containing subnet.
+
 ## Simple tagged VLAN network
 
 Use this when a subnet lives on a tagged VLAN, such as `VLAN 20` for IoT or

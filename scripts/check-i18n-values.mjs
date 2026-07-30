@@ -1,9 +1,21 @@
 #!/usr/bin/env node
 /** Validate locale parity, translation quality, placeholders, and explicit UI copy. */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+} from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import {
+  containsStandaloneBrand,
+  isStaleSameAsEnglishAllowance,
+  isUntranslatedVisibleValue,
+} from "./i18n-value-rules.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const translationsPath = join(root, "src/i18n/base.ts");
@@ -74,6 +86,15 @@ function placeholders(value) {
   return [...value.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort();
 }
 
+const protectedBrands = new Map([
+  ["Discord webhook URL", ["Discord"]],
+  ["Telegram bot token", ["Telegram"]],
+  ["Telegram chat ID", ["Telegram"]],
+  ["Discord / Telegram / Email", ["Discord", "Telegram"]],
+  ["Load sample Proxmox", ["Proxmox"]],
+  ["Load sample Hyper-V", ["Hyper-V"]],
+]);
+
 const en = parseTranslationMap(
   readFileSync(translationsPath, "utf8"),
   translationsPath,
@@ -83,6 +104,7 @@ const allowlistEntries = JSON.parse(readFileSync(allowlistPath, "utf8"));
 if (!Array.isArray(allowlistEntries))
   throw new Error("The i18n allowlist must be an array.");
 const allowlist = new Map();
+const localeEntries = new Map();
 for (const entry of allowlistEntries) {
   if (
     !entry ||
@@ -121,6 +143,7 @@ for (const file of readdirSync(localesDir)) {
     readFileSync(localePath, "utf8"),
     localePath,
   );
+  localeEntries.set(locale, entries);
   for (const key of en.keys()) {
     if (!entries.has(key)) {
       findings.push({ locale, key, value: "", reason: "missing-key" });
@@ -129,8 +152,7 @@ for (const file of readdirSync(localesDir)) {
     const value = entries.get(key);
     const enValue = en.get(key);
     if (
-      /[\p{L}]/u.test(value) &&
-      value === enValue &&
+      isUntranslatedVisibleValue(value, enValue) &&
       !sameAsEnglishAllowed(key, locale)
     ) {
       findings.push({ locale, key, value, reason: "same-as-english" });
@@ -138,10 +160,45 @@ for (const file of readdirSync(localesDir)) {
     if (placeholders(value).join("|") !== placeholders(enValue).join("|")) {
       findings.push({ locale, key, value, reason: "placeholder-mismatch" });
     }
+    for (const brand of protectedBrands.get(key) ?? []) {
+      if (!containsStandaloneBrand(value, brand)) {
+        findings.push({
+          locale,
+          key,
+          value,
+          reason: `translated-product-name:${brand}`,
+        });
+      }
+    }
   }
   for (const [key, value] of entries) {
     if (!en.has(key))
       findings.push({ locale, key, value, reason: "extra-key" });
+  }
+}
+
+for (const [key, locales] of allowlist) {
+  if (locales === null) continue;
+  for (const locale of locales) {
+    const entries = localeEntries.get(locale);
+    if (!entries) {
+      findings.push({
+        locale,
+        key,
+        value: "",
+        reason: "unknown-allowlist-locale",
+      });
+      continue;
+    }
+    const value = entries.get(key);
+    if (isStaleSameAsEnglishAllowance(value, en.get(key))) {
+      findings.push({
+        locale,
+        key,
+        value: value ?? "",
+        reason: "stale-same-as-english-allowlist",
+      });
+    }
   }
 }
 
@@ -166,14 +223,33 @@ if (/^import[\s\S]*?from\s+["']\.\/locales\//m.test(i18nRuntime)) {
 }
 
 function scanUiDirectory(directory) {
-  for (const name of readdirSync(directory)) {
-    const filePath = join(directory, name);
-    if (statSync(filePath).isDirectory()) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const filePath = join(directory, entry.name);
+    if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory()) {
       scanUiDirectory(filePath);
       continue;
     }
-    if (!filePath.endsWith(".tsx")) continue;
-    const content = readFileSync(filePath, "utf8");
+    if (!entry.isFile() || !filePath.endsWith(".tsx")) continue;
+
+    let descriptor;
+    try {
+      descriptor = openSync(
+        filePath,
+        constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+      );
+    } catch (error) {
+      if (error?.code === "ELOOP") continue;
+      throw error;
+    }
+
+    let content;
+    try {
+      if (!fstatSync(descriptor).isFile()) continue;
+      content = readFileSync(descriptor, "utf8");
+    } finally {
+      closeSync(descriptor);
+    }
     const sourceFile = ts.createSourceFile(
       filePath,
       content,

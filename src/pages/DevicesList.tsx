@@ -25,7 +25,15 @@ import type {
   Rack,
   Room,
 } from "@/lib/types";
-import { ChevronRight, Filter, Plus, Save, Trash2, X } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronRight,
+  Filter,
+  Plus,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 import { statusLabel } from "@/lib/utils";
 import { deviceTypeLabel } from "@/lib/device-types";
 import {
@@ -36,6 +44,11 @@ import {
   toggleSort,
   type SortState,
 } from "@/lib/sort";
+import {
+  findManagementIpMismatches,
+  indexValidDeviceIpAssignments,
+  matchingAssignedIps,
+} from "@/lib/device-ip-consistency";
 
 type SortKey =
   | "hostname"
@@ -61,6 +74,12 @@ interface BulkDeviceForm {
   memoryGb: string;
   storageGb: string;
   specs: string;
+}
+
+interface DuplicateMacGroup {
+  macAddress: string;
+  devices: Device[];
+  ignored: boolean;
 }
 
 const EMPTY_BULK_DEVICE_FORM: BulkDeviceForm = {
@@ -89,6 +108,7 @@ export default function DevicesList() {
   const wifiSsids = useStore((s) => s.wifiSsids);
   const racks = useStore((s) => s.racks);
   const ports = useStore((s) => s.ports);
+  const ipAssignments = useStore((s) => s.ipAssignments);
   const deviceMonitors = useStore((s) => s.deviceMonitors);
   const canEdit = canEditInventory(currentUser);
   const [query, setQuery] = useState("");
@@ -109,9 +129,19 @@ export default function DevicesList() {
   );
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkError, setBulkError] = useState("");
+  const [showIgnoredDuplicateMacs, setShowIgnoredDuplicateMacs] =
+    useState(false);
+  const [duplicateMacSaving, setDuplicateMacSaving] = useState<string | null>(
+    null,
+  );
+  const [duplicateMacError, setDuplicateMacError] = useState("");
   const typeParam = searchParams.get("type");
   const placementParam = searchParams.get("placement");
+  const macParam = searchParams.get("mac");
+  const ipParam = searchParams.get("ip");
   const showUnplacedOnly = placementParam === "unplaced";
+  const showDuplicateMacs = macParam === "duplicates";
+  const showIpMismatches = ipParam === "mismatch";
 
   useEffect(() => {
     if (typeParam && typeParam !== type) {
@@ -159,18 +189,104 @@ export default function DevicesList() {
     }, {});
   }, [ports]);
 
+  const allDuplicateMacGroups = useMemo<DuplicateMacGroup[]>(() => {
+    const groups = new Map<string, Device[]>();
+    for (const device of devices) {
+      const macAddress = canonicalMacAddress(device.macAddress);
+      if (!macAddress) continue;
+      const entries = groups.get(macAddress) ?? [];
+      entries.push(device);
+      groups.set(macAddress, entries);
+    }
+    return [...groups.entries()]
+      .filter(([, entries]) => entries.length > 1)
+      .map(([macAddress, entries]) => ({
+        macAddress,
+        devices: [...entries].sort((a, b) =>
+          a.hostname.localeCompare(b.hostname),
+        ),
+        ignored: entries.every((device) => device.ignoreDuplicateMac === true),
+      }))
+      .sort((a, b) => a.macAddress.localeCompare(b.macAddress));
+  }, [devices]);
+
+  const duplicateMacGroups = useMemo(
+    () => allDuplicateMacGroups.filter((group) => !group.ignored),
+    [allDuplicateMacGroups],
+  );
+  const ignoredDuplicateMacGroups = useMemo(
+    () => allDuplicateMacGroups.filter((group) => group.ignored),
+    [allDuplicateMacGroups],
+  );
+
+  useEffect(() => {
+    if (showIgnoredDuplicateMacs && ignoredDuplicateMacGroups.length === 0) {
+      setShowIgnoredDuplicateMacs(false);
+    }
+  }, [ignoredDuplicateMacGroups.length, showIgnoredDuplicateMacs]);
+
+  const duplicateMacDeviceIds = useMemo(
+    () =>
+      new Set(
+        duplicateMacGroups.flatMap((group) =>
+          group.devices.map((device) => device.id),
+        ),
+      ),
+    [duplicateMacGroups],
+  );
+  const ignoredDuplicateMacDeviceIds = useMemo(
+    () =>
+      new Set(
+        ignoredDuplicateMacGroups.flatMap((group) =>
+          group.devices.map((device) => device.id),
+        ),
+      ),
+    [ignoredDuplicateMacGroups],
+  );
+  const visibleDuplicateMacGroups = showIgnoredDuplicateMacs
+    ? allDuplicateMacGroups
+    : duplicateMacGroups;
+  const visibleDuplicateMacDeviceIds = useMemo(() => {
+    if (!showIgnoredDuplicateMacs) return duplicateMacDeviceIds;
+    return new Set([...duplicateMacDeviceIds, ...ignoredDuplicateMacDeviceIds]);
+  }, [
+    duplicateMacDeviceIds,
+    ignoredDuplicateMacDeviceIds,
+    showIgnoredDuplicateMacs,
+  ]);
+  const assignmentsByDeviceId = useMemo(
+    () => indexValidDeviceIpAssignments(ipAssignments),
+    [ipAssignments],
+  );
+  const ipMismatches = useMemo(
+    () => findManagementIpMismatches(devices, assignmentsByDeviceId),
+    [assignmentsByDeviceId, devices],
+  );
+  const ipMismatchDeviceIds = useMemo(
+    () => new Set(ipMismatches.map((entry) => entry.device.id)),
+    [ipMismatches],
+  );
+
   const filtered = useMemo(() => {
     return devices
       .filter((device) => {
         if (type && device.deviceType !== type) return false;
         if (showUnplacedOnly && !isUnplacedDevice(device)) return false;
+        if (showDuplicateMacs && !visibleDuplicateMacDeviceIds.has(device.id))
+          return false;
+        if (showIpMismatches && !ipMismatchDeviceIds.has(device.id))
+          return false;
         if (!query) return true;
+        const assignedIps = (assignmentsByDeviceId.get(device.id) ?? []).map(
+          (assignment) => assignment.ipAddress,
+        );
         const haystack = [
           device.hostname,
           device.displayName,
           device.manufacturer,
           device.model,
           device.managementIp,
+          ...assignedIps,
           device.macAddress,
           device.deviceType,
           ...(device.tags ?? []),
@@ -192,15 +308,20 @@ export default function DevicesList() {
         ),
       );
   }, [
+    assignmentsByDeviceId,
     deviceById,
     devices,
+    ipMismatchDeviceIds,
     portsByDeviceId,
     query,
     rackById,
     roomById,
     sort,
     showUnplacedOnly,
+    showDuplicateMacs,
+    showIpMismatches,
     type,
+    visibleDuplicateMacDeviceIds,
   ]);
   const selectedDeviceCount = selectedDeviceIds.size;
   const selectedDevices = useMemo(
@@ -416,6 +537,47 @@ export default function DevicesList() {
     setSearchParams(nextParams);
   }
 
+  function setDuplicateMacFilter(duplicatesOnly: boolean) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (duplicatesOnly) {
+      nextParams.set("mac", "duplicates");
+    } else {
+      nextParams.delete("mac");
+      setShowIgnoredDuplicateMacs(false);
+    }
+    setSearchParams(nextParams);
+  }
+
+  function setIpMismatchFilter(mismatchesOnly: boolean) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (mismatchesOnly) {
+      nextParams.set("ip", "mismatch");
+    } else {
+      nextParams.delete("ip");
+    }
+    setSearchParams(nextParams);
+  }
+
+  async function setDuplicateMacGroupIgnored(
+    group: DuplicateMacGroup,
+    ignored: boolean,
+  ) {
+    setDuplicateMacSaving(group.macAddress);
+    setDuplicateMacError("");
+    try {
+      await bulkUpdateDevices({
+        deviceIds: group.devices.map((device) => device.id),
+        changes: { ignoreDuplicateMac: ignored },
+      });
+    } catch (err) {
+      setDuplicateMacError(
+        err instanceof Error ? err.message : t("Failed to update devices."),
+      );
+    } finally {
+      setDuplicateMacSaving(null);
+    }
+  }
+
   const typeCounts = useMemo(() => {
     return devices.reduce<Record<string, number>>((acc, device) => {
       acc[device.deviceType] = (acc[device.deviceType] ?? 0) + 1;
@@ -471,6 +633,30 @@ export default function DevicesList() {
               {devices.filter(isUnplacedDevice).length}
             </Mono>
           </button>
+          <button
+            onClick={() => setDuplicateMacFilter(!showDuplicateMacs)}
+            className="rk-filter-pill"
+            data-active={showDuplicateMacs}
+          >
+            <AlertTriangle className="size-3" />
+            <span className="font-mono text-[10px] uppercase tracking-wider">
+              {t("Duplicate MACs")}
+            </span>
+            <Mono className="text-[10px]">
+              {duplicateMacDeviceIds.size}
+            </Mono>
+          </button>
+          <button
+            onClick={() => setIpMismatchFilter(!showIpMismatches)}
+            className="rk-filter-pill"
+            data-active={showIpMismatches}
+          >
+            <AlertTriangle className="size-3" />
+            <span className="font-mono text-[10px] uppercase tracking-wider">
+              {t("IP mismatches")}
+            </span>
+            <Mono className="text-[10px]">{ipMismatches.length}</Mono>
+          </button>
           {deviceTypes.map((entry) => {
             const count = typeCounts[entry.id] ?? 0;
             if (count === 0) return null;
@@ -491,15 +677,215 @@ export default function DevicesList() {
           })}
         </div>
 
-        <div className="relative max-w-md">
-          <Filter className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t("Search hostname, model, IP, MAC, tag...")}
-            className="pl-7"
-          />
+        <div className="flex max-w-2xl flex-wrap items-center gap-2">
+          <div className="relative min-w-0 flex-1 basis-64">
+            <Filter className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-fg-faint)]" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t("Search hostname, model, IP, MAC, tag...")}
+              className="pl-7"
+            />
+          </div>
+          <Mono
+            data-testid="device-filter-count"
+            className="whitespace-nowrap text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]"
+          >
+            {t("{filtered} of {total} devices", {
+              filtered: filtered.length,
+              total: devices.length,
+            })}
+          </Mono>
         </div>
+
+        {showDuplicateMacs && (
+          <Card data-testid="duplicate-mac-summary">
+            <CardBody className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="rk-kicker">{t("Duplicate MAC addresses")}</div>
+                  <div className="mt-1 text-sm text-[var(--color-fg-subtle)]">
+                    {t(
+                      "{groups} duplicate group(s) across {devices} device(s).",
+                      {
+                        groups: duplicateMacGroups.length,
+                        devices: duplicateMacDeviceIds.size,
+                      },
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] px-2.5 py-1.5 text-xs text-[var(--color-fg-subtle)]">
+                    <input
+                      type="checkbox"
+                      checked={showIgnoredDuplicateMacs}
+                      disabled={ignoredDuplicateMacGroups.length === 0}
+                      onChange={(event) =>
+                        setShowIgnoredDuplicateMacs(event.target.checked)
+                      }
+                    />
+                    {t("Show ignored")}
+                    <Mono className="text-[10px]">
+                      {ignoredDuplicateMacGroups.length}
+                    </Mono>
+                  </label>
+                  <Badge
+                    tone={duplicateMacGroups.length > 0 ? "warn" : "ok"}
+                  >
+                    {duplicateMacDeviceIds.size} {t("affected")}
+                  </Badge>
+                </div>
+              </div>
+
+              {visibleDuplicateMacGroups.length === 0 ? (
+                <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] px-3 py-4 text-sm text-[var(--color-fg-subtle)]">
+                  {t("No duplicate device MAC addresses found.")}
+                </div>
+              ) : (
+                <div className="grid gap-2 xl:grid-cols-2">
+                  {visibleDuplicateMacGroups.map((group) => (
+                    <div
+                      key={group.macAddress}
+                      data-testid="duplicate-mac-group"
+                      data-ignored={group.ignored || undefined}
+                      className={[
+                        "rounded-[var(--radius-sm)] border p-3",
+                        group.ignored
+                          ? "border-[var(--color-line)] bg-[var(--color-bg-2)]"
+                          : "border-[var(--color-warn)]/30 bg-[var(--color-warn)]/6",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <Mono className="text-xs text-[var(--color-fg)]">
+                          {group.macAddress}
+                        </Mono>
+                        <div className="flex items-center gap-2">
+                          <Badge tone={group.ignored ? "neutral" : "warn"}>
+                            {group.ignored ? (
+                              t("Ignored duplicate")
+                            ) : (
+                              <>
+                                {group.devices.length} {t("devices")}
+                              </>
+                            )}
+                          </Badge>
+                          {canEdit && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={duplicateMacSaving !== null}
+                              onClick={() =>
+                                void setDuplicateMacGroupIgnored(
+                                  group,
+                                  !group.ignored,
+                                )
+                              }
+                            >
+                              {group.ignored
+                                ? t("Restore duplicate warning")
+                                : t("Ignore duplicate")}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-2 divide-y divide-[var(--color-line)]">
+                        {group.devices.map((device) => (
+                          <div
+                            key={device.id}
+                            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 text-xs"
+                          >
+                            <Link
+                              to={`/devices/${device.id}`}
+                              className="font-medium text-[var(--color-fg)] hover:text-[var(--color-accent)]"
+                            >
+                              {device.hostname}
+                            </Link>
+                            <div className="flex items-center gap-3 text-[var(--color-fg-subtle)]">
+                              <Mono>{device.managementIp ?? t("No IP")}</Mono>
+                              <span className="inline-flex items-center gap-1.5">
+                                <StatusDot status={device.status} />
+                                {statusLabel[device.status]}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {duplicateMacError && (
+                <div className="text-xs text-[var(--color-err)]">
+                  {duplicateMacError}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        )}
+
+        {showIpMismatches && (
+          <Card data-testid="ip-mismatch-summary">
+            <CardBody className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="rk-kicker">{t("IP mismatches")}</div>
+                <Badge tone={ipMismatches.length > 0 ? "warn" : "ok"}>
+                  {ipMismatches.length} {t("affected")}
+                </Badge>
+              </div>
+              {ipMismatches.length === 0 ? (
+                <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] px-3 py-4 text-sm text-[var(--color-fg-subtle)]">
+                  {t("No IP mismatches found.")}
+                </div>
+              ) : (
+                <div className="grid gap-2 xl:grid-cols-2">
+                  {ipMismatches.map(({ device, assignments }) => (
+                    <div
+                      key={device.id}
+                      data-testid="ip-mismatch-device"
+                      className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/6 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <Link
+                            to={`/devices/${device.id}?tab=network`}
+                            className="font-medium text-[var(--color-fg)] hover:text-[var(--color-accent)]"
+                          >
+                            {device.hostname}
+                          </Link>
+                          <div className="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-2">
+                            <div>
+                              <div className="rk-kicker">
+                                {t("Management IP")}
+                              </div>
+                              <Mono className="mt-1 block text-[var(--color-fg)]">
+                                {device.managementIp}
+                              </Mono>
+                            </div>
+                            <div>
+                              <div className="rk-kicker">
+                                {t("IP assignments")}
+                              </div>
+                              <Mono className="mt-1 block text-[var(--color-fg)]">
+                                {assignments
+                                  .map((assignment) => assignment.ipAddress)
+                                  .join(", ")}
+                              </Mono>
+                            </div>
+                          </div>
+                        </div>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/devices/${device.id}?tab=network`}>
+                            {t("Review")}
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        )}
 
         {canEdit && selectedDeviceCount > 0 && (
           <Card>
@@ -884,6 +1270,16 @@ export default function DevicesList() {
               </thead>
               <tbody>
                 {filtered.map((device) => {
+                  const hasDuplicateMac = duplicateMacDeviceIds.has(device.id);
+                  const matchedAssignedIps = matchingAssignedIps(
+                    assignmentsByDeviceId.get(device.id),
+                    query,
+                    device.managementIp,
+                  );
+                  const hasIgnoredDuplicateMac =
+                    showDuplicateMacs &&
+                    showIgnoredDuplicateMacs &&
+                    ignoredDuplicateMacDeviceIds.has(device.id);
                   const devicePorts = portsByDeviceId[device.id] ?? [];
                   const linked = devicePorts.filter(
                     (port) => port.linkState === "up",
@@ -901,7 +1297,17 @@ export default function DevicesList() {
                     <tr
                       key={device.id}
                       data-selected={selectedDeviceIds.has(device.id)}
-                      className="group"
+                      data-duplicate-mac={hasDuplicateMac || undefined}
+                      data-ip-mismatch={
+                        ipMismatchDeviceIds.has(device.id) || undefined
+                      }
+                      data-ignored-duplicate-mac={
+                        hasIgnoredDuplicateMac || undefined
+                      }
+                      className={[
+                        "group",
+                        hasDuplicateMac ? "bg-[var(--color-warn)]/5" : "",
+                      ].join(" ")}
                     >
                       <Td className="w-px">
                         {canEdit && (
@@ -946,14 +1352,34 @@ export default function DevicesList() {
                         </Mono>
                       </Td>
                       <Td>
-                        <Mono className="text-[var(--color-fg)]">
-                          {device.managementIp ?? "-"}
-                        </Mono>
+                        <div>
+                          <Mono className="text-[var(--color-fg)]">
+                            {device.managementIp ?? "-"}
+                          </Mono>
+                          {matchedAssignedIps.length > 0 && (
+                            <Mono
+                              data-testid="matched-assigned-ip"
+                              className="mt-0.5 block text-[10px] text-[var(--color-warn)]"
+                            >
+                              {t("Assigned")}: {matchedAssignedIps.join(", ")}
+                            </Mono>
+                          )}
+                        </div>
                       </Td>
                       <Td>
-                        <Mono className="text-[var(--color-fg)]">
-                          {device.macAddress ?? "-"}
-                        </Mono>
+                        <div className="flex items-center gap-2">
+                          <Mono className="text-[var(--color-fg)]">
+                            {device.macAddress ?? "-"}
+                          </Mono>
+                          {hasDuplicateMac && (
+                            <Badge tone="warn">{t("Duplicate")}</Badge>
+                          )}
+                          {hasIgnoredDuplicateMac && (
+                            <Badge tone="neutral">
+                              {t("Ignored duplicate")}
+                            </Badge>
+                          )}
+                        </div>
                       </Td>
                       <Td>
                         {device.placement === "virtual" ? (
@@ -1189,6 +1615,13 @@ function compareDevices(
 
 function deviceModelSortValue(device: Device) {
   return [device.manufacturer, device.model].filter(Boolean).join(" ");
+}
+
+function canonicalMacAddress(value?: string | null) {
+  if (!value) return null;
+  const compact = value.trim().replace(/[:.\-\s]/g, "").toLowerCase();
+  if (!/^[0-9a-f]{12}$/.test(compact)) return null;
+  return compact.match(/.{2}/g)?.join(":") ?? null;
 }
 
 function devicePlacementSortValue(

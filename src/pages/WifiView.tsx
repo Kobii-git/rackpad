@@ -385,6 +385,9 @@ export default function WifiView() {
                             {canEdit && (
                               <button
                                 type="button"
+                                aria-label={t("Edit {name}", {
+                                  name: controller.name,
+                                })}
                                 onClick={() =>
                                   setEditor({ kind: "controller", controller })
                                 }
@@ -490,6 +493,9 @@ export default function WifiView() {
                             {canEdit && (
                               <button
                                 type="button"
+                                aria-label={t("Edit {name}", {
+                                  name: ssid.name,
+                                })}
                                 onClick={() =>
                                   setEditor({ kind: "ssid", ssid })
                                 }
@@ -672,6 +678,9 @@ export default function WifiView() {
                                     {canEdit && (
                                       <button
                                         type="button"
+                                        aria-label={t("Edit {name}", {
+                                          name: radio.slotName,
+                                        })}
                                         onClick={() =>
                                           setEditor({
                                             kind: "radio",
@@ -790,6 +799,9 @@ export default function WifiView() {
                                       {canEdit && (
                                         <button
                                           type="button"
+                                          aria-label={t("Edit {name}", {
+                                            name: client.hostname,
+                                          })}
                                           onClick={() =>
                                             setEditor({
                                               kind: "association",

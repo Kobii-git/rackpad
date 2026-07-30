@@ -6,6 +6,7 @@ import type {
   NetworkCreateResult,
   PortAggregateInput,
   PortAggregatePatch,
+  PortLinkBulkPatch,
   VlanPatch,
 } from "./api";
 import type {
@@ -617,6 +618,7 @@ function normalizeDeviceChanges(
     "deviceType",
     "status",
     "networkMode",
+    "ignoreDuplicateMac",
   ] as const;
 
   for (const key of nullableKeys) {
@@ -1265,8 +1267,7 @@ export async function loadAll(
       const allDiscoveredDevices = sortDiscoveredDevices(
         (
           (resolved.get("discoveredDevices") as
-            | DiscoveredDevice[]
-            | undefined) ?? []
+            DiscoveredDevice[] | undefined) ?? []
         ).filter((device) => device.labId === activeLab.id),
       );
       const discoveredIds = new Set(
@@ -1276,8 +1277,7 @@ export async function loadAll(
       const allDiscoveryScanSchedules = sortDiscoveryScanSchedules(
         (
           (resolved.get("discoveryScanSchedules") as
-            | DiscoveryScanSchedule[]
-            | undefined) ?? []
+            DiscoveryScanSchedule[] | undefined) ?? []
         ).filter((schedule) => schedule.labId === activeLab.id),
       );
       const discoveryScheduleIds = new Set(
@@ -1287,8 +1287,7 @@ export async function loadAll(
       const allDocumentationPages = sortDocumentationPages(
         (
           (resolved.get("documentationPages") as
-            | DocumentationPage[]
-            | undefined) ?? []
+            DocumentationPage[] | undefined) ?? []
         ).filter((page) => page.labId === activeLab.id),
       );
       const documentationPageIds = new Set(
@@ -1363,8 +1362,7 @@ export async function loadAll(
       const allWifiClientAssociations = sortWifiClientAssociations(
         (
           (resolved.get("wifiClientAssociations") as
-            | WifiClientAssociation[]
-            | undefined) ?? []
+            WifiClientAssociation[] | undefined) ?? []
         ).filter(
           (association) =>
             deviceIds.has(association.clientDeviceId) &&
@@ -2430,8 +2428,6 @@ export async function updateCable(
       patch[key] = changes[key] ?? null;
     }
   }
-  const nextFromPortId = String(patch.fromPortId ?? existing.fromPortId);
-  const nextToPortId = String(patch.toPortId ?? existing.toPortId);
   const updated = await api.updatePortLink(id, patch);
 
   setState((prev) => ({
@@ -2474,6 +2470,30 @@ export async function updateCable(
   );
 
   return updated;
+}
+
+export async function bulkUpdateCables(input: {
+  linkIds: string[];
+  changes: PortLinkBulkPatch;
+}): Promise<{ updated: number; links: PortLink[] }> {
+  const result = await api.bulkUpdatePortLinks(input);
+  setState((prev) => ({
+    ...prev,
+    portLinks: result.links.reduce(
+      (links, updated) => replaceById(links, updated),
+      prev.portLinks,
+    ),
+  }));
+
+  const fields = Object.keys(input.changes).join(", ");
+  void recordAudit(
+    "port.link.bulk_update",
+    "PortLink",
+    result.links[0]?.id ?? "bulk",
+    `Updated ${result.updated} cable${result.updated === 1 ? "" : "s"} in bulk${fields ? ` (${fields})` : ""}`,
+  );
+
+  return result;
 }
 
 export interface CreateDeviceInput {

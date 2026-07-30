@@ -8,16 +8,16 @@ Open Rackpad -> `Visualizer`.
 
 ## Screenshots
 
-| Topology and cable paths | Selected cable inspector |
-| --- | --- |
+| Topology and cable paths                                     | Selected cable inspector                                                  |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
 | ![Rackpad visualizer topology](./screenshots/visualizer.png) | ![Rackpad visualizer selected cable](./screenshots/visualizer-cables.png) |
 
-| Health overlay | Trace mode |
-| --- | --- |
+| Health overlay                                                            | Trace mode                                                           |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | ![Rackpad visualizer health overlay](./screenshots/visualizer-health.png) | ![Rackpad visualizer trace mode](./screenshots/visualizer-trace.png) |
 
-| Loose devices below racks |
-| --- |
+| Loose devices below racks                                                      |
+| ------------------------------------------------------------------------------ |
 | ![Rackpad visualizer loose-device layout](./screenshots/visualizer-layout.png) |
 
 ## What It Shows
@@ -121,6 +121,21 @@ modify port records.
 
 If no path exists, Rackpad shows that no documented path was found. Usually this
 means one or more cable links or patch-panel pass-through records are missing.
+
+When a path is available, the trace summary can be copied, downloaded as text,
+previewed in Rackpad, or downloaded as a standalone PNG. The responsive,
+scrollable preview shows the same localized SVG used to create the PNG and
+keeps **Download image** available inside the dialog. The image groups
+patch-panel front and rear ports into one device card, preserves documented
+cable colors and lengths, adds the device-type icon to each card, and includes
+the available room, rack, face, and U-position context. Preview and PNG colors
+automatically match the active Rackpad light or dark theme.
+
+Rackpad calculates the total when every physical cable has a recognized metric
+or imperial length, including conversions between `mm`, `cm`, `m`, `km`, `in`,
+`ft`, and `yd`. Missing lengths show **Unknown**. Unsupported free-form values
+remain visible as an expression rather than being partially or incorrectly
+calculated.
 
 ## Empty States
 

@@ -26,11 +26,18 @@ export function resolveSnmpSessionForTarget(input: {
 
   if (credentialId) {
     const credential = loadSnmpCredentialSecrets(credentialId, input.labId)
+    if (input.snmpVersion === '3' && credential.version !== '3') {
+      throw new Error('SNMPv3 targets require a usable SNMPv3 credential.')
+    }
     return buildSnmpSessionFromCredential(credential, {
       host: input.host,
       port: input.port,
       timeoutMs: input.timeoutMs,
     })
+  }
+
+  if (input.snmpVersion === '3') {
+    throw new Error('SNMPv3 targets require a usable SNMPv3 credential.')
   }
 
   const version = input.snmpVersion === '1' || input.snmpVersion === '2c' ? input.snmpVersion : '2c'

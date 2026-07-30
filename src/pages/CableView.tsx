@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { SortableHeader } from "@/components/shared/SortableHeader";
 import {
+  bulkUpdateCables,
   canEditInventory,
   createCable,
   deleteCable,
@@ -36,6 +37,7 @@ import {
   Plus,
   Save,
   Trash2,
+  X,
 } from "lucide-react";
 import {
   applySortDirection,
@@ -55,6 +57,12 @@ interface CableFormState {
   notes: string;
 }
 
+interface BulkCableForm {
+  cableType: string;
+  cableLength: string;
+  color: string;
+}
+
 type CableSortKey = "from" | "to" | "type" | "length" | "color";
 
 const EMPTY_FORM: CableFormState = {
@@ -64,6 +72,12 @@ const EMPTY_FORM: CableFormState = {
   cableLength: "",
   color: "",
   notes: "",
+};
+
+const EMPTY_BULK_FORM: BulkCableForm = {
+  cableType: "",
+  cableLength: "",
+  color: "",
 };
 
 export default function CableView() {
@@ -81,6 +95,13 @@ export default function CableView() {
   });
   const [createForm, setCreateForm] = useState<CableFormState>(EMPTY_FORM);
   const [selectedLinkId, setSelectedLinkId] = useState<string>();
+  const [selectedLinkIds, setSelectedLinkIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [bulkFields, setBulkFields] = useState<Set<keyof BulkCableForm>>(
+    new Set(),
+  );
+  const [bulkForm, setBulkForm] = useState<BulkCableForm>(EMPTY_BULK_FORM);
   const [editForm, setEditForm] = useState({
     fromPortId: "",
     toPortId: "",
@@ -94,6 +115,8 @@ export default function CableView() {
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkError, setBulkError] = useState("");
 
   const portById = useMemo(() => {
     return ports.reduce<Record<string, Port>>((acc, port) => {
@@ -134,6 +157,10 @@ export default function CableView() {
       })
       .sort((a, b) => compareCables(a, b, sort, portById, deviceById));
   }, [cableType, deviceById, portById, portLinks, query, sort]);
+  const allFilteredSelected =
+    filtered.length > 0 &&
+    filtered.every((link) => selectedLinkIds.has(link.id));
+  const selectedLinkCount = selectedLinkIds.size;
 
   const byType = useMemo(() => {
     return portLinks.reduce<Record<string, number>>((acc, link) => {
@@ -198,6 +225,19 @@ export default function CableView() {
     }
     setSelectedLinkId(filtered[0].id);
   }, [filtered, selectedLinkId]);
+
+  useEffect(() => {
+    const linkIds = new Set(portLinks.map((link) => link.id));
+    setSelectedLinkIds((current) => {
+      const next = new Set(
+        [...current].filter((linkId) => linkIds.has(linkId)),
+      );
+      return next.size === current.size &&
+        [...next].every((linkId) => current.has(linkId))
+        ? current
+        : next;
+    });
+  }, [portLinks]);
 
   useEffect(() => {
     if (!selectedLink) {
@@ -282,6 +322,74 @@ export default function CableView() {
       );
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  function toggleLinkSelection(linkId: string) {
+    setSelectedLinkIds((current) => {
+      const next = new Set(current);
+      if (next.has(linkId)) next.delete(linkId);
+      else next.add(linkId);
+      return next;
+    });
+  }
+
+  function toggleAllFiltered() {
+    setSelectedLinkIds((current) => {
+      const next = new Set(current);
+      if (allFilteredSelected) {
+        for (const link of filtered) next.delete(link.id);
+      } else {
+        for (const link of filtered) next.add(link.id);
+      }
+      return next;
+    });
+  }
+
+  function toggleBulkField(field: keyof BulkCableForm) {
+    setBulkFields((current) => {
+      const next = new Set(current);
+      if (next.has(field)) next.delete(field);
+      else next.add(field);
+      return next;
+    });
+  }
+
+  async function handleBulkSave() {
+    if (selectedLinkIds.size === 0 || bulkFields.size === 0) return;
+    const changes: {
+      cableType?: string | null;
+      cableLength?: string | null;
+      color?: string | null;
+    } = {};
+    if (bulkFields.has("cableType")) {
+      changes.cableType = bulkForm.cableType.trim() || null;
+    }
+    if (bulkFields.has("cableLength")) {
+      changes.cableLength = bulkForm.cableLength.trim() || null;
+    }
+    if (bulkFields.has("color")) {
+      changes.color = bulkForm.color.trim() || null;
+    }
+
+    setBulkSaving(true);
+    setBulkError("");
+    try {
+      await bulkUpdateCables({
+        linkIds: [...selectedLinkIds],
+        changes,
+      });
+      setSelectedLinkIds(new Set());
+      setBulkFields(new Set());
+      setBulkForm(EMPTY_BULK_FORM);
+    } catch (error) {
+      setBulkError(
+        error instanceof Error
+          ? error.message
+          : t("Something went wrong. Try again."),
+      );
+    } finally {
+      setBulkSaving(false);
     }
   }
 
@@ -434,7 +542,9 @@ export default function CableView() {
               </CardTitle>
               {selectedLink && (
                 <div className="flex items-center gap-1.5">
-                  {selectedLinkIsLogical && <Badge>{t("Aggregate port")}</Badge>}
+                  {selectedLinkIsLogical && (
+                    <Badge>{t("Aggregate port")}</Badge>
+                  )}
                   <Badge>{selectedLink.cableType ?? t("Cable")}</Badge>
                 </div>
               )}
@@ -592,6 +702,108 @@ export default function CableView() {
           </Card>
         </div>
 
+        {canEdit && selectedLinkCount > 0 && (
+          <Card data-testid="cable-bulk-editor">
+            <CardHeader>
+              <CardTitle>
+                <CardLabel>{t("Bulk edit")}</CardLabel>
+                <CardHeading>
+                  {selectedLinkCount} {t("selected")}
+                </CardHeading>
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={bulkSaving}
+                onClick={() => setSelectedLinkIds(new Set())}
+              >
+                <X className="size-3.5" />
+                {t("Clear")}
+              </Button>
+            </CardHeader>
+            <CardBody className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <BulkCableField
+                  label={t("Cable type")}
+                  checked={bulkFields.has("cableType")}
+                  disabled={bulkSaving}
+                  checkboxTestId="bulk-cable-type-enabled"
+                  onChecked={() => toggleBulkField("cableType")}
+                >
+                  <Input
+                    value={bulkForm.cableType}
+                    disabled={!bulkFields.has("cableType") || bulkSaving}
+                    onChange={(event) =>
+                      setBulkForm((current) => ({
+                        ...current,
+                        cableType: event.target.value,
+                      }))
+                    }
+                    placeholder={t("Cat6a, DAC, OM4...")}
+                    data-testid="bulk-cable-type"
+                  />
+                </BulkCableField>
+                <BulkCableField
+                  label={t("Length")}
+                  checked={bulkFields.has("cableLength")}
+                  disabled={bulkSaving}
+                  checkboxTestId="bulk-cable-length-enabled"
+                  onChecked={() => toggleBulkField("cableLength")}
+                >
+                  <Input
+                    value={bulkForm.cableLength}
+                    disabled={!bulkFields.has("cableLength") || bulkSaving}
+                    onChange={(event) =>
+                      setBulkForm((current) => ({
+                        ...current,
+                        cableLength: event.target.value,
+                      }))
+                    }
+                    placeholder={t("0.5m, 3m...")}
+                    data-testid="bulk-cable-length"
+                  />
+                </BulkCableField>
+                <BulkCableField
+                  label={t("Color")}
+                  checked={bulkFields.has("color")}
+                  disabled={bulkSaving}
+                  checkboxTestId="bulk-cable-color-enabled"
+                  onChecked={() => toggleBulkField("color")}
+                >
+                  <div data-testid="bulk-cable-color">
+                    <ColorInput
+                      value={bulkForm.color}
+                      disabled={!bulkFields.has("color") || bulkSaving}
+                      onChange={(color) =>
+                        setBulkForm((current) => ({ ...current, color }))
+                      }
+                      placeholder={t("#4a78c4 or blue")}
+                    />
+                  </div>
+                </BulkCableField>
+              </div>
+
+              {bulkError && (
+                <div className="text-xs text-[var(--color-err)]" role="alert">
+                  {bulkError}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  disabled={bulkSaving || bulkFields.size === 0}
+                  onClick={() => void handleBulkSave()}
+                  data-testid="bulk-cable-apply"
+                >
+                  <Save className="size-3.5" />
+                  {bulkSaving ? t("Saving...") : t("Apply changes")}
+                </Button>
+              </div>
+            </CardBody>
+          </Card>
+        )}
+
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setCableType(null)}
@@ -651,6 +863,17 @@ export default function CableView() {
               <table className="rk-table">
                 <thead>
                   <tr>
+                    {canEdit && (
+                      <Th>
+                        <input
+                          type="checkbox"
+                          checked={allFilteredSelected}
+                          onChange={toggleAllFiltered}
+                          aria-label={t("All")}
+                          data-testid="cable-select-all"
+                        />
+                      </Th>
+                    )}
                     <SortableHeader
                       sortKey="from"
                       sort={sort}
@@ -700,13 +923,30 @@ export default function CableView() {
                       ? deviceById[toPort.deviceId]
                       : undefined;
                     const isSelected = link.id === selectedLinkId;
+                    const isBulkSelected = selectedLinkIds.has(link.id);
                     return (
                       <tr
                         key={link.id}
                         onClick={() => setSelectedLinkId(link.id)}
                         data-selected={isSelected}
+                        data-bulk-selected={isBulkSelected || undefined}
                         className="cursor-pointer"
                       >
+                        {canEdit && (
+                          <Td className="w-px">
+                            <input
+                              type="checkbox"
+                              checked={isBulkSelected}
+                              onClick={(event) => event.stopPropagation()}
+                              onChange={() => toggleLinkSelection(link.id)}
+                              aria-label={t("{from} to {to}", {
+                                from: `${fromDev?.hostname ?? link.fromPortId}:${fromPort?.name ?? link.fromPortId}`,
+                                to: `${toDev?.hostname ?? link.toPortId}:${toPort?.name ?? link.toPortId}`,
+                              })}
+                              data-testid={`cable-select-${link.id}`}
+                            />
+                          </Td>
+                        )}
                         <Td>
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs">{fromDev?.hostname}</span>
@@ -796,6 +1036,38 @@ function Td({
   className?: string;
 }) {
   return <td className={className}>{children}</td>;
+}
+
+function BulkCableField({
+  label,
+  checked,
+  disabled,
+  checkboxTestId,
+  onChecked,
+  children,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  checkboxTestId: string;
+  onChecked: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={onChecked}
+          data-testid={checkboxTestId}
+        />
+        <span className="rk-field-label mb-0">{label}</span>
+      </span>
+      {children}
+    </label>
+  );
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

@@ -3,10 +3,16 @@ import test from "node:test";
 import type { Device, DeviceTypeDefinition, Port } from "@/lib/types";
 import {
   buildVisualizerModel,
+  summarizeCableLengths,
   visualizerCableLaneIndexes,
   visualizerCablePath,
 } from "./model";
-import type { RoomGroup, VisualizerCable, VisualizerNode } from "./types";
+import type {
+  RoomGroup,
+  TraceSegment,
+  VisualizerCable,
+  VisualizerNode,
+} from "./types";
 
 function testDevice(id: string): Device {
   return {
@@ -92,6 +98,59 @@ function testCable(
     logicalAggregate: false,
   };
 }
+
+function lengthSegments(
+  ...entries: Array<string | null | undefined | { patch: string }>
+): TraceSegment[] {
+  return entries.map((entry, index) => {
+    const patchLength =
+      typeof entry === "object" && entry ? entry.patch : undefined;
+    const length = patchLength ?? (typeof entry === "string" ? entry : null);
+    const kind: TraceSegment["kind"] =
+      patchLength === undefined ? "cable" : "patch";
+    return {
+      kind,
+      fromPort: testPort("length-source", `length-from-${index}`, index + 1),
+      toPort: testPort("length-target", `length-to-${index}`, index + 1),
+      color: "blue",
+      length,
+    };
+  });
+}
+
+test("trace cable lengths are calculated only when every cable is known", () => {
+  assert.equal(
+    summarizeCableLengths(lengthSegments("6ft", "25ft", "3ft", "1ft")),
+    "35ft",
+  );
+  assert.equal(summarizeCableLengths(lengthSegments("1m", "50 cm")), "1.5m");
+  assert.equal(summarizeCableLengths(lengthSegments("1 foot", '12"')), "2ft");
+  assert.equal(summarizeCableLengths(lengthSegments("1yd", "3 FT")), "2yd");
+  assert.equal(summarizeCableLengths(lengthSegments("1m", "3.28084ft")), "2m");
+  assert.equal(summarizeCableLengths(lengthSegments("1m", "1mm")), "1.001m");
+  assert.equal(
+    summarizeCableLengths(lengthSegments("1m", { patch: "999m" })),
+    "1m",
+  );
+
+  assert.equal(
+    summarizeCableLengths(lengthSegments("1m", undefined)),
+    "Unknown",
+  );
+  assert.equal(summarizeCableLengths(lengthSegments("1m", "~3m")), "1m + ~3m");
+  assert.equal(
+    summarizeCableLengths(lengthSegments("6ft 3in", "1ft")),
+    "6ft 3in + 1ft",
+  );
+  assert.equal(
+    summarizeCableLengths(lengthSegments("1-2m", "-3m")),
+    "1-2m + -3m",
+  );
+  assert.equal(
+    summarizeCableLengths(lengthSegments({ patch: "1m" })),
+    "Unknown",
+  );
+});
 
 test("bundled visualizer cables route loose devices through a right-side gutter", () => {
   const fromNode = testNode("loose-a", 48, 96, 160, 40);

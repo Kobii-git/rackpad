@@ -35,6 +35,7 @@ import { getAuthToken, lookupSession, needsBootstrap } from "./lib/auth.js";
 import { fetchUserLabAccess } from "./lib/lab-access.js";
 import { ValidationError } from "./lib/validation.js";
 import { normalizeSafeSubnetCidrs } from "./lib/subnet-integrity.js";
+import { CONTENT_SECURITY_POLICY } from "./security-headers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = path.resolve(__dirname, "../dist");
@@ -211,7 +212,7 @@ export async function createApp() {
     );
     reply.header(
       "Content-Security-Policy",
-      "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+      CONTENT_SECURITY_POLICY,
     );
     if (req.url.startsWith("/api/")) {
       reply.header("Cache-Control", "no-store");

@@ -86,7 +86,11 @@ export default function AuditLogView() {
             </div>
           </CardHeader>
           <CardBody className="p-0">
-            <div className="rk-table-shell">
+            <div
+              tabIndex={0}
+              aria-label={t("Recent audit entries")}
+              className="rk-table-shell max-h-[calc(100vh-20rem)] overflow-y-auto"
+            >
               <table className="rk-table min-w-[920px]">
                 <thead>
                   <tr>

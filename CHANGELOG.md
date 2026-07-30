@@ -8,6 +8,356 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.3] - 2026-07-30
+
+### Added
+
+- Added duplicate-MAC review and ignore controls, explicit per-target HTTPS
+  certificate exceptions, and safer disabled Docker and monitoring workflows.
+- Added Visualizer trace previews and standalone themed PNG exports with device
+  icons, patch-panel paths, and calculated compatible cable-length totals.
+- Added assigned-IP inventory search, conservative management-IP mismatch
+  review links, and atomic bulk cable metadata editing.
+
+### Fixed
+
+- Contained asynchronous and scheduled monitor failures, handled valid SNMP
+  exception values without disabling targets, and preserved secure monitor
+  defaults through redirects, imports, and backups.
+- Corrected responsive, localization, accessibility, demo-data, IPAM, cable,
+  and inventory edge cases across the operational UI.
+- Cleared fixable high-severity dependency findings and the remaining CodeQL
+  security-and-quality reports while retaining an expiring, documented
+  exception for an unused React Router RSC code path.
+
+### Changed
+
+- Promoted the smoke-tested `1.7.3-beta.5` release candidate to stable
+  `1.7.3`.
+- Expanded release validation across responsive light/dark and RTL layouts,
+  static-file isolation, CodeQL, Trivy filesystem/image scans, and
+  multi-architecture container publication.
+
+### Test notes
+
+- Verified a clean install, i18n, lint, build, server/client tests, the complete
+  browser and accessibility suite, bundle limits, CodeQL, Trivy, and Docker
+  image builds.
+- Pulled and smoke-tested the published beta image for health, bootstrap,
+  static SPA serving, and version reporting on the supported architecture.
+
+## [1.7.3-beta.5] - 2026-07-30
+
+### Changed
+
+- Updated the static-file server and JavaScript lint toolchain to versions that
+  resolve their current high-severity dependency advisories.
+- Documented an expiring exception for a React Router advisory that only
+  affects unstable RSC APIs, which Rackpad does not use.
+- Kept secret and configuration scanning active even when a dependency scan
+  has already failed.
+
+### Fixed
+
+- Removed the vulnerable `brace-expansion` release from both production and
+  development dependency trees.
+
+### Test notes
+
+- Confirm direct static files and refreshed app routes still load, while
+  noncanonical paths cannot expose files outside the built client.
+- Verify CodeQL, Trivy filesystem and image scans, and the separate
+  secret/configuration blocker all complete on the release workflow.
+
+## [1.7.3-beta.4] - 2026-07-29
+
+### Fixed
+
+- Trace image previews and PNG downloads now use the active Rackpad light or
+  dark theme with a self-contained export palette.
+- Trace summaries now calculate compatible documented cable lengths instead of
+  displaying an unevaluated expression, while retaining free-form values when
+  they cannot be parsed safely.
+
+### Test notes
+
+- Preview and download the same direct or multi-hop trace in light and dark
+  mode, then confirm the image colors match the active Rackpad theme.
+- Trace cables with lengths `6ft`, `25ft`, `3ft`, and `1ft` and confirm the
+  total reads `35ft`; missing values should show **Unknown**, while unsupported
+  free-form values should remain visible as entered.
+
+## [1.7.3-beta.3] - 2026-07-29
+
+### Added
+
+- Added an in-app, responsive preview for Visualizer cable trace images while
+  keeping PNG download available in both the trace summary and preview; device
+  cards now include their type icon in both formats.
+- Added device inventory search across attached IP assignments, an **IP
+  mismatches** filter, and direct Network-tab review links.
+- Added atomic bulk editing for cable type, length, and color across selected
+  physical or aggregate-link inventory rows.
+
+### Changed
+
+- Global IP search now identifies an assignment's owning device and opens its
+  Network tab, while retaining the subnet fallback for unowned assignments.
+
+### Fixed
+
+- Fixed device and global search omitting valid attached IP assignments that
+  differ from a device's management address.
+
+### Test notes
+
+- Search Devices by a non-management assigned IP, filter **IP mismatches**, and
+  confirm **Review** opens the owning device's Network tab.
+- Preview direct and multi-hop cable traces, close the dialog by button and
+  Escape, confirm device icons appear, and download the PNG from the preview.
+- Select individual and filtered cable rows, bulk update type, length, and
+  color, then confirm an enabled blank field clears only that metadata.
+
+## [1.7.3-beta.2] - 2026-07-26
+
+### Fixed
+
+- Restored production Visualizer trace PNG downloads by allowing client-generated
+  image blob URLs under Rackpad's image-only Content Security Policy directive.
+
+### Test notes
+
+- Verify direct and multi-hop patch-panel trace PNG downloads complete without
+  an error in a deployed beta instance.
+- Confirm **Copy** and **Download text** remain unchanged.
+
+## [1.7.3-beta.1] - 2026-07-26
+
+### Added
+
+- Added standalone PNG downloads for Visualizer cable traces, including device
+  placement, port faces, cable colors and lengths, and grouped patch-panel
+  pass-throughs.
+
+### Test notes
+
+- Trace a direct cable and a multi-hop patch-panel path, then confirm
+  **Download image** produces a readable PNG in light, dark, and RTL modes.
+- Confirm long device and port names wrap in the exported image and that
+  **Copy** and **Download text** still work.
+
+## [1.7.3-beta.0] - 2026-07-25
+
+### Added
+
+- Added a live filtered-versus-total device count beside inventory search.
+- Added persistent controls for ignoring legitimate duplicate MAC groups and
+  revealing or restoring ignored warnings.
+
+### Changed
+
+- Duplicate MAC counts, warning highlights, and the duplicate-only filter now
+  exclude ignored groups while automatically surfacing groups with new,
+  unignored members.
+
+### Fixed
+
+- Reset duplicate-MAC ignore state when a device MAC address changes so stale
+  exceptions do not hide a new conflict.
+
+### Test notes
+
+- On **Devices**, ignore a duplicate MAC group and confirm it disappears from
+  warnings and the duplicate-only list; enable **Show ignored** to restore it.
+- Search and combine Device filters and confirm the count beside search always
+  shows the filtered number against total inventory.
+
+## [1.7.2-beta.3] - 2026-07-24
+
+### Added
+
+- Added explicit typed handling for the valid SNMP `noSuchObject`,
+  `noSuchInstance`, and `endOfMibView` exception values across SNMPv2c and
+  SNMPv3 responses.
+
+### Changed
+
+- Missing SNMP OIDs now record an **Unknown** monitor result and set linked
+  interface state to unknown without disabling the monitor or marking the
+  device offline.
+- SNMP column walks stop cleanly at exception responses, while credential
+  tests report the returned exception and OID as a readable failure.
+
+### Fixed
+
+- Prevented rejected asynchronous monitor checks from escaping their error
+  boundary and terminating the Rackpad process.
+- Isolated scheduled monitor failures so one broken target cannot stop later
+  checks or place Docker into a repeating restart loop.
+- Prevented SNMP exception values from satisfying permissive monitor match
+  modes such as **Any value**.
+
+### Test notes
+
+- Verify an SNMP monitor whose OID has disappeared records **Unknown**, keeps
+  the monitor enabled, and leaves its linked interface and device out of an
+  offline state.
+- Verified all three SNMP exception tags, column-walk termination, credential
+  failure reporting, ordinary SNMP values, malformed responses, and continued
+  scheduled polling after a failed monitor.
+
+## [1.7.2-beta.2] - 2026-07-24
+
+### Added
+
+- Added a **Duplicate MACs** Devices filter that groups canonical matching
+  device MAC addresses, highlights affected inventory rows, and links each
+  duplicate to its device detail page.
+- Added an explicit per-target **Ignore TLS certificate errors** option for
+  HTTPS monitoring, including individual and bulk setup plus warning badges
+  wherever insecure targets are shown.
+
+### Changed
+
+- Kept HTTPS certificate verification enabled by default and limited the
+  bypass to HTTPS targets, clearing it automatically when a monitor changes to
+  another type.
+- Localized the duplicate-MAC and TLS warning interface across every supported
+  language.
+
+### Fixed
+
+- Preserved the HTTPS certificate-bypass setting through backup export and
+  restore while defaulting older backups safely to certificate verification.
+- Carried the explicit certificate-verification policy across validated HTTP
+  redirects without weakening Rackpad's pinned-host and reserved-address
+  protections.
+
+### Test notes
+
+- On **Devices**, select **Duplicate MACs** and confirm equivalent colon,
+  hyphen, and case variants group together while unique devices are filtered
+  out.
+- On an HTTPS monitor, enable **Ignore TLS certificate errors**, save it, and
+  confirm the warning appears in Device detail and Monitoring views; verify
+  bulk HTTPS target creation offers the same explicit option.
+- Verified secure defaults, self-signed-target execution, redirect handling,
+  schema migration, backup round trips, legacy-backup defaults, all locales,
+  and the duplicate-MAC and TLS browser flows.
+
+## [1.7.2-beta.1] - 2026-07-24
+
+### Fixed
+
+- Made table-scroll browser coverage deterministic across runner data volume
+  and font metrics by forcing both overflow axes inside the test before
+  verifying the scroll container.
+
+### Test notes
+
+- Re-ran the complete release validation and responsive/accessibility browser
+  matrix after the hosted beta.0 test exposed the font-metric-dependent
+  assertion.
+
+## [1.7.2-beta.0] - 2026-07-23
+
+### Added
+
+- Rebuilt the opt-in demo bootstrap as one server-owned, referentially valid
+  dataset covering all built-in device and port kinds, network allocation
+  modes, device services, monitor types, SNMP profiles/traps, documentation
+  links, rack/room images, disabled sample accounts, discovery states, and a
+  real imported custom laser-cutter device.
+- Added review-only sample Proxmox and Hyper-V inventory controls that stage
+  representative hosts, workloads, switches, ports, VLANs, specs, and IPs
+  without writing until the administrator chooses **Import selected**.
+- Added persisted enable/disable controls for Docker import sources, including
+  a Disabled badge and safe backup compatibility for older snapshots.
+
+### Changed
+
+- Made Ports select the populated device with the most ports by default, moved
+  port-template editing into a responsive full-width dialog, and reset the
+  Inspector scroll position whenever its editing context changes.
+- Expanded the responsive browser matrix to 1024x768, 1280x720, 1440x900, and
+  1920x1200 across light/dark English, French, and Arabic RTL, with route and
+  demo-lab smoke coverage.
+- Kept every demo monitor disabled by default while showing its historical
+  configuration, separated active and configured target counts, and prevented
+  disabled examples from running or affecting monitoring rollups.
+- Refreshed supported runtime and development dependencies within their
+  existing major versions while retaining Node 22 and TypeScript 6.
+- Updated repository website references to
+  [rackpad.net](https://rackpad.net).
+
+### Fixed
+
+- Corrected responsive sizing, wrapping, scrolling, and clipping in Discovery,
+  Documentation, shared tables, 1U rack tiles, ColorInput, Device Network
+  allocations, Admin role/actions, the sidebar version label, and compact
+  device-type labels.
+- Localized Discovery timestamps, added count-aware alert-history singular
+  labels, and preserved Discord and Telegram product names in every locale.
+- Prevented disabled Docker sources from scheduled, bulk, and manual sync while
+  preserving existing sources as enabled through the migration and older
+  backup restores.
+- Preserved an already-disabled Docker source when importing another container
+  from its endpoint; only explicit source controls can re-enable it.
+- Corrected reserved, infrastructure, and DHCP-zone demo ranges, and added
+  management cabling for both PDUs and the UPS plus a valid UPS-to-PDU IEC
+  power path.
+- Kept Discovery scan summaries and translated Admin actions from shrinking,
+  restored localized notification descriptions while retaining the exact
+  Discord and Telegram product names, and made Audit tables scroll on both
+  axes at constrained heights.
+- Fixed full-route accessibility gaps in rack face controls, WiFi edit actions,
+  Ports filters, Documentation fields, the backup picker, and keyboard access
+  for scrollable Audit, Imports, and Markdown code regions.
+- Removed a file-system race from the i18n UI scanner by reading verified
+  regular files through a single descriptor and skipping symbolic links.
+- Removed unused rack translation bindings and stale cable endpoint
+  calculations reported by CodeQL.
+- Preserved disabled HTTP and SNMP monitor configurations during edits, blocked
+  manual runs for disabled or documentation-only targets without changing
+  historical state, and presented disabled targets neutrally in detail, card,
+  and compact monitoring layouts.
+- Rejected missing, null, and non-boolean Docker source enablement updates
+  without touching the source row, while retaining explicit enable/disable
+  toggles.
+- Localized the Proxmox and Hyper-V sample-review controls in every locale and
+  hardened i18n validation for exact standalone product names, English-only
+  notification labels, and stale allowlist entries.
+- Preserved nullable SNMP configuration during partial and disabled-target
+  edits, added SNMPv3 form support, and rejected active SNMPv3 targets without
+  a usable v3 credential while blocking legacy runtime fallback to v2c.
+- Treated documentation-only monitor targets as disabled throughout monitoring
+  presentation and actions, including normalization during backup restore.
+- Hardened protected product-name validation against Unicode combining-mark,
+  connector, and join-control mutations for Discord, Telegram, Proxmox, and
+  Hyper-V.
+- Cleared newly published high-severity dependency advisories by using patched
+  `shell-quote`, `fast-uri`, and `find-my-way` releases.
+
+### Test notes
+
+- Verified a clean `npm ci`, `npm run check:i18n`, `npm run build`,
+  `npm run lint`, `npm run test:server`, `npm run test:client`,
+  `npm run test:e2e`, and `npm run check:bundle`.
+- Smoke-tested fresh demo and empty-workspace bootstraps, both demo labs, every
+  primary route, the responsive locale/theme matrix, and the corrected UI in a
+  live browser; `bash -n scripts/collect-proxmox.sh` also passes.
+- Added migration, backup, disabled-source import/sync, demo-monitor, DHCP/IP
+  zone, PDU/UPS link, intercepted Discovery scan, localized Admin, pluralization,
+  table-scroll, template-dialog, and disabled-monitor regressions.
+- Added no-mutation disabled-monitor run tests, disabled HTTP/SNMP edit tests,
+  strict Docker toggle validation, compact monitoring rollup checks, and
+  Spanish sample-import coverage at 1024px.
+- Added SNMPv3 nullable-field round trips, atomic invalid-activation checks,
+  legacy documentation-monitor restore coverage, and Unicode brand-boundary
+  regressions.
+- Verified zero `npm audit` vulnerabilities and a production Docker image
+  build on Node 22.
+
 ## [1.7.1] - 2026-07-16
 
 ### Added
@@ -1735,7 +2085,7 @@ work into the main release.
 
 ### Added
 
-- A standalone IIS-friendly Rackpad website and legal/support pack for `rackpad.co.za`, prepared outside the application repository for separate hosting.
+- A standalone IIS-friendly Rackpad website and legal/support pack for `rackpad.net`, prepared outside the application repository for separate hosting.
 - Root project governance files: `LICENSE`, `NOTICE.md`, `SECURITY.md`, and `SUPPORT.md`.
 - A richer compute bridge workflow so virtualization hosts can model `external`, `internal`, and `private` virtual switches directly from the Compute workspace.
 

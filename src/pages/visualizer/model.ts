@@ -3020,12 +3020,105 @@ function roomGroupsHeight(groups: RoomGroup[], startY: number) {
   );
 }
 
-function summarizeCableLengths(segments: TraceSegment[]) {
-  const lengths = segments
-    .filter((segment) => segment.kind === "cable" && segment.length)
-    .map((segment) => segment.length!)
-    .join(" + ");
-  return lengths || "Unknown";
+type CableLengthUnit = "mm" | "cm" | "m" | "km" | "in" | "ft" | "yd";
+
+interface ParsedCableLength {
+  meters: number;
+  unit: CableLengthUnit;
+}
+
+const CABLE_LENGTH_METERS_PER_UNIT: Record<CableLengthUnit, number> = {
+  mm: 0.001,
+  cm: 0.01,
+  m: 1,
+  km: 1_000,
+  in: 0.0254,
+  ft: 0.3048,
+  yd: 0.9144,
+};
+
+export function summarizeCableLengths(segments: TraceSegment[]) {
+  const cableSegments = segments.filter((segment) => segment.kind === "cable");
+  if (
+    cableSegments.length === 0 ||
+    cableSegments.some((segment) => !segment.length?.trim())
+  ) {
+    return "Unknown";
+  }
+
+  const originalLengths = cableSegments.map((segment) =>
+    segment.length!.trim(),
+  );
+  const parsedLengths = originalLengths.map(parseCableLength);
+  if (parsedLengths.some((length) => length === null)) {
+    return originalLengths.join(" + ");
+  }
+
+  const lengths = parsedLengths as ParsedCableLength[];
+  const outputUnit = lengths[0].unit;
+  const totalMeters = lengths.reduce(
+    (total, length) => total + length.meters,
+    0,
+  );
+  const totalInOutputUnit =
+    totalMeters / CABLE_LENGTH_METERS_PER_UNIT[outputUnit];
+  return `${formatCableLengthNumber(totalInOutputUnit)}${outputUnit}`;
+}
+
+function parseCableLength(value: string): ParsedCableLength | null {
+  const match = value.match(
+    /^(\d+(?:\.\d+)?)\s*(mm|millimeters?|millimetres?|cm|centimeters?|centimetres?|m|meters?|metres?|km|kilometers?|kilometres?|in|inches?|ft|feet|foot|yd|yards?|['"])$/i,
+  );
+  if (!match) return null;
+
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const unit = normalizeCableLengthUnit(match[2]);
+  if (!unit) return null;
+  return {
+    meters: amount * CABLE_LENGTH_METERS_PER_UNIT[unit],
+    unit,
+  };
+}
+
+function normalizeCableLengthUnit(value: string): CableLengthUnit | null {
+  const unit = value.toLowerCase();
+  if (
+    unit === "mm" ||
+    unit.startsWith("millimeter") ||
+    unit.startsWith("millimetre")
+  ) {
+    return "mm";
+  }
+  if (
+    unit === "cm" ||
+    unit.startsWith("centimeter") ||
+    unit.startsWith("centimetre")
+  ) {
+    return "cm";
+  }
+  if (
+    unit === "km" ||
+    unit.startsWith("kilometer") ||
+    unit.startsWith("kilometre")
+  ) {
+    return "km";
+  }
+  if (unit === "m" || unit.startsWith("meter") || unit.startsWith("metre")) {
+    return "m";
+  }
+  if (unit === '"' || unit === "in" || unit.startsWith("inch")) return "in";
+  if (unit === "'" || unit === "ft" || unit === "foot" || unit === "feet") {
+    return "ft";
+  }
+  if (unit === "yd" || unit.startsWith("yard")) return "yd";
+  return null;
+}
+
+function formatCableLengthNumber(value: number) {
+  const rounded = Math.round((value + Number.EPSILON) * 1_000) / 1_000;
+  return rounded.toFixed(3).replace(/\.?0+$/, "");
 }
 
 function fuzzyScore(haystack: string, needle: string) {

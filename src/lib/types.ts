@@ -29,24 +29,11 @@ export type LinkState = "up" | "down" | "disabled" | "unknown";
 export type PortMode = "access" | "trunk";
 export type PortRole = "physical" | "aggregate";
 export type DeviceStatus =
-  | "online"
-  | "offline"
-  | "warning"
-  | "unknown"
-  | "maintenance";
+  "online" | "offline" | "warning" | "unknown" | "maintenance";
 export type DevicePlacement =
-  | "rack"
-  | "room"
-  | "wireless"
-  | "virtual"
-  | "shelf";
+  "rack" | "room" | "wireless" | "virtual" | "shelf";
 export type IpAssignmentType =
-  | "device"
-  | "interface"
-  | "vm"
-  | "container"
-  | "reserved"
-  | "infrastructure";
+  "device" | "interface" | "vm" | "container" | "reserved" | "infrastructure";
 export type IpZoneKind = "static" | "dhcp" | "reserved" | "infrastructure";
 export type IpAllocationMode = "static" | "dhcp-reservation";
 export type UserRole = "admin" | "editor" | "viewer";
@@ -134,6 +121,7 @@ export interface Device {
   serial?: string;
   managementIp?: string;
   macAddress?: string | null;
+  ignoreDuplicateMac?: boolean;
   status: DeviceStatus;
   placement?: DevicePlacement;
   parentDeviceId?: ID;
@@ -396,10 +384,7 @@ export interface IpAssignment {
   description?: string;
   integrity?: {
     state:
-      | "ok"
-      | "cross-lab-reference"
-      | "missing-reference"
-      | "reference-mismatch";
+      "ok" | "cross-lab-reference" | "missing-reference" | "reference-mismatch";
     fields: Array<"deviceId" | "portId" | "vmId" | "containerId">;
   };
 }
@@ -438,6 +423,20 @@ export interface DeviceService {
   monitorId?: ID | null;
   url?: string | null;
   notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DockerImportSource {
+  id: ID;
+  labId: ID;
+  name: string;
+  endpoint: string;
+  hasToken: boolean;
+  enabled: boolean;
+  lastSyncAt?: string | null;
+  lastSyncStatus?: string | null;
+  lastSyncMessage?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -532,6 +531,7 @@ export interface DeviceMonitor {
   target?: string | null;
   port?: number | null;
   path?: string | null;
+  ignoreTlsErrors: boolean;
   snmpVersion?: "1" | "2c" | "3" | null;
   snmpCommunity?: string | null;
   snmpOid?: string | null;
@@ -589,10 +589,7 @@ export interface DiscoveryScanResult {
 }
 
 export type DiscoveryScanJobStatus =
-  | "queued"
-  | "running"
-  | "completed"
-  | "failed";
+  "queued" | "running" | "completed" | "failed";
 
 export interface DiscoveryScanJob {
   id: ID;

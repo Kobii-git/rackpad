@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { CONTENT_SECURITY_POLICY } from './server/security-headers'
 
 const packageJson = JSON.parse(
   readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
@@ -60,6 +61,10 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    hmr: process.env.NODE_ENV !== 'test',
+    headers: {
+      'Content-Security-Policy': CONTENT_SECURITY_POLICY,
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3000',

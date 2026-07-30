@@ -5,6 +5,7 @@ import { sendMonitorTransitionAlert } from './alerts.js'
 import { requestPinnedUrl } from './net-guard.js'
 import { snmpGet, SNMP_VERSIONS, type SnmpVersion } from './snmp.js'
 import { resolveMonitorSnmpSession } from './snmp-session.js'
+import { ValidationError } from './validation.js'
 import {
   evaluateSnmpMatch,
   isIfOperStatusOid,
@@ -26,6 +27,7 @@ export interface DeviceMonitor {
   target?: string | null
   port?: number | null
   path?: string | null
+  ignoreTlsErrors: boolean
   snmpVersion?: SnmpVersion | null
   snmpCommunity?: string | null
   snmpOid?: string | null
@@ -54,6 +56,7 @@ export function parseMonitor(row: Record<string, unknown>): DeviceMonitor {
     target: row.target ? String(row.target) : null,
     port: row.port == null ? null : Number(row.port),
     path: row.path ? String(row.path) : null,
+    ignoreTlsErrors: Number(row.ignoreTlsErrors ?? 0) === 1,
     snmpVersion: row.snmpVersion ? String(row.snmpVersion) as SnmpVersion : null,
     snmpCommunity: row.snmpCommunity ? String(row.snmpCommunity) : null,
     snmpOid: row.snmpOid ? String(row.snmpOid) : null,
@@ -86,7 +89,11 @@ export function startMonitoringLoop(defaultIntervalMs: number) {
   if (intervalHandle) clearInterval(intervalHandle)
 
   intervalHandle = setInterval(() => {
-    void runDueChecks(defaultIntervalMs)
+    void runDueChecks(defaultIntervalMs).catch((error) => {
+      console.error(
+        `[rackpad] Monitoring cycle failed: ${monitorErrorMessage(error)}`,
+      )
+    })
   }, defaultIntervalMs)
   intervalHandle.unref?.()
 
@@ -101,7 +108,13 @@ export async function runDueChecks(defaultIntervalMs: number) {
   for (const monitor of monitors) {
     const dueEvery = monitor.intervalMs ?? defaultIntervalMs
     if (!monitor.lastCheckAt || Date.now() - Date.parse(monitor.lastCheckAt) >= dueEvery) {
-      await runMonitorCheck(monitor.id)
+      try {
+        await runMonitorCheck(monitor.id)
+      } catch (error) {
+        console.error(
+          `[rackpad] Scheduled monitor check failed for ${monitor.id}: ${monitorErrorMessage(error)}`,
+        )
+      }
     }
   }
 }
@@ -113,17 +126,12 @@ export async function runMonitorCheck(id: string) {
   }
 
   const monitor = parseMonitor(row)
-  const checkedAt = new Date().toISOString()
 
   if (!monitor.enabled || monitor.type === 'none') {
-    await persistMonitorResult(monitor, {
-      checkedAt,
-      result: 'unknown',
-      message: 'Health checks disabled.',
-    })
-    return parseMonitor(db.prepare('SELECT * FROM deviceMonitors WHERE id = ?').get(id) as Record<string, unknown>)
+    throw new ValidationError('Monitor target is disabled.', 409)
   }
 
+  const checkedAt = new Date().toISOString()
   const result = await executeCheck(monitor)
   await persistMonitorResult(monitor, { checkedAt, ...result })
   return parseMonitor(db.prepare('SELECT * FROM deviceMonitors WHERE id = ?').get(id) as Record<string, unknown>)
@@ -244,12 +252,12 @@ async function executeCheck(monitor: DeviceMonitor) {
     }
 
     if (monitor.type === 'icmp') {
-      return runIcmpProbe(monitor.target)
+      return await runIcmpProbe(monitor.target)
     }
 
     if (monitor.type === 'tcp') {
       const port = monitor.port ?? 22
-      return tcpCheck(monitor.target, port)
+      return await tcpCheck(monitor.target, port)
     }
 
     if (monitor.type === 'http' || monitor.type === 'https') {
@@ -257,7 +265,11 @@ async function executeCheck(monitor: DeviceMonitor) {
       const path = monitor.path?.trim() || '/'
       const host = net.isIP(monitor.target) === 6 ? `[${monitor.target}]` : monitor.target
       const url = new URL(`${monitor.type}://${host}:${port}${path.startsWith('/') ? path : `/${path}`}`)
-      const res = await requestPinnedUrl(url, { timeoutMs: 5_000, maxRedirects: 3 })
+      const res = await requestPinnedUrl(url, {
+        timeoutMs: 5_000,
+        maxRedirects: 3,
+        rejectUnauthorized: !monitor.ignoreTlsErrors,
+      })
       if (res.statusCode < 200 || res.statusCode >= 300) {
         return { result: 'offline' as const, message: `${res.url} returned ${res.statusCode}.` }
       }
@@ -265,7 +277,7 @@ async function executeCheck(monitor: DeviceMonitor) {
     }
 
     if (monitor.type === 'snmp') {
-      return snmpCheck(monitor)
+      return await snmpCheck(monitor)
     }
 
     return { result: 'unknown' as const, message: 'Unknown check type.' }
@@ -406,6 +418,12 @@ async function snmpCheck(monitor: DeviceMonitor): Promise<MonitorResult> {
 
   const session = resolveMonitorSnmpSession(monitor, device)
   const response = await snmpGet(session, monitor.snmpOid)
+  if (response.kind === 'exception') {
+    return {
+      result: 'unknown',
+      message: `SNMP ${monitor.target}:${port} OID ${response.oid} is not present on the device (${response.exception}).`,
+    }
+  }
   const expected = monitor.snmpExpectedValue?.trim()
   const message = `SNMP ${monitor.target}:${port} ${response.oid} = ${response.value}`
   const matchMode = monitor.snmpMatchMode ?? (expected ? 'equals' : 'any')
@@ -428,6 +446,10 @@ async function snmpCheck(monitor: DeviceMonitor): Promise<MonitorResult> {
     result: 'offline',
     message: `${message} (expected ${expected || 'match'} via ${matchMode}).`,
   }
+}
+
+function monitorErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unexpected monitoring failure.'
 }
 
 function syncMonitorPortState(

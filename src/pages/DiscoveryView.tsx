@@ -114,7 +114,7 @@ const DISCOVERY_STATUS_KEYS: Record<
 };
 
 export default function DiscoveryView() {
-  const { t } = useI18n();
+  const { t, formatRelativeTime, language } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
   const devices = useStore((s) => s.devices);
@@ -743,7 +743,7 @@ export default function DiscoveryView() {
       />
 
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
-        <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
+        <div className="grid shrink-0 gap-3 md:grid-cols-4 xl:grid-cols-6">
           <DiscoveryStat
             label={t("Total")}
             value={String(discoveredDevices.length)}
@@ -779,7 +779,7 @@ export default function DiscoveryView() {
         {lastScanResult && <ScanSummary result={lastScanResult} t={t} />}
 
         {canEdit && (
-          <Card>
+          <Card className="shrink-0">
             <CardHeader>
               <CardTitle>
                 <CardLabel>{t("Scheduled scans")}</CardLabel>
@@ -795,7 +795,7 @@ export default function DiscoveryView() {
               </Badge>
             </CardHeader>
             <CardBody className="space-y-3">
-              <div className="grid gap-2 md:grid-cols-[minmax(12rem,1.2fr)_minmax(8rem,1fr)_8rem_auto]">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(12rem,1.2fr)_minmax(8rem,1fr)_8rem_auto]">
                 <select
                   value={scheduleTarget}
                   onChange={(event) => setScheduleTarget(event.target.value)}
@@ -921,7 +921,19 @@ export default function DiscoveryView() {
                           </Td>
                           <Td>
                             <div className="space-y-0.5 text-[11px] text-[var(--color-fg-subtle)]">
-                              <div>{schedule.lastRunAt ?? t("Never")}</div>
+                              <div>
+                                {schedule.lastRunAt ? (
+                                  <span
+                                    title={new Date(
+                                      schedule.lastRunAt,
+                                    ).toLocaleString(language)}
+                                  >
+                                    {formatRelativeTime(schedule.lastRunAt)}
+                                  </span>
+                                ) : (
+                                  t("Never")
+                                )}
+                              </div>
                               {schedule.lastMessage && (
                                 <div>{schedule.lastMessage}</div>
                               )}
@@ -1217,8 +1229,16 @@ export default function DiscoveryView() {
                               )}
                             </div>
                           </Td>
-                          <Td className="font-mono text-[11px] text-[var(--color-fg-subtle)]">
-                            {device.lastSeen ?? device.lastScannedAt}
+                          <Td className="whitespace-nowrap font-mono text-[11px] text-[var(--color-fg-subtle)]">
+                            <span
+                              title={new Date(
+                                device.lastSeen ?? device.lastScannedAt,
+                              ).toLocaleString(language)}
+                            >
+                              {formatRelativeTime(
+                                device.lastSeen ?? device.lastScannedAt,
+                              )}
+                            </span>
                           </Td>
                         </tr>
                       );
@@ -1595,7 +1615,8 @@ function ScanSummary({
         );
   return (
     <div
-      className={`rounded-[var(--radius-sm)] border px-3 py-3 ${
+      data-testid="discovery-scan-summary"
+      className={`shrink-0 rounded-[var(--radius-sm)] border px-3 py-3 ${
         hasWarning
           ? "border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10"
           : "border-[var(--color-line)] bg-[var(--color-bg-2)]"

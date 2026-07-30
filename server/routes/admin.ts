@@ -186,7 +186,7 @@ const exportBackupSnapshot = db.transaction(
           .all(),
         dockerImportSources: db
           .prepare(
-            "SELECT id, labId, name, endpoint, NULL AS tokenEnc, lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt FROM dockerImportSources ORDER BY labId, name, id",
+            "SELECT id, labId, name, endpoint, NULL AS tokenEnc, lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt, enabled FROM dockerImportSources ORDER BY labId, name, id",
           )
           .all(),
         dockerContainerLinks: db
@@ -857,8 +857,8 @@ const restoreBackupSnapshot = db.transaction(
     );
     const insertDevice = db.prepare(`
     INSERT INTO devices
-      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, rackSlot, tags, notes, lastSeen, networkMode, snmpCredentialId)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, ignoreDuplicateMac, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, rackSlot, tags, notes, lastSeen, networkMode, snmpCredentialId)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const updateDeviceParent = db.prepare(`
     UPDATE devices
@@ -950,6 +950,7 @@ const restoreBackupSnapshot = db.transaction(
       target,
       port,
       path,
+      ignoreTlsErrors,
       snmpVersion,
       snmpCommunity,
       snmpOid,
@@ -966,7 +967,7 @@ const restoreBackupSnapshot = db.transaction(
       lastResult,
       lastMessage
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertSnmpCredential = db.prepare(`
     INSERT INTO snmpCredentials (
@@ -978,8 +979,8 @@ const restoreBackupSnapshot = db.transaction(
     const insertDockerImportSource = db.prepare(`
     INSERT INTO dockerImportSources (
       id, labId, name, endpoint, tokenEnc,
-      lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt, enabled
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDockerContainerLink = db.prepare(`
     INSERT INTO dockerContainerLinks (
@@ -1111,6 +1112,7 @@ const restoreBackupSnapshot = db.transaction(
         row.lastSyncMessage ?? null,
         row.createdAt ?? new Date().toISOString(),
         row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+        row.enabled == null ? 1 : Number(Boolean(row.enabled)),
       );
     }
     for (const row of devices) {
@@ -1126,6 +1128,9 @@ const restoreBackupSnapshot = db.transaction(
         row.serial ?? null,
         row.managementIp ?? null,
         row.macAddress ?? null,
+        row.ignoreDuplicateMac == null
+          ? 0
+          : Number(Boolean(row.ignoreDuplicateMac)),
         row.status,
         row.placement ?? null,
         null,
@@ -1444,6 +1449,7 @@ const restoreBackupSnapshot = db.transaction(
         row.target ?? null,
         row.port ?? null,
         row.path ?? null,
+        Number(row.ignoreTlsErrors ?? 0) === 1 ? 1 : 0,
         row.snmpVersion ?? null,
         row.snmpCommunity ?? null,
         row.snmpOid ?? null,
@@ -1453,7 +1459,7 @@ const restoreBackupSnapshot = db.transaction(
         row.snmpIfIndex ?? null,
         row.snmpCredentialId ?? null,
         row.intervalMs ?? null,
-        Number(row.enabled ?? 0),
+        row.type === "none" ? 0 : Number(row.enabled ?? 0),
         row.sortOrder ?? 0,
         row.lastCheckAt ?? null,
         row.lastAlertAt ?? null,

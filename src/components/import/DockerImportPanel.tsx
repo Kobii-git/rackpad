@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Container, RefreshCw } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { Badge } from "@/components/ui/Badge";
@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/Input";
 import { Mono } from "@/components/shared/Mono";
 import { api, ApiError, type DockerContainerPreview } from "@/lib/api";
+import type { DockerImportSource } from "@/lib/types";
 import {
   canEditInventory,
   importDockerContainerRecord,
@@ -43,6 +44,20 @@ export function DockerImportPanel() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [sources, setSources] = useState<DockerImportSource[]>([]);
+  const [sourceSavingId, setSourceSavingId] = useState("");
+
+  async function loadSources() {
+    try {
+      setSources(await api.getDockerImportSources(lab.id));
+    } catch {
+      setSources([]);
+    }
+  }
+
+  useEffect(() => {
+    void loadSources();
+  }, [lab.id]);
 
   const hostDevices = useMemo(
     () =>
@@ -127,6 +142,7 @@ export function DockerImportPanel() {
       setSuccess(t("Imported container {name}.", { name: created.hostname }));
       setSelectedContainerId("");
       setContainers([]);
+      await loadSources();
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -162,6 +178,41 @@ export function DockerImportPanel() {
           : err instanceof Error
             ? err.message
             : t("Docker status refresh failed."),
+      );
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function handleSourceEnabled(
+    source: DockerImportSource,
+    enabled: boolean,
+  ) {
+    if (!canEdit) return;
+    setSourceSavingId(source.id);
+    setError("");
+    try {
+      await api.updateDockerImportSource(source.id, { enabled });
+      await loadSources();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("Docker status refresh failed."),
+      );
+    } finally {
+      setSourceSavingId("");
+    }
+  }
+
+  async function handleSourceSync(source: DockerImportSource) {
+    if (!canEdit || !source.enabled) return;
+    setSyncing(true);
+    setError("");
+    try {
+      await syncDockerContainerStatuses({ labId: lab.id, sourceId: source.id });
+      await loadSources();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("Docker status refresh failed."),
       );
     } finally {
       setSyncing(false);
@@ -335,6 +386,48 @@ export function DockerImportPanel() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {sources.length > 0 && (
+          <div className="space-y-2 border-t border-[var(--color-line)] pt-4">
+            {sources.map((source) => (
+              <div
+                key={source.id}
+                className="flex flex-wrap items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-[var(--text-primary)]">
+                    {source.name}
+                  </div>
+                  <Mono className="block truncate text-[10px] text-[var(--text-tertiary)]">
+                    {source.endpoint}
+                  </Mono>
+                </div>
+                <Badge tone={source.enabled ? "ok" : "neutral"}>
+                  {source.enabled ? t("Enabled") : t("Disabled")}
+                </Badge>
+                <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    checked={source.enabled}
+                    disabled={!canEdit || sourceSavingId === source.id}
+                    onChange={(event) =>
+                      void handleSourceEnabled(source, event.target.checked)
+                    }
+                  />
+                  {t("Enabled")}
+                </label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!canEdit || !source.enabled || syncing}
+                  onClick={() => void handleSourceSync(source)}
+                >
+                  <RefreshCw className="size-3.5" />
+                  {t("Refresh")}
+                </Button>
+              </div>
+            ))}
           </div>
         )}
       </CardBody>

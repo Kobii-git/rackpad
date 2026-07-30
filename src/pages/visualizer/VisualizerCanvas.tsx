@@ -10,12 +10,14 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
   Cable,
   Copy,
   Download,
   ExternalLink,
+  Image,
   LocateFixed,
   Network,
   PanelRightClose,
@@ -64,6 +66,12 @@ import {
   visualizerCableLaneIndexes,
   visualizerCablePath,
 } from "./model";
+import {
+  buildTraceImageSvg,
+  downloadTraceImagePng,
+  type TraceImageExport,
+  type TraceImageTheme,
+} from "./trace-image";
 import type {
   RackBand,
   RackPanel,
@@ -694,6 +702,7 @@ export function VisualizerCanvas({
                   variant={traceMode.enabled ? "secondary" : "outline"}
                   size="sm"
                   onClick={toggleTraceMode}
+                  data-testid="visualizer-trace-toggle"
                 >
                   {t("2 Trace")}
                 </Button>
@@ -2099,6 +2108,7 @@ function TracePicker({
               value={deviceId}
               onChange={(event) => setDeviceId(event.target.value)}
               className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
+              data-testid="trace-device-select"
             >
               {traceDevices.map((node) => (
                 <option key={node.device.id} value={node.device.id}>
@@ -2112,6 +2122,7 @@ function TracePicker({
               value={portId}
               onChange={(event) => setPortId(event.target.value)}
               className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
+              data-testid="trace-port-select"
             >
               {devicePorts.map((port) => (
                 <option key={port.id} value={port.id}>
@@ -2129,6 +2140,7 @@ function TracePicker({
           className="w-full"
           disabled={!deviceId || !portId}
           onClick={() => onTracePortSelect(deviceId, portId)}
+          data-testid="trace-submit"
         >
           {traceMode.firstPortId ? t("Trace to port") : t("Set start port")}
         </Button>
@@ -2415,10 +2427,40 @@ function TraceSummary({
 }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const [preparingImage, setPreparingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<{
+    result: TraceResult;
+    traceImage: TraceImageExport;
+    url: string;
+  } | null>(null);
+  const activeImagePreview =
+    imagePreview?.result === result ? imagePreview : null;
+  const previewButtonRef = useRef<HTMLButtonElement>(null);
+  const previewCloseButtonRef = useRef<HTMLButtonElement>(null);
   const traceText = useMemo(
     () => formatTraceText(model, result, t),
     [model, result, t],
   );
+
+  useEffect(() => {
+    if (!activeImagePreview) return;
+
+    const previewTrigger = previewButtonRef.current;
+    previewCloseButtonRef.current?.focus();
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setImagePreview(null);
+    }
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, true);
+      URL.revokeObjectURL(activeImagePreview.url);
+      previewTrigger?.focus();
+    };
+  }, [activeImagePreview]);
 
   async function copyTrace() {
     await copyText(traceText);
@@ -2426,8 +2468,61 @@ function TraceSummary({
     window.setTimeout(() => setCopied(false), 1400);
   }
 
-  function downloadTrace() {
+  function downloadTraceText() {
     downloadText("rackpad-trace-path.txt", traceText);
+  }
+
+  function buildTraceImage() {
+    const theme: TraceImageTheme = document.documentElement.classList.contains(
+      "light",
+    )
+      ? "light"
+      : "dark";
+    return buildTraceImageSvg(
+      model,
+      result,
+      {
+        cable: t("Cable"),
+        direction: document.documentElement.dir === "rtl" ? "rtl" : "ltr",
+        front: t("Front"),
+        rear: t("Rear"),
+        internalPassThrough: t("Internal pass-through"),
+        length: t("Length"),
+        rack: t("Rack"),
+        room: t("Room"),
+        unknown: t("Unknown"),
+        deviceType: typeLabel,
+        hops: (count) => t("{count} hops", { count }),
+      },
+      theme,
+    );
+  }
+
+  function openTraceImagePreview() {
+    setImageError(null);
+    try {
+      const traceImage = buildTraceImage();
+      const url = URL.createObjectURL(
+        new Blob([traceImage.svg], {
+          type: "image/svg+xml;charset=utf-8",
+        }),
+      );
+      setImagePreview({ result, traceImage, url });
+    } catch {
+      setImageError(t("Something went wrong. Try again."));
+    }
+  }
+
+  async function downloadTraceImage(traceImage?: TraceImageExport) {
+    setPreparingImage(true);
+    setImageError(null);
+    try {
+      await downloadTraceImagePng(traceImage ?? buildTraceImage());
+    } catch {
+      setImageError(t("Something went wrong. Try again."));
+    } finally {
+      setPreparingImage(false);
+    }
   }
 
   return (
@@ -2446,6 +2541,8 @@ function TraceSummary({
             size="sm"
             onClick={() => void copyTrace()}
             disabled={!traceText}
+            aria-label={t("Copy")}
+            data-testid="trace-copy-text"
           >
             <Copy className="size-3.5" />
             {copied ? t("Copied") : t("Copy")}
@@ -2453,14 +2550,48 @@ function TraceSummary({
           <Button
             variant="outline"
             size="sm"
-            onClick={downloadTrace}
+            onClick={downloadTraceText}
             disabled={!traceText}
+            aria-label={t("Download text")}
+            data-testid="trace-download-text"
           >
             <Download className="size-3.5" />
-            {t("Download")}
+            {t("Download text")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            ref={previewButtonRef}
+            onClick={openTraceImagePreview}
+            disabled={!traceText}
+            aria-label={t("Preview")}
+            data-testid="trace-preview-image"
+          >
+            <Image className="size-3.5" />
+            {t("Preview")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void downloadTraceImage()}
+            disabled={!traceText || preparingImage}
+            aria-label={t("Download image")}
+            data-testid="trace-download-image"
+          >
+            <Download className="size-3.5" />
+            {preparingImage ? t("Preparing...") : t("Download image")}
           </Button>
         </div>
       </div>
+      {imageError && (
+        <div
+          role="alert"
+          className="mt-2 text-xs text-[var(--danger)]"
+          data-testid="trace-image-error"
+        >
+          {imageError}
+        </div>
+      )}
       <div className="mt-3 space-y-2">
         {result.segments.map((segment, index) => {
           const fromDevice = model.deviceById[segment.fromPort.deviceId];
@@ -2494,6 +2625,84 @@ function TraceSummary({
           );
         })}
       </div>
+      {activeImagePreview &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setImagePreview(null);
+            }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="trace-image-preview-title"
+              data-testid="trace-image-dialog"
+              className="rk-panel flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[var(--radius-lg)] shadow-[var(--shadow-elev)]"
+            >
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--color-line)] px-4 py-3">
+                <div className="min-w-0">
+                  <div className="rk-kicker">{t("Trace hops")}</div>
+                  <div
+                    id="trace-image-preview-title"
+                    className="truncate text-base font-semibold text-[var(--text-primary)]"
+                  >
+                    {t("Cable trace image")}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      void downloadTraceImage(activeImagePreview.traceImage)
+                    }
+                    disabled={preparingImage}
+                    data-testid="trace-preview-download-image"
+                  >
+                    <Download className="size-3.5" />
+                    {preparingImage
+                      ? t("Preparing...")
+                      : t("Download image")}
+                  </Button>
+                  <Button
+                    ref={previewCloseButtonRef}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setImagePreview(null)}
+                    aria-label={t("Close")}
+                    data-testid="trace-preview-close"
+                  >
+                    <X className="size-3.5" />
+                    {t("Close")}
+                  </Button>
+                </div>
+              </div>
+              {imageError && (
+                <div
+                  role="alert"
+                  className="shrink-0 px-4 pt-3 text-xs text-[var(--danger)]"
+                >
+                  {imageError}
+                </div>
+              )}
+              <div className="flex-1 overflow-auto bg-[var(--surface-1)] p-4">
+                <img
+                  src={activeImagePreview.url}
+                  alt={t("Cable trace image")}
+                  width={activeImagePreview.traceImage.width}
+                  height={activeImagePreview.traceImage.height}
+                  onError={() =>
+                    setImageError(t("Something went wrong. Try again."))
+                  }
+                  data-testid="trace-preview-svg"
+                  className="mx-auto h-auto max-w-full shadow-lg"
+                />
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
