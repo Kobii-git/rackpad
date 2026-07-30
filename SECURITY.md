@@ -37,6 +37,17 @@ Rackpad is a self-hosted project without a commercial SLA, but good-faith
 private reports are appreciated and should receive triage before public
 disclosure whenever practical.
 
+## Automated scanning
+
+Rackpad runs CodeQL and Trivy against development, beta, and stable branches.
+Fixable high and critical dependency, secret, and configuration findings block
+release builds.
+
+Scanner exceptions must identify one advisory, explain why Rackpad is not
+affected, and include an expiry date. An expired exception fails the scan again
+until it is removed, renewed with current evidence, or replaced by an upstream
+fix.
+
 ## Hardening guidance
 
 Before exposing Rackpad beyond a trusted LAN, use:

@@ -1,0 +1,7 @@
+vulnerabilities:
+  - id: GHSA-qwww-vcr4-c8h2
+    expired_at: 2026-09-30
+    statement: >-
+      Rackpad is a browser-only BrowserRouter application and does not use
+      React Router's unstable RSC APIs. Review or remove this exception before
+      it expires, or when a compatible React Router 8 release is adopted.

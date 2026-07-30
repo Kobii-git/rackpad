@@ -8,6 +8,29 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.3-beta.5] - 2026-07-30
+
+### Changed
+
+- Updated the static-file server and JavaScript lint toolchain to versions that
+  resolve their current high-severity dependency advisories.
+- Documented an expiring exception for a React Router advisory that only
+  affects unstable RSC APIs, which Rackpad does not use.
+- Kept secret and configuration scanning active even when a dependency scan
+  has already failed.
+
+### Fixed
+
+- Removed the vulnerable `brace-expansion` release from both production and
+  development dependency trees.
+
+### Test notes
+
+- Confirm direct static files and refreshed app routes still load, while
+  noncanonical paths cannot expose files outside the built client.
+- Verify CodeQL, Trivy filesystem and image scans, and the separate
+  secret/configuration blocker all complete on the release workflow.
+
 ## [1.7.3-beta.4] - 2026-07-29
 
 ### Fixed

@@ -31,6 +31,7 @@ jobs:
           scan-ref: .
           scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
+          trivyignores: .trivyignore.yaml
           format: sarif
           output: trivy-filesystem.sarif
           exit-code: "0"
@@ -43,10 +44,12 @@ jobs:
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore.yaml
           format: table
           exit-code: "1"
 
       - name: Block high and critical secrets or configuration findings
+        if: always()
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
@@ -92,6 +95,7 @@ jobs:
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore.yaml
           format: sarif
           output: trivy-image.sarif
           exit-code: "0"
@@ -103,6 +107,7 @@ jobs:
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore.yaml
           format: table
           exit-code: "1"
 

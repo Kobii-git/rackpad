@@ -443,6 +443,31 @@ test("non-api app routes serve the SPA index on refresh", async () => {
   );
 });
 
+test("static serving stays inside the client distribution for noncanonical paths", async () => {
+  const indexRes = await app.inject({
+    method: "GET",
+    url: "/index.html",
+  });
+
+  assert.equal(indexRes.statusCode, 200);
+  assert.match(indexRes.headers["content-type"] ?? "", /text\/html/i);
+  assert.match(indexRes.body, /rackpad/i);
+
+  for (const url of [
+    "/public/../../package.json",
+    "/public/%2e%2e/%2e%2e/package.json",
+    "//package.json",
+    "/./package.json",
+  ]) {
+    const res = await app.inject({ method: "GET", url });
+    assert.doesNotMatch(
+      res.body,
+      /"name"\s*:\s*"rackpad"/i,
+      `${url} exposed a file outside the client distribution`,
+    );
+  }
+});
+
 test("responses allow trace image blob URLs only through img-src", async () => {
   const responses = [
     await app.inject({ method: "GET", url: "/compute" }),
