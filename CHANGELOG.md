@@ -8,6 +8,22 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.7.4-beta.0] - 2026-08-03
+
+### Fixed
+
+- Custom device types based on Server, Storage, KVM, or Other now inherit
+  Compute host eligibility, including before any virtual guests are attached.
+- Virtual-device host selection now excludes custom device types based on a VM
+  or container so workloads cannot be selected as their own host class.
+
+### Test notes
+
+- Create a custom device type with **Server** as its parent, assign it to a
+  device, and confirm the device appears under **Compute** as an available host.
+- Add a VM to that custom host and confirm it moves to the active host section
+  with the VM listed beneath it.
+
 ## [1.7.3] - 2026-07-30
 
 ### Added

@@ -26,6 +26,7 @@ import { useI18n } from "@/i18n";
 import type { TranslationKey } from "@/i18n/translations";
 import {
   BUILT_IN_DEVICE_TYPES,
+  deviceTypeBase,
   deviceTypeLabel,
   deviceTypeMatchesTemplate,
 } from "@/lib/device-types";
@@ -293,13 +294,15 @@ export function DeviceDrawer({
       .filter((entry) => {
         if (form.placement === "wireless") return entry.deviceType === "ap";
         if (form.placement === "virtual")
-          return !["vm", "container"].includes(entry.deviceType);
+          return !["vm", "container"].includes(
+            deviceTypeBase(entry.deviceType, deviceTypes),
+          );
         if (form.placement === "shelf")
           return entry.deviceType === "rack_shelf";
         return true;
       })
       .sort((a, b) => a.hostname.localeCompare(b.hostname));
-  }, [device, devices, form.placement]);
+  }, [device, devices, deviceTypes, form.placement]);
   const showParentSelector =
     form.placement === "wireless" ||
     form.placement === "virtual" ||

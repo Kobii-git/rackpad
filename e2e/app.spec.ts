@@ -258,6 +258,115 @@ test("all primary routes load without document overflow in both demo labs", asyn
   }
 });
 
+test("custom server device types inherit Compute host behavior", async ({
+  page,
+  request,
+}) => {
+  await authenticate(page);
+  const headers = { authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(16).slice(-7);
+  const serverTypeId = `e2e_compute_server_${suffix}`;
+  const endpointTypeId = `e2e_compute_endpoint_${suffix}`;
+  const serverHostname = `compute-host-${suffix}`;
+  const endpointHostname = `compute-endpoint-${suffix}`;
+  const guestHostname = `compute-guest-${suffix}`;
+  const deviceIds: string[] = [];
+  const deviceTypeIds: string[] = [];
+
+  try {
+    for (const definition of [
+      {
+        id: serverTypeId,
+        label: `E2E compute server ${suffix}`,
+        parentType: "server",
+      },
+      {
+        id: endpointTypeId,
+        label: `E2E compute endpoint ${suffix}`,
+        parentType: "endpoint",
+      },
+    ]) {
+      const response = await request.post("/api/device-types", {
+        headers,
+        data: definition,
+      });
+      expect(response.status()).toBe(201);
+      const created = (await response.json()) as {
+        id: string;
+        parentType: string;
+      };
+      expect(created.parentType).toBe(definition.parentType);
+      deviceTypeIds.push(created.id);
+    }
+
+    for (const device of [
+      {
+        hostname: serverHostname,
+        deviceType: serverTypeId,
+      },
+      {
+        hostname: endpointHostname,
+        deviceType: endpointTypeId,
+      },
+    ]) {
+      const response = await request.post("/api/devices", {
+        headers,
+        data: {
+          labId: "lab_home",
+          ...device,
+          placement: "room",
+          status: "unknown",
+        },
+      });
+      expect(response.status()).toBe(201);
+      deviceIds.push(((await response.json()) as { id: string }).id);
+    }
+
+    const hostDeviceId = deviceIds[0];
+    await page.goto("/compute");
+    await expect(page.locator("h1").first()).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: serverHostname, exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(endpointHostname, { exact: true })).toHaveCount(
+      0,
+    );
+
+    const guestResponse = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        hostname: guestHostname,
+        deviceType: "vm",
+        placement: "virtual",
+        parentDeviceId: hostDeviceId,
+        status: "unknown",
+      },
+    });
+    expect(guestResponse.status()).toBe(201);
+    deviceIds.unshift(((await guestResponse.json()) as { id: string }).id);
+
+    await page.reload();
+    const activeHostCard = page
+      .getByRole("heading", { name: serverHostname, exact: true })
+      .locator(
+        "xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' rk-panel ')][1]",
+      );
+    await expect(activeHostCard).toBeVisible();
+    await expect(activeHostCard).toContainText(guestHostname);
+    await expect(
+      activeHostCard.getByRole("button", { name: "Add VM on host" }),
+    ).toBeVisible();
+  } finally {
+    for (const deviceId of deviceIds) {
+      await request.delete(`/api/devices/${deviceId}`, { headers });
+    }
+    for (const deviceTypeId of deviceTypeIds.reverse()) {
+      await request.delete(`/api/device-types/${deviceTypeId}`, { headers });
+    }
+  }
+});
+
 test("visualizer trace downloads standalone PNGs under the production CSP", async ({
   page,
 }) => {

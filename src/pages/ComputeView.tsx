@@ -27,6 +27,7 @@ import {
   useStore,
 } from "@/lib/store";
 import type { Device, Port, VirtualSwitch } from "@/lib/types";
+import { deviceTypeBase } from "@/lib/device-types";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { statusLabel } from "@/lib/utils";
 
@@ -36,6 +37,8 @@ const HOST_DEVICE_TYPES = new Set<Device["deviceType"]>([
   "kvm",
   "other",
 ]);
+
+const VIRTUAL_DEVICE_TYPES = new Set<Device["deviceType"]>(["vm", "container"]);
 
 const VIRTUAL_SWITCH_KINDS: Array<VirtualSwitch["kind"]> = [
   "external",
@@ -61,6 +64,7 @@ export default function ComputeView() {
   const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const ports = useStore((s) => s.ports);
   const virtualSwitches = useStore((s) => s.virtualSwitches);
   const canEdit = canEditInventory(currentUser);
@@ -112,14 +116,15 @@ export default function ComputeView() {
   const hosts = useMemo(
     () =>
       devices
-        .filter(
-          (device) =>
-            !["vm", "container"].includes(device.deviceType) &&
-            (vmHostIds.has(device.id) ||
-              HOST_DEVICE_TYPES.has(device.deviceType)),
-        )
+        .filter((device) => {
+          const baseType = deviceTypeBase(device.deviceType, deviceTypes);
+          return (
+            !VIRTUAL_DEVICE_TYPES.has(baseType) &&
+            (vmHostIds.has(device.id) || HOST_DEVICE_TYPES.has(baseType))
+          );
+        })
         .sort((a, b) => a.hostname.localeCompare(b.hostname)),
-    [devices, vmHostIds],
+    [devices, deviceTypes, vmHostIds],
   );
 
   const guestsByHostId = useMemo(() => {
