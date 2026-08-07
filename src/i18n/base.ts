@@ -1949,6 +1949,8 @@ export const en = {
   "Template details": "Template details",
   "Saving storage changes...": "Saving storage changes...",
   "Storage changes could not be saved.": "Storage changes could not be saved.",
+  "Open pool {name}": "Open pool {name}",
+  "Edit pool {name}": "Edit pool {name}",
 } as const;
 
 export type TranslationKey = keyof typeof en;

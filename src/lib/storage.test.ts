@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   driveBayTemplateDisplayCopy,
+  driveFormFactorLabel,
+  driveInterfaceLabel,
   generateDriveBaySection,
   inferDriveBaySlotPrefix,
   isPoolDriveEligible,
@@ -195,6 +197,7 @@ test("storage display helpers localize built-ins and preserve custom copy", () =
     "Drive bays": "Baies de disques",
     "Storage enclosure": "Enceinte de stockage",
     Switch: "Commutateur",
+    Other: "Autre",
   };
   const t = (
     key: TranslationKey,
@@ -219,6 +222,10 @@ test("storage display helpers localize built-ins and preserve custom copy", () =
     description: "4 × 3.5-inch · Avant",
   });
   assert.equal(storagePoolStatusLabel("healthy", t), "Sain");
+  assert.equal(driveInterfaceLabel("nvme", t), "NVME");
+  assert.equal(driveInterfaceLabel("other", t), "Autre");
+  assert.equal(driveFormFactorLabel("m2", t), "M.2");
+  assert.equal(driveFormFactorLabel("other", t), "Autre");
   assert.equal(
     localizedDeviceTypeLabel(
       {

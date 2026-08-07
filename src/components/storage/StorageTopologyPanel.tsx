@@ -42,6 +42,8 @@ import {
   DRIVE_INTERFACE_OPTIONS,
   DRIVE_SLOT_TYPE_OPTIONS,
   driveBayTemplateDisplayCopy,
+  driveFormFactorLabel,
+  driveInterfaceLabel,
   driveLabel,
   driveSecondaryLabel,
   formatStorageCapacity,
@@ -187,6 +189,7 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
   const [creatingPool, setCreatingPool] = useState(false);
   const [poolForm, setPoolForm] = useState<PoolForm>(EMPTY_POOL_FORM);
   const [hoveredPoolId, setHoveredPoolId] = useState<string | null>(null);
+  const [focusedPoolId, setFocusedPoolId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -195,6 +198,7 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
     ? (drives.find((drive) => drive.id === selectedSlot.driveId) ?? null)
     : null;
   const selectedPool = pools.find((pool) => pool.id === selectedPoolId) ?? null;
+  const highlightedPoolId = focusedPoolId ?? hoveredPoolId;
 
   useEffect(() => {
     if (compatibleTemplates.length === 0) {
@@ -528,12 +532,13 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
                 drives={drives}
                 pools={allPools}
                 selectedSlotId={selectedSlotId}
-                hoveredPoolId={hoveredPoolId}
+                highlightedPoolId={highlightedPoolId}
                 onSelect={(slotId) => {
                   setCreatingSlot(false);
                   setSelectedSlotId(slotId);
                 }}
                 onHoverPool={setHoveredPoolId}
+                onFocusPool={setFocusedPoolId}
               />
 
               {(selectedSlot || creatingSlot) && (
@@ -729,8 +734,8 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
                       }}
                       onMouseEnter={() => setHoveredPoolId(pool.id)}
                       onMouseLeave={() => setHoveredPoolId(null)}
-                      onFocus={() => setHoveredPoolId(pool.id)}
-                      onBlur={() => setHoveredPoolId(null)}
+                      onFocus={() => setFocusedPoolId(pool.id)}
+                      onBlur={() => setFocusedPoolId(null)}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="min-w-0 break-words text-sm font-semibold">
@@ -775,8 +780,9 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
                   onDelete={() => void handleDeletePool()}
                   saving={saving}
                   creating={creatingPool}
-                  hoveredPoolId={hoveredPoolId}
+                  highlightedPoolId={highlightedPoolId}
                   onHoverPool={setHoveredPoolId}
+                  onFocusPool={setFocusedPoolId}
                 />
               )}
             </div>
@@ -834,17 +840,19 @@ function DriveSlotGrid({
   drives,
   pools,
   selectedSlotId,
-  hoveredPoolId,
+  highlightedPoolId,
   onSelect,
   onHoverPool,
+  onFocusPool,
 }: {
   slots: DriveSlot[];
   drives: StorageDrive[];
   pools: StoragePool[];
   selectedSlotId: string | null;
-  hoveredPoolId: string | null;
+  highlightedPoolId: string | null;
   onSelect: (slotId: string) => void;
   onHoverPool: (poolId: string | null) => void;
+  onFocusPool: (poolId: string | null) => void;
 }) {
   const { t } = useI18n();
   const driveById = new Map(drives.map((drive) => [drive.id, drive]));
@@ -888,7 +896,9 @@ function DriveSlotGrid({
                 const pool = drive?.poolId
                   ? poolById.get(drive.poolId)
                   : undefined;
-                const highlighted = Boolean(pool && pool.id === hoveredPoolId);
+                const highlighted = Boolean(
+                  pool && pool.id === highlightedPoolId,
+                );
                 return (
                   <button
                     key={slot.id}
@@ -913,8 +923,8 @@ function DriveSlotGrid({
                     onClick={() => onSelect(slot.id)}
                     onMouseEnter={() => onHoverPool(pool?.id ?? null)}
                     onMouseLeave={() => onHoverPool(null)}
-                    onFocus={() => onHoverPool(pool?.id ?? null)}
-                    onBlur={() => onHoverPool(null)}
+                    onFocus={() => onFocusPool(pool?.id ?? null)}
+                    onBlur={() => onFocusPool(null)}
                     data-pool-highlighted={highlighted ? "true" : undefined}
                     title={
                       drive
@@ -1016,7 +1026,7 @@ function SlotEditor({
           >
             {DRIVE_SLOT_TYPE_OPTIONS.map((value) => (
               <option key={value} value={value}>
-                {formatFormFactor(value, t)}
+                {driveFormFactorLabel(value, t)}
               </option>
             ))}
           </Select>
@@ -1135,7 +1145,7 @@ function DriveEditor({
           >
             {DRIVE_INTERFACE_OPTIONS.map((value) => (
               <option key={value} value={value}>
-                {value.toUpperCase()}
+                {driveInterfaceLabel(value, t)}
               </option>
             ))}
           </Select>
@@ -1150,7 +1160,7 @@ function DriveEditor({
           >
             {DRIVE_FORM_FACTOR_OPTIONS.map((value) => (
               <option key={value} value={value}>
-                {formatFormFactor(value, t)}
+                {driveFormFactorLabel(value, t)}
               </option>
             ))}
           </Select>
@@ -1179,8 +1189,9 @@ function PoolEditor({
   onDelete,
   saving,
   creating,
-  hoveredPoolId,
+  highlightedPoolId,
   onHoverPool,
+  onFocusPool,
 }: {
   form: PoolForm;
   onChange: (next: PoolForm) => void;
@@ -1192,8 +1203,9 @@ function PoolEditor({
   onDelete: () => void;
   saving: boolean;
   creating: boolean;
-  hoveredPoolId: string | null;
+  highlightedPoolId: string | null;
   onHoverPool: (poolId: string | null) => void;
+  onFocusPool: (poolId: string | null) => void;
 }) {
   const { t } = useI18n();
   const set = <K extends keyof PoolForm>(key: K, value: PoolForm[K]) =>
@@ -1290,16 +1302,20 @@ function PoolEditor({
             const hoverPoolId =
               drive.poolId ?? (pool && checked ? pool.id : null);
             const highlighted = Boolean(
-              hoverPoolId && hoverPoolId === hoveredPoolId,
+              hoverPoolId && hoverPoolId === highlightedPoolId,
             );
+            const inputId = `storage-pool-drive-${pool?.id ?? "new"}-${drive.id}`;
             return (
-              <label
+              <div
                 key={drive.id}
+                data-pool-member-row
                 className={cn(
-                  "flex items-start gap-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] px-3 py-2 transition-[border-color,box-shadow]",
+                  "flex items-start gap-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] px-3 py-2 transition-[border-color,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-primary)]",
                   !selectable && "opacity-55",
                   highlighted && "shadow-[0_0_0_2px_var(--pool-color)]",
                 )}
+                tabIndex={assignedElsewhere ? 0 : undefined}
+                aria-disabled={disabled || assignedElsewhere || undefined}
                 style={
                   {
                     "--pool-color": hoverPoolId
@@ -1313,11 +1329,18 @@ function PoolEditor({
                 }
                 onMouseEnter={() => onHoverPool(hoverPoolId)}
                 onMouseLeave={() => onHoverPool(null)}
-                onFocus={() => onHoverPool(hoverPoolId)}
-                onBlur={() => onHoverPool(null)}
+                onFocusCapture={() => onFocusPool(hoverPoolId)}
+                onBlurCapture={(event) => {
+                  if (
+                    !event.currentTarget.contains(event.relatedTarget as Node)
+                  ) {
+                    onFocusPool(null);
+                  }
+                }}
                 data-pool-highlighted={highlighted ? "true" : undefined}
               >
                 <input
+                  id={inputId}
                   type="checkbox"
                   className="mt-0.5 size-4 accent-[var(--accent-primary)]"
                   checked={checked}
@@ -1331,7 +1354,7 @@ function PoolEditor({
                     )
                   }
                 />
-                <span className="min-w-0 flex-1">
+                <label htmlFor={inputId} className="min-w-0 flex-1">
                   <span className="block break-words text-xs font-medium">
                     {driveLabel(drive)}
                   </span>
@@ -1346,12 +1369,12 @@ function PoolEditor({
                       ? t("· {value1}", { value1: drive.serial })
                       : ""}
                   </span>
-                </span>
+                </label>
                 {assignedElsewhere && (
                   <Badge tone="neutral">{drive.poolName}</Badge>
                 )}
                 {physicallyMissing && <Badge tone="err">{t("Missing")}</Badge>}
-              </label>
+              </div>
             );
           })}
         </div>
@@ -1463,23 +1486,6 @@ function poolToForm(pool: StoragePool): PoolForm {
     notes: pool.notes ?? "",
     driveIds: pool.driveIds,
   };
-}
-
-function formatFormFactor(value: string, t: ReturnType<typeof useI18n>["t"]) {
-  switch (value) {
-    case "m2":
-      return "M.2";
-    case "u2":
-      return "U.2";
-    case "2.5":
-    case "3.5":
-      return `${value}\"`;
-    case "other":
-    case "generic":
-      return t("Other");
-    default:
-      return value.charAt(0).toUpperCase() + value.slice(1);
-  }
 }
 
 function driveSlotFaceLabel(

@@ -48,6 +48,7 @@ import type {
   VirtualSwitch,
 } from "@/lib/types";
 import { cidrBounds, cidrContainsIp, cn, ipToInt } from "@/lib/utils";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 
 type ImportProvider = "hyperv" | "proxmox";
 
@@ -1213,6 +1214,7 @@ function HostPreview({
   value: HostDraft | null;
 }) {
   const { t } = useI18n();
+  const deviceTypes = useStore((state) => state.deviceTypes);
   const provider = providerForPayload(payload);
   const copy = PROVIDER_COPY[provider];
   const host = payload.host;
@@ -1263,7 +1265,8 @@ function HostPreview({
             </option>
             {hostCandidates.map((device) => (
               <option key={device.id} value={device.id}>
-                {device.hostname} ({device.deviceType})
+                {device.hostname} (
+                {localizedDeviceTypeIdLabel(device.deviceType, deviceTypes, t)})
               </option>
             ))}
           </select>

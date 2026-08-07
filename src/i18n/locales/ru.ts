@@ -1865,7 +1865,7 @@ export const ru = {
   "Usable capacity": "Полезная емкость",
   "Occupied slots": "Занятые слоты",
   "Unassigned drives": "Неназначенные диски",
-  "Storage attention": "Внимание к хранению",
+  "Storage attention": "Предупреждения хранилища",
   "All storage looks healthy.": "Все хранилище выглядит исправным.",
   "Missing pool members": "Отсутствующие участники пула хранения",
   "Degraded or offline pools": "Деградированные или автономные пулы",
@@ -1951,4 +1951,6 @@ export const ru = {
   "Template details": "Детали шаблона",
   "Saving storage changes...": "Сохранение изменений хранилища...",
   "Storage changes could not be saved.": "Не удалось сохранить изменения хранилища.",
+  "Open pool {name}": "Открыть пул хранения {name}",
+  "Edit pool {name}": "Изменить пул хранения {name}",
 } satisfies TranslationMap;

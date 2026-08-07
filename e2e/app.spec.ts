@@ -60,6 +60,12 @@ test("storage workspace and dense device topology stay readable", async ({
   ).toHaveValue("DEMO-STORE-01");
   await page.getByRole("tab", { name: /Logical pools/ }).click();
   await expect(page.getByText("tank", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Open pool tank", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Edit pool tank", exact: true }),
+  ).toBeVisible();
 
   await page.evaluate(() => localStorage.setItem("rackpad-theme", "dark"));
   await page.setViewportSize({ width: 720, height: 900 });
@@ -77,20 +83,35 @@ test("storage workspace and dense device topology stay readable", async ({
   await expect(page.getByTestId("device-storage-attention")).toContainText("2");
 
   const crossDeviceMember = page
-    .locator("label")
+    .locator("[data-pool-member-row]")
     .filter({ hasText: "DEMO-STORE-05" })
     .first();
   await crossDeviceMember.hover();
-  await expect(page.locator('label[data-pool-highlighted="true"]')).toHaveCount(
-    6,
-  );
+  await expect(
+    page.locator('[data-pool-member-row][data-pool-highlighted="true"]'),
+  ).toHaveCount(6);
   await expect(
     page.locator('button[data-pool-highlighted="true"]'),
   ).toHaveCount(4);
   await crossDeviceMember.getByRole("checkbox").focus();
-  await expect(page.locator('label[data-pool-highlighted="true"]')).toHaveCount(
-    6,
-  );
+  await expect(
+    page.locator('[data-pool-member-row][data-pool-highlighted="true"]'),
+  ).toHaveCount(6);
+  await expect(
+    page.locator('button[data-pool-highlighted="true"]'),
+  ).toHaveCount(4);
+
+  await page.getByRole("button", { name: "New pool", exact: true }).click();
+  const assignedElsewhereMember = page
+    .locator("[data-pool-member-row]")
+    .filter({ hasText: "DEMO-STORE-01" })
+    .first();
+  await expect(assignedElsewhereMember.getByRole("checkbox")).toBeDisabled();
+  await assignedElsewhereMember.focus();
+  await expect(assignedElsewhereMember).toBeFocused();
+  await expect(
+    page.locator('[data-pool-member-row][data-pool-highlighted="true"]'),
+  ).toHaveCount(6);
   await expect(
     page.locator('button[data-pool-highlighted="true"]'),
   ).toHaveCount(4);
@@ -123,17 +144,41 @@ test("storage labels localize built-ins while retaining technical values", async
       page.getByText("Boîtier de stockage", { exact: true }).first(),
     ).toBeVisible();
 
+    await page.goto(`/devices/${deviceId}`);
+    await expect(
+      page.getByText("Boîtier de stockage", { exact: true }).first(),
+    ).toBeVisible();
+
+    await page.keyboard.press("Control+k");
+    const commandSearch = page.getByPlaceholder("Rechercher des commandes");
+    await commandSearch.fill(hostname);
+    await expect(
+      page.getByText("Boîtier de stockage", { exact: true }).first(),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    await page.keyboard.press("Control+k");
+    await page.getByPlaceholder("Rechercher des commandes").fill("DEMO-STORE");
+    await expect(
+      page.getByText("Disques", { exact: true }).first(),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+
     await page.goto("/storage?tab=pools");
     await expect(page.getByText("Dégradé", { exact: true })).toBeVisible();
     await expect(
       page.getByText("Pool de stockage", { exact: true }).first(),
     ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: "Ouvrir le pool de stockage tank",
+        exact: true,
+      }),
+    ).toBeVisible();
 
     await page.getByRole("tab", { name: /Modèles de baie/ }).click();
     await expect(
-      page
-        .getByText("12 × 3.5-inch Baies de disques", { exact: true })
-        .first(),
+      page.getByText("12 × 3.5-inch Baies de disques", { exact: true }).first(),
     ).toBeVisible();
     await expect(
       page.getByText("Boîtier de stockage", { exact: true }),
@@ -320,10 +365,7 @@ test("custom template drives a cross-device pool through the editor UI", async (
     await expect(
       editorPage.getByTitle("Empty slot", { exact: true }),
     ).toHaveCount(2);
-    await editorPage
-      .getByTitle("Empty slot", { exact: true })
-      .first()
-      .click();
+    await editorPage.getByTitle("Empty slot", { exact: true }).first().click();
     await editorPage
       .getByRole("textbox", { name: "Manufacturer", exact: true })
       .fill("ShelfDisk");
@@ -379,12 +421,12 @@ test("custom template drives a cross-device pool through the editor UI", async (
       .last()
       .selectOption("gb");
     await editorPage
-      .locator("label")
+      .locator("[data-pool-member-row]")
       .filter({ hasText: hostSerial })
       .getByRole("checkbox")
       .check();
     await editorPage
-      .locator("label")
+      .locator("[data-pool-member-row]")
       .filter({ hasText: enclosureSerial })
       .getByRole("checkbox")
       .check();
@@ -405,7 +447,9 @@ test("custom template drives a cross-device pool through the editor UI", async (
       editorPage.getByTestId("device-storage-attention"),
     ).toContainText("0");
     await editorPage.setViewportSize({ width: 720, height: 900 });
-    await expect(editorPage.getByText(sectionName, { exact: true })).toBeVisible();
+    await expect(
+      editorPage.getByText(sectionName, { exact: true }),
+    ).toBeVisible();
     expect(
       await editorPage.evaluate(
         () =>
@@ -415,19 +459,23 @@ test("custom template drives a cross-device pool through the editor UI", async (
     ).toBeTruthy();
 
     const remoteMember = editorPage
-      .locator("label")
+      .locator("[data-pool-member-row]")
       .filter({ hasText: enclosureSerial })
       .first();
     await remoteMember.hover();
     await expect(
-      editorPage.locator('label[data-pool-highlighted="true"]'),
+      editorPage.locator(
+        '[data-pool-member-row][data-pool-highlighted="true"]',
+      ),
     ).toHaveCount(2);
     await expect(
       editorPage.locator('button[data-pool-highlighted="true"]'),
     ).toHaveCount(1);
     await remoteMember.getByRole("checkbox").focus();
     await expect(
-      editorPage.locator('label[data-pool-highlighted="true"]'),
+      editorPage.locator(
+        '[data-pool-member-row][data-pool-highlighted="true"]',
+      ),
     ).toHaveCount(2);
 
     await editorPage.goto(
@@ -514,8 +562,41 @@ test("storage inventory is read-only for viewers", async ({
       viewerPage.getByRole("button", { name: "New drive", exact: true }),
     ).toHaveCount(0);
 
+    await viewerPage.goto(
+      "http://127.0.0.1:5173/storage?tab=drives&driveId=drv_demo_1",
+    );
+    for (const fieldName of ["Manufacturer", "Model", "Serial", "Notes"]) {
+      await expect(
+        viewerPage.getByRole("textbox", { name: fieldName, exact: true }),
+      ).toBeDisabled();
+    }
+    await expect(
+      viewerPage.getByRole("spinbutton", { name: "Capacity", exact: true }),
+    ).toBeDisabled();
+    for (const fieldName of [
+      "Capacity unit",
+      "Interface",
+      "Form factor",
+      "Select a slot",
+    ]) {
+      await expect(
+        viewerPage.getByRole("combobox", { name: fieldName, exact: true }),
+      ).toBeDisabled();
+    }
+    await expect(
+      viewerPage.getByRole("button", { name: "Save drive", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      viewerPage.getByRole("button", { name: "Delete drive", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      viewerPage.getByRole("button", { name: "Close", exact: true }),
+    ).toBeVisible();
+
     await viewerPage.goto("http://127.0.0.1:5173/storage?tab=pools");
-    await viewerPage.getByRole("button", { name: "tank", exact: true }).click();
+    await viewerPage
+      .getByRole("button", { name: "Open pool tank", exact: true })
+      .click();
     await expect(
       viewerPage.getByRole("textbox", { name: "Pool name", exact: true }),
     ).toBeDisabled();
@@ -601,7 +682,7 @@ test("storage interactive views remain accessible and responsive", async ({
         await expect(page.locator("h1").first()).toBeVisible();
         if (route === "/storage?tab=pools") {
           await page
-            .getByRole("button", { name: "tank", exact: true })
+            .getByRole("button", { name: "Open pool tank", exact: true })
             .click();
         }
         if (route.includes("driveId=") || route.endsWith("tab=pools")) {
@@ -621,8 +702,7 @@ test("storage interactive views remain accessible and responsive", async ({
         expect(
           results.violations.filter(
             (violation) =>
-              violation.impact === "critical" ||
-              violation.impact === "serious",
+              violation.impact === "critical" || violation.impact === "serious",
           ),
           `${route} has serious accessibility violations in ${theme} at ${viewport.width}px`,
         ).toEqual([]);

@@ -1436,7 +1436,9 @@ function DeviceCard({
                   node.device.deviceType,
                   [],
                   t,
-                  typeLabel(node.device.deviceType),
+                  model.deviceTypes.find(
+                    (entry) => entry.type === node.device.deviceType,
+                  )?.label ?? typeLabel(node.device.deviceType),
                 ),
               )}
             </div>
@@ -2224,6 +2226,7 @@ function Inspector({
           )}
           {selectedNode && (
             <DeviceInspector
+              model={model}
               node={selectedNode}
               neighbors={neighbors}
               onSelectCable={onSelectCable}
@@ -2292,10 +2295,12 @@ function Inspector({
 }
 
 function DeviceInspector({
+  model,
   node,
   neighbors,
   onSelectCable,
 }: {
+  model: VisualizerModel;
   node: VisualizerNode;
   neighbors: Array<{
     device: VisualizerModel["deviceById"][string];
@@ -2324,7 +2329,9 @@ function DeviceInspector({
             node.device.deviceType,
             [],
             t,
-            typeLabel(node.device.deviceType),
+            model.deviceTypes.find(
+              (entry) => entry.type === node.device.deviceType,
+            )?.label ?? typeLabel(node.device.deviceType),
           )}
         />
         <InfoBox label={t("Placement")} value={placementLabel(node, t)} />
@@ -2510,7 +2517,14 @@ function TraceSummary({
         rack: t("Rack"),
         room: t("Room"),
         unknown: t("Unknown"),
-        deviceType: typeLabel,
+        deviceType: (type) =>
+          localizedDeviceTypeIdLabel(
+            type,
+            [],
+            t,
+            model.deviceTypes.find((entry) => entry.type === type)?.label ??
+              typeLabel(type),
+          ),
         hops: (count) => t("{count} hops", { count }),
       },
       theme,
@@ -2680,9 +2694,7 @@ function TraceSummary({
                     data-testid="trace-preview-download-image"
                   >
                     <Download className="size-3.5" />
-                    {preparingImage
-                      ? t("Preparing...")
-                      : t("Download image")}
+                    {preparingImage ? t("Preparing...") : t("Download image")}
                   </Button>
                   <Button
                     ref={previewCloseButtonRef}

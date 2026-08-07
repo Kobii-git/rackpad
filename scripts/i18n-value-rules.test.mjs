@@ -8,15 +8,36 @@ import {
 } from "./i18n-value-rules.mjs";
 
 test("notification brands remain exact standalone product names", () => {
-  assert.equal(containsStandaloneBrand("URL du webhook Discord", "Discord"), true);
+  assert.equal(
+    containsStandaloneBrand("URL du webhook Discord", "Discord"),
+    true,
+  );
   assert.equal(containsStandaloneBrand("Discord-webhaak-URL", "Discord"), true);
-  assert.equal(containsStandaloneBrand("fooDiscordbar webhook", "Discord"), false);
+  assert.equal(
+    containsStandaloneBrand("fooDiscordbar webhook", "Discord"),
+    false,
+  );
   assert.equal(containsStandaloneBrand("TelegramBot token", "Telegram"), false);
-  assert.equal(containsStandaloneBrand("Discord\u0301 webhook", "Discord"), false);
-  assert.equal(containsStandaloneBrand("\u0301Discord webhook", "Discord"), false);
-  assert.equal(containsStandaloneBrand("Discord\u203Fwebhook", "Discord"), false);
-  assert.equal(containsStandaloneBrand("Discord\u200D webhook", "Discord"), false);
-  assert.equal(containsStandaloneBrand("Telegram\u200C bot", "Telegram"), false);
+  assert.equal(
+    containsStandaloneBrand("Discord\u0301 webhook", "Discord"),
+    false,
+  );
+  assert.equal(
+    containsStandaloneBrand("\u0301Discord webhook", "Discord"),
+    false,
+  );
+  assert.equal(
+    containsStandaloneBrand("Discord\u203Fwebhook", "Discord"),
+    false,
+  );
+  assert.equal(
+    containsStandaloneBrand("Discord\u200D webhook", "Discord"),
+    false,
+  );
+  assert.equal(
+    containsStandaloneBrand("Telegram\u200C bot", "Telegram"),
+    false,
+  );
 });
 
 test("sample import product names remain exact standalone tokens", () => {
@@ -28,7 +49,10 @@ test("sample import product names remain exact standalone tokens", () => {
     containsStandaloneBrand("Hyper-V-Beispiel laden", "Hyper-V"),
     true,
   );
-  assert.equal(containsStandaloneBrand("Proxmox\u0301 sample", "Proxmox"), false);
+  assert.equal(
+    containsStandaloneBrand("Proxmox\u0301 sample", "Proxmox"),
+    false,
+  );
   assert.equal(containsStandaloneBrand("MyHyper-VLab", "Hyper-V"), false);
 });
 
@@ -52,21 +76,46 @@ test("stale same-as-English allowances are detected", () => {
 });
 
 test("storage-domain false friends are rejected", () => {
-  assert.equal(isRejectedStorageTranslation("fr", "Pool", "Piscine"), true);
-  assert.equal(
-    isRejectedStorageTranslation("ar", "Pool owner", "مالك المسبح"),
-    true,
-  );
-  assert.equal(
-    isRejectedStorageTranslation("zh", "Drive inventory", "推动库存"),
-    true,
-  );
-  assert.equal(
-    isRejectedStorageTranslation("fr", "Pool", "Pool de stockage"),
-    false,
-  );
-  assert.equal(
-    isRejectedStorageTranslation("zh", "Storage enclosure", "存储扩展柜"),
-    false,
-  );
+  const rejected = [
+    ["fr", "Pool", "Piscine"],
+    ["ar", "Pool owner", "مالك المسبح"],
+    ["zh", "Drive inventory", "推动库存"],
+    ["fr", "Face", "Visage"],
+    ["de", "Drives", "Antriebe"],
+    [
+      "de",
+      "No drives documented yet.",
+      "Es sind noch keine Fahrten dokumentiert.",
+    ],
+    ["bn", "Drives", "ড্রাইভ করে"],
+    ["hi", "Drives", "चलाती है"],
+    ["id", "New drive", "perjalanan baru"],
+    ["id", "Save drive", "Simpan perjalanan"],
+    ["it", "Drive details", "Dettagli della guida"],
+    ["he", "Logical pools", "בריכות לוגיות"],
+    ["fa", "Logical pools", "استخرهای منطقی"],
+  ];
+  for (const [locale, key, value] of rejected) {
+    assert.equal(
+      isRejectedStorageTranslation(locale, key, value),
+      true,
+      `${locale}:${key} should reject ${value}`,
+    );
+  }
+
+  const accepted = [
+    ["fr", "Pool", "Pool de stockage"],
+    ["fr", "Drives", "Disques"],
+    ["de", "Drives", "Laufwerke"],
+    ["id", "Drive details", "Detail drive"],
+    ["zh", "Storage enclosure", "存储扩展柜"],
+    ["ja", "Drive bays", "ドライブベイ"],
+  ];
+  for (const [locale, key, value] of accepted) {
+    assert.equal(
+      isRejectedStorageTranslation(locale, key, value),
+      false,
+      `${locale}:${key} should accept ${value}`,
+    );
+  }
 });

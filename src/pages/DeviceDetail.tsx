@@ -91,7 +91,11 @@ import {
   statusLabel,
 } from "@/lib/utils";
 import { formatDeviceAddress } from "@/lib/network-labels";
-import { deviceTypeBase, deviceTypeMatchesTemplate } from "@/lib/device-types";
+import {
+  deviceTypeBase,
+  deviceTypeMatchesTemplate,
+  localizedDeviceTypeIdLabel,
+} from "@/lib/device-types";
 import {
   defaultImageLabel,
   imageSizeLimitLabel,
@@ -1383,7 +1387,11 @@ export default function DeviceDetail() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                  {device.deviceType.replace("_", " ")}
+                  {localizedDeviceTypeIdLabel(
+                    device.deviceType,
+                    deviceTypes,
+                    t,
+                  )}
                 </div>
                 <h1 className="break-words text-xl font-semibold tracking-tight">
                   {device.hostname}
@@ -1487,7 +1495,11 @@ export default function DeviceDetail() {
                     <Row label={t("Serial")} value={device.serial} mono />
                     <Row
                       label={t("Type")}
-                      value={device.deviceType.replace("_", " ")}
+                      value={localizedDeviceTypeIdLabel(
+                        device.deviceType,
+                        deviceTypes,
+                        t,
+                      )}
                     />
                     <Row
                       label={t("CPU cores")}

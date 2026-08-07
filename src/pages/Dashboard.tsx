@@ -29,6 +29,7 @@ import { canEditInventory, useStore } from "@/lib/store";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { cidrSize, relativeTime, statusLabel } from "@/lib/utils";
 import { buildSnmpVerifiedPortIds } from "@/lib/snmp-port-status";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import { useI18n } from "@/i18n";
 
 export default function Dashboard() {
@@ -38,6 +39,7 @@ export default function Dashboard() {
   const rooms = useStore((s) => s.rooms);
   const racks = useStore((s) => s.racks);
   const devices = useStore((s) => s.devices);
+  const deviceTypeDefinitions = useStore((s) => s.deviceTypes);
   const ports = useStore((s) => s.ports);
   const subnets = useStore((s) => s.subnets);
   const portLinks = useStore((s) => s.portLinks);
@@ -125,7 +127,7 @@ export default function Dashboard() {
           100,
       )
     : 0;
-  const deviceTypes = Object.entries(
+  const deviceTypeCounts = Object.entries(
     devices.reduce<Record<string, number>>((acc, device) => {
       acc[device.deviceType] = (acc[device.deviceType] ?? 0) + 1;
       return acc;
@@ -242,7 +244,11 @@ export default function Dashboard() {
                           ? t("Device offline — monitoring failing")
                           : formatDeviceAddress(device) ||
                             device.displayName ||
-                            device.deviceType.replace("_", " ")}
+                            localizedDeviceTypeIdLabel(
+                              device.deviceType,
+                              deviceTypeDefinitions,
+                              t,
+                            )}
                       </div>
                     </div>
                     <span className="shrink-0 text-[11px] text-[var(--text-secondary)]">
@@ -388,7 +394,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardBody>
               <div className="grid grid-cols-2 gap-2">
-                {deviceTypes.map(([type, count]) => (
+                {deviceTypeCounts.map(([type, count]) => (
                   <Link
                     key={type}
                     to={`/devices?type=${encodeURIComponent(type)}`}
@@ -400,7 +406,11 @@ export default function Dashboard() {
                     />
                     <div className="flex min-w-0 flex-1 flex-col leading-tight">
                       <span className="min-w-0 text-xs font-medium capitalize leading-tight text-[var(--text-primary)]">
-                        {type.replace("_", " ")}
+                        {localizedDeviceTypeIdLabel(
+                          type,
+                          deviceTypeDefinitions,
+                          t,
+                        )}
                       </span>
                       <Mono className="text-[10px] text-[var(--text-tertiary)]">
                         {count}

@@ -1182,7 +1182,11 @@ export default function DiscoveryView() {
                                 className="size-3.5 text-[var(--color-accent)]"
                               />
                               <span className="capitalize text-[var(--color-fg-muted)]">
-                                {device.deviceType ?? t("endpoint")}
+                                {localizedDeviceTypeIdLabel(
+                                  device.deviceType ?? "endpoint",
+                                  deviceTypes,
+                                  t,
+                                )}
                               </span>
                             </span>
                           </Td>

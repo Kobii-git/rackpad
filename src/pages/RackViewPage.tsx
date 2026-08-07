@@ -43,6 +43,7 @@ import {
 import type {
   Device,
   DeviceImage,
+  DeviceTypeDefinition,
   Port,
   RackFace,
   ReferenceImage,
@@ -50,6 +51,7 @@ import type {
 } from "@/lib/types";
 import { cn, statusLabel } from "@/lib/utils";
 import { formatDeviceAddress } from "@/lib/network-labels";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 
 const UNRACKED_VIEW_ID = "__unracked__";
 const ROOM_VIEW_PREFIX = "__room__:";
@@ -100,6 +102,7 @@ export default function RackViewPage() {
   const rooms = useStore((s) => s.rooms);
   const racks = useStore((s) => s.racks);
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const ports = useStore((s) => s.ports);
   const deviceImages = useStore((s) => s.deviceImages);
   const referenceImages = useStore((s) => s.referenceImages);
@@ -796,6 +799,7 @@ export default function RackViewPage() {
                       >
                         <DeviceSummaryCard
                           device={selectedDevice}
+                          deviceTypes={deviceTypes}
                           portCount={
                             portsByDeviceId[selectedDevice.id]?.length ?? 0
                           }
@@ -899,6 +903,7 @@ function UnrackedPanel({
   portsByDeviceId: Record<string, Port[]>;
 }) {
   const { t } = useI18n();
+  const deviceTypes = useStore((state) => state.deviceTypes);
   return (
     <div className="space-y-4">
       <div>
@@ -943,7 +948,11 @@ function UnrackedPanel({
                     className="size-4 text-[var(--color-accent)]"
                   />
                   <span className="text-sm capitalize text-[var(--color-fg)]">
-                    {device.deviceType.replace("_", " ")}
+                    {localizedDeviceTypeIdLabel(
+                      device.deviceType,
+                      deviceTypes,
+                      t,
+                    )}
                   </span>
                   <span className="ml-auto inline-flex items-center gap-1.5">
                     <StatusDot status={device.status} />
@@ -1005,6 +1014,7 @@ function RoomPanel({
   portsByDeviceId: Record<string, Port[]>;
 }) {
   const { t } = useI18n();
+  const deviceTypes = useStore((state) => state.deviceTypes);
   return (
     <div className="space-y-5">
       <div>
@@ -1117,6 +1127,7 @@ function RoomPanel({
                 <DeviceRoomRow
                   key={device.id}
                   device={device}
+                  deviceTypes={deviceTypes}
                   portCount={portsByDeviceId[device.id]?.length ?? 0}
                 />
               ))
@@ -1130,9 +1141,11 @@ function RoomPanel({
 
 function DeviceRoomRow({
   device,
+  deviceTypes,
   portCount,
 }: {
   device: Device;
+  deviceTypes: DeviceTypeDefinition[];
   portCount: number;
 }) {
   const { t } = useI18n();
@@ -1150,7 +1163,10 @@ function DeviceRoomRow({
           {device.hostname}
         </div>
         <div className="truncate text-[11px] text-[var(--color-fg-subtle)]">
-          {formatDeviceAddress(device, device.deviceType.replace("_", " "))}
+          {formatDeviceAddress(
+            device,
+            localizedDeviceTypeIdLabel(device.deviceType, deviceTypes, t),
+          )}
         </div>
       </div>
       <Mono className="text-[10px] text-[var(--color-fg-muted)]">
@@ -1178,11 +1194,13 @@ function RackEditorModal({
 
 function DeviceSummaryCard({
   device,
+  deviceTypes,
   portCount,
   position,
   childDevices = [],
 }: {
   device: Device;
+  deviceTypes: DeviceTypeDefinition[];
   portCount: number;
   position?: string;
   childDevices?: Device[];
@@ -1208,7 +1226,7 @@ function DeviceSummaryCard({
             className="size-4 text-[var(--color-accent)]"
           />
           <span className="text-sm capitalize text-[var(--color-fg)]">
-            {device.deviceType.replace("_", " ")}
+            {localizedDeviceTypeIdLabel(device.deviceType, deviceTypes, t)}
           </span>
           <span className="ml-auto inline-flex items-center gap-1.5">
             <StatusDot status={device.status} />
@@ -1266,7 +1284,11 @@ function DeviceSummaryCard({
                       <span className="truncate">{child.hostname}</span>
                     </span>
                     <span className="text-[var(--color-fg-subtle)]">
-                      {child.deviceType.replace("_", " ")}
+                      {localizedDeviceTypeIdLabel(
+                        child.deviceType,
+                        deviceTypes,
+                        t,
+                      )}
                     </span>
                   </div>
                 ))}

@@ -793,7 +793,9 @@ function DiagramDeviceInspector({
               node.device.deviceType,
               [],
               t,
-              typeLabel(node.device.deviceType),
+              model.deviceTypes.find(
+                (entry) => entry.type === node.device.deviceType,
+              )?.label ?? typeLabel(node.device.deviceType),
             )}
           </div>
         </div>
@@ -801,7 +803,7 @@ function DiagramDeviceInspector({
       <div className="mt-3 grid grid-cols-2 gap-2">
         <InspectorValue
           label={t("Address")}
-          value={formatNodeAddress(node, t)}
+          value={formatNodeAddress(node, model, t)}
           mono
         />
         <InspectorValue
@@ -1078,7 +1080,7 @@ function buildDiagramLayout(
         type: "device",
         position,
         data: {
-          address: formatNodeAddress(node, t),
+          address: formatNodeAddress(node, model, t),
           deviceId: node.device.id,
           deviceType: node.device.deviceType,
           health: node.health,
@@ -1097,7 +1099,9 @@ function buildDiagramLayout(
             node.device.deviceType,
             [],
             t,
-            typeLabel(node.device.deviceType),
+            model.deviceTypes.find(
+              (entry) => entry.type === node.device.deviceType,
+            )?.label ?? typeLabel(node.device.deviceType),
           ),
         },
         zIndex: 2,
@@ -1253,8 +1257,7 @@ function describeSection(
           : "Hosted child devices",
       accent: parentNode?.typeColor ?? node.typeColor,
       layout: (parent.deviceType === "rack_shelf" ? "stack" : "grid") as
-        | "stack"
-        | "grid",
+        "stack" | "grid",
       sortGroup: 1,
     };
   }
@@ -1570,6 +1573,7 @@ function cableNeedsContrastOutline(color: string) {
 
 function formatNodeAddress(
   node: VisualizerNode,
+  model: VisualizerModel,
   t: (key: TranslationKey) => string,
 ) {
   return formatDeviceAddress(
@@ -1581,7 +1585,8 @@ function formatNodeAddress(
       node.device.deviceType,
       [],
       t,
-      typeLabel(node.device.deviceType),
+      model.deviceTypes.find((entry) => entry.type === node.device.deviceType)
+        ?.label ?? typeLabel(node.device.deviceType),
     ),
   );
 }

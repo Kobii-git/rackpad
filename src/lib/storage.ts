@@ -151,6 +151,33 @@ export function driveSlotTypeLabel(
   }
 }
 
+export function driveInterfaceLabel(
+  driveInterface: (typeof DRIVE_INTERFACE_OPTIONS)[number],
+  t: StorageTranslate,
+) {
+  return driveInterface === "other" ? t("Other") : driveInterface.toUpperCase();
+}
+
+export function driveFormFactorLabel(
+  formFactor:
+    | (typeof DRIVE_FORM_FACTOR_OPTIONS)[number]
+    | (typeof DRIVE_SLOT_TYPE_OPTIONS)[number],
+  t: StorageTranslate,
+) {
+  switch (formFactor) {
+    case "m2":
+      return "M.2";
+    case "u2":
+      return "U.2";
+    case "2.5":
+    case "3.5":
+      return `${formFactor}\"`;
+    case "other":
+    case "generic":
+      return t("Other");
+  }
+}
+
 const BUILT_IN_TEMPLATE_DISPLAY = {
   "storage-4x3-5": { count: 4, formFactor: "3.5-inch", face: "Front" },
   "storage-8x3-5": { count: 8, formFactor: "3.5-inch", face: "Front" },

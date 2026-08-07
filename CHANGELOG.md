@@ -20,6 +20,16 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Added storage topology to admin backup/restore, audit lab resolution, demo
   data, command-palette drive search, documentation, and supported locales.
 
+### Fixed
+
+- Corrected storage terminology across every supported locale and localized
+  built-in device-type labels consistently while preserving custom labels.
+- Made linked drive details read-only for viewers, added pool-specific
+  accessible actions, and completed keyboard highlighting for drives assigned
+  to another pool.
+- Updated the affected transitive dependency releases to clear the current
+  `brace-expansion` and `fast-uri` security findings.
+
 ### Changed
 
 - Device creation and editing can apply a drive-bay template snapshot while the

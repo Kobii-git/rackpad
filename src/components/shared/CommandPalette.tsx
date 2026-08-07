@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useStore } from "@/lib/store";
 import { useI18n } from "@/i18n";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 
 interface SearchResult {
   id: string;
@@ -59,6 +60,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const documentationPages = useStore((s) => s.documentationPages);
   const storageDrives = useStore((s) => s.storageDrives);
   const vlans = useStore((s) => s.vlans);
@@ -223,7 +225,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           group: "Devices",
           title: device.hostname,
           subtitle: [
-            device.deviceType.replace("_", " "),
+            localizedDeviceTypeIdLabel(device.deviceType, deviceTypes, t),
             device.manufacturer,
             device.model,
             formatDeviceAddress(device),
@@ -335,6 +337,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     return out;
   }, [
     deviceById,
+    deviceTypes,
     devices,
     documentationPages,
     ipAssignments,
@@ -482,9 +485,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                           <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
                             {group.label === "Devices"
                               ? t("Devices")
-                              : group.label === "Networks"
-                                ? t("Networks")
-                                : group.label}
+                              : group.label === "Drives"
+                                ? t("Drives")
+                                : group.label === "Networks"
+                                  ? t("Networks")
+                                  : group.label}
                           </span>
                           <span className="flex-1 border-t border-[var(--color-line)]" />
                         </div>

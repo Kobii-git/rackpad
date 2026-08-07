@@ -64,6 +64,7 @@ import {
 } from "lucide-react";
 import { cidrSize } from "@/lib/utils";
 import { formatDeviceMac } from "@/lib/network-labels";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 
 const ASSIGNMENT_HEADING_KEYS: Record<
   IpAssignment["assignmentType"],
@@ -2527,6 +2528,7 @@ function AssignmentsSection({
   onUnassign: (id: string) => void;
 }) {
   const { t } = useI18n();
+  const deviceTypes = useStore((state) => state.deviceTypes);
   return (
     <>
       {VISIBLE_ASSIGNMENT_TYPES.map((type) => {
@@ -2595,7 +2597,11 @@ function AssignmentsSection({
                           {device
                             ? t("{hostname} ({deviceType})", {
                                 hostname: device.hostname,
-                                deviceType: device.deviceType,
+                                deviceType: localizedDeviceTypeIdLabel(
+                                  device.deviceType,
+                                  deviceTypes,
+                                  t,
+                                ),
                               })
                             : (assignment.description ?? "-")}
                         </div>

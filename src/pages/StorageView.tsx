@@ -47,6 +47,8 @@ import {
   STORAGE_POOL_TYPE_OPTIONS,
   driveLabel,
   driveBayTemplateDisplayCopy,
+  driveFormFactorLabel,
+  driveInterfaceLabel,
   driveSlotTypeLabel,
   driveSecondaryLabel,
   formatStorageCapacity,
@@ -601,7 +603,9 @@ function DriveInventory({
                           size="icon"
                           variant="ghost"
                           onClick={() => openDrive(drive)}
-                          aria-label={t("Edit")}
+                          aria-label={t("Edit {name}", {
+                            name: driveLabel(drive),
+                          })}
                         >
                           <Pencil className="size-3.5" />
                         </Button>
@@ -658,6 +662,7 @@ function DriveInventory({
               <div className="grid grid-cols-2 gap-3">
                 <Field label={t("Manufacturer")}>
                   <Input
+                    disabled={!canEdit}
                     value={form.manufacturer}
                     onChange={(e) =>
                       setForm({ ...form, manufacturer: e.target.value })
@@ -666,6 +671,7 @@ function DriveInventory({
                 </Field>
                 <Field label={t("Model")}>
                   <Input
+                    disabled={!canEdit}
                     value={form.model}
                     onChange={(e) =>
                       setForm({ ...form, model: e.target.value })
@@ -675,6 +681,7 @@ function DriveInventory({
               </div>
               <Field label={t("Serial")}>
                 <Input
+                  disabled={!canEdit}
                   value={form.serial}
                   onChange={(e) => setForm({ ...form, serial: e.target.value })}
                 />
@@ -682,6 +689,7 @@ function DriveInventory({
               <div className="grid grid-cols-[1fr_90px] gap-3">
                 <Field label={t("Capacity")}>
                   <Input
+                    disabled={!canEdit}
                     type="number"
                     min="0"
                     value={form.capacity}
@@ -692,6 +700,7 @@ function DriveInventory({
                 </Field>
                 <Field label={t("Capacity unit")}>
                   <select
+                    disabled={!canEdit}
                     className={selectClass}
                     value={form.capacityUnit}
                     onChange={(e) =>
@@ -713,6 +722,7 @@ function DriveInventory({
               <div className="grid grid-cols-2 gap-3">
                 <Field label={t("Interface")}>
                   <select
+                    disabled={!canEdit}
                     className={selectClass}
                     value={form.interface}
                     onChange={(e) =>
@@ -723,12 +733,15 @@ function DriveInventory({
                     }
                   >
                     {DRIVE_INTERFACE_OPTIONS.map((value) => (
-                      <option key={value}>{value}</option>
+                      <option key={value} value={value}>
+                        {driveInterfaceLabel(value, t)}
+                      </option>
                     ))}
                   </select>
                 </Field>
                 <Field label={t("Form factor")}>
                   <select
+                    disabled={!canEdit}
                     className={selectClass}
                     value={form.formFactor}
                     onChange={(e) =>
@@ -739,13 +752,16 @@ function DriveInventory({
                     }
                   >
                     {DRIVE_FORM_FACTOR_OPTIONS.map((value) => (
-                      <option key={value}>{value}</option>
+                      <option key={value} value={value}>
+                        {driveFormFactorLabel(value, t)}
+                      </option>
                     ))}
                   </select>
                 </Field>
               </div>
               <Field label={t("Select a slot")}>
                 <select
+                  disabled={!canEdit}
                   className={selectClass}
                   value={form.slotId}
                   onChange={(e) => setForm({ ...form, slotId: e.target.value })}
@@ -764,6 +780,7 @@ function DriveInventory({
               </Field>
               <Field label={t("Notes")}>
                 <textarea
+                  disabled={!canEdit}
                   className={textareaClass}
                   rows={3}
                   value={form.notes}
@@ -773,29 +790,31 @@ function DriveInventory({
               {error && (
                 <div className="text-xs text-[var(--danger)]">{error}</div>
               )}
-              <div className="flex justify-between gap-2">
-                {selected ? (
+              {canEdit && (
+                <div className="flex justify-between gap-2">
+                  {selected ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={saving}
+                      onClick={() => void removeDrive()}
+                    >
+                      <Trash2 className="size-3.5" />
+                      {t("Delete drive")}
+                    </Button>
+                  ) : (
+                    <span />
+                  )}
                   <Button
-                    variant="outline"
                     size="sm"
                     disabled={saving}
-                    onClick={() => void removeDrive()}
+                    onClick={() => void saveDrive()}
                   >
-                    <Trash2 className="size-3.5" />
-                    {t("Delete drive")}
+                    <Save className="size-3.5" />
+                    {selected ? t("Save drive") : t("Create drive")}
                   </Button>
-                ) : (
-                  <span />
-                )}
-                <Button
-                  size="sm"
-                  disabled={saving}
-                  onClick={() => void saveDrive()}
-                >
-                  <Save className="size-3.5" />
-                  {selected ? t("Save drive") : t("Create drive")}
-                </Button>
-              </div>
+                </div>
+              )}
             </div>
           )}
         </CardBody>
@@ -936,6 +955,9 @@ function PoolInventory({ canEdit }: { canEdit: boolean }) {
                             type="button"
                             className="rounded-sm text-left font-medium text-[var(--text-primary)] hover:text-[var(--accent-primary-hover)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-primary)]"
                             onClick={() => openPool(pool)}
+                            aria-label={t("Open pool {name}", {
+                              name: pool.name,
+                            })}
                           >
                             {pool.name}
                           </button>
@@ -978,7 +1000,9 @@ function PoolInventory({ canEdit }: { canEdit: boolean }) {
                           size="icon"
                           variant="ghost"
                           onClick={() => openPool(pool)}
-                          aria-label={t("Edit")}
+                          aria-label={t("Edit pool {name}", {
+                            name: pool.name,
+                          })}
                         >
                           <Pencil className="size-3.5" />
                         </Button>

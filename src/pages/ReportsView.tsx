@@ -45,6 +45,7 @@ import type {
   WifiSsid,
 } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import {
   cidrSize,
   formatBandwidthMbps,
@@ -453,7 +454,7 @@ export default function ReportsView() {
                             className="size-4 text-[var(--accent-primary)]"
                           />
                           <span className="min-w-0 flex-1 text-xs capitalize leading-tight text-[var(--text-secondary)]">
-                            {type.replace("_", " ")}
+                            {localizedDeviceTypeIdLabel(type, deviceTypes, t)}
                           </span>
                           <Mono className="text-[var(--text-primary)]">
                             {count}

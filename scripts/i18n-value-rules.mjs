@@ -60,6 +60,34 @@ const rejectedPoolFragments = [
 ];
 
 const rejectedStorageValues = new Map([
+  ["Face", new Set(["Visage", "Faccia", "Cara", "Yüz"])],
+  [
+    "Storage attention",
+    new Set([
+      "Achtung bei der Lagerung",
+      "Attention au stockage",
+      "Opslag aandacht",
+      "Atención de almacenamiento",
+      "Atenção de armazenamento",
+      "Attenzione allo stoccaggio",
+      "Uwaga dotycząca przechowywania",
+      "储存注意事项",
+      "儲存注意事項",
+      "保管上の注意",
+      "보관상의 주의",
+      "भण्डारण का ध्यान",
+      "স্টোরেজ মনোযোগ",
+      "ความสนใจในการจัดเก็บ",
+      "توجه به ذخیره سازی",
+      "الاهتمام بالتخزين",
+      "Внимание к хранению",
+      "Увага до зберігання",
+      "Depolamaya dikkat",
+      "Lưu ý lưu trữ",
+      "Perhatian penyimpanan",
+      "Berging aandag",
+    ]),
+  ],
   [
     "Storage inventory",
     new Set([
@@ -94,6 +122,43 @@ const rejectedStorageValues = new Map([
       "Thúc đẩy khoảng không quảng cáo",
       "推动库存",
       "推動庫存",
+    ]),
+  ],
+  ["New drive", new Set(["perjalanan baru", "Nuova guida", "Nuwe aandrywing"])],
+  ["Save drive", new Set(["Simpan perjalanan", "Stoor ry"])],
+  ["Create drive", new Set(["Buat penggerak", "Skep ry"])],
+  [
+    "No drives documented yet.",
+    new Set([
+      "Es sind noch keine Fahrten dokumentiert.",
+      "কোন ড্রাইভ এখনো নথিভুক্ত করা হয়েছে.",
+    ]),
+  ],
+  [
+    "Drives",
+    new Set([
+      "Antriebe",
+      "Aandrijvingen",
+      "चलाती है",
+      "ড্রাইভ করে",
+      "berkendara",
+      "Ry",
+    ]),
+  ],
+  [
+    "Logical pools",
+    new Set(["حمامات منطقية", "בריכות לוגיות", "استخرهای منطقی"]),
+  ],
+  ["Unknown drive", new Set(["Onbekende rit", "Onbekende ry"])],
+  [
+    "Drive details",
+    new Set([
+      "Antriebsdetails",
+      "Rijgegevens",
+      "Detalhes da viagem",
+      "Dettagli della guida",
+      "تفاصيل القيادة",
+      "Detail berkendara",
     ]),
   ],
   [
