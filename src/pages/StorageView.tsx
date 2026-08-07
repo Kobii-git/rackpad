@@ -45,12 +45,12 @@ import {
   DRIVE_SLOT_TYPE_OPTIONS,
   STORAGE_POOL_STATUS_OPTIONS,
   STORAGE_POOL_TYPE_OPTIONS,
+  commitDriveBaySlotCount,
   driveLabel,
   driveBayTemplateDisplayCopy,
   driveFormFactorLabel,
   driveInterfaceLabel,
   driveSlotTypeLabel,
-  driveSecondaryLabel,
   formatStorageCapacity,
   generateDriveBaySection,
   inferDriveBaySlotPrefix,
@@ -58,7 +58,6 @@ import {
   poolColor,
   poolTypeLabel,
   renameDriveBaySlots,
-  resizeDriveBaySlots,
   serializeDriveBayTemplateSection,
   setDriveBaySlotType,
   summarizeStorage,
@@ -571,8 +570,9 @@ function DriveInventory({
                         {driveLabel(drive)}
                       </div>
                       <div className="font-mono text-[10px] text-[var(--text-muted)]">
-                        {drive.serial || "—"} · {drive.interface.toUpperCase()}{" "}
-                        · {drive.formFactor}
+                        {drive.serial || "—"} ·{" "}
+                        {driveInterfaceLabel(drive.interface, t)} ·{" "}
+                        {driveFormFactorLabel(drive.formFactor, t)}
                       </div>
                     </td>
                     <td className="px-3 py-2 font-mono text-[var(--text-primary)]">
@@ -1311,14 +1311,19 @@ function TemplateLibrary({ isAdmin }: { isAdmin: boolean }) {
   }
 
   async function saveTemplate() {
+    const committedSections = form.sections.map(commitTemplateSectionCount);
     if (
       !form.name.trim() ||
       form.deviceTypes.length === 0 ||
-      previewSections.some((section) => section.slots.length === 0)
+      committedSections.some((section) => section == null)
     ) {
       setError(t("Storage changes could not be saved."));
       return;
     }
+    const normalizedSections = committedSections.filter(
+      (section): section is TemplateSectionDraft => section != null,
+    );
+    const normalizedPreview = normalizedSections.map(sectionDraftToTemplate);
     setSaving(true);
     setError("");
     try {
@@ -1326,7 +1331,7 @@ function TemplateLibrary({ isAdmin }: { isAdmin: boolean }) {
         name: form.name.trim(),
         description: form.description.trim(),
         deviceTypes: form.deviceTypes,
-        sections: previewSections,
+        sections: normalizedPreview,
       };
       const saved =
         selected && !selected.builtIn
@@ -1334,6 +1339,7 @@ function TemplateLibrary({ isAdmin }: { isAdmin: boolean }) {
           : await createDriveBayTemplateRecord(payload);
       setSelectedId(saved.id);
       setCreating(false);
+      setForm({ ...form, sections: normalizedSections });
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -1552,23 +1558,26 @@ function TemplateLibrary({ isAdmin }: { isAdmin: boolean }) {
                           min="1"
                           max="500"
                           value={section.count}
-                          onChange={(e) => {
-                            const count = e.target.value;
-                            const parsed = Number(count);
-                            const fallbackType =
-                              section.slotType === "mixed"
-                                ? (section.slots.at(-1)?.slotType ?? "generic")
-                                : section.slotType;
+                          onChange={(e) =>
                             changeSection(setForm, form, section.id, {
-                              count,
-                              slots:
-                                Number.isFinite(parsed) && parsed >= 1
-                                  ? resizeDriveBaySlots(section.slots, parsed, {
-                                      prefix: section.prefix || "Slot ",
-                                      slotType: fallbackType,
-                                    })
-                                  : section.slots,
-                            });
+                              count: e.target.value,
+                            })
+                          }
+                          onBlur={() =>
+                            setForm((current) => ({
+                              ...current,
+                              sections: current.sections.map((entry) =>
+                                entry.id === section.id
+                                  ? (commitTemplateSectionCount(entry) ?? entry)
+                                  : entry,
+                              ),
+                            }))
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              event.currentTarget.blur();
+                            }
                           }}
                         />
                       </Field>
@@ -1858,6 +1867,19 @@ function sectionDraftToTemplate(section: TemplateSectionDraft) {
     columns: section.layout === "grid" ? Number(section.columns) || 1 : null,
     slots: section.slots.map((slot) => ({ ...slot })),
   });
+}
+
+function commitTemplateSectionCount(section: TemplateSectionDraft) {
+  const fallbackType =
+    section.slotType === "mixed"
+      ? (section.slots.at(-1)?.slotType ?? "generic")
+      : section.slotType;
+  const slots = commitDriveBaySlotCount(section.slots, section.count, {
+    prefix: section.prefix || "Slot ",
+    slotType: fallbackType,
+  });
+  if (!slots) return null;
+  return { ...section, count: String(slots.length), slots };
 }
 
 function changeSection(

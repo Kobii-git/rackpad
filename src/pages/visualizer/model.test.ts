@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Device, DeviceTypeDefinition, Port } from "@/lib/types";
 import {
+  buildSearchResults,
   buildVisualizerModel,
   summarizeCableLengths,
   visualizerCableLaneIndexes,
   visualizerCablePath,
+  visualizerSearchResultMeta,
 } from "./model";
+import type { TranslationKey } from "@/i18n/translations";
 import type {
   RoomGroup,
   TraceSegment,
@@ -274,6 +277,66 @@ test("custom device type parents drive visualizer grouping and counts", () => {
   assert.deepEqual(model.deviceTypes, [
     { type: "switch", label: "Switch", count: 2 },
   ]);
+});
+
+test("visualizer search localizes built-in types and preserves custom labels", () => {
+  const deviceTypes: DeviceTypeDefinition[] = [
+    { id: "storage", label: "Storage", builtIn: true },
+    {
+      id: "storage_enclosure",
+      label: "Storage enclosure",
+      builtIn: true,
+      parentType: "storage",
+    },
+    { id: "archive_shelf", label: "Archive shelf", builtIn: false },
+  ];
+  const model = buildVisualizerModel({
+    racks: [],
+    rooms: [],
+    devices: [
+      {
+        id: "d_enclosure",
+        labId: "lab_visualizer_types",
+        hostname: "jbod-lab",
+        deviceType: "storage_enclosure",
+        status: "online",
+        placement: "room",
+      },
+      {
+        id: "d_archive",
+        labId: "lab_visualizer_types",
+        hostname: "archive-lab",
+        deviceType: "archive_shelf",
+        status: "online",
+        placement: "room",
+      },
+    ],
+    deviceTypes,
+    ports: [],
+    portLinks: [],
+    deviceMonitors: [],
+    subnets: [],
+    vlans: [],
+    discoveredDevices: [],
+    virtualSwitches: [],
+    expandedRackRuns: new Set(),
+    collapsedGroups: new Set(),
+  });
+  const t = (key: TranslationKey) =>
+    key === "Storage enclosure" ? "Boîtier de stockage" : key;
+  const enclosure = buildSearchResults(model, "jbod-lab")[0];
+  const archive = buildSearchResults(model, "archive-lab")[0];
+  assert.ok(enclosure);
+  assert.ok(archive);
+  assert.equal(enclosure.meta, "");
+  assert.equal(
+    visualizerSearchResultMeta(model, enclosure, t),
+    "Boîtier de stockage",
+  );
+  assert.equal(
+    visualizerSearchResultMeta(model, archive, t),
+    "Archive shelf",
+  );
 });
 
 test("visualizer marks aggregate endpoint links as logical LAG links", () => {

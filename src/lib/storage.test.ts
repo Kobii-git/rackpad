@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  commitDriveBaySlotCount,
   driveBayTemplateDisplayCopy,
   driveFormFactorLabel,
   driveInterfaceLabel,
+  driveSecondaryLabel,
   generateDriveBaySection,
   inferDriveBaySlotPrefix,
   isPoolDriveEligible,
@@ -148,6 +150,21 @@ test("template bulk helpers preserve custom slots until explicitly changed", () 
   assert.equal(inferDriveBaySlotPrefix(customSlots), null);
   assert.equal(uniformDriveBaySlotType(customSlots), null);
 
+  assert.equal(
+    commitDriveBaySlotCount(customSlots, "", {
+      prefix: "Slot ",
+      slotType: "3.5",
+    }),
+    null,
+  );
+  assert.deepEqual(
+    commitDriveBaySlotCount(customSlots, "2", {
+      prefix: "Slot ",
+      slotType: "3.5",
+    }),
+    customSlots,
+  );
+
   const grown = resizeDriveBaySlots(customSlots, 3, {
     prefix: "Slot ",
     slotType: "3.5",
@@ -198,6 +215,16 @@ test("storage display helpers localize built-ins and preserve custom copy", () =
     "Storage enclosure": "Enceinte de stockage",
     Switch: "Commutateur",
     Other: "Autre",
+    "4 × 3.5-inch bays": "Quatre baies 3,5 pouces",
+    "Four front-facing 3.5-inch drive bays.": "Quatre baies frontales 3,5 pouces.",
+    "8 × 3.5-inch bays": "Huit baies 3,5 pouces",
+    "Eight front-facing 3.5-inch drive bays in two rows.": "Huit baies frontales 3,5 pouces sur deux rangées.",
+    "12 × 3.5-inch bays": "Douze baies 3,5 pouces",
+    "Twelve front-facing 3.5-inch drive bays in three rows.": "Douze baies frontales 3,5 pouces sur trois rangées.",
+    "24 × 2.5-inch bays": "Vingt-quatre baies 2,5 pouces",
+    "Twenty-four front-facing 2.5-inch drive bays in two rows.": "Vingt-quatre baies frontales 2,5 pouces sur deux rangées.",
+    "2 × M.2 internal slots": "Deux emplacements M.2 internes",
+    "Two internal M.2 storage slots.": "Deux emplacements de stockage M.2 internes.",
   };
   const t = (
     key: TranslationKey,
@@ -209,23 +236,59 @@ test("storage display helpers localize built-ins and preserve custom copy", () =
     }
     return result;
   };
-  const builtIn: DriveBayTemplate = {
-    id: "storage-4x3-5",
-    name: "server copy",
-    description: "server description",
-    deviceTypes: ["server"],
-    sections: [],
-    builtIn: true,
-  };
-  assert.deepEqual(driveBayTemplateDisplayCopy(builtIn, t), {
-    name: "4 × 3.5-inch Baies de disques",
-    description: "4 × 3.5-inch · Avant",
-  });
+  const builtIns = [
+    [
+      "storage-4x3-5",
+      "Quatre baies 3,5 pouces",
+      "Quatre baies frontales 3,5 pouces.",
+    ],
+    [
+      "storage-8x3-5",
+      "Huit baies 3,5 pouces",
+      "Huit baies frontales 3,5 pouces sur deux rangées.",
+    ],
+    [
+      "storage-12x3-5",
+      "Douze baies 3,5 pouces",
+      "Douze baies frontales 3,5 pouces sur trois rangées.",
+    ],
+    [
+      "storage-24x2-5",
+      "Vingt-quatre baies 2,5 pouces",
+      "Vingt-quatre baies frontales 2,5 pouces sur deux rangées.",
+    ],
+    [
+      "storage-2xm2",
+      "Deux emplacements M.2 internes",
+      "Deux emplacements de stockage M.2 internes.",
+    ],
+  ] as const;
+  for (const [id, name, description] of builtIns) {
+    const builtIn: DriveBayTemplate = {
+      id,
+      name: "server copy",
+      description: "server description",
+      deviceTypes: ["server"],
+      sections: [],
+      builtIn: true,
+    };
+    assert.deepEqual(driveBayTemplateDisplayCopy(builtIn, t), {
+      name,
+      description,
+    });
+  }
   assert.equal(storagePoolStatusLabel("healthy", t), "Sain");
   assert.equal(driveInterfaceLabel("nvme", t), "NVME");
   assert.equal(driveInterfaceLabel("other", t), "Autre");
   assert.equal(driveFormFactorLabel("m2", t), "M.2");
   assert.equal(driveFormFactorLabel("other", t), "Autre");
+  assert.equal(
+    driveSecondaryLabel(
+      drive("drive-other", 1000, { serial: "OTHER-1", interface: "other" }),
+      t,
+    ),
+    "OTHER-1 · 1 TB · Autre",
+  );
   assert.equal(
     localizedDeviceTypeLabel(
       {
@@ -264,7 +327,14 @@ test("storage display helpers localize built-ins and preserve custom copy", () =
     "My literal shelf",
   );
 
-  const custom = { ...builtIn, id: "custom", builtIn: false };
+  const custom: DriveBayTemplate = {
+    id: "custom",
+    name: "server copy",
+    description: "server description",
+    deviceTypes: ["server"],
+    sections: [],
+    builtIn: false,
+  };
   assert.deepEqual(driveBayTemplateDisplayCopy(custom, t), {
     name: "server copy",
     description: "server description",

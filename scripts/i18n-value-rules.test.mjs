@@ -81,6 +81,7 @@ test("storage-domain false friends are rejected", () => {
     ["ar", "Pool owner", "مالك المسبح"],
     ["zh", "Drive inventory", "推动库存"],
     ["fr", "Face", "Visage"],
+    ["fr", "Face", "visage"],
     ["de", "Drives", "Antriebe"],
     [
       "de",
@@ -94,6 +95,10 @@ test("storage-domain false friends are rejected", () => {
     ["it", "Drive details", "Dettagli della guida"],
     ["he", "Logical pools", "בריכות לוגיות"],
     ["fa", "Logical pools", "استخرهای منطقی"],
+    ["af", "Logical pools", "Logiese poele"],
+    ["af", "Unassigned drives", "Ontoegekende dryf"],
+    ["en", "Delete drive", "Delete journey"],
+    ["de", "Drive-bay template", "Fahrtenvorlage"],
   ];
   for (const [locale, key, value] of rejected) {
     assert.equal(
@@ -110,6 +115,8 @@ test("storage-domain false friends are rejected", () => {
     ["id", "Drive details", "Detail drive"],
     ["zh", "Storage enclosure", "存储扩展柜"],
     ["ja", "Drive bays", "ドライブベイ"],
+    ["af", "Unassigned drives", "Ontoegekende skywe"],
+    ["en", "Delete drive", "Delete drive"],
   ];
   for (const [locale, key, value] of accepted) {
     assert.equal(

@@ -22,6 +22,10 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Fixed
 
+- Preserved custom drive-slot names, positions, and types when template counts
+  are edited, and completed localized built-in template copy and drive values.
+- Localized device-type search metadata in the Visualizer and prevented handled
+  Storage editor conflicts from surfacing as browser promise errors.
 - Corrected storage terminology across every supported locale and localized
   built-in device-type labels consistently while preserving custom labels.
 - Made linked drive details read-only for viewers, added pool-specific

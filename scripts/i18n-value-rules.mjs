@@ -37,6 +37,10 @@ const storagePoolKeys = new Set([
   "A new pool member must be installed in a slot.",
   "Pool member is physically missing",
   "Pool owner",
+  "Open pool {name}",
+  "Edit pool {name}",
+  "Member missing from a physical slot",
+  "Assigned to {name}",
 ]);
 
 const rejectedPoolFragments = [
@@ -57,6 +61,25 @@ const rejectedPoolFragments = [
   "bể bơi",
   "hồ bơi",
   "泳池",
+];
+
+const rejectedDriveFragments = [
+  "journey",
+  "travel",
+  "driving",
+  "fahrt",
+  "fahrten",
+  "reise",
+  "viaje",
+  "viagem",
+  "perjalanan",
+  "berkendara",
+  "guida",
+  "conduite",
+  "voyage",
+  "ritgegevens",
+  "dryf",
+  "قيادة",
 ];
 
 const rejectedStorageValues = new Map([
@@ -147,9 +170,15 @@ const rejectedStorageValues = new Map([
   ],
   [
     "Logical pools",
-    new Set(["حمامات منطقية", "בריכות לוגיות", "استخرهای منطقی"]),
+    new Set([
+      "حمامات منطقية",
+      "בריכות לוגיות",
+      "استخرهای منطقی",
+      "Logiese poele",
+    ]),
   ],
   ["Unknown drive", new Set(["Onbekende rit", "Onbekende ry"])],
+  ["Unassigned drives", new Set(["Ontoegekende dryf"])],
   [
     "Drive details",
     new Set([
@@ -206,13 +235,33 @@ const rejectedStorageValues = new Map([
   ],
 ]);
 
-export function isRejectedStorageTranslation(_locale, key, value) {
-  const normalized = value.toLocaleLowerCase();
+function normalizeStorageValue(locale, value) {
+  return value.normalize("NFKC").trim().toLocaleLowerCase(locale);
+}
+
+export function isRejectedStorageTranslation(locale, key, value) {
+  const normalized = normalizeStorageValue(locale, value);
+  const normalizedKey = key.toLocaleLowerCase();
+  const isPoolKey = storagePoolKeys.has(key);
+  const isDriveKey =
+    normalizedKey.includes("drive") ||
+    normalizedKey.includes("bay") ||
+    normalizedKey.includes("slot");
   if (
-    storagePoolKeys.has(key) &&
+    isPoolKey &&
     rejectedPoolFragments.some((fragment) => normalized.includes(fragment))
   ) {
     return true;
   }
-  return rejectedStorageValues.get(key)?.has(value) ?? false;
+  if (
+    isDriveKey &&
+    rejectedDriveFragments.some((fragment) => normalized.includes(fragment))
+  ) {
+    return true;
+  }
+  return (
+    [...(rejectedStorageValues.get(key) ?? [])].some(
+      (rejected) => normalizeStorageValue(locale, rejected) === normalized,
+    ) ?? false
+  );
 }

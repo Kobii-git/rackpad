@@ -264,7 +264,6 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
           ? caught.message
           : t("Storage changes could not be saved."),
       );
-      throw caught;
     } finally {
       setSaving(false);
     }
@@ -605,7 +604,7 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
                                 <option key={drive.id} value={drive.id}>
                                   {driveLabel(drive)}{" "}
                                   {t("· {value1}", {
-                                    value1: driveSecondaryLabel(drive),
+                                    value1: driveSecondaryLabel(drive, t),
                                   })}
                                   {drive.deviceHostname
                                     ? t("· {value1}", {
@@ -736,6 +735,7 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
                       onMouseLeave={() => setHoveredPoolId(null)}
                       onFocus={() => setFocusedPoolId(pool.id)}
                       onBlur={() => setFocusedPoolId(null)}
+                      aria-label={t("Open pool {name}", { name: pool.name })}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="min-w-0 break-words text-sm font-semibold">
@@ -931,7 +931,7 @@ function DriveSlotGrid({
                         ? t("{value1}{value2}", {
                             value1: driveLabel(drive),
                             value2: t("· {value1}", {
-                              value1: driveSecondaryLabel(drive),
+                              value1: driveSecondaryLabel(drive, t),
                             }),
                           })
                         : t("Empty slot")

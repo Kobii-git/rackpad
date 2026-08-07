@@ -64,6 +64,7 @@ import {
   traceFromPort,
   tracePorts,
   typeLabel,
+  visualizerSearchResultMeta,
   visualizerCableLaneIndexes,
   visualizerCablePath,
 } from "./model";
@@ -679,7 +680,7 @@ export function VisualizerCanvas({
                               {result.label}
                             </span>
                             <span className="block truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-                              {result.meta}
+                              {visualizerSearchResultMeta(model, result, t)}
                             </span>
                           </span>
                           <Badge

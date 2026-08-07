@@ -93,6 +93,9 @@ test("storage workspace and dense device topology stay readable", async ({
   await expect(
     page.locator('button[data-pool-highlighted="true"]'),
   ).toHaveCount(4);
+  await expect(
+    page.getByRole("button", { name: "Open pool tank", exact: true }),
+  ).toBeVisible();
   await crossDeviceMember.getByRole("checkbox").focus();
   await expect(
     page.locator('[data-pool-member-row][data-pool-highlighted="true"]'),
@@ -115,6 +118,85 @@ test("storage workspace and dense device topology stay readable", async ({
   await expect(
     page.locator('button[data-pool-highlighted="true"]'),
   ).toHaveCount(4);
+});
+
+test("template count editing preserves custom slot metadata", async ({
+  page,
+  request,
+}) => {
+  const suffix = Date.now().toString(36);
+  const templateName = `Lossless template ${suffix}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  const originalSlots = [
+    { name: "Boot A", position: 10, slotType: "m2" },
+    { name: "Archive left", position: 20, slotType: "3.5" },
+  ];
+  let templateId = "";
+  try {
+    const createResponse = await request.post(
+      "/api/storage/drive-bay-templates",
+      {
+        headers,
+        data: {
+          name: templateName,
+          description: "Mixed custom slots",
+          deviceTypes: ["storage"],
+          sections: [
+            {
+              name: "Mixed archive",
+              face: "rear",
+              layout: "list",
+              columns: null,
+              slots: originalSlots,
+            },
+          ],
+        },
+      },
+    );
+    const created = (await createResponse.json()) as {
+      id?: string;
+      error?: string;
+    };
+    expect(createResponse.status(), created.error).toBe(201);
+    templateId = created.id ?? "";
+    expect(templateId).not.toBe("");
+
+    await authenticate(page);
+    await page.goto("/storage?tab=templates");
+    await page
+      .getByRole("button")
+      .filter({ hasText: templateName })
+      .click();
+    const count = page.getByRole("spinbutton", {
+      name: "Slot count",
+      exact: true,
+    });
+    await expect(count).toHaveValue("2");
+    await count.fill("");
+    await count.pressSequentially("2");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+
+    const listResponse = await request.get(
+      "/api/storage/drive-bay-templates",
+      { headers },
+    );
+    expect(listResponse.ok()).toBeTruthy();
+    const saved = (
+      (await listResponse.json()) as Array<{
+        id: string;
+        sections: Array<{ slots: typeof originalSlots }>;
+      }>
+    ).find((entry) => entry.id === templateId);
+    expect(saved?.sections[0]?.slots).toEqual(originalSlots);
+  } finally {
+    if (templateId) {
+      const response = await request.delete(
+        `/api/storage/drive-bay-templates/${templateId}`,
+        { headers },
+      );
+      expect(response.status(), await response.text()).toBe(204);
+    }
+  }
 });
 
 test("storage labels localize built-ins while retaining technical values", async ({
@@ -157,6 +239,34 @@ test("storage labels localize built-ins while retaining technical values", async
     ).toBeVisible();
     await page.keyboard.press("Escape");
 
+    await page.goto("/visualizer");
+    await page
+      .getByRole("textbox", { name: "Visualiseur de recherche", exact: true })
+      .fill(hostname);
+    await expect(
+      page.getByText("Boîtier de stockage", { exact: true }).first(),
+    ).toBeVisible();
+
+    await page.goto("/storage?tab=drives");
+    await page
+      .getByRole("button", { name: "Nouveau disque", exact: true })
+      .click();
+    const driveInterface = page.getByRole("combobox", {
+      name: "Interface",
+      exact: true,
+    });
+    const driveFormFactor = page.getByRole("combobox", {
+      name: "Facteur de forme",
+      exact: true,
+    });
+    await driveInterface.selectOption("other");
+    await driveFormFactor.selectOption("other");
+    await expect(driveInterface.locator("option:checked")).toHaveText("Autre");
+    await expect(driveFormFactor.locator("option:checked")).toHaveText(
+      "Autre",
+    );
+    await page.getByRole("button", { name: "Fermer", exact: true }).click();
+
     await page.keyboard.press("Control+k");
     await page.getByPlaceholder("Rechercher des commandes").fill("DEMO-STORE");
     await expect(
@@ -178,10 +288,26 @@ test("storage labels localize built-ins while retaining technical values", async
 
     await page.getByRole("tab", { name: /Modèles de baie/ }).click();
     await expect(
-      page.getByText("12 × 3.5-inch Baies de disques", { exact: true }).first(),
+      page
+        .getByText("12 × baies de disques de 3,5 pouces", { exact: true })
+        .first(),
     ).toBeVisible();
     await expect(
+      page.getByRole("textbox", { name: "Descriptif", exact: true }),
+    ).toHaveValue(
+      "Douze baies frontales pour disques de 3,5 pouces sur trois rangées.",
+    );
+    await expect(
       page.getByText("Boîtier de stockage", { exact: true }),
+    ).toBeVisible();
+
+    await page.evaluate(() => localStorage.setItem("rackpad.language", "af"));
+    await page.goto("/storage");
+    await expect(
+      page.getByRole("tab", { name: /Logiese bergingspoele/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Ontoegekende skywe", { exact: false }).first(),
     ).toBeVisible();
   } finally {
     if (deviceId) {
@@ -306,6 +432,8 @@ test("custom template drives a cross-device pool through the editor UI", async (
 
     editorContext = await browser.newContext();
     const editorPage = await editorContext.newPage();
+    const storagePageErrors: string[] = [];
+    editorPage.on("pageerror", (error) => storagePageErrors.push(error.message));
     editorPage.setDefaultTimeout(10_000);
     await editorPage.addInitScript((authToken) => {
       localStorage.setItem("rackpad.auth.token", authToken);
@@ -405,6 +533,7 @@ test("custom template drives a cross-device pool through the editor UI", async (
     await expect(
       editorPage.getByTestId("device-storage-raw-capacity"),
     ).toContainText("6 TB");
+    expect(storagePageErrors).toEqual([]);
 
     await editorPage.goto(
       `http://127.0.0.1:5173/devices/${host.id}?tab=storage`,
@@ -436,6 +565,12 @@ test("custom template drives a cross-device pool through the editor UI", async (
 
     await expect(
       editorPage.getByText(poolName, { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      editorPage.getByRole("button", {
+        name: `Open pool ${poolName}`,
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(
       editorPage.getByTestId("device-storage-raw-capacity"),

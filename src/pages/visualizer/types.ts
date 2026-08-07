@@ -240,6 +240,7 @@ export interface VisualizerModel {
   portById: Record<string, Port>;
   portLinkByPortId: Record<string, PortLink>;
   deviceById: Record<string, Device>;
+  deviceTypeLabelsById: Record<string, string>;
   effectiveDeviceTypeByDeviceId: Record<string, DeviceType>;
   vlanById: Record<string, Vlan>;
   directNeighborsByDeviceId: Record<string, VisualizerNeighbor[]>;

@@ -23,7 +23,9 @@ import type { useI18n } from "@/i18n";
 import { formatPortTypeLabel } from "@/components/ports/port-mode-labels";
 import {
   deviceTypeBase,
+  deviceTypeLabel,
   defaultDeviceTypeLabel,
+  localizedDeviceTypeIdLabel,
   normalizeDeviceTypeId,
 } from "@/lib/device-types";
 import { formatDeviceAddress } from "@/lib/network-labels";
@@ -577,6 +579,9 @@ export function buildVisualizerModel(
     portById,
     portLinkByPortId,
     deviceById,
+    deviceTypeLabelsById: Object.fromEntries(
+      input.deviceTypes.map((entry) => [entry.id, entry.label]),
+    ),
     vlanById,
     directNeighborsByDeviceId,
     deviceTypes: buildDeviceTypeCounts(input.devices, input.deviceTypes),
@@ -794,6 +799,9 @@ function buildPyramidVisualizerModel(
     portById,
     portLinkByPortId,
     deviceById,
+    deviceTypeLabelsById: Object.fromEntries(
+      input.deviceTypes.map((entry) => [entry.id, entry.label]),
+    ),
     vlanById,
     directNeighborsByDeviceId,
     deviceTypes: buildDeviceTypeCounts(input.devices, input.deviceTypes),
@@ -2157,10 +2165,9 @@ export function buildSearchResults(
         kind: "device",
         id: node.device.id,
         label: node.device.hostname,
-        meta:
-          [node.device.managementIp, node.macAddress]
-            .filter(Boolean)
-            .join(" | ") || DEVICE_TYPE_LABEL[node.device.deviceType],
+        meta: [node.device.managementIp, node.macAddress]
+          .filter(Boolean)
+          .join(" | "),
         score,
       });
     }
@@ -2192,6 +2199,21 @@ export function buildSearchResults(
     }
   }
   return results.sort((a, b) => b.score - a.score).slice(0, 24);
+}
+
+export function visualizerSearchResultMeta(
+  model: VisualizerModel,
+  result: SearchResult,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  if (result.meta || result.kind !== "device") return result.meta;
+  const deviceType = model.deviceById[result.id]?.deviceType;
+  return localizedDeviceTypeIdLabel(
+    deviceType,
+    [],
+    t,
+    deviceType ? model.deviceTypeLabelsById[deviceType] : undefined,
+  );
 }
 
 function roundPathCoord(value: number) {
@@ -2790,11 +2812,16 @@ function buildDeviceTypeCounts(
   const ordered = DEVICE_TYPE_ORDER.filter((type) => counts.has(type));
   const custom = [...counts.keys()]
     .filter((type) => !DEVICE_TYPE_ORDER.includes(type))
-    .sort((a, b) => NATURAL_COLLATOR.compare(typeLabel(a), typeLabel(b)));
+    .sort((a, b) =>
+      NATURAL_COLLATOR.compare(
+        deviceTypeLabel(a, deviceTypes),
+        deviceTypeLabel(b, deviceTypes),
+      ),
+    );
 
   return [...ordered, ...custom].map((type) => ({
     type,
-    label: typeLabel(type),
+    label: deviceTypeLabel(type, deviceTypes),
     count: counts.get(type) ?? 0,
   }));
 }

@@ -76,11 +76,14 @@ export function driveLabel(drive: StorageDrive) {
   return model || drive.serial || `Drive ${drive.id.slice(-6)}`;
 }
 
-export function driveSecondaryLabel(drive: StorageDrive) {
+export function driveSecondaryLabel(
+  drive: StorageDrive,
+  t: StorageTranslate,
+) {
   return [
     drive.serial,
     formatStorageCapacity(drive.capacityGb),
-    drive.interface.toUpperCase(),
+    driveInterfaceLabel(drive.interface, t),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -179,14 +182,29 @@ export function driveFormFactorLabel(
 }
 
 const BUILT_IN_TEMPLATE_DISPLAY = {
-  "storage-4x3-5": { count: 4, formFactor: "3.5-inch", face: "Front" },
-  "storage-8x3-5": { count: 8, formFactor: "3.5-inch", face: "Front" },
-  "storage-12x3-5": { count: 12, formFactor: "3.5-inch", face: "Front" },
-  "storage-24x2-5": { count: 24, formFactor: "2.5-inch", face: "Front" },
-  "storage-2xm2": { count: 2, formFactor: "M.2", face: "Internal" },
+  "storage-4x3-5": {
+    name: "4 × 3.5-inch bays",
+    description: "Four front-facing 3.5-inch drive bays.",
+  },
+  "storage-8x3-5": {
+    name: "8 × 3.5-inch bays",
+    description: "Eight front-facing 3.5-inch drive bays in two rows.",
+  },
+  "storage-12x3-5": {
+    name: "12 × 3.5-inch bays",
+    description: "Twelve front-facing 3.5-inch drive bays in three rows.",
+  },
+  "storage-24x2-5": {
+    name: "24 × 2.5-inch bays",
+    description: "Twenty-four front-facing 2.5-inch drive bays in two rows.",
+  },
+  "storage-2xm2": {
+    name: "2 × M.2 internal slots",
+    description: "Two internal M.2 storage slots.",
+  },
 } as const satisfies Record<
   string,
-  { count: number; formFactor: string; face: "Front" | "Internal" }
+  { name: TranslationKey; description: TranslationKey }
 >;
 
 export function driveBayTemplateDisplayCopy(
@@ -200,16 +218,9 @@ export function driveBayTemplateDisplayCopy(
   if (!template.builtIn || !display) {
     return { name: template.name, description: template.description };
   }
-  const specification = `${display.count} × ${display.formFactor}`;
   return {
-    name: t("{value1}{value2}", {
-      value1: `${specification} `,
-      value2: t("Drive bays"),
-    }),
-    description: t("{value1}{value2}", {
-      value1: `${specification} · `,
-      value2: t(display.face),
-    }),
+    name: t(display.name),
+    description: t(display.description),
   };
 }
 
@@ -329,6 +340,16 @@ export function resizeDriveBaySlots(
     });
   }
   return preserved;
+}
+
+export function commitDriveBaySlotCount(
+  slots: DriveBayTemplateSlot[],
+  countValue: string,
+  defaults: { prefix: string; slotType: DriveSlotType },
+) {
+  const count = Number(countValue);
+  if (!Number.isInteger(count) || count < 1 || count > 500) return null;
+  return resizeDriveBaySlots(slots, count, defaults);
 }
 
 export function renameDriveBaySlots(
