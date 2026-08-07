@@ -3481,6 +3481,82 @@ const portTemplates = [
   },
 ];
 
+const demoStorageDrives = Array.from({ length: 7 }, (_, index) => ({
+  id: `drv_demo_${index + 1}`,
+  labId: "lab_home",
+  manufacturer: index === 6 ? "Samsung" : "Seagate",
+  model: index === 6 ? "PM9A3" : "Exos X18",
+  serial: `DEMO-STORE-${String(index + 1).padStart(2, "0")}`,
+  capacityGb: index === 6 ? 3840 : 12000,
+  interface: index === 6 ? "nvme" : "sas",
+  formFactor: index === 6 ? "u2" : "3.5",
+  notes:
+    index === 5
+      ? "Pool member pulled from its bay to demonstrate the physically missing state."
+      : null,
+  createdAt: new Date(now - 14 * 24 * 3600_000).toISOString(),
+  updatedAt: new Date(now - 15 * 60_000).toISOString(),
+}));
+
+const demoDriveSlots = [
+  ...Array.from({ length: 24 }, (_, index) => ({
+    id: `ds_demo_nas_${index + 1}`,
+    deviceId: "d_srv_nas",
+    name: `Bay ${index + 1}`,
+    sectionName: "Front bays",
+    sectionOrder: 0,
+    position: index + 1,
+    slotType: "3.5",
+    face: "front",
+    layout: "grid",
+    columns: 12,
+    driveId:
+      index < 4
+        ? demoStorageDrives[index].id
+        : index === 4
+          ? demoStorageDrives[6].id
+          : null,
+    createdAt: new Date(now - 14 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 15 * 60_000).toISOString(),
+  })),
+  {
+    id: "ds_demo_backup_1",
+    deviceId: "d_srv_backup",
+    name: "Bay 1",
+    sectionName: "Front bays",
+    sectionOrder: 0,
+    position: 1,
+    slotType: "3.5",
+    face: "front",
+    layout: "grid",
+    columns: 4,
+    driveId: demoStorageDrives[4].id,
+    createdAt: new Date(now - 14 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 15 * 60_000).toISOString(),
+  },
+];
+
+const demoStoragePools = [
+  {
+    id: "sp_demo_tank",
+    deviceId: "d_srv_nas",
+    name: "tank",
+    poolType: "raidz2",
+    usableCapacityGb: 48000,
+    status: "degraded",
+    notes:
+      "Cross-device demo pool with one backup-server member and one pulled member.",
+    createdAt: new Date(now - 14 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 15 * 60_000).toISOString(),
+  },
+];
+
+const demoStoragePoolDrives = demoStorageDrives.slice(0, 6).map((drive) => ({
+  poolId: "sp_demo_tank",
+  driveId: drive.id,
+  createdAt: new Date(now - 14 * 24 * 3600_000).toISOString(),
+}));
+
 const discoveredDevices = [
   {
     id: "disc_home_dup",
@@ -4548,6 +4624,18 @@ export function seedIfEmpty() {
   const insertPortTemplate = db.prepare(
     "INSERT INTO portTemplates VALUES (@id, @name, @description, @deviceTypes, @ports, @createdAt, @updatedAt)",
   );
+  const insertStorageDrive = db.prepare(
+    "INSERT INTO storageDrives (id, labId, manufacturer, model, serial, capacityGb, interface, formFactor, notes, createdAt, updatedAt) VALUES (@id, @labId, @manufacturer, @model, @serial, @capacityGb, @interface, @formFactor, @notes, @createdAt, @updatedAt)",
+  );
+  const insertDriveSlot = db.prepare(
+    "INSERT INTO driveSlots (id, deviceId, name, sectionName, sectionOrder, position, slotType, face, layout, columns, driveId, createdAt, updatedAt) VALUES (@id, @deviceId, @name, @sectionName, @sectionOrder, @position, @slotType, @face, @layout, @columns, @driveId, @createdAt, @updatedAt)",
+  );
+  const insertStoragePool = db.prepare(
+    "INSERT INTO storagePools (id, deviceId, name, poolType, usableCapacityGb, status, notes, createdAt, updatedAt) VALUES (@id, @deviceId, @name, @poolType, @usableCapacityGb, @status, @notes, @createdAt, @updatedAt)",
+  );
+  const insertStoragePoolDrive = db.prepare(
+    "INSERT INTO storagePoolDrives (poolId, driveId, createdAt) VALUES (@poolId, @driveId, @createdAt)",
+  );
   const insertVlan = db.prepare(
     "INSERT INTO vlans VALUES (@id, @labId, @vlanId, @name, @description, @color)",
   );
@@ -4746,6 +4834,11 @@ export function seedIfEmpty() {
     }
     for (const virtualSwitch of virtualSwitches)
       insertVirtualSwitch.run(virtualSwitch);
+    for (const drive of demoStorageDrives) insertStorageDrive.run(drive);
+    for (const slot of demoDriveSlots) insertDriveSlot.run(slot);
+    for (const pool of demoStoragePools) insertStoragePool.run(pool);
+    for (const membership of demoStoragePoolDrives)
+      insertStoragePoolDrive.run(membership);
     for (const p of [...ports].sort(
       (a, b) =>
         Number(b.portRole === "aggregate") - Number(a.portRole === "aggregate"),

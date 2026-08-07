@@ -45,6 +45,7 @@ contains the core material you need:
 - [Networks, VLANs, DHCP, and IPAM guide](./docs/NETWORKS_IPAM.md)
 - [Discovery guide](./docs/DISCOVERY.md)
 - [Reports guide](./docs/REPORTS.md)
+- [Storage topology guide](./docs/STORAGE.md)
 - [Visualizer guide](./docs/VISUALIZER.md)
 - [OIDC login guide](./docs/OIDC.md)
 - [SNMP monitoring, traps & sync guide](./docs/SNMP.md)
@@ -220,6 +221,7 @@ Use these when you want the workflow steps rather than just the overview:
 - [Hyper-V import](./docs/HYPERV_IMPORT.md): download the collector, collect inventory on a Hyper-V host, map or create the host record, review VMs, and import selected categories.
 - [Proxmox import](./docs/PROXMOX_IMPORT.md): download the collector, collect inventory on a Proxmox node, map or create the node record, review QEMU VMs and LXC containers, and import selected categories.
 - [Reports](./docs/REPORTS.md): generate a clean inventory report, print/save to PDF, and export CSV or Excel-compatible files.
+- [Storage topology](./docs/STORAGE.md): document physical drive bays, lab-wide drive inventory, cross-device pools, and missing members.
 - [Networks/IPAM](./docs/NETWORKS_IPAM.md): create tagged or untagged networks, document DHCP scopes, zones, reservations, and VLAN planning ranges.
 - [Discovery](./docs/DISCOVERY.md): run manual or scheduled scans, keep results review-first, and understand Docker/LXC visibility limits.
 - [Visualizer](./docs/VISUALIZER.md): inspect rack, loose-room, port, and cable relationships from existing Rackpad data.

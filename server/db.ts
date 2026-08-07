@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 34;
+const CURRENT_SCHEMA_VERSION = 35;
 
 export const db = new Database(DB_PATH);
 
@@ -946,6 +946,94 @@ const SCHEMA_MIGRATIONS = [
     version: 34,
     sql: `
       ALTER TABLE devices ADD COLUMN ignoreDuplicateMac INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
+  {
+    version: 35,
+    sql: `
+      CREATE TABLE IF NOT EXISTS driveBayTemplates (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        description TEXT NOT NULL,
+        deviceTypes TEXT NOT NULL,
+        sections    TEXT NOT NULL,
+        createdAt   TEXT NOT NULL,
+        updatedAt   TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_drive_bay_templates_name
+        ON driveBayTemplates (name COLLATE NOCASE);
+
+      CREATE TABLE IF NOT EXISTS storageDrives (
+        id           TEXT PRIMARY KEY,
+        labId        TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        manufacturer TEXT,
+        model        TEXT,
+        serial       TEXT,
+        capacityGb   REAL NOT NULL,
+        interface    TEXT NOT NULL,
+        formFactor   TEXT NOT NULL,
+        notes        TEXT,
+        createdAt    TEXT NOT NULL,
+        updatedAt    TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_storage_drives_lab_id
+        ON storageDrives (labId);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_storage_drives_lab_serial
+        ON storageDrives (labId, serial COLLATE NOCASE)
+        WHERE serial IS NOT NULL AND TRIM(serial) != '';
+
+      CREATE TABLE IF NOT EXISTS driveSlots (
+        id           TEXT PRIMARY KEY,
+        deviceId     TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        name         TEXT NOT NULL,
+        sectionName  TEXT NOT NULL,
+        sectionOrder INTEGER NOT NULL DEFAULT 0,
+        position     INTEGER NOT NULL,
+        slotType     TEXT NOT NULL,
+        face         TEXT NOT NULL,
+        layout       TEXT NOT NULL,
+        columns      INTEGER,
+        driveId      TEXT REFERENCES storageDrives(id) ON DELETE SET NULL,
+        createdAt    TEXT NOT NULL,
+        updatedAt    TEXT NOT NULL,
+        UNIQUE(deviceId, sectionName, name)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_drive_slots_device_id
+        ON driveSlots (deviceId, sectionOrder, position);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_drive_slots_drive_id
+        ON driveSlots (driveId)
+        WHERE driveId IS NOT NULL;
+
+      CREATE TABLE IF NOT EXISTS storagePools (
+        id               TEXT PRIMARY KEY,
+        deviceId         TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        name             TEXT NOT NULL,
+        poolType         TEXT NOT NULL,
+        usableCapacityGb REAL NOT NULL,
+        status           TEXT NOT NULL,
+        notes            TEXT,
+        createdAt        TEXT NOT NULL,
+        updatedAt        TEXT NOT NULL,
+        UNIQUE(deviceId, name COLLATE NOCASE)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_storage_pools_device_id
+        ON storagePools (deviceId);
+
+      CREATE TABLE IF NOT EXISTS storagePoolDrives (
+        poolId    TEXT NOT NULL REFERENCES storagePools(id) ON DELETE CASCADE,
+        driveId   TEXT NOT NULL UNIQUE REFERENCES storageDrives(id) ON DELETE RESTRICT,
+        createdAt TEXT NOT NULL,
+        PRIMARY KEY (poolId, driveId)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_storage_pool_drives_pool_id
+        ON storagePoolDrives (poolId);
     `,
   },
 ] as const;

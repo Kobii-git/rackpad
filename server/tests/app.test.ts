@@ -8396,7 +8396,115 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
   assert.equal(source.enabled, 1);
   assert.equal(tlsColumn?.dflt_value, "0");
   assert.equal(duplicateMacColumn?.dflt_value, "0");
-  assert.equal(version.version, 34);
+  assert.equal(version.version, 35);
+  migrated.close();
+});
+
+test("storage topology migration upgrades a version-34 database without changing storageGb", async () => {
+  const legacyPath = path.join(tempDir, "storage-source-v34.db");
+  const { default: Database } = await import("better-sqlite3");
+  const initializeDatabase = () =>
+    execFileSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        "await import('./server/db.ts')",
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          DATABASE_PATH: legacyPath,
+          NODE_ENV: "test",
+        },
+        stdio: "pipe",
+      },
+    );
+
+  initializeDatabase();
+  const legacy = new Database(legacyPath);
+  legacy.exec(`
+    INSERT INTO labs (id, name, description, location)
+    VALUES ('lab_storage_v34', 'Storage migration', NULL, NULL);
+
+    INSERT INTO devices (
+      id, labId, hostname, deviceType, status, storageGb
+    ) VALUES (
+      'device_storage_v34', 'lab_storage_v34', 'legacy-storage',
+      'server', 'online', 9876
+    );
+
+    DROP TABLE storagePoolDrives;
+    DROP TABLE storagePools;
+    DROP TABLE driveSlots;
+    DROP TABLE storageDrives;
+    DROP TABLE driveBayTemplates;
+
+    UPDATE schemaVersion
+    SET version = 34, updatedAt = '2026-08-01T00:00:00.000Z'
+    WHERE id = 1;
+  `);
+  legacy.close();
+
+  initializeDatabase();
+  const migrated = new Database(legacyPath, { readonly: true });
+  const tableNames = (
+    migrated
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('driveBayTemplates', 'storageDrives', 'driveSlots', 'storagePools', 'storagePoolDrives')",
+      )
+      .all() as Array<{ name: string }>
+  ).map((row) => row.name);
+  assert.deepEqual(tableNames.sort(), [
+    "driveBayTemplates",
+    "driveSlots",
+    "storageDrives",
+    "storagePoolDrives",
+    "storagePools",
+  ]);
+  const indexNames = new Set(
+    (
+      migrated
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%storage%' OR type = 'index' AND name LIKE 'idx_drive_%'",
+        )
+        .all() as Array<{ name: string }>
+    ).map((row) => row.name),
+  );
+  for (const indexName of [
+    "idx_drive_bay_templates_name",
+    "idx_storage_drives_lab_id",
+    "idx_storage_drives_lab_serial",
+    "idx_drive_slots_device_id",
+    "idx_drive_slots_drive_id",
+    "idx_storage_pools_device_id",
+    "idx_storage_pool_drives_pool_id",
+  ]) {
+    assert.ok(indexNames.has(indexName), indexName);
+  }
+  for (const table of [
+    "driveBayTemplates",
+    "storageDrives",
+    "driveSlots",
+    "storagePools",
+    "storagePoolDrives",
+  ]) {
+    const row = migrated
+      .prepare(`SELECT COUNT(*) AS count FROM ${table}`)
+      .get() as { count: number };
+    assert.equal(row.count, 0, table);
+  }
+  const device = migrated
+    .prepare("SELECT storageGb FROM devices WHERE id = ?")
+    .get("device_storage_v34") as { storageGb: number };
+  const version = migrated
+    .prepare("SELECT version FROM schemaVersion WHERE id = 1")
+    .get() as { version: number };
+  assert.equal(device.storageGb, 9876);
+  assert.equal(version.version, 35);
   migrated.close();
 });
 
@@ -9151,12 +9259,17 @@ function resetDatabase() {
     DELETE FROM portLinks;
     DELETE FROM ports;
     DELETE FROM virtualSwitches;
+    DELETE FROM storagePoolDrives;
+    DELETE FROM storagePools;
+    DELETE FROM driveSlots;
+    DELETE FROM storageDrives;
     DELETE FROM ipZones;
     DELETE FROM dhcpScopes;
     DELETE FROM subnets;
     DELETE FROM vlanRanges;
     DELETE FROM vlans;
     DELETE FROM portTemplates;
+    DELETE FROM driveBayTemplates;
     DELETE FROM devices;
     DELETE FROM racks;
     DELETE FROM rooms;

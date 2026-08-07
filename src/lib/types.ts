@@ -42,6 +42,30 @@ export type DiscoveryStatus = "new" | "imported" | "dismissed";
 export type WifiBand = "2.4ghz" | "5ghz" | "6ghz";
 export type VirtualSwitchKind = "external" | "internal" | "private";
 export type DeviceNetworkMode = "normal" | "host-shared";
+export type DriveInterface = "sata" | "sas" | "nvme" | "usb" | "other";
+export type DriveFormFactor = "2.5" | "3.5" | "m2" | "u2" | "other";
+export type DriveSlotType = "2.5" | "3.5" | "m2" | "u2" | "generic";
+export type DriveSlotFace = "front" | "rear" | "internal";
+export type DriveSlotLayout = "grid" | "list";
+export type StoragePoolType =
+  | "raid0"
+  | "raid1"
+  | "raid5"
+  | "raid6"
+  | "raid10"
+  | "raidz1"
+  | "raidz2"
+  | "raidz3"
+  | "mirror"
+  | "unraid"
+  | "jbod"
+  | "other";
+export type StoragePoolStatus =
+  | "healthy"
+  | "degraded"
+  | "rebuilding"
+  | "offline"
+  | "unknown";
 export type DeviceServiceType =
   | "dhcp"
   | "dns"
@@ -698,6 +722,80 @@ export interface PortTemplate {
   deviceTypes: DeviceType[];
   ports: PortTemplatePort[];
   builtIn?: boolean;
+}
+
+export interface DriveBayTemplateSlot {
+  name: string;
+  position: number;
+  slotType: DriveSlotType;
+}
+
+export interface DriveBayTemplateSection {
+  name: string;
+  face: DriveSlotFace;
+  layout: DriveSlotLayout;
+  columns?: number | null;
+  slots: DriveBayTemplateSlot[];
+}
+
+export interface DriveBayTemplate {
+  id: ID;
+  name: string;
+  description: string;
+  deviceTypes: DeviceType[];
+  sections: DriveBayTemplateSection[];
+  builtIn?: boolean;
+}
+
+export interface DriveSlot {
+  id: ID;
+  deviceId: ID;
+  name: string;
+  sectionName: string;
+  sectionOrder: number;
+  position: number;
+  slotType: DriveSlotType;
+  face: DriveSlotFace;
+  layout: DriveSlotLayout;
+  columns?: number | null;
+  driveId?: ID | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StorageDrive {
+  id: ID;
+  labId: ID;
+  manufacturer?: string | null;
+  model?: string | null;
+  serial?: string | null;
+  capacityGb: number;
+  interface: DriveInterface;
+  formFactor: DriveFormFactor;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  slotId?: ID | null;
+  deviceId?: ID | null;
+  deviceHostname?: string | null;
+  slotName?: string | null;
+  slotSectionName?: string | null;
+  poolId?: ID | null;
+  poolName?: string | null;
+}
+
+export interface StoragePool {
+  id: ID;
+  deviceId: ID;
+  labId: ID;
+  name: string;
+  poolType: StoragePoolType;
+  usableCapacityGb: number;
+  status: StoragePoolStatus;
+  notes?: string | null;
+  driveIds: ID[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DeviceWithPorts extends Device {

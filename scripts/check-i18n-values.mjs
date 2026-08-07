@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import {
   containsStandaloneBrand,
+  isRejectedStorageTranslation,
   isStaleSameAsEnglishAllowance,
   isUntranslatedVisibleValue,
 } from "./i18n-value-rules.mjs";
@@ -169,6 +170,14 @@ for (const file of readdirSync(localesDir)) {
           reason: `translated-product-name:${brand}`,
         });
       }
+    }
+    if (isRejectedStorageTranslation(locale, key, value)) {
+      findings.push({
+        locale,
+        key,
+        value,
+        reason: "storage-domain-false-friend",
+      });
     }
   }
   for (const [key, value] of entries) {

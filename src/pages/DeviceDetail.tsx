@@ -28,6 +28,7 @@ import { Mono } from "@/components/shared/Mono";
 import { PortGrid } from "@/components/ports/PortGrid";
 import { PortList } from "@/components/ports/PortList";
 import { DevicePortEditor } from "@/components/ports/DevicePortEditor";
+import { StorageTopologyPanel } from "@/components/storage/StorageTopologyPanel";
 import { SnmpCredentialsPanel } from "@/components/shared/SnmpCredentialsPanel";
 import { SnmpSyncPanel } from "@/components/shared/SnmpSyncPanel";
 import { api } from "@/lib/api";
@@ -90,7 +91,7 @@ import {
   statusLabel,
 } from "@/lib/utils";
 import { formatDeviceAddress } from "@/lib/network-labels";
-import { deviceTypeMatchesTemplate } from "@/lib/device-types";
+import { deviceTypeBase, deviceTypeMatchesTemplate } from "@/lib/device-types";
 import {
   defaultImageLabel,
   imageSizeLimitLabel,
@@ -231,6 +232,7 @@ const NEW_SERVICE_ID = "__new_service__";
 const DEVICE_DETAIL_TABS = new Set([
   "overview",
   "ports",
+  "storage",
   "network",
   "monitoring",
   "services",
@@ -264,6 +266,8 @@ export default function DeviceDetail() {
   const deviceServices = useStore((s) => s.deviceServices);
   const portTemplates = useStore((s) => s.portTemplates);
   const deviceTypes = useStore((s) => s.deviceTypes);
+  const driveSlots = useStore((s) => s.driveSlots);
+  const storagePools = useStore((s) => s.storagePools);
   const documentationPages = useStore((s) => s.documentationPages);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -324,6 +328,20 @@ export default function DeviceDetail() {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const device = id ? devices.find((entry) => entry.id === id) : undefined;
+  const deviceDriveSlots = id
+    ? driveSlots.filter((entry) => entry.deviceId === id)
+    : [];
+  const deviceStoragePools = id
+    ? storagePools.filter((entry) => entry.deviceId === id)
+    : [];
+  const storageBaseType = device
+    ? deviceTypeBase(device.deviceType, deviceTypes)
+    : null;
+  const showStorage =
+    storageBaseType === "server" ||
+    storageBaseType === "storage" ||
+    deviceDriveSlots.length > 0 ||
+    deviceStoragePools.length > 0;
   useEffect(() => {
     if (!device) {
       setLinkedDocumentation([]);
@@ -1355,41 +1373,43 @@ export default function DeviceDetail() {
 
         <Card className="relative mb-4 overflow-hidden">
           <span className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-[var(--color-accent)] to-transparent opacity-60" />
-          <div className="flex items-center gap-5 px-5 py-4">
-            <div className="grid size-12 place-items-center rounded-[var(--radius-sm)] border border-[var(--color-line-strong)] bg-[var(--color-surface)]">
-              <DeviceTypeIcon
-                type={device.deviceType}
-                className="size-5 text-[var(--color-accent)]"
-              />
-            </div>
-            <div className="flex-1">
-              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                {device.deviceType.replace("_", " ")}
+          <div className="flex flex-col items-stretch gap-4 px-4 py-4 lg:flex-row lg:items-center lg:gap-5 lg:px-5">
+            <div className="flex min-w-0 items-center gap-4 lg:flex-1">
+              <div className="grid size-12 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--color-line-strong)] bg-[var(--color-surface)]">
+                <DeviceTypeIcon
+                  type={device.deviceType}
+                  className="size-5 text-[var(--color-accent)]"
+                />
               </div>
-              <h1 className="text-xl font-semibold tracking-tight">
-                {device.hostname}
-              </h1>
-              <div className="mt-0.5 text-xs text-[var(--color-fg-subtle)]">
-                {device.displayName}
-                {rack && (
-                  <>
-                    <span className="mx-1.5 text-[var(--color-fg-faint)]">
-                      |
-                    </span>
-                    {device.placement === "shelf" && parentDevice
-                      ? t("{name} | shelf {hostname}", {
-                          name: rack.name,
-                          hostname: parentDevice.hostname,
-                        })
-                      : t("{name} {value2}", {
-                          name: rack.name,
-                          value2: formatRackUnit(device, t),
-                        })}
-                  </>
-                )}
+              <div className="min-w-0 flex-1">
+                <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
+                  {device.deviceType.replace("_", " ")}
+                </div>
+                <h1 className="break-words text-xl font-semibold tracking-tight">
+                  {device.hostname}
+                </h1>
+                <div className="mt-0.5 break-words text-xs text-[var(--color-fg-subtle)]">
+                  {device.displayName}
+                  {rack && (
+                    <>
+                      <span className="mx-1.5 text-[var(--color-fg-faint)]">
+                        |
+                      </span>
+                      {device.placement === "shelf" && parentDevice
+                        ? t("{name} | shelf {hostname}", {
+                            name: rack.name,
+                            hostname: parentDevice.hostname,
+                          })
+                        : t("{name} {value2}", {
+                            name: rack.name,
+                            value2: formatRackUnit(device, t),
+                          })}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-            <dl className="grid grid-cols-3 gap-x-6 gap-y-1 text-[11px]">
+            <dl className="grid w-full grid-cols-2 gap-x-5 gap-y-2 text-[11px] sm:grid-cols-3 lg:w-auto lg:gap-x-6 lg:gap-y-1">
               <Stat
                 label={t("Mgmt IP / MAC")}
                 value={formatDeviceAddress(device)}
@@ -1422,11 +1442,16 @@ export default function DeviceDetail() {
             setSearchParams(nextParams, { replace: true });
           }}
         >
-          <TabsList>
+          <TabsList className="max-w-full overflow-x-auto [&>*]:shrink-0 [&>*]:whitespace-nowrap">
             <TabsTrigger value="overview">{t("Overview")}</TabsTrigger>
             <TabsTrigger value="ports">
               {t("Ports")} | {devicePorts.length}
             </TabsTrigger>
+            {showStorage && (
+              <TabsTrigger value="storage">
+                {t("Storage")} | {deviceDriveSlots.length}
+              </TabsTrigger>
+            )}
             <TabsTrigger value="network">
               {t("Network")} | {displayedDeviceIpCount}
             </TabsTrigger>
@@ -1849,6 +1874,12 @@ export default function DeviceDetail() {
               </div>
             </div>
           </TabsContent>
+
+          {showStorage && (
+            <TabsContent value="storage" className="pt-4">
+              <StorageTopologyPanel deviceId={device.id} />
+            </TabsContent>
+          )}
 
           <TabsContent value="network" className="pt-4">
             {canEdit && (
@@ -2332,14 +2363,13 @@ export default function DeviceDetail() {
                               ? t(":{port}", { port: entry.port })
                               : ""}
                           </div>
-                          {entry.type === "https" &&
-                            entry.ignoreTlsErrors && (
-                              <div className="mt-2">
-                                <Badge tone="warn">
-                                  {t("TLS verification off")}
-                                </Badge>
-                              </div>
-                            )}
+                          {entry.type === "https" && entry.ignoreTlsErrors && (
+                            <div className="mt-2">
+                              <Badge tone="warn">
+                                {t("TLS verification off")}
+                              </Badge>
+                            </div>
+                          )}
                           <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
                             {entry.lastMessage ?? t("No checks have run yet.")}
                           </div>
@@ -3362,7 +3392,7 @@ function Select({
 
 function MonitorStat({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="min-w-0">
       <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
         {label}
       </div>
@@ -3410,9 +3440,9 @@ function Stat({
         {label}
       </dt>
       <dd
-        className={
+        className={`break-words ${
           mono ? "font-mono text-[var(--color-fg)]" : "text-[var(--color-fg)]"
-        }
+        }`}
       >
         {value ?? "-"}
       </dd>

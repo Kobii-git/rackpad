@@ -16,6 +16,7 @@ export const BUILT_IN_DEVICE_TYPES = [
   { id: 'brush_panel', label: 'Brush panel' },
   { id: 'blanking_panel', label: 'Blanking panel' },
   { id: 'storage', label: 'Storage' },
+  { id: 'storage_enclosure', label: 'Storage enclosure', parentType: 'storage' },
   { id: 'pdu', label: 'PDU' },
   { id: 'ups', label: 'UPS' },
   { id: 'kvm', label: 'KVM' },
@@ -172,6 +173,30 @@ export function isKnownDeviceType(id: string) {
   return listObservedDeviceTypes().includes(normalized)
 }
 
+export function deviceTypeBase(id: string) {
+  const normalized = normalizeDeviceTypeId(id)
+  const byId = new Map(listDeviceTypes().map((entry) => [entry.id, entry]))
+  const seen = new Set<string>()
+  let current = normalized
+  while (current && !seen.has(current)) {
+    seen.add(current)
+    const parent = byId.get(current)?.parentType
+    if (!parent || parent === current) return current
+    current = parent
+  }
+  return normalized
+}
+
+export function deviceTypeMatches(
+  deviceType: string,
+  compatibleDeviceTypes: string[],
+) {
+  const normalized = normalizeDeviceTypeId(deviceType)
+  if (compatibleDeviceTypes.includes(normalized)) return true
+  const base = deviceTypeBase(normalized)
+  return base !== normalized && compatibleDeviceTypes.includes(base)
+}
+
 export function requiredDeviceType(body: Record<string, unknown>, key = 'deviceType') {
   const value = body[key]
   if (typeof value !== 'string' || !value.trim()) {
@@ -299,9 +324,15 @@ export function deleteDeviceType(id: string) {
   }
 
   const usage = deviceTypeUsage(normalizedId)
-  if (usage.devices + usage.discoveredDevices + usage.portTemplates > 0) {
+  if (
+    usage.devices +
+      usage.discoveredDevices +
+      usage.portTemplates +
+      usage.driveBayTemplates >
+    0
+  ) {
     throw new ValidationError(
-      'Device type is still used by devices, discovery records, or port templates.',
+      'Device type is still used by devices, discovery records, port templates, or drive-bay templates.',
       409,
     )
   }
@@ -358,17 +389,25 @@ function deviceTypeUsage(deviceType: string) {
     SELECT deviceTypes
     FROM portTemplates
   `).all() as Array<{ deviceTypes: string }>
+  const driveBayTemplates = db.prepare(`
+    SELECT deviceTypes
+    FROM driveBayTemplates
+  `).all() as Array<{ deviceTypes: string }>
 
-  return {
-    devices: Number(devices.count ?? 0),
-    discoveredDevices: Number(discoveredDevices.count ?? 0),
-    portTemplates: templates.filter((template) => {
+  const countTemplateUsage = (rows: Array<{ deviceTypes: string }>) =>
+    rows.filter((template) => {
       try {
         const parsed = JSON.parse(template.deviceTypes)
         return Array.isArray(parsed) && parsed.includes(deviceType)
       } catch {
         return false
       }
-    }).length,
+    }).length
+
+  return {
+    devices: Number(devices.count ?? 0),
+    discoveredDevices: Number(discoveredDevices.count ?? 0),
+    portTemplates: countTemplateUsage(templates),
+    driveBayTemplates: countTemplateUsage(driveBayTemplates),
   }
 }

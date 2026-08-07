@@ -96,6 +96,10 @@
     "reason": "Connector standard"
   },
   {
+    "key": "JBOD",
+    "reason": "Storage architecture acronym"
+  },
+  {
     "key": "ICMP",
     "reason": "Protocol acronym"
   },

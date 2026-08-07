@@ -113,6 +113,25 @@ const exportBackupSnapshot = db.transaction(
             .prepare("SELECT * FROM portTemplates ORDER BY name, id")
             .all() as Record<string, unknown>[]
         ).map((row) => parseRow(row, ["deviceTypes", "ports"])),
+        driveBayTemplates: (
+          db
+            .prepare("SELECT * FROM driveBayTemplates ORDER BY name, id")
+            .all() as Record<string, unknown>[]
+        ).map((row) => parseRow(row, ["deviceTypes", "sections"])),
+        storageDrives: db
+          .prepare("SELECT * FROM storageDrives ORDER BY labId, manufacturer, model, id")
+          .all(),
+        driveSlots: db
+          .prepare(
+            "SELECT * FROM driveSlots ORDER BY deviceId, sectionOrder, position, id",
+          )
+          .all(),
+        storagePools: db
+          .prepare("SELECT * FROM storagePools ORDER BY deviceId, name, id")
+          .all(),
+        storagePoolDrives: db
+          .prepare("SELECT * FROM storagePoolDrives ORDER BY poolId, createdAt, driveId")
+          .all(),
         vlans: db.prepare("SELECT * FROM vlans ORDER BY vlanId, id").all(),
         vlanRanges: db
           .prepare("SELECT * FROM vlanRanges ORDER BY startVlan, id")
@@ -661,6 +680,93 @@ function validateBackupNetworkIntegrity(input: {
   }
 }
 
+function validateBackupStorageIntegrity(input: {
+  labs: Record<string, unknown>[];
+  devices: Record<string, unknown>[];
+  storageDrives: Record<string, unknown>[];
+  driveSlots: Record<string, unknown>[];
+  storagePools: Record<string, unknown>[];
+  storagePoolDrives: Record<string, unknown>[];
+}) {
+  const labIds = new Set(input.labs.map((row) => String(row.id)));
+  const devices = new Map(
+    input.devices.map((row) => [
+      String(row.id),
+      { labId: String(row.labId ?? "") },
+    ]),
+  );
+  const drives = new Map(
+    input.storageDrives.map((row) => [
+      String(row.id),
+      { labId: String(row.labId ?? "") },
+    ]),
+  );
+  const slottedDriveIds = new Set<string>();
+
+  for (const [driveId, drive] of drives) {
+    if (!labIds.has(drive.labId)) {
+      throw new ValidationError(
+        `Backup storage drive ${driveId} references a missing lab.`,
+      );
+    }
+  }
+
+  for (const row of input.driveSlots) {
+    const slotId = String(row.id);
+    const device = devices.get(String(row.deviceId ?? ""));
+    if (!device) {
+      throw new ValidationError(
+        `Backup drive slot ${slotId} references a missing device.`,
+      );
+    }
+    if (!row.driveId) continue;
+    const driveId = String(row.driveId);
+    const drive = drives.get(driveId);
+    if (!drive || drive.labId !== device.labId) {
+      throw new ValidationError(
+        `Backup drive slot ${slotId} contains a drive from another lab or a missing drive.`,
+      );
+    }
+    if (slottedDriveIds.has(driveId)) {
+      throw new ValidationError(
+        `Backup storage drive ${driveId} is installed in more than one slot.`,
+      );
+    }
+    slottedDriveIds.add(driveId);
+  }
+
+  const pools = new Map<string, { labId: string }>();
+  for (const row of input.storagePools) {
+    const poolId = String(row.id);
+    const device = devices.get(String(row.deviceId ?? ""));
+    if (!device) {
+      throw new ValidationError(
+        `Backup storage pool ${poolId} references a missing device.`,
+      );
+    }
+    pools.set(poolId, { labId: device.labId });
+  }
+
+  const pooledDriveIds = new Set<string>();
+  for (const row of input.storagePoolDrives) {
+    const poolId = String(row.poolId ?? "");
+    const driveId = String(row.driveId ?? "");
+    const pool = pools.get(poolId);
+    const drive = drives.get(driveId);
+    if (!pool || !drive || pool.labId !== drive.labId) {
+      throw new ValidationError(
+        `Backup pool membership ${poolId}/${driveId} crosses labs or references missing storage.`,
+      );
+    }
+    if (pooledDriveIds.has(driveId)) {
+      throw new ValidationError(
+        `Backup storage drive ${driveId} belongs to more than one pool.`,
+      );
+    }
+    pooledDriveIds.add(driveId);
+  }
+}
+
 const restoreBackupSnapshot = db.transaction(
   (snapshot: Record<string, unknown>, restoredBy: string) => {
     if (snapshot.format !== "rackpad-backup-v1") {
@@ -684,6 +790,26 @@ const restoreBackupSnapshot = db.transaction(
     const portTemplates = normalizeArrayRecordArray(
       data.portTemplates ?? [],
       "data.portTemplates",
+    );
+    const driveBayTemplates = normalizeArrayRecordArray(
+      data.driveBayTemplates ?? [],
+      "data.driveBayTemplates",
+    );
+    const storageDrives = normalizeArrayRecordArray(
+      data.storageDrives ?? [],
+      "data.storageDrives",
+    );
+    const driveSlots = normalizeArrayRecordArray(
+      data.driveSlots ?? [],
+      "data.driveSlots",
+    );
+    const storagePools = normalizeArrayRecordArray(
+      data.storagePools ?? [],
+      "data.storagePools",
+    );
+    const storagePoolDrives = normalizeArrayRecordArray(
+      data.storagePoolDrives ?? [],
+      "data.storagePoolDrives",
     );
     const vlans = normalizeArrayRecordArray(data.vlans, "data.vlans");
     const vlanRanges = normalizeArrayRecordArray(
@@ -804,6 +930,14 @@ const restoreBackupSnapshot = db.transaction(
       ports,
       ipAssignments,
     });
+    validateBackupStorageIntegrity({
+      labs,
+      devices,
+      storageDrives,
+      driveSlots,
+      storagePools,
+      storagePoolDrives,
+    });
 
     db.exec(`
     DELETE FROM userSessions;
@@ -833,12 +967,17 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM portLinks;
     DELETE FROM ports;
     DELETE FROM virtualSwitches;
+    DELETE FROM storagePoolDrives;
+    DELETE FROM storagePools;
+    DELETE FROM driveSlots;
+    DELETE FROM storageDrives;
     DELETE FROM ipZones;
     DELETE FROM dhcpScopes;
     DELETE FROM subnets;
     DELETE FROM vlans;
     DELETE FROM vlanRanges;
     DELETE FROM portTemplates;
+    DELETE FROM driveBayTemplates;
     DELETE FROM devices;
     DELETE FROM racks;
     DELETE FROM rooms;
@@ -884,6 +1023,29 @@ const restoreBackupSnapshot = db.transaction(
     const insertPortTemplate = db.prepare(`
     INSERT INTO portTemplates (id, name, description, deviceTypes, ports, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertDriveBayTemplate = db.prepare(`
+    INSERT INTO driveBayTemplates (id, name, description, deviceTypes, sections, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertStorageDrive = db.prepare(`
+    INSERT INTO storageDrives
+      (id, labId, manufacturer, model, serial, capacityGb, interface, formFactor, notes, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertDriveSlot = db.prepare(`
+    INSERT INTO driveSlots
+      (id, deviceId, name, sectionName, sectionOrder, position, slotType, face, layout, columns, driveId, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertStoragePool = db.prepare(`
+    INSERT INTO storagePools
+      (id, deviceId, name, poolType, usableCapacityGb, status, notes, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertStoragePoolDrive = db.prepare(`
+    INSERT INTO storagePoolDrives (poolId, driveId, createdAt)
+    VALUES (?, ?, ?)
   `);
     const insertVlan = db.prepare(
       "INSERT INTO vlans (id, labId, vlanId, name, description, color) VALUES (?, ?, ?, ?, ?, ?)",
@@ -1164,6 +1326,58 @@ const restoreBackupSnapshot = db.transaction(
       }
       updateDeviceParent.run(parentDeviceId, row.id);
     }
+    for (const row of storageDrives) {
+      insertStorageDrive.run(
+        row.id,
+        row.labId,
+        row.manufacturer ?? null,
+        row.model ?? null,
+        row.serial ?? null,
+        row.capacityGb,
+        row.interface,
+        row.formFactor,
+        row.notes ?? null,
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      );
+    }
+    for (const row of driveSlots) {
+      insertDriveSlot.run(
+        row.id,
+        row.deviceId,
+        row.name,
+        row.sectionName,
+        row.sectionOrder ?? 0,
+        row.position,
+        row.slotType,
+        row.face,
+        row.layout,
+        row.columns ?? null,
+        row.driveId ?? null,
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      );
+    }
+    for (const row of storagePools) {
+      insertStoragePool.run(
+        row.id,
+        row.deviceId,
+        row.name,
+        row.poolType,
+        row.usableCapacityGb,
+        row.status,
+        row.notes ?? null,
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      );
+    }
+    for (const row of storagePoolDrives) {
+      insertStoragePoolDrive.run(
+        row.poolId,
+        row.driveId,
+        row.createdAt ?? new Date().toISOString(),
+      );
+    }
     for (const row of dockerContainerLinks) {
       insertDockerContainerLink.run(
         row.deviceId,
@@ -1301,6 +1515,17 @@ const restoreBackupSnapshot = db.transaction(
         JSON.stringify(row.ports ?? []),
         row.createdAt ?? new Date().toISOString(),
         row.updatedAt ?? new Date().toISOString(),
+      );
+    }
+    for (const row of driveBayTemplates) {
+      insertDriveBayTemplate.run(
+        row.id,
+        row.name,
+        row.description,
+        JSON.stringify(row.deviceTypes ?? []),
+        JSON.stringify(row.sections ?? []),
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
       );
     }
     for (const row of dhcpScopes) {
@@ -1585,6 +1810,11 @@ const restoreBackupSnapshot = db.transaction(
         referenceImages: referenceImages.length,
         deviceServices: deviceServices.length,
         portTemplates: portTemplates.length,
+        driveBayTemplates: driveBayTemplates.length,
+        storageDrives: storageDrives.length,
+        driveSlots: driveSlots.length,
+        storagePools: storagePools.length,
+        storagePoolDrives: storagePoolDrives.length,
         wifiControllers: wifiControllers.length,
         wifiSsids: wifiSsids.length,
         wifiRadios: wifiRadios.length,

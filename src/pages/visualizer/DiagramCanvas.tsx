@@ -33,6 +33,7 @@ import type {
   WifiSsid,
 } from "@/lib/types";
 import { cn, formatPortLabel, normalizeColorToCss } from "@/lib/utils";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import { nodeStripeColor, typeColor, typeLabel } from "./model";
 import type {
   VisualizerCable,
@@ -41,6 +42,7 @@ import type {
   VisualizerNode,
 } from "./types";
 import { useI18n } from "@/i18n";
+import type { TranslationKey } from "@/i18n/translations";
 
 const DIAGRAM_POSITIONS_STORAGE_KEY = "rackpad.visualizer.diagram-positions";
 const DIAGRAM_SECTION_POSITIONS_STORAGE_KEY =
@@ -208,6 +210,7 @@ export function DiagramCanvas({
         savedPositions,
         savedSectionPositions,
         wifiContext,
+        t,
       ),
     [
       model,
@@ -217,6 +220,7 @@ export function DiagramCanvas({
       savedPositions,
       savedSectionPositions,
       wifiContext,
+      t,
     ],
   );
   const [nodes, setNodes, onNodesChange] =
@@ -550,7 +554,12 @@ export function DiagramCanvas({
                 key={entry.type}
                 active={typeFilters.has(entry.type)}
                 label={t("{label} {count}", {
-                  label: entry.label,
+                  label: localizedDeviceTypeIdLabel(
+                    entry.type,
+                    [],
+                    t,
+                    entry.label,
+                  ),
                   count: entry.count,
                 })}
                 onClick={() => toggleTypeFilter(entry.type)}
@@ -780,14 +789,19 @@ function DiagramDeviceInspector({
             {node.device.hostname}
           </div>
           <div className="mt-1 text-xs text-[var(--text-secondary)]">
-            {typeLabel(node.device.deviceType)}
+            {localizedDeviceTypeIdLabel(
+              node.device.deviceType,
+              [],
+              t,
+              typeLabel(node.device.deviceType),
+            )}
           </div>
         </div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <InspectorValue
           label={t("Address")}
-          value={formatNodeAddress(node)}
+          value={formatNodeAddress(node, t)}
           mono
         />
         <InspectorValue
@@ -999,6 +1013,7 @@ function buildDiagramLayout(
   savedPositions: Record<string, XYPosition>,
   savedSectionPositions: Record<string, XYPosition>,
   wifiContext: DiagramWifiContext,
+  t: (key: TranslationKey) => string,
 ): DiagramLayoutResult {
   const visibleNodes = model.nodes.filter(
     (node) =>
@@ -1063,7 +1078,7 @@ function buildDiagramLayout(
         type: "device",
         position,
         data: {
-          address: formatNodeAddress(node),
+          address: formatNodeAddress(node, t),
           deviceId: node.device.id,
           deviceType: node.device.deviceType,
           health: node.health,
@@ -1078,7 +1093,12 @@ function buildDiagramLayout(
           sectionLabel: shortSectionLabel(section.title),
           stripeColor: nodeStripeColor(node, healthOverlay),
           typeColor: node.typeColor,
-          typeLabel: typeLabel(node.device.deviceType),
+          typeLabel: localizedDeviceTypeIdLabel(
+            node.device.deviceType,
+            [],
+            t,
+            typeLabel(node.device.deviceType),
+          ),
         },
         zIndex: 2,
       });
@@ -1548,13 +1568,21 @@ function cableNeedsContrastOutline(color: string) {
   );
 }
 
-function formatNodeAddress(node: VisualizerNode) {
+function formatNodeAddress(
+  node: VisualizerNode,
+  t: (key: TranslationKey) => string,
+) {
   return formatDeviceAddress(
     {
       managementIp: node.device.managementIp,
       macAddress: node.macAddress,
     },
-    typeLabel(node.device.deviceType),
+    localizedDeviceTypeIdLabel(
+      node.device.deviceType,
+      [],
+      t,
+      typeLabel(node.device.deviceType),
+    ),
   );
 }
 

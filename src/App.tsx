@@ -16,6 +16,7 @@ const RackViewPage = lazy(() => import("@/pages/RackViewPage"));
 const DevicesList = lazy(() => import("@/pages/DevicesList"));
 const DeviceDetail = lazy(() => import("@/pages/DeviceDetail"));
 const ComputeView = lazy(() => import("@/pages/ComputeView"));
+const StorageView = lazy(() => import("@/pages/StorageView"));
 const WifiView = lazy(() => import("@/pages/WifiView"));
 const DiscoveryView = lazy(() => import("@/pages/DiscoveryView"));
 const ImportView = lazy(() => import("@/pages/ImportView"));
@@ -87,6 +88,14 @@ export default function App() {
           element={
             <RouteFrame>
               <ComputeView />
+            </RouteFrame>
+          }
+        />
+        <Route
+          path="/storage"
+          element={
+            <RouteFrame>
+              <StorageView />
             </RouteFrame>
           }
         />

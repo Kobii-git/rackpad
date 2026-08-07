@@ -54,6 +54,7 @@ import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { Mono } from "@/components/shared/Mono";
 import type { Port } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import { formatPortEndpointLabel } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import {
@@ -1431,7 +1432,12 @@ function DeviceCard({
                   managementIp: node.device.managementIp,
                   macAddress: node.macAddress,
                 },
-                typeLabel(node.device.deviceType),
+                localizedDeviceTypeIdLabel(
+                  node.device.deviceType,
+                  [],
+                  t,
+                  typeLabel(node.device.deviceType),
+                ),
               )}
             </div>
           )}
@@ -2010,7 +2016,12 @@ function VisualizerSidePanel({
               key={entry.type}
               active={typeFilters.has(entry.type)}
               label={t("{label} {count}", {
-                label: entry.label,
+                label: localizedDeviceTypeIdLabel(
+                  entry.type,
+                  [],
+                  t,
+                  entry.label,
+                ),
                 count: entry.count,
               })}
               onClick={() => toggleTypeFilter(entry.type)}
@@ -2307,7 +2318,15 @@ function DeviceInspector({
       <div className="grid grid-cols-2 gap-2">
         <InfoBox label={t("IP")} value={node.device.managementIp} mono />
         <InfoBox label={t("MAC")} value={node.macAddress} mono />
-        <InfoBox label={t("Type")} value={typeLabel(node.device.deviceType)} />
+        <InfoBox
+          label={t("Type")}
+          value={localizedDeviceTypeIdLabel(
+            node.device.deviceType,
+            [],
+            t,
+            typeLabel(node.device.deviceType),
+          )}
+        />
         <InfoBox label={t("Placement")} value={placementLabel(node, t)} />
         <InfoBox
           label={t("Ports")}

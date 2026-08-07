@@ -8,6 +8,35 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+### Added
+
+- Added Storage Topology v1 with lab-wide physical-drive inventory, reusable
+  drive-bay templates, device slot layouts, and logical storage pools.
+- Added the **Storage** workspace, device **Storage** tab, built-in starter bay
+  layouts, and the **Storage enclosure** device subtype.
+- Added cross-device pool membership for same-lab JBOD and disk-shelf drives,
+  including exclusive membership, missing-member warnings, deterministic pool
+  highlighting, and safe drive move, pull, and deletion controls.
+- Added storage topology to admin backup/restore, audit lab resolution, demo
+  data, command-palette drive search, documentation, and supported locales.
+
+### Changed
+
+- Device creation and editing can apply a drive-bay template snapshot while the
+  device has no storage slots. Later template edits do not alter devices.
+- Rackpad is now versioned as `1.8.0-dev.0` for ongoing development. Existing
+  `storageGb`, import, and reporting behavior remains independent.
+
+### Test notes
+
+- Apply a 24-bay template to a storage device, populate bays, and verify the
+  dense layout remains readable in light/dark and narrow/desktop views.
+- Build a pool owned by a server with a member installed in a same-lab Storage
+  enclosure; pull that member and confirm membership and the missing warning
+  remain until it is removed from the pool.
+- Confirm viewers are read-only, editors can manage lab storage, and only
+  admins can create or modify templates.
+
 ## [1.7.4-beta.0] - 2026-08-03
 
 ### Fixed

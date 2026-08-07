@@ -19,6 +19,7 @@ import {
   BookOpen,
   Route,
   UploadCloud,
+  HardDrive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { selectLab, useStore } from "@/lib/store";
@@ -31,6 +32,7 @@ const baseNavItems = [
   { to: "/racks", icon: Server, label: "Racks / Rooms" },
   { to: "/devices", icon: Boxes, label: "Devices" },
   { to: "/compute", icon: Cpu, label: "Compute" },
+  { to: "/storage", icon: HardDrive, label: "Storage" },
   { to: "/wifi", icon: Wifi, label: "WiFi" },
   { to: "/discovery", icon: Search, label: "Discovery" },
   { to: "/imports", icon: UploadCloud, label: "Imports" },

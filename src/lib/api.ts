@@ -10,6 +10,8 @@ import type {
   DeviceService,
   DeviceTypeDefinition,
   DeviceMonitor,
+  DriveBayTemplate,
+  DriveSlot,
   DiscoveredSnmpInterface,
   DocumentationPage,
   DockerImportSource,
@@ -38,6 +40,8 @@ import type {
   SnmpTrapLogEntry,
   SnmpTrapReceiverStatus,
   Subnet,
+  StorageDrive,
+  StoragePool,
   UiSettings,
   UserRole,
   Vlan,
@@ -187,6 +191,46 @@ export type PortLinkBulkPatch = Nullable<
 >;
 export type PortTemplatePatch = Nullable<
   Pick<PortTemplate, "name" | "description" | "deviceTypes" | "ports">
+>;
+export type DriveBayTemplatePatch = Nullable<
+  Pick<DriveBayTemplate, "name" | "description" | "deviceTypes" | "sections">
+>;
+export type DriveSlotPatch = Nullable<
+  Pick<
+    DriveSlot,
+    | "name"
+    | "sectionName"
+    | "sectionOrder"
+    | "position"
+    | "slotType"
+    | "face"
+    | "layout"
+    | "columns"
+  >
+>;
+export type StorageDrivePatch = Nullable<
+  Pick<
+    StorageDrive,
+    | "manufacturer"
+    | "model"
+    | "serial"
+    | "capacityGb"
+    | "interface"
+    | "formFactor"
+    | "notes"
+    | "slotId"
+  >
+>;
+export type StoragePoolPatch = Nullable<
+  Pick<
+    StoragePool,
+    | "name"
+    | "poolType"
+    | "usableCapacityGb"
+    | "status"
+    | "notes"
+    | "driveIds"
+  >
 >;
 export type DiscoveredDevicePatch = Nullable<
   Pick<
@@ -779,7 +823,11 @@ export const api = {
   },
 
   createDevice(
-    body: Omit<Device, "id"> & { id?: string; portTemplateId?: string },
+    body: Omit<Device, "id"> & {
+      id?: string;
+      portTemplateId?: string;
+      driveBayTemplateId?: string;
+    },
   ) {
     return request<Device>("/devices", {
       method: "POST",
@@ -789,7 +837,10 @@ export const api = {
 
   updateDevice(
     id: string,
-    body: DevicePatch & { portTemplateId?: string | null },
+    body: DevicePatch & {
+      portTemplateId?: string | null;
+      driveBayTemplateId?: string | null;
+    },
   ) {
     return request<Device>(`/devices/${id}`, {
       method: "PATCH",
@@ -837,6 +888,126 @@ export const api = {
     return request<void>(`/ports/templates/${id}`, {
       method: "DELETE",
     });
+  },
+
+  getDriveBayTemplates() {
+    return request<DriveBayTemplate[]>("/storage/drive-bay-templates");
+  },
+
+  createDriveBayTemplate(
+    body: Omit<DriveBayTemplate, "builtIn" | "id"> & { id?: string },
+  ) {
+    return request<DriveBayTemplate>("/storage/drive-bay-templates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateDriveBayTemplate(id: string, body: DriveBayTemplatePatch) {
+    return request<DriveBayTemplate>(`/storage/drive-bay-templates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteDriveBayTemplate(id: string) {
+    return request<void>(`/storage/drive-bay-templates/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  getDriveSlots(params?: { labId?: string; deviceId?: string }) {
+    return request<DriveSlot[]>("/storage/drive-slots", undefined, params);
+  },
+
+  applyDriveBayTemplate(body: { deviceId: string; templateId: string }) {
+    return request<DriveSlot[]>("/storage/drive-slots/apply-template", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  createDriveSlot(
+    body: Omit<DriveSlot, "id" | "driveId" | "createdAt" | "updatedAt"> & {
+      id?: string;
+    },
+  ) {
+    return request<DriveSlot>("/storage/drive-slots", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateDriveSlot(id: string, body: DriveSlotPatch) {
+    return request<DriveSlot>(`/storage/drive-slots/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteDriveSlot(id: string) {
+    return request<void>(`/storage/drive-slots/${id}`, { method: "DELETE" });
+  },
+
+  getStorageDrives(params?: { labId?: string; deviceId?: string }) {
+    return request<StorageDrive[]>("/storage/drives", undefined, params);
+  },
+
+  createStorageDrive(
+    body: Omit<
+      StorageDrive,
+      | "id"
+      | "createdAt"
+      | "updatedAt"
+      | "deviceId"
+      | "deviceHostname"
+      | "slotName"
+      | "slotSectionName"
+      | "poolId"
+      | "poolName"
+    > & { id?: string },
+  ) {
+    return request<StorageDrive>("/storage/drives", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateStorageDrive(id: string, body: StorageDrivePatch) {
+    return request<StorageDrive>(`/storage/drives/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteStorageDrive(id: string) {
+    return request<void>(`/storage/drives/${id}`, { method: "DELETE" });
+  },
+
+  getStoragePools(params?: { labId?: string; deviceId?: string }) {
+    return request<StoragePool[]>("/storage/pools", undefined, params);
+  },
+
+  createStoragePool(
+    body: Omit<StoragePool, "id" | "labId" | "createdAt" | "updatedAt"> & {
+      id?: string;
+    },
+  ) {
+    return request<StoragePool>("/storage/pools", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateStoragePool(id: string, body: StoragePoolPatch) {
+    return request<StoragePool>(`/storage/pools/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteStoragePool(id: string) {
+    return request<void>(`/storage/pools/${id}`, { method: "DELETE" });
   },
 
   previewNetboxDeviceTypeImport(yaml: string) {

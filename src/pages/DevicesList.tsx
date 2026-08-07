@@ -35,7 +35,7 @@ import {
   X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/utils";
-import { deviceTypeLabel } from "@/lib/device-types";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import {
   applySortDirection,
   compareIp,
@@ -669,7 +669,12 @@ export default function DevicesList() {
               >
                 <DeviceTypeIcon type={entry.id} className="size-3" />
                 <span className="font-mono text-[10px] uppercase tracking-wider capitalize">
-                  {entry.label}
+                  {localizedDeviceTypeIdLabel(
+                    entry.id,
+                    deviceTypes,
+                    t,
+                    entry.label,
+                  )}
                 </span>
                 <Mono className="text-[10px]">{count}</Mono>
               </button>
@@ -1026,7 +1031,12 @@ export default function DevicesList() {
                     <option value="">{t("Keep current type")}</option>
                     {deviceTypes.map((entry) => (
                       <option key={entry.id} value={entry.id}>
-                        {entry.label}
+                        {localizedDeviceTypeIdLabel(
+                          entry.id,
+                          deviceTypes,
+                          t,
+                          entry.label,
+                        )}
                       </option>
                     ))}
                   </Select>
@@ -1338,7 +1348,11 @@ export default function DevicesList() {
                       </Td>
                       <Td>
                         <span className="text-xs capitalize text-[var(--color-fg-muted)]">
-                          {deviceTypeLabel(device.deviceType, deviceTypes)}
+                          {localizedDeviceTypeIdLabel(
+                            device.deviceType,
+                            deviceTypes,
+                            t,
+                          )}
                         </span>
                       </Td>
                       <Td>

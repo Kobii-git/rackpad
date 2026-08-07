@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   containsStandaloneBrand,
+  isRejectedStorageTranslation,
   isStaleSameAsEnglishAllowance,
   isUntranslatedVisibleValue,
 } from "./i18n-value-rules.mjs";
@@ -47,5 +48,25 @@ test("stale same-as-English allowances are detected", () => {
   assert.equal(
     isStaleSameAsEnglishAllowance("Discord-webhaak-URL", "Discord webhook URL"),
     true,
+  );
+});
+
+test("storage-domain false friends are rejected", () => {
+  assert.equal(isRejectedStorageTranslation("fr", "Pool", "Piscine"), true);
+  assert.equal(
+    isRejectedStorageTranslation("ar", "Pool owner", "مالك المسبح"),
+    true,
+  );
+  assert.equal(
+    isRejectedStorageTranslation("zh", "Drive inventory", "推动库存"),
+    true,
+  );
+  assert.equal(
+    isRejectedStorageTranslation("fr", "Pool", "Pool de stockage"),
+    false,
+  );
+  assert.equal(
+    isRejectedStorageTranslation("zh", "Storage enclosure", "存储扩展柜"),
+    false,
   );
 });

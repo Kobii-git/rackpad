@@ -31,6 +31,7 @@ import { deviceImagesRoutes } from "./routes/device-images.js";
 import { deviceServicesRoutes } from "./routes/device-services.js";
 import { referenceImagesRoutes } from "./routes/reference-images.js";
 import { importsRoutes } from "./routes/imports.js";
+import { storageRoutes } from "./routes/storage.js";
 import { getAuthToken, lookupSession, needsBootstrap } from "./lib/auth.js";
 import { fetchUserLabAccess } from "./lib/lab-access.js";
 import { ValidationError } from "./lib/validation.js";
@@ -403,6 +404,7 @@ export async function createApp() {
   await app.register(referenceImagesRoutes, { prefix: "/api/reference-images" });
   await app.register(adminRoutes, { prefix: "/api/admin" });
   await app.register(importsRoutes, { prefix: "/api/imports" });
+  await app.register(storageRoutes, { prefix: "/api/storage" });
 
   if (existsSync(DIST_DIR)) {
     await app.register(staticPlugin, {

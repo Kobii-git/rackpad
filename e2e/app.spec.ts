@@ -17,6 +17,7 @@ const primaryRoutes = [
   "/racks",
   "/devices",
   "/compute",
+  "/storage",
   "/wifi",
   "/discovery",
   "/imports",
@@ -30,6 +31,605 @@ const primaryRoutes = [
   "/documentation",
   "/admin",
 ];
+
+test("storage workspace and dense device topology stay readable", async ({
+  page,
+}) => {
+  await authenticate(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/storage");
+  await expect(
+    page.getByRole("heading", { name: "Storage", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Raw capacity", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Missing pool members", { exact: false }),
+  ).toBeVisible();
+
+  await page.getByRole("tab", { name: /Drive-bay templates/ }).click();
+  await expect(
+    page.getByRole("spinbutton", { name: "Slot count", exact: true }),
+  ).toHaveValue("12");
+  await expect(page.getByTitle("Bay 12", { exact: true })).toBeVisible();
+
+  await page.getByRole("tab", { name: /Drives/ }).click();
+  await expect(page.getByText("DEMO-STORE-01", { exact: false })).toBeVisible();
+  await page.goto("/storage?tab=drives&driveId=drv_demo_1");
+  await expect(
+    page.getByRole("textbox", { name: "Serial", exact: true }),
+  ).toHaveValue("DEMO-STORE-01");
+  await page.getByRole("tab", { name: /Logical pools/ }).click();
+  await expect(page.getByText("tank", { exact: true }).first()).toBeVisible();
+
+  await page.evaluate(() => localStorage.setItem("rackpad-theme", "dark"));
+  await page.setViewportSize({ width: 720, height: 900 });
+  await page.goto("/devices/d_srv_nas?tab=storage");
+  await expect(page.getByRole("tab", { name: /Storage/ })).toHaveAttribute(
+    "data-state",
+    "active",
+  );
+  await expect(page.getByText("Bay 24", { exact: true })).toBeVisible();
+  await expect(page.getByText("tank", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("DEMO-STORE-06", { exact: false })).toBeVisible();
+  await expect(
+    page.getByText("Missing", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByTestId("device-storage-attention")).toContainText("2");
+
+  const crossDeviceMember = page
+    .locator("label")
+    .filter({ hasText: "DEMO-STORE-05" })
+    .first();
+  await crossDeviceMember.hover();
+  await expect(page.locator('label[data-pool-highlighted="true"]')).toHaveCount(
+    6,
+  );
+  await expect(
+    page.locator('button[data-pool-highlighted="true"]'),
+  ).toHaveCount(4);
+  await crossDeviceMember.getByRole("checkbox").focus();
+  await expect(page.locator('label[data-pool-highlighted="true"]')).toHaveCount(
+    6,
+  );
+  await expect(
+    page.locator('button[data-pool-highlighted="true"]'),
+  ).toHaveCount(4);
+});
+
+test("storage labels localize built-ins while retaining technical values", async ({
+  page,
+  request,
+}) => {
+  const hostname = `storage-enclosure-locale-${Date.now().toString(36)}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  let deviceId = "";
+  try {
+    const response = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        hostname,
+        deviceType: "storage_enclosure",
+        placement: "room",
+        status: "online",
+      },
+    });
+    expect(response.status()).toBe(201);
+    deviceId = ((await response.json()) as { id: string }).id;
+
+    await authenticate(page, "fr");
+    await page.goto("/devices");
+    await expect(
+      page.getByText("Boîtier de stockage", { exact: true }).first(),
+    ).toBeVisible();
+
+    await page.goto("/storage?tab=pools");
+    await expect(page.getByText("Dégradé", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Pool de stockage", { exact: true }).first(),
+    ).toBeVisible();
+
+    await page.getByRole("tab", { name: /Modèles de baie/ }).click();
+    await expect(
+      page
+        .getByText("12 × 3.5-inch Baies de disques", { exact: true })
+        .first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Boîtier de stockage", { exact: true }),
+    ).toBeVisible();
+  } finally {
+    if (deviceId) {
+      const response = await request.delete(`/api/devices/${deviceId}`, {
+        headers,
+      });
+      expect(response.status(), await response.text()).toBe(204);
+    }
+  }
+});
+
+test("custom template drives a cross-device pool through the editor UI", async ({
+  browser,
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  const suffix = Date.now().toString(36);
+  const templateName = `E2E storage ${suffix}`;
+  const labName = `E2E Storage Lab ${suffix}`;
+  const hostName = `storage-host-with-a-deliberately-long-name-${suffix}`;
+  const enclosureName = `storage-enclosure-with-a-deliberately-long-name-${suffix}`;
+  const sectionName = `Long front storage bay section ${suffix}`;
+  const slotPrefix = `Long physical drive slot ${suffix} `;
+  const secondSlotName = `${slotPrefix}2`;
+  const poolName = `cross-device-storage-pool-with-a-long-name-${suffix}`;
+  const hostSerial = `E2E-HOST-${suffix}`;
+  const enclosureSerial = `E2E-JBOD-${suffix}`;
+  const editorUsername = `storage-editor-${suffix}`;
+  const editorPassword = "storage-editor-password";
+  const headers = { Authorization: `Bearer ${token}` };
+  let templateId = "";
+  let labId = "";
+  let editorId = "";
+  let editorContext: Awaited<ReturnType<typeof browser.newContext>> | null =
+    null;
+
+  try {
+    page.setDefaultTimeout(10_000);
+    await authenticate(page);
+    await page.goto("/storage?tab=templates");
+    await page.getByRole("button", { name: "Custom template" }).click();
+    await page
+      .getByRole("textbox", { name: "Name", exact: true })
+      .first()
+      .fill(templateName);
+    await page
+      .getByRole("textbox", { name: "Description", exact: true })
+      .fill("Two-bay E2E storage template");
+    await page
+      .getByRole("spinbutton", { name: "Slot count", exact: true })
+      .fill("2");
+    await page
+      .getByRole("textbox", { name: "Name", exact: true })
+      .last()
+      .fill(sectionName);
+    await page
+      .getByRole("textbox", { name: "Slot prefix", exact: true })
+      .fill(slotPrefix);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(
+      page.getByText(templateName, { exact: true }).first(),
+    ).toBeVisible();
+
+    const templatesResponse = await request.get(
+      "/api/storage/drive-bay-templates",
+      { headers },
+    );
+    expect(templatesResponse.ok()).toBeTruthy();
+    const templates = (await templatesResponse.json()) as Array<{
+      id: string;
+      name: string;
+    }>;
+    templateId =
+      templates.find((entry) => entry.name === templateName)?.id ?? "";
+    expect(templateId).not.toBe("");
+
+    const labResponse = await request.post("/api/labs", {
+      headers,
+      data: { name: labName, description: "Temporary storage E2E lab" },
+    });
+    expect(labResponse.status()).toBe(201);
+    labId = ((await labResponse.json()) as { id: string }).id;
+
+    const createDevice = async (hostname: string, deviceType: string) => {
+      const response = await request.post("/api/devices", {
+        headers,
+        data: {
+          labId,
+          hostname,
+          deviceType,
+          placement: "room",
+          status: "online",
+          driveBayTemplateId: templateId,
+        },
+      });
+      const result = (await response.json()) as { id?: string; error?: string };
+      expect(response.status(), result.error).toBe(201);
+      return { id: result.id! };
+    };
+    const host = await createDevice(hostName, "server");
+    const enclosure = await createDevice(enclosureName, "storage_enclosure");
+
+    const editorResponse = await request.post("/api/users", {
+      headers,
+      data: {
+        username: editorUsername,
+        displayName: "Storage E2E Editor",
+        password: editorPassword,
+        role: "editor",
+        labAccess: [{ labId, role: "editor" }],
+      },
+    });
+    expect(editorResponse.status()).toBe(201);
+    editorId = ((await editorResponse.json()) as { id: string }).id;
+    const loginResponse = await request.post("/api/auth/login", {
+      data: { username: editorUsername, password: editorPassword },
+    });
+    expect(loginResponse.ok()).toBeTruthy();
+    const editorToken = ((await loginResponse.json()) as { token: string })
+      .token;
+
+    editorContext = await browser.newContext();
+    const editorPage = await editorContext.newPage();
+    editorPage.setDefaultTimeout(10_000);
+    await editorPage.addInitScript((authToken) => {
+      localStorage.setItem("rackpad.auth.token", authToken);
+      localStorage.setItem("rackpad.language", "en");
+    }, editorToken);
+
+    const createDrive = async (
+      deviceId: string,
+      manufacturer: string,
+      serial: string,
+      capacity: string,
+    ) => {
+      await editorPage.goto(
+        `http://127.0.0.1:5173/devices/${deviceId}?tab=storage`,
+      );
+      await expect(
+        editorPage.getByText(secondSlotName, { exact: true }),
+      ).toBeVisible();
+      await editorPage
+        .getByTitle("Empty slot", { exact: true })
+        .first()
+        .click();
+      await editorPage
+        .getByRole("textbox", { name: "Manufacturer", exact: true })
+        .fill(manufacturer);
+      await editorPage
+        .getByRole("textbox", { name: "Model", exact: true })
+        .fill("FlowDrive");
+      await editorPage
+        .getByRole("textbox", { name: "Serial", exact: true })
+        .fill(serial);
+      await editorPage
+        .getByRole("spinbutton", { name: "Capacity", exact: true })
+        .fill(capacity);
+      await editorPage
+        .getByRole("combobox", { name: "Capacity unit", exact: true })
+        .selectOption("gb");
+      await editorPage
+        .getByRole("button", { name: "Create drive", exact: true })
+        .click();
+      await expect(
+        editorPage.getByRole("textbox", { name: "Serial", exact: true }),
+      ).toHaveValue(serial);
+    };
+
+    await createDrive(host.id, "HostDisk", hostSerial, "4000");
+
+    await editorPage.goto(
+      `http://127.0.0.1:5173/devices/${enclosure.id}?tab=storage`,
+    );
+    await expect(
+      editorPage.getByText(secondSlotName, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      editorPage.getByTestId("device-storage-raw-capacity"),
+    ).toContainText("0 GB");
+    await expect(
+      editorPage.getByTitle("Empty slot", { exact: true }),
+    ).toHaveCount(2);
+    await editorPage
+      .getByTitle("Empty slot", { exact: true })
+      .first()
+      .click();
+    await editorPage
+      .getByRole("textbox", { name: "Manufacturer", exact: true })
+      .fill("ShelfDisk");
+    await editorPage
+      .getByRole("textbox", { name: "Model", exact: true })
+      .fill("FlowDrive");
+    await editorPage
+      .getByRole("textbox", { name: "Serial", exact: true })
+      .fill(hostSerial);
+    await editorPage
+      .getByRole("spinbutton", { name: "Capacity", exact: true })
+      .fill("6000");
+    await editorPage
+      .getByRole("combobox", { name: "Capacity unit", exact: true })
+      .selectOption("gb");
+    await editorPage
+      .getByRole("button", { name: "Create drive", exact: true })
+      .click();
+    await expect(
+      editorPage.getByText("That record conflicts with an existing value."),
+    ).toBeVisible();
+    await expect(
+      editorPage.getByTestId("device-storage-raw-capacity"),
+    ).toContainText("0 GB");
+    await expect(
+      editorPage.getByTitle("Empty slot", { exact: true }),
+    ).toHaveCount(2);
+    await editorPage
+      .getByRole("textbox", { name: "Serial", exact: true })
+      .fill(enclosureSerial);
+    await editorPage
+      .getByRole("button", { name: "Create drive", exact: true })
+      .click();
+    await expect(
+      editorPage.getByRole("textbox", { name: "Serial", exact: true }),
+    ).toHaveValue(enclosureSerial);
+    await expect(
+      editorPage.getByTestId("device-storage-raw-capacity"),
+    ).toContainText("6 TB");
+
+    await editorPage.goto(
+      `http://127.0.0.1:5173/devices/${host.id}?tab=storage`,
+    );
+    await editorPage.getByRole("button", { name: "New pool" }).click();
+    await editorPage
+      .getByRole("textbox", { name: "Pool name", exact: true })
+      .fill(poolName);
+    await editorPage
+      .getByRole("spinbutton", { name: "Usable capacity", exact: true })
+      .fill("7000");
+    await editorPage
+      .getByRole("combobox", { name: "Capacity unit", exact: true })
+      .last()
+      .selectOption("gb");
+    await editorPage
+      .locator("label")
+      .filter({ hasText: hostSerial })
+      .getByRole("checkbox")
+      .check();
+    await editorPage
+      .locator("label")
+      .filter({ hasText: enclosureSerial })
+      .getByRole("checkbox")
+      .check();
+    await editorPage
+      .getByRole("button", { name: "Create pool", exact: true })
+      .click();
+
+    await expect(
+      editorPage.getByText(poolName, { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      editorPage.getByTestId("device-storage-raw-capacity"),
+    ).toContainText("4 TB");
+    await expect(
+      editorPage.getByTestId("device-storage-usable-capacity"),
+    ).toContainText("7 TB");
+    await expect(
+      editorPage.getByTestId("device-storage-attention"),
+    ).toContainText("0");
+    await editorPage.setViewportSize({ width: 720, height: 900 });
+    await expect(editorPage.getByText(sectionName, { exact: true })).toBeVisible();
+    expect(
+      await editorPage.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth + 1,
+      ),
+    ).toBeTruthy();
+
+    const remoteMember = editorPage
+      .locator("label")
+      .filter({ hasText: enclosureSerial })
+      .first();
+    await remoteMember.hover();
+    await expect(
+      editorPage.locator('label[data-pool-highlighted="true"]'),
+    ).toHaveCount(2);
+    await expect(
+      editorPage.locator('button[data-pool-highlighted="true"]'),
+    ).toHaveCount(1);
+    await remoteMember.getByRole("checkbox").focus();
+    await expect(
+      editorPage.locator('label[data-pool-highlighted="true"]'),
+    ).toHaveCount(2);
+
+    await editorPage.goto(
+      `http://127.0.0.1:5173/devices/${enclosure.id}?tab=storage`,
+    );
+    await editorPage.locator('button[title*="ShelfDisk FlowDrive"]').click();
+    await editorPage
+      .getByRole("button", { name: "Pull drive", exact: true })
+      .click();
+    await editorPage.goto(
+      `http://127.0.0.1:5173/devices/${host.id}?tab=storage`,
+    );
+    await expect(
+      editorPage.getByTestId("device-storage-attention"),
+    ).toContainText("1");
+    await expect(
+      editorPage.getByText("Missing", { exact: true }).first(),
+    ).toBeVisible();
+  } finally {
+    await editorContext?.close();
+    if (editorId) {
+      const response = await request.delete(`/api/users/${editorId}`, {
+        headers,
+      });
+      expect(response.status(), await response.text()).toBe(204);
+    }
+    if (labId) {
+      const response = await request.delete(`/api/labs/${labId}`, { headers });
+      expect(response.status(), await response.text()).toBe(204);
+    }
+    if (templateId) {
+      const response = await request.delete(
+        `/api/storage/drive-bay-templates/${templateId}`,
+        { headers },
+      );
+      expect(response.status(), await response.text()).toBe(204);
+    }
+  }
+});
+
+test("storage inventory is read-only for viewers", async ({
+  browser,
+  request,
+}) => {
+  const suffix = Date.now().toString(36);
+  const username = `storage-viewer-${suffix}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  let viewerId = "";
+  let viewerContext: Awaited<ReturnType<typeof browser.newContext>> | null =
+    null;
+
+  try {
+    const viewerResponse = await request.post("/api/users", {
+      headers,
+      data: {
+        username,
+        displayName: "Storage Viewer",
+        password: "storage-viewer-password",
+        role: "viewer",
+      },
+    });
+    expect(viewerResponse.status()).toBe(201);
+    viewerId = ((await viewerResponse.json()) as { id: string }).id;
+
+    const loginResponse = await request.post("/api/auth/login", {
+      data: { username, password: "storage-viewer-password" },
+    });
+    expect(loginResponse.ok()).toBeTruthy();
+    const viewerToken = ((await loginResponse.json()) as { token: string })
+      .token;
+
+    viewerContext = await browser.newContext();
+    const viewerPage = await viewerContext.newPage();
+    await viewerPage.addInitScript((authToken) => {
+      localStorage.setItem("rackpad.auth.token", authToken);
+    }, viewerToken);
+
+    await viewerPage.goto("http://127.0.0.1:5173/storage?tab=drives");
+    await expect(
+      viewerPage.getByRole("heading", { name: "Storage", exact: true }),
+    ).toBeVisible();
+    await expect(viewerPage.getByText("DEMO-STORE-01")).toBeVisible();
+    await expect(
+      viewerPage.getByRole("button", { name: "New drive", exact: true }),
+    ).toHaveCount(0);
+
+    await viewerPage.goto("http://127.0.0.1:5173/storage?tab=pools");
+    await viewerPage.getByRole("button", { name: "tank", exact: true }).click();
+    await expect(
+      viewerPage.getByRole("textbox", { name: "Pool name", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      viewerPage.getByRole("textbox", { name: "Notes", exact: true }),
+    ).toHaveValue(
+      "Cross-device demo pool with one backup-server member and one pulled member.",
+    );
+    await expect(viewerPage.getByText("DEMO-STORE-01")).toBeVisible();
+    await expect(viewerPage.getByText("DEMO-STORE-06")).toBeVisible();
+    const memberCheckboxes = viewerPage.getByRole("checkbox");
+    await expect(memberCheckboxes).toHaveCount(6);
+    for (let index = 0; index < 6; index += 1) {
+      await expect(memberCheckboxes.nth(index)).toBeDisabled();
+    }
+    await expect(
+      viewerPage.getByRole("button", { name: "Close", exact: true }),
+    ).toBeVisible();
+    for (const controlName of ["New pool", "Save pool", "Delete pool"]) {
+      await expect(
+        viewerPage.getByRole("button", { name: controlName, exact: true }),
+      ).toHaveCount(0);
+    }
+
+    await viewerPage.goto(
+      "http://127.0.0.1:5173/devices/d_srv_nas?tab=storage",
+    );
+    await expect(viewerPage.getByText("Bay 24", { exact: true })).toBeVisible();
+    for (const controlName of [
+      "Add slot",
+      "Save slot",
+      "Save drive",
+      "New pool",
+    ]) {
+      await expect(
+        viewerPage.getByRole("button", { name: controlName, exact: true }),
+      ).toHaveCount(0);
+    }
+
+    await viewerPage.goto("http://127.0.0.1:5173/storage?tab=templates");
+    await expect(
+      viewerPage.getByRole("button", {
+        name: "Custom template",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      viewerPage.getByRole("spinbutton", {
+        name: "Slot count",
+        exact: true,
+      }),
+    ).toBeDisabled();
+  } finally {
+    await viewerContext?.close();
+    if (viewerId) await request.delete(`/api/users/${viewerId}`, { headers });
+  }
+});
+
+test("storage interactive views remain accessible and responsive", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await authenticate(page);
+  await page.goto("/");
+  const routes = [
+    "/storage?tab=drives&driveId=drv_demo_1",
+    "/storage?tab=pools",
+    "/storage?tab=templates",
+    "/devices/d_srv_nas?tab=storage",
+  ];
+
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((selectedTheme) => {
+      localStorage.setItem("rackpad-theme", selectedTheme);
+    }, theme);
+    for (const viewport of [
+      { width: 720, height: 900 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      for (const route of routes) {
+        await page.goto(route);
+        await expect(page.locator("h1").first()).toBeVisible();
+        if (route === "/storage?tab=pools") {
+          await page
+            .getByRole("button", { name: "tank", exact: true })
+            .click();
+        }
+        if (route.includes("driveId=") || route.endsWith("tab=pools")) {
+          await expect(
+            page.getByRole("button", { name: "Close", exact: true }),
+          ).toBeVisible();
+        }
+        expect(
+          await page.evaluate(
+            () =>
+              document.documentElement.scrollWidth <=
+              document.documentElement.clientWidth + 1,
+          ),
+          `${route} overflowed in ${theme} at ${viewport.width}px`,
+        ).toBeTruthy();
+        const results = await new AxeBuilder({ page }).analyze();
+        expect(
+          results.violations.filter(
+            (violation) =>
+              violation.impact === "critical" ||
+              violation.impact === "serious",
+          ),
+          `${route} has serious accessibility violations in ${theme} at ${viewport.width}px`,
+        ).toEqual([]);
+      }
+    }
+  }
+});
 
 test.beforeAll(async ({ request }) => {
   const status = await request.get("/api/auth/status");
@@ -1826,9 +2426,14 @@ test("localized Admin controls stay contained and alert counts pluralize", async
     await rolePicker
       .getByRole("button", { name: mode.role, exact: true })
       .click();
-    const assignmentSelects = page.locator("select").filter({
-      has: page.locator('option[value="none"]'),
-    });
+    const assignmentSelects = page
+      .locator("select")
+      .filter({
+        has: page.locator('option[value="none"]'),
+      })
+      .filter({
+        has: page.locator('option[value="viewer"]'),
+      });
     await expect(assignmentSelects).toHaveCount(2);
     for (const select of await assignmentSelects.all()) {
       expect(

@@ -25,6 +25,7 @@ import {
   Route,
   Shield,
   UploadCloud,
+  HardDrive,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { formatDeviceAddress } from "@/lib/network-labels";
@@ -35,7 +36,7 @@ import { useI18n } from "@/i18n";
 
 interface SearchResult {
   id: string;
-  group: "Pages" | "Devices" | "Networks" | "IPs";
+  group: "Pages" | "Devices" | "Drives" | "Networks" | "IPs";
   title: string;
   subtitle?: string;
   href: string;
@@ -59,6 +60,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   const devices = useStore((s) => s.devices);
   const documentationPages = useStore((s) => s.documentationPages);
+  const storageDrives = useStore((s) => s.storageDrives);
   const vlans = useStore((s) => s.vlans);
   const ipAssignments = useStore((s) => s.ipAssignments);
   const deviceById = useMemo(
@@ -99,6 +101,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         subtitle: "Health overview",
         href: "/monitoring",
         Icon: Activity,
+      },
+      {
+        id: "p-storage",
+        group: "Pages",
+        title: t("Storage"),
+        subtitle: t("Physical drives, device bays, and logical pools"),
+        href: "/storage",
+        Icon: HardDrive,
+        keywords: ["storage", "drive", "disk", "pool", "raid", "jbod"],
       },
       {
         id: "p-imports",
@@ -225,6 +236,28 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       }
     }
 
+    for (const drive of storageDrives) {
+      const haystack = [drive.serial, drive.manufacturer, drive.model]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (haystack.includes(q)) {
+        out.push({
+          id: `drive-${drive.id}`,
+          group: "Drives",
+          title:
+            [drive.manufacturer, drive.model].filter(Boolean).join(" ") ||
+            drive.serial ||
+            t("Unknown drive"),
+          subtitle: [drive.serial, drive.deviceHostname, drive.slotName]
+            .filter(Boolean)
+            .join(" · "),
+          href: `/storage?tab=drives&driveId=${drive.id}`,
+          Icon: HardDrive,
+        });
+      }
+    }
+
     for (const vlan of vlans) {
       const haystack = [String(vlan.vlanId), vlan.name, vlan.description]
         .filter(Boolean)
@@ -307,6 +340,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     ipAssignments,
     pages,
     query,
+    storageDrives,
     t,
     vlans,
   ]);

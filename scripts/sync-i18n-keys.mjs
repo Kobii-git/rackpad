@@ -9,10 +9,14 @@ const localesDir = join(root, "src/i18n/locales");
 
 function parseObjectBody(body) {
   const entries = new Map();
-  const regex = /^\s*"((?:\\.|[^"\\])*)"\s*:\s*"((?:\\.|[^"\\])*)"\s*,?\s*$/gm;
+  const regex = /^\s*(["'])((?:\\.|(?!\1).)*)\1\s*:\s*(["'])((?:\\.|(?!\3).)*)\3\s*,?\s*$/gm;
   let match;
   while ((match = regex.exec(body)) !== null) {
-    entries.set(JSON.parse(`"${match[1]}"`), JSON.parse(`"${match[2]}"`));
+    const parseString = (quote, value) =>
+      quote === '"'
+        ? JSON.parse(`"${value}"`)
+        : JSON.parse(`"${value.replace(/\\'/g, "'").replace(/"/g, '\\"')}"`);
+    entries.set(parseString(match[1], match[2]), parseString(match[3], match[4]));
   }
   return entries;
 }

@@ -42,7 +42,10 @@ import type {
   Vlan,
   VirtualSwitch,
 } from "@/lib/types";
-import { deviceTypeLabel, deviceTypeMatchesTemplate } from "@/lib/device-types";
+import {
+  localizedDeviceTypeIdLabel,
+  deviceTypeMatchesTemplate,
+} from "@/lib/device-types";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { formatPortLabel } from "@/lib/utils";
 import { ArrowRight, Filter, Network, Plus, Save, Trash2 } from "lucide-react";
@@ -1047,7 +1050,12 @@ export default function PortView() {
                   <option value="all">{t("All types")}</option>
                   {portDeviceTypeOptions.map((deviceType) => (
                     <option key={deviceType.id} value={deviceType.id}>
-                      {deviceType.label}
+                      {localizedDeviceTypeIdLabel(
+                        deviceType.id,
+                        deviceTypes,
+                        t,
+                        deviceType.label,
+                      )}
                     </option>
                   ))}
                 </Select>
@@ -1131,7 +1139,11 @@ export default function PortView() {
                       className="size-4 text-[var(--color-accent)]"
                     />
                     <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-subtle)]">
-                      {deviceTypeLabel(device.deviceType, deviceTypes)}
+                      {localizedDeviceTypeIdLabel(
+                        device.deviceType,
+                        deviceTypes,
+                        t,
+                      )}
                     </span>
                   </div>
                   <Link
@@ -2100,7 +2112,12 @@ export default function PortView() {
                                           : "border-[var(--color-line)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-strong)]"
                                       } disabled:cursor-default disabled:opacity-70`}
                                     >
-                                      {deviceType.label}
+                                      {localizedDeviceTypeIdLabel(
+                                        deviceType.id,
+                                        deviceTypes,
+                                        t,
+                                        deviceType.label,
+                                      )}
                                     </button>
                                   );
                                 })}

@@ -56,6 +56,7 @@ import type {
   Subnet,
 } from "@/lib/types";
 import { cidrContainsIp, ipToInt } from "@/lib/utils";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import {
   applySortDirection,
   compareDate,
@@ -1424,7 +1425,12 @@ export default function DiscoveryView() {
                         >
                           {deviceTypes.map((deviceType) => (
                             <option key={deviceType.id} value={deviceType.id}>
-                              {deviceType.label}
+                              {localizedDeviceTypeIdLabel(
+                                deviceType.id,
+                                deviceTypes,
+                                t,
+                                deviceType.label,
+                              )}
                             </option>
                           ))}
                         </Select>

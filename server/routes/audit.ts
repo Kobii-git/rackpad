@@ -91,6 +91,22 @@ function getAuditEntityLabIds(entityType: string, entityId: string) {
         JOIN devices ON devices.id = virtualSwitches.hostDeviceId
         WHERE virtualSwitches.id = ?
       `, id)
+    case 'DriveSlot':
+      return queryLabIds(`
+        SELECT devices.labId
+        FROM driveSlots
+        JOIN devices ON devices.id = driveSlots.deviceId
+        WHERE driveSlots.id = ?
+      `, id)
+    case 'StorageDrive':
+      return queryLabIds('SELECT labId FROM storageDrives WHERE id = ?', id)
+    case 'StoragePool':
+      return queryLabIds(`
+        SELECT devices.labId
+        FROM storagePools
+        JOIN devices ON devices.id = storagePools.deviceId
+        WHERE storagePools.id = ?
+      `, id)
     case 'Vlan':
       return queryLabIds('SELECT labId FROM vlans WHERE id = ?', id)
     case 'VlanRange':
