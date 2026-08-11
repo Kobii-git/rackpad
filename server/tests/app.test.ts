@@ -31,6 +31,9 @@ const { resetLocalUserPassword } = await import("../lib/password-reset.js");
 const { parseIeeeOuiText } = await import("../lib/oui.js");
 const { cidrOverlaps, ipToInt } = await import("../lib/ip-cidr.js");
 const { resolveSnmpSessionForTarget } = await import("../lib/snmp-session.js");
+const { inferDiscoveryPlacement } = await import(
+  "../lib/discovery-placement.js"
+);
 const { setNetworkHostLookupForTests, setPinnedRequestTransportForTests } =
   await import("../lib/net-guard.js");
 const {
@@ -2445,6 +2448,119 @@ test("custom device types can be created and used by devices and templates", asy
     },
   });
   assert.equal(deleteBuiltInTypeRes.statusCode, 400);
+});
+
+test("custom device types inherit built-in placement and validation behavior", async () => {
+  const adminToken = await bootstrapAdmin();
+  const definitions = [
+    ["custom_vm", "Custom VM", "vm"],
+    ["custom_container", "Custom container", "container"],
+    ["custom_ap", "Custom AP", "ap"],
+    ["custom_shelf", "Custom shelf", "rack_shelf"],
+    ["custom_patch", "Custom patch panel", "patch_panel"],
+  ] as const;
+
+  for (const [id, label, parentType] of definitions) {
+    const typeRes = await app.inject({
+      method: "POST",
+      url: "/api/device-types",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { id, label, parentType },
+    });
+    assert.equal(typeRes.statusCode, 201, typeRes.body);
+  }
+
+  const hostRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      hostname: "custom-workload-host",
+      deviceType: "server",
+      status: "online",
+    },
+  });
+  assert.equal(hostRes.statusCode, 201, hostRes.body);
+  const host = readJson(hostRes) as { id: string };
+
+  const expectedPlacements = [
+    ["custom_vm", "virtual"],
+    ["custom_container", "virtual"],
+    ["custom_ap", "wireless"],
+    ["custom_shelf", "rack"],
+    ["custom_patch", "room"],
+  ] as const;
+  const created = new Map<string, { id: string; placement: string }>();
+
+  for (const [deviceType, expectedPlacement] of expectedPlacements) {
+    const deviceRes = await app.inject({
+      method: "POST",
+      url: "/api/devices",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        labId: "lab_home",
+        hostname: `${deviceType}-01`,
+        deviceType,
+        status: "unknown",
+        parentDeviceId:
+          deviceType === "custom_vm" || deviceType === "custom_container"
+            ? host.id
+            : undefined,
+        networkMode: deviceType === "custom_vm" ? "host-shared" : undefined,
+      },
+    });
+    assert.equal(deviceRes.statusCode, 201, deviceRes.body);
+    const device = readJson(deviceRes) as {
+      id: string;
+      placement: string;
+      networkMode: string;
+    };
+    assert.equal(device.placement, expectedPlacement);
+    if (deviceType === "custom_vm") {
+      assert.equal(device.networkMode, "host-shared");
+    }
+    created.set(deviceType, device);
+  }
+
+  assert.equal(
+    inferDiscoveryPlacement({
+      labId: "lab_home",
+      ipAddress: "192.0.2.20",
+      deviceType: "custom_ap",
+    }),
+    "wireless",
+  );
+  assert.equal(
+    inferDiscoveryPlacement({
+      labId: "lab_home",
+      ipAddress: "192.0.2.21",
+      deviceType: "custom_container",
+    }),
+    "virtual",
+  );
+
+  const customAp = created.get("custom_ap");
+  assert.ok(customAp);
+  const saveApRes = await app.inject({
+    method: "PUT",
+    url: `/api/wifi/access-points/${customAp.id}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { location: "Custom AP room" },
+  });
+  assert.equal(saveApRes.statusCode, 200, saveApRes.body);
+
+  const listApRes = await app.inject({
+    method: "GET",
+    url: "/api/wifi/access-points?labId=lab_home",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(listApRes.statusCode, 200, listApRes.body);
+  const accessPoints = readJson(listApRes) as Array<{ deviceId: string }>;
+  assert.equal(
+    accessPoints.some((entry) => entry.deviceId === customAp.id),
+    true,
+  );
 });
 
 test("bulk device updates accept custom types and wireless placement", async () => {
@@ -8506,6 +8622,82 @@ test("storage topology migration upgrades a version-34 database without changing
   assert.equal(device.storageGb, 9876);
   assert.equal(version.version, 35);
   migrated.close();
+});
+
+test("docker import scopes duplicate hostnames to the selected host", async () => {
+  const adminToken = await bootstrapAdmin();
+  const hosts: Array<{ id: string }> = [];
+  for (const hostname of ["docker-host-01", "docker-host-02"]) {
+    const hostRes = await app.inject({
+      method: "POST",
+      url: "/api/devices",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        labId: "lab_home",
+        hostname,
+        deviceType: "server",
+        status: "online",
+      },
+    });
+    assert.equal(hostRes.statusCode, 201);
+    hosts.push(readJson(hostRes) as { id: string });
+  }
+
+  setDockerHttpJsonFetcherForTests(async (url) => {
+    const containerId = `container-${url.hostname}`;
+    return [
+      {
+        Id: containerId,
+        Names: ["/homepage"],
+        Image: "ghcr.io/gethomepage/homepage:latest",
+        State: "running",
+        Status: "Up 3 minutes",
+      },
+    ];
+  });
+
+  const importContainer = (endpoint: string, hostDeviceId: string) =>
+    app.inject({
+      method: "POST",
+      url: "/api/imports/docker/import",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        endpoint,
+        containerId: `container-${new URL(endpoint).hostname}`,
+        labId: "lab_home",
+        hostDeviceId,
+      },
+    });
+
+  try {
+    const firstImportRes = await importContainer(
+      "https://8.8.8.8:2375",
+      hosts[0]!.id,
+    );
+    assert.equal(firstImportRes.statusCode, 201);
+
+    const otherHostImportRes = await importContainer(
+      "https://1.1.1.1:2375",
+      hosts[1]!.id,
+    );
+    assert.equal(otherHostImportRes.statusCode, 201);
+    assert.equal(
+      (readJson(otherHostImportRes) as { parentDeviceId: string })
+        .parentDeviceId,
+      hosts[1]!.id,
+    );
+
+    const sameHostImportRes = await importContainer(
+      "https://9.9.9.9:2375",
+      hosts[1]!.id,
+    );
+    assert.equal(sameHostImportRes.statusCode, 409);
+    assert.deepEqual(readJson(sameHostImportRes), {
+      error: "Hostname homepage is already used on this host.",
+    });
+  } finally {
+    setDockerHttpJsonFetcherForTests(null);
+  }
 });
 
 test("docker import stores a sync source and refreshes container status", async () => {

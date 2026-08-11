@@ -35,7 +35,10 @@ import {
   X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/utils";
-import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
+import {
+  deviceTypeBase,
+  localizedDeviceTypeIdLabel,
+} from "@/lib/device-types";
 import {
   applySortDirection,
   compareIp,
@@ -49,6 +52,10 @@ import {
   indexValidDeviceIpAssignments,
   matchingAssignedIps,
 } from "@/lib/device-ip-consistency";
+import {
+  canonicalMacAddress,
+  matchesMacAwareSearch,
+} from "@/lib/network-labels";
 
 type SortKey =
   | "hostname"
@@ -170,9 +177,11 @@ export default function DevicesList() {
   const accessPointCandidates = useMemo(
     () =>
       devices
-        .filter((device) => device.deviceType === "ap")
+        .filter(
+          (device) => deviceTypeBase(device.deviceType, deviceTypes) === "ap",
+        )
         .sort((a, b) => a.hostname.localeCompare(b.hostname)),
-    [devices],
+    [devices, deviceTypes],
   );
 
   const deviceById = useMemo(() => {
@@ -294,7 +303,7 @@ export default function DevicesList() {
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        return haystack.includes(query.toLowerCase());
+        return matchesMacAwareSearch(haystack, query.toLowerCase());
       })
       .sort((a, b) =>
         compareDevices(
@@ -1629,13 +1638,6 @@ function compareDevices(
 
 function deviceModelSortValue(device: Device) {
   return [device.manufacturer, device.model].filter(Boolean).join(" ");
-}
-
-function canonicalMacAddress(value?: string | null) {
-  if (!value) return null;
-  const compact = value.trim().replace(/[:.\-\s]/g, "").toLowerCase();
-  if (!/^[0-9a-f]{12}$/.test(compact)) return null;
-  return compact.match(/.{2}/g)?.join(":") ?? null;
 }
 
 function devicePlacementSortValue(

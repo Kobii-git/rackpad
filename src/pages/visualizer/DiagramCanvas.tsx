@@ -1248,16 +1248,19 @@ function describeSection(
     : null;
   if (parent) {
     const parentNode = model.nodesByDeviceId[parent.id];
+    const parentBaseType =
+      parentNode?.effectiveDeviceType ??
+      model.effectiveDeviceTypeByDeviceId[parent.id] ??
+      parent.deviceType;
+    const parentIsRackShelf = parentBaseType === "rack_shelf";
     return {
       id: `parent:${parent.id}`,
       title: parent.hostname,
-      subtitle:
-        parent.deviceType === "rack_shelf"
-          ? "Shelf / stacked devices"
-          : "Hosted child devices",
+      subtitle: parentIsRackShelf
+        ? "Shelf / stacked devices"
+        : "Hosted child devices",
       accent: parentNode?.typeColor ?? node.typeColor,
-      layout: (parent.deviceType === "rack_shelf" ? "stack" : "grid") as
-        "stack" | "grid",
+      layout: (parentIsRackShelf ? "stack" : "grid") as "stack" | "grid",
       sortGroup: 1,
     };
   }

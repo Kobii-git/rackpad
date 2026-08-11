@@ -11,7 +11,10 @@ import {
   assertLabWriteFromRow,
   resolveLabIdsForList,
 } from "../lib/lab-access.js";
-import { optionalDeviceType } from "../lib/device-types.js";
+import {
+  deviceTypeBase,
+  optionalDeviceType,
+} from "../lib/device-types.js";
 import {
   inferDiscoveryPlacement,
   inferDiscoveryPlacementHint,
@@ -525,8 +528,9 @@ function inferPlacement(
       macAddress: context.macAddress,
     });
   }
-  if (deviceType === "ap") return "wireless" as const;
-  if (deviceType === "vm" || deviceType === "container")
+  const baseType = deviceTypeBase(deviceType);
+  if (baseType === "ap") return "wireless" as const;
+  if (baseType === "vm" || baseType === "container")
     return "virtual" as const;
   return "room" as const;
 }

@@ -338,12 +338,12 @@ export default function DeviceDetail() {
   const deviceStoragePools = id
     ? storagePools.filter((entry) => entry.deviceId === id)
     : [];
-  const storageBaseType = device
+  const baseDeviceType = device
     ? deviceTypeBase(device.deviceType, deviceTypes)
     : null;
   const showStorage =
-    storageBaseType === "server" ||
-    storageBaseType === "storage" ||
+    baseDeviceType === "server" ||
+    baseDeviceType === "storage" ||
     deviceDriveSlots.length > 0 ||
     deviceStoragePools.length > 0;
   useEffect(() => {
@@ -1576,7 +1576,7 @@ export default function DeviceDetail() {
                     <CardTitle>
                       <CardLabel>{t("Relationships")}</CardLabel>
                       <CardHeading>
-                        {device.deviceType === "ap"
+                        {baseDeviceType === "ap"
                           ? t("Connected clients")
                           : t("Hosted / child devices")}
                       </CardHeading>
@@ -1808,6 +1808,7 @@ export default function DeviceDetail() {
                           links={linkByPortId}
                           portsById={portById}
                           devicesById={deviceById}
+                          deviceTypes={deviceTypes}
                           vlansById={vlanById}
                           virtualSwitchesById={virtualSwitchById}
                           snmpVerifiedPortIds={snmpVerifiedPortIds}
@@ -1838,6 +1839,7 @@ export default function DeviceDetail() {
                         links={linkByPortId}
                         portsById={portById}
                         devicesById={deviceById}
+                        deviceTypes={deviceTypes}
                         vlansById={vlanById}
                         virtualSwitchesById={virtualSwitchById}
                         onSelectPort={(portId) => {
@@ -1863,6 +1865,7 @@ export default function DeviceDetail() {
               <div className="col-span-12 xl:col-span-4">
                 <DevicePortEditor
                   device={device}
+                  deviceTypes={deviceTypes}
                   port={selectedPort}
                   creating={creatingPort}
                   canEdit={canEdit}
@@ -1872,7 +1875,7 @@ export default function DeviceDetail() {
                   peerPort={peerPort}
                   peerDevice={peerDevice}
                   link={selectedLink}
-                  showFaceInHeading={device.deviceType === "patch_panel"}
+                  showFaceInHeading={baseDeviceType === "patch_panel"}
                   onCancelCreate={() => setCreatingPort(false)}
                   onSaved={(savedPort) => {
                     setCreatingPort(false);

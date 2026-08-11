@@ -28,7 +28,10 @@ import {
   localizedDeviceTypeIdLabel,
   normalizeDeviceTypeId,
 } from "@/lib/device-types";
-import { formatDeviceAddress } from "@/lib/network-labels";
+import {
+  canonicalMacAddress,
+  formatDeviceAddress,
+} from "@/lib/network-labels";
 import { buildSnmpVerifiedPortIds } from "@/lib/snmp-port-status";
 import type {
   RackBand,
@@ -2144,6 +2147,7 @@ export function buildSearchResults(
 ): SearchResult[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return [];
+  const deviceNeedle = canonicalMacAddress(normalized) ?? normalized;
   const results: SearchResult[] = [];
   for (const node of model.nodes) {
     const haystack = [
@@ -2159,7 +2163,7 @@ export function buildSearchResults(
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    const score = fuzzyScore(haystack, normalized);
+    const score = fuzzyScore(haystack, deviceNeedle);
     if (score > 0) {
       results.push({
         kind: "device",

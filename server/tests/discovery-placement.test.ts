@@ -11,6 +11,7 @@ process.env.RACKPAD_SECRET_KEY = 'rackpad-test-secret-key'
 
 const { db } = await import('../db.js')
 const { cidrContainsHostIp } = await import('../lib/ip-cidr.js')
+const { createDeviceType } = await import('../lib/device-types.js')
 const {
   applyWifiDiscoveryPlacementToDevice,
   cidrContainsIp,
@@ -27,6 +28,7 @@ after(() => {
 
 beforeEach(() => {
   db.exec(`
+    DELETE FROM appSettings;
     DELETE FROM wifiClientAssociations;
     DELETE FROM wifiRadioSsids;
     DELETE FROM wifiRadios;
@@ -177,6 +179,26 @@ test('wired inventory and hostname heuristics skip WiFi auto placement', () => {
     }),
   )
   assert.equal(shouldSkipWifiAutoPlacement({ deviceType: 'server' }), true)
+})
+
+test('custom wired types report the wired device-type placement hint', () => {
+  createDeviceType({
+    id: 'mini_server',
+    label: 'Mini server',
+    parentType: 'server',
+  })
+
+  const explanation = explainWifiClientPlacement({
+    labId: 'lab_home',
+    ipAddress: '192.0.2.10',
+    deviceType: 'mini_server',
+  })
+
+  assert.deepEqual(explanation, {
+    placement: 'room',
+    hint: 'loose-wired-device-type',
+    resolved: null,
+  })
 })
 
 test('applyWifiDiscoveryPlacementToDevice updates device and association', () => {

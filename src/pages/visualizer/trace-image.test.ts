@@ -237,6 +237,51 @@ test("trace image icons inherit custom device parents and fall back safely", () 
   assert.match(image.svg, /<\/svg>$/);
 });
 
+test("trace image uses server and storage icons for custom child types", () => {
+  const devices = [
+    device("custom-server", { deviceType: "mini_server" }),
+    device("custom-storage", { deviceType: "disk_array" }),
+  ];
+  const ports = [
+    port("custom_server_port", "custom-server", "eno1"),
+    port("custom_storage_port", "custom-storage", "eth0"),
+  ];
+  const model = buildModel({
+    devices,
+    ports,
+    deviceTypes: [
+      {
+        id: "mini_server",
+        label: "Mini server",
+        parentType: "server",
+        builtIn: false,
+      },
+      {
+        id: "disk_array",
+        label: "Disk array",
+        parentType: "storage",
+        builtIn: false,
+      },
+    ],
+    links: [
+      {
+        id: "custom_server_storage",
+        fromPortId: "custom_server_port",
+        toPortId: "custom_storage_port",
+      },
+    ],
+  });
+  const result = tracePorts(model, "custom_server_port", "custom_storage_port");
+  assert.ok(result);
+
+  const image = buildTraceImageSvg(model, result, labels, "light");
+  assert.equal((image.svg.match(/data-device-icon="server"/g) ?? []).length, 1);
+  assert.equal(
+    (image.svg.match(/data-device-icon="storage"/g) ?? []).length,
+    1,
+  );
+});
+
 test("trace image groups a patch-panel pass-through into one device card", () => {
   const devices = [
     device("source", { hostname: "source-01" }),

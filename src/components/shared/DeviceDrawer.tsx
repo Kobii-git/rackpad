@@ -317,17 +317,19 @@ export function DeviceDrawer({
   );
   const isRackMounted = form.placement === "rack";
   const isShelfMounted = form.placement === "shelf";
+  const formBaseType = deviceTypeBase(form.deviceType, deviceTypes);
   const parentCandidates = useMemo(() => {
     return devices
       .filter((entry) => !device || entry.id !== device.id)
       .filter((entry) => {
-        if (form.placement === "wireless") return entry.deviceType === "ap";
+        if (form.placement === "wireless")
+          return deviceTypeBase(entry.deviceType, deviceTypes) === "ap";
         if (form.placement === "virtual")
           return !["vm", "container"].includes(
             deviceTypeBase(entry.deviceType, deviceTypes),
           );
         if (form.placement === "shelf")
-          return entry.deviceType === "rack_shelf";
+          return deviceTypeBase(entry.deviceType, deviceTypes) === "rack_shelf";
         return true;
       })
       .sort((a, b) => a.hostname.localeCompare(b.hostname));
@@ -354,7 +356,7 @@ export function DeviceDrawer({
     : undefined;
   const canUseHostSharedNetworking =
     form.placement === "virtual" &&
-    (form.deviceType === "vm" || form.deviceType === "container") &&
+    (formBaseType === "vm" || formBaseType === "container") &&
     Boolean(form.parentDeviceId);
   const managementIp = form.managementIp.trim();
   const managementSubnet = managementIp
@@ -390,10 +392,10 @@ export function DeviceDrawer({
     scopesForSelectedSubnet[0]?.id ||
     "";
   const managementAssignmentType = useMemo<IpAssignmentType>(() => {
-    if (form.deviceType === "vm") return "vm";
-    if (form.deviceType === "container") return "container";
+    if (formBaseType === "vm") return "vm";
+    if (formBaseType === "container") return "container";
     return "device";
-  }, [form.deviceType]);
+  }, [formBaseType]);
   const nextIpPreview = useMemo(() => {
     if (isEdit || canUseHostSharedNetworking || !selectedIpSubnetId)
       return null;
@@ -478,10 +480,10 @@ export function DeviceDrawer({
   }, [form.placement]);
 
   useEffect(() => {
-    if (form.deviceType !== "rack_shelf") return;
+    if (formBaseType !== "rack_shelf") return;
     if (form.placement === "rack") return;
     setForm((prev) => ({ ...prev, placement: "rack", parentDeviceId: "" }));
-  }, [form.deviceType, form.placement]);
+  }, [form.placement, formBaseType]);
 
   useEffect(() => {
     if (showParentSelector) return;
@@ -1343,7 +1345,7 @@ export function DeviceDrawer({
                     >
                       <option value="rack">{t("Rack mounted")}</option>
                       <option value="room">{t("Loose / room tech")}</option>
-                      {form.deviceType !== "rack_shelf" && (
+                      {formBaseType !== "rack_shelf" && (
                         <option value="shelf">
                           {t("On rack shelf / tray")}
                         </option>

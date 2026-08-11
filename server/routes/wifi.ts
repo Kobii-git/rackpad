@@ -7,6 +7,7 @@ import {
   resolveLabIdsForList,
 } from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
+import { deviceTypeBase } from '../lib/device-types.js'
 import {
   asObject,
   ensureIpv4,
@@ -171,7 +172,7 @@ function getRadio(radioId: string) {
 function requireApDevice(deviceId: string, labId?: string) {
   const device = getDevice(deviceId)
   if (!device) throw new ValidationError('Selected access point does not exist.')
-  if (device.deviceType !== 'ap') throw new ValidationError('Selected device must be an access point.')
+  if (deviceTypeBase(device.deviceType) !== 'ap') throw new ValidationError('Selected device must be an access point.')
   if (labId && device.labId !== labId) throw new ValidationError('Access point must belong to the same lab.')
   return device
 }
@@ -179,7 +180,7 @@ function requireApDevice(deviceId: string, labId?: string) {
 function requireClientDevice(deviceId: string, labId?: string) {
   const device = getDevice(deviceId)
   if (!device) throw new ValidationError('Selected client device does not exist.')
-  if (device.deviceType === 'ap') throw new ValidationError('Access points cannot be linked as wireless clients.')
+  if (deviceTypeBase(device.deviceType) === 'ap') throw new ValidationError('Access points cannot be linked as wireless clients.')
   if (labId && device.labId !== labId) throw new ValidationError('Wireless client must belong to the same lab.')
   return device
 }
@@ -468,18 +469,21 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
     let sql = `
       SELECT
         d.id AS deviceId,
+        d.deviceType,
         a.controllerId,
         a.location,
         a.firmwareVersion,
         a.notes
       FROM devices d
       LEFT JOIN wifiAccessPoints a ON a.deviceId = d.id
-      WHERE d.deviceType = 'ap'
+      WHERE 1=1
     `
     const params: unknown[] = []
     const filtered = appendLabFilter(sql, params, filter.labIds, 'd.labId')
     const rows = db.prepare(`${filtered.sql} ORDER BY d.hostname, d.id`).all(...filtered.params) as Record<string, unknown>[]
-    return rows.map(parseWifiAccessPoint)
+    return rows
+      .filter((row) => deviceTypeBase(String(row.deviceType)) === 'ap')
+      .map(parseWifiAccessPoint)
   })
 
   app.put<{ Params: { deviceId: string } }>('/access-points/:deviceId', async (req, reply) => {

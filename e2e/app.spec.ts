@@ -1073,7 +1073,7 @@ test("all primary routes load without document overflow in both demo labs", asyn
   }
 });
 
-test("custom server device types inherit Compute host behavior", async ({
+test("Compute host eligibility distinguishes storage from storage enclosures", async ({
   page,
   request,
 }) => {
@@ -1082,8 +1082,14 @@ test("custom server device types inherit Compute host behavior", async ({
   const suffix = Date.now().toString(16).slice(-7);
   const serverTypeId = `e2e_compute_server_${suffix}`;
   const endpointTypeId = `e2e_compute_endpoint_${suffix}`;
+  const storageTypeId = `e2e_compute_storage_${suffix}`;
+  const enclosureTypeId = `e2e_compute_enclosure_${suffix}`;
   const serverHostname = `compute-host-${suffix}`;
   const endpointHostname = `compute-endpoint-${suffix}`;
+  const storageHostname = `compute-storage-${suffix}`;
+  const enclosureHostname = `compute-enclosure-${suffix}`;
+  const customStorageHostname = `compute-custom-storage-${suffix}`;
+  const customEnclosureHostname = `compute-custom-enclosure-${suffix}`;
   const guestHostname = `compute-guest-${suffix}`;
   const deviceIds: string[] = [];
   const deviceTypeIds: string[] = [];
@@ -1099,6 +1105,16 @@ test("custom server device types inherit Compute host behavior", async ({
         id: endpointTypeId,
         label: `E2E compute endpoint ${suffix}`,
         parentType: "endpoint",
+      },
+      {
+        id: storageTypeId,
+        label: `E2E compute storage ${suffix}`,
+        parentType: "storage",
+      },
+      {
+        id: enclosureTypeId,
+        label: `E2E compute enclosure ${suffix}`,
+        parentType: "storage_enclosure",
       },
     ]) {
       const response = await request.post("/api/device-types", {
@@ -1123,6 +1139,22 @@ test("custom server device types inherit Compute host behavior", async ({
         hostname: endpointHostname,
         deviceType: endpointTypeId,
       },
+      {
+        hostname: storageHostname,
+        deviceType: "storage",
+      },
+      {
+        hostname: enclosureHostname,
+        deviceType: "storage_enclosure",
+      },
+      {
+        hostname: customStorageHostname,
+        deviceType: storageTypeId,
+      },
+      {
+        hostname: customEnclosureHostname,
+        deviceType: enclosureTypeId,
+      },
     ]) {
       const response = await request.post("/api/devices", {
         headers,
@@ -1143,9 +1175,24 @@ test("custom server device types inherit Compute host behavior", async ({
     await expect(
       page.getByRole("link", { name: serverHostname, exact: true }),
     ).toBeVisible();
-    await expect(page.getByText(endpointHostname, { exact: true })).toHaveCount(
-      0,
-    );
+    for (const hostname of [storageHostname, customStorageHostname]) {
+      const hostCard = page
+        .getByRole("link", { name: hostname, exact: true })
+        .locator(
+          "xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' rk-panel-inset ')][1]",
+        );
+      await expect(hostCard).toBeVisible();
+      await expect(
+        hostCard.getByRole("button", { name: "Add bridge", exact: true }),
+      ).toBeVisible();
+    }
+    for (const hostname of [
+      endpointHostname,
+      enclosureHostname,
+      customEnclosureHostname,
+    ]) {
+      await expect(page.getByText(hostname, { exact: true })).toHaveCount(0);
+    }
 
     const guestResponse = await request.post("/api/devices", {
       headers,

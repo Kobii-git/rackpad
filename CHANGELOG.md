@@ -8,6 +8,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.0-beta.0] - 2026-08-11
+
 ### Added
 
 - Added Storage Topology v1 with lab-wide physical-drive inventory, reusable
@@ -22,6 +24,18 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Fixed
 
+- Docker container import now rejects duplicate container hostnames per host,
+  while allowing the same hostname to be imported under a different Docker host
+  ([#120](https://github.com/Kobii-git/rackpad/issues/120)).
+- MAC address search now accepts colon, hyphen, Cisco dot, and continuous hex
+  notation across device, command-palette, port, discovery, and Visualizer
+  searches ([#119](https://github.com/Kobii-git/rackpad/issues/119)).
+- Custom device types now inherit their parent type's placement, virtual-port,
+  access-point, patch-panel, virtual-switch, Wi-Fi classification, and Docker
+  import host behavior ([#115](https://github.com/Kobii-git/rackpad/issues/115)).
+- Storage enclosures are no longer offered as Compute virtualization hosts,
+  while regular Storage devices remain eligible
+  ([#117](https://github.com/Kobii-git/rackpad/issues/117)).
 - Preserved custom drive-slot names, positions, and types when template counts
   are edited, and completed localized built-in template copy and drive values.
 - Localized device-type search metadata in the Visualizer and prevented handled
@@ -38,7 +52,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 - Device creation and editing can apply a drive-bay template snapshot while the
   device has no storage slots. Later template edits do not alter devices.
-- Rackpad is now versioned as `1.8.0-dev.0` for ongoing development. Existing
+- Rackpad is now versioned as `1.8.0-beta.0` for beta testing. Existing
   `storageGb`, import, and reporting behavior remains independent.
 
 ### Test notes
@@ -50,6 +64,13 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   remain until it is removed from the pool.
 - Confirm viewers are read-only, editors can manage lab storage, and only
   admins can create or modify templates.
+- Import identically named Docker containers under two different hosts, then
+  confirm a duplicate under the same host is rejected.
+- Search the device, port, discovery, and Visualizer views using hyphenated,
+  Cisco-dot, continuous, and colon-formatted MAC addresses.
+- Confirm custom VM, container, AP, rack-shelf, patch-panel, and server-derived
+  types inherit their parent behavior, while Storage enclosures stay out of
+  Compute host selection.
 
 ## [1.7.4-beta.0] - 2026-08-03
 

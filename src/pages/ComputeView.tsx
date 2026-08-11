@@ -27,7 +27,7 @@ import {
   useStore,
 } from "@/lib/store";
 import type { Device, Port, VirtualSwitch } from "@/lib/types";
-import { deviceTypeBase } from "@/lib/device-types";
+import { deviceTypeBase, deviceTypeChainIncludes } from "@/lib/device-types";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { statusLabel } from "@/lib/utils";
 
@@ -39,6 +39,10 @@ const HOST_DEVICE_TYPES = new Set<Device["deviceType"]>([
 ]);
 
 const VIRTUAL_DEVICE_TYPES = new Set<Device["deviceType"]>(["vm", "container"]);
+
+const EXCLUDED_HOST_DEVICE_TYPES = new Set<Device["deviceType"]>([
+  "storage_enclosure",
+]);
 
 const VIRTUAL_SWITCH_KINDS: Array<VirtualSwitch["kind"]> = [
   "external",
@@ -97,10 +101,12 @@ export default function ComputeView() {
       devices
         .filter(
           (device) =>
-            device.deviceType === "vm" || device.placement === "virtual",
+            VIRTUAL_DEVICE_TYPES.has(
+              deviceTypeBase(device.deviceType, deviceTypes),
+            ) || device.placement === "virtual",
         )
         .sort((a, b) => a.hostname.localeCompare(b.hostname)),
-    [devices],
+    [devices, deviceTypes],
   );
 
   const vmHostIds = useMemo(
@@ -118,8 +124,13 @@ export default function ComputeView() {
       devices
         .filter((device) => {
           const baseType = deviceTypeBase(device.deviceType, deviceTypes);
+          const excludedHostType = [...EXCLUDED_HOST_DEVICE_TYPES].some(
+            (type) =>
+              deviceTypeChainIncludes(device.deviceType, type, deviceTypes),
+          );
           return (
             !VIRTUAL_DEVICE_TYPES.has(baseType) &&
+            !excludedHostType &&
             (vmHostIds.has(device.id) || HOST_DEVICE_TYPES.has(baseType))
           );
         })

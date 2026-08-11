@@ -36,6 +36,7 @@ import { buildSnmpVerifiedPortIdsForDevice } from "@/lib/snmp-port-status";
 import type {
   Device,
   DeviceType,
+  DeviceTypeDefinition,
   Port,
   PortLink,
   PortTemplate,
@@ -43,10 +44,14 @@ import type {
   VirtualSwitch,
 } from "@/lib/types";
 import {
+  deviceTypeBase,
   localizedDeviceTypeIdLabel,
   deviceTypeMatchesTemplate,
 } from "@/lib/device-types";
-import { formatDeviceAddress } from "@/lib/network-labels";
+import {
+  formatDeviceAddress,
+  matchesMacAwareSearch,
+} from "@/lib/network-labels";
 import { formatPortLabel } from "@/lib/utils";
 import { ArrowRight, Filter, Network, Plus, Save, Trash2 } from "lucide-react";
 
@@ -160,8 +165,10 @@ function templateToForm(template: PortTemplate): TemplateFormState {
 
 function blankTemplateForm(
   deviceType: DeviceType = "switch",
+  deviceTypes: DeviceTypeDefinition[] = [],
 ): TemplateFormState {
-  if (deviceType === "patch_panel") {
+  const baseType = deviceTypeBase(deviceType, deviceTypes);
+  if (baseType === "patch_panel") {
     return {
       name: "",
       description: "",
@@ -185,7 +192,7 @@ function blankTemplateForm(
     };
   }
 
-  const isVirtualWorkload = deviceType === "vm" || deviceType === "container";
+  const isVirtualWorkload = baseType === "vm" || baseType === "container";
   const defaultKind: Port["kind"] = isVirtualWorkload ? "virtual" : "rj45";
   const defaultSpeed = isVirtualWorkload ? "virtio" : "";
   return {
@@ -204,9 +211,12 @@ function blankTemplateForm(
   };
 }
 
-function blankPortForm(device?: Device): PortFormState {
-  const isVirtualDevice =
-    device?.deviceType === "vm" || device?.deviceType === "container";
+function blankPortForm(
+  device: Device | undefined,
+  deviceTypes: DeviceTypeDefinition[],
+): PortFormState {
+  const baseType = deviceTypeBase(device?.deviceType, deviceTypes);
+  const isVirtualDevice = baseType === "vm" || baseType === "container";
   return {
     name: "",
     kind: isVirtualDevice ? "virtual" : "rj45",
@@ -222,12 +232,20 @@ function blankPortForm(device?: Device): PortFormState {
   };
 }
 
-function isPatchPanelTemplate(form: TemplateFormState) {
-  return form.deviceTypes.includes("patch_panel");
+function isPatchPanelTemplate(
+  form: TemplateFormState,
+  deviceTypes: DeviceTypeDefinition[],
+) {
+  return form.deviceTypes.some(
+    (deviceType) => deviceTypeBase(deviceType, deviceTypes) === "patch_panel",
+  );
 }
 
-function appendTemplatePorts(form: TemplateFormState): TemplateFormState {
-  if (!isPatchPanelTemplate(form)) {
+function appendTemplatePorts(
+  form: TemplateFormState,
+  deviceTypes: DeviceTypeDefinition[],
+): TemplateFormState {
+  if (!isPatchPanelTemplate(form, deviceTypes)) {
     return {
       ...form,
       ports: [
@@ -286,14 +304,20 @@ export default function PortView() {
   const portBearingDevices = useMemo(
     () =>
       devices.filter(
-        (device) => !NON_PORT_BEARING_TYPES.has(device.deviceType),
+        (device) =>
+          !NON_PORT_BEARING_TYPES.has(
+            deviceTypeBase(device.deviceType, deviceTypes),
+          ),
       ),
-    [devices],
+    [devices, deviceTypes],
   );
   const portDeviceTypeOptions = useMemo(
     () =>
       deviceTypes.filter(
-        (deviceType) => !NON_PORT_BEARING_TYPES.has(deviceType.id),
+        (deviceType) =>
+          !NON_PORT_BEARING_TYPES.has(
+            deviceTypeBase(deviceType.id, deviceTypes),
+          ),
       ),
     [deviceTypes],
   );
@@ -422,7 +446,7 @@ export default function PortView() {
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      return haystack.includes(query);
+      return matchesMacAwareSearch(haystack, query);
     });
   }, [
     deviceById,
@@ -510,13 +534,14 @@ export default function PortView() {
         return false;
       }
       if (!query) return true;
-      return portSearchHaystack(port, {
+      const haystack = portSearchHaystack(port, {
         deviceById,
         linkByPortId,
         portById,
         virtualSwitchById,
         vlanById,
-      }).includes(query);
+      });
+      return matchesMacAwareSearch(haystack, query);
     });
   }, [
     deviceById,
@@ -624,13 +649,13 @@ export default function PortView() {
 
   useEffect(() => {
     if (creating) {
-      setForm(blankPortForm(device));
+      setForm(blankPortForm(device, deviceTypes));
       setError("");
       return;
     }
     setForm(selectedPort ? portToForm(selectedPort) : null);
     setError("");
-  }, [creating, device, selectedPort]);
+  }, [creating, device, deviceTypes, selectedPort]);
 
   useEffect(() => {
     if (creatingTemplate) return;
@@ -735,7 +760,9 @@ export default function PortView() {
   function beginBlankTemplate() {
     setCreatingTemplate(true);
     setSelectedTemplateId(undefined);
-    setTemplateForm(blankTemplateForm(device?.deviceType ?? "switch"));
+    setTemplateForm(
+      blankTemplateForm(device?.deviceType ?? "switch", deviceTypes),
+    );
     setTemplateError("");
     setTemplateModalOpen(true);
   }
@@ -761,7 +788,7 @@ export default function PortView() {
               mode: port.mode ?? "access",
               face: port.face ?? "front",
             }))
-          : blankTemplateForm(device.deviceType).ports,
+          : blankTemplateForm(device.deviceType, deviceTypes).ports,
     });
     setTemplateError("");
     setTemplateModalOpen(true);
@@ -1010,7 +1037,7 @@ export default function PortView() {
               onClick={() => {
                 setCreating(true);
                 setSelectedPortId(undefined);
-                setForm(blankPortForm(device));
+                setForm(blankPortForm(device, deviceTypes));
               }}
             >
               <Plus className="size-3.5" />
@@ -1224,6 +1251,7 @@ export default function PortView() {
                           links={linkByPortId}
                           portsById={portById}
                           devicesById={deviceById}
+                          deviceTypes={deviceTypes}
                           vlansById={vlanById}
                           virtualSwitchesById={virtualSwitchById}
                           snmpVerifiedPortIds={snmpVerifiedPortIds}
@@ -1253,6 +1281,7 @@ export default function PortView() {
                         links={linkByPortId}
                         portsById={portById}
                         devicesById={deviceById}
+                        deviceTypes={deviceTypes}
                         vlansById={vlanById}
                         virtualSwitchesById={virtualSwitchById}
                         snmpVerifiedPortIds={snmpVerifiedPortIds}
@@ -1460,7 +1489,10 @@ export default function PortView() {
                           : selectedPort
                             ? formatPortLabel(selectedPort, {
                                 includeFace:
-                                  device?.deviceType === "patch_panel" ||
+                                  deviceTypeBase(
+                                    device?.deviceType,
+                                    deviceTypes,
+                                  ) === "patch_panel" ||
                                   selectedPort.face === "rear",
                               })
                             : t("Select a port")}
@@ -2135,12 +2167,15 @@ export default function PortView() {
                                     size="sm"
                                     onClick={() =>
                                       setTemplateForm((prev) =>
-                                        appendTemplatePorts(prev),
+                                        appendTemplatePorts(prev, deviceTypes),
                                       )
                                     }
                                   >
                                     <Plus className="size-3.5" />
-                                    {isPatchPanelTemplate(templateForm)
+                                    {isPatchPanelTemplate(
+                                      templateForm,
+                                      deviceTypes,
+                                    )
                                       ? t("Add jack")
                                       : t("Add port")}
                                   </Button>

@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/Input";
 import { Mono } from "@/components/shared/Mono";
 import { api, ApiError, type DockerContainerPreview } from "@/lib/api";
+import { deviceTypeBase } from "@/lib/device-types";
 import type { DockerImportSource } from "@/lib/types";
 import {
   canEditInventory,
@@ -25,12 +26,14 @@ import {
 type DockerConnectionMode = "socket" | "http";
 
 const DEFAULT_DOCKER_SOCKET_PATH = "/var/run/docker.sock";
+const DOCKER_HOST_DEVICE_TYPES = new Set(["server", "vm", "container"]);
 
 export function DockerImportPanel() {
   const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const canEdit = canEditInventory(currentUser);
   const [connectionMode, setConnectionMode] =
     useState<DockerConnectionMode>("socket");
@@ -64,9 +67,11 @@ export function DockerImportPanel() {
       devices.filter(
         (device) =>
           device.labId === lab.id &&
-          ["server", "vm", "container"].includes(device.deviceType),
+          DOCKER_HOST_DEVICE_TYPES.has(
+            deviceTypeBase(device.deviceType, deviceTypes),
+          ),
       ),
-    [devices, lab.id],
+    [devices, deviceTypes, lab.id],
   );
 
   function buildEndpointForRequest() {

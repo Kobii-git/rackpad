@@ -57,6 +57,7 @@ import type {
 } from "@/lib/types";
 import { cidrContainsIp, ipToInt } from "@/lib/utils";
 import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
+import { matchesMacAwareSearch } from "@/lib/network-labels";
 import {
   applySortDirection,
   compareDate,
@@ -275,7 +276,7 @@ export default function DiscoveryView() {
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        return haystack.includes(normalizedQuery);
+        return matchesMacAwareSearch(haystack, normalizedQuery);
       })
       .sort((a, b) =>
         compareDiscoveredDevices(a, b, sort, duplicateMatchesById),

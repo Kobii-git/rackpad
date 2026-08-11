@@ -1,7 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
 import { db, parseRow } from "../db.js";
 import { writeAuditLogEntry } from "../lib/audit-log.js";
-import { requiredDeviceType } from "../lib/device-types.js";
+import {
+  deviceTypeBase,
+  requiredDeviceType,
+} from "../lib/device-types.js";
 import {
   applyWifiDiscoveryPlacementToDevice,
   upsertWifiClientAssociation,
@@ -78,10 +81,11 @@ function derivePlacement(input: {
   if (input.placement) return input.placement;
   if (input.rackId || input.startU != null || input.heightU != null)
     return "rack";
-  if (input.deviceType === "vm" || input.deviceType === "container")
+  const baseType = deviceTypeBase(input.deviceType);
+  if (baseType === "vm" || baseType === "container")
     return "virtual";
-  if (input.deviceType === "ap") return "wireless";
-  if (input.deviceType === "rack_shelf") return "rack";
+  if (baseType === "ap") return "wireless";
+  if (baseType === "rack_shelf") return "rack";
   return "room";
 }
 
@@ -114,7 +118,7 @@ function normalizePlacement(input: {
         "A rack shelf / tray must be selected for shelf-mounted gear.",
       );
     }
-    if (parent.deviceType !== "rack_shelf") {
+    if (deviceTypeBase(parent.deviceType) !== "rack_shelf") {
       throw new ValidationError(
         "Shelf-mounted gear can only be attached to a rack shelf / tray.",
       );
@@ -228,7 +232,8 @@ function validateNetworkMode(input: {
       "Host-shared networking requires a parent host device.",
     );
   }
-  if (input.deviceType !== "vm" && input.deviceType !== "container") {
+  const baseType = deviceTypeBase(input.deviceType);
+  if (baseType !== "vm" && baseType !== "container") {
     throw new ValidationError(
       "Host-shared networking is only available for VMs and containers.",
     );
@@ -603,7 +608,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
               )
               .get(nextParentId, labId) as
               { id: string; labId: string; deviceType: string } | undefined;
-            if (!apDevice || apDevice.deviceType !== "ap") {
+            if (!apDevice || deviceTypeBase(apDevice.deviceType) !== "ap") {
               throw new ValidationError(
                 "Wireless placement requires a valid access point in this lab.",
               );

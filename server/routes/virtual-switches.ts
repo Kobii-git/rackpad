@@ -8,6 +8,7 @@ import {
   resolveLabIdsForList,
 } from '../lib/lab-access.js'
 import { createId } from '../lib/ids.js'
+import { deviceTypeBase } from '../lib/device-types.js'
 import { asObject, optionalBoolean, optionalEnum, optionalString, requiredString, ValidationError } from '../lib/validation.js'
 
 const VIRTUAL_SWITCH_KINDS = ['external', 'internal', 'private'] as const
@@ -58,7 +59,8 @@ function requireHostDevice(deviceId: string) {
   if (!device) {
     throw new ValidationError('Selected host device does not exist.')
   }
-  if (device.deviceType === 'vm' || device.deviceType === 'container' || device.placement === 'virtual') {
+  const baseType = deviceTypeBase(device.deviceType)
+  if (baseType === 'vm' || baseType === 'container' || device.placement === 'virtual') {
     throw new ValidationError('Virtual switches must be attached to a physical host or parent device.')
   }
   return device

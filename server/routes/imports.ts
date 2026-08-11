@@ -285,11 +285,13 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
 
     const hostname = hostnameOverride ?? container.name.slice(0, 120);
     const existing = db
-      .prepare("SELECT id FROM devices WHERE labId = ? AND hostname = ?")
-      .get(labId, hostname) as { id: string } | undefined;
+      .prepare(
+        "SELECT id FROM devices WHERE labId = ? AND hostname = ? AND parentDeviceId = ?",
+      )
+      .get(labId, hostname, hostDeviceId) as { id: string } | undefined;
     if (existing) {
       return reply.status(409).send({
-        error: `Hostname ${hostname} is already used in this lab.`,
+        error: `Hostname ${hostname} is already used on this host.`,
       });
     }
 

@@ -152,6 +152,30 @@ export function deviceTypeBase(
   return type;
 }
 
+export function deviceTypeChainIncludes(
+  type: DeviceType | null | undefined,
+  targetType: DeviceType,
+  definitions: DeviceTypeDefinition[] = BUILT_IN_DEVICE_TYPES,
+) {
+  if (!type) return false;
+  const byId = new Map(
+    [...BUILT_IN_DEVICE_TYPES, ...definitions].map((entry) => [
+      entry.id,
+      entry,
+    ]),
+  );
+  const seen = new Set<DeviceType>();
+  let current = type;
+  while (!seen.has(current)) {
+    if (current === targetType) return true;
+    seen.add(current);
+    const parent = byId.get(current)?.parentType;
+    if (!parent || parent === current) return false;
+    current = parent;
+  }
+  return false;
+}
+
 export function deviceTypeMatchesTemplate(
   deviceType: DeviceType,
   templateDeviceTypes: DeviceType[],

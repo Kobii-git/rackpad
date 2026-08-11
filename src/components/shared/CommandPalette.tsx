@@ -28,7 +28,10 @@ import {
   HardDrive,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { formatDeviceAddress } from "@/lib/network-labels";
+import {
+  formatDeviceAddress,
+  matchesMacAwareSearch,
+} from "@/lib/network-labels";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useStore } from "@/lib/store";
@@ -219,7 +222,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         .join(" ")
         .toLowerCase();
 
-      if (haystack.includes(q)) {
+      if (matchesMacAwareSearch(haystack, q)) {
         out.push({
           id: device.id,
           group: "Devices",
