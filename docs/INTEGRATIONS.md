@@ -6,7 +6,19 @@ VLANs, networks/subnets, DHCP ranges, and containers. Everything stays
 review-first — a pull produces a preview diff against the active lab, and
 nothing is written until an administrator applies it.
 
-The panel lives in **Imports → Integrations**.
+The panel lives on the **Integrations** tab of the Imports page (the
+existing collector and Docker imports keep their own **Imports** tab).
+Adding a connection is a three-step flow: enter the URL and credentials,
+click **Test & discover** to prove them and list what the controller offers,
+then tick the sites (UniFi/Omada), cluster nodes (Proxmox), or environments
+(Dockhand) to pull from — leaving everything unticked uses the provider's
+default. Each provider shows its own pull checkboxes (for example Proxmox
+"SDN VLANs" versus Omada "LAN VLANs") with hover text explaining exactly
+what each brings in; Proxmox SDN VLANs live on the host overlay fabric and
+may not correspond to your physical switch VLANs, which is why they are
+labeled and described separately. Pulling inventory opens a preview dialog
+with one tab per object type (VLANs, subnets, DHCP, devices) so large
+controllers stay reviewable.
 
 ## Requirements
 
@@ -59,7 +71,8 @@ Two auth options:
 Pulls map corporate/VLAN-only networks to VLANs and subnets, DHCP server
 ranges to preview-only scopes, and list switches, APs, and gateways with
 model, MAC, IP, state, and firmware. WAN and VPN networks are excluded from
-IPAM. The optional **Site** field selects a site by name or id.
+IPAM. **Test & discover** lists the console's sites; tick one or more to
+pull from (default: the first site).
 
 ### TP-Link Omada
 
@@ -71,8 +84,12 @@ IPAM. The optional **Site** field selects a site by name or id.
    the Client ID, and the Client Secret. The `omadacId` is discovered
    automatically.
 
-Pulls map LAN networks/interfaces to VLANs and subnets, DHCP server ranges to
-preview-only scopes, and list switches, gateways, and APs per site.
+Pulls map LAN networks/interfaces to VLANs and subnets, DHCP server ranges
+to preview-only scopes, and list switches, gateways, and APs for every
+selected site (**Test & discover** lists them; default: the first site).
+If a controller build returns nothing from the per-site device endpoint,
+Rackpad falls back to the controller-wide device list and says so in the
+preview warnings.
 
 ### OPNsense
 
@@ -81,8 +98,12 @@ preview-only scopes, and list switches, gateways, and APs per site.
    access) is recommended.
 2. Add the connection with the firewall URL and the key/secret pair.
 
-Pulls map VLAN definitions and interface IPv4 networks to VLANs and subnets,
-and Kea DHCPv4 pools plus Dnsmasq ranges to preview-only scopes. Legacy ISC
+Pulls map VLAN definitions and interface IPv4 networks to VLANs and
+subnets, and Kea DHCPv4 pools plus Dnsmasq ranges to preview-only scopes.
+When the firewall reports a VLAN id for a subnet Rackpad already tracks
+without a VLAN link, the preview offers the association and merge applies
+it — existing subnets get connected to their VLANs instead of staying
+orphaned. Legacy ISC
 dhcpd does not expose its ranges over the API — Rackpad warns instead of
 silently omitting them. Both pre- and post-25.7 API URL casings are handled.
 
@@ -94,8 +115,8 @@ silently omitting them. Both pre- and post-25.7 API URL casings are handled.
 2. Add the connection with the Dockhand URL (`http://dockhand.example:3000`
    by default — Dockhand usually sits behind a reverse proxy if you use
    HTTPS) and the `dh_...` token as the API key.
-3. The optional environment field limits the pull to a single Dockhand
-   environment by name or id; the default pulls all of them.
+3. **Test & discover** lists the Docker environments; tick the ones to
+   pull from (default: all of them).
 
 Pulls list each Docker environment as a host (online state, running/total
 containers, stacks), every container (image, IP, state/health, compose
@@ -111,8 +132,8 @@ When VLANs live on the switching controller but networks terminate at the
 firewall, use the per-connection pull toggles so each source owns what it
 terminates:
 
-- Switch controller connection: **Pull VLANs** on, subnets/DHCP off.
-- OPNsense connection: **Pull subnets** and **Pull DHCP** on, VLANs off.
+- Switch controller connection: keep the VLAN checkbox on, subnets/DHCP off.
+- OPNsense connection: keep subnets and DHCP on, VLANs off.
 
 The preview reconciles both sources against IPAM by VLAN id and CIDR, so the
 same VLAN or subnet reported by two controllers never creates duplicates, and

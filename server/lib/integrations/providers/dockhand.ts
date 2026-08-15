@@ -4,11 +4,13 @@ import {
   integrationHttpRequest,
   parseIntegrationJson,
 } from "../http.js";
-import type {
-  IntegrationClient,
-  IntegrationDevicePreview,
-  IntegrationInventory,
-  IntegrationTestResult,
+import {
+  connectionScopeRefs,
+  type IntegrationClient,
+  type IntegrationDevicePreview,
+  type IntegrationInventory,
+  type IntegrationScope,
+  type IntegrationTestResult,
 } from "../inventory.js";
 import type { IntegrationConnectionSecrets } from "../types.js";
 
@@ -131,18 +133,18 @@ async function dockhandEnvironments(
 
 function filterEnvironments(
   environments: DockhandEnvironment[],
-  siteRef: string | null,
+  refs: string[],
 ) {
-  if (!siteRef) return environments;
-  const wanted = siteRef.trim().toLowerCase();
+  if (refs.length === 0) return environments;
+  const wanted = refs.map((ref) => ref.trim().toLowerCase());
   const matched = environments.filter(
     (environment) =>
-      String(environment.id) === wanted ||
-      environment.name.toLowerCase() === wanted,
+      wanted.includes(String(environment.id)) ||
+      wanted.includes(environment.name.toLowerCase()),
   );
   if (matched.length === 0) {
     throw new ValidationError(
-      `Dockhand environment "${siteRef}" was not found. Available environments: ${environments
+      `No selected Dockhand environment was found. Available environments: ${environments
         .map((environment) => environment.name)
         .join(", ")}.`,
     );
@@ -227,7 +229,7 @@ async function dockhandFetchInventory(
 
   const environments = filterEnvironments(
     await dockhandEnvironments(connection),
-    connection.siteRef,
+    connectionScopeRefs(connection),
   );
   const stats = await dockhandStats(connection);
 
@@ -311,8 +313,18 @@ async function dockhandFetchInventory(
   };
 }
 
+async function dockhandListScopes(
+  connection: IntegrationConnectionSecrets,
+): Promise<IntegrationScope[]> {
+  return (await dockhandEnvironments(connection)).map((environment) => ({
+    id: String(environment.id),
+    label: environment.name,
+  }));
+}
+
 export const dockhandIntegrationClient: IntegrationClient = {
   provider: "dockhand",
   test: dockhandTest,
   fetchInventory: dockhandFetchInventory,
+  listScopes: dockhandListScopes,
 };

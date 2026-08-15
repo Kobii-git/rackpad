@@ -89,6 +89,7 @@ export function parseIntegrationConnectionPublic(
     authId: row.authId ? String(row.authId) : null,
     hasSecret: Boolean(row.authSecretEnc),
     siteRef: row.siteRef ? String(row.siteRef) : null,
+    scopeRefs: parseLabIds(row.scopeRefs),
     verifyTls: Boolean(row.verifyTls),
     enabled: Boolean(row.enabled),
     syncVlans: Boolean(row.syncVlans),
@@ -166,6 +167,7 @@ export function loadIntegrationConnectionSecrets(
       ? decryptSecret(String(row.authSecretEnc))
       : null,
     siteRef: row.siteRef ? String(row.siteRef) : null,
+    scopeRefs: parseLabIds(row.scopeRefs),
     verifyTls: Boolean(row.verifyTls),
     enabled: Boolean(row.enabled),
     syncVlans: Boolean(row.syncVlans),
@@ -202,6 +204,7 @@ export function createIntegrationConnection(input: {
   authId?: string | null;
   authSecret?: string | null;
   siteRef?: string | null;
+  scopeRefs?: string[];
   verifyTls?: boolean;
   enabled?: boolean;
   syncVlans?: boolean;
@@ -216,9 +219,9 @@ export function createIntegrationConnection(input: {
     `
     INSERT INTO integrationConnections (
       id, labId, provider, name, baseUrl, authKind, authId, authSecretEnc,
-      siteRef, verifyTls, enabled, syncVlans, syncSubnets, syncDhcp,
+      siteRef, scopeRefs, verifyTls, enabled, syncVlans, syncSubnets, syncDhcp,
       lastStatus, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
   `,
   ).run(
     id,
@@ -230,6 +233,9 @@ export function createIntegrationConnection(input: {
     input.authId?.trim() || null,
     encryptOptionalSecret(input.authSecret),
     input.siteRef?.trim() || null,
+    input.scopeRefs && input.scopeRefs.length > 0
+      ? JSON.stringify([...new Set(input.scopeRefs.filter(Boolean))])
+      : null,
     input.verifyTls === false ? 0 : 1,
     input.enabled === false ? 0 : 1,
     input.syncVlans === false ? 0 : 1,
@@ -250,6 +256,7 @@ export function updateIntegrationConnection(
     authId: string | null;
     authSecret: string | null;
     siteRef: string | null;
+    scopeRefs: string[];
     verifyTls: boolean;
     enabled: boolean;
     syncVlans: boolean;
@@ -288,6 +295,12 @@ export function updateIntegrationConnection(
     input.siteRef !== undefined
       ? input.siteRef?.trim() || null
       : (existing.siteRef as string | null);
+  const nextScopeRefs =
+    input.scopeRefs !== undefined
+      ? input.scopeRefs.length > 0
+        ? JSON.stringify([...new Set(input.scopeRefs.filter(Boolean))])
+        : null
+      : ((existing.scopeRefs as string | null) ?? null);
   const nextVerifyTls =
     input.verifyTls !== undefined
       ? input.verifyTls
@@ -352,6 +365,7 @@ export function updateIntegrationConnection(
       authId = ?,
       authSecretEnc = ?,
       siteRef = ?,
+      scopeRefs = ?,
       verifyTls = ?,
       enabled = ?,
       syncVlans = ?,
@@ -373,6 +387,7 @@ export function updateIntegrationConnection(
     nextAuthId,
     nextSecret,
     nextSiteRef,
+    nextScopeRefs,
     nextVerifyTls,
     nextEnabled,
     nextSyncVlans,

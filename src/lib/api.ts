@@ -23,6 +23,8 @@ import type {
   IntegrationConnection,
   IntegrationInventoryResponse,
   IntegrationProviderInfo,
+  IntegrationScope,
+  IntegrationScopeKind,
   IntegrationTestResult,
   IpAssignment,
   IpZone,
@@ -1579,6 +1581,7 @@ export const api = {
     authId?: string;
     authSecret: string;
     siteRef?: string;
+    scopeRefs?: string[];
     verifyTls?: boolean;
     enabled?: boolean;
     syncVlans?: boolean;
@@ -1586,6 +1589,26 @@ export const api = {
     syncDhcp?: boolean;
   }) {
     return request<IntegrationConnection>("/integrations/connections", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  discoverIntegrationScopes(body: {
+    connectionId?: string;
+    labId?: string;
+    provider?: IntegrationConnection["provider"];
+    baseUrl?: string;
+    authKind?: IntegrationConnection["authKind"];
+    authId?: string;
+    authSecret?: string;
+    verifyTls?: boolean;
+  }) {
+    return request<{
+      result: IntegrationTestResult;
+      scopeKind: IntegrationScopeKind | null;
+      scopes: IntegrationScope[];
+    }>("/integrations/discover-scopes", {
       method: "POST",
       body: JSON.stringify(body),
     });
@@ -1600,6 +1623,7 @@ export const api = {
       authId: string | null;
       authSecret: string;
       siteRef: string | null;
+      scopeRefs: string[];
       verifyTls: boolean;
       enabled: boolean;
       syncVlans: boolean;

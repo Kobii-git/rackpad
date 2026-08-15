@@ -35,13 +35,20 @@ export const INTEGRATION_AUTO_SYNC_MODES = [
 export type IntegrationAutoSyncMode =
   (typeof INTEGRATION_AUTO_SYNC_MODES)[number];
 
+export const INTEGRATION_SCOPE_KINDS = [
+  "sites",
+  "nodes",
+  "environments",
+] as const;
+export type IntegrationScopeKind = (typeof INTEGRATION_SCOPE_KINDS)[number];
+
 export interface IntegrationProviderInfo {
   id: IntegrationProvider;
   label: string;
   vendor: string;
   authKinds: IntegrationAuthKind[];
   defaultAuthKind: IntegrationAuthKind;
-  supportsSiteRef: boolean;
+  scopeKind: IntegrationScopeKind | null;
 }
 
 export const INTEGRATION_PROVIDER_INFO: Record<
@@ -54,7 +61,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     vendor: "Proxmox",
     authKinds: ["api-token"],
     defaultAuthKind: "api-token",
-    supportsSiteRef: false,
+    scopeKind: "nodes",
   },
   unifi: {
     id: "unifi",
@@ -62,7 +69,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     vendor: "Ubiquiti",
     authKinds: ["api-key", "username-password"],
     defaultAuthKind: "api-key",
-    supportsSiteRef: true,
+    scopeKind: "sites",
   },
   omada: {
     id: "omada",
@@ -70,7 +77,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     vendor: "TP-Link",
     authKinds: ["client-credentials"],
     defaultAuthKind: "client-credentials",
-    supportsSiteRef: true,
+    scopeKind: "sites",
   },
   opnsense: {
     id: "opnsense",
@@ -78,7 +85,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     vendor: "OPNsense",
     authKinds: ["key-secret"],
     defaultAuthKind: "key-secret",
-    supportsSiteRef: false,
+    scopeKind: null,
   },
   dockhand: {
     id: "dockhand",
@@ -86,7 +93,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     vendor: "Finsys",
     authKinds: ["api-key"],
     defaultAuthKind: "api-key",
-    supportsSiteRef: true,
+    scopeKind: "environments",
   },
 };
 
@@ -100,6 +107,7 @@ export interface IntegrationConnectionPublic {
   authId: string | null;
   hasSecret: boolean;
   siteRef: string | null;
+  scopeRefs: string[];
   verifyTls: boolean;
   enabled: boolean;
   syncVlans: boolean;
@@ -132,6 +140,7 @@ export interface IntegrationConnectionSecrets {
   authId: string | null;
   authSecret: string | null;
   siteRef: string | null;
+  scopeRefs: string[];
   verifyTls: boolean;
   enabled: boolean;
   syncVlans: boolean;

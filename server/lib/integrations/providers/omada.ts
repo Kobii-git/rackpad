@@ -5,12 +5,14 @@ import {
   integrationHttpRequest,
   parseIntegrationJson,
 } from "../http.js";
-import type {
-  IntegrationClient,
-  IntegrationDeviceKind,
-  IntegrationDevicePreview,
-  IntegrationInventory,
-  IntegrationTestResult,
+import {
+  connectionScopeRefs,
+  type IntegrationClient,
+  type IntegrationDeviceKind,
+  type IntegrationDevicePreview,
+  type IntegrationInventory,
+  type IntegrationScope,
+  type IntegrationTestResult,
 } from "../inventory.js";
 import type { IntegrationConnectionSecrets } from "../types.js";
 import type {
@@ -224,27 +226,28 @@ async function omadaSites(
     .filter((site) => site.siteId);
 }
 
-function pickOmadaSite(sites: OmadaSite[], siteRef: string | null): OmadaSite {
+function pickOmadaSites(sites: OmadaSite[], refs: string[]): OmadaSite[] {
   if (sites.length === 0) {
     throw new ValidationError(
       "Omada reported no sites visible to this Open API client.",
       502,
     );
   }
-  if (!siteRef) return sites[0];
-  const wanted = siteRef.trim().toLowerCase();
-  const match = sites.find(
+  if (refs.length === 0) return [sites[0]];
+  const wanted = refs.map((ref) => ref.trim().toLowerCase());
+  const matched = sites.filter(
     (site) =>
-      site.siteId.toLowerCase() === wanted || site.name.toLowerCase() === wanted,
+      wanted.includes(site.siteId.toLowerCase()) ||
+      wanted.includes(site.name.toLowerCase()),
   );
-  if (!match) {
+  if (matched.length === 0) {
     throw new ValidationError(
-      `Omada site "${siteRef}" was not found. Available sites: ${sites
+      `No selected Omada site was found. Available sites: ${sites
         .map((site) => site.name)
         .join(", ")}.`,
     );
   }
-  return match;
+  return matched;
 }
 
 const OMADA_DEVICE_KINDS: Record<string, IntegrationDeviceKind> = {
@@ -369,6 +372,82 @@ async function omadaLanNetworks(
   return [];
 }
 
+// Some controller builds report the device type under a different key or
+// casing; treat them all the same so switches are never silently dropped.
+function omadaDeviceKind(row: JsonRecord): IntegrationDeviceKind {
+  const type = asText(row.type ?? row.deviceType ?? row.deviceCategory)
+    .trim()
+    .toLowerCase();
+  return OMADA_DEVICE_KINDS[type] ?? "other";
+}
+
+function omadaDevicePreview(
+  row: JsonRecord,
+  siteLabel: string | null,
+): IntegrationDevicePreview {
+  const status = asNumber(row.status);
+  const firmware = asText(row.firmwareVersion);
+  return {
+    name: asText(row.name) || asText(row.mac),
+    kind: omadaDeviceKind(row),
+    model: asText(row.model) || null,
+    macAddress: asText(row.mac) || null,
+    ipAddress: usableIpv4(row.ip) || asText(row.ip) || null,
+    status:
+      status != null
+        ? (OMADA_DEVICE_STATUSES[status] ?? `status ${status}`)
+        : null,
+    detail:
+      [
+        siteLabel ? `site: ${siteLabel}` : "",
+        firmware ? `firmware ${firmware}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ") || null,
+  };
+}
+
+async function omadaSiteDevices(
+  connection: IntegrationConnectionSecrets,
+  session: OmadaSession,
+  site: OmadaSite,
+  warnings: string[],
+): Promise<JsonRecord[]> {
+  const rows = (
+    await omadaGridPage(
+      connection,
+      session,
+      `/openapi/v1/${session.omadacId}/sites/${site.siteId}/devices`,
+    )
+  ).map(asRecord);
+  if (rows.length > 0) return rows;
+
+  // Some firmware exposes devices only through the controller-wide list;
+  // fall back to it and keep rows that belong to this site (or carry no
+  // site field at all).
+  try {
+    const globalRows = (
+      await omadaGridPage(
+        connection,
+        session,
+        `/openapi/v1/${session.omadacId}/devices`,
+      )
+    ).map(asRecord);
+    const filtered = globalRows.filter((row) => {
+      const rowSite = asText(row.site ?? row.siteId);
+      return !rowSite || rowSite === site.siteId;
+    });
+    if (filtered.length > 0) {
+      warnings.push(
+        `Omada site ${site.name} returned no devices from the per-site endpoint; the controller-wide device list was used instead.`,
+      );
+    }
+    return filtered;
+  } catch {
+    return rows;
+  }
+}
+
 async function omadaFetchInventory(
   connection: IntegrationConnectionSecrets,
 ): Promise<IntegrationInventory> {
@@ -381,69 +460,72 @@ async function omadaFetchInventory(
   const seenSubnets = new Set<string>();
 
   const session = await omadaLogin(connection);
-  const site = pickOmadaSite(
+  const sites = pickOmadaSites(
     await omadaSites(connection, session),
-    connection.siteRef,
+    connectionScopeRefs(connection),
   );
+  const multiSite = sites.length > 1;
 
-  for (const entry of await omadaGridPage(
-    connection,
-    session,
-    `/openapi/v1/${session.omadacId}/sites/${site.siteId}/devices`,
-  )) {
-    const row = asRecord(entry);
-    const status = asNumber(row.status);
-    devices.push({
-      name: asText(row.name) || asText(row.mac),
-      kind: OMADA_DEVICE_KINDS[asText(row.type).toLowerCase()] ?? "other",
-      model: asText(row.model) || null,
-      macAddress: asText(row.mac) || null,
-      ipAddress: usableIpv4(row.ip) || asText(row.ip) || null,
-      status:
-        status != null
-          ? OMADA_DEVICE_STATUSES[status] ?? `status ${status}`
-          : null,
-      detail: asText(row.firmwareVersion)
-        ? `firmware ${asText(row.firmwareVersion)}`
-        : null,
-    });
-  }
+  for (const site of sites) {
+    for (const row of await omadaSiteDevices(
+      connection,
+      session,
+      site,
+      warnings,
+    )) {
+      devices.push(omadaDevicePreview(row, multiSite ? site.name : null));
+    }
 
-  const networks = await omadaLanNetworks(
-    connection,
-    session,
-    site.siteId,
-    warnings,
-  );
-  for (const network of networks) {
-    if (network.vlanNumber != null && !seenVlans.has(network.vlanNumber)) {
-      seenVlans.add(network.vlanNumber);
-      vlans.push({ vlanNumber: network.vlanNumber, name: network.name });
-    }
-    if (network.cidr && !seenSubnets.has(network.cidr)) {
-      seenSubnets.add(network.cidr);
-      subnets.push({
-        cidr: network.cidr,
-        name: network.name,
-        vlanNumber: network.vlanNumber,
-      });
-    }
-    for (const pool of network.pools) {
-      dhcpScopes.push({
-        name: `${network.name} DHCP`,
-        startIp: pool.startIp,
-        endIp: pool.endIp,
-        subnetCidr: network.cidr,
-        note: "Omada DHCP server range",
-      });
+    const networks = await omadaLanNetworks(
+      connection,
+      session,
+      site.siteId,
+      warnings,
+    );
+    for (const network of networks) {
+      const networkName = multiSite
+        ? `${site.name} ${network.name}`
+        : network.name;
+      if (network.vlanNumber != null && !seenVlans.has(network.vlanNumber)) {
+        seenVlans.add(network.vlanNumber);
+        vlans.push({ vlanNumber: network.vlanNumber, name: networkName });
+      }
+      if (network.cidr && !seenSubnets.has(network.cidr)) {
+        seenSubnets.add(network.cidr);
+        subnets.push({
+          cidr: network.cidr,
+          name: networkName,
+          vlanNumber: network.vlanNumber,
+        });
+      }
+      for (const pool of network.pools) {
+        dhcpScopes.push({
+          name: `${networkName} DHCP`,
+          startIp: pool.startIp,
+          endIp: pool.endIp,
+          subnetCidr: network.cidr,
+          note: "Omada DHCP server range",
+        });
+      }
     }
   }
 
   return { collection: { vlans, subnets, dhcpScopes }, devices, warnings };
 }
 
+async function omadaListScopes(
+  connection: IntegrationConnectionSecrets,
+): Promise<IntegrationScope[]> {
+  const session = await omadaLogin(connection);
+  return (await omadaSites(connection, session)).map((site) => ({
+    id: site.siteId,
+    label: site.name,
+  }));
+}
+
 export const omadaIntegrationClient: IntegrationClient = {
   provider: "omada",
   test: omadaTest,
   fetchInventory: omadaFetchInventory,
+  listScopes: omadaListScopes,
 };

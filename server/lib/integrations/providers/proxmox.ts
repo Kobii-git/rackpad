@@ -5,11 +5,13 @@ import {
   integrationHttpRequest,
   parseIntegrationJson,
 } from "../http.js";
-import type {
-  IntegrationClient,
-  IntegrationDevicePreview,
-  IntegrationInventory,
-  IntegrationTestResult,
+import {
+  connectionScopeRefs,
+  type IntegrationClient,
+  type IntegrationDevicePreview,
+  type IntegrationInventory,
+  type IntegrationScope,
+  type IntegrationTestResult,
 } from "../inventory.js";
 import type { IntegrationConnectionSecrets } from "../types.js";
 import type {
@@ -388,7 +390,24 @@ async function proxmoxFetchInventory(
   const seenVlans = new Set<number>();
   const seenSubnets = new Set<string>();
 
-  const nodes = parseNodeList(await proxmoxGet(connection, "/nodes"));
+  const scopeRefs = connectionScopeRefs(connection).map((ref) =>
+    ref.trim().toLowerCase(),
+  );
+  const allNodes = parseNodeList(await proxmoxGet(connection, "/nodes"));
+  const nodes =
+    scopeRefs.length > 0
+      ? allNodes.filter((entry) =>
+          scopeRefs.includes(entry.node.toLowerCase()),
+        )
+      : allNodes;
+  if (nodes.length === 0) {
+    throw new ValidationError(
+      `No selected Proxmox node was found. Available nodes: ${allNodes
+        .map((entry) => entry.node)
+        .join(", ")}.`,
+    );
+  }
+  const nodeNames = new Set(nodes.map((entry) => entry.node));
   for (const node of nodes) {
     devices.push({
       name: node.node,
@@ -411,6 +430,7 @@ async function proxmoxFetchInventory(
       await proxmoxGet(connection, "/cluster/resources", { type: "vm" }),
     )) {
       const row = asRecord(entry);
+      if (!nodeNames.has(asText(row.node))) continue;
       const kind = asText(row.type) === "lxc" ? "container" : "vm";
       devices.push({
         name: asText(row.name) || `vmid-${asText(row.vmid)}`,
@@ -998,8 +1018,18 @@ export async function fetchProxmoxStagedInventory(
   };
 }
 
+async function proxmoxListScopes(
+  connection: IntegrationConnectionSecrets,
+): Promise<IntegrationScope[]> {
+  return (await fetchProxmoxNodes(connection)).map((entry) => ({
+    id: entry.node,
+    label: entry.node,
+  }));
+}
+
 export const proxmoxIntegrationClient: IntegrationClient = {
   provider: "proxmox",
   test: proxmoxTest,
   fetchInventory: proxmoxFetchInventory,
+  listScopes: proxmoxListScopes,
 };

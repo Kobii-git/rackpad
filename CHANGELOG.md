@@ -38,6 +38,31 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   0 disables), so the Integrations panel shows live reachability, product,
   and version without clicking Test. Inventory preview/apply remains a
   manual, review-first action.
+- Restructured the Imports page into horizontal Imports / Integrations
+  tabs so collector uploads, NetBox, and Docker imports stay untouched
+  while controller integrations get their own space. The integrations
+  panel drops its intro prose for hover signposts: each provider's pull
+  checkboxes are now provider-specific (for example Proxmox "SDN VLANs"
+  with a note that SDN overlay VLANs may not match the physical switch
+  fabric) with concise hover descriptions, and connection forms show a
+  one-line provider summary instead.
+- Adding or editing a connection now offers **Test & discover**: it
+  verifies the credentials and lists the controller's sites (UniFi and
+  Omada), cluster nodes (Proxmox), or Docker environments (Dockhand) as a
+  checkbox multi-select stored on the connection, so pulls cover exactly
+  the selected scopes (multi-site and multi-node pulls label records by
+  site/node).
+- Inventory previews open in a dialog with one tab per object type
+  (VLANs, subnets, DHCP, devices) instead of an in-page scroll, with the
+  apply controls in the footer.
+- Existing subnets without a VLAN link are now associated automatically
+  when a pulled controller (for example OPNsense) reports a matching VLAN
+  id — the preview shows the association and merge mode applies just the
+  link, never touching names.
+- Hardened Omada device import: device types are matched
+  case-insensitively across the type field variants so switches are never
+  dropped, and an empty per-site device list falls back to the
+  controller-wide endpoint with a warning.
 - Added opt-in scheduled auto-sync per integration connection on a new
   Auto-sync tab (the panel now splits into Connections and Auto-sync tabs):
   basic schedule presets with custom cron as an advanced option, merge /

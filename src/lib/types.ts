@@ -288,13 +288,20 @@ export type IntegrationAuthKind =
   | "client-credentials"
   | "key-secret";
 
+export type IntegrationScopeKind = "sites" | "nodes" | "environments";
+
 export interface IntegrationProviderInfo {
   id: IntegrationProvider;
   label: string;
   vendor: string;
   authKinds: IntegrationAuthKind[];
   defaultAuthKind: IntegrationAuthKind;
-  supportsSiteRef: boolean;
+  scopeKind: IntegrationScopeKind | null;
+}
+
+export interface IntegrationScope {
+  id: string;
+  label: string;
 }
 
 export type IntegrationAutoSyncMode = "merge" | "overwrite" | "skip";
@@ -309,6 +316,7 @@ export interface IntegrationConnection {
   authId: string | null;
   hasSecret: boolean;
   siteRef: string | null;
+  scopeRefs: string[];
   verifyTls: boolean;
   enabled: boolean;
   syncVlans: boolean;

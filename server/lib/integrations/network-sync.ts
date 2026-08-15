@@ -1,3 +1,5 @@
+import { db } from "../../db.js";
+import { createId } from "../ids.js";
 import { applySnmpSyncPreview, buildSnmpSyncPreview } from "../snmp-sync.js";
 import type {
   SnmpProfileCollection,
@@ -55,7 +57,77 @@ export function buildIntegrationNetworkPreview(input: {
     );
   }
 
+  // When a controller reports a VLAN id for a subnet Rackpad already has
+  // without a VLAN link, offer the association even under merge policy.
+  // The VLAN may already exist in the lab or be created by this preview.
+  if (input.policy === "merge") {
+    const previewVlanNumbers = new Set(
+      preview.vlans.map((entry) => entry.vlanNumber),
+    );
+    for (const diff of preview.subnets) {
+      if (
+        diff.action !== "unchanged" ||
+        !diff.existingId ||
+        diff.vlanNumber == null
+      ) {
+        continue;
+      }
+      const existing = db
+        .prepare("SELECT vlanId FROM subnets WHERE id = ?")
+        .get(diff.existingId) as { vlanId: string | null } | undefined;
+      if (!existing || existing.vlanId != null) continue;
+      const vlanKnown =
+        previewVlanNumbers.has(diff.vlanNumber) ||
+        Boolean(
+          db
+            .prepare("SELECT id FROM vlans WHERE labId = ? AND vlanId = ?")
+            .get(input.connection.labId, diff.vlanNumber),
+        );
+      if (!vlanKnown) continue;
+      diff.action = "update";
+      diff.linkOnly = true;
+      diff.changes = [`vlan: none -> ${diff.vlanNumber}`];
+    }
+  }
+
   return preview;
+}
+
+// Merge-policy applies skip update rows in the engine, so link-only VLAN
+// associations are applied here: set the subnet's VLAN when it is still
+// unlinked, never touching names or other fields.
+function applyLinkOnlySubnetUpdates(
+  preview: SnmpSyncPreview,
+  actor: string,
+): string[] {
+  const linked: string[] = [];
+  if (preview.policy !== "merge") return linked;
+  for (const diff of preview.subnets) {
+    if (!diff.linkOnly || !diff.existingId || diff.vlanNumber == null) continue;
+    const vlan = db
+      .prepare("SELECT id FROM vlans WHERE labId = ? AND vlanId = ?")
+      .get(preview.labId, diff.vlanNumber) as { id: string } | undefined;
+    if (!vlan) continue;
+    const result = db
+      .prepare("UPDATE subnets SET vlanId = ? WHERE id = ? AND vlanId IS NULL")
+      .run(vlan.id, diff.existingId);
+    if (result.changes > 0) {
+      linked.push(diff.existingId);
+      db.prepare(
+        `
+        INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
+        VALUES (?, ?, ?, 'integration.sync.subnet.link', 'IntegrationSync', ?, ?)
+      `,
+      ).run(
+        createId("a"),
+        new Date().toISOString(),
+        actor,
+        diff.existingId,
+        `Linked subnet ${diff.cidr} to VLAN ${diff.vlanNumber}.`,
+      );
+    }
+  }
+  return linked;
 }
 
 export function applyIntegrationNetworkPreview(input: {
@@ -63,7 +135,7 @@ export function applyIntegrationNetworkPreview(input: {
   allowDeletes?: boolean;
   actor: string;
 }) {
-  return applySnmpSyncPreview({
+  const result = applySnmpSyncPreview({
     preview: input.preview,
     allowDeletes: input.allowDeletes,
     actor: input.actor,
@@ -73,4 +145,8 @@ export function applyIntegrationNetworkPreview(input: {
       label: "Integration sync",
     },
   });
+  result.updatedSubnetIds.push(
+    ...applyLinkOnlySubnetUpdates(input.preview, input.actor),
+  );
+  return result;
 }

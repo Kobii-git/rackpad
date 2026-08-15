@@ -40,6 +40,11 @@ export interface IntegrationInventory {
   warnings: string[];
 }
 
+export interface IntegrationScope {
+  id: string;
+  label: string;
+}
+
 export interface IntegrationClient {
   provider: IntegrationProvider;
   test(
@@ -48,6 +53,16 @@ export interface IntegrationClient {
   fetchInventory(
     connection: IntegrationConnectionSecrets,
   ): Promise<IntegrationInventory>;
+  listScopes?(
+    connection: IntegrationConnectionSecrets,
+  ): Promise<IntegrationScope[]>;
+}
+
+// Selected scopes (sites, nodes, environments) with the legacy single
+// siteRef as a fallback for connections created before multi-select.
+export function connectionScopeRefs(connection: IntegrationConnectionSecrets) {
+  if (connection.scopeRefs.length > 0) return connection.scopeRefs;
+  return connection.siteRef ? [connection.siteRef] : [];
 }
 
 const clients = new Map<IntegrationProvider, IntegrationClient>();

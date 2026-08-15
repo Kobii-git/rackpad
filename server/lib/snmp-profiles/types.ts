@@ -59,6 +59,9 @@ export interface SnmpSyncSubnetDiff {
   existingName?: string | null
   changes?: string[]
   blockedReason?: string | null
+  // Set when the only change is associating an existing unlinked subnet
+  // with its VLAN; merge-policy applies may perform this link safely.
+  linkOnly?: boolean
 }
 
 export interface SnmpSyncDhcpPreview {

@@ -10,6 +10,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Trash2,
+  X,
 } from "lucide-react";
 import { useI18n } from "@/i18n";
 import type { TranslationKey } from "@/i18n/translations";
@@ -41,6 +42,8 @@ import type {
   IntegrationInventoryResponse,
   IntegrationProvider,
   IntegrationProviderInfo,
+  IntegrationScope,
+  IntegrationScopeKind,
   ProxmoxIntegrationNode,
   SnmpSyncPolicy,
 } from "@/lib/types";
@@ -53,7 +56,7 @@ interface ConnectionForm {
   authKind: IntegrationAuthKind;
   authId: string;
   authSecret: string;
-  siteRef: string;
+  scopeRefs: string[];
   verifyTls: boolean;
   syncVlans: boolean;
   syncSubnets: boolean;
@@ -67,7 +70,7 @@ const EMPTY_FORM: ConnectionForm = {
   authKind: "api-token",
   authId: "",
   authSecret: "",
-  siteRef: "",
+  scopeRefs: [],
   verifyTls: true,
   syncVlans: true,
   syncSubnets: true,
@@ -104,6 +107,101 @@ const AUTH_KIND_LABELS: Record<IntegrationAuthKind, TranslationKey> = {
   "username-password": "Username / password",
   "client-credentials": "Client credentials",
   "key-secret": "Key / secret",
+};
+
+// One concise line under the connection form instead of a paragraph of
+// prose on the panel.
+const PROVIDER_DESCRIPTIONS: Record<IntegrationProvider, TranslationKey> = {
+  proxmox:
+    "Pulls nodes, VMs, containers, bridges, and SDN networks, and can stage a full node into the import wizard.",
+  unifi:
+    "Pulls switches, gateways, and APs plus networks, VLANs, and DHCP ranges per site.",
+  omada:
+    "Pulls switches, gateways, and APs plus LAN networks, VLANs, and DHCP ranges per site.",
+  opnsense:
+    "Pulls interfaces, VLAN definitions, gateways, and DHCP ranges from the firewall.",
+  dockhand:
+    "Pulls Docker environments, containers, stacks, and networks as read-only previews.",
+};
+
+interface PullToggleCopy {
+  label: TranslationKey;
+  hint: TranslationKey;
+}
+
+// Provider-correlated pull toggles: each checkbox says what it actually
+// brings in for that integration, with a hover for the fine print.
+const PULL_TOGGLES: Record<
+  IntegrationProvider,
+  {
+    vlans: PullToggleCopy | null;
+    subnets: PullToggleCopy | null;
+    dhcp: PullToggleCopy | null;
+  }
+> = {
+  proxmox: {
+    vlans: {
+      label: "SDN VLANs",
+      hint: "VLAN ids from Proxmox SDN zones and vnets. These live on the host overlay fabric and may not match your physical switch VLANs.",
+    },
+    subnets: {
+      label: "Bridge and SDN subnets",
+      hint: "IPv4 networks from node bridges, VLAN interfaces, and SDN subnets.",
+    },
+    dhcp: {
+      label: "SDN DHCP ranges",
+      hint: "DHCP ranges defined on SDN subnets. Shown for review only, never applied.",
+    },
+  },
+  unifi: {
+    vlans: {
+      label: "Network VLANs",
+      hint: "VLAN ids from UniFi corporate and VLAN-only networks.",
+    },
+    subnets: {
+      label: "Network subnets",
+      hint: "IPv4 subnets of gateway-managed networks. WAN and VPN networks are excluded.",
+    },
+    dhcp: {
+      label: "DHCP server ranges",
+      hint: "UniFi DHCP server pools. Shown for review only, never applied.",
+    },
+  },
+  omada: {
+    vlans: {
+      label: "LAN VLANs",
+      hint: "VLAN ids from Omada LAN networks and interfaces.",
+    },
+    subnets: {
+      label: "LAN subnets",
+      hint: "Gateway subnets of Omada LAN networks.",
+    },
+    dhcp: {
+      label: "DHCP server ranges",
+      hint: "Omada DHCP server pools. Shown for review only, never applied.",
+    },
+  },
+  opnsense: {
+    vlans: {
+      label: "Interface VLANs",
+      hint: "802.1Q VLAN definitions from the firewall. Existing subnets without a VLAN are associated when the ids match.",
+    },
+    subnets: {
+      label: "Interface subnets",
+      hint: "IPv4 networks of configured interfaces.",
+    },
+    dhcp: {
+      label: "Kea and Dnsmasq ranges",
+      hint: "DHCP pools from Kea and Dnsmasq. ISC dhcpd does not expose ranges. Shown for review only, never applied.",
+    },
+  },
+  dockhand: { vlans: null, subnets: null, dhcp: null },
+};
+
+const SCOPE_KIND_LABELS: Record<IntegrationScopeKind, TranslationKey> = {
+  sites: "Sites",
+  nodes: "Cluster nodes",
+  environments: "Environments",
 };
 
 const DEVICE_KIND_LABELS: Record<
@@ -197,6 +295,11 @@ function autoSyncStatusTone(
   return "neutral" as const;
 }
 
+function connectionScopes(connection: IntegrationConnection) {
+  if (connection.scopeRefs.length > 0) return connection.scopeRefs;
+  return connection.siteRef ? [connection.siteRef] : [];
+}
+
 export function IntegrationsPanel({
   onStageProxmoxPayload,
 }: {
@@ -218,6 +321,10 @@ export function IntegrationsPanel({
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveredScopes, setDiscoveredScopes] = useState<
+    IntegrationScope[] | null
+  >(null);
   const [pull, setPull] = useState<
     (IntegrationInventoryResponse & { connectionId: string }) | null
   >(null);
@@ -270,73 +377,6 @@ export function IntegrationsPanel({
     void loadConnections();
   }, [lab.id]);
 
-  function updateAutoSyncDraft(
-    connection: IntegrationConnection,
-    patch: Partial<AutoSyncDraft>,
-  ) {
-    setAutoSyncDrafts((prev) => ({
-      ...prev,
-      [connection.id]: {
-        ...(prev[connection.id] ?? draftFromConnection(connection)),
-        ...patch,
-      },
-    }));
-  }
-
-  async function handleAutoSyncSave(connection: IntegrationConnection) {
-    const draft =
-      autoSyncDrafts[connection.id] ?? draftFromConnection(connection);
-    const preset = SCHEDULE_PRESETS.find((entry) => entry.id === draft.preset);
-    const cron = preset?.cron ?? draft.cron.trim();
-    setBusyId(connection.id);
-    resetMessages();
-    try {
-      await api.updateIntegrationConnection(connection.id, {
-        autoSyncEnabled: draft.enabled,
-        autoSyncMode: draft.mode,
-        autoSyncCron: cron || null,
-        autoSyncLabIds: draft.labIds,
-      });
-      setSuccess(t("Auto-sync settings saved."));
-      setAutoSyncDrafts((prev) => {
-        const next = { ...prev };
-        delete next[connection.id];
-        return next;
-      });
-      await loadConnections();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : t("Saving the auto-sync settings failed."),
-      );
-    } finally {
-      setBusyId("");
-    }
-  }
-
-  async function handleAutoSyncRun(connection: IntegrationConnection) {
-    setBusyId(connection.id);
-    resetMessages();
-    try {
-      const { result } = await api.runIntegrationAutoSync(connection.id);
-      if (result.status === "error") {
-        setError(result.message);
-      } else {
-        setSuccess(result.message);
-      }
-      await loadConnections();
-      if (result.status === "ok") {
-        await loadAll();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("Auto-sync run failed."));
-      await loadConnections();
-    } finally {
-      setBusyId("");
-    }
-  }
-
   function resetMessages() {
     setError("");
     setSuccess("");
@@ -350,6 +390,7 @@ export function IntegrationsPanel({
       authKind: info?.defaultAuthKind ?? EMPTY_FORM.authKind,
     });
     setEditingId("");
+    setDiscoveredScopes(null);
     setFormOpen(true);
     resetMessages();
   }
@@ -362,13 +403,14 @@ export function IntegrationsPanel({
       authKind: connection.authKind,
       authId: connection.authId ?? "",
       authSecret: "",
-      siteRef: connection.siteRef ?? "",
+      scopeRefs: connectionScopes(connection),
       verifyTls: connection.verifyTls,
       syncVlans: connection.syncVlans,
       syncSubnets: connection.syncSubnets,
       syncDhcp: connection.syncDhcp,
     });
     setEditingId(connection.id);
+    setDiscoveredScopes(null);
     setFormOpen(true);
     resetMessages();
   }
@@ -376,7 +418,43 @@ export function IntegrationsPanel({
   function closeForm() {
     setFormOpen(false);
     setEditingId("");
+    setDiscoveredScopes(null);
     setForm(EMPTY_FORM);
+  }
+
+  async function handleDiscover() {
+    setDiscovering(true);
+    resetMessages();
+    try {
+      const response =
+        editingId && !form.authSecret.trim()
+          ? await api.discoverIntegrationScopes({ connectionId: editingId })
+          : await api.discoverIntegrationScopes({
+              labId: lab.id,
+              provider: form.provider,
+              baseUrl: form.baseUrl.trim(),
+              authKind: form.authKind,
+              authId: form.authId.trim() || undefined,
+              authSecret: form.authSecret.trim() || undefined,
+              verifyTls: form.verifyTls,
+            });
+      const version = response.result.version
+        ? ` ${response.result.version}`
+        : "";
+      setSuccess(
+        t("Connected to {product}.", {
+          product: `${response.result.product}${version}`,
+        }),
+      );
+      setDiscoveredScopes(response.scopes);
+    } catch (err) {
+      setDiscoveredScopes(null);
+      setError(
+        err instanceof Error ? err.message : t("Connection test failed."),
+      );
+    } finally {
+      setDiscovering(false);
+    }
   }
 
   async function handleSave() {
@@ -392,7 +470,7 @@ export function IntegrationsPanel({
           ...(form.authSecret.trim()
             ? { authSecret: form.authSecret.trim() }
             : {}),
-          siteRef: form.siteRef.trim() || null,
+          scopeRefs: form.scopeRefs,
           verifyTls: form.verifyTls,
           syncVlans: form.syncVlans,
           syncSubnets: form.syncSubnets,
@@ -408,7 +486,7 @@ export function IntegrationsPanel({
           authKind: form.authKind,
           authId: form.authId.trim() || undefined,
           authSecret: form.authSecret.trim(),
-          siteRef: form.siteRef.trim() || undefined,
+          scopeRefs: form.scopeRefs,
           verifyTls: form.verifyTls,
           syncVlans: form.syncVlans,
           syncSubnets: form.syncSubnets,
@@ -558,8 +636,77 @@ export function IntegrationsPanel({
     }
   }
 
+  function updateAutoSyncDraft(
+    connection: IntegrationConnection,
+    patch: Partial<AutoSyncDraft>,
+  ) {
+    setAutoSyncDrafts((prev) => ({
+      ...prev,
+      [connection.id]: {
+        ...(prev[connection.id] ?? draftFromConnection(connection)),
+        ...patch,
+      },
+    }));
+  }
+
+  async function handleAutoSyncSave(connection: IntegrationConnection) {
+    const draft =
+      autoSyncDrafts[connection.id] ?? draftFromConnection(connection);
+    const preset = SCHEDULE_PRESETS.find((entry) => entry.id === draft.preset);
+    const cron = preset?.cron ?? draft.cron.trim();
+    setBusyId(connection.id);
+    resetMessages();
+    try {
+      await api.updateIntegrationConnection(connection.id, {
+        autoSyncEnabled: draft.enabled,
+        autoSyncMode: draft.mode,
+        autoSyncCron: cron || null,
+        autoSyncLabIds: draft.labIds,
+      });
+      setSuccess(t("Auto-sync settings saved."));
+      setAutoSyncDrafts((prev) => {
+        const next = { ...prev };
+        delete next[connection.id];
+        return next;
+      });
+      await loadConnections();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("Saving the auto-sync settings failed."),
+      );
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function handleAutoSyncRun(connection: IntegrationConnection) {
+    setBusyId(connection.id);
+    resetMessages();
+    try {
+      const { result } = await api.runIntegrationAutoSync(connection.id);
+      if (result.status === "error") {
+        setError(result.message);
+      } else {
+        setSuccess(result.message);
+      }
+      await loadConnections();
+      if (result.status === "ok") {
+        await loadAll();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("Auto-sync run failed."));
+      await loadConnections();
+    } finally {
+      setBusyId("");
+    }
+  }
+
   const authIdLabel = AUTH_ID_LABELS[form.authKind];
   const formProviderInfo = providerById[form.provider];
+  const formPullToggles = PULL_TOGGLES[form.provider];
+  const formScopeKind = formProviderInfo?.scopeKind ?? null;
   const pullConnection = pull
     ? connections.find((entry) => entry.id === pull.connectionId)
     : undefined;
@@ -580,19 +727,17 @@ export function IntegrationsPanel({
           <CardLabel>{t("Controller APIs")}</CardLabel>
           <CardHeading>{t("Integrations")}</CardHeading>
         </CardTitle>
-        <Badge tone="cyan">
+        <Badge
+          tone="cyan"
+          title={t(
+            "Credentials are stored encrypted. Inventory is only written after a reviewed preview or an explicit auto-sync schedule.",
+          )}
+        >
           <PlugZap className="size-3" />
           {t("Live inventory")}
         </Badge>
       </CardHeader>
       <CardBody className="space-y-4">
-        <p className="text-sm text-[var(--text-tertiary)]">
-          {t(
-            "Connect Proxmox VE, UniFi Network, Omada, OPNsense, and Dockhand to pull devices, VLANs, networks, DHCP ranges, and containers. Credentials are encrypted at rest with {secretKey}; nothing is written without a reviewed preview.",
-            { secretKey: "RACKPAD_SECRET_KEY" },
-          )}
-        </p>
-
         <Tabs defaultValue="connections" className="space-y-4">
           <TabsList>
             <TabsTrigger value="connections">{t("Connections")}</TabsTrigger>
@@ -621,6 +766,7 @@ export function IntegrationsPanel({
                   variant="outline"
                   size="sm"
                   disabled={!canEdit}
+                  title={t(PROVIDER_DESCRIPTIONS[provider.id])}
                   onClick={() => openCreateForm(provider.id)}
                 >
                   <IntegrationIcon
@@ -635,18 +781,23 @@ export function IntegrationsPanel({
 
             {formOpen && (
               <div className="space-y-3 rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-bg)] p-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                  <IntegrationIcon
-                    provider={form.provider}
-                    className="size-4"
-                  />
-                  {editingId
-                    ? t("Edit {name} connection", {
-                        name: formProviderInfo?.label ?? form.provider,
-                      })
-                    : t("New {name} connection", {
-                        name: formProviderInfo?.label ?? form.provider,
-                      })}
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+                    <IntegrationIcon
+                      provider={form.provider}
+                      className="size-4"
+                    />
+                    {editingId
+                      ? t("Edit {name} connection", {
+                          name: formProviderInfo?.label ?? form.provider,
+                        })
+                      : t("New {name} connection", {
+                          name: formProviderInfo?.label ?? form.provider,
+                        })}
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                    {t(PROVIDER_DESCRIPTIONS[form.provider])}
+                  </p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="space-y-1 text-sm">
@@ -743,30 +894,15 @@ export function IntegrationsPanel({
                       }
                     />
                   </label>
-                  {formProviderInfo?.supportsSiteRef && (
-                    <label className="space-y-1 text-sm">
-                      <span className="text-[var(--text-secondary)]">
-                        {form.provider === "dockhand"
-                          ? t(
-                              "Environment (optional, defaults to all environments)",
-                            )
-                          : t("Site (optional, defaults to the first site)")}
-                      </span>
-                      <Input
-                        value={form.siteRef}
-                        disabled={saving}
-                        onChange={(event) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            siteRef: event.target.value,
-                          }))
-                        }
-                      />
-                    </label>
-                  )}
                 </div>
-                <div className="flex flex-wrap gap-4 text-xs text-[var(--text-secondary)]">
-                  <label className="flex items-center gap-2">
+
+                <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--text-secondary)]">
+                  <label
+                    className="flex items-center gap-2"
+                    title={t(
+                      "Turn off for controllers with self-signed certificates.",
+                    )}
+                  >
                     <input
                       type="checkbox"
                       checked={form.verifyTls}
@@ -780,54 +916,137 @@ export function IntegrationsPanel({
                     />
                     {t("Verify TLS certificate")}
                   </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={form.syncVlans}
-                      disabled={saving}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          syncVlans: event.target.checked,
-                        }))
-                      }
-                    />
-                    {t("Pull VLANs")}
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={form.syncSubnets}
-                      disabled={saving}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          syncSubnets: event.target.checked,
-                        }))
-                      }
-                    />
-                    {t("Pull subnets")}
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={form.syncDhcp}
-                      disabled={saving}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          syncDhcp: event.target.checked,
-                        }))
-                      }
-                    />
-                    {t("Pull DHCP (preview only)")}
-                  </label>
-                </div>
-                <p className="text-xs text-[var(--text-tertiary)]">
-                  {t(
-                    "Mixed setups: keep VLANs on the switch controller connection and subnets/DHCP on the firewall connection so each source owns what it terminates.",
+                  {formPullToggles.vlans && (
+                    <label
+                      className="flex items-center gap-2"
+                      title={t(formPullToggles.vlans.hint)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.syncVlans}
+                        disabled={saving}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            syncVlans: event.target.checked,
+                          }))
+                        }
+                      />
+                      {t(formPullToggles.vlans.label)}
+                    </label>
                   )}
-                </p>
+                  {formPullToggles.subnets && (
+                    <label
+                      className="flex items-center gap-2"
+                      title={t(formPullToggles.subnets.hint)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.syncSubnets}
+                        disabled={saving}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            syncSubnets: event.target.checked,
+                          }))
+                        }
+                      />
+                      {t(formPullToggles.subnets.label)}
+                    </label>
+                  )}
+                  {formPullToggles.dhcp && (
+                    <label
+                      className="flex items-center gap-2"
+                      title={t(formPullToggles.dhcp.hint)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.syncDhcp}
+                        disabled={saving}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            syncDhcp: event.target.checked,
+                          }))
+                        }
+                      />
+                      {t(formPullToggles.dhcp.label)}
+                    </label>
+                  )}
+                </div>
+
+                {formScopeKind && (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={
+                          saving ||
+                          discovering ||
+                          !form.baseUrl.trim() ||
+                          (!editingId && !form.authSecret.trim())
+                        }
+                        title={t(
+                          "Tests the credentials and lists what you can pull from.",
+                        )}
+                        onClick={() => void handleDiscover()}
+                      >
+                        <PlugZap className="size-3.5" />
+                        {discovering ? t("Testing…") : t("Test & discover")}
+                      </Button>
+                      <span className="text-xs text-[var(--text-tertiary)]">
+                        {form.scopeRefs.length > 0
+                          ? t("{count} of {kind} selected", {
+                              count: form.scopeRefs.length,
+                              kind: t(SCOPE_KIND_LABELS[formScopeKind]),
+                            })
+                          : t(
+                              "Nothing selected — the default selection is used.",
+                            )}
+                      </span>
+                    </div>
+                    {discoveredScopes && discoveredScopes.length > 0 && (
+                      <div className="space-y-1">
+                        <span className="rk-field-label">
+                          {t(SCOPE_KIND_LABELS[formScopeKind])}
+                        </span>
+                        <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+                          {discoveredScopes.map((scope) => (
+                            <label
+                              key={scope.id}
+                              className="flex items-center gap-2 rounded border border-[var(--color-line)] px-2 py-1 text-sm text-[var(--text-secondary)]"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={form.scopeRefs.includes(scope.id)}
+                                disabled={saving}
+                                onChange={(event) =>
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    scopeRefs: event.target.checked
+                                      ? [...prev.scopeRefs, scope.id]
+                                      : prev.scopeRefs.filter(
+                                          (id) => id !== scope.id,
+                                        ),
+                                  }))
+                                }
+                              />
+                              {scope.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {!discoveredScopes && form.scopeRefs.length > 0 && (
+                      <Mono className="block text-[10px] text-[var(--text-tertiary)]">
+                        {form.scopeRefs.join(", ")}
+                      </Mono>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
@@ -907,7 +1126,12 @@ export function IntegrationsPanel({
                         )}
                       </div>
                       <Mono className="block truncate text-[10px] text-[var(--text-tertiary)]">
-                        {connection.baseUrl}
+                        {[
+                          connection.baseUrl,
+                          connectionScopes(connection).join(", "),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </Mono>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -915,6 +1139,9 @@ export function IntegrationsPanel({
                         variant="outline"
                         size="sm"
                         disabled={!canEdit || busy}
+                        title={t(
+                          "Checks reachability and refreshes product and version.",
+                        )}
                         onClick={() => void handleTest(connection)}
                       >
                         <PlugZap className="size-3.5" />
@@ -924,6 +1151,9 @@ export function IntegrationsPanel({
                         variant="outline"
                         size="sm"
                         disabled={!canEdit || busy || !connection.enabled}
+                        title={t(
+                          "Fetches inventory and opens a review preview. Nothing is written yet.",
+                        )}
                         onClick={() => void handlePull(connection)}
                       >
                         <RefreshCw className="size-3.5" />
@@ -935,6 +1165,9 @@ export function IntegrationsPanel({
                             variant="outline"
                             size="sm"
                             disabled={!canEdit || busy || !connection.enabled}
+                            title={t(
+                              "Loads a node's full inventory into the Proxmox import wizard.",
+                            )}
                             onClick={() => void handleStageProxmox(connection)}
                           >
                             <DownloadCloud className="size-3.5" />
@@ -993,180 +1226,6 @@ export function IntegrationsPanel({
                 </div>
               );
             })}
-
-            {pull && (
-              <div className="space-y-3 border-t border-[var(--color-line)] pt-4">
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-sm font-medium text-[var(--text-primary)]">
-                    {t("Inventory preview")}
-                  </span>
-                  {pullConnection && (
-                    <Badge tone="info">{pullConnection.name}</Badge>
-                  )}
-                  <Badge tone="neutral">{pull.preview.policy}</Badge>
-                  <span className="text-[var(--color-fg-subtle)]">
-                    {t("+{vlanCreates} VLAN / +{subnetCreates} subnet", {
-                      vlanCreates: pull.preview.summary.vlanCreates,
-                      subnetCreates: pull.preview.summary.subnetCreates,
-                    })}
-                  </span>
-                  <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                    {t("Policy")}
-                    <select
-                      className="rk-control"
-                      value={policy}
-                      onChange={(event) =>
-                        setPolicy(event.target.value as SnmpSyncPolicy)
-                      }
-                    >
-                      <option value="merge">
-                        {t("Merge (add missing only)")}
-                      </option>
-                      <option value="mirror">
-                        {t("Mirror (create, update, delete)")}
-                      </option>
-                    </select>
-                  </label>
-                </div>
-
-                {[...pull.warnings, ...pull.preview.warnings].map((warning) => (
-                  <div key={warning} className="text-xs text-[var(--warning)]">
-                    {warning}
-                  </div>
-                ))}
-
-                {pull.preview.vlans.length > 0 && (
-                  <IntegrationDiffSection
-                    title={t("VLANs")}
-                    rows={pull.preview.vlans.map((entry) => ({
-                      key: `vlan-${entry.vlanNumber}`,
-                      label: t("VLAN {number}", { number: entry.vlanNumber }),
-                      detail: entry.name,
-                      action: entry.action,
-                      note:
-                        entry.changes?.join("; ") ??
-                        entry.blockedReason ??
-                        undefined,
-                    }))}
-                  />
-                )}
-                {pull.preview.subnets.length > 0 && (
-                  <IntegrationDiffSection
-                    title={t("Subnets")}
-                    rows={pull.preview.subnets.map((entry) => ({
-                      key: `subnet-${entry.cidr}`,
-                      label: entry.cidr,
-                      detail: entry.name,
-                      action: entry.action,
-                      note:
-                        entry.changes?.join("; ") ??
-                        entry.blockedReason ??
-                        undefined,
-                    }))}
-                  />
-                )}
-                {pull.preview.dhcp.scopes.length > 0 && (
-                  <IntegrationDiffSection
-                    title={t("DHCP ranges (preview only)")}
-                    rows={pull.preview.dhcp.scopes.map((scope, index) => ({
-                      key: `dhcp-${index}`,
-                      label: `${scope.startIp} – ${scope.endIp}`,
-                      detail: scope.name,
-                      action: "unchanged",
-                      note: scope.subnetCidr ?? undefined,
-                    }))}
-                  />
-                )}
-
-                {pull.devices.length > 0 && (
-                  <div>
-                    <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-                      {t("Controller devices (read-only)")}
-                    </div>
-                    <div className="rk-table-shell max-h-56 overflow-y-auto">
-                      <table className="rk-table">
-                        <thead>
-                          <tr>
-                            <th>{t("Name")}</th>
-                            <th>{t("Type")}</th>
-                            <th>{t("Model")}</th>
-                            <th>{t("MAC")}</th>
-                            <th>{t("IP")}</th>
-                            <th>{t("Status")}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pull.devices.map((device, index) => (
-                            <tr key={`${device.name}-${index}`}>
-                              <td className="font-medium text-[var(--text-primary)]">
-                                {device.name}
-                              </td>
-                              <td>{t(DEVICE_KIND_LABELS[device.kind])}</td>
-                              <td>{device.model ?? ""}</td>
-                              <td>
-                                {device.macAddress ? (
-                                  <Mono>{device.macAddress}</Mono>
-                                ) : (
-                                  ""
-                                )}
-                              </td>
-                              <td>
-                                {device.ipAddress ? (
-                                  <Mono>{device.ipAddress}</Mono>
-                                ) : (
-                                  ""
-                                )}
-                              </td>
-                              <td>{device.status ?? ""}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {!hasChanges && (
-                  <div className="text-sm text-[var(--color-fg-subtle)]">
-                    {t("Rackpad already matches this controller's inventory.")}
-                  </div>
-                )}
-
-                {admin ? (
-                  <div className="flex flex-wrap items-center gap-3">
-                    {policy === "mirror" &&
-                      pull.preview.summary.vlanDeletes +
-                        pull.preview.summary.subnetDeletes >
-                        0 && (
-                        <label className="flex items-center gap-2 text-xs text-[var(--color-fg-subtle)]">
-                          <input
-                            type="checkbox"
-                            checked={allowDeletes}
-                            onChange={(event) =>
-                              setAllowDeletes(event.target.checked)
-                            }
-                          />
-                          {t("Allow deletes for unreferenced VLANs/subnets")}
-                        </label>
-                      )}
-                    <Button
-                      size="sm"
-                      disabled={applying || !hasChanges}
-                      onClick={() => void handleApply()}
-                    >
-                      <ShieldCheck className="size-3.5" />
-                      {applying ? t("Applying...") : t("Apply preview")}
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="text-xs text-[var(--color-fg-subtle)]">
-                    {t(
-                      "Administrator access is required to apply integration changes.",
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
           </TabsContent>
 
           <TabsContent value="auto-sync" className="space-y-4">
@@ -1185,9 +1244,6 @@ export function IntegrationsPanel({
                 autoSyncDrafts[connection.id] ??
                 draftFromConnection(connection);
               const busy = busyId === connection.id;
-              const preset = SCHEDULE_PRESETS.find(
-                (entry) => entry.id === draft.preset,
-              );
               const paused =
                 connection.autoSyncPausedUntil &&
                 new Date(connection.autoSyncPausedUntil).getTime() > Date.now();
@@ -1406,16 +1462,249 @@ export function IntegrationsPanel({
             })}
           </TabsContent>
         </Tabs>
+
+        {pull && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]">
+            <div className="flex max-h-[85vh] w-full max-w-3xl flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-2)] p-4 shadow-xl">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("Inventory preview")}
+                  </span>
+                  {pullConnection && (
+                    <Badge tone="info">{pullConnection.name}</Badge>
+                  )}
+                  <Badge tone="neutral">{pull.preview.policy}</Badge>
+                  <span className="text-xs text-[var(--color-fg-subtle)]">
+                    {t("+{vlanCreates} VLAN / +{subnetCreates} subnet", {
+                      vlanCreates: pull.preview.summary.vlanCreates,
+                      subnetCreates: pull.preview.summary.subnetCreates,
+                    })}
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPull(null)}
+                  aria-label={t("Close")}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </div>
+
+              {[...pull.warnings, ...pull.preview.warnings].map((warning) => (
+                <div key={warning} className="text-xs text-[var(--warning)]">
+                  {warning}
+                </div>
+              ))}
+
+              <Tabs
+                defaultValue={
+                  pull.preview.vlans.length > 0 ? "vlans" : "devices"
+                }
+                className="flex min-h-0 flex-1 flex-col gap-3"
+              >
+                <TabsList className="max-w-full overflow-x-auto [&>*]:shrink-0">
+                  <TabsTrigger value="vlans">
+                    {t("VLANs")} ({pull.preview.vlans.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="subnets">
+                    {t("Subnets")} ({pull.preview.subnets.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="dhcp">
+                    {t("DHCP")} ({pull.preview.dhcp.scopes.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="devices">
+                    {t("Devices")} ({pull.devices.length})
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent
+                  value="vlans"
+                  className="min-h-0 flex-1 overflow-y-auto"
+                >
+                  <IntegrationDiffRows
+                    emptyText={t("The controller reported no VLANs.")}
+                    rows={pull.preview.vlans.map((entry) => ({
+                      key: `vlan-${entry.vlanNumber}`,
+                      label: t("VLAN {number}", { number: entry.vlanNumber }),
+                      detail: entry.name,
+                      action: entry.action,
+                      note:
+                        entry.changes?.join("; ") ??
+                        entry.blockedReason ??
+                        undefined,
+                    }))}
+                  />
+                </TabsContent>
+                <TabsContent
+                  value="subnets"
+                  className="min-h-0 flex-1 overflow-y-auto"
+                >
+                  <IntegrationDiffRows
+                    emptyText={t("The controller reported no subnets.")}
+                    rows={pull.preview.subnets.map((entry) => ({
+                      key: `subnet-${entry.cidr}`,
+                      label: entry.cidr,
+                      detail: entry.name,
+                      action: entry.action,
+                      note:
+                        entry.changes?.join("; ") ??
+                        entry.blockedReason ??
+                        undefined,
+                    }))}
+                  />
+                </TabsContent>
+                <TabsContent
+                  value="dhcp"
+                  className="min-h-0 flex-1 overflow-y-auto"
+                >
+                  <IntegrationDiffRows
+                    emptyText={t("The controller reported no DHCP ranges.")}
+                    rows={pull.preview.dhcp.scopes.map((scope, index) => ({
+                      key: `dhcp-${index}`,
+                      label: `${scope.startIp} – ${scope.endIp}`,
+                      detail: scope.name,
+                      action: "unchanged",
+                      note: scope.subnetCidr ?? undefined,
+                    }))}
+                  />
+                  {pull.preview.dhcp.scopes.length > 0 && (
+                    <p className="mt-2 text-xs text-[var(--color-fg-subtle)]">
+                      {t("DHCP ranges are shown for review and never applied.")}
+                    </p>
+                  )}
+                </TabsContent>
+                <TabsContent
+                  value="devices"
+                  className="min-h-0 flex-1 overflow-y-auto"
+                >
+                  {pull.devices.length === 0 ? (
+                    <p className="text-sm text-[var(--color-fg-subtle)]">
+                      {t("The controller reported no devices.")}
+                    </p>
+                  ) : (
+                    <div className="rk-table-shell">
+                      <table className="rk-table">
+                        <thead>
+                          <tr>
+                            <th>{t("Name")}</th>
+                            <th>{t("Type")}</th>
+                            <th>{t("Model")}</th>
+                            <th>{t("MAC")}</th>
+                            <th>{t("IP")}</th>
+                            <th>{t("Status")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pull.devices.map((device, index) => (
+                            <tr key={`${device.name}-${index}`}>
+                              <td className="font-medium text-[var(--text-primary)]">
+                                {device.name}
+                              </td>
+                              <td>{t(DEVICE_KIND_LABELS[device.kind])}</td>
+                              <td>{device.model ?? ""}</td>
+                              <td>
+                                {device.macAddress ? (
+                                  <Mono>{device.macAddress}</Mono>
+                                ) : (
+                                  ""
+                                )}
+                              </td>
+                              <td>
+                                {device.ipAddress ? (
+                                  <Mono>{device.ipAddress}</Mono>
+                                ) : (
+                                  ""
+                                )}
+                              </td>
+                              <td>{device.status ?? ""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+
+              <div className="flex flex-wrap items-center gap-3 border-t border-[var(--color-line)] pt-3">
+                <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                  {t("Policy")}
+                  <select
+                    className="rk-control"
+                    value={policy}
+                    onChange={(event) =>
+                      setPolicy(event.target.value as SnmpSyncPolicy)
+                    }
+                  >
+                    <option value="merge">
+                      {t("Merge (add missing only)")}
+                    </option>
+                    <option value="mirror">
+                      {t("Mirror (create, update, delete)")}
+                    </option>
+                  </select>
+                </label>
+                {admin &&
+                  policy === "mirror" &&
+                  pull.preview.summary.vlanDeletes +
+                    pull.preview.summary.subnetDeletes >
+                    0 && (
+                    <label className="flex items-center gap-2 text-xs text-[var(--color-fg-subtle)]">
+                      <input
+                        type="checkbox"
+                        checked={allowDeletes}
+                        onChange={(event) =>
+                          setAllowDeletes(event.target.checked)
+                        }
+                      />
+                      {t("Allow deletes for unreferenced VLANs/subnets")}
+                    </label>
+                  )}
+                {!hasChanges && (
+                  <span className="text-xs text-[var(--color-fg-subtle)]">
+                    {t("Rackpad already matches this controller's inventory.")}
+                  </span>
+                )}
+                <div className="ml-auto flex items-center gap-2">
+                  {admin ? (
+                    <Button
+                      size="sm"
+                      disabled={applying || !hasChanges}
+                      onClick={() => void handleApply()}
+                    >
+                      <ShieldCheck className="size-3.5" />
+                      {applying ? t("Applying...") : t("Apply preview")}
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-[var(--color-fg-subtle)]">
+                      {t(
+                        "Administrator access is required to apply integration changes.",
+                      )}
+                    </span>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPull(null)}
+                  >
+                    {t("Close")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </CardBody>
     </Card>
   );
 }
 
-function IntegrationDiffSection({
-  title,
+function IntegrationDiffRows({
   rows,
+  emptyText,
 }: {
-  title: string;
   rows: Array<{
     key: string;
     label: string;
@@ -1423,36 +1712,35 @@ function IntegrationDiffSection({
     action: string;
     note?: string;
   }>;
+  emptyText: string;
 }) {
   const { t } = useI18n();
+  if (rows.length === 0) {
+    return <p className="text-sm text-[var(--color-fg-subtle)]">{emptyText}</p>;
+  }
   return (
-    <div>
-      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-        {title}
-      </div>
-      <div className="max-h-40 space-y-1 overflow-y-auto">
-        {rows.map((row) => (
-          <div
-            key={row.key}
-            className="flex items-center justify-between gap-3 rounded border border-[var(--color-line)] px-2 py-1 text-xs"
-          >
-            <div className="min-w-0">
-              <div className="truncate font-mono text-[var(--color-fg)]">
-                {row.label}
-              </div>
-              <div className="truncate text-[var(--color-fg-subtle)]">
-                {row.detail}
-                {row.note ? t("· {note}", { note: row.note }) : ""}
-              </div>
+    <div className="space-y-1">
+      {rows.map((row) => (
+        <div
+          key={row.key}
+          className="flex items-center justify-between gap-3 rounded border border-[var(--color-line)] px-2 py-1 text-xs"
+        >
+          <div className="min-w-0">
+            <div className="truncate font-mono text-[var(--color-fg)]">
+              {row.label}
             </div>
-            <Badge tone={actionTone(row.action)}>
-              {SYNC_ACTION_LABELS[row.action]
-                ? t(SYNC_ACTION_LABELS[row.action])
-                : row.action}
-            </Badge>
+            <div className="truncate text-[var(--color-fg-subtle)]">
+              {row.detail}
+              {row.note ? t("· {note}", { note: row.note }) : ""}
+            </div>
           </div>
-        ))}
-      </div>
+          <Badge tone={actionTone(row.action)}>
+            {SYNC_ACTION_LABELS[row.action]
+              ? t(SYNC_ACTION_LABELS[row.action])
+              : row.action}
+          </Badge>
+        </div>
+      ))}
     </div>
   );
 }

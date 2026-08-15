@@ -13,11 +13,13 @@ import {
   getIntegrationConnectionRow,
   listIntegrationConnections,
   loadIntegrationConnectionSecrets,
+  normalizeIntegrationBaseUrl,
   parseIntegrationConnectionPublic,
   recordIntegrationConnectionStatus,
   updateIntegrationConnection,
 } from "../lib/integrations/connections.js";
 import { getIntegrationClient } from "../lib/integrations/index.js";
+import type { IntegrationConnectionSecrets } from "../lib/integrations/types.js";
 import {
   applyIntegrationNetworkPreview,
   buildIntegrationNetworkPreview,
@@ -132,6 +134,8 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       authId,
       authSecret,
       siteRef: optionalString(body, "siteRef", { maxLength: 120 }) ?? null,
+      scopeRefs:
+        optionalStringArray(body, "scopeRefs", { maxItems: 100 }) ?? undefined,
       verifyTls: optionalBoolean(body, "verifyTls") ?? true,
       enabled: optionalBoolean(body, "enabled") ?? true,
       syncVlans: optionalBoolean(body, "syncVlans") ?? true,
@@ -140,6 +144,98 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
     });
 
     return reply.status(201).send(created);
+  });
+
+  // One call behind the "Test & discover" button: proves the credentials
+  // and returns the selectable scopes (sites, nodes, environments). Works
+  // with inline credentials before a connection exists, or with a stored
+  // connection id (optionally overriding the secret being retyped).
+  app.post("/discover-scopes", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+
+    const body = asObject(req.body);
+    const connectionId = optionalString(body, "connectionId", {
+      maxLength: 80,
+    });
+
+    let secrets: IntegrationConnectionSecrets;
+    if (connectionId) {
+      const existing = getIntegrationConnectionRow(connectionId);
+      if (!existing) {
+        return reply
+          .status(404)
+          .send({ error: "Integration connection not found." });
+      }
+      if (!assertLabWrite(req, reply, String(existing.labId))) return;
+      secrets = loadIntegrationConnectionSecrets(connectionId);
+      const inlineSecret = optionalString(body, "authSecret", {
+        maxLength: 500,
+      });
+      if (inlineSecret) secrets = { ...secrets, authSecret: inlineSecret };
+      const inlineAuthId = optionalString(body, "authId", { maxLength: 200 });
+      if (inlineAuthId !== undefined) {
+        secrets = { ...secrets, authId: inlineAuthId };
+      }
+    } else {
+      const labId = requiredString(body, "labId", { maxLength: 80 });
+      if (!assertLabWrite(req, reply, labId)) return;
+      const provider = requiredEnum(body, "provider", INTEGRATION_PROVIDERS);
+      const authKind =
+        optionalEnum(body, "authKind", INTEGRATION_AUTH_KINDS) ??
+        INTEGRATION_PROVIDER_INFO[provider].defaultAuthKind;
+      secrets = {
+        id: "discover",
+        labId,
+        provider,
+        name: "discover",
+        baseUrl: normalizeIntegrationBaseUrl(
+          requiredString(body, "baseUrl", { maxLength: 500 }),
+        ),
+        authKind,
+        authId: optionalString(body, "authId", { maxLength: 200 }) ?? null,
+        authSecret: requiredString(body, "authSecret", { maxLength: 500 }),
+        siteRef: null,
+        scopeRefs: [],
+        verifyTls: optionalBoolean(body, "verifyTls") ?? true,
+        enabled: true,
+        syncVlans: true,
+        syncSubnets: true,
+        syncDhcp: true,
+        autoSyncEnabled: false,
+        autoSyncMode: "merge",
+        autoSyncCron: null,
+        autoSyncLabIds: [],
+        autoSyncFailureCount: 0,
+        autoSyncPausedUntil: null,
+      };
+    }
+
+    const client = getIntegrationClient(secrets.provider);
+    if (!client) {
+      return reply.status(501).send({
+        error: `The ${INTEGRATION_PROVIDER_INFO[secrets.provider].label} client is not available in this build.`,
+      });
+    }
+    if (!secrets.authSecret) {
+      return reply.status(400).send({
+        error:
+          "This connection has no stored secret. Enter the credential again first.",
+      });
+    }
+
+    try {
+      const result = await client.test(secrets);
+      const scopes = client.listScopes ? await client.listScopes(secrets) : [];
+      return {
+        result,
+        scopeKind: INTEGRATION_PROVIDER_INFO[secrets.provider].scopeKind,
+        scopes,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Connection test failed.";
+      return reply.status(502).send({ error: message });
+    }
   });
 
   app.patch<{ Params: { id: string } }>(
@@ -238,6 +334,9 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
           "siteRef" in body
             ? optionalString(body, "siteRef", { maxLength: 120 })
             : undefined,
+        scopeRefs:
+          optionalStringArray(body, "scopeRefs", { maxItems: 100 }) ??
+          undefined,
         verifyTls: optionalBoolean(body, "verifyTls") ?? undefined,
         enabled: optionalBoolean(body, "enabled") ?? undefined,
         syncVlans: optionalBoolean(body, "syncVlans") ?? undefined,

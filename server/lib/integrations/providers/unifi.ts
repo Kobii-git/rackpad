@@ -6,12 +6,14 @@ import {
   parseIntegrationJson,
   type IntegrationHttpResponse,
 } from "../http.js";
-import type {
-  IntegrationClient,
-  IntegrationDeviceKind,
-  IntegrationDevicePreview,
-  IntegrationInventory,
-  IntegrationTestResult,
+import {
+  connectionScopeRefs,
+  type IntegrationClient,
+  type IntegrationDeviceKind,
+  type IntegrationDevicePreview,
+  type IntegrationInventory,
+  type IntegrationScope,
+  type IntegrationTestResult,
 } from "../inventory.js";
 import type { IntegrationConnectionSecrets } from "../types.js";
 import type {
@@ -207,29 +209,32 @@ async function officialSites(
     .filter((site) => site.id);
 }
 
-function pickOfficialSite(
+function pickOfficialSites(
   sites: OfficialSite[],
-  siteRef: string | null,
-): OfficialSite {
+  refs: string[],
+): OfficialSite[] {
   if (sites.length === 0) {
-    throw new ValidationError("UniFi Network reported no sites for this key.", 502);
-  }
-  if (!siteRef) return sites[0];
-  const wanted = siteRef.trim().toLowerCase();
-  const match = sites.find(
-    (site) =>
-      site.id.toLowerCase() === wanted ||
-      site.internalReference.toLowerCase() === wanted ||
-      site.name.toLowerCase() === wanted,
-  );
-  if (!match) {
     throw new ValidationError(
-      `UniFi site "${siteRef}" was not found. Available sites: ${sites
+      "UniFi Network reported no sites for this key.",
+      502,
+    );
+  }
+  if (refs.length === 0) return [sites[0]];
+  const wanted = refs.map((ref) => ref.trim().toLowerCase());
+  const matched = sites.filter(
+    (site) =>
+      wanted.includes(site.id.toLowerCase()) ||
+      wanted.includes(site.internalReference.toLowerCase()) ||
+      wanted.includes(site.name.toLowerCase()),
+  );
+  if (matched.length === 0) {
+    throw new ValidationError(
+      `No selected UniFi site was found. Available sites: ${sites
         .map((site) => site.name || site.internalReference)
         .join(", ")}.`,
     );
   }
-  return match;
+  return matched;
 }
 
 function officialDeviceKind(features: unknown): IntegrationDeviceKind {
@@ -264,40 +269,54 @@ async function officialFetchInventory(
 ): Promise<IntegrationInventory> {
   const warnings: string[] = [];
   const devices: IntegrationDevicePreview[] = [];
-  const site = pickOfficialSite(
-    await officialSites(connection),
-    connection.siteRef,
-  );
-
-  for (const entry of await integrationApiPage(
-    connection,
-    `/v1/sites/${site.id}/devices`,
-  )) {
-    const row = asRecord(entry);
-    devices.push({
-      name: asText(row.name) || asText(row.macAddress),
-      kind: officialDeviceKind(row.features),
-      model: asText(row.model) || null,
-      macAddress: asText(row.macAddress) || null,
-      ipAddress: usableIpv4(row.ipAddress) || asText(row.ipAddress) || null,
-      status: asText(row.state).toLowerCase() || null,
-      detail: asText(row.firmwareVersion)
-        ? `firmware ${asText(row.firmwareVersion)}`
-        : null,
-    });
-  }
-
   const networks: NetworkRecord[] = [];
-  const listResponse = await integrationApiRequest(
-    connection,
-    `/v1/sites/${site.id}/networks`,
-    { offset: 0, limit: PAGE_LIMIT },
+  const sites = pickOfficialSites(
+    await officialSites(connection),
+    connectionScopeRefs(connection),
   );
-  if (listResponse.status === 404) {
-    warnings.push(
-      "This UniFi Network version does not expose networks over the API key integration (Network 10+ required). Use username/password auth to pull networks and VLANs.",
+  const multiSite = sites.length > 1;
+  let networksUnavailable = false;
+
+  for (const site of sites) {
+    const siteLabel = site.name || site.internalReference;
+    for (const entry of await integrationApiPage(
+      connection,
+      `/v1/sites/${site.id}/devices`,
+    )) {
+      const row = asRecord(entry);
+      const firmware = asText(row.firmwareVersion);
+      devices.push({
+        name: asText(row.name) || asText(row.macAddress),
+        kind: officialDeviceKind(row.features),
+        model: asText(row.model) || null,
+        macAddress: asText(row.macAddress) || null,
+        ipAddress: usableIpv4(row.ipAddress) || asText(row.ipAddress) || null,
+        status: asText(row.state).toLowerCase() || null,
+        detail:
+          [
+            multiSite ? `site: ${siteLabel}` : "",
+            firmware ? `firmware ${firmware}` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ") || null,
+      });
+    }
+
+    const listResponse = await integrationApiRequest(
+      connection,
+      `/v1/sites/${site.id}/networks`,
+      { offset: 0, limit: PAGE_LIMIT },
     );
-  } else if (listResponse.status >= 200 && listResponse.status < 300) {
+    if (listResponse.status === 404) {
+      networksUnavailable = true;
+      continue;
+    }
+    if (listResponse.status < 200 || listResponse.status >= 300) {
+      throw new ValidationError(
+        `${TARGET_LABEL} returned HTTP ${listResponse.status} for the networks list.`,
+        502,
+      );
+    }
     const listBody = asRecord(parseIntegrationJson(listResponse, TARGET_LABEL));
     for (const entry of asArray(listBody.data)) {
       const row = asRecord(entry);
@@ -334,7 +353,7 @@ async function officialFetchInventory(
       }
 
       networks.push({
-        name,
+        name: multiSite ? `${siteLabel} ${name}` : name,
         vlanNumber,
         cidr,
         dhcpStart,
@@ -342,10 +361,11 @@ async function officialFetchInventory(
         purpose: asText(row.management).toLowerCase(),
       });
     }
-  } else {
-    throw new ValidationError(
-      `${TARGET_LABEL} returned HTTP ${listResponse.status} for the networks list.`,
-      502,
+  }
+
+  if (networksUnavailable) {
+    warnings.push(
+      "This UniFi Network version does not expose networks over the API key integration (Network 10+ required). Use username/password auth to pull networks and VLANs.",
     );
   }
 
@@ -488,30 +508,30 @@ async function legacySites(
     .filter((site) => site.key);
 }
 
-function pickLegacySite(sites: LegacySite[], siteRef: string | null): LegacySite {
+function pickLegacySites(sites: LegacySite[], refs: string[]): LegacySite[] {
   if (sites.length === 0) {
     throw new ValidationError(
       "UniFi Network reported no sites for this account.",
       502,
     );
   }
-  if (!siteRef) {
-    return sites.find((site) => site.key === "default") ?? sites[0];
+  if (refs.length === 0) {
+    return [sites.find((site) => site.key === "default") ?? sites[0]];
   }
-  const wanted = siteRef.trim().toLowerCase();
-  const match = sites.find(
+  const wanted = refs.map((ref) => ref.trim().toLowerCase());
+  const matched = sites.filter(
     (site) =>
-      site.key.toLowerCase() === wanted ||
-      site.description.toLowerCase() === wanted,
+      wanted.includes(site.key.toLowerCase()) ||
+      wanted.includes(site.description.toLowerCase()),
   );
-  if (!match) {
+  if (matched.length === 0) {
     throw new ValidationError(
-      `UniFi site "${siteRef}" was not found. Available sites: ${sites
+      `No selected UniFi site was found. Available sites: ${sites
         .map((site) => site.description)
         .join(", ")}.`,
     );
   }
-  return match;
+  return matched;
 }
 
 const LEGACY_DEVICE_KINDS: Record<string, IntegrationDeviceKind> = {
@@ -540,7 +560,7 @@ async function legacyTest(
 ): Promise<IntegrationTestResult> {
   const session = await legacyLogin(connection);
   const sites = await legacySites(connection, session);
-  const site = pickLegacySite(sites, connection.siteRef);
+  const [site] = pickLegacySites(sites, connectionScopeRefs(connection));
   const sysinfo = asRecord(
     (await legacyJson(connection, session, `/s/${site.key}/stat/sysinfo`))[0],
   );
@@ -559,63 +579,75 @@ async function legacyFetchInventory(
   connection: IntegrationConnectionSecrets,
 ): Promise<IntegrationInventory> {
   const session = await legacyLogin(connection);
-  const site = pickLegacySite(
+  const sites = pickLegacySites(
     await legacySites(connection, session),
-    connection.siteRef,
+    connectionScopeRefs(connection),
   );
+  const multiSite = sites.length > 1;
   const devices: IntegrationDevicePreview[] = [];
-
-  for (const entry of await legacyJson(
-    connection,
-    session,
-    `/s/${site.key}/stat/device`,
-  )) {
-    const row = asRecord(entry);
-    const state = asNumber(row.state);
-    devices.push({
-      name: asText(row.name) || asText(row.mac),
-      kind: LEGACY_DEVICE_KINDS[asText(row.type)] ?? "other",
-      model: asText(row.model) || null,
-      macAddress: asText(row.mac) || null,
-      ipAddress: usableIpv4(row.ip) || asText(row.ip) || null,
-      status:
-        state != null ? LEGACY_DEVICE_STATES[state] ?? `state ${state}` : null,
-      detail: asText(row.version) ? `firmware ${asText(row.version)}` : null,
-    });
-  }
-
   const networks: NetworkRecord[] = [];
-  for (const entry of await legacyJson(
-    connection,
-    session,
-    `/s/${site.key}/rest/networkconf`,
-  )) {
-    const row = asRecord(entry);
-    const purpose = asText(row.purpose);
-    if (purpose === "wan" || purpose.endsWith("-vpn")) continue;
-    if (row.enabled === false) continue;
 
-    const name = asText(row.name) || "UniFi network";
-    const vlanEnabled = row.vlan_enabled !== false && row.vlan != null;
-    const vlanNumber = vlanEnabled ? asNumber(row.vlan) : null;
-    let cidr: string | null = null;
-    const ipSubnet = asText(row.ip_subnet);
-    if (usableIpv4(ipSubnet)) {
-      try {
-        cidr = canonicalizeIpv4Cidr(ipSubnet);
-      } catch {
-        cidr = null;
-      }
+  for (const site of sites) {
+    for (const entry of await legacyJson(
+      connection,
+      session,
+      `/s/${site.key}/stat/device`,
+    )) {
+      const row = asRecord(entry);
+      const state = asNumber(row.state);
+      const firmware = asText(row.version);
+      devices.push({
+        name: asText(row.name) || asText(row.mac),
+        kind: LEGACY_DEVICE_KINDS[asText(row.type)] ?? "other",
+        model: asText(row.model) || null,
+        macAddress: asText(row.mac) || null,
+        ipAddress: usableIpv4(row.ip) || asText(row.ip) || null,
+        status:
+          state != null
+            ? (LEGACY_DEVICE_STATES[state] ?? `state ${state}`)
+            : null,
+        detail:
+          [
+            multiSite ? `site: ${site.description}` : "",
+            firmware ? `firmware ${firmware}` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ") || null,
+      });
     }
-    const dhcpEnabled = row.dhcpd_enabled === true;
-    networks.push({
-      name,
-      vlanNumber,
-      cidr,
-      dhcpStart: dhcpEnabled ? usableIpv4(row.dhcpd_start) || null : null,
-      dhcpEnd: dhcpEnabled ? usableIpv4(row.dhcpd_stop) || null : null,
-      purpose,
-    });
+
+    for (const entry of await legacyJson(
+      connection,
+      session,
+      `/s/${site.key}/rest/networkconf`,
+    )) {
+      const row = asRecord(entry);
+      const purpose = asText(row.purpose);
+      if (purpose === "wan" || purpose.endsWith("-vpn")) continue;
+      if (row.enabled === false) continue;
+
+      const name = asText(row.name) || "UniFi network";
+      const vlanEnabled = row.vlan_enabled !== false && row.vlan != null;
+      const vlanNumber = vlanEnabled ? asNumber(row.vlan) : null;
+      let cidr: string | null = null;
+      const ipSubnet = asText(row.ip_subnet);
+      if (usableIpv4(ipSubnet)) {
+        try {
+          cidr = canonicalizeIpv4Cidr(ipSubnet);
+        } catch {
+          cidr = null;
+        }
+      }
+      const dhcpEnabled = row.dhcpd_enabled === true;
+      networks.push({
+        name: multiSite ? `${site.description} ${name}` : name,
+        vlanNumber,
+        cidr,
+        dhcpStart: dhcpEnabled ? usableIpv4(row.dhcpd_start) || null : null,
+        dhcpEnd: dhcpEnabled ? usableIpv4(row.dhcpd_stop) || null : null,
+        purpose,
+      });
+    }
   }
 
   return { collection: collectNetworks(networks), devices, warnings: [] };
@@ -639,8 +671,25 @@ async function unifiFetchInventory(
     : officialFetchInventory(connection);
 }
 
+async function unifiListScopes(
+  connection: IntegrationConnectionSecrets,
+): Promise<IntegrationScope[]> {
+  if (connection.authKind === "username-password") {
+    const session = await legacyLogin(connection);
+    return (await legacySites(connection, session)).map((site) => ({
+      id: site.key,
+      label: site.description,
+    }));
+  }
+  return (await officialSites(connection)).map((site) => ({
+    id: site.id,
+    label: site.name || site.internalReference,
+  }));
+}
+
 export const unifiIntegrationClient: IntegrationClient = {
   provider: "unifi",
   test: unifiTest,
   fetchInventory: unifiFetchInventory,
+  listScopes: unifiListScopes,
 };

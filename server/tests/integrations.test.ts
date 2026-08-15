@@ -728,6 +728,80 @@ test("integration status sync refreshes enabled connections and records failures
   }
 });
 
+test("discover-scopes tests credentials and lists scopes inline or by connection", async () => {
+  const token = await bootstrapAdmin();
+  const labId = await firstLabId(token);
+
+  setIntegrationClientOverrideForTests("proxmox", {
+    provider: "proxmox",
+    test: async () => ({
+      product: "Proxmox VE",
+      version: "8.4.1",
+      summary: { nodes: 2 },
+    }),
+    fetchInventory: async () => {
+      throw new Error("not used");
+    },
+    listScopes: async () => [
+      { id: "pve1", label: "pve1" },
+      { id: "pve2", label: "pve2" },
+    ],
+  });
+  try {
+    const inline = await app.inject({
+      method: "POST",
+      url: "/api/integrations/discover-scopes",
+      headers: authHeaders(token),
+      payload: {
+        labId,
+        provider: "proxmox",
+        baseUrl: "https://pve.lab.internal:8006",
+        authKind: "api-token",
+        authId: "rackpad@pam!inventory",
+        authSecret: "token-secret",
+      },
+    });
+    assert.equal(inline.statusCode, 200, inline.body);
+    const inlineBody = json(inline) as {
+      result: { product: string };
+      scopeKind: string;
+      scopes: Array<{ id: string }>;
+    };
+    assert.equal(inlineBody.result.product, "Proxmox VE");
+    assert.equal(inlineBody.scopeKind, "nodes");
+    assert.deepEqual(
+      inlineBody.scopes.map((scope) => scope.id),
+      ["pve1", "pve2"],
+    );
+
+    const created = await createConnection(token, {
+      labId,
+      provider: "proxmox",
+      name: "PVE with scopes",
+      baseUrl: "https://pve.lab.internal:8006",
+      authKind: "api-token",
+      authId: "rackpad@pam!inventory",
+      authSecret: "token-secret",
+      scopeRefs: ["pve1"],
+    });
+    assert.deepEqual(
+      (created as unknown as { scopeRefs: string[] }).scopeRefs,
+      ["pve1"],
+    );
+
+    const stored = await app.inject({
+      method: "POST",
+      url: "/api/integrations/discover-scopes",
+      headers: authHeaders(token),
+      payload: { connectionId: created.id },
+    });
+    assert.equal(stored.statusCode, 200, stored.body);
+    assert.equal((json(stored) as { scopeKind: string }).scopeKind, "nodes");
+  } finally {
+    setIntegrationClientOverrideForTests("proxmox", null);
+  }
+});
+
 test("integration URLs join base paths and query params safely", () => {
   const plain = buildIntegrationUrl(
     "https://omada.lab.internal:8043",
