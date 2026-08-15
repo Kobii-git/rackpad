@@ -20,10 +20,15 @@ import type {
   DiscoveryScanResult,
   DiscoveryScanSchedule,
   DhcpScope,
+  IntegrationConnection,
+  IntegrationInventoryResponse,
+  IntegrationProviderInfo,
+  IntegrationTestResult,
   IpAssignment,
   IpZone,
   ID,
   Lab,
+  ProxmoxIntegrationNode,
   LabAccessEntry,
   Port,
   PortLink,
@@ -224,12 +229,7 @@ export type StorageDrivePatch = Nullable<
 export type StoragePoolPatch = Nullable<
   Pick<
     StoragePool,
-    | "name"
-    | "poolType"
-    | "usableCapacityGb"
-    | "status"
-    | "notes"
-    | "driveIds"
+    "name" | "poolType" | "usableCapacityGb" | "status" | "notes" | "driveIds"
   >
 >;
 export type DiscoveredDevicePatch = Nullable<
@@ -1551,6 +1551,112 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     });
+  },
+
+  getIntegrationProviders() {
+    return request<IntegrationProviderInfo[]>("/integrations/providers");
+  },
+
+  getIntegrationConnections(params?: { labId?: string }) {
+    return request<IntegrationConnection[]>(
+      "/integrations/connections",
+      undefined,
+      params,
+    );
+  },
+
+  createIntegrationConnection(body: {
+    labId: string;
+    provider: IntegrationConnection["provider"];
+    name: string;
+    baseUrl: string;
+    authKind?: IntegrationConnection["authKind"];
+    authId?: string;
+    authSecret: string;
+    siteRef?: string;
+    verifyTls?: boolean;
+    enabled?: boolean;
+    syncVlans?: boolean;
+    syncSubnets?: boolean;
+    syncDhcp?: boolean;
+  }) {
+    return request<IntegrationConnection>("/integrations/connections", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateIntegrationConnection(
+    id: ID,
+    body: Partial<{
+      name: string;
+      baseUrl: string;
+      authKind: IntegrationConnection["authKind"];
+      authId: string | null;
+      authSecret: string;
+      siteRef: string | null;
+      verifyTls: boolean;
+      enabled: boolean;
+      syncVlans: boolean;
+      syncSubnets: boolean;
+      syncDhcp: boolean;
+      clearSecret: boolean;
+    }>,
+  ) {
+    return request<IntegrationConnection>(`/integrations/connections/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteIntegrationConnection(id: ID) {
+    return request<void>(`/integrations/connections/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  testIntegrationConnection(id: ID) {
+    return request<{
+      connection: IntegrationConnection | null;
+      result: IntegrationTestResult;
+    }>(`/integrations/connections/${id}/test`, { method: "POST" });
+  },
+
+  pullIntegrationInventory(
+    id: ID,
+    body?: { policy?: SnmpSyncPreview["policy"] },
+  ) {
+    return request<IntegrationInventoryResponse>(
+      `/integrations/connections/${id}/inventory`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    );
+  },
+
+  applyIntegrationPreview(
+    id: ID,
+    body: {
+      preview: SnmpSyncPreview;
+      policy?: SnmpSyncPreview["policy"];
+      allowDeletes?: boolean;
+    },
+  ) {
+    return request<SnmpSyncApplyResult>(
+      `/integrations/connections/${id}/apply`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  },
+
+  getProxmoxIntegrationNodes(id: ID) {
+    return request<{ nodes: ProxmoxIntegrationNode[] }>(
+      `/integrations/connections/${id}/proxmox/nodes`,
+    );
+  },
+
+  pullProxmoxStagedInventory(id: ID, body?: { node?: string }) {
+    return request<Record<string, unknown>>(
+      `/integrations/connections/${id}/proxmox/staged-inventory`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    );
   },
 
   getDiscoveredDevices(params?: { labId?: string; status?: string }) {

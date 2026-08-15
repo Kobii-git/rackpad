@@ -4,6 +4,11 @@
     "reason": "Product name"
   },
   {
+    "key": "Bridge",
+    "reason": "Networking term kept in English by Proxmox's own German and Italian UIs",
+    "locales": ["de", "it"]
+  },
+  {
     "key": "WiFi",
     "reason": "Networking standard name"
   },

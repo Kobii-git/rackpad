@@ -11,6 +11,7 @@ import {
 import { TopBar } from "@/components/layout/TopBar";
 import { NetBoxDeviceTypeImport } from "@/components/import/NetBoxDeviceTypeImport";
 import { DockerImportPanel } from "@/components/import/DockerImportPanel";
+import { IntegrationsPanel } from "@/components/import/IntegrationsPanel";
 import { useI18n } from "@/i18n";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -701,6 +702,21 @@ export default function ImportView() {
     stagePayload(structuredClone(SAMPLE_IMPORTS[provider]));
   }
 
+  function stageIntegrationPayload(payload: Record<string, unknown>) {
+    try {
+      stagePayload(payload as HyperVPayload);
+    } catch (error) {
+      setPayload(null);
+      setHostDraft(null);
+      setVmDrafts([]);
+      setParseError(
+        error instanceof Error
+          ? error.message
+          : "Failed to stage the pulled inventory.",
+      );
+    }
+  }
+
   async function handleImport() {
     if (!payload || !canEdit) return;
     setImporting(true);
@@ -949,6 +965,8 @@ export default function ImportView() {
           <NetBoxDeviceTypeImport />
 
           <DockerImportPanel />
+
+          <IntegrationsPanel onStageProxmoxPayload={stageIntegrationPayload} />
 
           <Card>
             <CardHeader>

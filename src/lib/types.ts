@@ -61,11 +61,7 @@ export type StoragePoolType =
   | "jbod"
   | "other";
 export type StoragePoolStatus =
-  | "healthy"
-  | "degraded"
-  | "rebuilding"
-  | "offline"
-  | "unknown";
+  "healthy" | "degraded" | "rebuilding" | "offline" | "unknown";
 export type DeviceServiceType =
   | "dhcp"
   | "dns"
@@ -280,6 +276,87 @@ export interface SnmpSyncApplyResult {
   deletedSubnetIds: string[];
   skippedDeletes: number;
   warnings: string[];
+}
+
+export type IntegrationProvider = "proxmox" | "unifi" | "omada" | "opnsense";
+
+export type IntegrationAuthKind =
+  | "api-token"
+  | "api-key"
+  | "username-password"
+  | "client-credentials"
+  | "key-secret";
+
+export interface IntegrationProviderInfo {
+  id: IntegrationProvider;
+  label: string;
+  vendor: string;
+  authKinds: IntegrationAuthKind[];
+  defaultAuthKind: IntegrationAuthKind;
+  supportsSiteRef: boolean;
+}
+
+export interface IntegrationConnection {
+  id: string;
+  labId: string;
+  provider: IntegrationProvider;
+  name: string;
+  baseUrl: string;
+  authKind: IntegrationAuthKind;
+  authId: string | null;
+  hasSecret: boolean;
+  siteRef: string | null;
+  verifyTls: boolean;
+  enabled: boolean;
+  syncVlans: boolean;
+  syncSubnets: boolean;
+  syncDhcp: boolean;
+  lastStatus: "unknown" | "ok" | "error";
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  lastSummary: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IntegrationTestResult {
+  product: string;
+  version: string | null;
+  summary: Record<string, unknown>;
+}
+
+export interface IntegrationDevicePreview {
+  name: string;
+  kind:
+    | "host"
+    | "vm"
+    | "container"
+    | "switch"
+    | "gateway"
+    | "access-point"
+    | "firewall"
+    | "bridge"
+    | "interface"
+    | "other";
+  model: string | null;
+  macAddress: string | null;
+  ipAddress: string | null;
+  status: string | null;
+  detail: string | null;
+}
+
+export interface IntegrationInventoryResponse {
+  connection: IntegrationConnection | null;
+  preview: SnmpSyncPreview;
+  devices: IntegrationDevicePreview[];
+  warnings: string[];
+}
+
+export interface ProxmoxIntegrationNode {
+  node: string;
+  status: string;
+  maxcpu: number | null;
+  maxmemGb: number | null;
 }
 
 export interface DeviceImage {
