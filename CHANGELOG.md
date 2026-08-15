@@ -8,6 +8,43 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+### Added
+
+- Added controller API integrations for Proxmox VE, UniFi Network, TP-Link
+  Omada, and OPNsense in **Imports → Integrations**: lab-scoped connections
+  with credentials encrypted at rest via `RACKPAD_SECRET_KEY`, per-connection
+  TLS verification and sync toggles, connection tests that report product and
+  version, and read-only device previews (hosts, VMs, switches, gateways,
+  APs, interfaces).
+- Live network inventory pulls preview VLANs, subnets, and DHCP ranges from
+  each controller and apply through the same merge/mirror engine as SNMP
+  inventory sync — DHCP stays preview-only, deletes require explicit
+  confirmation, and referenced records are protected. Applies are audited as
+  `integration.sync.*`.
+- Proxmox connections can stage a full node inventory over the API directly
+  into the existing review-first Proxmox import wizard (same payload as the
+  offline collector script), including QEMU/LXC workloads, bridges, virtual
+  NICs, VLAN tags, and guest IPs.
+- Per-connection VLAN/subnet/DHCP pull toggles support mixed environments,
+  for example Omada or UniFi owning VLANs while networks terminate on
+  OPNsense, without duplicate IPAM ownership.
+- New integration strings are localized across all supported locales.
+
+### Test notes
+
+- Set `RACKPAD_SECRET_KEY`, open **Imports → Integrations**, and add a
+  connection for each controller you run; **Test** should report the product
+  and version, and invalid credentials should surface the controller's error.
+- Pull inventory on a controller with VLANs/DHCP configured, review the
+  preview counts, and apply as an admin; re-pulling should then show
+  everything as unchanged. Editors should be able to preview but not apply.
+- On a Proxmox connection, use **Stage import** and confirm the wizard shows
+  the same nodes, VMs, containers, bridges, and IPs as an uploaded collector
+  file, then import selected categories.
+- For a mixed Omada/UniFi + OPNsense setup, disable subnet pulls on the
+  switch controller connection and VLAN pulls on the firewall connection,
+  pull both, and confirm the previews stay free of duplicate VLANs/subnets.
+
 ## [1.8.0-beta.0] - 2026-08-11
 
 ### Added
