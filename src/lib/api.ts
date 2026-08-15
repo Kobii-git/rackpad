@@ -1039,6 +1039,7 @@ export const api = {
     endpoint: string;
     labId?: string;
     token?: string;
+    verifyTls?: boolean;
   }) {
     return request<{ containers: DockerContainerPreview[] }>(
       "/imports/docker/preview",
@@ -1052,6 +1053,7 @@ export const api = {
   importDockerContainer(input: {
     endpoint: string;
     token?: string;
+    verifyTls?: boolean;
     containerId: string;
     labId: string;
     hostDeviceId: string;
@@ -1076,7 +1078,10 @@ export const api = {
     });
   },
 
-  updateDockerImportSource(id: string, input: { enabled: boolean }) {
+  updateDockerImportSource(
+    id: string,
+    input: { enabled?: boolean; verifyTls?: boolean },
+  ) {
     return request<DockerImportSource>(`/imports/docker/sources/${id}`, {
       method: "PATCH",
       body: JSON.stringify(input),

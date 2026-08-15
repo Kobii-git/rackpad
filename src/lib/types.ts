@@ -535,6 +535,7 @@ export interface DockerImportSource {
   endpoint: string;
   hasToken: boolean;
   enabled: boolean;
+  verifyTls: boolean;
   lastSyncAt?: string | null;
   lastSyncStatus?: string | null;
   lastSyncMessage?: string | null;

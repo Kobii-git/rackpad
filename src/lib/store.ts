@@ -3351,6 +3351,7 @@ export async function unlinkDocumentationDeviceRecord(
 export async function importDockerContainerRecord(input: {
   endpoint: string;
   token?: string;
+  verifyTls?: boolean;
   containerId: string;
   labId: string;
   hostDeviceId: string;

@@ -28,6 +28,11 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Per-connection VLAN/subnet/DHCP pull toggles support mixed environments,
   for example Omada or UniFi owning VLANs while networks terminate on
   OPNsense, without duplicate IPAM ownership.
+- Optional TLS certificate verification skip is now available across all
+  outbound connections: every integration connection has a per-connection
+  toggle, and Docker/Portainer HTTPS imports gain the same option on the
+  preview/import form and per saved source (persisted and reused by the
+  background status sync). Verification stays on by default everywhere.
 - New integration strings are localized across all supported locales.
 
 ### Test notes

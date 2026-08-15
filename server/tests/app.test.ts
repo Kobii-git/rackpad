@@ -8512,7 +8512,7 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
   assert.equal(source.enabled, 1);
   assert.equal(tlsColumn?.dflt_value, "0");
   assert.equal(duplicateMacColumn?.dflt_value, "0");
-  assert.equal(version.version, 36);
+  assert.equal(version.version, 37);
   migrated.close();
 });
 
@@ -8558,6 +8558,44 @@ test("storage topology migration upgrades a version-34 database without changing
     DROP TABLE driveSlots;
     DROP TABLE storageDrives;
     DROP TABLE driveBayTemplates;
+
+    -- Rebuild dockerImportSources at its v34 shape (no verifyTls column)
+    -- so the v37 ALTER TABLE migration runs against a true v34 schema.
+    DROP TABLE dockerContainerLinks;
+    DROP TABLE dockerImportSources;
+    CREATE TABLE dockerImportSources (
+      id              TEXT PRIMARY KEY,
+      labId           TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+      name            TEXT NOT NULL,
+      endpoint        TEXT NOT NULL,
+      tokenEnc        TEXT,
+      lastSyncAt      TEXT,
+      lastSyncStatus  TEXT,
+      lastSyncMessage TEXT,
+      createdAt       TEXT NOT NULL,
+      updatedAt       TEXT NOT NULL,
+      enabled         INTEGER NOT NULL DEFAULT 1,
+      UNIQUE(labId, endpoint)
+    );
+    CREATE INDEX idx_docker_import_sources_lab_id
+      ON dockerImportSources (labId);
+    CREATE INDEX idx_docker_import_sources_enabled
+      ON dockerImportSources (enabled, labId);
+    CREATE TABLE dockerContainerLinks (
+      deviceId       TEXT PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+      sourceId       TEXT NOT NULL REFERENCES dockerImportSources(id) ON DELETE CASCADE,
+      containerId    TEXT NOT NULL,
+      containerName  TEXT NOT NULL,
+      image          TEXT NOT NULL,
+      state          TEXT NOT NULL,
+      status         TEXT NOT NULL,
+      lastSyncedAt   TEXT,
+      createdAt      TEXT NOT NULL,
+      updatedAt      TEXT NOT NULL,
+      UNIQUE(sourceId, containerId)
+    );
+    CREATE INDEX idx_docker_container_links_source_id
+      ON dockerContainerLinks (sourceId);
 
     UPDATE schemaVersion
     SET version = 34, updatedAt = '2026-08-01T00:00:00.000Z'
@@ -8620,7 +8658,7 @@ test("storage topology migration upgrades a version-34 database without changing
     .prepare("SELECT version FROM schemaVersion WHERE id = 1")
     .get() as { version: number };
   assert.equal(device.storageGb, 9876);
-  assert.equal(version.version, 36);
+  assert.equal(version.version, 37);
   migrated.close();
 });
 

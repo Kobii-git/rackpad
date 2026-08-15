@@ -26,6 +26,7 @@ export interface DockerImportSource {
   endpoint: string;
   hasToken: boolean;
   enabled: boolean;
+  verifyTls: boolean;
   lastSyncAt?: string | null;
   lastSyncStatus?: string | null;
   lastSyncMessage?: string | null;
@@ -33,8 +34,9 @@ export interface DockerImportSource {
   updatedAt: string;
 }
 
-interface DockerImportSourceRow extends DockerImportSource {
+interface DockerImportSourceRow extends Omit<DockerImportSource, "verifyTls"> {
   tokenEnc?: string | null;
+  verifyTls?: number | null;
 }
 
 const DOCKER_ENDPOINT_RESERVED_MESSAGE =
@@ -68,6 +70,7 @@ export interface DockerStatusSyncResult {
 type DockerHttpJsonFetcher = (
   url: URL,
   headers: Record<string, string>,
+  options?: { verifyTls?: boolean },
 ) => Promise<unknown>;
 
 let dockerHttpJsonFetcher: DockerHttpJsonFetcher = fetchDockerHttpJson;
@@ -321,6 +324,7 @@ function fetchDockerSocketJson(
 function fetchDockerHttpJson(
   url: URL,
   headers: Record<string, string>,
+  options?: { verifyTls?: boolean },
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
     resolveRoutableHost(url, DOCKER_ENDPOINT_RESERVED_MESSAGE)
@@ -344,6 +348,9 @@ function fetchDockerHttpJson(
         };
         if (url.protocol === "https:" && net.isIP(url.hostname) === 0) {
           requestOptions.servername = url.hostname;
+        }
+        if (url.protocol === "https:") {
+          requestOptions.rejectUnauthorized = options?.verifyTls !== false;
         }
 
         const request =
@@ -388,6 +395,7 @@ function fetchDockerHttpJson(
 export async function fetchDockerContainersPreview(
   endpoint: string,
   token?: string,
+  options?: { verifyTls?: boolean },
 ): Promise<DockerContainerPreview[]> {
   if (isDockerSocketEndpoint(endpoint)) {
     const { socketPath } = normalizeDockerSocketEndpoint(endpoint);
@@ -417,7 +425,9 @@ export async function fetchDockerContainersPreview(
 
   let payload: unknown;
   try {
-    payload = await dockerHttpJsonFetcher(url, headers);
+    payload = await dockerHttpJsonFetcher(url, headers, {
+      verifyTls: options?.verifyTls !== false,
+    });
   } catch (error) {
     if (error instanceof ValidationError) throw error;
     const message = error instanceof Error ? error.message : "Request failed.";
@@ -452,6 +462,7 @@ function parseSource(row: Record<string, unknown>): DockerImportSource {
     endpoint: String(row.endpoint),
     hasToken: Boolean(row.tokenEnc),
     enabled: Number(row.enabled ?? 1) === 1,
+    verifyTls: Number(row.verifyTls ?? 1) === 1,
     lastSyncAt: row.lastSyncAt ? String(row.lastSyncAt) : null,
     lastSyncStatus: row.lastSyncStatus ? String(row.lastSyncStatus) : null,
     lastSyncMessage: row.lastSyncMessage ? String(row.lastSyncMessage) : null,
@@ -510,11 +521,14 @@ export function upsertDockerImportSource(input: {
   labId: string;
   endpoint: string;
   token?: string | null;
+  verifyTls?: boolean;
 }) {
   const endpoint = normalizeDockerEndpointTextForStorage(input.endpoint);
   const tokenEnc = isDockerSocketEndpoint(endpoint)
     ? undefined
     : encryptDockerToken(input.token);
+  const nextVerifyTls =
+    input.verifyTls === undefined ? null : input.verifyTls ? 1 : 0;
   const now = new Date().toISOString();
   const existing = db
     .prepare(
@@ -526,10 +540,17 @@ export function upsertDockerImportSource(input: {
     db.prepare(
       `
       UPDATE dockerImportSources
-      SET name = ?, tokenEnc = COALESCE(?, tokenEnc), updatedAt = ?
+      SET name = ?, tokenEnc = COALESCE(?, tokenEnc),
+          verifyTls = COALESCE(?, verifyTls), updatedAt = ?
       WHERE id = ?
     `,
-    ).run(sourceNameFromEndpoint(endpoint), tokenEnc ?? null, now, existing.id);
+    ).run(
+      sourceNameFromEndpoint(endpoint),
+      tokenEnc ?? null,
+      nextVerifyTls,
+      now,
+      existing.id,
+    );
     return parseSource(
       db
         .prepare("SELECT * FROM dockerImportSources WHERE id = ?")
@@ -542,8 +563,9 @@ export function upsertDockerImportSource(input: {
     `
     INSERT INTO dockerImportSources (
       id, labId, name, endpoint, tokenEnc,
-      lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt, enabled
-    ) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, 1)
+      lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt,
+      enabled, verifyTls
+    ) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, 1, ?)
   `,
   ).run(
     id,
@@ -553,6 +575,7 @@ export function upsertDockerImportSource(input: {
     tokenEnc ?? null,
     now,
     now,
+    nextVerifyTls ?? 1,
   );
 
   return parseSource(
@@ -723,6 +746,7 @@ export async function syncDockerImportSource(sourceId: string) {
     const containers = await fetchDockerContainersPreview(
       source.endpoint,
       decryptDockerToken(source),
+      { verifyTls: Number(source.verifyTls ?? 1) === 1 },
     );
     const byId = new Map(
       containers.map((container) => [container.id, container]),
