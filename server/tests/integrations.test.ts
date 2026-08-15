@@ -21,6 +21,9 @@ const { setIntegrationClientOverrideForTests } = await import(
   "../lib/integrations/inventory.js"
 );
 const { buildIntegrationUrl } = await import("../lib/integrations/http.js");
+const { syncIntegrationConnectionStatuses } = await import(
+  "../lib/integrations/status-sync.js"
+);
 
 type AppInstance = Awaited<ReturnType<typeof createApp>>;
 
@@ -640,6 +643,87 @@ test("integration endpoints handle missing clients and disabled connections", as
     });
     assert.equal(disabled.statusCode, 409);
   } finally {
+    setIntegrationClientOverrideForTests("omada", null);
+  }
+});
+
+test("integration status sync refreshes enabled connections and records failures", async () => {
+  const token = await bootstrapAdmin();
+  const labId = await firstLabId(token);
+  const healthy = await createConnection(token, {
+    labId,
+    provider: "proxmox",
+    name: "PVE status target",
+    baseUrl: "https://pve.lab.internal:8006",
+    authKind: "api-token",
+    authId: "rackpad@pam!inventory",
+    authSecret: "token-secret",
+  });
+  const failing = await createConnection(token, {
+    labId,
+    provider: "opnsense",
+    name: "Unreachable firewall",
+    baseUrl: "https://fw.lab.internal",
+    authKind: "key-secret",
+    authId: "key",
+    authSecret: "secret",
+  });
+  const disabled = await createConnection(token, {
+    labId,
+    provider: "omada",
+    name: "Disabled controller",
+    baseUrl: "https://omada.lab.internal:8043",
+    authKind: "client-credentials",
+    authId: "client-id",
+    authSecret: "client-secret",
+    enabled: false,
+  });
+
+  setIntegrationClientOverrideForTests("proxmox", {
+    provider: "proxmox",
+    test: async () => ({
+      product: "Proxmox VE",
+      version: "8.4.1",
+      summary: { nodes: 1 },
+    }),
+    fetchInventory: async () => {
+      throw new Error("not used");
+    },
+  });
+  setIntegrationClientOverrideForTests("opnsense", {
+    provider: "opnsense",
+    test: async () => {
+      throw new Error("Could not reach OPNsense: connection refused.");
+    },
+    fetchInventory: async () => {
+      throw new Error("not used");
+    },
+  });
+  setIntegrationClientOverrideForTests("omada", {
+    provider: "omada",
+    test: async () => {
+      throw new Error("disabled connections must be skipped");
+    },
+    fetchInventory: async () => {
+      throw new Error("not used");
+    },
+  });
+  try {
+    const result = await syncIntegrationConnectionStatuses(labId);
+    assert.equal(result.connections, 2);
+    assert.equal(result.ok, 1);
+    assert.equal(result.failed, 1);
+    assert.equal(result.skipped, 1);
+    assert.match(result.errors.join(" "), /connection refused/);
+
+    const rows = await listConnections(token, labId);
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    assert.equal(byId.get(healthy.id)?.lastStatus, "ok");
+    assert.equal(byId.get(failing.id)?.lastStatus, "error");
+    assert.equal(byId.get(disabled.id)?.lastStatus, "unknown");
+  } finally {
+    setIntegrationClientOverrideForTests("proxmox", null);
+    setIntegrationClientOverrideForTests("opnsense", null);
     setIntegrationClientOverrideForTests("omada", null);
   }
 });

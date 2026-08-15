@@ -99,6 +99,20 @@ The preview reconciles both sources against IPAM by VLAN id and CIDR, so the
 same VLAN or subnet reported by two controllers never creates duplicates, and
 skipped record kinds are called out in the preview warnings.
 
+## What runs automatically vs. manually
+
+- **Automatic (background):** connection status. Every
+  `INTEGRATION_STATUS_SYNC_INTERVAL_MS` (default 5 minutes, `0` disables)
+  Rackpad re-runs each enabled connection's lightweight test call and updates
+  the status badge, product/version summary, and last error on the
+  Integrations panel. Disabled connections are skipped. Docker/Portainer
+  container *status* refresh has its own loop
+  (`DOCKER_STATUS_SYNC_INTERVAL_MS`).
+- **Manual (review-first, by design):** inventory. Pulling VLANs, subnets,
+  DHCP ranges, and device previews — and applying them to IPAM — is always a
+  human action, matching SNMP inventory sync. Nothing writes to your lab on a
+  timer.
+
 ## Safety model
 
 - Preview/apply reuses the SNMP inventory sync engine: **merge** (default)

@@ -33,6 +33,11 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   toggle, and Docker/Portainer HTTPS imports gain the same option on the
   preview/import form and per saved source (persisted and reused by the
   background status sync). Verification stays on by default everywhere.
+- Integration connection statuses now refresh automatically in the
+  background (`INTEGRATION_STATUS_SYNC_INTERVAL_MS`, default 5 minutes,
+  0 disables), so the Integrations panel shows live reachability, product,
+  and version without clicking Test. Inventory preview/apply remains a
+  manual, review-first action.
 - New integration strings are localized across all supported locales.
 
 ### Test notes

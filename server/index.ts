@@ -5,12 +5,14 @@ import { startDiscoveryScanScheduleLoop } from './routes/discovery.js'
 import { startMonitoringLoop } from './lib/monitoring.js'
 import { startSnmpTrapReceiver } from './lib/snmp-traps.js'
 import { startDockerStatusSyncLoop } from './lib/docker-import.js'
+import { startIntegrationStatusSyncLoop } from './lib/integrations/status-sync.js'
 
 const PORT = Number.parseInt(process.env.PORT ?? '3000', 10)
 const HOST = process.env.HOST ?? '0.0.0.0'
 const MONITOR_INTERVAL_MS = Number.parseInt(process.env.MONITOR_INTERVAL_MS ?? '0', 10)
 const DISCOVERY_SCAN_SCHEDULE_INTERVAL_MS = Number.parseInt(process.env.DISCOVERY_SCAN_SCHEDULE_INTERVAL_MS ?? '60000', 10)
 const DOCKER_STATUS_SYNC_INTERVAL_MS = Number.parseInt(process.env.DOCKER_STATUS_SYNC_INTERVAL_MS ?? '300000', 10)
+const INTEGRATION_STATUS_SYNC_INTERVAL_MS = Number.parseInt(process.env.INTEGRATION_STATUS_SYNC_INTERVAL_MS ?? '300000', 10)
 const SESSION_CLEANUP_INTERVAL_MS = 1000 * 60 * 60 * 24
 
 const app = await createApp()
@@ -21,6 +23,9 @@ const stopDiscoveryScanSchedules = startDiscoveryScanScheduleLoop(
 )
 const stopDockerStatusSync = startDockerStatusSyncLoop(
   Number.isFinite(DOCKER_STATUS_SYNC_INTERVAL_MS) ? DOCKER_STATUS_SYNC_INTERVAL_MS : 300000,
+)
+const stopIntegrationStatusSync = startIntegrationStatusSyncLoop(
+  Number.isFinite(INTEGRATION_STATUS_SYNC_INTERVAL_MS) ? INTEGRATION_STATUS_SYNC_INTERVAL_MS : 300000,
 )
 const stopTrapReceiver = startSnmpTrapReceiver()
 const sessionCleanupHandle = setInterval(() => {
@@ -33,6 +38,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     stopMonitoring()
     stopDiscoveryScanSchedules()
     stopDockerStatusSync()
+    stopIntegrationStatusSync()
     stopTrapReceiver()
     clearInterval(sessionCleanupHandle)
     await app.close()
