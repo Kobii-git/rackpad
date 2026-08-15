@@ -75,7 +75,7 @@ test("integration providers are listed with their auth kinds", async () => {
   }>;
   assert.deepEqual(
     providers.map((entry) => entry.id),
-    ["proxmox", "unifi", "omada", "opnsense"],
+    ["proxmox", "unifi", "omada", "opnsense", "dockhand"],
   );
   assert.deepEqual(
     providers.find((entry) => entry.id === "unifi")?.authKinds,

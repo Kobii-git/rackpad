@@ -56,7 +56,9 @@ function validateConnectionAuth(
   authId: string | null | undefined,
   partial = false,
 ) {
-  const needsAuthId = !(provider === "unifi" && authKind === "api-key");
+  // API keys are a single secret; every other auth kind pairs the secret
+  // with an identifier (username, token id, client id, or key id).
+  const needsAuthId = authKind !== "api-key";
   if (!partial && needsAuthId && !authId?.trim()) {
     throw new ValidationError(
       `authId is required for ${INTEGRATION_PROVIDER_INFO[provider].label} connections.`,

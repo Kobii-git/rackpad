@@ -3,6 +3,7 @@ export const INTEGRATION_PROVIDERS = [
   "unifi",
   "omada",
   "opnsense",
+  "dockhand",
 ] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
 
@@ -67,6 +68,14 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     authKinds: ["key-secret"],
     defaultAuthKind: "key-secret",
     supportsSiteRef: false,
+  },
+  dockhand: {
+    id: "dockhand",
+    label: "Dockhand",
+    vendor: "Finsys",
+    authKinds: ["api-key"],
+    defaultAuthKind: "api-key",
+    supportsSiteRef: true,
   },
 };
 

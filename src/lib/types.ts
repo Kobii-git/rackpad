@@ -278,7 +278,8 @@ export interface SnmpSyncApplyResult {
   warnings: string[];
 }
 
-export type IntegrationProvider = "proxmox" | "unifi" | "omada" | "opnsense";
+export type IntegrationProvider =
+  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand";
 
 export type IntegrationAuthKind =
   | "api-token"

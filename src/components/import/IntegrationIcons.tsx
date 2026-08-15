@@ -92,6 +92,23 @@ function OpnsenseMark({
   );
 }
 
+function DockhandMark({
+  className,
+  title,
+}: {
+  className?: string;
+  title: string;
+}) {
+  return (
+    <SvgBase className={className} title={title}>
+      <path d="M4 13.5h7.5V21H4z" />
+      <path d="M12.5 13.5H20V21h-12.5" />
+      <path d="M8 13.5V17M16.25 13.5V17" />
+      <path d="M12 13.5V9.5a3.5 3.5 0 0 1 7 0" />
+    </SvgBase>
+  );
+}
+
 export function IntegrationIcon({
   provider,
   className,
@@ -110,6 +127,9 @@ export function IntegrationIcon({
   }
   if (provider === "omada") {
     return <OmadaMark className={className} title={label} />;
+  }
+  if (provider === "dockhand") {
+    return <DockhandMark className={className} title={label} />;
   }
   return <OpnsenseMark className={className} title={label} />;
 }

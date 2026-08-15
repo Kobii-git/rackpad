@@ -1,10 +1,10 @@
 # Controller integrations
 
-Rackpad can connect directly to Proxmox VE, UniFi Network, TP-Link Omada, and
-OPNsense and pull live inventory over their HTTP APIs: devices, VLANs,
-networks/subnets, and DHCP ranges. Everything stays review-first — a pull
-produces a preview diff against the active lab, and nothing is written until an
-administrator applies it.
+Rackpad can connect directly to Proxmox VE, UniFi Network, TP-Link Omada,
+OPNsense, and Dockhand and pull live inventory over their HTTP APIs: devices,
+VLANs, networks/subnets, DHCP ranges, and containers. Everything stays
+review-first — a pull produces a preview diff against the active lab, and
+nothing is written until an administrator applies it.
 
 The panel lives in **Imports → Integrations**.
 
@@ -85,6 +85,25 @@ Pulls map VLAN definitions and interface IPv4 networks to VLANs and subnets,
 and Kea DHCPv4 pools plus Dnsmasq ranges to preview-only scopes. Legacy ISC
 dhcpd does not expose its ranges over the API — Rackpad warns instead of
 silently omitting them. Both pre- and post-25.7 API URL casings are handled.
+
+### Dockhand
+
+1. Dockhand v1.0.25+ with authentication enabled. Generate an API token on
+   your profile page (Profile → API tokens → Generate API token; local users
+   re-enter their password).
+2. Add the connection with the Dockhand URL (`http://dockhand.example:3000`
+   by default — Dockhand usually sits behind a reverse proxy if you use
+   HTTPS) and the `dh_...` token as the API key.
+3. The optional environment field limits the pull to a single Dockhand
+   environment by name or id; the default pulls all of them.
+
+Pulls list each Docker environment as a host (online state, running/total
+containers, stacks), every container (image, IP, state/health, compose
+stack), and Docker networks with their drivers and subnets. Container
+plumbing is deliberately kept out of IPAM — Docker networks appear as
+read-only previews only. Offline environments are skipped with a warning
+rather than reported as empty. On the free edition any valid token has admin
+scope, so treat Dockhand tokens with the same care as the other credentials.
 
 ## Mixed environments (Omada/UniFi + OPNsense)
 

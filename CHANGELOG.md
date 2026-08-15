@@ -38,6 +38,12 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   0 disables), so the Integrations panel shows live reachability, product,
   and version without clicking Test. Inventory preview/apply remains a
   manual, review-first action.
+- Added a Dockhand integration (Bearer API token) that lists Docker
+  environments with online state and container/stack counts, containers with
+  image, IP, health, and compose stack, and Docker networks with drivers and
+  subnets as read-only previews. An optional environment filter limits the
+  pull; offline environments are skipped with a warning, and container
+  networking is deliberately kept out of IPAM.
 - New integration strings are localized across all supported locales.
 
 ### Test notes

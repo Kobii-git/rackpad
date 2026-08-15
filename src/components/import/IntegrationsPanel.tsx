@@ -69,6 +69,7 @@ const BASE_URL_PLACEHOLDERS: Record<IntegrationProvider, string> = {
   unifi: "https://unifi.example.internal",
   omada: "https://omada.example.internal:8043",
   opnsense: "https://firewall.example.internal",
+  dockhand: "http://dockhand.example.internal:3000",
 };
 
 const AUTH_ID_LABELS: Record<IntegrationAuthKind, TranslationKey | null> = {
@@ -450,7 +451,7 @@ export function IntegrationsPanel({
       <CardBody className="space-y-4">
         <p className="text-sm text-[var(--text-tertiary)]">
           {t(
-            "Connect Proxmox VE, UniFi Network, Omada, and OPNsense to pull devices, VLANs, networks, and DHCP ranges. Credentials are encrypted at rest with {secretKey}; nothing is written without a reviewed preview.",
+            "Connect Proxmox VE, UniFi Network, Omada, OPNsense, and Dockhand to pull devices, VLANs, networks, DHCP ranges, and containers. Credentials are encrypted at rest with {secretKey}; nothing is written without a reviewed preview.",
             { secretKey: "RACKPAD_SECRET_KEY" },
           )}
         </p>
@@ -579,7 +580,11 @@ export function IntegrationsPanel({
               {formProviderInfo?.supportsSiteRef && (
                 <label className="space-y-1 text-sm">
                   <span className="text-[var(--text-secondary)]">
-                    {t("Site (optional, defaults to the first site)")}
+                    {form.provider === "dockhand"
+                      ? t(
+                          "Environment (optional, defaults to all environments)",
+                        )
+                      : t("Site (optional, defaults to the first site)")}
                   </span>
                   <Input
                     value={form.siteRef}
