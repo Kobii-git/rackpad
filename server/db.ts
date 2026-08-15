@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 35;
+const CURRENT_SCHEMA_VERSION = 36;
 
 export const db = new Database(DB_PATH);
 
@@ -1034,6 +1034,37 @@ const SCHEMA_MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS idx_storage_pool_drives_pool_id
         ON storagePoolDrives (poolId);
+    `,
+  },
+  {
+    version: 36,
+    sql: `
+      CREATE TABLE IF NOT EXISTS integrationConnections (
+        id            TEXT PRIMARY KEY,
+        labId         TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        provider      TEXT NOT NULL,
+        name          TEXT NOT NULL,
+        baseUrl       TEXT NOT NULL,
+        authKind      TEXT NOT NULL,
+        authId        TEXT,
+        authSecretEnc TEXT,
+        siteRef       TEXT,
+        verifyTls     INTEGER NOT NULL DEFAULT 1,
+        enabled       INTEGER NOT NULL DEFAULT 1,
+        syncVlans     INTEGER NOT NULL DEFAULT 1,
+        syncSubnets   INTEGER NOT NULL DEFAULT 1,
+        syncDhcp      INTEGER NOT NULL DEFAULT 1,
+        lastStatus    TEXT NOT NULL DEFAULT 'unknown',
+        lastCheckedAt TEXT,
+        lastError     TEXT,
+        lastSummary   TEXT,
+        createdAt     TEXT NOT NULL,
+        updatedAt     TEXT NOT NULL,
+        UNIQUE(labId, name COLLATE NOCASE)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_integration_connections_lab_provider
+        ON integrationConnections (labId, provider);
     `,
   },
 ] as const;
