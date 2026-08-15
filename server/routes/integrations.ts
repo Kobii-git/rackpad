@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { requireAuth } from "../lib/auth.js";
+import { requireAdmin, requireAuth } from "../lib/auth.js";
 import {
   assertLabRead,
   assertLabWrite,
@@ -11,8 +11,16 @@ import {
   deleteIntegrationConnection,
   getIntegrationConnectionRow,
   listIntegrationConnections,
+  loadIntegrationConnectionSecrets,
+  parseIntegrationConnectionPublic,
+  recordIntegrationConnectionStatus,
   updateIntegrationConnection,
 } from "../lib/integrations/connections.js";
+import { getIntegrationClient } from "../lib/integrations/inventory.js";
+import {
+  applyIntegrationNetworkPreview,
+  buildIntegrationNetworkPreview,
+} from "../lib/integrations/network-sync.js";
 import {
   INTEGRATION_AUTH_KINDS,
   INTEGRATION_PROVIDER_INFO,
@@ -20,6 +28,11 @@ import {
   type IntegrationAuthKind,
   type IntegrationProvider,
 } from "../lib/integrations/types.js";
+import {
+  SNMP_SYNC_POLICIES,
+  type SnmpSyncPolicy,
+  type SnmpSyncPreview,
+} from "../lib/snmp-profiles/types.js";
 import {
   asObject,
   optionalBoolean,
@@ -188,6 +201,197 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
 
       deleteIntegrationConnection(req.params.id);
       return reply.status(204).send();
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/connections/:id/test",
+    async (req, reply) => {
+      if (!requireAuth(req, reply)) return;
+
+      const existing = getIntegrationConnectionRow(req.params.id);
+      if (!existing) {
+        return reply
+          .status(404)
+          .send({ error: "Integration connection not found." });
+      }
+      if (!assertLabWrite(req, reply, String(existing.labId))) return;
+
+      const provider = String(existing.provider) as IntegrationProvider;
+      const client = getIntegrationClient(provider);
+      if (!client) {
+        return reply.status(501).send({
+          error: `The ${INTEGRATION_PROVIDER_INFO[provider].label} client is not available in this build.`,
+        });
+      }
+
+      const connection = loadIntegrationConnectionSecrets(req.params.id);
+      if (!connection.authSecret) {
+        return reply.status(400).send({
+          error:
+            "This connection has no stored secret. Enter the credential again before testing.",
+        });
+      }
+
+      try {
+        const result = await client.test(connection);
+        const updated = recordIntegrationConnectionStatus(req.params.id, {
+          status: "ok",
+          error: null,
+          summary: {
+            product: result.product,
+            version: result.version,
+            ...result.summary,
+          },
+        });
+        return { connection: updated, result };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Connection test failed.";
+        const updated = recordIntegrationConnectionStatus(req.params.id, {
+          status: "error",
+          error: message,
+        });
+        return reply.status(502).send({ error: message, connection: updated });
+      }
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/connections/:id/inventory",
+    async (req, reply) => {
+      if (!requireAuth(req, reply)) return;
+
+      const existing = getIntegrationConnectionRow(req.params.id);
+      if (!existing) {
+        return reply
+          .status(404)
+          .send({ error: "Integration connection not found." });
+      }
+      if (!assertLabWrite(req, reply, String(existing.labId))) return;
+      if (!existing.enabled) {
+        return reply.status(409).send({
+          error: "This connection is disabled. Enable it before pulling inventory.",
+        });
+      }
+
+      const provider = String(existing.provider) as IntegrationProvider;
+      const client = getIntegrationClient(provider);
+      if (!client) {
+        return reply.status(501).send({
+          error: `The ${INTEGRATION_PROVIDER_INFO[provider].label} client is not available in this build.`,
+        });
+      }
+
+      const body = req.body == null ? {} : asObject(req.body);
+      const policy =
+        (optionalEnum(body, "policy", SNMP_SYNC_POLICIES) as
+          | SnmpSyncPolicy
+          | null
+          | undefined) ?? "merge";
+
+      const connection = loadIntegrationConnectionSecrets(req.params.id);
+      if (!connection.authSecret) {
+        return reply.status(400).send({
+          error:
+            "This connection has no stored secret. Enter the credential again before pulling inventory.",
+        });
+      }
+
+      try {
+        const inventory = await client.fetchInventory(connection);
+        const preview = buildIntegrationNetworkPreview({
+          connection,
+          collection: inventory.collection,
+          policy,
+        });
+        const previousSummary =
+          parseIntegrationConnectionPublic(existing).lastSummary ?? {};
+        const updated = recordIntegrationConnectionStatus(req.params.id, {
+          status: "ok",
+          error: null,
+          summary: {
+            ...previousSummary,
+            devices: inventory.devices.length,
+            vlans: inventory.collection.vlans.length,
+            subnets: inventory.collection.subnets.length,
+            dhcpScopes: inventory.collection.dhcpScopes.length,
+          },
+        });
+        return {
+          connection: updated,
+          preview,
+          devices: inventory.devices,
+          warnings: inventory.warnings,
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Inventory pull failed.";
+        const updated = recordIntegrationConnectionStatus(req.params.id, {
+          status: "error",
+          error: message,
+        });
+        return reply.status(502).send({ error: message, connection: updated });
+      }
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/connections/:id/apply",
+    async (req, reply) => {
+      if (!requireAdmin(req, reply)) return;
+
+      const existing = getIntegrationConnectionRow(req.params.id);
+      if (!existing) {
+        return reply
+          .status(404)
+          .send({ error: "Integration connection not found." });
+      }
+      if (!assertLabWrite(req, reply, String(existing.labId))) return;
+
+      const body = asObject(req.body);
+      const preview = body.preview as SnmpSyncPreview | undefined;
+      if (!preview || typeof preview !== "object") {
+        return reply.status(400).send({ error: "Preview payload is required." });
+      }
+      if (
+        String(preview.deviceId) !== req.params.id ||
+        String(preview.labId) !== String(existing.labId)
+      ) {
+        return reply
+          .status(400)
+          .send({ error: "Preview does not match this connection." });
+      }
+
+      const policy =
+        (optionalEnum(body, "policy", SNMP_SYNC_POLICIES) as
+          | SnmpSyncPolicy
+          | null
+          | undefined) ?? preview.policy;
+      if (policy === "mirror" && preview.policy !== "mirror") {
+        return reply
+          .status(400)
+          .send({ error: "Mirror apply requires a mirror preview." });
+      }
+
+      const allowDeletes = optionalBoolean(body, "allowDeletes") ?? false;
+      if (
+        policy === "mirror" &&
+        !allowDeletes &&
+        (preview.summary.vlanDeletes > 0 || preview.summary.subnetDeletes > 0)
+      ) {
+        return reply.status(400).send({
+          error:
+            "Mirror preview includes deletes. Re-run apply with allowDeletes=true to confirm.",
+        });
+      }
+
+      const result = applyIntegrationNetworkPreview({
+        preview: { ...preview, policy },
+        allowDeletes,
+        actor: req.authUser!.username,
+      });
+      return result;
     },
   );
 };

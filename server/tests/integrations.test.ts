@@ -17,6 +17,10 @@ const { db } = await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
 const { loadIntegrationConnectionSecrets, normalizeIntegrationBaseUrl } =
   await import("../lib/integrations/connections.js");
+const { setIntegrationClientOverrideForTests } = await import(
+  "../lib/integrations/inventory.js"
+);
+const { buildIntegrationUrl } = await import("../lib/integrations/http.js");
 
 type AppInstance = Awaited<ReturnType<typeof createApp>>;
 
@@ -313,6 +317,356 @@ test("storing integration credentials requires RACKPAD_SECRET_KEY", async () => 
   } finally {
     process.env.RACKPAD_SECRET_KEY = savedKey;
   }
+});
+
+test("integration test endpoint records success and failure status", async () => {
+  const token = await bootstrapAdmin();
+  const labId = await firstLabId(token);
+  const created = await createConnection(token, {
+    labId,
+    provider: "proxmox",
+    name: "PVE test target",
+    baseUrl: "https://pve.lab.internal:8006",
+    authKind: "api-token",
+    authId: "rackpad@pam!inventory",
+    authSecret: "token-secret",
+  });
+
+  setIntegrationClientOverrideForTests("proxmox", {
+    provider: "proxmox",
+    test: async () => ({
+      product: "Proxmox VE",
+      version: "8.4.1",
+      summary: { nodes: 2 },
+    }),
+    fetchInventory: async () => {
+      throw new Error("not used");
+    },
+  });
+  try {
+    const okResponse = await app.inject({
+      method: "POST",
+      url: `/api/integrations/connections/${created.id}/test`,
+      headers: authHeaders(token),
+    });
+    assert.equal(okResponse.statusCode, 200, okResponse.body);
+    const okBody = json(okResponse) as {
+      connection: ConnectionPublic & {
+        lastSummary: Record<string, unknown> | null;
+        lastError: string | null;
+      };
+      result: { product: string; version: string };
+    };
+    assert.equal(okBody.result.product, "Proxmox VE");
+    assert.equal(okBody.connection.lastStatus, "ok");
+    assert.equal(okBody.connection.lastError, null);
+    assert.equal(okBody.connection.lastSummary?.version, "8.4.1");
+    assert.equal(okBody.connection.lastSummary?.nodes, 2);
+
+    setIntegrationClientOverrideForTests("proxmox", {
+      provider: "proxmox",
+      test: async () => {
+        throw new Error("Could not reach Proxmox VE: connection refused.");
+      },
+      fetchInventory: async () => {
+        throw new Error("not used");
+      },
+    });
+    const failResponse = await app.inject({
+      method: "POST",
+      url: `/api/integrations/connections/${created.id}/test`,
+      headers: authHeaders(token),
+    });
+    assert.equal(failResponse.statusCode, 502);
+    const failBody = json(failResponse) as {
+      error: string;
+      connection: { lastStatus: string; lastError: string | null };
+    };
+    assert.match(failBody.error, /connection refused/);
+    assert.equal(failBody.connection.lastStatus, "error");
+    assert.match(failBody.connection.lastError ?? "", /connection refused/);
+  } finally {
+    setIntegrationClientOverrideForTests("proxmox", null);
+  }
+});
+
+test("integration inventory builds a preview, honors sync toggles, and apply writes IPAM", async () => {
+  const token = await bootstrapAdmin();
+  const labId = await firstLabId(token);
+  const created = await createConnection(token, {
+    labId,
+    provider: "opnsense",
+    name: "Edge firewall",
+    baseUrl: "https://fw.lab.internal",
+    authKind: "key-secret",
+    authId: "key",
+    authSecret: "secret",
+  });
+
+  setIntegrationClientOverrideForTests("opnsense", {
+    provider: "opnsense",
+    test: async () => ({ product: "OPNsense", version: "25.7", summary: {} }),
+    fetchInventory: async () => ({
+      collection: {
+        vlans: [
+          { vlanNumber: 10, name: "Servers" },
+          { vlanNumber: 20, name: "IoT" },
+        ],
+        subnets: [
+          { cidr: "10.0.10.0/24", name: "Servers", vlanNumber: 10 },
+          { cidr: "10.0.20.0/24", name: "IoT", vlanNumber: 20 },
+        ],
+        dhcpScopes: [
+          {
+            name: "Servers pool",
+            startIp: "10.0.10.100",
+            endIp: "10.0.10.199",
+            subnetCidr: "10.0.10.0/24",
+          },
+        ],
+      },
+      devices: [
+        {
+          name: "igc0",
+          kind: "interface" as const,
+          model: null,
+          macAddress: "00:11:22:33:44:55",
+          ipAddress: "10.0.10.1",
+          status: "up",
+          detail: "LAN",
+        },
+      ],
+      warnings: ["ISC DHCP ranges are not exposed by the OPNsense API."],
+    }),
+  });
+  try {
+    const pullResponse = await app.inject({
+      method: "POST",
+      url: `/api/integrations/connections/${created.id}/inventory`,
+      headers: authHeaders(token),
+      payload: {},
+    });
+    assert.equal(pullResponse.statusCode, 200, pullResponse.body);
+    const pullBody = json(pullResponse) as {
+      preview: {
+        labId: string;
+        deviceId: string;
+        policy: string;
+        summary: { vlanCreates: number; subnetCreates: number };
+        dhcp: { scopes: unknown[] };
+      };
+      devices: Array<{ name: string }>;
+      warnings: string[];
+    };
+    assert.equal(pullBody.preview.policy, "merge");
+    assert.equal(pullBody.preview.summary.vlanCreates, 2);
+    assert.equal(pullBody.preview.summary.subnetCreates, 2);
+    assert.equal(pullBody.preview.dhcp.scopes.length, 1);
+    assert.equal(pullBody.devices[0]?.name, "igc0");
+    assert.match(pullBody.warnings[0] ?? "", /ISC DHCP/);
+
+    const applyResponse = await app.inject({
+      method: "POST",
+      url: `/api/integrations/connections/${created.id}/apply`,
+      headers: authHeaders(token),
+      payload: { preview: pullBody.preview },
+    });
+    assert.equal(applyResponse.statusCode, 200, applyResponse.body);
+    const applyBody = json(applyResponse) as {
+      createdVlanIds: string[];
+      createdSubnetIds: string[];
+    };
+    assert.equal(applyBody.createdVlanIds.length, 2);
+    assert.equal(applyBody.createdSubnetIds.length, 2);
+
+    const vlanRows = db
+      .prepare("SELECT vlanId, name FROM vlans WHERE labId = ? ORDER BY vlanId")
+      .all(labId) as Array<{ vlanId: number; name: string }>;
+    assert.deepEqual(
+      vlanRows.map((row) => [row.vlanId, row.name]),
+      [
+        [10, "Servers"],
+        [20, "IoT"],
+      ],
+    );
+    const subnetRows = db
+      .prepare("SELECT cidr FROM subnets WHERE labId = ? ORDER BY cidr")
+      .all(labId) as Array<{ cidr: string }>;
+    assert.deepEqual(
+      subnetRows.map((row) => row.cidr),
+      ["10.0.10.0/24", "10.0.20.0/24"],
+    );
+    const auditRow = db
+      .prepare(
+        "SELECT entityType, action FROM auditLog WHERE action = 'integration.sync.apply'",
+      )
+      .get() as { entityType: string } | undefined;
+    assert.equal(auditRow?.entityType, "IntegrationSync");
+
+    const disabledVlans = await patchConnection(token, created.id, {
+      syncVlans: false,
+    });
+    assert.equal(disabledVlans.syncVlans, false);
+    const filteredResponse = await app.inject({
+      method: "POST",
+      url: `/api/integrations/connections/${created.id}/inventory`,
+      headers: authHeaders(token),
+      payload: {},
+    });
+    assert.equal(filteredResponse.statusCode, 200);
+    const filteredBody = json(filteredResponse) as {
+      preview: {
+        vlans: unknown[];
+        summary: { vlanCreates: number };
+        warnings: string[];
+      };
+    };
+    assert.equal(filteredBody.preview.vlans.length, 0);
+    assert.equal(filteredBody.preview.summary.vlanCreates, 0);
+    assert.match(
+      filteredBody.preview.warnings.join(" "),
+      /skipped 2 VLAN\(s\)/,
+    );
+  } finally {
+    setIntegrationClientOverrideForTests("opnsense", null);
+  }
+});
+
+test("integration apply requires admin and a matching preview", async () => {
+  const adminToken = await bootstrapAdmin();
+  const labId = await firstLabId(adminToken);
+  const editorToken = await createUserAndLogin(adminToken, {
+    username: "integration-editor",
+    displayName: "Integration Editor",
+    password: "integration-editor-1",
+    role: "editor",
+  });
+  const created = await createConnection(adminToken, {
+    labId,
+    provider: "unifi",
+    name: "UniFi console",
+    baseUrl: "https://unifi.lab.internal",
+    authKind: "api-key",
+    authSecret: "api-key",
+  });
+
+  const fakePreview = {
+    profileId: "integration-unifi",
+    deviceId: created.id,
+    labId,
+    target: "https://unifi.lab.internal",
+    collectedAt: new Date().toISOString(),
+    policy: "merge",
+    vlans: [{ action: "create", vlanNumber: 30, name: "Cameras" }],
+    subnets: [],
+    dhcp: { supported: false, message: "", scopes: [] },
+    summary: {
+      vlanCreates: 1,
+      vlanUpdates: 0,
+      vlanDeletes: 0,
+      subnetCreates: 0,
+      subnetUpdates: 0,
+      subnetDeletes: 0,
+    },
+    warnings: [],
+  };
+
+  const editorApply = await app.inject({
+    method: "POST",
+    url: `/api/integrations/connections/${created.id}/apply`,
+    headers: authHeaders(editorToken),
+    payload: { preview: fakePreview },
+  });
+  assert.equal(editorApply.statusCode, 403);
+
+  const mismatched = await app.inject({
+    method: "POST",
+    url: `/api/integrations/connections/${created.id}/apply`,
+    headers: authHeaders(adminToken),
+    payload: { preview: { ...fakePreview, deviceId: "intg_other" } },
+  });
+  assert.equal(mismatched.statusCode, 400);
+
+  const adminApply = await app.inject({
+    method: "POST",
+    url: `/api/integrations/connections/${created.id}/apply`,
+    headers: authHeaders(adminToken),
+    payload: { preview: fakePreview },
+  });
+  assert.equal(adminApply.statusCode, 200, adminApply.body);
+});
+
+test("integration endpoints handle missing clients and disabled connections", async () => {
+  const token = await bootstrapAdmin();
+  const labId = await firstLabId(token);
+  const created = await createConnection(token, {
+    labId,
+    provider: "omada",
+    name: "Omada controller",
+    baseUrl: "https://omada.lab.internal:8043",
+    authKind: "client-credentials",
+    authId: "client-id",
+    authSecret: "client-secret",
+  });
+
+  setIntegrationClientOverrideForTests("omada", "none");
+  try {
+    const noClient = await app.inject({
+      method: "POST",
+      url: `/api/integrations/connections/${created.id}/test`,
+      headers: authHeaders(token),
+    });
+    assert.equal(noClient.statusCode, 501);
+  } finally {
+    setIntegrationClientOverrideForTests("omada", null);
+  }
+
+  await patchConnection(token, created.id, { enabled: false });
+  setIntegrationClientOverrideForTests("omada", {
+    provider: "omada",
+    test: async () => ({ product: "Omada", version: null, summary: {} }),
+    fetchInventory: async () => ({
+      collection: { vlans: [], subnets: [], dhcpScopes: [] },
+      devices: [],
+      warnings: [],
+    }),
+  });
+  try {
+    const disabled = await app.inject({
+      method: "POST",
+      url: `/api/integrations/connections/${created.id}/inventory`,
+      headers: authHeaders(token),
+      payload: {},
+    });
+    assert.equal(disabled.statusCode, 409);
+  } finally {
+    setIntegrationClientOverrideForTests("omada", null);
+  }
+});
+
+test("integration URLs join base paths and query params safely", () => {
+  const plain = buildIntegrationUrl(
+    "https://omada.lab.internal:8043",
+    "/openapi/v1/omadac-1/sites",
+    { page: 1, pageSize: 100 },
+  );
+  assert.equal(
+    plain.toString(),
+    "https://omada.lab.internal:8043/openapi/v1/omadac-1/sites?page=1&pageSize=100",
+  );
+
+  const withBasePath = buildIntegrationUrl(
+    "https://unifi.lab.internal/proxy",
+    "/network/integration/v1/sites",
+  );
+  assert.equal(
+    withBasePath.toString(),
+    "https://unifi.lab.internal/proxy/network/integration/v1/sites",
+  );
+
+  assert.throws(() =>
+    buildIntegrationUrl("https://pve.lab.internal:8006", "no-slash"),
+  );
 });
 
 test("integration base URLs are normalized and reject embedded credentials", () => {
