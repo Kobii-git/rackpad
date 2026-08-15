@@ -16,11 +16,15 @@ import {
   recordIntegrationConnectionStatus,
   updateIntegrationConnection,
 } from "../lib/integrations/connections.js";
-import { getIntegrationClient } from "../lib/integrations/inventory.js";
+import { getIntegrationClient } from "../lib/integrations/index.js";
 import {
   applyIntegrationNetworkPreview,
   buildIntegrationNetworkPreview,
 } from "../lib/integrations/network-sync.js";
+import {
+  fetchProxmoxNodes,
+  fetchProxmoxStagedInventory,
+} from "../lib/integrations/providers/proxmox.js";
 import {
   INTEGRATION_AUTH_KINDS,
   INTEGRATION_PROVIDER_INFO,
@@ -392,6 +396,106 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         actor: req.authUser!.username,
       });
       return result;
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/connections/:id/proxmox/nodes",
+    async (req, reply) => {
+      if (!requireAuth(req, reply)) return;
+
+      const existing = getIntegrationConnectionRow(req.params.id);
+      if (!existing) {
+        return reply
+          .status(404)
+          .send({ error: "Integration connection not found." });
+      }
+      if (!assertLabWrite(req, reply, String(existing.labId))) return;
+      if (String(existing.provider) !== "proxmox") {
+        return reply
+          .status(400)
+          .send({ error: "This endpoint requires a Proxmox VE connection." });
+      }
+
+      const connection = loadIntegrationConnectionSecrets(req.params.id);
+      if (!connection.authSecret) {
+        return reply.status(400).send({
+          error:
+            "This connection has no stored secret. Enter the credential again first.",
+        });
+      }
+
+      try {
+        return { nodes: await fetchProxmoxNodes(connection) };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Node listing failed.";
+        recordIntegrationConnectionStatus(req.params.id, {
+          status: "error",
+          error: message,
+        });
+        return reply.status(502).send({ error: message });
+      }
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/connections/:id/proxmox/staged-inventory",
+    async (req, reply) => {
+      if (!requireAuth(req, reply)) return;
+
+      const existing = getIntegrationConnectionRow(req.params.id);
+      if (!existing) {
+        return reply
+          .status(404)
+          .send({ error: "Integration connection not found." });
+      }
+      if (!assertLabWrite(req, reply, String(existing.labId))) return;
+      if (String(existing.provider) !== "proxmox") {
+        return reply
+          .status(400)
+          .send({ error: "This endpoint requires a Proxmox VE connection." });
+      }
+      if (!existing.enabled) {
+        return reply.status(409).send({
+          error: "This connection is disabled. Enable it before pulling inventory.",
+        });
+      }
+
+      const body = req.body == null ? {} : asObject(req.body);
+      const node = optionalString(body, "node", { maxLength: 120 }) ?? null;
+
+      const connection = loadIntegrationConnectionSecrets(req.params.id);
+      if (!connection.authSecret) {
+        return reply.status(400).send({
+          error:
+            "This connection has no stored secret. Enter the credential again first.",
+        });
+      }
+
+      try {
+        const payload = await fetchProxmoxStagedInventory(connection, node);
+        const previousSummary =
+          parseIntegrationConnectionPublic(existing).lastSummary ?? {};
+        recordIntegrationConnectionStatus(req.params.id, {
+          status: "ok",
+          error: null,
+          summary: {
+            ...previousSummary,
+            stagedNode: payload.summary.node,
+            workloads: payload.summary.workloads,
+          },
+        });
+        return payload;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Inventory staging failed.";
+        recordIntegrationConnectionStatus(req.params.id, {
+          status: "error",
+          error: message,
+        });
+        return reply.status(502).send({ error: message });
+      }
     },
   );
 };
