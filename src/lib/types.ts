@@ -297,6 +297,8 @@ export interface IntegrationProviderInfo {
   supportsSiteRef: boolean;
 }
 
+export type IntegrationAutoSyncMode = "merge" | "overwrite" | "skip";
+
 export interface IntegrationConnection {
   id: string;
   labId: string;
@@ -316,6 +318,15 @@ export interface IntegrationConnection {
   lastCheckedAt: string | null;
   lastError: string | null;
   lastSummary: Record<string, unknown> | null;
+  autoSyncEnabled: boolean;
+  autoSyncMode: IntegrationAutoSyncMode;
+  autoSyncCron: string | null;
+  autoSyncLabIds: string[];
+  autoSyncFailureCount: number;
+  autoSyncPausedUntil: string | null;
+  lastAutoSyncAt: string | null;
+  lastAutoSyncStatus: "ok" | "error" | "drift" | null;
+  lastAutoSyncMessage: string | null;
   createdAt: string;
   updatedAt: string;
 }

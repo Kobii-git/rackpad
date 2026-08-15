@@ -1606,12 +1606,23 @@ export const api = {
       syncSubnets: boolean;
       syncDhcp: boolean;
       clearSecret: boolean;
+      autoSyncEnabled: boolean;
+      autoSyncMode: IntegrationConnection["autoSyncMode"];
+      autoSyncCron: string | null;
+      autoSyncLabIds: string[];
     }>,
   ) {
     return request<IntegrationConnection>(`/integrations/connections/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     });
+  },
+
+  runIntegrationAutoSync(id: ID) {
+    return request<{
+      result: { status: "ok" | "error" | "drift"; message: string };
+      connection: IntegrationConnection | null;
+    }>(`/integrations/connections/${id}/auto-sync/run`, { method: "POST" });
   },
 
   deleteIntegrationConnection(id: ID) {

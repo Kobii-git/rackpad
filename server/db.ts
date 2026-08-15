@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 37;
+const CURRENT_SCHEMA_VERSION = 38;
 
 export const db = new Database(DB_PATH);
 
@@ -1071,6 +1071,20 @@ const SCHEMA_MIGRATIONS = [
     version: 37,
     sql: `
       ALTER TABLE dockerImportSources ADD COLUMN verifyTls INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
+  {
+    version: 38,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncEnabled INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncMode TEXT NOT NULL DEFAULT 'merge';
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncCron TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncLabIds TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncFailureCount INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncPausedUntil TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN lastAutoSyncAt TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN lastAutoSyncStatus TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN lastAutoSyncMessage TEXT;
     `,
   },
 ] as const;

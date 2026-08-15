@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  CalendarClock,
   CheckCircle2,
+  ChevronDown,
   DownloadCloud,
   Pencil,
+  PlayCircle,
   PlugZap,
   RefreshCw,
   ShieldCheck,
@@ -21,11 +24,18 @@ import {
   CardTitle,
 } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/Popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { Mono } from "@/components/shared/Mono";
 import { IntegrationIcon } from "@/components/import/IntegrationIcons";
 import { api } from "@/lib/api";
 import type {
   IntegrationAuthKind,
+  IntegrationAutoSyncMode,
   IntegrationConnection,
   IntegrationDevicePreview,
   IntegrationInventoryResponse,
@@ -132,6 +142,61 @@ const SYNC_ACTION_LABELS: Record<string, TranslationKey> = {
   unchanged: "Unchanged",
 };
 
+// Basic selectors first; cron stays available as the advanced option.
+const SCHEDULE_PRESETS: Array<{
+  id: string;
+  cron: string | null;
+  label: TranslationKey;
+}> = [
+  { id: "15m", cron: "*/15 * * * *", label: "Every 15 minutes" },
+  { id: "30m", cron: "*/30 * * * *", label: "Every 30 minutes" },
+  { id: "1h", cron: "0 * * * *", label: "Hourly" },
+  { id: "6h", cron: "0 */6 * * *", label: "Every 6 hours" },
+  { id: "daily", cron: "0 2 * * *", label: "Daily at 02:00" },
+  { id: "weekly", cron: "0 2 * * 0", label: "Weekly on Sunday at 02:00" },
+  { id: "custom", cron: null, label: "Custom cron (advanced)" },
+];
+
+const AUTO_SYNC_MODE_LABELS: Record<IntegrationAutoSyncMode, TranslationKey> = {
+  merge: "Merge (add missing only)",
+  overwrite: "Overwrite (add and update, never delete)",
+  skip: "Skip (detect drift, write nothing)",
+};
+
+interface AutoSyncDraft {
+  enabled: boolean;
+  mode: IntegrationAutoSyncMode;
+  preset: string;
+  cron: string;
+  labIds: string[];
+}
+
+function draftFromConnection(connection: IntegrationConnection): AutoSyncDraft {
+  const preset =
+    SCHEDULE_PRESETS.find(
+      (entry) => entry.cron && entry.cron === connection.autoSyncCron,
+    )?.id ?? (connection.autoSyncCron ? "custom" : "daily");
+  return {
+    enabled: connection.autoSyncEnabled,
+    mode: connection.autoSyncMode,
+    preset,
+    cron: connection.autoSyncCron ?? "",
+    labIds:
+      connection.autoSyncLabIds.length > 0
+        ? connection.autoSyncLabIds
+        : [connection.labId],
+  };
+}
+
+function autoSyncStatusTone(
+  status: IntegrationConnection["lastAutoSyncStatus"],
+) {
+  if (status === "ok") return "ok" as const;
+  if (status === "drift") return "warn" as const;
+  if (status === "error") return "err" as const;
+  return "neutral" as const;
+}
+
 export function IntegrationsPanel({
   onStageProxmoxPayload,
 }: {
@@ -140,6 +205,7 @@ export function IntegrationsPanel({
   const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
+  const labs = useStore((s) => s.labs);
   const canEdit = canEditInventory(currentUser);
   const admin = isAdmin(currentUser);
 
@@ -163,6 +229,9 @@ export function IntegrationsPanel({
   >({});
   const [proxmoxNodeChoice, setProxmoxNodeChoice] = useState<
     Record<string, string>
+  >({});
+  const [autoSyncDrafts, setAutoSyncDrafts] = useState<
+    Record<string, AutoSyncDraft>
   >({});
 
   const providerById = useMemo(
@@ -197,8 +266,76 @@ export function IntegrationsPanel({
 
   useEffect(() => {
     setPull(null);
+    setAutoSyncDrafts({});
     void loadConnections();
   }, [lab.id]);
+
+  function updateAutoSyncDraft(
+    connection: IntegrationConnection,
+    patch: Partial<AutoSyncDraft>,
+  ) {
+    setAutoSyncDrafts((prev) => ({
+      ...prev,
+      [connection.id]: {
+        ...(prev[connection.id] ?? draftFromConnection(connection)),
+        ...patch,
+      },
+    }));
+  }
+
+  async function handleAutoSyncSave(connection: IntegrationConnection) {
+    const draft =
+      autoSyncDrafts[connection.id] ?? draftFromConnection(connection);
+    const preset = SCHEDULE_PRESETS.find((entry) => entry.id === draft.preset);
+    const cron = preset?.cron ?? draft.cron.trim();
+    setBusyId(connection.id);
+    resetMessages();
+    try {
+      await api.updateIntegrationConnection(connection.id, {
+        autoSyncEnabled: draft.enabled,
+        autoSyncMode: draft.mode,
+        autoSyncCron: cron || null,
+        autoSyncLabIds: draft.labIds,
+      });
+      setSuccess(t("Auto-sync settings saved."));
+      setAutoSyncDrafts((prev) => {
+        const next = { ...prev };
+        delete next[connection.id];
+        return next;
+      });
+      await loadConnections();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("Saving the auto-sync settings failed."),
+      );
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function handleAutoSyncRun(connection: IntegrationConnection) {
+    setBusyId(connection.id);
+    resetMessages();
+    try {
+      const { result } = await api.runIntegrationAutoSync(connection.id);
+      if (result.status === "error") {
+        setError(result.message);
+      } else {
+        setSuccess(result.message);
+      }
+      await loadConnections();
+      if (result.status === "ok") {
+        await loadAll();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("Auto-sync run failed."));
+      await loadConnections();
+    } finally {
+      setBusyId("");
+    }
+  }
 
   function resetMessages() {
     setError("");
@@ -456,557 +593,819 @@ export function IntegrationsPanel({
           )}
         </p>
 
-        <div className="flex flex-wrap gap-2">
-          {providers.map((provider) => (
-            <Button
-              key={provider.id}
-              variant="outline"
-              size="sm"
-              disabled={!canEdit}
-              onClick={() => openCreateForm(provider.id)}
-            >
-              <IntegrationIcon
-                provider={provider.id}
-                className="size-3.5"
-                title={provider.label}
-              />
-              {t("Add {name}", { name: provider.label })}
-            </Button>
-          ))}
-        </div>
+        <Tabs defaultValue="connections" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="connections">{t("Connections")}</TabsTrigger>
+            <TabsTrigger value="auto-sync">
+              <CalendarClock className="mr-1.5 inline size-3" />
+              {t("Auto-sync")}
+            </TabsTrigger>
+          </TabsList>
 
-        {formOpen && (
-          <div className="space-y-3 rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-bg)] p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-              <IntegrationIcon provider={form.provider} className="size-4" />
-              {editingId
-                ? t("Edit {name} connection", {
-                    name: formProviderInfo?.label ?? form.provider,
-                  })
-                : t("New {name} connection", {
-                    name: formProviderInfo?.label ?? form.provider,
-                  })}
+          {error && (
+            <div className="rounded-[var(--radius-md)] border border-[var(--danger-border)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">
+              {error}
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="space-y-1 text-sm">
-                <span className="text-[var(--text-secondary)]">
-                  {t("Name")}
-                </span>
-                <Input
-                  value={form.name}
-                  disabled={saving}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, name: event.target.value }))
-                  }
-                  placeholder={t("Core controller")}
-                />
-              </label>
-              <label className="space-y-1 text-sm">
-                <span className="text-[var(--text-secondary)]">
-                  {t("Controller URL")}
-                </span>
-                <Input
-                  value={form.baseUrl}
-                  disabled={saving}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      baseUrl: event.target.value,
-                    }))
-                  }
-                  placeholder={BASE_URL_PLACEHOLDERS[form.provider]}
-                />
-              </label>
-              {(formProviderInfo?.authKinds.length ?? 0) > 1 && (
-                <label className="space-y-1 text-sm">
-                  <span className="text-[var(--text-secondary)]">
-                    {t("Authentication")}
-                  </span>
-                  <select
-                    className="rk-control w-full"
-                    value={form.authKind}
-                    disabled={saving}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        authKind: event.target.value as IntegrationAuthKind,
-                      }))
-                    }
-                  >
-                    {formProviderInfo?.authKinds.map((kind) => (
-                      <option key={kind} value={kind}>
-                        {t(AUTH_KIND_LABELS[kind])}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {authIdLabel && (
-                <label className="space-y-1 text-sm">
-                  <span className="text-[var(--text-secondary)]">
-                    {t(authIdLabel)}
-                  </span>
-                  <Input
-                    value={form.authId}
-                    disabled={saving}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        authId: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              )}
-              <label className="space-y-1 text-sm">
-                <span className="text-[var(--text-secondary)]">
-                  {t(AUTH_SECRET_LABELS[form.authKind])}
-                </span>
-                <Input
-                  type="password"
-                  value={form.authSecret}
-                  disabled={saving}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      authSecret: event.target.value,
-                    }))
-                  }
-                  placeholder={
-                    editingId ? t("Leave blank to keep the stored secret") : ""
-                  }
-                />
-              </label>
-              {formProviderInfo?.supportsSiteRef && (
-                <label className="space-y-1 text-sm">
-                  <span className="text-[var(--text-secondary)]">
-                    {form.provider === "dockhand"
-                      ? t(
-                          "Environment (optional, defaults to all environments)",
-                        )
-                      : t("Site (optional, defaults to the first site)")}
-                  </span>
-                  <Input
-                    value={form.siteRef}
-                    disabled={saving}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        siteRef: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              )}
+          )}
+          {success && (
+            <div className="rounded-[var(--radius-md)] border border-[var(--success-border)] bg-[var(--success-soft)] px-3 py-2 text-sm text-[var(--success)]">
+              {success}
             </div>
-            <div className="flex flex-wrap gap-4 text-xs text-[var(--text-secondary)]">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={form.verifyTls}
-                  disabled={saving}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      verifyTls: event.target.checked,
-                    }))
-                  }
-                />
-                {t("Verify TLS certificate")}
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={form.syncVlans}
-                  disabled={saving}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      syncVlans: event.target.checked,
-                    }))
-                  }
-                />
-                {t("Pull VLANs")}
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={form.syncSubnets}
-                  disabled={saving}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      syncSubnets: event.target.checked,
-                    }))
-                  }
-                />
-                {t("Pull subnets")}
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={form.syncDhcp}
-                  disabled={saving}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      syncDhcp: event.target.checked,
-                    }))
-                  }
-                />
-                {t("Pull DHCP (preview only)")}
-              </label>
-            </div>
-            <p className="text-xs text-[var(--text-tertiary)]">
-              {t(
-                "Mixed setups: keep VLANs on the switch controller connection and subnets/DHCP on the firewall connection so each source owns what it terminates.",
-              )}
-            </p>
+          )}
+
+          <TabsContent value="connections" className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                disabled={
-                  saving ||
-                  !form.name.trim() ||
-                  !form.baseUrl.trim() ||
-                  (!editingId && !form.authSecret.trim())
-                }
-                onClick={() => void handleSave()}
-              >
-                <CheckCircle2 className="size-3.5" />
-                {saving
-                  ? t("Saving...")
-                  : editingId
-                    ? t("Save changes")
-                    : t("Add connection")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={saving}
-                onClick={closeForm}
-              >
-                {t("Cancel")}
-              </Button>
+              {providers.map((provider) => (
+                <Button
+                  key={provider.id}
+                  variant="outline"
+                  size="sm"
+                  disabled={!canEdit}
+                  onClick={() => openCreateForm(provider.id)}
+                >
+                  <IntegrationIcon
+                    provider={provider.id}
+                    className="size-3.5"
+                    title={provider.label}
+                  />
+                  {t("Add {name}", { name: provider.label })}
+                </Button>
+              ))}
             </div>
-          </div>
-        )}
 
-        {error && (
-          <div className="rounded-[var(--radius-md)] border border-[var(--danger-border)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="rounded-[var(--radius-md)] border border-[var(--success-border)] bg-[var(--success-soft)] px-3 py-2 text-sm text-[var(--success)]">
-            {success}
-          </div>
-        )}
-
-        {connections.length === 0 && !formOpen && (
-          <p className="text-sm text-[var(--text-tertiary)]">
-            {t(
-              "No integration connections yet. Add a controller above to pull live inventory.",
-            )}
-          </p>
-        )}
-
-        {connections.map((connection) => {
-          const info = providerById[connection.provider];
-          const busy = busyId === connection.id;
-          const summaryProduct = connection.lastSummary?.product;
-          const summaryVersion = connection.lastSummary?.version;
-          const nodes = proxmoxNodes[connection.id] ?? [];
-          return (
-            <div
-              key={connection.id}
-              className="space-y-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2"
-            >
-              <div className="flex flex-wrap items-center gap-3">
-                <IntegrationIcon
-                  provider={connection.provider}
-                  className="size-5 shrink-0 text-[var(--accent-secondary)]"
-                  title={info?.label ?? connection.provider}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-medium text-[var(--text-primary)]">
-                      {connection.name}
-                    </span>
-                    <Badge tone={statusTone(connection.lastStatus)}>
-                      {connection.lastStatus === "ok"
-                        ? t("Connected")
-                        : connection.lastStatus === "error"
-                          ? t("Error")
-                          : t("Untested")}
-                    </Badge>
-                    {!connection.enabled && (
-                      <Badge tone="neutral">{t("Disabled")}</Badge>
-                    )}
-                    {typeof summaryProduct === "string" && (
-                      <span className="text-xs text-[var(--text-tertiary)]">
-                        {[summaryProduct, summaryVersion]
-                          .filter((part) => typeof part === "string")
-                          .join(" ")}
-                      </span>
-                    )}
-                  </div>
-                  <Mono className="block truncate text-[10px] text-[var(--text-tertiary)]">
-                    {connection.baseUrl}
-                  </Mono>
+            {formOpen && (
+              <div className="space-y-3 rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-bg)] p-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+                  <IntegrationIcon
+                    provider={form.provider}
+                    className="size-4"
+                  />
+                  {editingId
+                    ? t("Edit {name} connection", {
+                        name: formProviderInfo?.label ?? form.provider,
+                      })
+                    : t("New {name} connection", {
+                        name: formProviderInfo?.label ?? form.provider,
+                      })}
                 </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="space-y-1 text-sm">
+                    <span className="text-[var(--text-secondary)]">
+                      {t("Name")}
+                    </span>
+                    <Input
+                      value={form.name}
+                      disabled={saving}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          name: event.target.value,
+                        }))
+                      }
+                      placeholder={t("Core controller")}
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-[var(--text-secondary)]">
+                      {t("Controller URL")}
+                    </span>
+                    <Input
+                      value={form.baseUrl}
+                      disabled={saving}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          baseUrl: event.target.value,
+                        }))
+                      }
+                      placeholder={BASE_URL_PLACEHOLDERS[form.provider]}
+                    />
+                  </label>
+                  {(formProviderInfo?.authKinds.length ?? 0) > 1 && (
+                    <label className="space-y-1 text-sm">
+                      <span className="text-[var(--text-secondary)]">
+                        {t("Authentication")}
+                      </span>
+                      <select
+                        className="rk-control w-full"
+                        value={form.authKind}
+                        disabled={saving}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            authKind: event.target.value as IntegrationAuthKind,
+                          }))
+                        }
+                      >
+                        {formProviderInfo?.authKinds.map((kind) => (
+                          <option key={kind} value={kind}>
+                            {t(AUTH_KIND_LABELS[kind])}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {authIdLabel && (
+                    <label className="space-y-1 text-sm">
+                      <span className="text-[var(--text-secondary)]">
+                        {t(authIdLabel)}
+                      </span>
+                      <Input
+                        value={form.authId}
+                        disabled={saving}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            authId: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  )}
+                  <label className="space-y-1 text-sm">
+                    <span className="text-[var(--text-secondary)]">
+                      {t(AUTH_SECRET_LABELS[form.authKind])}
+                    </span>
+                    <Input
+                      type="password"
+                      value={form.authSecret}
+                      disabled={saving}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          authSecret: event.target.value,
+                        }))
+                      }
+                      placeholder={
+                        editingId
+                          ? t("Leave blank to keep the stored secret")
+                          : ""
+                      }
+                    />
+                  </label>
+                  {formProviderInfo?.supportsSiteRef && (
+                    <label className="space-y-1 text-sm">
+                      <span className="text-[var(--text-secondary)]">
+                        {form.provider === "dockhand"
+                          ? t(
+                              "Environment (optional, defaults to all environments)",
+                            )
+                          : t("Site (optional, defaults to the first site)")}
+                      </span>
+                      <Input
+                        value={form.siteRef}
+                        disabled={saving}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            siteRef: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-4 text-xs text-[var(--text-secondary)]">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.verifyTls}
+                      disabled={saving}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          verifyTls: event.target.checked,
+                        }))
+                      }
+                    />
+                    {t("Verify TLS certificate")}
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.syncVlans}
+                      disabled={saving}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          syncVlans: event.target.checked,
+                        }))
+                      }
+                    />
+                    {t("Pull VLANs")}
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.syncSubnets}
+                      disabled={saving}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          syncSubnets: event.target.checked,
+                        }))
+                      }
+                    />
+                    {t("Pull subnets")}
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.syncDhcp}
+                      disabled={saving}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          syncDhcp: event.target.checked,
+                        }))
+                      }
+                    />
+                    {t("Pull DHCP (preview only)")}
+                  </label>
+                </div>
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  {t(
+                    "Mixed setups: keep VLANs on the switch controller connection and subnets/DHCP on the firewall connection so each source owns what it terminates.",
+                  )}
+                </p>
                 <div className="flex flex-wrap gap-2">
                   <Button
-                    variant="outline"
                     size="sm"
-                    disabled={!canEdit || busy}
-                    onClick={() => void handleTest(connection)}
+                    disabled={
+                      saving ||
+                      !form.name.trim() ||
+                      !form.baseUrl.trim() ||
+                      (!editingId && !form.authSecret.trim())
+                    }
+                    onClick={() => void handleSave()}
                   >
-                    <PlugZap className="size-3.5" />
-                    {busy ? t("Working...") : t("Test")}
+                    <CheckCircle2 className="size-3.5" />
+                    {saving
+                      ? t("Saving...")
+                      : editingId
+                        ? t("Save changes")
+                        : t("Add connection")}
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={!canEdit || busy || !connection.enabled}
-                    onClick={() => void handlePull(connection)}
+                    disabled={saving}
+                    onClick={closeForm}
                   >
-                    <RefreshCw className="size-3.5" />
-                    {t("Pull inventory")}
+                    {t("Cancel")}
                   </Button>
-                  {connection.provider === "proxmox" &&
-                    onStageProxmoxPayload && (
+                </div>
+              </div>
+            )}
+
+            {connections.length === 0 && !formOpen && (
+              <p className="text-sm text-[var(--text-tertiary)]">
+                {t(
+                  "No integration connections yet. Add a controller above to pull live inventory.",
+                )}
+              </p>
+            )}
+
+            {connections.map((connection) => {
+              const info = providerById[connection.provider];
+              const busy = busyId === connection.id;
+              const summaryProduct = connection.lastSummary?.product;
+              const summaryVersion = connection.lastSummary?.version;
+              const nodes = proxmoxNodes[connection.id] ?? [];
+              return (
+                <div
+                  key={connection.id}
+                  className="space-y-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2"
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    <IntegrationIcon
+                      provider={connection.provider}
+                      className="size-5 shrink-0 text-[var(--accent-secondary)]"
+                      title={info?.label ?? connection.provider}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-medium text-[var(--text-primary)]">
+                          {connection.name}
+                        </span>
+                        <Badge tone={statusTone(connection.lastStatus)}>
+                          {connection.lastStatus === "ok"
+                            ? t("Connected")
+                            : connection.lastStatus === "error"
+                              ? t("Error")
+                              : t("Untested")}
+                        </Badge>
+                        {!connection.enabled && (
+                          <Badge tone="neutral">{t("Disabled")}</Badge>
+                        )}
+                        {typeof summaryProduct === "string" && (
+                          <span className="text-xs text-[var(--text-tertiary)]">
+                            {[summaryProduct, summaryVersion]
+                              .filter((part) => typeof part === "string")
+                              .join(" ")}
+                          </span>
+                        )}
+                      </div>
+                      <Mono className="block truncate text-[10px] text-[var(--text-tertiary)]">
+                        {connection.baseUrl}
+                      </Mono>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!canEdit || busy}
+                        onClick={() => void handleTest(connection)}
+                      >
+                        <PlugZap className="size-3.5" />
+                        {busy ? t("Working...") : t("Test")}
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
                         disabled={!canEdit || busy || !connection.enabled}
-                        onClick={() => void handleStageProxmox(connection)}
+                        onClick={() => void handlePull(connection)}
                       >
-                        <DownloadCloud className="size-3.5" />
-                        {t("Stage import")}
+                        <RefreshCw className="size-3.5" />
+                        {t("Pull inventory")}
                       </Button>
+                      {connection.provider === "proxmox" &&
+                        onStageProxmoxPayload && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!canEdit || busy || !connection.enabled}
+                            onClick={() => void handleStageProxmox(connection)}
+                          >
+                            <DownloadCloud className="size-3.5" />
+                            {t("Stage import")}
+                          </Button>
+                        )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!canEdit || busy}
+                        onClick={() => openEditForm(connection)}
+                      >
+                        <Pencil className="size-3.5" />
+                        {t("Edit")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!canEdit || busy}
+                        onClick={() => void handleDelete(connection)}
+                      >
+                        <Trash2 className="size-3.5" />
+                        {t("Delete")}
+                      </Button>
+                    </div>
+                  </div>
+                  {connection.lastStatus === "error" &&
+                    connection.lastError && (
+                      <div className="text-xs text-[var(--danger)]">
+                        {connection.lastError}
+                      </div>
                     )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!canEdit || busy}
-                    onClick={() => openEditForm(connection)}
-                  >
-                    <Pencil className="size-3.5" />
-                    {t("Edit")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!canEdit || busy}
-                    onClick={() => void handleDelete(connection)}
-                  >
-                    <Trash2 className="size-3.5" />
-                    {t("Delete")}
-                  </Button>
-                </div>
-              </div>
-              {connection.lastStatus === "error" && connection.lastError && (
-                <div className="text-xs text-[var(--danger)]">
-                  {connection.lastError}
-                </div>
-              )}
-              {connection.provider === "proxmox" && nodes.length > 1 && (
-                <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                  {t("Proxmox node")}
-                  <select
-                    className="rk-control"
-                    value={proxmoxNodeChoice[connection.id] ?? nodes[0].node}
-                    onChange={(event) =>
-                      setProxmoxNodeChoice((current) => ({
-                        ...current,
-                        [connection.id]: event.target.value,
-                      }))
-                    }
-                  >
-                    {nodes.map((node) => (
-                      <option key={node.node} value={node.node}>
-                        {node.node}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </div>
-          );
-        })}
-
-        {pull && (
-          <div className="space-y-3 border-t border-[var(--color-line)] pt-4">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-sm font-medium text-[var(--text-primary)]">
-                {t("Inventory preview")}
-              </span>
-              {pullConnection && (
-                <Badge tone="info">{pullConnection.name}</Badge>
-              )}
-              <Badge tone="neutral">{pull.preview.policy}</Badge>
-              <span className="text-[var(--color-fg-subtle)]">
-                {t("+{vlanCreates} VLAN / +{subnetCreates} subnet", {
-                  vlanCreates: pull.preview.summary.vlanCreates,
-                  subnetCreates: pull.preview.summary.subnetCreates,
-                })}
-              </span>
-              <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                {t("Policy")}
-                <select
-                  className="rk-control"
-                  value={policy}
-                  onChange={(event) =>
-                    setPolicy(event.target.value as SnmpSyncPolicy)
-                  }
-                >
-                  <option value="merge">{t("Merge (add missing only)")}</option>
-                  <option value="mirror">
-                    {t("Mirror (create, update, delete)")}
-                  </option>
-                </select>
-              </label>
-            </div>
-
-            {[...pull.warnings, ...pull.preview.warnings].map((warning) => (
-              <div key={warning} className="text-xs text-[var(--warning)]">
-                {warning}
-              </div>
-            ))}
-
-            {pull.preview.vlans.length > 0 && (
-              <IntegrationDiffSection
-                title={t("VLANs")}
-                rows={pull.preview.vlans.map((entry) => ({
-                  key: `vlan-${entry.vlanNumber}`,
-                  label: t("VLAN {number}", { number: entry.vlanNumber }),
-                  detail: entry.name,
-                  action: entry.action,
-                  note:
-                    entry.changes?.join("; ") ??
-                    entry.blockedReason ??
-                    undefined,
-                }))}
-              />
-            )}
-            {pull.preview.subnets.length > 0 && (
-              <IntegrationDiffSection
-                title={t("Subnets")}
-                rows={pull.preview.subnets.map((entry) => ({
-                  key: `subnet-${entry.cidr}`,
-                  label: entry.cidr,
-                  detail: entry.name,
-                  action: entry.action,
-                  note:
-                    entry.changes?.join("; ") ??
-                    entry.blockedReason ??
-                    undefined,
-                }))}
-              />
-            )}
-            {pull.preview.dhcp.scopes.length > 0 && (
-              <IntegrationDiffSection
-                title={t("DHCP ranges (preview only)")}
-                rows={pull.preview.dhcp.scopes.map((scope, index) => ({
-                  key: `dhcp-${index}`,
-                  label: `${scope.startIp} – ${scope.endIp}`,
-                  detail: scope.name,
-                  action: "unchanged",
-                  note: scope.subnetCidr ?? undefined,
-                }))}
-              />
-            )}
-
-            {pull.devices.length > 0 && (
-              <div>
-                <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-                  {t("Controller devices (read-only)")}
-                </div>
-                <div className="rk-table-shell max-h-56 overflow-y-auto">
-                  <table className="rk-table">
-                    <thead>
-                      <tr>
-                        <th>{t("Name")}</th>
-                        <th>{t("Type")}</th>
-                        <th>{t("Model")}</th>
-                        <th>{t("MAC")}</th>
-                        <th>{t("IP")}</th>
-                        <th>{t("Status")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pull.devices.map((device, index) => (
-                        <tr key={`${device.name}-${index}`}>
-                          <td className="font-medium text-[var(--text-primary)]">
-                            {device.name}
-                          </td>
-                          <td>{t(DEVICE_KIND_LABELS[device.kind])}</td>
-                          <td>{device.model ?? ""}</td>
-                          <td>
-                            {device.macAddress ? (
-                              <Mono>{device.macAddress}</Mono>
-                            ) : (
-                              ""
-                            )}
-                          </td>
-                          <td>
-                            {device.ipAddress ? (
-                              <Mono>{device.ipAddress}</Mono>
-                            ) : (
-                              ""
-                            )}
-                          </td>
-                          <td>{device.status ?? ""}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {!hasChanges && (
-              <div className="text-sm text-[var(--color-fg-subtle)]">
-                {t("Rackpad already matches this controller's inventory.")}
-              </div>
-            )}
-
-            {admin ? (
-              <div className="flex flex-wrap items-center gap-3">
-                {policy === "mirror" &&
-                  pull.preview.summary.vlanDeletes +
-                    pull.preview.summary.subnetDeletes >
-                    0 && (
-                    <label className="flex items-center gap-2 text-xs text-[var(--color-fg-subtle)]">
-                      <input
-                        type="checkbox"
-                        checked={allowDeletes}
-                        onChange={(event) =>
-                          setAllowDeletes(event.target.checked)
+                  {connection.provider === "proxmox" && nodes.length > 1 && (
+                    <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                      {t("Proxmox node")}
+                      <select
+                        className="rk-control"
+                        value={
+                          proxmoxNodeChoice[connection.id] ?? nodes[0].node
                         }
-                      />
-                      {t("Allow deletes for unreferenced VLANs/subnets")}
+                        onChange={(event) =>
+                          setProxmoxNodeChoice((current) => ({
+                            ...current,
+                            [connection.id]: event.target.value,
+                          }))
+                        }
+                      >
+                        {nodes.map((node) => (
+                          <option key={node.node} value={node.node}>
+                            {node.node}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                   )}
-                <Button
-                  size="sm"
-                  disabled={applying || !hasChanges}
-                  onClick={() => void handleApply()}
-                >
-                  <ShieldCheck className="size-3.5" />
-                  {applying ? t("Applying...") : t("Apply preview")}
-                </Button>
-              </div>
-            ) : (
-              <div className="text-xs text-[var(--color-fg-subtle)]">
-                {t(
-                  "Administrator access is required to apply integration changes.",
+                </div>
+              );
+            })}
+
+            {pull && (
+              <div className="space-y-3 border-t border-[var(--color-line)] pt-4">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("Inventory preview")}
+                  </span>
+                  {pullConnection && (
+                    <Badge tone="info">{pullConnection.name}</Badge>
+                  )}
+                  <Badge tone="neutral">{pull.preview.policy}</Badge>
+                  <span className="text-[var(--color-fg-subtle)]">
+                    {t("+{vlanCreates} VLAN / +{subnetCreates} subnet", {
+                      vlanCreates: pull.preview.summary.vlanCreates,
+                      subnetCreates: pull.preview.summary.subnetCreates,
+                    })}
+                  </span>
+                  <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                    {t("Policy")}
+                    <select
+                      className="rk-control"
+                      value={policy}
+                      onChange={(event) =>
+                        setPolicy(event.target.value as SnmpSyncPolicy)
+                      }
+                    >
+                      <option value="merge">
+                        {t("Merge (add missing only)")}
+                      </option>
+                      <option value="mirror">
+                        {t("Mirror (create, update, delete)")}
+                      </option>
+                    </select>
+                  </label>
+                </div>
+
+                {[...pull.warnings, ...pull.preview.warnings].map((warning) => (
+                  <div key={warning} className="text-xs text-[var(--warning)]">
+                    {warning}
+                  </div>
+                ))}
+
+                {pull.preview.vlans.length > 0 && (
+                  <IntegrationDiffSection
+                    title={t("VLANs")}
+                    rows={pull.preview.vlans.map((entry) => ({
+                      key: `vlan-${entry.vlanNumber}`,
+                      label: t("VLAN {number}", { number: entry.vlanNumber }),
+                      detail: entry.name,
+                      action: entry.action,
+                      note:
+                        entry.changes?.join("; ") ??
+                        entry.blockedReason ??
+                        undefined,
+                    }))}
+                  />
+                )}
+                {pull.preview.subnets.length > 0 && (
+                  <IntegrationDiffSection
+                    title={t("Subnets")}
+                    rows={pull.preview.subnets.map((entry) => ({
+                      key: `subnet-${entry.cidr}`,
+                      label: entry.cidr,
+                      detail: entry.name,
+                      action: entry.action,
+                      note:
+                        entry.changes?.join("; ") ??
+                        entry.blockedReason ??
+                        undefined,
+                    }))}
+                  />
+                )}
+                {pull.preview.dhcp.scopes.length > 0 && (
+                  <IntegrationDiffSection
+                    title={t("DHCP ranges (preview only)")}
+                    rows={pull.preview.dhcp.scopes.map((scope, index) => ({
+                      key: `dhcp-${index}`,
+                      label: `${scope.startIp} – ${scope.endIp}`,
+                      detail: scope.name,
+                      action: "unchanged",
+                      note: scope.subnetCidr ?? undefined,
+                    }))}
+                  />
+                )}
+
+                {pull.devices.length > 0 && (
+                  <div>
+                    <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                      {t("Controller devices (read-only)")}
+                    </div>
+                    <div className="rk-table-shell max-h-56 overflow-y-auto">
+                      <table className="rk-table">
+                        <thead>
+                          <tr>
+                            <th>{t("Name")}</th>
+                            <th>{t("Type")}</th>
+                            <th>{t("Model")}</th>
+                            <th>{t("MAC")}</th>
+                            <th>{t("IP")}</th>
+                            <th>{t("Status")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pull.devices.map((device, index) => (
+                            <tr key={`${device.name}-${index}`}>
+                              <td className="font-medium text-[var(--text-primary)]">
+                                {device.name}
+                              </td>
+                              <td>{t(DEVICE_KIND_LABELS[device.kind])}</td>
+                              <td>{device.model ?? ""}</td>
+                              <td>
+                                {device.macAddress ? (
+                                  <Mono>{device.macAddress}</Mono>
+                                ) : (
+                                  ""
+                                )}
+                              </td>
+                              <td>
+                                {device.ipAddress ? (
+                                  <Mono>{device.ipAddress}</Mono>
+                                ) : (
+                                  ""
+                                )}
+                              </td>
+                              <td>{device.status ?? ""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {!hasChanges && (
+                  <div className="text-sm text-[var(--color-fg-subtle)]">
+                    {t("Rackpad already matches this controller's inventory.")}
+                  </div>
+                )}
+
+                {admin ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    {policy === "mirror" &&
+                      pull.preview.summary.vlanDeletes +
+                        pull.preview.summary.subnetDeletes >
+                        0 && (
+                        <label className="flex items-center gap-2 text-xs text-[var(--color-fg-subtle)]">
+                          <input
+                            type="checkbox"
+                            checked={allowDeletes}
+                            onChange={(event) =>
+                              setAllowDeletes(event.target.checked)
+                            }
+                          />
+                          {t("Allow deletes for unreferenced VLANs/subnets")}
+                        </label>
+                      )}
+                    <Button
+                      size="sm"
+                      disabled={applying || !hasChanges}
+                      onClick={() => void handleApply()}
+                    >
+                      <ShieldCheck className="size-3.5" />
+                      {applying ? t("Applying...") : t("Apply preview")}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-xs text-[var(--color-fg-subtle)]">
+                    {t(
+                      "Administrator access is required to apply integration changes.",
+                    )}
+                  </div>
                 )}
               </div>
             )}
-          </div>
-        )}
+          </TabsContent>
+
+          <TabsContent value="auto-sync" className="space-y-4">
+            <p className="text-xs text-[var(--text-tertiary)]">
+              {t(
+                "Auto-sync is opt-in per connection and runs on the server without a review step. Merge only adds missing records, overwrite also updates them, and skip only reports drift. Repeated failures back off automatically and surface here.",
+              )}
+            </p>
+            {connections.length === 0 && (
+              <p className="text-sm text-[var(--text-tertiary)]">
+                {t("Add a connection first to configure auto-sync.")}
+              </p>
+            )}
+            {connections.map((connection) => {
+              const draft =
+                autoSyncDrafts[connection.id] ??
+                draftFromConnection(connection);
+              const busy = busyId === connection.id;
+              const preset = SCHEDULE_PRESETS.find(
+                (entry) => entry.id === draft.preset,
+              );
+              const paused =
+                connection.autoSyncPausedUntil &&
+                new Date(connection.autoSyncPausedUntil).getTime() > Date.now();
+              return (
+                <div
+                  key={connection.id}
+                  className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <IntegrationIcon
+                      provider={connection.provider}
+                      className="size-4 shrink-0 text-[var(--accent-secondary)]"
+                    />
+                    <span className="text-sm font-medium text-[var(--text-primary)]">
+                      {connection.name}
+                    </span>
+                    <Badge
+                      tone={
+                        connection.autoSyncEnabled
+                          ? autoSyncStatusTone(connection.lastAutoSyncStatus)
+                          : "neutral"
+                      }
+                    >
+                      {!connection.autoSyncEnabled
+                        ? t("Auto-sync off")
+                        : connection.lastAutoSyncStatus === "ok"
+                          ? t("Synced")
+                          : connection.lastAutoSyncStatus === "drift"
+                            ? t("Drift")
+                            : connection.lastAutoSyncStatus === "error"
+                              ? t("Error")
+                              : t("Never run")}
+                    </Badge>
+                    {paused && <Badge tone="warn">{t("Backing off")}</Badge>}
+                    {connection.lastAutoSyncAt && (
+                      <span className="text-xs text-[var(--text-tertiary)]">
+                        {t("Last run: {time}", {
+                          time: new Date(
+                            connection.lastAutoSyncAt,
+                          ).toLocaleString(),
+                        })}
+                      </span>
+                    )}
+                  </div>
+                  {connection.lastAutoSyncMessage &&
+                    connection.lastAutoSyncStatus !== "ok" && (
+                      <div
+                        className={`text-xs ${
+                          connection.lastAutoSyncStatus === "error"
+                            ? "text-[var(--danger)]"
+                            : "text-[var(--warning)]"
+                        }`}
+                      >
+                        {connection.lastAutoSyncMessage}
+                      </div>
+                    )}
+
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                      <input
+                        type="checkbox"
+                        checked={draft.enabled}
+                        disabled={!admin || busy}
+                        onChange={(event) =>
+                          updateAutoSyncDraft(connection, {
+                            enabled: event.target.checked,
+                          })
+                        }
+                      />
+                      {t("Enable auto-sync (opt-in)")}
+                    </label>
+                    <label className="space-y-1 text-sm">
+                      <span className="text-[var(--text-secondary)]">
+                        {t("Sync mode")}
+                      </span>
+                      <select
+                        className="rk-control w-full"
+                        value={draft.mode}
+                        disabled={!admin || busy}
+                        onChange={(event) =>
+                          updateAutoSyncDraft(connection, {
+                            mode: event.target.value as IntegrationAutoSyncMode,
+                          })
+                        }
+                      >
+                        {(
+                          Object.keys(
+                            AUTO_SYNC_MODE_LABELS,
+                          ) as IntegrationAutoSyncMode[]
+                        ).map((mode) => (
+                          <option key={mode} value={mode}>
+                            {t(AUTO_SYNC_MODE_LABELS[mode])}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-sm">
+                      <span className="text-[var(--text-secondary)]">
+                        {t("Schedule")}
+                      </span>
+                      <select
+                        className="rk-control w-full"
+                        value={draft.preset}
+                        disabled={!admin || busy}
+                        onChange={(event) =>
+                          updateAutoSyncDraft(connection, {
+                            preset: event.target.value,
+                          })
+                        }
+                      >
+                        {SCHEDULE_PRESETS.map((entry) => (
+                          <option key={entry.id} value={entry.id}>
+                            {t(entry.label)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="space-y-1 text-sm">
+                      <span className="block text-[var(--text-secondary)]">
+                        {t("Target labs")}
+                      </span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full justify-between"
+                            disabled={!admin || busy}
+                          >
+                            {t("{count} lab(s)", {
+                              count: draft.labIds.length,
+                            })}
+                            <ChevronDown className="size-3.5" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 space-y-1">
+                          {labs.map((entry) => (
+                            <label
+                              key={entry.id}
+                              className="flex items-center gap-2 rounded px-1 py-0.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={draft.labIds.includes(entry.id)}
+                                disabled={!admin}
+                                onChange={(event) =>
+                                  updateAutoSyncDraft(connection, {
+                                    labIds: event.target.checked
+                                      ? [...draft.labIds, entry.id]
+                                      : draft.labIds.filter(
+                                          (id) => id !== entry.id,
+                                        ),
+                                  })
+                                }
+                              />
+                              {entry.name}
+                            </label>
+                          ))}
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                  {draft.preset === "custom" && (
+                    <label className="block space-y-1 text-sm md:max-w-sm">
+                      <span className="text-[var(--text-secondary)]">
+                        {t("Cron expression (minute hour day month weekday)")}
+                      </span>
+                      <Input
+                        value={draft.cron}
+                        disabled={!admin || busy}
+                        onChange={(event) =>
+                          updateAutoSyncDraft(connection, {
+                            cron: event.target.value,
+                          })
+                        }
+                        placeholder="30 2 * * *"
+                      />
+                    </label>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      disabled={
+                        !admin ||
+                        busy ||
+                        (draft.enabled &&
+                          draft.preset === "custom" &&
+                          !draft.cron.trim())
+                      }
+                      onClick={() => void handleAutoSyncSave(connection)}
+                    >
+                      <CheckCircle2 className="size-3.5" />
+                      {busy ? t("Saving...") : t("Save schedule")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!admin || busy || !connection.enabled}
+                      onClick={() => void handleAutoSyncRun(connection)}
+                    >
+                      <PlayCircle className="size-3.5" />
+                      {busy ? t("Working...") : t("Run now")}
+                    </Button>
+                    {!admin && (
+                      <span className="text-xs text-[var(--color-fg-subtle)]">
+                        {t(
+                          "Administrator access is required to configure auto-sync.",
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </TabsContent>
+        </Tabs>
       </CardBody>
     </Card>
   );

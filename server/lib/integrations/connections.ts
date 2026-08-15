@@ -5,6 +5,7 @@ import { ValidationError } from "../validation.js";
 import {
   INTEGRATION_PROVIDER_INFO,
   type IntegrationAuthKind,
+  type IntegrationAutoSyncMode,
   type IntegrationConnectionPublic,
   type IntegrationConnectionSecrets,
   type IntegrationConnectionStatus,
@@ -52,6 +53,29 @@ function parseStatus(value: unknown): IntegrationConnectionStatus {
   return "unknown";
 }
 
+function parseAutoSyncMode(value: unknown): IntegrationAutoSyncMode {
+  if (value === "overwrite" || value === "skip") return value;
+  return "merge";
+}
+
+function parseAutoSyncStatus(value: unknown): "ok" | "error" | "drift" | null {
+  if (value === "ok" || value === "error" || value === "drift") return value;
+  return null;
+}
+
+function parseLabIds(value: unknown): string[] {
+  if (typeof value !== "string" || !value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.map((entry) => String(entry)).filter(Boolean);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 export function parseIntegrationConnectionPublic(
   row: Record<string, unknown>,
 ): IntegrationConnectionPublic {
@@ -74,6 +98,19 @@ export function parseIntegrationConnectionPublic(
     lastCheckedAt: row.lastCheckedAt ? String(row.lastCheckedAt) : null,
     lastError: row.lastError ? String(row.lastError) : null,
     lastSummary: parseSummary(row.lastSummary),
+    autoSyncEnabled: Boolean(row.autoSyncEnabled),
+    autoSyncMode: parseAutoSyncMode(row.autoSyncMode),
+    autoSyncCron: row.autoSyncCron ? String(row.autoSyncCron) : null,
+    autoSyncLabIds: parseLabIds(row.autoSyncLabIds),
+    autoSyncFailureCount: Number(row.autoSyncFailureCount ?? 0),
+    autoSyncPausedUntil: row.autoSyncPausedUntil
+      ? String(row.autoSyncPausedUntil)
+      : null,
+    lastAutoSyncAt: row.lastAutoSyncAt ? String(row.lastAutoSyncAt) : null,
+    lastAutoSyncStatus: parseAutoSyncStatus(row.lastAutoSyncStatus),
+    lastAutoSyncMessage: row.lastAutoSyncMessage
+      ? String(row.lastAutoSyncMessage)
+      : null,
     createdAt: String(row.createdAt),
     updatedAt: String(row.updatedAt),
   };
@@ -125,13 +162,23 @@ export function loadIntegrationConnectionSecrets(
     baseUrl: String(row.baseUrl),
     authKind: String(row.authKind) as IntegrationAuthKind,
     authId: row.authId ? String(row.authId) : null,
-    authSecret: row.authSecretEnc ? decryptSecret(String(row.authSecretEnc)) : null,
+    authSecret: row.authSecretEnc
+      ? decryptSecret(String(row.authSecretEnc))
+      : null,
     siteRef: row.siteRef ? String(row.siteRef) : null,
     verifyTls: Boolean(row.verifyTls),
     enabled: Boolean(row.enabled),
     syncVlans: Boolean(row.syncVlans),
     syncSubnets: Boolean(row.syncSubnets),
     syncDhcp: Boolean(row.syncDhcp),
+    autoSyncEnabled: Boolean(row.autoSyncEnabled),
+    autoSyncMode: parseAutoSyncMode(row.autoSyncMode),
+    autoSyncCron: row.autoSyncCron ? String(row.autoSyncCron) : null,
+    autoSyncLabIds: parseLabIds(row.autoSyncLabIds),
+    autoSyncFailureCount: Number(row.autoSyncFailureCount ?? 0),
+    autoSyncPausedUntil: row.autoSyncPausedUntil
+      ? String(row.autoSyncPausedUntil)
+      : null,
   };
 }
 
@@ -209,6 +256,10 @@ export function updateIntegrationConnection(
     syncSubnets: boolean;
     syncDhcp: boolean;
     clearSecret: boolean;
+    autoSyncEnabled: boolean;
+    autoSyncMode: IntegrationAutoSyncMode;
+    autoSyncCron: string | null;
+    autoSyncLabIds: string[];
   }>,
 ) {
   const existing = getIntegrationConnectionRow(id);
@@ -267,6 +318,29 @@ export function updateIntegrationConnection(
         ? 1
         : 0
       : (existing.syncDhcp as number);
+  const nextAutoSyncEnabled =
+    input.autoSyncEnabled !== undefined
+      ? input.autoSyncEnabled
+        ? 1
+        : 0
+      : ((existing.autoSyncEnabled as number) ?? 0);
+  const nextAutoSyncMode =
+    input.autoSyncMode ?? parseAutoSyncMode(existing.autoSyncMode);
+  const nextAutoSyncCron =
+    input.autoSyncCron !== undefined
+      ? input.autoSyncCron?.trim() || null
+      : ((existing.autoSyncCron as string | null) ?? null);
+  const nextAutoSyncLabIds =
+    input.autoSyncLabIds !== undefined
+      ? JSON.stringify([...new Set(input.autoSyncLabIds.filter(Boolean))])
+      : ((existing.autoSyncLabIds as string | null) ?? null);
+  // Reconfiguring auto-sync clears any failure backoff so fixes take
+  // effect immediately.
+  const autoSyncTouched =
+    input.autoSyncEnabled !== undefined ||
+    input.autoSyncMode !== undefined ||
+    input.autoSyncCron !== undefined ||
+    input.autoSyncLabIds !== undefined;
 
   db.prepare(
     `
@@ -283,6 +357,12 @@ export function updateIntegrationConnection(
       syncVlans = ?,
       syncSubnets = ?,
       syncDhcp = ?,
+      autoSyncEnabled = ?,
+      autoSyncMode = ?,
+      autoSyncCron = ?,
+      autoSyncLabIds = ?,
+      autoSyncFailureCount = CASE WHEN ? THEN 0 ELSE autoSyncFailureCount END,
+      autoSyncPausedUntil = CASE WHEN ? THEN NULL ELSE autoSyncPausedUntil END,
       updatedAt = ?
     WHERE id = ?
   `,
@@ -298,11 +378,45 @@ export function updateIntegrationConnection(
     nextSyncVlans,
     nextSyncSubnets,
     nextSyncDhcp,
+    nextAutoSyncEnabled,
+    nextAutoSyncMode,
+    nextAutoSyncCron,
+    nextAutoSyncLabIds,
+    autoSyncTouched ? 1 : 0,
+    autoSyncTouched ? 1 : 0,
     new Date().toISOString(),
     id,
   );
 
   return parseIntegrationConnectionPublic(getIntegrationConnectionRow(id)!);
+}
+
+export function recordIntegrationAutoSyncResult(
+  id: string,
+  input: {
+    status: "ok" | "error" | "drift";
+    message: string;
+    failureCount: number;
+    pausedUntil: string | null;
+  },
+) {
+  const now = new Date().toISOString();
+  db.prepare(
+    `
+    UPDATE integrationConnections
+    SET lastAutoSyncAt = ?, lastAutoSyncStatus = ?, lastAutoSyncMessage = ?,
+        autoSyncFailureCount = ?, autoSyncPausedUntil = ?, updatedAt = ?
+    WHERE id = ?
+  `,
+  ).run(
+    now,
+    input.status,
+    input.message,
+    input.failureCount,
+    input.pausedUntil,
+    now,
+    id,
+  );
 }
 
 export function deleteIntegrationConnection(id: string) {

@@ -24,6 +24,17 @@ export const INTEGRATION_CONNECTION_STATUSES = [
 export type IntegrationConnectionStatus =
   (typeof INTEGRATION_CONNECTION_STATUSES)[number];
 
+// merge: add missing records only. overwrite: add and update to match the
+// controller (never deletes). skip: compute the diff and report drift
+// without writing anything.
+export const INTEGRATION_AUTO_SYNC_MODES = [
+  "merge",
+  "overwrite",
+  "skip",
+] as const;
+export type IntegrationAutoSyncMode =
+  (typeof INTEGRATION_AUTO_SYNC_MODES)[number];
+
 export interface IntegrationProviderInfo {
   id: IntegrationProvider;
   label: string;
@@ -98,6 +109,15 @@ export interface IntegrationConnectionPublic {
   lastCheckedAt: string | null;
   lastError: string | null;
   lastSummary: Record<string, unknown> | null;
+  autoSyncEnabled: boolean;
+  autoSyncMode: IntegrationAutoSyncMode;
+  autoSyncCron: string | null;
+  autoSyncLabIds: string[];
+  autoSyncFailureCount: number;
+  autoSyncPausedUntil: string | null;
+  lastAutoSyncAt: string | null;
+  lastAutoSyncStatus: "ok" | "error" | "drift" | null;
+  lastAutoSyncMessage: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -117,4 +137,10 @@ export interface IntegrationConnectionSecrets {
   syncVlans: boolean;
   syncSubnets: boolean;
   syncDhcp: boolean;
+  autoSyncEnabled: boolean;
+  autoSyncMode: IntegrationAutoSyncMode;
+  autoSyncCron: string | null;
+  autoSyncLabIds: string[];
+  autoSyncFailureCount: number;
+  autoSyncPausedUntil: string | null;
 }

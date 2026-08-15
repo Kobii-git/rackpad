@@ -38,6 +38,15 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   0 disables), so the Integrations panel shows live reachability, product,
   and version without clicking Test. Inventory preview/apply remains a
   manual, review-first action.
+- Added opt-in scheduled auto-sync per integration connection on a new
+  Auto-sync tab (the panel now splits into Connections and Auto-sync tabs):
+  basic schedule presets with custom cron as an advanced option, merge /
+  overwrite / skip modes (deletes never run automatically), and a checkbox
+  multi-select of target labs so one controller can populate several labs.
+  Configuration is admin-only; failures surface non-intrusively on the
+  connection with the exact error, back off exponentially (capped at 6
+  hours), and runs are sequential so a broken controller cannot destabilize
+  the server. A Run now action executes the configured sync on demand.
 - Added a Dockhand integration (Bearer API token) that lists Docker
   environments with online state and container/stack counts, containers with
   image, IP, health, and compose stack, and Docker networks with drivers and

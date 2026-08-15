@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { db } from "../db.js";
 import { requireAdmin, requireAuth } from "../lib/auth.js";
 import {
   assertLabRead,
@@ -25,8 +26,11 @@ import {
   fetchProxmoxNodes,
   fetchProxmoxStagedInventory,
 } from "../lib/integrations/providers/proxmox.js";
+import { isValidCronExpression } from "../lib/integrations/cron.js";
+import { runIntegrationAutoSync } from "../lib/integrations/auto-sync.js";
 import {
   INTEGRATION_AUTH_KINDS,
+  INTEGRATION_AUTO_SYNC_MODES,
   INTEGRATION_PROVIDER_INFO,
   INTEGRATION_PROVIDERS,
   type IntegrationAuthKind,
@@ -42,6 +46,7 @@ import {
   optionalBoolean,
   optionalEnum,
   optionalString,
+  optionalStringArray,
   requiredEnum,
   requiredString,
   ValidationError,
@@ -166,6 +171,59 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         true,
       );
 
+      const autoSyncEnabled = optionalBoolean(body, "autoSyncEnabled");
+      const autoSyncMode = optionalEnum(
+        body,
+        "autoSyncMode",
+        INTEGRATION_AUTO_SYNC_MODES,
+      );
+      const autoSyncCron =
+        "autoSyncCron" in body
+          ? optionalString(body, "autoSyncCron", { maxLength: 120 })
+          : undefined;
+      const autoSyncLabIds = optionalStringArray(body, "autoSyncLabIds", {
+        maxItems: 50,
+      });
+      const touchesAutoSync =
+        autoSyncEnabled != null ||
+        autoSyncMode != null ||
+        autoSyncCron !== undefined ||
+        (autoSyncLabIds !== undefined && autoSyncLabIds !== null);
+
+      if (touchesAutoSync) {
+        // Auto-sync writes to labs without a per-run review, so configuring
+        // it is an admin decision even though editors manage connections.
+        if (!requireAdmin(req, reply)) return;
+        if (autoSyncCron != null && !isValidCronExpression(autoSyncCron)) {
+          return reply.status(400).send({
+            error:
+              "autoSyncCron is not a valid five-field cron expression (minute hour day-of-month month day-of-week).",
+          });
+        }
+        if (autoSyncLabIds) {
+          for (const labId of autoSyncLabIds) {
+            const lab = db
+              .prepare("SELECT id FROM labs WHERE id = ?")
+              .get(labId);
+            if (!lab) {
+              return reply
+                .status(422)
+                .send({ error: `Target lab ${labId} does not exist.` });
+            }
+          }
+        }
+        const nextCron =
+          autoSyncCron !== undefined
+            ? autoSyncCron
+            : ((existing.autoSyncCron as string | null) ?? null);
+        const enabling = autoSyncEnabled ?? Boolean(existing.autoSyncEnabled);
+        if (enabling && !nextCron) {
+          return reply.status(400).send({
+            error: "A schedule is required before enabling auto-sync.",
+          });
+        }
+      }
+
       const updated = updateIntegrationConnection(req.params.id, {
         name: optionalString(body, "name", { maxLength: 120 }) ?? undefined,
         baseUrl:
@@ -186,9 +244,43 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         syncSubnets: optionalBoolean(body, "syncSubnets") ?? undefined,
         syncDhcp: optionalBoolean(body, "syncDhcp") ?? undefined,
         clearSecret: optionalBoolean(body, "clearSecret") ?? false,
+        autoSyncEnabled: autoSyncEnabled ?? undefined,
+        autoSyncMode: autoSyncMode ?? undefined,
+        autoSyncCron: autoSyncCron !== undefined ? autoSyncCron : undefined,
+        autoSyncLabIds: autoSyncLabIds ?? undefined,
       });
 
       return updated;
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/connections/:id/auto-sync/run",
+    async (req, reply) => {
+      if (!requireAdmin(req, reply)) return;
+
+      const existing = getIntegrationConnectionRow(req.params.id);
+      if (!existing) {
+        return reply
+          .status(404)
+          .send({ error: "Integration connection not found." });
+      }
+      if (!assertLabWrite(req, reply, String(existing.labId))) return;
+      if (!existing.enabled) {
+        return reply.status(409).send({
+          error:
+            "This connection is disabled. Enable it before running auto-sync.",
+        });
+      }
+
+      const result = await runIntegrationAutoSync(req.params.id);
+      const connection = getIntegrationConnectionRow(req.params.id);
+      return {
+        result,
+        connection: connection
+          ? parseIntegrationConnectionPublic(connection)
+          : null,
+      };
     },
   );
 
@@ -277,7 +369,8 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       if (!assertLabWrite(req, reply, String(existing.labId))) return;
       if (!existing.enabled) {
         return reply.status(409).send({
-          error: "This connection is disabled. Enable it before pulling inventory.",
+          error:
+            "This connection is disabled. Enable it before pulling inventory.",
         });
       }
 
@@ -292,9 +385,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       const body = req.body == null ? {} : asObject(req.body);
       const policy =
         (optionalEnum(body, "policy", SNMP_SYNC_POLICIES) as
-          | SnmpSyncPolicy
-          | null
-          | undefined) ?? "merge";
+          SnmpSyncPolicy | null | undefined) ?? "merge";
 
       const connection = loadIntegrationConnectionSecrets(req.params.id);
       if (!connection.authSecret) {
@@ -358,7 +449,9 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       const body = asObject(req.body);
       const preview = body.preview as SnmpSyncPreview | undefined;
       if (!preview || typeof preview !== "object") {
-        return reply.status(400).send({ error: "Preview payload is required." });
+        return reply
+          .status(400)
+          .send({ error: "Preview payload is required." });
       }
       if (
         String(preview.deviceId) !== req.params.id ||
@@ -371,9 +464,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
 
       const policy =
         (optionalEnum(body, "policy", SNMP_SYNC_POLICIES) as
-          | SnmpSyncPolicy
-          | null
-          | undefined) ?? preview.policy;
+          SnmpSyncPolicy | null | undefined) ?? preview.policy;
       if (policy === "mirror" && preview.policy !== "mirror") {
         return reply
           .status(400)
@@ -460,7 +551,8 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!existing.enabled) {
         return reply.status(409).send({
-          error: "This connection is disabled. Enable it before pulling inventory.",
+          error:
+            "This connection is disabled. Enable it before pulling inventory.",
         });
       }
 

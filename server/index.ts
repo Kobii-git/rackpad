@@ -6,6 +6,7 @@ import { startMonitoringLoop } from './lib/monitoring.js'
 import { startSnmpTrapReceiver } from './lib/snmp-traps.js'
 import { startDockerStatusSyncLoop } from './lib/docker-import.js'
 import { startIntegrationStatusSyncLoop } from './lib/integrations/status-sync.js'
+import { startIntegrationAutoSyncLoop } from './lib/integrations/auto-sync.js'
 
 const PORT = Number.parseInt(process.env.PORT ?? '3000', 10)
 const HOST = process.env.HOST ?? '0.0.0.0'
@@ -27,6 +28,7 @@ const stopDockerStatusSync = startDockerStatusSyncLoop(
 const stopIntegrationStatusSync = startIntegrationStatusSyncLoop(
   Number.isFinite(INTEGRATION_STATUS_SYNC_INTERVAL_MS) ? INTEGRATION_STATUS_SYNC_INTERVAL_MS : 300000,
 )
+const stopIntegrationAutoSync = startIntegrationAutoSyncLoop()
 const stopTrapReceiver = startSnmpTrapReceiver()
 const sessionCleanupHandle = setInterval(() => {
   purgeExpiredSessions()
@@ -39,6 +41,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     stopDiscoveryScanSchedules()
     stopDockerStatusSync()
     stopIntegrationStatusSync()
+    stopIntegrationAutoSync()
     stopTrapReceiver()
     clearInterval(sessionCleanupHandle)
     await app.close()

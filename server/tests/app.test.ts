@@ -8482,6 +8482,9 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
       ON dockerImportSources (labId);
     ALTER TABLE deviceMonitors DROP COLUMN ignoreTlsErrors;
     ALTER TABLE devices DROP COLUMN ignoreDuplicateMac;
+    -- Created by migration v36 and altered by v38; drop it so both re-run
+    -- against a true pre-v36 schema.
+    DROP TABLE integrationConnections;
     UPDATE schemaVersion
     SET version = 31, updatedAt = '2026-07-20T00:00:00.000Z'
     WHERE id = 1;
@@ -8512,7 +8515,7 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
   assert.equal(source.enabled, 1);
   assert.equal(tlsColumn?.dflt_value, "0");
   assert.equal(duplicateMacColumn?.dflt_value, "0");
-  assert.equal(version.version, 37);
+  assert.equal(version.version, 38);
   migrated.close();
 });
 
@@ -8558,6 +8561,10 @@ test("storage topology migration upgrades a version-34 database without changing
     DROP TABLE driveSlots;
     DROP TABLE storageDrives;
     DROP TABLE driveBayTemplates;
+
+    -- Drop tables created by post-v34 migrations so their CREATE and ALTER
+    -- statements re-run against a true v34 schema.
+    DROP TABLE integrationConnections;
 
     -- Rebuild dockerImportSources at its v34 shape (no verifyTls column)
     -- so the v37 ALTER TABLE migration runs against a true v34 schema.
@@ -8658,7 +8665,7 @@ test("storage topology migration upgrades a version-34 database without changing
     .prepare("SELECT version FROM schemaVersion WHERE id = 1")
     .get() as { version: number };
   assert.equal(device.storageGb, 9876);
-  assert.equal(version.version, 37);
+  assert.equal(version.version, 38);
   migrated.close();
 });
 

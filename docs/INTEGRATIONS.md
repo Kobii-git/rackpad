@@ -127,10 +127,39 @@ skipped record kinds are called out in the preview warnings.
   Integrations panel. Disabled connections are skipped. Docker/Portainer
   container *status* refresh has its own loop
   (`DOCKER_STATUS_SYNC_INTERVAL_MS`).
-- **Manual (review-first, by design):** inventory. Pulling VLANs, subnets,
-  DHCP ranges, and device previews — and applying them to IPAM — is always a
-  human action, matching SNMP inventory sync. Nothing writes to your lab on a
-  timer.
+- **Automatic (opt-in): scheduled inventory sync.** See below.
+- **Manual (default):** inventory. Pulling VLANs, subnets, DHCP ranges, and
+  device previews — and applying them to IPAM — is a human action behind the
+  review diff unless an administrator explicitly schedules a connection.
+
+## Scheduled auto-sync (opt-in)
+
+The **Auto-sync** tab on the Integrations panel schedules inventory sync per
+connection. It is off by default and only administrators can configure it,
+because scheduled runs write without a per-run review.
+
+- **Schedule:** pick a basic preset (every 15/30 minutes, hourly, every
+  6 hours, daily, weekly) or switch to **Custom cron (advanced)** for a
+  five-field cron expression (`minute hour day-of-month month day-of-week`).
+  The scheduler ticks once a minute and catches up runs missed by short
+  stalls.
+- **Mode:**
+  - **Merge** adds missing VLANs/subnets only.
+  - **Overwrite** adds and updates records to match the controller. Deletes
+    are never automatic — removals stay a manual, confirmed decision.
+  - **Skip** computes the diff and reports drift without writing anything —
+    useful as a change detector.
+- **Target labs:** a checkbox multi-select. One connection can populate
+  several labs with the same controller data; the default is the
+  connection's own lab. The same per-connection VLAN/subnet/DHCP pull
+  toggles apply.
+- **Errors without instability:** failures are recorded on the connection
+  (status badge plus the exact error message in the Auto-sync tab — nothing
+  modal) and audited. Consecutive failures back off exponentially (5m, 10m,
+  20m, ... capped at 6 hours), runs are strictly sequential, and overlapping
+  ticks are skipped, so a dead or slow controller cannot pile up work or
+  hammer the network. Saving the schedule again clears the backoff, and
+  **Run now** executes the configured sync immediately for testing.
 
 ## Safety model
 
