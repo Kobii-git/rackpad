@@ -30,6 +30,8 @@ const apiKeyConnection: IntegrationConnectionSecrets = {
   syncVlans: true,
   syncSubnets: true,
   syncDhcp: true,
+  syncDevices: true,
+  syncWifi: true,
 };
 
 const passwordConnection: IntegrationConnectionSecrets = {

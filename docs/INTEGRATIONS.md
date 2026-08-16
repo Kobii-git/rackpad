@@ -155,10 +155,14 @@ skipped record kinds are called out in the preview warnings.
 
 ## Scheduled auto-sync (opt-in)
 
-The **Auto-sync** tab on the Integrations panel schedules inventory sync per
+The **Auto-sync** tab on the Integrations panel manages sync schedules per
 connection. It is off by default and only administrators can configure it,
 because scheduled runs write without a per-run review.
 
+- **Multiple schedules per connection:** each connection can have any number
+  of named schedules, each with its own cadence, mode, and target labs — for
+  example a nightly merge into a production lab plus an hourly drift check
+  against a staging lab, both fed by the same controller.
 - **Schedule:** pick a basic preset (every 15/30 minutes, hourly, every
   6 hours, daily, weekly) or switch to **Custom cron (advanced)** for a
   five-field cron expression (`minute hour day-of-month month day-of-week`).
@@ -170,17 +174,44 @@ because scheduled runs write without a per-run review.
     are never automatic — removals stay a manual, confirmed decision.
   - **Skip** computes the diff and reports drift without writing anything —
     useful as a change detector.
-- **Target labs:** a checkbox multi-select. One connection can populate
+- **Target labs:** a checkbox multi-select. One schedule can populate
   several labs with the same controller data; the default is the
-  connection's own lab. The same per-connection VLAN/subnet/DHCP pull
-  toggles apply.
-- **Errors without instability:** failures are recorded on the connection
+  connection's own lab. The same per-connection pull toggles apply, and
+  when the connection's device or SSID pulls are enabled, scheduled runs
+  also import new devices and SSIDs (merge-only — existing records are
+  never modified).
+- **Errors without instability:** failures are recorded on the schedule
   (status badge plus the exact error message in the Auto-sync tab — nothing
   modal) and audited. Consecutive failures back off exponentially (5m, 10m,
-  20m, ... capped at 6 hours), runs are strictly sequential, and overlapping
-  ticks are skipped, so a dead or slow controller cannot pile up work or
-  hammer the network. Saving the schedule again clears the backoff, and
-  **Run now** executes the configured sync immediately for testing.
+  20m, ... capped at 6 hours) per schedule, runs are strictly sequential,
+  and overlapping ticks are skipped, so a dead or slow controller cannot
+  pile up work or hammer the network. Saving a schedule again clears its
+  backoff, and **Run now** executes it immediately for testing.
+
+## Device and WiFi import
+
+Controllers that manage physical gear (UniFi, Omada, OPNsense) can import
+those devices as real Rackpad device records — visible in **Devices** — not
+just as read-only previews:
+
+- **What comes in:** switches, gateways/routers, and access points from
+  UniFi and Omada (with their full port list: name, RJ45/SFP/SFP+ media
+  type, speed, and link state), and the OPNsense firewall itself. Model,
+  MAC, IP, serial, firmware, and online status are captured when the
+  controller reports them.
+- **Loose gear placement:** imported devices land unracked ("loose gear")
+  so nothing guesses at physical location — rack them afterwards from the
+  Devices page.
+- **Merge-only matching:** existing devices are matched by MAC address
+  first, then hostname/display name, and are never modified. The preview
+  modal's **Import** tab shows exactly what will be created versus what is
+  already tracked before you press **Import devices**.
+- **WiFi:** enabling the SSID pull creates a WiFi controller record for the
+  connection, imports SSIDs (linked to VLANs when the ids match), and links
+  imported access points to that controller.
+- Imports are audited as `integration.sync.device.create`,
+  `integration.sync.wifi.ssid.create`, and
+  `integration.sync.wifi.controller.create`.
 
 ## Safety model
 

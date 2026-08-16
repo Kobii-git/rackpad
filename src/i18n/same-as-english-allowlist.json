@@ -2397,5 +2397,14 @@
     "key": "port",
     "locales": ["fr"],
     "reason": "Locale-invariant technical notation, product name, or placeholder-only format verified after translation."
+  },
+  {
+    "key": "SSID · VLAN {number}",
+    "reason": "Technical identifier built from networking acronyms and a placeholder"
+  },
+  {
+    "key": "{count} port(s)",
+    "locales": ["fr"],
+    "reason": "French spells port(s) identically to English; mirrors the existing fr allowances for Port/Ports"
   }
 ]

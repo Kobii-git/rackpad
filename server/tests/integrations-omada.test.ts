@@ -30,6 +30,8 @@ const connection: IntegrationConnectionSecrets = {
   syncVlans: true,
   syncSubnets: true,
   syncDhcp: true,
+  syncDevices: true,
+  syncWifi: true,
 };
 
 type FakeRoute = { status?: number; body: unknown };

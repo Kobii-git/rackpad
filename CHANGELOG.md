@@ -63,15 +63,32 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   case-insensitively across the type field variants so switches are never
   dropped, and an empty per-site device list falls back to the
   controller-wide endpoint with a warning.
-- Added opt-in scheduled auto-sync per integration connection on a new
-  Auto-sync tab (the panel now splits into Connections and Auto-sync tabs):
-  basic schedule presets with custom cron as an advanced option, merge /
-  overwrite / skip modes (deletes never run automatically), and a checkbox
-  multi-select of target labs so one controller can populate several labs.
-  Configuration is admin-only; failures surface non-intrusively on the
-  connection with the exact error, back off exponentially (capped at 6
-  hours), and runs are sequential so a broken controller cannot destabilize
-  the server. A Run now action executes the configured sync on demand.
+- Added opt-in scheduled auto-sync on a new Auto-sync tab (the panel now
+  splits into Connections and Auto-sync tabs): each connection supports
+  multiple named schedules, each with its own basic preset or custom cron
+  (advanced), merge / overwrite / skip mode (deletes never run
+  automatically), and checkbox multi-select of target labs — so one
+  controller can feed different labs on different cadences. Configuration
+  is admin-only; failures surface non-intrusively on the schedule with the
+  exact error, back off exponentially (capped at 6 hours), and runs are
+  sequential so a broken controller cannot destabilize the server. A Run
+  now action executes any schedule on demand.
+- Integration pulls can now import real devices: UniFi and Omada switches,
+  gateways, and access points (including their switch ports with media
+  type, speed, and link state) and the OPNsense firewall become Rackpad
+  device records, placed as loose gear until racked. Matching is merge-only
+  by MAC then hostname — existing devices are never modified — and the
+  preview modal gains an Import tab showing create vs. already-tracked
+  before an explicit **Import devices** action. Scheduled syncs import new
+  devices too when the connection's device pull is enabled.
+- Added WiFi inventory import: enabling the SSID pull creates a WiFi
+  controller record per connection, imports SSIDs with their VLAN
+  associations, and links imported access points to the controller.
+- The connections list now labels each entry with its provider under an
+  "Existing connections" heading, discovered sites/nodes/environments moved
+  into a checkbox dropdown matching the rest of the UI, and staging a
+  Proxmox node into the import wizard now reports parse failures on the
+  Integrations panel instead of silently bouncing back to the Imports tab.
 - Added a Dockhand integration (Bearer API token) that lists Docker
   environments with online state and container/stack counts, containers with
   image, IP, health, and compose stack, and Docker networks with drivers and
@@ -94,6 +111,15 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - For a mixed Omada/UniFi + OPNsense setup, disable subnet pulls on the
   switch controller connection and VLAN pulls on the firewall connection,
   pull both, and confirm the previews stay free of duplicate VLANs/subnets.
+- On a UniFi or Omada connection with device and SSID pulls enabled, pull
+  inventory, check the preview's Import tab (creates vs. already tracked,
+  port counts), press **Import devices**, and confirm the gear appears in
+  Devices as loose (unracked) with its ports and that SSIDs land under
+  WiFi with VLAN links. Re-pulling should show everything as already
+  tracked.
+- Create two schedules on one connection targeting different labs, run
+  each with **Run now**, and confirm both labs fill independently and per
+  schedule status/backoff behave when credentials are broken.
 
 ## [1.8.0-beta.0] - 2026-08-11
 

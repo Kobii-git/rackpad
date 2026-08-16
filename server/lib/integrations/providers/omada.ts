@@ -10,9 +10,12 @@ import {
   type IntegrationClient,
   type IntegrationDeviceKind,
   type IntegrationDevicePreview,
+  type IntegrationImportableDevice,
   type IntegrationInventory,
+  type IntegrationPortSpec,
   type IntegrationScope,
   type IntegrationTestResult,
+  type IntegrationWifiSsid,
 } from "../inventory.js";
 import type { IntegrationConnectionSecrets } from "../types.js";
 import type {
@@ -465,6 +468,8 @@ async function omadaFetchInventory(
     connectionScopeRefs(connection),
   );
   const multiSite = sites.length > 1;
+  const importableDevices: IntegrationImportableDevice[] = [];
+  const ssids: IntegrationWifiSsid[] = [];
 
   for (const site of sites) {
     for (const row of await omadaSiteDevices(
@@ -474,6 +479,109 @@ async function omadaFetchInventory(
       warnings,
     )) {
       devices.push(omadaDevicePreview(row, multiSite ? site.name : null));
+
+      const kind = omadaDeviceKind(row);
+      const deviceType =
+        kind === "switch"
+          ? ("switch" as const)
+          : kind === "gateway"
+            ? ("router" as const)
+            : kind === "access-point"
+              ? ("ap" as const)
+              : null;
+      if (!deviceType) continue;
+      const mac = asText(row.mac);
+      const ports: IntegrationPortSpec[] = [];
+      if (deviceType === "switch" && mac) {
+        // Per-switch detail carries the port list; parse defensively since
+        // field names vary across controller builds.
+        try {
+          const detail = asRecord(
+            await omadaJson(
+              connection,
+              `/openapi/v1/${session.omadacId}/sites/${site.siteId}/switches/${mac}`,
+              { accessToken: session.accessToken },
+            ),
+          );
+          for (const portEntry of asArray(detail.portList)) {
+            const port = asRecord(portEntry);
+            const index = asNumber(port.port ?? port.portId ?? port.id);
+            const name =
+              asText(port.name ?? port.portName) ||
+              `Port ${index ?? ports.length + 1}`;
+            const media = asText(
+              port.type ?? port.media ?? port.portType,
+            ).toLowerCase();
+            const linkStatus = asNumber(port.linkStatus ?? port.status);
+            const maxSpeed = asNumber(port.maxSpeed ?? port.linkSpeed);
+            ports.push({
+              name,
+              kind: media.includes("sfp+")
+                ? "sfp_plus"
+                : media.includes("sfp")
+                  ? "sfp"
+                  : "rj45",
+              speed:
+                maxSpeed != null && maxSpeed > 0
+                  ? maxSpeed >= 1000
+                    ? `${maxSpeed / 1000}G`
+                    : `${maxSpeed}M`
+                  : null,
+              linkState:
+                linkStatus === 1 ? "up" : linkStatus === 0 ? "down" : "unknown",
+            });
+          }
+        } catch {
+          // Ports are best-effort; import the switch without them.
+        }
+      }
+      const status = asNumber(row.status);
+      importableDevices.push({
+        name: asText(row.name) || mac,
+        deviceType,
+        model: asText(row.model) || null,
+        macAddress: mac || null,
+        ipAddress: usableIpv4(row.ip) || null,
+        serial: asText(row.sn) || null,
+        firmware: asText(row.firmwareVersion) || null,
+        online: status != null ? status === 1 : null,
+        ports,
+      });
+    }
+
+    // SSIDs: the wlans endpoints arrived with newer Open API catalogs;
+    // parse defensively and skip quietly when unavailable.
+    try {
+      const wlanGroups = await omadaGridPage(
+        connection,
+        session,
+        `/openapi/v1/${session.omadacId}/sites/${site.siteId}/wlans`,
+      );
+      for (const groupEntry of wlanGroups) {
+        const group = asRecord(groupEntry);
+        const wlanId = asText(group.id ?? group.wlanId);
+        if (!wlanId) continue;
+        const ssidRows = await omadaGridPage(
+          connection,
+          session,
+          `/openapi/v1/${session.omadacId}/sites/${site.siteId}/wlans/${wlanId}/ssids`,
+        );
+        for (const ssidEntry of ssidRows) {
+          const row = asRecord(ssidEntry);
+          const name = asText(row.name ?? row.ssid);
+          if (!name) continue;
+          const vlan = asNumber(row.vlanId ?? row.vlan);
+          ssids.push({
+            name,
+            vlanNumber:
+              vlan != null && vlan >= 1 && vlan <= 4094 ? vlan : null,
+            security: asText(row.security ?? row.securityMode) || null,
+            hidden: row.hideSsid === true || row.ssidBroadcast === false,
+          });
+        }
+      }
+    } catch {
+      // SSIDs stay empty when the endpoints are unavailable.
     }
 
     const networks = await omadaLanNetworks(
@@ -510,7 +618,18 @@ async function omadaFetchInventory(
     }
   }
 
-  return { collection: { vlans, subnets, dhcpScopes }, devices, warnings };
+  return {
+    collection: { vlans, subnets, dhcpScopes },
+    devices,
+    importableDevices,
+    wifi: {
+      controllerName: `Omada Controller (${connection.name})`,
+      vendor: "TP-Link",
+      managementIp: null,
+      ssids,
+    },
+    warnings,
+  };
 }
 
 async function omadaListScopes(

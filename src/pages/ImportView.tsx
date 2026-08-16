@@ -704,10 +704,11 @@ export default function ImportView() {
     stagePayload(structuredClone(SAMPLE_IMPORTS[provider]));
   }
 
-  function stageIntegrationPayload(payload: Record<string, unknown>) {
+  function stageIntegrationPayload(payload: Record<string, unknown>): boolean {
     try {
       stagePayload(payload as HyperVPayload);
       setImportTab("imports");
+      return true;
     } catch (error) {
       setPayload(null);
       setHostDraft(null);
@@ -717,6 +718,7 @@ export default function ImportView() {
           ? error.message
           : "Failed to stage the pulled inventory.",
       );
+      return false;
     }
   }
 

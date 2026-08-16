@@ -11,9 +11,12 @@ import {
   type IntegrationClient,
   type IntegrationDeviceKind,
   type IntegrationDevicePreview,
+  type IntegrationImportableDevice,
   type IntegrationInventory,
+  type IntegrationPortSpec,
   type IntegrationScope,
   type IntegrationTestResult,
+  type IntegrationWifiSsid,
 } from "../inventory.js";
 import type { IntegrationConnectionSecrets } from "../types.js";
 import type {
@@ -237,6 +240,21 @@ function pickOfficialSites(
   return matched;
 }
 
+function speedLabel(mbps: number | null): string | null {
+  if (mbps == null || mbps <= 0) return null;
+  if (mbps >= 1000) return `${mbps / 1000}G`;
+  return `${mbps}M`;
+}
+
+function importableKind(
+  kind: IntegrationDeviceKind,
+): IntegrationImportableDevice["deviceType"] | null {
+  if (kind === "switch") return "switch";
+  if (kind === "gateway") return "router";
+  if (kind === "access-point") return "ap";
+  return null;
+}
+
 function officialDeviceKind(features: unknown): IntegrationDeviceKind {
   const list = asArray(features).map(asText);
   const keys =
@@ -269,6 +287,8 @@ async function officialFetchInventory(
 ): Promise<IntegrationInventory> {
   const warnings: string[] = [];
   const devices: IntegrationDevicePreview[] = [];
+  const importableDevices: IntegrationImportableDevice[] = [];
+  const ssids: IntegrationWifiSsid[] = [];
   const networks: NetworkRecord[] = [];
   const sites = pickOfficialSites(
     await officialSites(connection),
@@ -285,9 +305,10 @@ async function officialFetchInventory(
     )) {
       const row = asRecord(entry);
       const firmware = asText(row.firmwareVersion);
+      const kind = officialDeviceKind(row.features);
       devices.push({
         name: asText(row.name) || asText(row.macAddress),
-        kind: officialDeviceKind(row.features),
+        kind,
         model: asText(row.model) || null,
         macAddress: asText(row.macAddress) || null,
         ipAddress: usableIpv4(row.ipAddress) || asText(row.ipAddress) || null,
@@ -300,6 +321,86 @@ async function officialFetchInventory(
             .filter(Boolean)
             .join(" · ") || null,
       });
+
+      const deviceType = importableKind(kind);
+      const deviceId = asText(row.id);
+      if (deviceType) {
+        const ports: IntegrationPortSpec[] = [];
+        if (deviceType === "switch" && deviceId) {
+          try {
+            const detail = asRecord(
+              await integrationApiJson(
+                connection,
+                `/v1/sites/${site.id}/devices/${deviceId}`,
+              ),
+            );
+            const interfaces = asRecord(detail.interfaces);
+            for (const portEntry of asArray(interfaces.ports)) {
+              const port = asRecord(portEntry);
+              const idx = asNumber(port.idx);
+              const connector = asText(port.connector).toUpperCase();
+              ports.push({
+                name: `Port ${idx ?? ports.length + 1}`,
+                kind: connector.startsWith("QSFP")
+                  ? "qsfp"
+                  : connector === "SFP"
+                    ? "sfp"
+                    : connector.startsWith("SFP")
+                      ? "sfp_plus"
+                      : "rj45",
+                speed: speedLabel(asNumber(port.maxSpeedMbps)),
+                linkState:
+                  asText(port.state) === "UP"
+                    ? "up"
+                    : asText(port.state) === "DOWN"
+                      ? "down"
+                      : "unknown",
+              });
+            }
+          } catch {
+            // Ports are best-effort; import the device without them.
+          }
+        }
+        importableDevices.push({
+          name: asText(row.name) || asText(row.macAddress),
+          deviceType,
+          model: asText(row.model) || null,
+          macAddress: asText(row.macAddress) || null,
+          ipAddress: usableIpv4(row.ipAddress) || null,
+          serial: null,
+          firmware: firmware || null,
+          online: asText(row.state) === "ONLINE",
+          ports,
+        });
+      }
+    }
+
+    // SSIDs are only exposed by Network 10+ over the integration API;
+    // parse defensively and skip quietly on older versions.
+    try {
+      const broadcastResponse = await integrationApiRequest(
+        connection,
+        `/v1/sites/${site.id}/wifi/broadcasts`,
+        { offset: 0, limit: PAGE_LIMIT },
+      );
+      if (broadcastResponse.status >= 200 && broadcastResponse.status < 300) {
+        const body = asRecord(
+          parseIntegrationJson(broadcastResponse, TARGET_LABEL),
+        );
+        for (const entry of asArray(body.data)) {
+          const row = asRecord(entry);
+          const name = asText(row.name ?? row.ssid);
+          if (!name) continue;
+          ssids.push({
+            name,
+            vlanNumber: asNumber(row.vlanId ?? row.vlan),
+            security: asText(row.security) || null,
+            hidden: row.hidden === true || row.hideSsid === true,
+          });
+        }
+      }
+    } catch {
+      // SSIDs stay empty when the endpoint is unavailable.
     }
 
     const listResponse = await integrationApiRequest(
@@ -369,7 +470,18 @@ async function officialFetchInventory(
     );
   }
 
-  return { collection: collectNetworks(networks), devices, warnings };
+  return {
+    collection: collectNetworks(networks),
+    devices,
+    importableDevices,
+    wifi: {
+      controllerName: `UniFi Network (${connection.name})`,
+      vendor: "Ubiquiti",
+      managementIp: null,
+      ssids,
+    },
+    warnings,
+  };
 }
 
 // ── Legacy controller API (username/password cookie session) ────────
@@ -585,6 +697,8 @@ async function legacyFetchInventory(
   );
   const multiSite = sites.length > 1;
   const devices: IntegrationDevicePreview[] = [];
+  const importableDevices: IntegrationImportableDevice[] = [];
+  const ssids: IntegrationWifiSsid[] = [];
   const networks: NetworkRecord[] = [];
 
   for (const site of sites) {
@@ -596,9 +710,10 @@ async function legacyFetchInventory(
       const row = asRecord(entry);
       const state = asNumber(row.state);
       const firmware = asText(row.version);
+      const kind = LEGACY_DEVICE_KINDS[asText(row.type)] ?? "other";
       devices.push({
         name: asText(row.name) || asText(row.mac),
-        kind: LEGACY_DEVICE_KINDS[asText(row.type)] ?? "other",
+        kind,
         model: asText(row.model) || null,
         macAddress: asText(row.mac) || null,
         ipAddress: usableIpv4(row.ip) || asText(row.ip) || null,
@@ -614,6 +729,58 @@ async function legacyFetchInventory(
             .filter(Boolean)
             .join(" · ") || null,
       });
+
+      const deviceType = importableKind(kind);
+      if (deviceType) {
+        const ports: IntegrationPortSpec[] = [];
+        for (const portEntry of asArray(row.port_table)) {
+          const port = asRecord(portEntry);
+          const media = asText(port.media).toUpperCase();
+          const idx = asNumber(port.port_idx);
+          ports.push({
+            name: asText(port.name) || `Port ${idx ?? ports.length + 1}`,
+            kind: media.includes("SFP+")
+              ? "sfp_plus"
+              : media.includes("SFP")
+                ? "sfp"
+                : "rj45",
+            speed: speedLabel(asNumber(port.speed)),
+            linkState:
+              port.up === true ? "up" : port.up === false ? "down" : "unknown",
+          });
+        }
+        importableDevices.push({
+          name: asText(row.name) || asText(row.mac),
+          deviceType,
+          model: asText(row.model) || null,
+          macAddress: asText(row.mac) || null,
+          ipAddress: usableIpv4(row.ip) || null,
+          serial: asText(row.serial) || null,
+          firmware: firmware || null,
+          online: state === 1,
+          ports,
+        });
+      }
+    }
+
+    try {
+      for (const entry of await legacyJson(
+        connection,
+        session,
+        `/s/${site.key}/rest/wlanconf`,
+      )) {
+        const row = asRecord(entry);
+        const name = asText(row.name);
+        if (!name || row.enabled === false) continue;
+        ssids.push({
+          name,
+          vlanNumber: asNumber(row.vlan),
+          security: asText(row.security) || null,
+          hidden: row.hide_ssid === true,
+        });
+      }
+    } catch {
+      // SSIDs stay empty when wlanconf is unavailable to this account.
     }
 
     for (const entry of await legacyJson(
@@ -650,7 +817,18 @@ async function legacyFetchInventory(
     }
   }
 
-  return { collection: collectNetworks(networks), devices, warnings: [] };
+  return {
+    collection: collectNetworks(networks),
+    devices,
+    importableDevices,
+    wifi: {
+      controllerName: `UniFi Network (${connection.name})`,
+      vendor: "Ubiquiti",
+      managementIp: null,
+      ssids,
+    },
+    warnings: [],
+  };
 }
 
 // ── Provider client ─────────────────────────────────────────────────

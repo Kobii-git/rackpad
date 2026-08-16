@@ -95,6 +95,8 @@ export function parseIntegrationConnectionPublic(
     syncVlans: Boolean(row.syncVlans),
     syncSubnets: Boolean(row.syncSubnets),
     syncDhcp: Boolean(row.syncDhcp),
+    syncDevices: Boolean(row.syncDevices ?? 1),
+    syncWifi: Boolean(row.syncWifi ?? 1),
     lastStatus: parseStatus(row.lastStatus),
     lastCheckedAt: row.lastCheckedAt ? String(row.lastCheckedAt) : null,
     lastError: row.lastError ? String(row.lastError) : null,
@@ -173,6 +175,8 @@ export function loadIntegrationConnectionSecrets(
     syncVlans: Boolean(row.syncVlans),
     syncSubnets: Boolean(row.syncSubnets),
     syncDhcp: Boolean(row.syncDhcp),
+    syncDevices: Boolean(row.syncDevices ?? 1),
+    syncWifi: Boolean(row.syncWifi ?? 1),
     autoSyncEnabled: Boolean(row.autoSyncEnabled),
     autoSyncMode: parseAutoSyncMode(row.autoSyncMode),
     autoSyncCron: row.autoSyncCron ? String(row.autoSyncCron) : null,
@@ -210,6 +214,8 @@ export function createIntegrationConnection(input: {
   syncVlans?: boolean;
   syncSubnets?: boolean;
   syncDhcp?: boolean;
+  syncDevices?: boolean;
+  syncWifi?: boolean;
 }) {
   assertProviderAuthKind(input.provider, input.authKind);
   const baseUrl = normalizeIntegrationBaseUrl(input.baseUrl);
@@ -220,8 +226,8 @@ export function createIntegrationConnection(input: {
     INSERT INTO integrationConnections (
       id, labId, provider, name, baseUrl, authKind, authId, authSecretEnc,
       siteRef, scopeRefs, verifyTls, enabled, syncVlans, syncSubnets, syncDhcp,
-      lastStatus, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
+      syncDevices, syncWifi, lastStatus, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
   `,
   ).run(
     id,
@@ -241,6 +247,8 @@ export function createIntegrationConnection(input: {
     input.syncVlans === false ? 0 : 1,
     input.syncSubnets === false ? 0 : 1,
     input.syncDhcp === false ? 0 : 1,
+    input.syncDevices === false ? 0 : 1,
+    input.syncWifi === false ? 0 : 1,
     now,
     now,
   );
@@ -262,6 +270,8 @@ export function updateIntegrationConnection(
     syncVlans: boolean;
     syncSubnets: boolean;
     syncDhcp: boolean;
+    syncDevices: boolean;
+    syncWifi: boolean;
     clearSecret: boolean;
     autoSyncEnabled: boolean;
     autoSyncMode: IntegrationAutoSyncMode;
@@ -331,6 +341,18 @@ export function updateIntegrationConnection(
         ? 1
         : 0
       : (existing.syncDhcp as number);
+  const nextSyncDevices =
+    input.syncDevices !== undefined
+      ? input.syncDevices
+        ? 1
+        : 0
+      : ((existing.syncDevices as number) ?? 1);
+  const nextSyncWifi =
+    input.syncWifi !== undefined
+      ? input.syncWifi
+        ? 1
+        : 0
+      : ((existing.syncWifi as number) ?? 1);
   const nextAutoSyncEnabled =
     input.autoSyncEnabled !== undefined
       ? input.autoSyncEnabled
@@ -371,6 +393,8 @@ export function updateIntegrationConnection(
       syncVlans = ?,
       syncSubnets = ?,
       syncDhcp = ?,
+      syncDevices = ?,
+      syncWifi = ?,
       autoSyncEnabled = ?,
       autoSyncMode = ?,
       autoSyncCron = ?,
@@ -393,6 +417,8 @@ export function updateIntegrationConnection(
     nextSyncVlans,
     nextSyncSubnets,
     nextSyncDhcp,
+    nextSyncDevices,
+    nextSyncWifi,
     nextAutoSyncEnabled,
     nextAutoSyncMode,
     nextAutoSyncCron,

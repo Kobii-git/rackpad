@@ -21,11 +21,15 @@ import type {
   DiscoveryScanSchedule,
   DhcpScope,
   IntegrationConnection,
+  IntegrationDeviceSyncResult,
+  IntegrationImportableDevice,
   IntegrationInventoryResponse,
   IntegrationProviderInfo,
   IntegrationScope,
   IntegrationScopeKind,
+  IntegrationSyncSchedule,
   IntegrationTestResult,
+  IntegrationWifiInventory,
   IpAssignment,
   IpZone,
   ID,
@@ -1587,6 +1591,8 @@ export const api = {
     syncVlans?: boolean;
     syncSubnets?: boolean;
     syncDhcp?: boolean;
+    syncDevices?: boolean;
+    syncWifi?: boolean;
   }) {
     return request<IntegrationConnection>("/integrations/connections", {
       method: "POST",
@@ -1629,11 +1635,9 @@ export const api = {
       syncVlans: boolean;
       syncSubnets: boolean;
       syncDhcp: boolean;
+      syncDevices: boolean;
+      syncWifi: boolean;
       clearSecret: boolean;
-      autoSyncEnabled: boolean;
-      autoSyncMode: IntegrationConnection["autoSyncMode"];
-      autoSyncCron: string | null;
-      autoSyncLabIds: string[];
     }>,
   ) {
     return request<IntegrationConnection>(`/integrations/connections/${id}`, {
@@ -1642,11 +1646,68 @@ export const api = {
     });
   },
 
-  runIntegrationAutoSync(id: ID) {
+  getIntegrationSchedules(params?: { connectionId?: string }) {
+    return request<IntegrationSyncSchedule[]>(
+      "/integrations/schedules",
+      undefined,
+      params,
+    );
+  },
+
+  createIntegrationSchedule(body: {
+    connectionId: string;
+    name: string;
+    enabled?: boolean;
+    mode?: IntegrationSyncSchedule["mode"];
+    cron: string;
+    labIds?: string[];
+  }) {
+    return request<IntegrationSyncSchedule>("/integrations/schedules", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateIntegrationSchedule(
+    id: ID,
+    body: Partial<{
+      name: string;
+      enabled: boolean;
+      mode: IntegrationSyncSchedule["mode"];
+      cron: string;
+      labIds: string[];
+    }>,
+  ) {
+    return request<IntegrationSyncSchedule>(`/integrations/schedules/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteIntegrationSchedule(id: ID) {
+    return request<void>(`/integrations/schedules/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  runIntegrationSchedule(id: ID) {
     return request<{
       result: { status: "ok" | "error" | "drift"; message: string };
-      connection: IntegrationConnection | null;
-    }>(`/integrations/connections/${id}/auto-sync/run`, { method: "POST" });
+      schedule: IntegrationSyncSchedule | null;
+    }>(`/integrations/schedules/${id}/run`, { method: "POST" });
+  },
+
+  applyIntegrationDevices(
+    id: ID,
+    body: {
+      importableDevices: IntegrationImportableDevice[];
+      wifi: IntegrationWifiInventory | null;
+    },
+  ) {
+    return request<IntegrationDeviceSyncResult>(
+      `/integrations/connections/${id}/apply-devices`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
   },
 
   deleteIntegrationConnection(id: ID) {

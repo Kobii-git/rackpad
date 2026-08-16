@@ -34,9 +34,55 @@ export interface IntegrationDevicePreview {
   detail: string | null;
 }
 
+export const INTEGRATION_PORT_KINDS = [
+  "rj45",
+  "sfp",
+  "sfp_plus",
+  "qsfp",
+  "wifi",
+] as const;
+export type IntegrationPortKind = (typeof INTEGRATION_PORT_KINDS)[number];
+
+export interface IntegrationPortSpec {
+  name: string;
+  kind: IntegrationPortKind;
+  speed: string | null;
+  linkState: "up" | "down" | "unknown";
+}
+
+// A controller device that can become a real Rackpad device record
+// (switches with their ports, gateways, APs, firewalls).
+export interface IntegrationImportableDevice {
+  name: string;
+  deviceType: "switch" | "router" | "firewall" | "ap" | "server" | "other";
+  model: string | null;
+  macAddress: string | null;
+  ipAddress: string | null;
+  serial: string | null;
+  firmware: string | null;
+  online: boolean | null;
+  ports: IntegrationPortSpec[];
+}
+
+export interface IntegrationWifiSsid {
+  name: string;
+  vlanNumber: number | null;
+  security: string | null;
+  hidden: boolean;
+}
+
+export interface IntegrationWifiInventory {
+  controllerName: string;
+  vendor: string;
+  managementIp: string | null;
+  ssids: IntegrationWifiSsid[];
+}
+
 export interface IntegrationInventory {
   collection: SnmpProfileCollection;
   devices: IntegrationDevicePreview[];
+  importableDevices?: IntegrationImportableDevice[];
+  wifi?: IntegrationWifiInventory | null;
   warnings: string[];
 }
 

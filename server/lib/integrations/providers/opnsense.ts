@@ -8,6 +8,7 @@ import {
 import type {
   IntegrationClient,
   IntegrationDevicePreview,
+  IntegrationImportableDevice,
   IntegrationInventory,
   IntegrationTestResult,
 } from "../inventory.js";
@@ -240,8 +241,9 @@ async function opnsenseFetchInventory(
   const seenSubnets = new Set<string>();
 
   const test = await opnsenseTest(connection);
+  const firewallName = asText(test.summary.hostname) || connection.name;
   devices.push({
-    name: asText(test.summary.hostname) || connection.name,
+    name: firewallName,
     kind: "firewall",
     model: test.version ? `${test.product} ${test.version}` : test.product,
     macAddress: null,
@@ -249,6 +251,25 @@ async function opnsenseFetchInventory(
     status: "online",
     detail: null,
   });
+  let firewallIp: string | null = null;
+  try {
+    firewallIp = usableIpv4(new URL(connection.baseUrl).hostname) || null;
+  } catch {
+    firewallIp = null;
+  }
+  const importableDevices: IntegrationImportableDevice[] = [
+    {
+      name: firewallName,
+      deviceType: "firewall",
+      model: test.version ? `${test.product} ${test.version}` : test.product,
+      macAddress: null,
+      ipAddress: firewallIp,
+      serial: null,
+      firmware: test.version ?? null,
+      online: true,
+      ports: [],
+    },
+  ];
 
   // VLAN definitions first so interface subnets can link to them.
   const vlanConfig = asRecord(
@@ -407,7 +428,13 @@ async function opnsenseFetchInventory(
     });
   }
 
-  return { collection: { vlans, subnets, dhcpScopes }, devices, warnings };
+  return {
+    collection: { vlans, subnets, dhcpScopes },
+    devices,
+    importableDevices,
+    wifi: null,
+    warnings,
+  };
 }
 
 export const opnsenseIntegrationClient: IntegrationClient = {

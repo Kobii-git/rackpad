@@ -438,7 +438,6 @@ export const en = {
   "Path": "Path",
   "Filter by host, target, or latest monitor message": "Filter by host, target, or latest monitor message",
   "Last checked {time}": "Last checked {time}",
-  "{count} target(s)": "{count} target(s)",
   "{count} failing": "{count} failing",
   "{count} unknown": "{count} unknown",
   "No active monitor targets. Select this device and use Enable ICMP to add one in bulk.": "No active monitor targets. Select this device and use Enable ICMP to add one in bulk.",
@@ -2000,15 +1999,12 @@ export const en = {
   "Inventory preview": "Inventory preview",
   "Inventory staging failed.": "Inventory staging failed.",
   "Stage import": "Stage import",
-  "Select the Proxmox node to stage, then pull again.": "Select the Proxmox node to stage, then pull again.",
-  "Staged the Proxmox inventory below. Review it, then import.": "Staged the Proxmox inventory below. Review it, then import.",
   "Rackpad already matches this controller's inventory.": "Rackpad already matches this controller's inventory.",
   "Applying the preview failed.": "Applying the preview failed.",
   "Administrator access is required to apply integration changes.": "Administrator access is required to apply integration changes.",
   "Bridge": "Bridge",
   "Unchanged": "Unchanged",
   "Auto-sync": "Auto-sync",
-  "Auto-sync is opt-in per connection and runs on the server without a review step. Merge only adds missing records, overwrite also updates them, and skip only reports drift. Repeated failures back off automatically and surface here.": "Auto-sync is opt-in per connection and runs on the server without a review step. Merge only adds missing records, overwrite also updates them, and skip only reports drift. Repeated failures back off automatically and surface here.",
   "Add a connection first to configure auto-sync.": "Add a connection first to configure auto-sync.",
   "Auto-sync off": "Auto-sync off",
   "Synced": "Synced",
@@ -2016,7 +2012,6 @@ export const en = {
   "Never run": "Never run",
   "Backing off": "Backing off",
   "Last run: {time}": "Last run: {time}",
-  "Enable auto-sync (opt-in)": "Enable auto-sync (opt-in)",
   "Sync mode": "Sync mode",
   "Overwrite (add and update, never delete)": "Overwrite (add and update, never delete)",
   "Skip (detect drift, write nothing)": "Skip (detect drift, write nothing)",
@@ -2072,7 +2067,6 @@ export const en = {
   "Test & discover": "Test & discover",
   "Tests the credentials and lists what you can pull from.": "Tests the credentials and lists what you can pull from.",
   "{count} of {kind} selected": "{count} of {kind} selected",
-  "Nothing selected \u2014 the default selection is used.": "Nothing selected \u2014 the default selection is used.",
   "Checks reachability and refreshes product and version.": "Checks reachability and refreshes product and version.",
   "Fetches inventory and opens a review preview. Nothing is written yet.": "Fetches inventory and opens a review preview. Nothing is written yet.",
   "Loads a node's full inventory into the Proxmox import wizard.": "Loads a node's full inventory into the Proxmox import wizard.",
@@ -2081,6 +2075,47 @@ export const en = {
   "The controller reported no DHCP ranges.": "The controller reported no DHCP ranges.",
   "The controller reported no devices.": "The controller reported no devices.",
   "DHCP ranges are shown for review and never applied.": "DHCP ranges are shown for review and never applied.",
+  "Switches, gateways, APs": "Switches, gateways, APs",
+  "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.":
+    "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.",
+  "Creates the WiFi controller, links AP devices to it, and imports SSIDs with their VLAN associations.":
+    "Creates the WiFi controller, links AP devices to it, and imports SSIDs with their VLAN associations.",
+  "Firewall device": "Firewall device",
+  "Imports the firewall itself as a Rackpad device record, placed as loose gear.":
+    "Imports the firewall itself as a Rackpad device record, placed as loose gear.",
+  "Already tracked": "Already tracked",
+  "Existing connections ({count})": "Existing connections ({count})",
+  "Run Test & discover first to list the choices.": "Run Test & discover first to list the choices.",
+  "{kind}: default selection": "{kind}: default selection",
+  "Staged the Proxmox inventory in the import wizard.": "Staged the Proxmox inventory in the import wizard.",
+  "The pulled Proxmox inventory could not be staged. Open the Imports tab for the exact parse error.":
+    "The pulled Proxmox inventory could not be staged. Open the Imports tab for the exact parse error.",
+  "Auto-sync is opt-in per schedule and runs on the server without a review step. Each connection can have several schedules with their own cadence, mode, and target labs. Repeated failures back off automatically and surface here.":
+    "Auto-sync is opt-in per schedule and runs on the server without a review step. Each connection can have several schedules with their own cadence, mode, and target labs. Repeated failures back off automatically and surface here.",
+  "{count} schedule(s)": "{count} schedule(s)",
+  "Nightly staging sync": "Nightly staging sync",
+  "New schedule": "New schedule",
+  "Create schedule": "Create schedule",
+  "Schedule created.": "Schedule created.",
+  "Creating the schedule failed.": "Creating the schedule failed.",
+  "Schedule deleted.": "Schedule deleted.",
+  "Deleting the schedule failed.": "Deleting the schedule failed.",
+  "No schedules yet — syncs for this connection run manually.":
+    "No schedules yet — syncs for this connection run manually.",
+  "Nothing importable — enable the device or SSID pull options on the connection.":
+    "Nothing importable — enable the device or SSID pull options on the connection.",
+  "New records are created as loose gear (no rack) with their ports; matched records are left untouched.":
+    "New records are created as loose gear (no rack) with their ports; matched records are left untouched.",
+  "{count} port(s)": "{count} port(s)",
+  "matches {name}": "matches {name}",
+  "SSID · VLAN {number}": "SSID · VLAN {number}",
+  "Apply networks": "Apply networks",
+  "Import devices": "Import devices",
+  "Importing devices failed.": "Importing devices failed.",
+  "Imported {deviceCount} device(s) with {portCount} port(s) and {ssidCount} SSID(s).":
+    "Imported {deviceCount} device(s) with {portCount} port(s) and {ssidCount} SSID(s).",
+  "Creates the new devices, ports, and SSIDs shown on the Import tab.":
+    "Creates the new devices, ports, and SSIDs shown on the Import tab.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

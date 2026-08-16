@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 39;
+const CURRENT_SCHEMA_VERSION = 40;
 
 export const db = new Database(DB_PATH);
 
@@ -1091,6 +1091,46 @@ const SCHEMA_MIGRATIONS = [
     version: 39,
     sql: `
       ALTER TABLE integrationConnections ADD COLUMN scopeRefs TEXT;
+    `,
+  },
+  {
+    version: 40,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN syncDevices INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE integrationConnections ADD COLUMN syncWifi INTEGER NOT NULL DEFAULT 1;
+
+      CREATE TABLE IF NOT EXISTS integrationSyncSchedules (
+        id             TEXT PRIMARY KEY,
+        connectionId   TEXT NOT NULL REFERENCES integrationConnections(id) ON DELETE CASCADE,
+        name           TEXT NOT NULL,
+        enabled        INTEGER NOT NULL DEFAULT 1,
+        mode           TEXT NOT NULL DEFAULT 'merge',
+        cron           TEXT NOT NULL,
+        labIds         TEXT,
+        failureCount   INTEGER NOT NULL DEFAULT 0,
+        pausedUntil    TEXT,
+        lastRunAt      TEXT,
+        lastRunStatus  TEXT,
+        lastRunMessage TEXT,
+        createdAt      TEXT NOT NULL,
+        updatedAt      TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_integration_sync_schedules_connection
+        ON integrationSyncSchedules (connectionId, enabled);
+
+      INSERT INTO integrationSyncSchedules (
+        id, connectionId, name, enabled, mode, cron, labIds,
+        failureCount, pausedUntil, lastRunAt, lastRunStatus, lastRunMessage,
+        createdAt, updatedAt
+      )
+      SELECT
+        'intsch_' || id, id, 'Default schedule', autoSyncEnabled, autoSyncMode,
+        autoSyncCron, autoSyncLabIds, autoSyncFailureCount, autoSyncPausedUntil,
+        lastAutoSyncAt, lastAutoSyncStatus, lastAutoSyncMessage,
+        createdAt, updatedAt
+      FROM integrationConnections
+      WHERE autoSyncCron IS NOT NULL;
     `,
   },
 ] as const;

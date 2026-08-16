@@ -4,8 +4,10 @@ import {
   CheckCircle2,
   ChevronDown,
   DownloadCloud,
+  HardDriveDownload,
   Pencil,
   PlayCircle,
+  Plus,
   PlugZap,
   RefreshCw,
   ShieldCheck,
@@ -44,6 +46,7 @@ import type {
   IntegrationProviderInfo,
   IntegrationScope,
   IntegrationScopeKind,
+  IntegrationSyncSchedule,
   ProxmoxIntegrationNode,
   SnmpSyncPolicy,
 } from "@/lib/types";
@@ -61,6 +64,8 @@ interface ConnectionForm {
   syncVlans: boolean;
   syncSubnets: boolean;
   syncDhcp: boolean;
+  syncDevices: boolean;
+  syncWifi: boolean;
 }
 
 const EMPTY_FORM: ConnectionForm = {
@@ -75,6 +80,8 @@ const EMPTY_FORM: ConnectionForm = {
   syncVlans: true,
   syncSubnets: true,
   syncDhcp: true,
+  syncDevices: true,
+  syncWifi: true,
 };
 
 const BASE_URL_PLACEHOLDERS: Record<IntegrationProvider, string> = {
@@ -137,6 +144,8 @@ const PULL_TOGGLES: Record<
     vlans: PullToggleCopy | null;
     subnets: PullToggleCopy | null;
     dhcp: PullToggleCopy | null;
+    devices: PullToggleCopy | null;
+    wifi: PullToggleCopy | null;
   }
 > = {
   proxmox: {
@@ -152,6 +161,8 @@ const PULL_TOGGLES: Record<
       label: "SDN DHCP ranges",
       hint: "DHCP ranges defined on SDN subnets. Shown for review only, never applied.",
     },
+    devices: null,
+    wifi: null,
   },
   unifi: {
     vlans: {
@@ -165,6 +176,14 @@ const PULL_TOGGLES: Record<
     dhcp: {
       label: "DHCP server ranges",
       hint: "UniFi DHCP server pools. Shown for review only, never applied.",
+    },
+    devices: {
+      label: "Switches, gateways, APs",
+      hint: "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.",
+    },
+    wifi: {
+      label: "SSIDs",
+      hint: "Creates the WiFi controller, links AP devices to it, and imports SSIDs with their VLAN associations.",
     },
   },
   omada: {
@@ -180,6 +199,14 @@ const PULL_TOGGLES: Record<
       label: "DHCP server ranges",
       hint: "Omada DHCP server pools. Shown for review only, never applied.",
     },
+    devices: {
+      label: "Switches, gateways, APs",
+      hint: "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.",
+    },
+    wifi: {
+      label: "SSIDs",
+      hint: "Creates the WiFi controller, links AP devices to it, and imports SSIDs with their VLAN associations.",
+    },
   },
   opnsense: {
     vlans: {
@@ -194,8 +221,19 @@ const PULL_TOGGLES: Record<
       label: "Kea and Dnsmasq ranges",
       hint: "DHCP pools from Kea and Dnsmasq. ISC dhcpd does not expose ranges. Shown for review only, never applied.",
     },
+    devices: {
+      label: "Firewall device",
+      hint: "Imports the firewall itself as a Rackpad device record, placed as loose gear.",
+    },
+    wifi: null,
   },
-  dockhand: { vlans: null, subnets: null, dhcp: null },
+  dockhand: {
+    vlans: null,
+    subnets: null,
+    dhcp: null,
+    devices: null,
+    wifi: null,
+  },
 };
 
 const SCOPE_KIND_LABELS: Record<IntegrationScopeKind, TranslationKey> = {
@@ -220,6 +258,15 @@ const DEVICE_KIND_LABELS: Record<
   other: "Other",
 };
 
+const IMPORT_TYPE_LABELS: Record<string, TranslationKey> = {
+  switch: "Switch",
+  router: "Router",
+  firewall: "Firewall",
+  ap: "Access point",
+  server: "Host",
+  other: "Other",
+};
+
 function statusTone(status: IntegrationConnection["lastStatus"]) {
   if (status === "ok") return "ok" as const;
   if (status === "error") return "err" as const;
@@ -238,6 +285,7 @@ const SYNC_ACTION_LABELS: Record<string, TranslationKey> = {
   update: "Update",
   delete: "Delete",
   unchanged: "Unchanged",
+  exists: "Already tracked",
 };
 
 // Basic selectors first; cron stays available as the advanced option.
@@ -261,7 +309,8 @@ const AUTO_SYNC_MODE_LABELS: Record<IntegrationAutoSyncMode, TranslationKey> = {
   skip: "Skip (detect drift, write nothing)",
 };
 
-interface AutoSyncDraft {
+interface ScheduleDraft {
+  name: string;
   enabled: boolean;
   mode: IntegrationAutoSyncMode;
   preset: string;
@@ -269,26 +318,32 @@ interface AutoSyncDraft {
   labIds: string[];
 }
 
-function draftFromConnection(connection: IntegrationConnection): AutoSyncDraft {
+function draftFromSchedule(schedule: IntegrationSyncSchedule): ScheduleDraft {
   const preset =
-    SCHEDULE_PRESETS.find(
-      (entry) => entry.cron && entry.cron === connection.autoSyncCron,
-    )?.id ?? (connection.autoSyncCron ? "custom" : "daily");
+    SCHEDULE_PRESETS.find((entry) => entry.cron && entry.cron === schedule.cron)
+      ?.id ?? "custom";
   return {
-    enabled: connection.autoSyncEnabled,
-    mode: connection.autoSyncMode,
+    name: schedule.name,
+    enabled: schedule.enabled,
+    mode: schedule.mode,
     preset,
-    cron: connection.autoSyncCron ?? "",
-    labIds:
-      connection.autoSyncLabIds.length > 0
-        ? connection.autoSyncLabIds
-        : [connection.labId],
+    cron: schedule.cron,
+    labIds: schedule.labIds,
   };
 }
 
-function autoSyncStatusTone(
-  status: IntegrationConnection["lastAutoSyncStatus"],
-) {
+function emptyScheduleDraft(labId: string): ScheduleDraft {
+  return {
+    name: "",
+    enabled: true,
+    mode: "merge",
+    preset: "daily",
+    cron: "",
+    labIds: [labId],
+  };
+}
+
+function runStatusTone(status: IntegrationSyncSchedule["lastRunStatus"]) {
   if (status === "ok") return "ok" as const;
   if (status === "drift") return "warn" as const;
   if (status === "error") return "err" as const;
@@ -303,7 +358,7 @@ function connectionScopes(connection: IntegrationConnection) {
 export function IntegrationsPanel({
   onStageProxmoxPayload,
 }: {
-  onStageProxmoxPayload?: (payload: Record<string, unknown>) => void;
+  onStageProxmoxPayload?: (payload: Record<string, unknown>) => boolean;
 }) {
   const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
@@ -314,6 +369,7 @@ export function IntegrationsPanel({
 
   const [providers, setProviders] = useState<IntegrationProviderInfo[]>([]);
   const [connections, setConnections] = useState<IntegrationConnection[]>([]);
+  const [schedules, setSchedules] = useState<IntegrationSyncSchedule[]>([]);
   const [form, setForm] = useState<ConnectionForm>(EMPTY_FORM);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState("");
@@ -331,14 +387,18 @@ export function IntegrationsPanel({
   const [policy, setPolicy] = useState<SnmpSyncPolicy>("merge");
   const [allowDeletes, setAllowDeletes] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [importingDevices, setImportingDevices] = useState(false);
   const [proxmoxNodes, setProxmoxNodes] = useState<
     Record<string, ProxmoxIntegrationNode[]>
   >({});
   const [proxmoxNodeChoice, setProxmoxNodeChoice] = useState<
     Record<string, string>
   >({});
-  const [autoSyncDrafts, setAutoSyncDrafts] = useState<
-    Record<string, AutoSyncDraft>
+  const [scheduleDrafts, setScheduleDrafts] = useState<
+    Record<string, ScheduleDraft>
+  >({});
+  const [newScheduleFor, setNewScheduleFor] = useState<
+    Record<string, ScheduleDraft | undefined>
   >({});
 
   const providerById = useMemo(
@@ -353,11 +413,24 @@ export function IntegrationsPanel({
     [providers],
   );
 
+  const schedulesByConnection = useMemo(() => {
+    const map: Record<string, IntegrationSyncSchedule[]> = {};
+    for (const schedule of schedules) {
+      (map[schedule.connectionId] ??= []).push(schedule);
+    }
+    return map;
+  }, [schedules]);
+
   async function loadConnections() {
     try {
       setConnections(await api.getIntegrationConnections({ labId: lab.id }));
     } catch {
       setConnections([]);
+    }
+    try {
+      setSchedules(await api.getIntegrationSchedules());
+    } catch {
+      setSchedules([]);
     }
   }
 
@@ -373,9 +446,25 @@ export function IntegrationsPanel({
 
   useEffect(() => {
     setPull(null);
-    setAutoSyncDrafts({});
+    setScheduleDrafts({});
+    setNewScheduleFor({});
     void loadConnections();
   }, [lab.id]);
+
+  // Fetch node lists for Proxmox connections up front so the node selector
+  // is visible before the first Stage import click.
+  useEffect(() => {
+    for (const connection of connections) {
+      if (connection.provider !== "proxmox" || !connection.enabled) continue;
+      if (proxmoxNodes[connection.id]) continue;
+      void api
+        .getProxmoxIntegrationNodes(connection.id)
+        .then(({ nodes }) =>
+          setProxmoxNodes((current) => ({ ...current, [connection.id]: nodes })),
+        )
+        .catch(() => {});
+    }
+  }, [connections]);
 
   function resetMessages() {
     setError("");
@@ -408,6 +497,8 @@ export function IntegrationsPanel({
       syncVlans: connection.syncVlans,
       syncSubnets: connection.syncSubnets,
       syncDhcp: connection.syncDhcp,
+      syncDevices: connection.syncDevices,
+      syncWifi: connection.syncWifi,
     });
     setEditingId(connection.id);
     setDiscoveredScopes(null);
@@ -475,6 +566,8 @@ export function IntegrationsPanel({
           syncVlans: form.syncVlans,
           syncSubnets: form.syncSubnets,
           syncDhcp: form.syncDhcp,
+          syncDevices: form.syncDevices,
+          syncWifi: form.syncWifi,
         });
         setSuccess(t("Integration connection updated."));
       } else {
@@ -491,6 +584,8 @@ export function IntegrationsPanel({
           syncVlans: form.syncVlans,
           syncSubnets: form.syncSubnets,
           syncDhcp: form.syncDhcp,
+          syncDevices: form.syncDevices,
+          syncWifi: form.syncWifi,
         });
         setSuccess(t("Integration connection saved."));
       }
@@ -598,6 +693,36 @@ export function IntegrationsPanel({
     }
   }
 
+  async function handleImportDevices() {
+    if (!pull) return;
+    setImportingDevices(true);
+    resetMessages();
+    try {
+      const result = await api.applyIntegrationDevices(pull.connectionId, {
+        importableDevices: pull.importableDevices,
+        wifi: pull.wifi,
+      });
+      setSuccess(
+        t(
+          "Imported {deviceCount} device(s) with {portCount} port(s) and {ssidCount} SSID(s).",
+          {
+            deviceCount: result.createdDeviceIds.length,
+            portCount: result.createdPortCount,
+            ssidCount: result.createdSsidIds.length,
+          },
+        ),
+      );
+      setPull(null);
+      await loadAll();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("Importing devices failed."),
+      );
+    } finally {
+      setImportingDevices(false);
+    }
+  }
+
   async function handleStageProxmox(connection: IntegrationConnection) {
     if (!onStageProxmoxPayload) return;
     setBusyId(connection.id);
@@ -607,24 +732,22 @@ export function IntegrationsPanel({
       if (!nodes) {
         nodes = (await api.getProxmoxIntegrationNodes(connection.id)).nodes;
         setProxmoxNodes((current) => ({ ...current, [connection.id]: nodes! }));
-        if (nodes.length > 1 && !proxmoxNodeChoice[connection.id]) {
-          setProxmoxNodeChoice((current) => ({
-            ...current,
-            [connection.id]: nodes![0].node,
-          }));
-          setSuccess(t("Select the Proxmox node to stage, then pull again."));
-          return;
-        }
       }
       const node =
         proxmoxNodeChoice[connection.id] ?? nodes[0]?.node ?? undefined;
       const payload = await api.pullProxmoxStagedInventory(connection.id, {
         node,
       });
-      onStageProxmoxPayload(payload);
-      setSuccess(
-        t("Staged the Proxmox inventory below. Review it, then import."),
-      );
+      const staged = onStageProxmoxPayload(payload);
+      if (staged) {
+        setSuccess(t("Staged the Proxmox inventory in the import wizard."));
+      } else {
+        setError(
+          t(
+            "The pulled Proxmox inventory could not be staged. Open the Imports tab for the exact parse error.",
+          ),
+        );
+      }
       await loadConnections();
     } catch (err) {
       setError(
@@ -636,37 +759,37 @@ export function IntegrationsPanel({
     }
   }
 
-  function updateAutoSyncDraft(
-    connection: IntegrationConnection,
-    patch: Partial<AutoSyncDraft>,
+  function updateScheduleDraft(
+    schedule: IntegrationSyncSchedule,
+    patch: Partial<ScheduleDraft>,
   ) {
-    setAutoSyncDrafts((prev) => ({
+    setScheduleDrafts((prev) => ({
       ...prev,
-      [connection.id]: {
-        ...(prev[connection.id] ?? draftFromConnection(connection)),
+      [schedule.id]: {
+        ...(prev[schedule.id] ?? draftFromSchedule(schedule)),
         ...patch,
       },
     }));
   }
 
-  async function handleAutoSyncSave(connection: IntegrationConnection) {
-    const draft =
-      autoSyncDrafts[connection.id] ?? draftFromConnection(connection);
+  async function handleScheduleSave(schedule: IntegrationSyncSchedule) {
+    const draft = scheduleDrafts[schedule.id] ?? draftFromSchedule(schedule);
     const preset = SCHEDULE_PRESETS.find((entry) => entry.id === draft.preset);
     const cron = preset?.cron ?? draft.cron.trim();
-    setBusyId(connection.id);
+    setBusyId(schedule.id);
     resetMessages();
     try {
-      await api.updateIntegrationConnection(connection.id, {
-        autoSyncEnabled: draft.enabled,
-        autoSyncMode: draft.mode,
-        autoSyncCron: cron || null,
-        autoSyncLabIds: draft.labIds,
+      await api.updateIntegrationSchedule(schedule.id, {
+        name: draft.name.trim() || schedule.name,
+        enabled: draft.enabled,
+        mode: draft.mode,
+        cron,
+        labIds: draft.labIds,
       });
       setSuccess(t("Auto-sync settings saved."));
-      setAutoSyncDrafts((prev) => {
+      setScheduleDrafts((prev) => {
         const next = { ...prev };
-        delete next[connection.id];
+        delete next[schedule.id];
         return next;
       });
       await loadConnections();
@@ -681,11 +804,55 @@ export function IntegrationsPanel({
     }
   }
 
-  async function handleAutoSyncRun(connection: IntegrationConnection) {
+  async function handleScheduleCreate(connection: IntegrationConnection) {
+    const draft = newScheduleFor[connection.id];
+    if (!draft) return;
+    const preset = SCHEDULE_PRESETS.find((entry) => entry.id === draft.preset);
+    const cron = preset?.cron ?? draft.cron.trim();
     setBusyId(connection.id);
     resetMessages();
     try {
-      const { result } = await api.runIntegrationAutoSync(connection.id);
+      await api.createIntegrationSchedule({
+        connectionId: connection.id,
+        name: draft.name.trim() || t("New schedule"),
+        enabled: draft.enabled,
+        mode: draft.mode,
+        cron,
+        labIds: draft.labIds,
+      });
+      setSuccess(t("Schedule created."));
+      setNewScheduleFor((prev) => ({ ...prev, [connection.id]: undefined }));
+      await loadConnections();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("Creating the schedule failed."),
+      );
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function handleScheduleDelete(schedule: IntegrationSyncSchedule) {
+    setBusyId(schedule.id);
+    resetMessages();
+    try {
+      await api.deleteIntegrationSchedule(schedule.id);
+      setSuccess(t("Schedule deleted."));
+      await loadConnections();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("Deleting the schedule failed."),
+      );
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function handleScheduleRun(schedule: IntegrationSyncSchedule) {
+    setBusyId(schedule.id);
+    resetMessages();
+    try {
+      const { result } = await api.runIntegrationSchedule(schedule.id);
       if (result.status === "error") {
         setError(result.message);
       } else {
@@ -701,6 +868,138 @@ export function IntegrationsPanel({
     } finally {
       setBusyId("");
     }
+  }
+
+  function labMultiSelect(
+    selected: string[],
+    disabled: boolean,
+    onChange: (labIds: string[]) => void,
+  ) {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full justify-between"
+            disabled={disabled}
+          >
+            {t("{count} lab(s)", { count: selected.length })}
+            <ChevronDown className="size-3.5" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-64 space-y-1">
+          {labs.map((entry) => (
+            <label
+              key={entry.id}
+              className="flex items-center gap-2 rounded px-1 py-0.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(entry.id)}
+                disabled={disabled}
+                onChange={(event) =>
+                  onChange(
+                    event.target.checked
+                      ? [...selected, entry.id]
+                      : selected.filter((id) => id !== entry.id),
+                  )
+                }
+              />
+              {entry.name}
+            </label>
+          ))}
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
+  function scheduleEditor(
+    draft: ScheduleDraft,
+    busy: boolean,
+    onDraftChange: (patch: Partial<ScheduleDraft>) => void,
+  ) {
+    return (
+      <>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <label className="space-y-1 text-sm">
+            <span className="text-[var(--text-secondary)]">
+              {t("Schedule name")}
+            </span>
+            <Input
+              value={draft.name}
+              disabled={!admin || busy}
+              onChange={(event) => onDraftChange({ name: event.target.value })}
+              placeholder={t("Nightly staging sync")}
+            />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="text-[var(--text-secondary)]">
+              {t("Sync mode")}
+            </span>
+            <select
+              className="rk-control w-full"
+              value={draft.mode}
+              disabled={!admin || busy}
+              onChange={(event) =>
+                onDraftChange({
+                  mode: event.target.value as IntegrationAutoSyncMode,
+                })
+              }
+            >
+              {(
+                Object.keys(AUTO_SYNC_MODE_LABELS) as IntegrationAutoSyncMode[]
+              ).map((mode) => (
+                <option key={mode} value={mode}>
+                  {t(AUTO_SYNC_MODE_LABELS[mode])}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="text-[var(--text-secondary)]">
+              {t("Schedule")}
+            </span>
+            <select
+              className="rk-control w-full"
+              value={draft.preset}
+              disabled={!admin || busy}
+              onChange={(event) =>
+                onDraftChange({ preset: event.target.value })
+              }
+            >
+              {SCHEDULE_PRESETS.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {t(entry.label)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="space-y-1 text-sm">
+            <span className="block text-[var(--text-secondary)]">
+              {t("Target labs")}
+            </span>
+            {labMultiSelect(draft.labIds, !admin || busy, (labIds) =>
+              onDraftChange({ labIds }),
+            )}
+          </div>
+        </div>
+        {draft.preset === "custom" && (
+          <label className="block space-y-1 text-sm md:max-w-sm">
+            <span className="text-[var(--text-secondary)]">
+              {t("Cron expression (minute hour day month weekday)")}
+            </span>
+            <Input
+              value={draft.cron}
+              disabled={!admin || busy}
+              onChange={(event) => onDraftChange({ cron: event.target.value })}
+              placeholder="30 2 * * *"
+            />
+          </label>
+        )}
+      </>
+    );
   }
 
   const authIdLabel = AUTH_ID_LABELS[form.authKind];
@@ -719,6 +1018,11 @@ export function IntegrationsPanel({
         pull.preview.summary.subnetDeletes >
       0
     : false;
+  const importCreates = pull
+    ? pull.deviceSync.devices.filter((entry) => entry.action === "create")
+        .length +
+      pull.deviceSync.ssids.filter((entry) => entry.action === "create").length
+    : 0;
 
   return (
     <Card>
@@ -916,107 +1220,93 @@ export function IntegrationsPanel({
                     />
                     {t("Verify TLS certificate")}
                   </label>
-                  {formPullToggles.vlans && (
-                    <label
-                      className="flex items-center gap-2"
-                      title={t(formPullToggles.vlans.hint)}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form.syncVlans}
-                        disabled={saving}
-                        onChange={(event) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            syncVlans: event.target.checked,
-                          }))
-                        }
-                      />
-                      {t(formPullToggles.vlans.label)}
-                    </label>
-                  )}
-                  {formPullToggles.subnets && (
-                    <label
-                      className="flex items-center gap-2"
-                      title={t(formPullToggles.subnets.hint)}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form.syncSubnets}
-                        disabled={saving}
-                        onChange={(event) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            syncSubnets: event.target.checked,
-                          }))
-                        }
-                      />
-                      {t(formPullToggles.subnets.label)}
-                    </label>
-                  )}
-                  {formPullToggles.dhcp && (
-                    <label
-                      className="flex items-center gap-2"
-                      title={t(formPullToggles.dhcp.hint)}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form.syncDhcp}
-                        disabled={saving}
-                        onChange={(event) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            syncDhcp: event.target.checked,
-                          }))
-                        }
-                      />
-                      {t(formPullToggles.dhcp.label)}
-                    </label>
-                  )}
+                  {(
+                    [
+                      ["vlans", "syncVlans"],
+                      ["subnets", "syncSubnets"],
+                      ["dhcp", "syncDhcp"],
+                      ["devices", "syncDevices"],
+                      ["wifi", "syncWifi"],
+                    ] as const
+                  ).map(([toggleKey, formKey]) => {
+                    const copy = formPullToggles[toggleKey];
+                    if (!copy) return null;
+                    return (
+                      <label
+                        key={toggleKey}
+                        className="flex items-center gap-2"
+                        title={t(copy.hint)}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form[formKey]}
+                          disabled={saving}
+                          onChange={(event) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              [formKey]: event.target.checked,
+                            }))
+                          }
+                        />
+                        {t(copy.label)}
+                      </label>
+                    );
+                  })}
                 </div>
 
                 {formScopeKind && (
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={
-                          saving ||
-                          discovering ||
-                          !form.baseUrl.trim() ||
-                          (!editingId && !form.authSecret.trim())
-                        }
-                        title={t(
-                          "Tests the credentials and lists what you can pull from.",
-                        )}
-                        onClick={() => void handleDiscover()}
-                      >
-                        <PlugZap className="size-3.5" />
-                        {discovering ? t("Testing…") : t("Test & discover")}
-                      </Button>
-                      <span className="text-xs text-[var(--text-tertiary)]">
-                        {form.scopeRefs.length > 0
-                          ? t("{count} of {kind} selected", {
-                              count: form.scopeRefs.length,
-                              kind: t(SCOPE_KIND_LABELS[formScopeKind]),
-                            })
-                          : t(
-                              "Nothing selected — the default selection is used.",
-                            )}
-                      </span>
-                    </div>
-                    {discoveredScopes && discoveredScopes.length > 0 && (
-                      <div className="space-y-1">
-                        <span className="rk-field-label">
-                          {t(SCOPE_KIND_LABELS[formScopeKind])}
-                        </span>
-                        <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
-                          {discoveredScopes.map((scope) => (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        saving ||
+                        discovering ||
+                        !form.baseUrl.trim() ||
+                        (!editingId && !form.authSecret.trim())
+                      }
+                      title={t(
+                        "Tests the credentials and lists what you can pull from.",
+                      )}
+                      onClick={() => void handleDiscover()}
+                    >
+                      <PlugZap className="size-3.5" />
+                      {discovering ? t("Testing…") : t("Test & discover")}
+                    </Button>
+                    <div className="space-y-1 text-sm">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="min-w-48 justify-between"
+                            disabled={saving || !discoveredScopes}
+                            title={
+                              discoveredScopes
+                                ? undefined
+                                : t(
+                                    "Run Test & discover first to list the choices.",
+                                  )
+                            }
+                          >
+                            {form.scopeRefs.length > 0
+                              ? t("{count} of {kind} selected", {
+                                  count: form.scopeRefs.length,
+                                  kind: t(SCOPE_KIND_LABELS[formScopeKind]),
+                                })
+                              : t("{kind}: default selection", {
+                                  kind: t(SCOPE_KIND_LABELS[formScopeKind]),
+                                })}
+                            <ChevronDown className="size-3.5" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 space-y-1">
+                          {(discoveredScopes ?? []).map((scope) => (
                             <label
                               key={scope.id}
-                              className="flex items-center gap-2 rounded border border-[var(--color-line)] px-2 py-1 text-sm text-[var(--text-secondary)]"
+                              className="flex items-center gap-2 rounded px-1 py-0.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
                             >
                               <input
                                 type="checkbox"
@@ -1036,11 +1326,11 @@ export function IntegrationsPanel({
                               {scope.label}
                             </label>
                           ))}
-                        </div>
-                      </div>
-                    )}
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                     {!discoveredScopes && form.scopeRefs.length > 0 && (
-                      <Mono className="block text-[10px] text-[var(--text-tertiary)]">
+                      <Mono className="text-[10px] text-[var(--text-tertiary)]">
                         {form.scopeRefs.join(", ")}
                       </Mono>
                     )}
@@ -1077,6 +1367,13 @@ export function IntegrationsPanel({
               </div>
             )}
 
+            {connections.length > 0 && (
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                {t("Existing connections ({count})", {
+                  count: connections.length,
+                })}
+              </div>
+            )}
             {connections.length === 0 && !formOpen && (
               <p className="text-sm text-[var(--text-tertiary)]">
                 {t(
@@ -1107,6 +1404,9 @@ export function IntegrationsPanel({
                         <span className="truncate text-sm font-medium text-[var(--text-primary)]">
                           {connection.name}
                         </span>
+                        <Badge tone="neutral">
+                          {info?.label ?? connection.provider}
+                        </Badge>
                         <Badge tone={statusTone(connection.lastStatus)}>
                           {connection.lastStatus === "ok"
                             ? t("Connected")
@@ -1231,7 +1531,7 @@ export function IntegrationsPanel({
           <TabsContent value="auto-sync" className="space-y-4">
             <p className="text-xs text-[var(--text-tertiary)]">
               {t(
-                "Auto-sync is opt-in per connection and runs on the server without a review step. Merge only adds missing records, overwrite also updates them, and skip only reports drift. Repeated failures back off automatically and surface here.",
+                "Auto-sync is opt-in per schedule and runs on the server without a review step. Each connection can have several schedules with their own cadence, mode, and target labs. Repeated failures back off automatically and surface here.",
               )}
             </p>
             {connections.length === 0 && (
@@ -1240,13 +1540,10 @@ export function IntegrationsPanel({
               </p>
             )}
             {connections.map((connection) => {
-              const draft =
-                autoSyncDrafts[connection.id] ??
-                draftFromConnection(connection);
+              const connectionSchedules =
+                schedulesByConnection[connection.id] ?? [];
+              const newDraft = newScheduleFor[connection.id];
               const busy = busyId === connection.id;
-              const paused =
-                connection.autoSyncPausedUntil &&
-                new Date(connection.autoSyncPausedUntil).getTime() > Date.now();
               return (
                 <div
                   key={connection.id}
@@ -1260,203 +1557,197 @@ export function IntegrationsPanel({
                     <span className="text-sm font-medium text-[var(--text-primary)]">
                       {connection.name}
                     </span>
-                    <Badge
-                      tone={
-                        connection.autoSyncEnabled
-                          ? autoSyncStatusTone(connection.lastAutoSyncStatus)
-                          : "neutral"
-                      }
-                    >
-                      {!connection.autoSyncEnabled
-                        ? t("Auto-sync off")
-                        : connection.lastAutoSyncStatus === "ok"
-                          ? t("Synced")
-                          : connection.lastAutoSyncStatus === "drift"
-                            ? t("Drift")
-                            : connection.lastAutoSyncStatus === "error"
-                              ? t("Error")
-                              : t("Never run")}
+                    <Badge tone="neutral">
+                      {t("{count} schedule(s)", {
+                        count: connectionSchedules.length,
+                      })}
                     </Badge>
-                    {paused && <Badge tone="warn">{t("Backing off")}</Badge>}
-                    {connection.lastAutoSyncAt && (
-                      <span className="text-xs text-[var(--text-tertiary)]">
-                        {t("Last run: {time}", {
-                          time: new Date(
-                            connection.lastAutoSyncAt,
-                          ).toLocaleString(),
-                        })}
-                      </span>
-                    )}
-                  </div>
-                  {connection.lastAutoSyncMessage &&
-                    connection.lastAutoSyncStatus !== "ok" && (
-                      <div
-                        className={`text-xs ${
-                          connection.lastAutoSyncStatus === "error"
-                            ? "text-[var(--danger)]"
-                            : "text-[var(--warning)]"
-                        }`}
-                      >
-                        {connection.lastAutoSyncMessage}
-                      </div>
-                    )}
-
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-                      <input
-                        type="checkbox"
-                        checked={draft.enabled}
-                        disabled={!admin || busy}
-                        onChange={(event) =>
-                          updateAutoSyncDraft(connection, {
-                            enabled: event.target.checked,
-                          })
-                        }
-                      />
-                      {t("Enable auto-sync (opt-in)")}
-                    </label>
-                    <label className="space-y-1 text-sm">
-                      <span className="text-[var(--text-secondary)]">
-                        {t("Sync mode")}
-                      </span>
-                      <select
-                        className="rk-control w-full"
-                        value={draft.mode}
-                        disabled={!admin || busy}
-                        onChange={(event) =>
-                          updateAutoSyncDraft(connection, {
-                            mode: event.target.value as IntegrationAutoSyncMode,
-                          })
+                    <div className="ml-auto">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!admin || busy || newDraft !== undefined}
+                        onClick={() =>
+                          setNewScheduleFor((prev) => ({
+                            ...prev,
+                            [connection.id]: emptyScheduleDraft(
+                              connection.labId,
+                            ),
+                          }))
                         }
                       >
-                        {(
-                          Object.keys(
-                            AUTO_SYNC_MODE_LABELS,
-                          ) as IntegrationAutoSyncMode[]
-                        ).map((mode) => (
-                          <option key={mode} value={mode}>
-                            {t(AUTO_SYNC_MODE_LABELS[mode])}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="space-y-1 text-sm">
-                      <span className="text-[var(--text-secondary)]">
-                        {t("Schedule")}
-                      </span>
-                      <select
-                        className="rk-control w-full"
-                        value={draft.preset}
-                        disabled={!admin || busy}
-                        onChange={(event) =>
-                          updateAutoSyncDraft(connection, {
-                            preset: event.target.value,
-                          })
-                        }
-                      >
-                        {SCHEDULE_PRESETS.map((entry) => (
-                          <option key={entry.id} value={entry.id}>
-                            {t(entry.label)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <div className="space-y-1 text-sm">
-                      <span className="block text-[var(--text-secondary)]">
-                        {t("Target labs")}
-                      </span>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-full justify-between"
-                            disabled={!admin || busy}
-                          >
-                            {t("{count} lab(s)", {
-                              count: draft.labIds.length,
-                            })}
-                            <ChevronDown className="size-3.5" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 space-y-1">
-                          {labs.map((entry) => (
-                            <label
-                              key={entry.id}
-                              className="flex items-center gap-2 rounded px-1 py-0.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={draft.labIds.includes(entry.id)}
-                                disabled={!admin}
-                                onChange={(event) =>
-                                  updateAutoSyncDraft(connection, {
-                                    labIds: event.target.checked
-                                      ? [...draft.labIds, entry.id]
-                                      : draft.labIds.filter(
-                                          (id) => id !== entry.id,
-                                        ),
-                                  })
-                                }
-                              />
-                              {entry.name}
-                            </label>
-                          ))}
-                        </PopoverContent>
-                      </Popover>
+                        <Plus className="size-3.5" />
+                        {t("Add schedule")}
+                      </Button>
                     </div>
                   </div>
-                  {draft.preset === "custom" && (
-                    <label className="block space-y-1 text-sm md:max-w-sm">
-                      <span className="text-[var(--text-secondary)]">
-                        {t("Cron expression (minute hour day month weekday)")}
-                      </span>
-                      <Input
-                        value={draft.cron}
-                        disabled={!admin || busy}
-                        onChange={(event) =>
-                          updateAutoSyncDraft(connection, {
-                            cron: event.target.value,
-                          })
-                        }
-                        placeholder="30 2 * * *"
-                      />
-                    </label>
+
+                  {newDraft && (
+                    <div className="space-y-3 rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] p-3">
+                      {scheduleEditor(newDraft, busy, (patch) =>
+                        setNewScheduleFor((prev) => ({
+                          ...prev,
+                          [connection.id]: { ...newDraft, ...patch },
+                        })),
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          disabled={
+                            !admin ||
+                            busy ||
+                            !newDraft.name.trim() ||
+                            (newDraft.preset === "custom" &&
+                              !newDraft.cron.trim())
+                          }
+                          onClick={() => void handleScheduleCreate(connection)}
+                        >
+                          <CheckCircle2 className="size-3.5" />
+                          {t("Create schedule")}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() =>
+                            setNewScheduleFor((prev) => ({
+                              ...prev,
+                              [connection.id]: undefined,
+                            }))
+                          }
+                        >
+                          {t("Cancel")}
+                        </Button>
+                      </div>
+                    </div>
                   )}
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      size="sm"
-                      disabled={
-                        !admin ||
-                        busy ||
-                        (draft.enabled &&
-                          draft.preset === "custom" &&
-                          !draft.cron.trim())
-                      }
-                      onClick={() => void handleAutoSyncSave(connection)}
-                    >
-                      <CheckCircle2 className="size-3.5" />
-                      {busy ? t("Saving...") : t("Save schedule")}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={!admin || busy || !connection.enabled}
-                      onClick={() => void handleAutoSyncRun(connection)}
-                    >
-                      <PlayCircle className="size-3.5" />
-                      {busy ? t("Working...") : t("Run now")}
-                    </Button>
-                    {!admin && (
-                      <span className="text-xs text-[var(--color-fg-subtle)]">
-                        {t(
-                          "Administrator access is required to configure auto-sync.",
+                  {connectionSchedules.length === 0 && !newDraft && (
+                    <p className="text-xs text-[var(--text-tertiary)]">
+                      {t(
+                        "No schedules yet — syncs for this connection run manually.",
+                      )}
+                    </p>
+                  )}
+
+                  {connectionSchedules.map((schedule) => {
+                    const draft =
+                      scheduleDrafts[schedule.id] ??
+                      draftFromSchedule(schedule);
+                    const scheduleBusy = busyId === schedule.id;
+                    const paused =
+                      schedule.pausedUntil &&
+                      new Date(schedule.pausedUntil).getTime() > Date.now();
+                    return (
+                      <div
+                        key={schedule.id}
+                        className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+                            <input
+                              type="checkbox"
+                              checked={draft.enabled}
+                              disabled={!admin || scheduleBusy}
+                              onChange={(event) =>
+                                updateScheduleDraft(schedule, {
+                                  enabled: event.target.checked,
+                                })
+                              }
+                            />
+                            {schedule.name}
+                          </label>
+                          <Badge
+                            tone={
+                              schedule.enabled
+                                ? runStatusTone(schedule.lastRunStatus)
+                                : "neutral"
+                            }
+                          >
+                            {!schedule.enabled
+                              ? t("Auto-sync off")
+                              : schedule.lastRunStatus === "ok"
+                                ? t("Synced")
+                                : schedule.lastRunStatus === "drift"
+                                  ? t("Drift")
+                                  : schedule.lastRunStatus === "error"
+                                    ? t("Error")
+                                    : t("Never run")}
+                          </Badge>
+                          {paused && (
+                            <Badge tone="warn">{t("Backing off")}</Badge>
+                          )}
+                          {schedule.lastRunAt && (
+                            <span className="text-xs text-[var(--text-tertiary)]">
+                              {t("Last run: {time}", {
+                                time: new Date(
+                                  schedule.lastRunAt,
+                                ).toLocaleString(),
+                              })}
+                            </span>
+                          )}
+                        </div>
+                        {schedule.lastRunMessage &&
+                          schedule.lastRunStatus !== "ok" && (
+                            <div
+                              className={`text-xs ${
+                                schedule.lastRunStatus === "error"
+                                  ? "text-[var(--danger)]"
+                                  : "text-[var(--warning)]"
+                              }`}
+                            >
+                              {schedule.lastRunMessage}
+                            </div>
+                          )}
+
+                        {scheduleEditor(draft, scheduleBusy, (patch) =>
+                          updateScheduleDraft(schedule, patch),
                         )}
-                      </span>
-                    )}
-                  </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            size="sm"
+                            disabled={
+                              !admin ||
+                              scheduleBusy ||
+                              (draft.preset === "custom" && !draft.cron.trim())
+                            }
+                            onClick={() => void handleScheduleSave(schedule)}
+                          >
+                            <CheckCircle2 className="size-3.5" />
+                            {scheduleBusy ? t("Saving...") : t("Save schedule")}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={
+                              !admin || scheduleBusy || !connection.enabled
+                            }
+                            onClick={() => void handleScheduleRun(schedule)}
+                          >
+                            <PlayCircle className="size-3.5" />
+                            {scheduleBusy ? t("Working...") : t("Run now")}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!admin || scheduleBusy}
+                            onClick={() => void handleScheduleDelete(schedule)}
+                          >
+                            <Trash2 className="size-3.5" />
+                            {t("Delete")}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {!admin && (
+                    <span className="text-xs text-[var(--color-fg-subtle)]">
+                      {t(
+                        "Administrator access is required to configure auto-sync.",
+                      )}
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -1516,6 +1807,12 @@ export function IntegrationsPanel({
                   </TabsTrigger>
                   <TabsTrigger value="devices">
                     {t("Devices")} ({pull.devices.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="import">
+                    {t("Import")} (
+                    {pull.deviceSync.devices.length +
+                      pull.deviceSync.ssids.length}
+                    )
                   </TabsTrigger>
                 </TabsList>
 
@@ -1626,6 +1923,66 @@ export function IntegrationsPanel({
                     </div>
                   )}
                 </TabsContent>
+                <TabsContent
+                  value="import"
+                  className="min-h-0 flex-1 space-y-3 overflow-y-auto"
+                >
+                  {pull.deviceSync.devices.length === 0 &&
+                  pull.deviceSync.ssids.length === 0 ? (
+                    <p className="text-sm text-[var(--color-fg-subtle)]">
+                      {t(
+                        "Nothing importable — enable the device or SSID pull options on the connection.",
+                      )}
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-[var(--text-tertiary)]">
+                        {t(
+                          "New records are created as loose gear (no rack) with their ports; matched records are left untouched.",
+                        )}
+                      </p>
+                      <IntegrationDiffRows
+                        emptyText={t("The controller reported no devices.")}
+                        rows={pull.deviceSync.devices.map((entry, index) => ({
+                          key: `import-${entry.name}-${index}`,
+                          label: entry.name,
+                          detail: [
+                            t(IMPORT_TYPE_LABELS[entry.deviceType] ?? "Other"),
+                            entry.model ?? "",
+                            entry.portCount > 0
+                              ? t("{count} port(s)", {
+                                  count: entry.portCount,
+                                })
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · "),
+                          action: entry.action,
+                          note: entry.existingHostname
+                            ? t("matches {name}", {
+                                name: entry.existingHostname,
+                              })
+                            : undefined,
+                        }))}
+                      />
+                      {pull.deviceSync.ssids.length > 0 && (
+                        <IntegrationDiffRows
+                          emptyText={t("The controller reported no devices.")}
+                          rows={pull.deviceSync.ssids.map((entry, index) => ({
+                            key: `ssid-${entry.name}-${index}`,
+                            label: entry.name,
+                            detail: entry.vlanNumber
+                              ? t("SSID · VLAN {number}", {
+                                  number: entry.vlanNumber,
+                                })
+                              : t("SSID"),
+                            action: entry.action,
+                          }))}
+                        />
+                      )}
+                    </>
+                  )}
+                </TabsContent>
               </Tabs>
 
               <div className="flex flex-wrap items-center gap-3 border-t border-[var(--color-line)] pt-3">
@@ -1662,21 +2019,37 @@ export function IntegrationsPanel({
                       {t("Allow deletes for unreferenced VLANs/subnets")}
                     </label>
                   )}
-                {!hasChanges && (
+                {!hasChanges && importCreates === 0 && (
                   <span className="text-xs text-[var(--color-fg-subtle)]">
                     {t("Rackpad already matches this controller's inventory.")}
                   </span>
                 )}
                 <div className="ml-auto flex items-center gap-2">
                   {admin ? (
-                    <Button
-                      size="sm"
-                      disabled={applying || !hasChanges}
-                      onClick={() => void handleApply()}
-                    >
-                      <ShieldCheck className="size-3.5" />
-                      {applying ? t("Applying...") : t("Apply preview")}
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        disabled={applying || !hasChanges}
+                        onClick={() => void handleApply()}
+                      >
+                        <ShieldCheck className="size-3.5" />
+                        {applying ? t("Applying...") : t("Apply networks")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={importingDevices || importCreates === 0}
+                        title={t(
+                          "Creates the new devices, ports, and SSIDs shown on the Import tab.",
+                        )}
+                        onClick={() => void handleImportDevices()}
+                      >
+                        <HardDriveDownload className="size-3.5" />
+                        {importingDevices
+                          ? t("Importing...")
+                          : t("Import devices")}
+                      </Button>
+                    </>
                   ) : (
                     <span className="text-xs text-[var(--color-fg-subtle)]">
                       {t(

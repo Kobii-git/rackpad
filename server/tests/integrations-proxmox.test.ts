@@ -33,6 +33,8 @@ const connection: IntegrationConnectionSecrets = {
   syncVlans: true,
   syncSubnets: true,
   syncDhcp: true,
+  syncDevices: true,
+  syncWifi: true,
 };
 
 const GIB = 1024 ** 3;

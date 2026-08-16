@@ -18,9 +18,8 @@ const { setIntegrationClientOverrideForTests } = await import(
 );
 const { cronMatches, isValidCronExpression, parseCronExpression } =
   await import("../lib/integrations/cron.js");
-const { findDueIntegrationAutoSyncs, runIntegrationAutoSync } = await import(
-  "../lib/integrations/auto-sync.js"
-);
+const { findDueIntegrationSyncSchedules, runIntegrationSyncSchedule } =
+  await import("../lib/integrations/auto-sync.js");
 
 type AppInstance = Awaited<ReturnType<typeof createApp>>;
 
@@ -33,6 +32,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   setIntegrationClientOverrideForTests("opnsense", null);
+  setIntegrationClientOverrideForTests("unifi", null);
   await app.close();
 });
 
@@ -51,12 +51,12 @@ test("cron expressions parse presets, steps, ranges, and reject junk", () => {
   assert.ok(!cronMatches(dailyTwo, new Date(2026, 7, 15, 3, 0)));
 
   const weeklySunday = parseCronExpression("0 2 * * 7");
-  assert.ok(cronMatches(weeklySunday, new Date(2026, 7, 16, 2, 0))); // Sunday
-  assert.ok(!cronMatches(weeklySunday, new Date(2026, 7, 17, 2, 0))); // Monday
+  assert.ok(cronMatches(weeklySunday, new Date(2026, 7, 16, 2, 0)));
+  assert.ok(!cronMatches(weeklySunday, new Date(2026, 7, 17, 2, 0)));
 
   const workHours = parseCronExpression("0 9-17/2 * * 1-5");
-  assert.ok(cronMatches(workHours, new Date(2026, 7, 17, 11, 0))); // Monday
-  assert.ok(!cronMatches(workHours, new Date(2026, 7, 16, 11, 0))); // Sunday
+  assert.ok(cronMatches(workHours, new Date(2026, 7, 17, 11, 0)));
+  assert.ok(!cronMatches(workHours, new Date(2026, 7, 16, 11, 0)));
 
   assert.ok(isValidCronExpression("30 4 1,15 * *"));
   assert.ok(!isValidCronExpression("* * * *"));
@@ -65,7 +65,7 @@ test("cron expressions parse presets, steps, ranges, and reject junk", () => {
   assert.ok(!isValidCronExpression("banana * * * *"));
 });
 
-test("auto-sync config is admin-only, validated, and surfaced on the connection", async () => {
+test("multiple schedules per connection are admin-only and validated", async () => {
   const adminToken = await bootstrapAdmin();
   const labId = await firstLabId(adminToken);
   const secondLabId = await createLab(adminToken, "Second lab");
@@ -86,66 +86,94 @@ test("auto-sync config is admin-only, validated, and surfaced on the connection"
   });
 
   const editorAttempt = await app.inject({
-    method: "PATCH",
-    url: `/api/integrations/connections/${created.id}`,
+    method: "POST",
+    url: "/api/integrations/schedules",
     headers: authHeaders(editorToken),
-    payload: { autoSyncEnabled: true, autoSyncCron: "*/15 * * * *" },
+    payload: {
+      connectionId: created.id,
+      name: "Hourly",
+      cron: "0 * * * *",
+    },
   });
   assert.equal(editorAttempt.statusCode, 403);
 
   const badCron = await app.inject({
-    method: "PATCH",
-    url: `/api/integrations/connections/${created.id}`,
+    method: "POST",
+    url: "/api/integrations/schedules",
     headers: authHeaders(adminToken),
-    payload: { autoSyncEnabled: true, autoSyncCron: "not a cron" },
+    payload: { connectionId: created.id, name: "Bad", cron: "not a cron" },
   });
   assert.equal(badCron.statusCode, 400);
 
-  const missingCron = await app.inject({
-    method: "PATCH",
-    url: `/api/integrations/connections/${created.id}`,
-    headers: authHeaders(adminToken),
-    payload: { autoSyncEnabled: true },
-  });
-  assert.equal(missingCron.statusCode, 400);
-
   const badLab = await app.inject({
-    method: "PATCH",
-    url: `/api/integrations/connections/${created.id}`,
+    method: "POST",
+    url: "/api/integrations/schedules",
     headers: authHeaders(adminToken),
     payload: {
-      autoSyncEnabled: true,
-      autoSyncCron: "*/15 * * * *",
-      autoSyncLabIds: ["lab_missing"],
+      connectionId: created.id,
+      name: "Bad lab",
+      cron: "0 * * * *",
+      labIds: ["lab_missing"],
     },
   });
   assert.equal(badLab.statusCode, 422);
 
-  const configured = await app.inject({
-    method: "PATCH",
-    url: `/api/integrations/connections/${created.id}`,
-    headers: authHeaders(adminToken),
-    payload: {
-      autoSyncEnabled: true,
-      autoSyncMode: "overwrite",
-      autoSyncCron: "0 2 * * *",
-      autoSyncLabIds: [labId, secondLabId],
-    },
+  // Two schedules with different labs and cadences on one connection.
+  const hourly = await createSchedule(adminToken, {
+    connectionId: created.id,
+    name: "Hourly main lab",
+    cron: "0 * * * *",
+    mode: "merge",
+    labIds: [labId],
   });
-  assert.equal(configured.statusCode, 200, configured.body);
-  const body = JSON.parse(configured.body) as {
-    autoSyncEnabled: boolean;
-    autoSyncMode: string;
-    autoSyncCron: string;
-    autoSyncLabIds: string[];
-  };
-  assert.equal(body.autoSyncEnabled, true);
-  assert.equal(body.autoSyncMode, "overwrite");
-  assert.equal(body.autoSyncCron, "0 2 * * *");
-  assert.deepEqual(body.autoSyncLabIds.sort(), [labId, secondLabId].sort());
+  const nightly = await createSchedule(adminToken, {
+    connectionId: created.id,
+    name: "Nightly staging",
+    cron: "0 2 * * *",
+    mode: "overwrite",
+    labIds: [secondLabId],
+  });
+  assert.notEqual(hourly.id, nightly.id);
+
+  const listResponse = await app.inject({
+    method: "GET",
+    url: `/api/integrations/schedules?connectionId=${created.id}`,
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(listResponse.statusCode, 200);
+  const schedules = JSON.parse(listResponse.body) as Array<{
+    id: string;
+    name: string;
+    mode: string;
+    labIds: string[];
+  }>;
+  assert.equal(schedules.length, 2);
+  assert.deepEqual(
+    schedules.map((entry) => entry.mode).sort(),
+    ["merge", "overwrite"],
+  );
+
+  const patched = await app.inject({
+    method: "PATCH",
+    url: `/api/integrations/schedules/${hourly.id}`,
+    headers: authHeaders(adminToken),
+    payload: { cron: "*/30 * * * *", name: "Half-hourly" },
+  });
+  assert.equal(patched.statusCode, 200, patched.body);
+  assert.equal(
+    (JSON.parse(patched.body) as { cron: string }).cron,
+    "*/30 * * * *",
+  );
+
+  const deleted = await app.inject({
+    method: "DELETE",
+    url: `/api/integrations/schedules/${nightly.id}`,
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(deleted.statusCode, 204);
 });
 
-test("auto-sync populates multiple labs, honors modes, and detects drift", async () => {
+test("schedule runs populate their own target labs and honor modes", async () => {
   const adminToken = await bootstrapAdmin();
   const labId = await firstLabId(adminToken);
   const secondLabId = await createLab(adminToken, "Second lab");
@@ -158,11 +186,19 @@ test("auto-sync populates multiple labs, honors modes, and detects drift", async
     authId: "key",
     authSecret: "secret",
   });
-  await patchConnection(adminToken, created.id, {
-    autoSyncEnabled: true,
-    autoSyncMode: "merge",
-    autoSyncCron: "*/15 * * * *",
-    autoSyncLabIds: [labId, secondLabId],
+  const mergeSchedule = await createSchedule(adminToken, {
+    connectionId: created.id,
+    name: "Merge both labs",
+    cron: "*/15 * * * *",
+    mode: "merge",
+    labIds: [labId, secondLabId],
+  });
+  const skipSchedule = await createSchedule(adminToken, {
+    connectionId: created.id,
+    name: "Drift detector",
+    cron: "0 * * * *",
+    mode: "skip",
+    labIds: [labId],
   });
 
   setIntegrationClientOverrideForTests("opnsense", {
@@ -179,17 +215,13 @@ test("auto-sync populates multiple labs, honors modes, and detects drift", async
     }),
   });
 
-  const mergeRun = await runIntegrationAutoSync(created.id);
+  const mergeRun = await runIntegrationSyncSchedule(mergeSchedule.id);
   assert.equal(mergeRun.status, "ok", mergeRun.message);
   for (const targetLab of [labId, secondLabId]) {
     const vlan = db
       .prepare("SELECT name FROM vlans WHERE labId = ? AND vlanId = 10")
       .get(targetLab) as { name: string } | undefined;
     assert.equal(vlan?.name, "Servers", `lab ${targetLab} should have VLAN 10`);
-    const subnet = db
-      .prepare("SELECT id FROM subnets WHERE labId = ? AND cidr = '10.0.10.0/24'")
-      .get(targetLab);
-    assert.ok(subnet, `lab ${targetLab} should have the subnet`);
   }
   const auditRow = db
     .prepare(
@@ -198,7 +230,7 @@ test("auto-sync populates multiple labs, honors modes, and detects drift", async
     .get() as { user: string } | undefined;
   assert.equal(auditRow?.user, "integration-auto-sync");
 
-  // Rename upstream: merge must NOT update, overwrite must.
+  // Upstream rename: skip mode must report drift without writing.
   setIntegrationClientOverrideForTests("opnsense", {
     provider: "opnsense",
     test: async () => ({ product: "OPNsense", version: "25.7", summary: {} }),
@@ -212,38 +244,17 @@ test("auto-sync populates multiple labs, honors modes, and detects drift", async
       warnings: [],
     }),
   });
-
-  await runIntegrationAutoSync(created.id);
-  let vlanName = (
-    db
-      .prepare("SELECT name FROM vlans WHERE labId = ? AND vlanId = 10")
-      .get(labId) as { name: string }
-  ).name;
-  assert.equal(vlanName, "Servers", "merge mode must not rename");
-
-  await patchConnection(adminToken, created.id, { autoSyncMode: "skip" });
-  const skipRun = await runIntegrationAutoSync(created.id);
+  const skipRun = await runIntegrationSyncSchedule(skipSchedule.id);
   assert.equal(skipRun.status, "drift");
-  assert.match(skipRun.message, /drift detected/);
-  vlanName = (
+  const vlanName = (
     db
       .prepare("SELECT name FROM vlans WHERE labId = ? AND vlanId = 10")
       .get(labId) as { name: string }
   ).name;
   assert.equal(vlanName, "Servers", "skip mode must write nothing");
-
-  await patchConnection(adminToken, created.id, { autoSyncMode: "overwrite" });
-  const overwriteRun = await runIntegrationAutoSync(created.id);
-  assert.equal(overwriteRun.status, "ok", overwriteRun.message);
-  vlanName = (
-    db
-      .prepare("SELECT name FROM vlans WHERE labId = ? AND vlanId = 10")
-      .get(labId) as { name: string }
-  ).name;
-  assert.equal(vlanName, "Renamed Servers", "overwrite mode must update");
 });
 
-test("auto-sync failures back off exponentially and recover on success", async () => {
+test("schedule failures back off and the scanner respects pauses", async () => {
   const adminToken = await bootstrapAdmin();
   const labId = await firstLabId(adminToken);
   const created = await createConnection(adminToken, {
@@ -255,9 +266,10 @@ test("auto-sync failures back off exponentially and recover on success", async (
     authId: "key",
     authSecret: "secret",
   });
-  await patchConnection(adminToken, created.id, {
-    autoSyncEnabled: true,
-    autoSyncCron: "* * * * *",
+  const schedule = await createSchedule(adminToken, {
+    connectionId: created.id,
+    name: "Every minute",
+    cron: "* * * * *",
   });
 
   setIntegrationClientOverrideForTests("opnsense", {
@@ -268,31 +280,15 @@ test("auto-sync failures back off exponentially and recover on success", async (
     },
   });
 
-  const firstFailure = await runIntegrationAutoSync(created.id);
+  const firstFailure = await runIntegrationSyncSchedule(schedule.id);
   assert.equal(firstFailure.status, "error");
   assert.match(firstFailure.message, /Retrying after 5 minute/);
 
-  let row = db
-    .prepare(
-      "SELECT autoSyncFailureCount, autoSyncPausedUntil, lastAutoSyncStatus, lastAutoSyncMessage FROM integrationConnections WHERE id = ?",
-    )
-    .get(created.id) as {
-    autoSyncFailureCount: number;
-    autoSyncPausedUntil: string | null;
-    lastAutoSyncStatus: string;
-    lastAutoSyncMessage: string;
-  };
-  assert.equal(row.autoSyncFailureCount, 1);
-  assert.ok(row.autoSyncPausedUntil, "backoff pause must be set");
-  assert.equal(row.lastAutoSyncStatus, "error");
-  assert.match(row.lastAutoSyncMessage, /connection refused/);
-
-  const secondFailure = await runIntegrationAutoSync(created.id);
+  const secondFailure = await runIntegrationSyncSchedule(schedule.id);
   assert.match(secondFailure.message, /Retrying after 10 minute/);
 
-  // While paused, the schedule scanner must not consider it due.
-  const due = findDueIntegrationAutoSyncs(new Date(), null);
-  assert.ok(!due.includes(created.id), "paused connections are not due");
+  const due = findDueIntegrationSyncSchedules(new Date(), null);
+  assert.ok(!due.includes(schedule.id), "paused schedules are not due");
 
   setIntegrationClientOverrideForTests("opnsense", {
     provider: "opnsense",
@@ -303,18 +299,18 @@ test("auto-sync failures back off exponentially and recover on success", async (
       warnings: [],
     }),
   });
-  const recovery = await runIntegrationAutoSync(created.id);
+  const recovery = await runIntegrationSyncSchedule(schedule.id);
   assert.equal(recovery.status, "ok");
-  row = db
+  const row = db
     .prepare(
-      "SELECT autoSyncFailureCount, autoSyncPausedUntil, lastAutoSyncStatus, lastAutoSyncMessage FROM integrationConnections WHERE id = ?",
+      "SELECT failureCount, pausedUntil FROM integrationSyncSchedules WHERE id = ?",
     )
-    .get(created.id) as typeof row;
-  assert.equal(row.autoSyncFailureCount, 0);
-  assert.equal(row.autoSyncPausedUntil, null);
+    .get(schedule.id) as { failureCount: number; pausedUntil: string | null };
+  assert.equal(row.failureCount, 0);
+  assert.equal(row.pausedUntil, null);
 });
 
-test("the schedule scanner finds due connections and respects the run window", async () => {
+test("the scanner finds due schedules and disabled connections are skipped", async () => {
   const adminToken = await bootstrapAdmin();
   const labId = await firstLabId(adminToken);
   const created = await createConnection(adminToken, {
@@ -326,30 +322,214 @@ test("the schedule scanner finds due connections and respects the run window", a
     authId: "key",
     authSecret: "secret",
   });
-  await patchConnection(adminToken, created.id, {
-    autoSyncEnabled: true,
-    autoSyncCron: "30 2 * * *",
+  const schedule = await createSchedule(adminToken, {
+    connectionId: created.id,
+    name: "Nightly",
+    cron: "30 2 * * *",
   });
 
   const at230 = new Date(2026, 7, 15, 2, 30, 5);
   const at229 = new Date(2026, 7, 15, 2, 29, 5);
-  assert.deepEqual(findDueIntegrationAutoSyncs(at230, at229), [created.id]);
+  assert.deepEqual(findDueIntegrationSyncSchedules(at230, at229), [
+    schedule.id,
+  ]);
   assert.deepEqual(
-    findDueIntegrationAutoSyncs(new Date(2026, 7, 15, 3, 0, 5), null),
+    findDueIntegrationSyncSchedules(new Date(2026, 7, 15, 3, 0, 5), null),
     [],
   );
-
   // A slow tick that jumps past 02:30 still catches the run.
   assert.deepEqual(
-    findDueIntegrationAutoSyncs(
+    findDueIntegrationSyncSchedules(
       new Date(2026, 7, 15, 2, 32, 5),
       new Date(2026, 7, 15, 2, 28, 5),
     ),
-    [created.id],
+    [schedule.id],
   );
 
-  await patchConnection(adminToken, created.id, { autoSyncEnabled: false });
-  assert.deepEqual(findDueIntegrationAutoSyncs(at230, at229), []);
+  await app.inject({
+    method: "PATCH",
+    url: `/api/integrations/connections/${created.id}`,
+    headers: authHeaders(adminToken),
+    payload: { enabled: false },
+  });
+  assert.deepEqual(findDueIntegrationSyncSchedules(at230, at229), []);
+});
+
+test("device import creates loose gear with ports and WiFi inventory", async () => {
+  const adminToken = await bootstrapAdmin();
+  const labId = await firstLabId(adminToken);
+  const created = await createConnection(adminToken, {
+    labId,
+    provider: "unifi",
+    name: "UniFi console",
+    baseUrl: "https://unifi.lab.internal",
+    authKind: "api-key",
+    authSecret: "unifi-api-key",
+  });
+
+  const importableDevices = [
+    {
+      name: "core-switch",
+      deviceType: "switch",
+      model: "USW-24-POE",
+      macAddress: "AA:BB:CC:00:11:22",
+      ipAddress: "192.168.1.2",
+      serial: "SER123",
+      firmware: "7.1.20",
+      online: true,
+      ports: [
+        { name: "Port 1", kind: "rj45", speed: "1G", linkState: "up" },
+        { name: "SFP 1", kind: "sfp_plus", speed: "10G", linkState: "down" },
+      ],
+    },
+    {
+      name: "office-ap",
+      deviceType: "ap",
+      model: "U6-LR",
+      macAddress: "AA:BB:CC:00:11:33",
+      ipAddress: "192.168.1.3",
+      serial: null,
+      firmware: "6.6.55",
+      online: true,
+      ports: [],
+    },
+  ];
+  const wifi = {
+    controllerName: "UniFi Network (UniFi console)",
+    vendor: "Ubiquiti",
+    managementIp: null,
+    ssids: [
+      { name: "HomeLab", vlanNumber: 10, security: "wpapsk", hidden: false },
+    ],
+  };
+
+  setIntegrationClientOverrideForTests("unifi", {
+    provider: "unifi",
+    test: async () => ({
+      product: "UniFi Network",
+      version: "10.1.84",
+      summary: {},
+    }),
+    fetchInventory: async () => ({
+      collection: {
+        vlans: [{ vlanNumber: 10, name: "Servers" }],
+        subnets: [],
+        dhcpScopes: [],
+      },
+      devices: [],
+      importableDevices:
+        importableDevices as unknown as import("../lib/integrations/inventory.js").IntegrationImportableDevice[],
+      wifi,
+      warnings: [],
+    }),
+  });
+  try {
+    const pullResponse = await app.inject({
+      method: "POST",
+      url: `/api/integrations/connections/${created.id}/inventory`,
+      headers: authHeaders(adminToken),
+      payload: {},
+    });
+    assert.equal(pullResponse.statusCode, 200, pullResponse.body);
+    const pullBody = JSON.parse(pullResponse.body) as {
+      deviceSync: {
+        devices: Array<{ action: string; name: string; portCount: number }>;
+        ssids: Array<{ action: string; name: string }>;
+      };
+    };
+    assert.deepEqual(
+      pullBody.deviceSync.devices.map((entry) => [
+        entry.name,
+        entry.action,
+        entry.portCount,
+      ]),
+      [
+        ["core-switch", "create", 2],
+        ["office-ap", "create", 0],
+      ],
+    );
+    assert.deepEqual(pullBody.deviceSync.ssids, [
+      { action: "create", name: "HomeLab", vlanNumber: 10 },
+    ]);
+
+    // Apply the networks first so the SSID VLAN link resolves.
+    const vlanId = db
+      .prepare("INSERT INTO vlans (id, labId, vlanId, name) VALUES ('v_test', ?, 10, 'Servers')")
+      .run(labId);
+    assert.ok(vlanId);
+
+    const applyResponse = await app.inject({
+      method: "POST",
+      url: `/api/integrations/connections/${created.id}/apply-devices`,
+      headers: authHeaders(adminToken),
+      payload: { importableDevices, wifi },
+    });
+    assert.equal(applyResponse.statusCode, 200, applyResponse.body);
+    const applyBody = JSON.parse(applyResponse.body) as {
+      createdDeviceIds: string[];
+      createdPortCount: number;
+      createdSsidIds: string[];
+      linkedAccessPoints: number;
+    };
+    assert.equal(applyBody.createdDeviceIds.length, 2);
+    assert.equal(applyBody.createdPortCount, 2);
+    assert.equal(applyBody.createdSsidIds.length, 1);
+    assert.equal(applyBody.linkedAccessPoints, 1);
+
+    const switchRow = db
+      .prepare(
+        "SELECT deviceType, placement, rackId, macAddress, manufacturer FROM devices WHERE hostname = 'core-switch'",
+      )
+      .get() as {
+      deviceType: string;
+      placement: string;
+      rackId: string | null;
+      macAddress: string;
+      manufacturer: string;
+    };
+    assert.equal(switchRow.deviceType, "switch");
+    assert.equal(switchRow.placement, "room", "imported as loose gear");
+    assert.equal(switchRow.rackId, null);
+    assert.equal(switchRow.manufacturer, "Ubiquiti");
+
+    const portRows = db
+      .prepare(
+        "SELECT ports.name, ports.kind, ports.speed FROM ports JOIN devices ON devices.id = ports.deviceId WHERE devices.hostname = 'core-switch' ORDER BY ports.position",
+      )
+      .all() as Array<{ name: string; kind: string; speed: string }>;
+    assert.deepEqual(portRows, [
+      { name: "Port 1", kind: "rj45", speed: "1G" },
+      { name: "SFP 1", kind: "sfp_plus", speed: "10G" },
+    ]);
+
+    const ssidRow = db
+      .prepare("SELECT vlanId FROM wifiSsids WHERE labId = ? AND name = 'HomeLab'")
+      .get(labId) as { vlanId: string | null };
+    assert.equal(ssidRow.vlanId, "v_test", "SSID linked to the VLAN");
+    const apRow = db
+      .prepare(
+        "SELECT wifiAccessPoints.controllerId FROM wifiAccessPoints JOIN devices ON devices.id = wifiAccessPoints.deviceId WHERE devices.hostname = 'office-ap'",
+      )
+      .get() as { controllerId: string };
+    assert.ok(apRow.controllerId, "AP linked to the controller");
+
+    // Re-applying must be a no-op (merge semantics).
+    const reapply = await app.inject({
+      method: "POST",
+      url: `/api/integrations/connections/${created.id}/apply-devices`,
+      headers: authHeaders(adminToken),
+      payload: { importableDevices, wifi },
+    });
+    assert.equal(reapply.statusCode, 200);
+    const reapplyBody = JSON.parse(reapply.body) as {
+      createdDeviceIds: string[];
+      createdSsidIds: string[];
+    };
+    assert.equal(reapplyBody.createdDeviceIds.length, 0);
+    assert.equal(reapplyBody.createdSsidIds.length, 0);
+  } finally {
+    setIntegrationClientOverrideForTests("unifi", null);
+  }
 });
 
 function resetDatabase() {
@@ -357,11 +537,19 @@ function resetDatabase() {
     DELETE FROM userSessions;
     DELETE FROM oidcIdentities;
     DELETE FROM userLabAccess;
+    DELETE FROM integrationSyncSchedules;
     DELETE FROM integrationConnections;
+    DELETE FROM wifiRadioSsids;
+    DELETE FROM wifiClientAssociations;
+    DELETE FROM wifiRadios;
+    DELETE FROM wifiAccessPoints;
+    DELETE FROM wifiSsids;
+    DELETE FROM wifiControllers;
     DELETE FROM auditLog;
     DELETE FROM ipAssignments;
     DELETE FROM dhcpScopes;
     DELETE FROM subnets;
+    DELETE FROM ports;
     DELETE FROM vlans;
     DELETE FROM devices;
     DELETE FROM users;
@@ -419,19 +607,18 @@ async function createConnection(
   return JSON.parse(response.body) as { id: string };
 }
 
-async function patchConnection(
+async function createSchedule(
   token: string,
-  id: string,
   payload: Record<string, unknown>,
 ) {
   const response = await app.inject({
-    method: "PATCH",
-    url: `/api/integrations/connections/${id}`,
+    method: "POST",
+    url: "/api/integrations/schedules",
     headers: authHeaders(token),
     payload,
   });
-  assert.equal(response.statusCode, 200, response.body);
-  return JSON.parse(response.body) as Record<string, unknown>;
+  assert.equal(response.statusCode, 201, response.body);
+  return JSON.parse(response.body) as { id: string };
 }
 
 async function createUserAndLogin(

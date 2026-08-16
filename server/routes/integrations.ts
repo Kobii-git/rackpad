@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { db } from "../db.js";
 import { requireAdmin, requireAuth } from "../lib/auth.js";
 import {
@@ -29,7 +29,21 @@ import {
   fetchProxmoxStagedInventory,
 } from "../lib/integrations/providers/proxmox.js";
 import { isValidCronExpression } from "../lib/integrations/cron.js";
-import { runIntegrationAutoSync } from "../lib/integrations/auto-sync.js";
+import { runIntegrationSyncSchedule } from "../lib/integrations/auto-sync.js";
+import {
+  createIntegrationSyncSchedule,
+  deleteIntegrationSyncSchedule,
+  getIntegrationSyncScheduleRow,
+  listIntegrationSyncSchedules,
+  parseIntegrationSyncSchedule,
+  updateIntegrationSyncSchedule,
+} from "../lib/integrations/schedules.js";
+import {
+  applyIntegrationDeviceSync,
+  buildIntegrationDeviceSyncPlan,
+  sanitizeImportableDevices,
+  sanitizeWifiInventory,
+} from "../lib/integrations/device-sync.js";
 import {
   INTEGRATION_AUTH_KINDS,
   INTEGRATION_AUTO_SYNC_MODES,
@@ -201,6 +215,8 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         syncVlans: true,
         syncSubnets: true,
         syncDhcp: true,
+        syncDevices: true,
+        syncWifi: true,
         autoSyncEnabled: false,
         autoSyncMode: "merge",
         autoSyncCron: null,
@@ -267,59 +283,6 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         true,
       );
 
-      const autoSyncEnabled = optionalBoolean(body, "autoSyncEnabled");
-      const autoSyncMode = optionalEnum(
-        body,
-        "autoSyncMode",
-        INTEGRATION_AUTO_SYNC_MODES,
-      );
-      const autoSyncCron =
-        "autoSyncCron" in body
-          ? optionalString(body, "autoSyncCron", { maxLength: 120 })
-          : undefined;
-      const autoSyncLabIds = optionalStringArray(body, "autoSyncLabIds", {
-        maxItems: 50,
-      });
-      const touchesAutoSync =
-        autoSyncEnabled != null ||
-        autoSyncMode != null ||
-        autoSyncCron !== undefined ||
-        (autoSyncLabIds !== undefined && autoSyncLabIds !== null);
-
-      if (touchesAutoSync) {
-        // Auto-sync writes to labs without a per-run review, so configuring
-        // it is an admin decision even though editors manage connections.
-        if (!requireAdmin(req, reply)) return;
-        if (autoSyncCron != null && !isValidCronExpression(autoSyncCron)) {
-          return reply.status(400).send({
-            error:
-              "autoSyncCron is not a valid five-field cron expression (minute hour day-of-month month day-of-week).",
-          });
-        }
-        if (autoSyncLabIds) {
-          for (const labId of autoSyncLabIds) {
-            const lab = db
-              .prepare("SELECT id FROM labs WHERE id = ?")
-              .get(labId);
-            if (!lab) {
-              return reply
-                .status(422)
-                .send({ error: `Target lab ${labId} does not exist.` });
-            }
-          }
-        }
-        const nextCron =
-          autoSyncCron !== undefined
-            ? autoSyncCron
-            : ((existing.autoSyncCron as string | null) ?? null);
-        const enabling = autoSyncEnabled ?? Boolean(existing.autoSyncEnabled);
-        if (enabling && !nextCron) {
-          return reply.status(400).send({
-            error: "A schedule is required before enabling auto-sync.",
-          });
-        }
-      }
-
       const updated = updateIntegrationConnection(req.params.id, {
         name: optionalString(body, "name", { maxLength: 120 }) ?? undefined,
         baseUrl:
@@ -342,44 +305,12 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         syncVlans: optionalBoolean(body, "syncVlans") ?? undefined,
         syncSubnets: optionalBoolean(body, "syncSubnets") ?? undefined,
         syncDhcp: optionalBoolean(body, "syncDhcp") ?? undefined,
+        syncDevices: optionalBoolean(body, "syncDevices") ?? undefined,
+        syncWifi: optionalBoolean(body, "syncWifi") ?? undefined,
         clearSecret: optionalBoolean(body, "clearSecret") ?? false,
-        autoSyncEnabled: autoSyncEnabled ?? undefined,
-        autoSyncMode: autoSyncMode ?? undefined,
-        autoSyncCron: autoSyncCron !== undefined ? autoSyncCron : undefined,
-        autoSyncLabIds: autoSyncLabIds ?? undefined,
       });
 
       return updated;
-    },
-  );
-
-  app.post<{ Params: { id: string } }>(
-    "/connections/:id/auto-sync/run",
-    async (req, reply) => {
-      if (!requireAdmin(req, reply)) return;
-
-      const existing = getIntegrationConnectionRow(req.params.id);
-      if (!existing) {
-        return reply
-          .status(404)
-          .send({ error: "Integration connection not found." });
-      }
-      if (!assertLabWrite(req, reply, String(existing.labId))) return;
-      if (!existing.enabled) {
-        return reply.status(409).send({
-          error:
-            "This connection is disabled. Enable it before running auto-sync.",
-        });
-      }
-
-      const result = await runIntegrationAutoSync(req.params.id);
-      const connection = getIntegrationConnectionRow(req.params.id);
-      return {
-        result,
-        connection: connection
-          ? parseIntegrationConnectionPublic(connection)
-          : null,
-      };
     },
   );
 
@@ -514,10 +445,22 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
             dhcpScopes: inventory.collection.dhcpScopes.length,
           },
         });
+        const deviceSync = buildIntegrationDeviceSyncPlan({
+          labId: connection.labId,
+          importableDevices: connection.syncDevices
+            ? (inventory.importableDevices ?? [])
+            : [],
+          wifi: connection.syncWifi ? (inventory.wifi ?? null) : null,
+        });
         return {
           connection: updated,
           preview,
           devices: inventory.devices,
+          deviceSync,
+          importableDevices: connection.syncDevices
+            ? (inventory.importableDevices ?? [])
+            : [],
+          wifi: connection.syncWifi ? (inventory.wifi ?? null) : null,
           warnings: inventory.warnings,
         };
       } catch (error) {
@@ -585,6 +528,202 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       const result = applyIntegrationNetworkPreview({
         preview: { ...preview, policy },
         allowDeletes,
+        actor: req.authUser!.username,
+      });
+      return result;
+    },
+  );
+
+  function scheduleConnection(
+    scheduleRow: Record<string, unknown> | undefined,
+  ) {
+    if (!scheduleRow) return null;
+    return getIntegrationConnectionRow(String(scheduleRow.connectionId));
+  }
+
+  function validateScheduleInput(
+    reply: FastifyReply,
+    cron: string | null | undefined,
+    labIds: string[] | null | undefined,
+  ) {
+    if (cron != null && !isValidCronExpression(cron)) {
+      reply.status(400).send({
+        error:
+          "cron is not a valid five-field cron expression (minute hour day-of-month month day-of-week).",
+      });
+      return false;
+    }
+    if (labIds) {
+      for (const labId of labIds) {
+        const lab = db.prepare("SELECT id FROM labs WHERE id = ?").get(labId);
+        if (!lab) {
+          reply.status(422).send({ error: `Target lab ${labId} does not exist.` });
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  app.get("/schedules", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const query = req.query as { connectionId?: string };
+    if (query.connectionId) {
+      const connection = getIntegrationConnectionRow(query.connectionId);
+      if (!connection) {
+        return reply
+          .status(404)
+          .send({ error: "Integration connection not found." });
+      }
+      if (!assertLabRead(req, reply, String(connection.labId))) return;
+      return listIntegrationSyncSchedules(query.connectionId);
+    }
+    // Filter to connections the caller can read.
+    const readable = new Set(
+      listIntegrationConnections()
+        .filter((connection) =>
+          req.authUser?.role === "admin"
+            ? true
+            : (req.labAccess ?? []).some(
+                (entry) => entry.labId === connection.labId,
+              ),
+        )
+        .map((connection) => connection.id),
+    );
+    return listIntegrationSyncSchedules().filter((schedule) =>
+      readable.has(schedule.connectionId),
+    );
+  });
+
+  // Multiple schedules per connection: different cadences, modes, and
+  // target labs can coexist (for example hourly merge into the main lab
+  // and a nightly overwrite into a staging lab).
+  app.post("/schedules", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const body = asObject(req.body);
+    const connectionId = requiredString(body, "connectionId", {
+      maxLength: 80,
+    });
+    const connection = getIntegrationConnectionRow(connectionId);
+    if (!connection) {
+      return reply
+        .status(404)
+        .send({ error: "Integration connection not found." });
+    }
+    if (!assertLabWrite(req, reply, String(connection.labId))) return;
+
+    const cron = requiredString(body, "cron", { maxLength: 120 });
+    const labIds = optionalStringArray(body, "labIds", { maxItems: 50 }) ?? [];
+    if (!validateScheduleInput(reply, cron, labIds)) return;
+
+    const created = createIntegrationSyncSchedule({
+      connectionId,
+      name: requiredString(body, "name", { maxLength: 120 }),
+      enabled: optionalBoolean(body, "enabled") ?? true,
+      mode:
+        optionalEnum(body, "mode", INTEGRATION_AUTO_SYNC_MODES) ?? "merge",
+      cron,
+      labIds,
+    });
+    return reply.status(201).send(created);
+  });
+
+  app.patch<{ Params: { id: string } }>("/schedules/:id", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const existing = getIntegrationSyncScheduleRow(req.params.id);
+    const connection = scheduleConnection(existing);
+    if (!existing || !connection) {
+      return reply.status(404).send({ error: "Sync schedule not found." });
+    }
+    if (!assertLabWrite(req, reply, String(connection.labId))) return;
+
+    const body = asObject(req.body);
+    const cron = optionalString(body, "cron", { maxLength: 120 });
+    const labIds = optionalStringArray(body, "labIds", { maxItems: 50 });
+    if (!validateScheduleInput(reply, cron, labIds ?? undefined)) return;
+
+    return updateIntegrationSyncSchedule(req.params.id, {
+      name: optionalString(body, "name", { maxLength: 120 }) ?? undefined,
+      enabled: optionalBoolean(body, "enabled") ?? undefined,
+      mode: optionalEnum(body, "mode", INTEGRATION_AUTO_SYNC_MODES) ?? undefined,
+      cron: cron ?? undefined,
+      labIds: labIds ?? undefined,
+    });
+  });
+
+  app.delete<{ Params: { id: string } }>(
+    "/schedules/:id",
+    async (req, reply) => {
+      if (!requireAdmin(req, reply)) return;
+      const existing = getIntegrationSyncScheduleRow(req.params.id);
+      const connection = scheduleConnection(existing);
+      if (!existing || !connection) {
+        return reply.status(404).send({ error: "Sync schedule not found." });
+      }
+      if (!assertLabWrite(req, reply, String(connection.labId))) return;
+      deleteIntegrationSyncSchedule(req.params.id);
+      return reply.status(204).send();
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/schedules/:id/run",
+    async (req, reply) => {
+      if (!requireAdmin(req, reply)) return;
+      const existing = getIntegrationSyncScheduleRow(req.params.id);
+      const connection = scheduleConnection(existing);
+      if (!existing || !connection) {
+        return reply.status(404).send({ error: "Sync schedule not found." });
+      }
+      if (!assertLabWrite(req, reply, String(connection.labId))) return;
+      if (!connection.enabled) {
+        return reply.status(409).send({
+          error:
+            "This connection is disabled. Enable it before running auto-sync.",
+        });
+      }
+      const result = await runIntegrationSyncSchedule(req.params.id);
+      const schedule = getIntegrationSyncScheduleRow(req.params.id);
+      return {
+        result,
+        schedule: schedule ? parseIntegrationSyncSchedule(schedule) : null,
+      };
+    },
+  );
+
+  // Imports the previewed controller devices (with their ports) and WiFi
+  // inventory as real records. Merge-only: existing devices and SSIDs are
+  // matched and never modified.
+  app.post<{ Params: { id: string } }>(
+    "/connections/:id/apply-devices",
+    async (req, reply) => {
+      if (!requireAdmin(req, reply)) return;
+
+      const existing = getIntegrationConnectionRow(req.params.id);
+      if (!existing) {
+        return reply
+          .status(404)
+          .send({ error: "Integration connection not found." });
+      }
+      if (!assertLabWrite(req, reply, String(existing.labId))) return;
+
+      const body = asObject(req.body);
+      const importableDevices = sanitizeImportableDevices(
+        body.importableDevices,
+      );
+      const wifi = sanitizeWifiInventory(body.wifi);
+      if (importableDevices.length === 0 && !wifi) {
+        return reply
+          .status(400)
+          .send({ error: "There is nothing to import." });
+      }
+
+      const provider = String(existing.provider) as IntegrationProvider;
+      const result = applyIntegrationDeviceSync({
+        labId: String(existing.labId),
+        importableDevices,
+        wifi,
+        vendor: INTEGRATION_PROVIDER_INFO[provider].vendor,
         actor: req.authUser!.username,
       });
       return result;

@@ -322,6 +322,8 @@ export interface IntegrationConnection {
   syncVlans: boolean;
   syncSubnets: boolean;
   syncDhcp: boolean;
+  syncDevices: boolean;
+  syncWifi: boolean;
   lastStatus: "unknown" | "ok" | "error";
   lastCheckedAt: string | null;
   lastError: string | null;
@@ -365,10 +367,90 @@ export interface IntegrationDevicePreview {
   detail: string | null;
 }
 
+export interface IntegrationPortSpec {
+  name: string;
+  kind: "rj45" | "sfp" | "sfp_plus" | "qsfp" | "wifi";
+  speed: string | null;
+  linkState: "up" | "down" | "unknown";
+}
+
+export interface IntegrationImportableDevice {
+  name: string;
+  deviceType: "switch" | "router" | "firewall" | "ap" | "server" | "other";
+  model: string | null;
+  macAddress: string | null;
+  ipAddress: string | null;
+  serial: string | null;
+  firmware: string | null;
+  online: boolean | null;
+  ports: IntegrationPortSpec[];
+}
+
+export interface IntegrationWifiInventory {
+  controllerName: string;
+  vendor: string;
+  managementIp: string | null;
+  ssids: Array<{
+    name: string;
+    vlanNumber: number | null;
+    security: string | null;
+    hidden: boolean;
+  }>;
+}
+
+export interface IntegrationDeviceSyncPlan {
+  labId: string;
+  devices: Array<{
+    action: "create" | "exists";
+    name: string;
+    deviceType: IntegrationImportableDevice["deviceType"];
+    model: string | null;
+    macAddress: string | null;
+    ipAddress: string | null;
+    portCount: number;
+    existingId?: string;
+    existingHostname?: string;
+  }>;
+  ssids: Array<{
+    action: "create" | "exists";
+    name: string;
+    vlanNumber: number | null;
+  }>;
+  controllerName: string | null;
+}
+
+export interface IntegrationDeviceSyncResult {
+  createdDeviceIds: string[];
+  createdPortCount: number;
+  createdSsidIds: string[];
+  linkedAccessPoints: number;
+  skipped: string[];
+}
+
+export interface IntegrationSyncSchedule {
+  id: string;
+  connectionId: string;
+  name: string;
+  enabled: boolean;
+  mode: IntegrationAutoSyncMode;
+  cron: string;
+  labIds: string[];
+  failureCount: number;
+  pausedUntil: string | null;
+  lastRunAt: string | null;
+  lastRunStatus: "ok" | "error" | "drift" | null;
+  lastRunMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface IntegrationInventoryResponse {
   connection: IntegrationConnection | null;
   preview: SnmpSyncPreview;
   devices: IntegrationDevicePreview[];
+  deviceSync: IntegrationDeviceSyncPlan;
+  importableDevices: IntegrationImportableDevice[];
+  wifi: IntegrationWifiInventory | null;
   warnings: string[];
 }
 
