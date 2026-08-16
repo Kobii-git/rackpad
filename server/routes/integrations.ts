@@ -616,7 +616,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
 
   // Multiple schedules per connection: different cadences, modes, and
   // target labs can coexist (for example hourly merge into the main lab
-  // and a nightly overwrite into a staging lab).
+  // and a nightly mirror into a staging lab).
   app.post("/schedules", async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     const body = asObject(req.body);

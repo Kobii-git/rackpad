@@ -109,6 +109,21 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   returned data for — no more empty VLANs/Subnets/DHCP tabs on container
   platforms — and the auto-sync explainer appears once above the
   connections list instead of repeating per connection.
+- Sync modes are now the same three everywhere — Mirror, Merge, Skip —
+  shown as plain labels with one hover that explains them: Merge only
+  adds missing records, Skip also updates but never deletes, Mirror
+  deletes destination records that are gone from the source. Mirror
+  deletes are scoped to the object types a connection actually manages
+  (a disabled pull option no longer reads as "delete everything"),
+  referenced records stay protected, and devices/SSIDs remain merge-only
+  in every mode. The preview dialog re-pulls when the mode changes so the
+  diff always matches, and scheduled mirrors can now prune stale records
+  without a manual pass.
+- Imported and matched devices whose IP falls inside a subnet the lab
+  already tracks are linked as IP assignments on that subnet, so networks
+  pulled first and devices second come out interconnected — switches,
+  ports, VLANs, subnets, and addresses — ready for the operator to take
+  it from there.
 - Added a Dockhand integration (Bearer API token) that lists Docker
   environments with online state and container/stack counts, containers with
   image, IP, health, and compose stack, and Docker networks with drivers and

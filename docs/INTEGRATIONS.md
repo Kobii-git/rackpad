@@ -53,7 +53,8 @@ controllers stay reviewable.
   format as `collect-proxmox.sh` and stages it in the Proxmox import wizard
   below — the same host mapping, VM/container review, virtual switch, port,
   VLAN, and IP handling as a file upload, no shell access required. For
-  clusters, pick the node to stage; run once per node.
+  clusters, tick the nodes to stage (Select all included) — workloads and
+  bridges come from every selected node in one pass.
 
 ### UniFi Network
 
@@ -164,25 +165,29 @@ runs write without a per-run review.
 
 - **Multiple schedules per connection:** each connection can have any number
   of named schedules, each with its own cadence, mode, and target labs — for
-  example a nightly merge into a production lab plus an hourly drift check
-  against a staging lab, both fed by the same controller.
+  example a nightly mirror into a production lab plus an hourly merge into
+  a staging lab, both fed by the same controller.
 - **Schedule:** pick a basic preset (every 15/30 minutes, hourly, every
   6 hours, daily, weekly) or switch to **Custom cron (advanced)** for a
   five-field cron expression (`minute hour day-of-month month day-of-week`).
   The scheduler ticks once a minute and catches up runs missed by short
   stalls.
-- **Mode:**
-  - **Merge** adds missing VLANs/subnets only.
-  - **Overwrite** adds and updates records to match the controller. Deletes
-    are never automatic — removals stay a manual, confirmed decision.
-  - **Skip** computes the diff and reports drift without writing anything —
-    useful as a change detector.
+- **Mode** — the same three modes everywhere (preview dialog and
+  schedules), described by a hover in the UI:
+  - **Mirror** makes the destination match the source: adds, updates, and
+    deletes records that are gone from the source. Deletes are scoped to
+    the object types the connection actually manages (a disabled pull
+    option is never read as "delete everything"), records still referenced
+    by ports, assignments, or DHCP scopes are protected, and devices are
+    never deleted automatically.
+  - **Merge** adds missing records only.
+  - **Skip** adds and updates records but skips deletions.
 - **Target labs:** a checkbox multi-select. One schedule can populate
   several labs with the same controller data; the default is the
   connection's own lab. The same per-connection pull toggles apply, and
   when the connection's device or SSID pulls are enabled, scheduled runs
-  also import new devices and SSIDs (merge-only — existing records are
-  never modified).
+  also import new devices and SSIDs (always merge-only regardless of the
+  schedule mode — existing records are never modified or deleted).
 - **Errors without instability:** failures are recorded on the schedule
   (status badge plus the exact error message on the schedule — nothing
   modal) and audited. Consecutive failures back off exponentially (5m, 10m,
@@ -225,6 +230,12 @@ just as read-only previews:
   first, then hostname/display name, and are never modified. The preview
   modal's **Import** tab shows exactly what will be created versus what is
   already tracked before you press **Import devices**.
+- **IP assignments:** when an imported (or matched) device reports an IP
+  that falls inside a subnet the lab already tracks, the import links it
+  as an IP assignment on that subnet — so pulling networks first and
+  devices second leaves switches, ports, VLANs, subnets, and addresses
+  interconnected instead of sitting side by side. Existing assignments on
+  an address are never touched.
 - **WiFi:** enabling the SSID pull creates a WiFi controller record for the
   connection, imports SSIDs (linked to VLANs when the ids match), and links
   imported access points to that controller.
@@ -234,10 +245,12 @@ just as read-only previews:
 
 ## Safety model
 
-- Preview/apply reuses the SNMP inventory sync engine: **merge** (default)
-  only adds missing records; **mirror** also updates and can delete, but
-  deletes require an explicit confirmation and are blocked for VLANs/subnets
-  that ports, assignments, or DHCP scopes still reference.
+- Preview/apply reuses the SNMP inventory sync engine. **Mirror** is the
+  only mode that deletes; it is scoped to the object types the connection
+  manages, and deletes are blocked for VLANs/subnets that ports,
+  assignments, or DHCP scopes still reference. **Merge** and **Skip**
+  never remove anything, and devices/SSIDs/IP assignments are merge-only
+  in every mode.
 - DHCP scopes are preview-only, matching SNMP sync v1.
 - Applying requires an administrator; editors can save connections, test, and
   preview. Viewers are read-only.

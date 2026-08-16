@@ -304,7 +304,7 @@ export interface IntegrationScope {
   label: string;
 }
 
-export type IntegrationAutoSyncMode = "merge" | "overwrite" | "skip";
+export type IntegrationAutoSyncMode = "merge" | "mirror" | "skip";
 
 export interface IntegrationConnection {
   id: string;
@@ -438,6 +438,7 @@ export interface IntegrationDeviceSyncResult {
   createdDeviceIds: string[];
   createdPortCount: number;
   createdSsidIds: string[];
+  createdIpAssignmentIds: string[];
   linkedAccessPoints: number;
   skipped: string[];
 }

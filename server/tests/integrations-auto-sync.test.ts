@@ -130,7 +130,7 @@ test("multiple schedules per connection are admin-only and validated", async () 
     connectionId: created.id,
     name: "Nightly staging",
     cron: "0 2 * * *",
-    mode: "overwrite",
+    mode: "mirror",
     labIds: [secondLabId],
   });
   assert.notEqual(hourly.id, nightly.id);
@@ -150,7 +150,7 @@ test("multiple schedules per connection are admin-only and validated", async () 
   assert.equal(schedules.length, 2);
   assert.deepEqual(
     schedules.map((entry) => entry.mode).sort(),
-    ["merge", "overwrite"],
+    ["merge", "mirror"],
   );
 
   const patched = await app.inject({
@@ -195,9 +195,16 @@ test("schedule runs populate their own target labs and honor modes", async () =>
   });
   const skipSchedule = await createSchedule(adminToken, {
     connectionId: created.id,
-    name: "Drift detector",
+    name: "Updater",
     cron: "0 * * * *",
     mode: "skip",
+    labIds: [labId],
+  });
+  const mirrorSchedule = await createSchedule(adminToken, {
+    connectionId: created.id,
+    name: "Mirror main",
+    cron: "0 3 * * *",
+    mode: "mirror",
     labIds: [labId],
   });
 
@@ -230,7 +237,10 @@ test("schedule runs populate their own target labs and honor modes", async () =>
     .get() as { user: string } | undefined;
   assert.equal(auditRow?.user, "integration-auto-sync");
 
-  // Upstream rename: skip mode must report drift without writing.
+  // Upstream rename: skip mode applies adds and updates but never deletes.
+  db.prepare(
+    "INSERT INTO vlans (id, labId, vlanId, name) VALUES ('v_gone', ?, 99, 'Stale')",
+  ).run(labId);
   setIntegrationClientOverrideForTests("opnsense", {
     provider: "opnsense",
     test: async () => ({ product: "OPNsense", version: "25.7", summary: {} }),
@@ -245,13 +255,30 @@ test("schedule runs populate their own target labs and honor modes", async () =>
     }),
   });
   const skipRun = await runIntegrationSyncSchedule(skipSchedule.id);
-  assert.equal(skipRun.status, "drift");
+  assert.equal(skipRun.status, "ok", skipRun.message);
   const vlanName = (
     db
       .prepare("SELECT name FROM vlans WHERE labId = ? AND vlanId = 10")
       .get(labId) as { name: string }
   ).name;
-  assert.equal(vlanName, "Servers", "skip mode must write nothing");
+  assert.equal(vlanName, "Renamed Servers", "skip mode applies updates");
+  assert.ok(
+    db.prepare("SELECT id FROM vlans WHERE id = 'v_gone'").get(),
+    "skip mode never deletes",
+  );
+
+  // Mirror removes destination records that are gone from the source.
+  const mirrorRun = await runIntegrationSyncSchedule(mirrorSchedule.id);
+  assert.equal(mirrorRun.status, "ok", mirrorRun.message);
+  assert.equal(
+    db.prepare("SELECT id FROM vlans WHERE id = 'v_gone'").get(),
+    undefined,
+    "mirror deletes records missing from the source",
+  );
+  assert.ok(
+    db.prepare("SELECT id FROM vlans WHERE labId = ? AND vlanId = 10").get(labId),
+    "records present in the source survive a mirror",
+  );
 });
 
 test("schedule failures back off and the scanner respects pauses", async () => {
@@ -469,11 +496,15 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
       { action: "create", name: "HomeLab", vlanNumber: 10 },
     ]);
 
-    // Apply the networks first so the SSID VLAN link resolves.
+    // Apply the networks first so the SSID VLAN link resolves, and seed a
+    // management subnet so device IPs link as IP assignments.
     const vlanId = db
       .prepare("INSERT INTO vlans (id, labId, vlanId, name) VALUES ('v_test', ?, 10, 'Servers')")
       .run(labId);
     assert.ok(vlanId);
+    db.prepare(
+      "INSERT INTO subnets (id, labId, cidr, name) VALUES ('sub_test', ?, '192.168.1.0/24', 'Management')",
+    ).run(labId);
 
     const applyResponse = await app.inject({
       method: "POST",
@@ -486,12 +517,27 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
       createdDeviceIds: string[];
       createdPortCount: number;
       createdSsidIds: string[];
+      createdIpAssignmentIds: string[];
       linkedAccessPoints: number;
     };
     assert.equal(applyBody.createdDeviceIds.length, 2);
     assert.equal(applyBody.createdPortCount, 2);
     assert.equal(applyBody.createdSsidIds.length, 1);
     assert.equal(applyBody.linkedAccessPoints, 1);
+    assert.equal(
+      applyBody.createdIpAssignmentIds.length,
+      2,
+      "device IPs inside the seeded subnet become IP assignments",
+    );
+    const ipRows = db
+      .prepare(
+        "SELECT ipAddress FROM ipAssignments WHERE subnetId = 'sub_test' ORDER BY ipAddress",
+      )
+      .all() as Array<{ ipAddress: string }>;
+    assert.deepEqual(
+      ipRows.map((row) => row.ipAddress),
+      ["192.168.1.2", "192.168.1.3"],
+    );
 
     const switchRow = db
       .prepare(
@@ -562,9 +608,11 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
     const reapplyBody = JSON.parse(reapply.body) as {
       createdDeviceIds: string[];
       createdSsidIds: string[];
+      createdIpAssignmentIds: string[];
     };
     assert.equal(reapplyBody.createdDeviceIds.length, 0);
     assert.equal(reapplyBody.createdSsidIds.length, 0);
+    assert.equal(reapplyBody.createdIpAssignmentIds.length, 0);
   } finally {
     setIntegrationClientOverrideForTests("unifi", null);
   }

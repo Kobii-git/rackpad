@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 42;
+const CURRENT_SCHEMA_VERSION = 43;
 
 export const db = new Database(DB_PATH);
 
@@ -1151,6 +1151,16 @@ const SCHEMA_MIGRATIONS = [
     sql: `
       ALTER TABLE integrationConnections ADD COLUMN syncHosts INTEGER NOT NULL DEFAULT 1;
       ALTER TABLE integrationConnections ADD COLUMN syncGuests INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
+  {
+    version: 43,
+    sql: `
+      -- Sync modes unified to merge/mirror/skip. Old "overwrite" (add and
+      -- update, never delete) is the new "skip"; the old drift-only "skip"
+      -- becomes "merge", the least intrusive mode that still writes.
+      UPDATE integrationSyncSchedules SET mode = 'merge' WHERE mode = 'skip';
+      UPDATE integrationSyncSchedules SET mode = 'skip' WHERE mode = 'overwrite';
     `,
   },
 ] as const;

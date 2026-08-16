@@ -21,7 +21,9 @@ export interface IntegrationSyncSchedule {
 }
 
 function parseMode(value: unknown): IntegrationAutoSyncMode {
-  if (value === "overwrite" || value === "skip") return value;
+  if (value === "mirror" || value === "skip") return value;
+  // Pre-v43 rows could still say "overwrite"; that behavior is now "skip".
+  if (value === "overwrite") return "skip";
   return "merge";
 }
 

@@ -35,6 +35,23 @@ export function buildIntegrationNetworkPreview(input: {
     collection: filtered,
   });
 
+  // A disabled pull option means this connection does not manage that
+  // object type at all — under mirror an empty source list must not read
+  // as "delete everything in the destination", so unmanaged types drop
+  // out of the diff entirely.
+  if (!input.connection.syncVlans) {
+    preview.vlans = [];
+    preview.summary.vlanCreates = 0;
+    preview.summary.vlanUpdates = 0;
+    preview.summary.vlanDeletes = 0;
+  }
+  if (!input.connection.syncSubnets) {
+    preview.subnets = [];
+    preview.summary.subnetCreates = 0;
+    preview.summary.subnetUpdates = 0;
+    preview.summary.subnetDeletes = 0;
+  }
+
   preview.warnings = preview.warnings.map((warning) =>
     warning.startsWith("SNMP walk returned no VLAN or subnet inventory")
       ? "The controller returned no VLAN or subnet inventory for the enabled sync options."

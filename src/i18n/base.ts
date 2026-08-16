@@ -2011,8 +2011,6 @@ export const en = {
   "Backing off": "Backing off",
   "Last run: {time}": "Last run: {time}",
   "Sync mode": "Sync mode",
-  "Overwrite (add and update, never delete)": "Overwrite (add and update, never delete)",
-  "Skip (detect drift, write nothing)": "Skip (detect drift, write nothing)",
   "Every 15 minutes": "Every 15 minutes",
   "Every 30 minutes": "Every 30 minutes",
   "Hourly": "Hourly",
@@ -2095,16 +2093,12 @@ export const en = {
   "Deleting the schedule failed.": "Deleting the schedule failed.",
   "Nothing importable — enable the device or SSID pull options on the connection.":
     "Nothing importable — enable the device or SSID pull options on the connection.",
-  "New records are created as loose gear (no rack) with their ports; matched records are left untouched.":
-    "New records are created as loose gear (no rack) with their ports; matched records are left untouched.",
   "{count} port(s)": "{count} port(s)",
   "matches {name}": "matches {name}",
   "SSID · VLAN {number}": "SSID · VLAN {number}",
   "Apply networks": "Apply networks",
   "Import devices": "Import devices",
   "Importing devices failed.": "Importing devices failed.",
-  "Imported {deviceCount} device(s) with {portCount} port(s) and {ssidCount} SSID(s).":
-    "Imported {deviceCount} device(s) with {portCount} port(s) and {ssidCount} SSID(s).",
   "Creates the new devices, ports, and SSIDs shown on the Import tab.":
     "Creates the new devices, ports, and SSIDs shown on the Import tab.",
   "Gateways": "Gateways",
@@ -2128,6 +2122,14 @@ export const en = {
     "Imports QEMU VMs and LXC containers as devices with their running state. Use Stage import for full detail like NICs, VLANs, and IPs.",
   "Proxmox nodes to stage": "Proxmox nodes to stage",
   "Select at least one Proxmox node to stage.": "Select at least one Proxmox node to stage.",
+  "Merge": "Merge",
+  "Skip": "Skip",
+  "Merge only adds missing records. Skip also updates existing records but never deletes anything. Mirror deletes records that are gone from the source — records still in use are protected, and devices are never deleted automatically.":
+    "Merge only adds missing records. Skip also updates existing records but never deletes anything. Mirror deletes records that are gone from the source — records still in use are protected, and devices are never deleted automatically.",
+  "Imported {deviceCount} device(s) with {portCount} port(s), {ssidCount} SSID(s), and {ipCount} IP assignment(s).":
+    "Imported {deviceCount} device(s) with {portCount} port(s), {ssidCount} SSID(s), and {ipCount} IP assignment(s).",
+  "New records are created as loose gear (no rack) with their ports; matched records are never modified. Device IPs inside a known subnet are linked as IP assignments.":
+    "New records are created as loose gear (no rack) with their ports; matched records are never modified. Device IPs inside a known subnet are linked as IP assignments.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

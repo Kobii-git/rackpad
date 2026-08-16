@@ -368,10 +368,14 @@ const SCHEDULE_PRESETS: Array<{
 ];
 
 const AUTO_SYNC_MODE_LABELS: Record<IntegrationAutoSyncMode, TranslationKey> = {
-  merge: "Merge (add missing only)",
-  overwrite: "Overwrite (add and update, never delete)",
-  skip: "Skip (detect drift, write nothing)",
+  mirror: "Mirror",
+  merge: "Merge",
+  skip: "Skip",
 };
+
+// One hover explains all three modes wherever they appear.
+const SYNC_MODE_HINT: TranslationKey =
+  "Merge only adds missing records. Skip also updates existing records but never deletes anything. Mirror deletes records that are gone from the source — records still in use are protected, and devices are never deleted automatically.";
 
 interface ScheduleDraft {
   name: string;
@@ -448,8 +452,7 @@ export function IntegrationsPanel({
   const [pull, setPull] = useState<
     (IntegrationInventoryResponse & { connectionId: string }) | null
   >(null);
-  const [policy, setPolicy] = useState<SnmpSyncPolicy>("merge");
-  const [allowDeletes, setAllowDeletes] = useState(false);
+  const [syncMode, setSyncMode] = useState<IntegrationAutoSyncMode>("merge");
   const [applying, setApplying] = useState(false);
   const [importingDevices, setImportingDevices] = useState(false);
   const [previewTab, setPreviewTab] = useState("vlans");
@@ -769,14 +772,17 @@ export function IntegrationsPanel({
     }
   }
 
-  async function handlePull(connection: IntegrationConnection) {
+  async function handlePull(
+    connection: IntegrationConnection,
+    options?: { keepOpen?: boolean; mode?: IntegrationAutoSyncMode },
+  ) {
+    const mode = options?.mode ?? syncMode;
     setBusyId(connection.id);
     resetMessages();
-    setPull(null);
-    setAllowDeletes(false);
+    if (!options?.keepOpen) setPull(null);
     try {
       const result = await api.pullIntegrationInventory(connection.id, {
-        policy,
+        policy: mode === "merge" ? "merge" : "mirror",
       });
       setPull({ ...result, connectionId: connection.id });
       const counts = {
@@ -810,8 +816,8 @@ export function IntegrationsPanel({
     try {
       const result = await api.applyIntegrationPreview(pull.connectionId, {
         preview: pull.preview,
-        policy,
-        allowDeletes,
+        policy: syncMode === "merge" ? "merge" : "mirror",
+        allowDeletes: syncMode === "mirror",
       });
       setSuccess(
         t("Applied {vlanCount} VLAN(s) and {subnetCount} subnet(s).", {
@@ -841,11 +847,12 @@ export function IntegrationsPanel({
       });
       setSuccess(
         t(
-          "Imported {deviceCount} device(s) with {portCount} port(s) and {ssidCount} SSID(s).",
+          "Imported {deviceCount} device(s) with {portCount} port(s), {ssidCount} SSID(s), and {ipCount} IP assignment(s).",
           {
             deviceCount: result.createdDeviceIds.length,
             portCount: result.createdPortCount,
             ssidCount: result.createdSsidIds.length,
+            ipCount: result.createdIpAssignmentIds.length,
           },
         ),
       );
@@ -1095,7 +1102,7 @@ export function IntegrationsPanel({
               placeholder={t("Nightly staging sync")}
             />
           </label>
-          <label className="space-y-1 text-sm">
+          <label className="space-y-1 text-sm" title={t(SYNC_MODE_HINT)}>
             <span className="text-[var(--text-secondary)]">
               {t("Sync mode")}
             </span>
@@ -1984,7 +1991,9 @@ export function IntegrationsPanel({
                   {pullConnection && (
                     <Badge tone="info">{pullConnection.name}</Badge>
                   )}
-                  <Badge tone="neutral">{pull.preview.policy}</Badge>
+                  <Badge tone="neutral">
+                    {t(AUTO_SYNC_MODE_LABELS[syncMode])}
+                  </Badge>
                   <span className="text-xs text-[var(--color-fg-subtle)]">
                     {t("+{vlanCreates} VLAN / +{subnetCreates} subnet", {
                       vlanCreates: pull.preview.summary.vlanCreates,
@@ -2164,7 +2173,7 @@ export function IntegrationsPanel({
                     <>
                       <p className="text-xs text-[var(--text-tertiary)]">
                         {t(
-                          "New records are created as loose gear (no rack) with their ports; matched records are left untouched.",
+                          "New records are created as loose gear (no rack) with their ports; matched records are never modified. Device IPs inside a known subnet are linked as IP assignments.",
                         )}
                       </p>
                       <IntegrationDiffRows
@@ -2213,41 +2222,39 @@ export function IntegrationsPanel({
 
               <div className="flex flex-wrap items-center gap-3 border-t border-[var(--color-line)] pt-3">
                 {isNetworkPreviewTab && (
-                  <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                    {t("Policy")}
+                  <label
+                    className="flex items-center gap-2 text-xs text-[var(--text-secondary)]"
+                    title={t(SYNC_MODE_HINT)}
+                  >
+                    {t("Sync mode")}
                     <select
                       className="rk-control"
-                      value={policy}
-                      onChange={(event) =>
-                        setPolicy(event.target.value as SnmpSyncPolicy)
-                      }
+                      value={syncMode}
+                      disabled={busyId === pull.connectionId}
+                      onChange={(event) => {
+                        const next = event.target
+                          .value as IntegrationAutoSyncMode;
+                        setSyncMode(next);
+                        if (pullConnection) {
+                          void handlePull(pullConnection, {
+                            keepOpen: true,
+                            mode: next,
+                          });
+                        }
+                      }}
                     >
-                      <option value="merge">
-                        {t("Merge (add missing only)")}
-                      </option>
-                      <option value="mirror">
-                        {t("Mirror (create, update, delete)")}
-                      </option>
+                      {(
+                        Object.keys(
+                          AUTO_SYNC_MODE_LABELS,
+                        ) as IntegrationAutoSyncMode[]
+                      ).map((mode) => (
+                        <option key={mode} value={mode}>
+                          {t(AUTO_SYNC_MODE_LABELS[mode])}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 )}
-                {isNetworkPreviewTab &&
-                  admin &&
-                  policy === "mirror" &&
-                  pull.preview.summary.vlanDeletes +
-                    pull.preview.summary.subnetDeletes >
-                    0 && (
-                    <label className="flex items-center gap-2 text-xs text-[var(--color-fg-subtle)]">
-                      <input
-                        type="checkbox"
-                        checked={allowDeletes}
-                        onChange={(event) =>
-                          setAllowDeletes(event.target.checked)
-                        }
-                      />
-                      {t("Allow deletes for unreferenced VLANs/subnets")}
-                    </label>
-                  )}
                 {isNetworkPreviewTab && !hasChanges && (
                   <span className="text-xs text-[var(--color-fg-subtle)]">
                     {t("Rackpad already matches this controller's inventory.")}

@@ -65,7 +65,6 @@ export async function runIntegrationSyncSchedule(
 
     const inventory = await client.fetchInventory(connection);
     const labMessages: string[] = [];
-    let driftDetected = false;
     const targetLabs =
       schedule.labIds.length > 0 ? schedule.labIds : [connection.labId];
 
@@ -74,40 +73,33 @@ export async function runIntegrationSyncSchedule(
         labMessages.push(`${labId}: lab no longer exists, skipped`);
         continue;
       }
-      // merge previews only surface missing records; overwrite and skip use
-      // the mirror diff so updates are visible (skip never applies it, and
-      // deletes are excluded from the drift count to avoid flagging records
-      // owned by other sources).
+      // Merge previews only surface missing records; skip and mirror build
+      // the mirror diff so updates are visible too. Deletes only run under
+      // mirror, scoped to the object types this connection manages, with
+      // referenced records protected by the engine. Devices and SSIDs stay
+      // merge-only in every mode.
       const preview = buildIntegrationNetworkPreview({
         connection: { ...connection, labId },
         collection: inventory.collection,
         policy: schedule.mode === "merge" ? "merge" : "mirror",
       });
+      const pendingDeletes =
+        schedule.mode === "mirror"
+          ? preview.summary.vlanDeletes + preview.summary.subnetDeletes
+          : 0;
       const changes = previewChangeCount(preview.summary);
 
-      if (schedule.mode === "skip") {
-        if (changes > 0) {
-          driftDetected = true;
-          labMessages.push(
-            `${labId}: drift detected (+${preview.summary.vlanCreates} VLANs, +${preview.summary.subnetCreates} subnets, ${preview.summary.vlanUpdates + preview.summary.subnetUpdates} update(s)); skip mode wrote nothing`,
-          );
-        } else {
-          labMessages.push(`${labId}: in sync`);
-        }
-        continue;
-      }
-
       const parts: string[] = [];
-      if (changes > 0) {
-        // Deletes are never part of auto-sync: overwrite applies the mirror
-        // policy with allowDeletes off, so removals stay a manual decision.
+      if (changes > 0 || pendingDeletes > 0) {
         const applied = applyIntegrationNetworkPreview({
           preview,
-          allowDeletes: false,
+          allowDeletes: schedule.mode === "mirror",
           actor: AUTO_SYNC_ACTOR,
         });
+        const removed =
+          applied.deletedVlanIds.length + applied.deletedSubnetIds.length;
         parts.push(
-          `+${applied.createdVlanIds.length} VLAN(s), +${applied.createdSubnetIds.length} subnet(s), ${applied.updatedVlanIds.length + applied.updatedSubnetIds.length} update(s)`,
+          `+${applied.createdVlanIds.length} VLAN(s), +${applied.createdSubnetIds.length} subnet(s), ${applied.updatedVlanIds.length + applied.updatedSubnetIds.length} update(s)${removed > 0 ? `, -${removed} removed` : ""}`,
         );
       }
 
@@ -141,7 +133,7 @@ export async function runIntegrationSyncSchedule(
       );
     }
 
-    const status = driftDetected ? "drift" : "ok";
+    const status = "ok" as const;
     const message = labMessages.join(" | ") || "No target labs configured.";
     recordIntegrationSyncScheduleResult(scheduleId, {
       status,

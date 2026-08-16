@@ -1,4 +1,5 @@
 import { db } from "../../db.js";
+import { cidrContainsHostIp } from "../ip-cidr.js";
 import { createId } from "../ids.js";
 import {
   INTEGRATION_PORT_KINDS,
@@ -75,9 +76,8 @@ export function sanitizeImportableDevices(
               linkState: (linkState === "up" || linkState === "down"
                 ? linkState
                 : "unknown") as "up" | "down" | "unknown",
-              mode: (mode === "access" || mode === "trunk"
-                ? mode
-                : null) as "access" | "trunk" | null,
+              mode: (mode === "access" || mode === "trunk" ? mode : null) as
+                "access" | "trunk" | null,
               untaggedVlanNumber: sanitizeVlanNumber(port.untaggedVlanNumber),
               taggedVlanNumbers,
             },
@@ -165,6 +165,7 @@ export interface IntegrationDeviceSyncResult {
   createdDeviceIds: string[];
   createdPortCount: number;
   createdSsidIds: string[];
+  createdIpAssignmentIds: string[];
   linkedAccessPoints: number;
   skipped: string[];
 }
@@ -280,6 +281,7 @@ export function applyIntegrationDeviceSync(input: {
     createdDeviceIds: [],
     createdPortCount: 0,
     createdSsidIds: [],
+    createdIpAssignmentIds: [],
     linkedAccessPoints: 0,
     skipped: [],
   };
@@ -304,6 +306,53 @@ export function applyIntegrationDeviceSync(input: {
   const apply = db.transaction(() => {
     const existing = existingLabDevices(input.labId);
     const apDeviceIds: string[] = [];
+    // Interconnect what we can: a device IP that falls inside a subnet the
+    // lab already tracks becomes an IP assignment (merge-only — existing
+    // assignments on that address are left alone).
+    const labSubnets = db
+      .prepare("SELECT id, cidr FROM subnets WHERE labId = ?")
+      .all(input.labId) as Array<{ id: string; cidr: string }>;
+    const assignmentExists = db.prepare(
+      "SELECT id FROM ipAssignments WHERE subnetId = ? AND ipAddress = ?",
+    );
+    const insertAssignment = db.prepare(`
+      INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, allocationMode, deviceId, hostname, description)
+      VALUES (?, ?, ?, 'device', 'static', ?, ?, ?)
+    `);
+    const linkDeviceIp = (
+      deviceId: string,
+      name: string,
+      ipAddress: string | null,
+    ) => {
+      if (!ipAddress || !/^\d{1,3}(\.\d{1,3}){3}$/.test(ipAddress)) return;
+      const subnet = labSubnets.find((entry) => {
+        try {
+          return cidrContainsHostIp(entry.cidr, ipAddress);
+        } catch {
+          return false;
+        }
+      });
+      if (!subnet) return;
+      if (assignmentExists.get(subnet.id, ipAddress)) return;
+      const assignmentId = createId("ip");
+      insertAssignment.run(
+        assignmentId,
+        subnet.id,
+        ipAddress,
+        deviceId,
+        name,
+        "Linked by a controller integration import.",
+      );
+      result.createdIpAssignmentIds.push(assignmentId);
+      writeAudit.run(
+        createId("a"),
+        now,
+        input.actor,
+        "integration.sync.ip.create",
+        assignmentId,
+        `Assigned ${ipAddress} to ${name} in subnet ${subnet.cidr}.`,
+      );
+    };
     const vlanIdByNumber = new Map<number, string>(
       (
         db
@@ -318,6 +367,7 @@ export function applyIntegrationDeviceSync(input: {
       const match = matchDevice(device, existing);
       if (match) {
         if (device.deviceType === "ap") apDeviceIds.push(match.id);
+        linkDeviceIp(match.id, name, device.ipAddress);
         continue;
       }
       const hostnameTaken = existing.some(
@@ -403,6 +453,8 @@ export function applyIntegrationDeviceSync(input: {
         });
         result.createdPortCount += 1;
       });
+
+      linkDeviceIp(deviceId, name, device.ipAddress);
 
       writeAudit.run(
         createId("a"),

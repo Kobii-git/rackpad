@@ -25,11 +25,12 @@ export type IntegrationConnectionStatus =
   (typeof INTEGRATION_CONNECTION_STATUSES)[number];
 
 // merge: add missing records only. overwrite: add and update to match the
-// controller (never deletes). skip: compute the diff and report drift
-// without writing anything.
+// controller. mirror: also deletes destination records missing from the
+// source (per managed object type, referenced records protected). merge:
+// add missing records only. skip: add and update, but skip deletes.
 export const INTEGRATION_AUTO_SYNC_MODES = [
   "merge",
-  "overwrite",
+  "mirror",
   "skip",
 ] as const;
 export type IntegrationAutoSyncMode =
