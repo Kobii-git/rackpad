@@ -33,7 +33,9 @@ const connection: IntegrationConnectionSecrets = {
   syncVlans: true,
   syncSubnets: true,
   syncDhcp: true,
-  syncDevices: true,
+  syncSwitches: true,
+  syncGateways: true,
+  syncAccessPoints: true,
   syncWifi: true,
 };
 

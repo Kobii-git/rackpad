@@ -2077,8 +2077,6 @@ export const fa = {
   "The controller reported no DHCP ranges.": "کنترلر هیچ محدوده DHCP گزارش نکرد.",
   "The controller reported no devices.": "کنترلر هیچ دستگاهی گزارش نکرد.",
   "DHCP ranges are shown for review and never applied.": "محدوده‌های DHCP فقط برای بازبینی نمایش داده می‌شوند و هرگز اعمال نمی‌شوند.",
-  "Switches, gateways, APs": "سوئیچ‌ها، دروازه‌ها، اکسس‌پوینت‌ها",
-  "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.": "دستگاه‌های کنترلر را به‌عنوان رکوردهای Rackpad وارد می‌کند، از جمله پورت‌های سوئیچ. تا زمانی که آن‌ها را در رک نصب کنید به‌صورت تجهیزات نصب‌نشده قرار می‌گیرند؛ دستگاه‌های موجود با MAC یا نام میزبان تطبیق داده می‌شوند و هرگز تغییر نمی‌کنند.",
   "Creates the WiFi controller, links AP devices to it, and imports SSIDs with their VLAN associations.": "کنترلر WiFi را ایجاد می‌کند، دستگاه‌های AP را به آن پیوند می‌دهد و SSIDها را همراه با ارتباط‌های VLAN آن‌ها وارد می‌کند.",
   "Firewall device": "دستگاه فایروال",
   "Imports the firewall itself as a Rackpad device record, placed as loose gear.": "خود فایروال را به‌عنوان رکورد دستگاه Rackpad وارد می‌کند و به‌صورت تجهیزات نصب‌نشده قرار می‌گیرد.",
@@ -2108,4 +2106,8 @@ export const fa = {
   "Importing devices failed.": "واردکردن دستگاه‌ها ناموفق بود.",
   "Imported {deviceCount} device(s) with {portCount} port(s) and {ssidCount} SSID(s).": "{deviceCount} دستگاه با {portCount} پورت و {ssidCount} SSID وارد شد.",
   "Creates the new devices, ports, and SSIDs shown on the Import tab.": "دستگاه‌ها، پورت‌ها و SSIDهای جدید نمایش‌داده‌شده در زبانه وارد کردن را ایجاد می‌کند.",
+  "Gateways": "دروازه‌ها",
+  "Imports switches as Rackpad devices with their full port list (media type, speed, link state). New records land as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.": "سوئیچ‌ها را به‌عنوان دستگاه‌های Rackpad همراه با فهرست کامل پورت‌هایشان (نوع رسانه، سرعت، وضعیت لینک) وارد می‌کند. رکوردهای جدید تا زمانی که آن‌ها را در رک نصب کنید به‌صورت تجهیزات نصب‌نشده می‌مانند؛ دستگاه‌های موجود بر اساس MAC یا نام میزبان تطبیق داده می‌شوند و هرگز تغییر نمی‌کنند.",
+  "Imports gateways and routers as Rackpad devices, placed as loose gear. Existing devices are never modified.": "دروازه‌ها و روترها را به‌عنوان دستگاه‌های Rackpad وارد می‌کند و به‌صورت تجهیزات نصب‌نشده قرار می‌گیرند. دستگاه‌های موجود هرگز تغییر نمی‌کنند.",
+  "Imports access points as Rackpad devices and links them to the WiFi controller when SSIDs are pulled.": "نقاط دسترسی را به‌عنوان دستگاه‌های Rackpad وارد می‌کند و هنگام دریافت SSIDها آن‌ها را به کنترلر WiFi پیوند می‌دهد.",
 } satisfies TranslationMap;

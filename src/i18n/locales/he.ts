@@ -2077,8 +2077,6 @@ export const he = {
   "The controller reported no DHCP ranges.": "הבקר לא דיווח על אף טווח DHCP.",
   "The controller reported no devices.": "הבקר לא דיווח על אף התקן.",
   "DHCP ranges are shown for review and never applied.": "טווחי DHCP מוצגים לבדיקה ולעולם אינם מוחלים.",
-  "Switches, gateways, APs": "מתגים, שערים, נקודות גישה",
-  "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.": "מייבא את התקני הבקר כרשומות Rackpad, כולל יציאות מתג. הם מונחים כציוד לא מותקן עד שתתקינו אותם בארון; התקנים קיימים מותאמים לפי MAC או שם מארח ולעולם אינם משתנים.",
   "Creates the WiFi controller, links AP devices to it, and imports SSIDs with their VLAN associations.": "יוצר את בקר ה-WiFi, מקשר אליו התקני AP ומייבא רשתות SSID עם שיוכי ה-VLAN שלהן.",
   "Firewall device": "התקן חומת אש",
   "Imports the firewall itself as a Rackpad device record, placed as loose gear.": "מייבא את חומת האש עצמה כרשומת התקן ב-Rackpad, מונחת כציוד לא מותקן.",
@@ -2108,4 +2106,8 @@ export const he = {
   "Importing devices failed.": "ייבוא ההתקנים נכשל.",
   "Imported {deviceCount} device(s) with {portCount} port(s) and {ssidCount} SSID(s).": "יובאו {deviceCount} התקנים עם {portCount} יציאות ו-{ssidCount} רשתות SSID.",
   "Creates the new devices, ports, and SSIDs shown on the Import tab.": "יוצר את ההתקנים, היציאות ורשתות ה-SSID החדשים המוצגים בלשונית הייבוא.",
+  "Gateways": "שערים",
+  "Imports switches as Rackpad devices with their full port list (media type, speed, link state). New records land as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.": "מייבא מתגים כהתקני Rackpad עם רשימת היציאות המלאה שלהם (סוג מדיה, מהירות, מצב קישור). רשומות חדשות מגיעות כציוד לא מותקן עד שתתקינו אותן בארון; התקנים קיימים מותאמים לפי MAC או שם מארח ולעולם אינם משתנים.",
+  "Imports gateways and routers as Rackpad devices, placed as loose gear. Existing devices are never modified.": "מייבא שערים ונתבים כהתקני Rackpad, מונחים כציוד לא מותקן. התקנים קיימים לעולם אינם משתנים.",
+  "Imports access points as Rackpad devices and links them to the WiFi controller when SSIDs are pulled.": "מייבא נקודות גישה כהתקני Rackpad ומקשר אותן לבקר ה-WiFi כאשר רשתות SSID נמשכות.",
 } satisfies TranslationMap;

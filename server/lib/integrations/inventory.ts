@@ -48,6 +48,11 @@ export interface IntegrationPortSpec {
   kind: IntegrationPortKind;
   speed: string | null;
   linkState: "up" | "down" | "unknown";
+  // VLAN behavior when the controller exposes it: access ports carry an
+  // untagged VLAN, trunks list the VLANs tagged on them.
+  mode?: "access" | "trunk" | null;
+  untaggedVlanNumber?: number | null;
+  taggedVlanNumbers?: number[];
 }
 
 // A controller device that can become a real Rackpad device record
@@ -112,7 +117,10 @@ export function connectionScopeRefs(connection: IntegrationConnectionSecrets) {
 }
 
 const clients = new Map<IntegrationProvider, IntegrationClient>();
-const testOverrides = new Map<IntegrationProvider, IntegrationClient | "none">();
+const testOverrides = new Map<
+  IntegrationProvider,
+  IntegrationClient | "none"
+>();
 
 export function registerIntegrationClient(client: IntegrationClient) {
   clients.set(client.provider, client);

@@ -113,7 +113,9 @@ export interface IntegrationConnectionPublic {
   syncVlans: boolean;
   syncSubnets: boolean;
   syncDhcp: boolean;
-  syncDevices: boolean;
+  syncSwitches: boolean;
+  syncGateways: boolean;
+  syncAccessPoints: boolean;
   syncWifi: boolean;
   lastStatus: IntegrationConnectionStatus;
   lastCheckedAt: string | null;
@@ -148,7 +150,9 @@ export interface IntegrationConnectionSecrets {
   syncVlans: boolean;
   syncSubnets: boolean;
   syncDhcp: boolean;
-  syncDevices: boolean;
+  syncSwitches: boolean;
+  syncGateways: boolean;
+  syncAccessPoints: boolean;
   syncWifi: boolean;
   autoSyncEnabled: boolean;
   autoSyncMode: IntegrationAutoSyncMode;

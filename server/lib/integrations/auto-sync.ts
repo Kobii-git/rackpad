@@ -10,7 +10,10 @@ import {
   applyIntegrationNetworkPreview,
   buildIntegrationNetworkPreview,
 } from "./network-sync.js";
-import { applyIntegrationDeviceSync } from "./device-sync.js";
+import {
+  applyIntegrationDeviceSync,
+  filterImportableDevicesForConnection,
+} from "./device-sync.js";
 import { INTEGRATION_PROVIDER_INFO } from "./types.js";
 import { cronMatches, parseCronExpression } from "./cron.js";
 
@@ -108,16 +111,18 @@ export async function runIntegrationSyncSchedule(
         );
       }
 
-      if (
-        (connection.syncDevices || connection.syncWifi) &&
-        ((inventory.importableDevices?.length ?? 0) > 0 || inventory.wifi)
-      ) {
+      const importableDevices = filterImportableDevicesForConnection(
+        connection,
+        inventory.importableDevices ?? [],
+      );
+      const wifiInventory = connection.syncWifi
+        ? (inventory.wifi ?? null)
+        : null;
+      if (importableDevices.length > 0 || wifiInventory) {
         const deviceResult = applyIntegrationDeviceSync({
           labId,
-          importableDevices: connection.syncDevices
-            ? (inventory.importableDevices ?? [])
-            : [],
-          wifi: connection.syncWifi ? (inventory.wifi ?? null) : null,
+          importableDevices,
+          wifi: wifiInventory,
           vendor: INTEGRATION_PROVIDER_INFO[connection.provider].vendor,
           actor: AUTO_SYNC_ACTOR,
         });

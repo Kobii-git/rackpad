@@ -2075,9 +2075,6 @@ export const en = {
   "The controller reported no DHCP ranges.": "The controller reported no DHCP ranges.",
   "The controller reported no devices.": "The controller reported no devices.",
   "DHCP ranges are shown for review and never applied.": "DHCP ranges are shown for review and never applied.",
-  "Switches, gateways, APs": "Switches, gateways, APs",
-  "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.":
-    "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.",
   "Creates the WiFi controller, links AP devices to it, and imports SSIDs with their VLAN associations.":
     "Creates the WiFi controller, links AP devices to it, and imports SSIDs with their VLAN associations.",
   "Firewall device": "Firewall device",
@@ -2116,6 +2113,13 @@ export const en = {
     "Imported {deviceCount} device(s) with {portCount} port(s) and {ssidCount} SSID(s).",
   "Creates the new devices, ports, and SSIDs shown on the Import tab.":
     "Creates the new devices, ports, and SSIDs shown on the Import tab.",
+  "Gateways": "Gateways",
+  "Imports switches as Rackpad devices with their full port list (media type, speed, link state). New records land as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.":
+    "Imports switches as Rackpad devices with their full port list (media type, speed, link state). New records land as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.",
+  "Imports gateways and routers as Rackpad devices, placed as loose gear. Existing devices are never modified.":
+    "Imports gateways and routers as Rackpad devices, placed as loose gear. Existing devices are never modified.",
+  "Imports access points as Rackpad devices and links them to the WiFi controller when SSIDs are pulled.":
+    "Imports access points as Rackpad devices and links them to the WiFi controller when SSIDs are pulled.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

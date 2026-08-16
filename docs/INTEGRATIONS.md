@@ -195,10 +195,20 @@ those devices as real Rackpad device records — visible in **Devices** — not
 just as read-only previews:
 
 - **What comes in:** switches, gateways/routers, and access points from
-  UniFi and Omada (with their full port list: name, RJ45/SFP/SFP+ media
-  type, speed, and link state), and the OPNsense firewall itself. Model,
-  MAC, IP, serial, firmware, and online status are captured when the
-  controller reports them.
+  UniFi and Omada — each behind its own pull checkbox, so you can import
+  just switches, just APs, or any mix — and the OPNsense firewall itself.
+  Model, MAC, IP, serial, firmware, and online status are captured when
+  the controller reports them.
+- **Switch ports with VLAN behavior:** the full port list comes in (name,
+  RJ45/SFP/SFP+ media type, speed, link state), and when the controller
+  exposes per-port VLAN configuration it is mapped onto Rackpad's port
+  model: access ports get their untagged VLAN link, trunks get the list
+  of VLANs carried on them (`allowedVlanIds`). UniFi resolves port
+  profiles and per-port overrides ("native" → access, "all" → trunk
+  carrying every site VLAN, "customize" → trunk with the explicit tagged
+  list); Omada reads the port PVID and treats the built-in "All" profile
+  as a trunk. VLAN links resolve against the lab's VLANs by number, so
+  apply the network preview first if the VLANs are new.
 - **Loose gear placement:** imported devices land unracked ("loose gear")
   so nothing guesses at physical location — rack them afterwards from the
   Devices page.

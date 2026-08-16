@@ -322,7 +322,9 @@ export interface IntegrationConnection {
   syncVlans: boolean;
   syncSubnets: boolean;
   syncDhcp: boolean;
-  syncDevices: boolean;
+  syncSwitches: boolean;
+  syncGateways: boolean;
+  syncAccessPoints: boolean;
   syncWifi: boolean;
   lastStatus: "unknown" | "ok" | "error";
   lastCheckedAt: string | null;
@@ -372,6 +374,9 @@ export interface IntegrationPortSpec {
   kind: "rj45" | "sfp" | "sfp_plus" | "qsfp" | "wifi";
   speed: string | null;
   linkState: "up" | "down" | "unknown";
+  mode?: "access" | "trunk" | null;
+  untaggedVlanNumber?: number | null;
+  taggedVlanNumbers?: number[];
 }
 
 export interface IntegrationImportableDevice {

@@ -41,6 +41,7 @@ import {
 import {
   applyIntegrationDeviceSync,
   buildIntegrationDeviceSyncPlan,
+  filterImportableDevicesForConnection,
   sanitizeImportableDevices,
   sanitizeWifiInventory,
 } from "../lib/integrations/device-sync.js";
@@ -155,6 +156,10 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       syncVlans: optionalBoolean(body, "syncVlans") ?? true,
       syncSubnets: optionalBoolean(body, "syncSubnets") ?? true,
       syncDhcp: optionalBoolean(body, "syncDhcp") ?? true,
+      syncSwitches: optionalBoolean(body, "syncSwitches") ?? true,
+      syncGateways: optionalBoolean(body, "syncGateways") ?? true,
+      syncAccessPoints: optionalBoolean(body, "syncAccessPoints") ?? true,
+      syncWifi: optionalBoolean(body, "syncWifi") ?? true,
     });
 
     return reply.status(201).send(created);
@@ -215,7 +220,9 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         syncVlans: true,
         syncSubnets: true,
         syncDhcp: true,
-        syncDevices: true,
+        syncSwitches: true,
+        syncGateways: true,
+        syncAccessPoints: true,
         syncWifi: true,
         autoSyncEnabled: false,
         autoSyncMode: "merge",
@@ -305,7 +312,10 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         syncVlans: optionalBoolean(body, "syncVlans") ?? undefined,
         syncSubnets: optionalBoolean(body, "syncSubnets") ?? undefined,
         syncDhcp: optionalBoolean(body, "syncDhcp") ?? undefined,
-        syncDevices: optionalBoolean(body, "syncDevices") ?? undefined,
+        syncSwitches: optionalBoolean(body, "syncSwitches") ?? undefined,
+        syncGateways: optionalBoolean(body, "syncGateways") ?? undefined,
+        syncAccessPoints:
+          optionalBoolean(body, "syncAccessPoints") ?? undefined,
         syncWifi: optionalBoolean(body, "syncWifi") ?? undefined,
         clearSecret: optionalBoolean(body, "clearSecret") ?? false,
       });
@@ -445,22 +455,23 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
             dhcpScopes: inventory.collection.dhcpScopes.length,
           },
         });
+        const importableDevices = filterImportableDevicesForConnection(
+          connection,
+          inventory.importableDevices ?? [],
+        );
+        const wifi = connection.syncWifi ? (inventory.wifi ?? null) : null;
         const deviceSync = buildIntegrationDeviceSyncPlan({
           labId: connection.labId,
-          importableDevices: connection.syncDevices
-            ? (inventory.importableDevices ?? [])
-            : [],
-          wifi: connection.syncWifi ? (inventory.wifi ?? null) : null,
+          importableDevices,
+          wifi,
         });
         return {
           connection: updated,
           preview,
           devices: inventory.devices,
           deviceSync,
-          importableDevices: connection.syncDevices
-            ? (inventory.importableDevices ?? [])
-            : [],
-          wifi: connection.syncWifi ? (inventory.wifi ?? null) : null,
+          importableDevices,
+          wifi,
           warnings: inventory.warnings,
         };
       } catch (error) {
@@ -557,7 +568,9 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       for (const labId of labIds) {
         const lab = db.prepare("SELECT id FROM labs WHERE id = ?").get(labId);
         if (!lab) {
-          reply.status(422).send({ error: `Target lab ${labId} does not exist.` });
+          reply
+            .status(422)
+            .send({ error: `Target lab ${labId} does not exist.` });
           return false;
         }
       }
@@ -620,36 +633,39 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       connectionId,
       name: requiredString(body, "name", { maxLength: 120 }),
       enabled: optionalBoolean(body, "enabled") ?? true,
-      mode:
-        optionalEnum(body, "mode", INTEGRATION_AUTO_SYNC_MODES) ?? "merge",
+      mode: optionalEnum(body, "mode", INTEGRATION_AUTO_SYNC_MODES) ?? "merge",
       cron,
       labIds,
     });
     return reply.status(201).send(created);
   });
 
-  app.patch<{ Params: { id: string } }>("/schedules/:id", async (req, reply) => {
-    if (!requireAdmin(req, reply)) return;
-    const existing = getIntegrationSyncScheduleRow(req.params.id);
-    const connection = scheduleConnection(existing);
-    if (!existing || !connection) {
-      return reply.status(404).send({ error: "Sync schedule not found." });
-    }
-    if (!assertLabWrite(req, reply, String(connection.labId))) return;
+  app.patch<{ Params: { id: string } }>(
+    "/schedules/:id",
+    async (req, reply) => {
+      if (!requireAdmin(req, reply)) return;
+      const existing = getIntegrationSyncScheduleRow(req.params.id);
+      const connection = scheduleConnection(existing);
+      if (!existing || !connection) {
+        return reply.status(404).send({ error: "Sync schedule not found." });
+      }
+      if (!assertLabWrite(req, reply, String(connection.labId))) return;
 
-    const body = asObject(req.body);
-    const cron = optionalString(body, "cron", { maxLength: 120 });
-    const labIds = optionalStringArray(body, "labIds", { maxItems: 50 });
-    if (!validateScheduleInput(reply, cron, labIds ?? undefined)) return;
+      const body = asObject(req.body);
+      const cron = optionalString(body, "cron", { maxLength: 120 });
+      const labIds = optionalStringArray(body, "labIds", { maxItems: 50 });
+      if (!validateScheduleInput(reply, cron, labIds ?? undefined)) return;
 
-    return updateIntegrationSyncSchedule(req.params.id, {
-      name: optionalString(body, "name", { maxLength: 120 }) ?? undefined,
-      enabled: optionalBoolean(body, "enabled") ?? undefined,
-      mode: optionalEnum(body, "mode", INTEGRATION_AUTO_SYNC_MODES) ?? undefined,
-      cron: cron ?? undefined,
-      labIds: labIds ?? undefined,
-    });
-  });
+      return updateIntegrationSyncSchedule(req.params.id, {
+        name: optionalString(body, "name", { maxLength: 120 }) ?? undefined,
+        enabled: optionalBoolean(body, "enabled") ?? undefined,
+        mode:
+          optionalEnum(body, "mode", INTEGRATION_AUTO_SYNC_MODES) ?? undefined,
+        cron: cron ?? undefined,
+        labIds: labIds ?? undefined,
+      });
+    },
+  );
 
   app.delete<{ Params: { id: string } }>(
     "/schedules/:id",
@@ -708,14 +724,13 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       if (!assertLabWrite(req, reply, String(existing.labId))) return;
 
       const body = asObject(req.body);
-      const importableDevices = sanitizeImportableDevices(
-        body.importableDevices,
+      const importableDevices = filterImportableDevicesForConnection(
+        parseIntegrationConnectionPublic(existing),
+        sanitizeImportableDevices(body.importableDevices),
       );
       const wifi = sanitizeWifiInventory(body.wifi);
       if (importableDevices.length === 0 && !wifi) {
-        return reply
-          .status(400)
-          .send({ error: "There is nothing to import." });
+        return reply.status(400).send({ error: "There is nothing to import." });
       }
 
       const provider = String(existing.provider) as IntegrationProvider;

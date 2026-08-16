@@ -23,6 +23,13 @@ function text(value: unknown, maxLength = 200): string {
 
 // The apply route round-trips the previewed inventory through the client,
 // so every field is re-validated and coerced before touching the database.
+function sanitizeVlanNumber(value: unknown): number | null {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 1 && number <= 4094
+    ? number
+    : null;
+}
+
 export function sanitizeImportableDevices(
   value: unknown,
 ): IntegrationImportableDevice[] {
@@ -34,9 +41,7 @@ export function sanitizeImportableDevices(
     const name = text(row.name, 120);
     const deviceType = text(row.deviceType, 20);
     if (!name) continue;
-    if (
-      !(IMPORTABLE_DEVICE_TYPES as readonly string[]).includes(deviceType)
-    ) {
+    if (!(IMPORTABLE_DEVICE_TYPES as readonly string[]).includes(deviceType)) {
       continue;
     }
     const ports = Array.isArray(row.ports)
@@ -50,6 +55,16 @@ export function sanitizeImportableDevices(
             return [];
           }
           const linkState = text(port.linkState, 10);
+          const mode = text(port.mode, 10);
+          const taggedVlanNumbers = Array.isArray(port.taggedVlanNumbers)
+            ? [
+                ...new Set(
+                  port.taggedVlanNumbers
+                    .map(sanitizeVlanNumber)
+                    .filter((number): number is number => number != null),
+                ),
+              ].slice(0, 64)
+            : [];
           return [
             {
               name: portName,
@@ -58,6 +73,11 @@ export function sanitizeImportableDevices(
               linkState: (linkState === "up" || linkState === "down"
                 ? linkState
                 : "unknown") as "up" | "down" | "unknown",
+              mode: (mode === "access" || mode === "trunk"
+                ? mode
+                : null) as "access" | "trunk" | null,
+              untaggedVlanNumber: sanitizeVlanNumber(port.untaggedVlanNumber),
+              taggedVlanNumbers,
             },
           ];
         })
@@ -70,8 +90,7 @@ export function sanitizeImportableDevices(
       ipAddress: text(row.ipAddress, 60) || null,
       serial: text(row.serial, 120) || null,
       firmware: text(row.firmware, 120) || null,
-      online:
-        row.online === true ? true : row.online === false ? false : null,
+      online: row.online === true ? true : row.online === false ? false : null,
       ports,
     });
   }
@@ -174,9 +193,7 @@ function matchDevice(
 ): ExistingDeviceRow | undefined {
   const mac = normalizeMac(device.macAddress);
   if (mac) {
-    const byMac = existing.find(
-      (row) => normalizeMac(row.macAddress) === mac,
-    );
+    const byMac = existing.find((row) => normalizeMac(row.macAddress) === mac);
     if (byMac) return byMac;
   }
   const name = device.name.trim().toLowerCase();
@@ -285,6 +302,13 @@ export function applyIntegrationDeviceSync(input: {
   const apply = db.transaction(() => {
     const existing = existingLabDevices(input.labId);
     const apDeviceIds: string[] = [];
+    const vlanIdByNumber = new Map<number, string>(
+      (
+        db
+          .prepare("SELECT id, vlanId FROM vlans WHERE labId = ?")
+          .all(input.labId) as Array<{ id: string; vlanId: number }>
+      ).map((row) => [Number(row.vlanId), row.id]),
+    );
 
     for (const device of input.importableDevices) {
       const name = device.name.trim();
@@ -317,7 +341,11 @@ export function applyIntegrationDeviceSync(input: {
         device.serial,
         device.ipAddress,
         device.macAddress,
-        device.online == null ? "unknown" : device.online ? "online" : "offline",
+        device.online == null
+          ? "unknown"
+          : device.online
+            ? "online"
+            : "offline",
         "room",
         null,
         "normal",
@@ -343,6 +371,17 @@ export function applyIntegrationDeviceSync(input: {
       if (device.deviceType === "ap") apDeviceIds.push(deviceId);
 
       device.ports.forEach((port, index) => {
+        const mode = port.mode === "trunk" ? "trunk" : "access";
+        const untaggedVlanId =
+          port.untaggedVlanNumber != null
+            ? (vlanIdByNumber.get(port.untaggedVlanNumber) ?? null)
+            : null;
+        const allowedVlanIds =
+          mode === "trunk"
+            ? (port.taggedVlanNumbers ?? [])
+                .map((number) => vlanIdByNumber.get(number))
+                .filter((id): id is string => Boolean(id))
+            : [];
         insertPort.run({
           id: createId("p"),
           deviceId,
@@ -351,9 +390,10 @@ export function applyIntegrationDeviceSync(input: {
           kind: port.kind,
           speed: port.speed,
           linkState: port.linkState,
-          mode: "access",
-          vlanId: null,
-          allowedVlanIds: null,
+          mode,
+          vlanId: untaggedVlanId,
+          allowedVlanIds:
+            allowedVlanIds.length > 0 ? JSON.stringify(allowedVlanIds) : null,
           description: null,
           face: "front",
           virtualSwitchId: null,
@@ -375,12 +415,9 @@ export function applyIntegrationDeviceSync(input: {
     if (input.wifi) {
       let controllerId: string | null = null;
       const controllerRow = db
-        .prepare(
-          "SELECT id FROM wifiControllers WHERE labId = ? AND name = ?",
-        )
+        .prepare("SELECT id FROM wifiControllers WHERE labId = ? AND name = ?")
         .get(input.labId, input.wifi.controllerName) as
-        | { id: string }
-        | undefined;
+        { id: string } | undefined;
       if (controllerRow) {
         controllerId = controllerRow.id;
       } else {
@@ -407,20 +444,11 @@ export function applyIntegrationDeviceSync(input: {
         );
       }
 
-      const vlanIdByNumber = new Map<number, string>(
-        (
-          db
-            .prepare("SELECT id, vlanId FROM vlans WHERE labId = ?")
-            .all(input.labId) as Array<{ id: string; vlanId: number }>
-        ).map((row) => [Number(row.vlanId), row.id]),
-      );
       for (const ssid of input.wifi.ssids) {
         const name = ssid.name.trim();
         if (!name) continue;
         const existingSsid = db
-          .prepare(
-            "SELECT id FROM wifiSsids WHERE labId = ? AND name = ?",
-          )
+          .prepare("SELECT id FROM wifiSsids WHERE labId = ? AND name = ?")
           .get(input.labId, name);
         if (existingSsid) continue;
         const ssidId = createId("ssid");
@@ -495,4 +523,24 @@ function matchesApDevice(
     row.hostname.trim().toLowerCase() === name ||
     (row.displayName ?? "").trim().toLowerCase() === name
   );
+}
+
+// Applies the connection's per-category device toggles. Firewalls follow the
+// gateway toggle (they are the gateway in OPNsense setups).
+export function filterImportableDevicesForConnection(
+  connection: {
+    syncSwitches: boolean;
+    syncGateways: boolean;
+    syncAccessPoints: boolean;
+  },
+  devices: IntegrationImportableDevice[],
+): IntegrationImportableDevice[] {
+  return devices.filter((device) => {
+    if (device.deviceType === "switch") return connection.syncSwitches;
+    if (device.deviceType === "router" || device.deviceType === "firewall") {
+      return connection.syncGateways;
+    }
+    if (device.deviceType === "ap") return connection.syncAccessPoints;
+    return true;
+  });
 }

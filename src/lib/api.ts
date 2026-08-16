@@ -1591,7 +1591,9 @@ export const api = {
     syncVlans?: boolean;
     syncSubnets?: boolean;
     syncDhcp?: boolean;
-    syncDevices?: boolean;
+    syncSwitches?: boolean;
+    syncGateways?: boolean;
+    syncAccessPoints?: boolean;
     syncWifi?: boolean;
   }) {
     return request<IntegrationConnection>("/integrations/connections", {
@@ -1635,7 +1637,9 @@ export const api = {
       syncVlans: boolean;
       syncSubnets: boolean;
       syncDhcp: boolean;
-      syncDevices: boolean;
+      syncSwitches: boolean;
+      syncGateways: boolean;
+      syncAccessPoints: boolean;
       syncWifi: boolean;
       clearSecret: boolean;
     }>,

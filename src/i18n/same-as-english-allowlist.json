@@ -353,8 +353,33 @@
   },
   {
     "key": "Gateway",
-    "locales": ["af"],
+    "locales": ["af", "de", "id", "it", "nl", "pt", "vi"],
     "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Gateways",
+    "locales": ["af", "de", "nl", "pt"],
+    "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "Switches",
+    "locales": ["de"],
+    "reason": "German networking keeps the English loanword; plural of the existing de rendering Netzwerk-Switch."
+  },
+  {
+    "key": "Host",
+    "locales": ["de", "id", "it", "nl"],
+    "reason": "These locales keep the English networking term; the previous values were guest/party-host false friends."
+  },
+  {
+    "key": "Container",
+    "locales": ["de", "nl"],
+    "reason": "German and Dutch container UIs (Docker, Proxmox) keep the English term."
+  },
+  {
+    "key": "Access point",
+    "locales": ["it"],
+    "reason": "Italian networking keeps the invariant English loanword access point."
   },
   {
     "key": "dhcp",

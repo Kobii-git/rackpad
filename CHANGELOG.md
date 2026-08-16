@@ -74,13 +74,20 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   sequential so a broken controller cannot destabilize the server. A Run
   now action executes any schedule on demand.
 - Integration pulls can now import real devices: UniFi and Omada switches,
-  gateways, and access points (including their switch ports with media
-  type, speed, and link state) and the OPNsense firewall become Rackpad
-  device records, placed as loose gear until racked. Matching is merge-only
-  by MAC then hostname — existing devices are never modified — and the
-  preview modal gains an Import tab showing create vs. already-tracked
-  before an explicit **Import devices** action. Scheduled syncs import new
-  devices too when the connection's device pull is enabled.
+  gateways, and access points — each behind its own per-category pull
+  checkbox — and the OPNsense firewall become Rackpad device records,
+  placed as loose gear until racked. Switch ports import with media type,
+  speed, and link state, and per-port VLAN behavior maps onto Rackpad's
+  port model where the controller exposes it: access ports link their
+  untagged VLAN, trunks carry their tagged VLAN list (UniFi port profiles
+  and overrides are resolved; Omada uses the PVID and treats the "All"
+  profile as a trunk). Matching is merge-only by MAC then hostname —
+  existing devices are never modified — and the preview modal gains an
+  Import tab showing create vs. already-tracked before an explicit
+  **Import devices** action. The modal footer is context-aware: network
+  tabs offer **Apply networks**, device tabs offer **Import devices**.
+  Scheduled syncs import new devices too when the category pulls are
+  enabled.
 - Added WiFi inventory import: enabling the SSID pull creates a WiFi
   controller record per connection, imports SSIDs with their VLAN
   associations, and links imported access points to the controller.

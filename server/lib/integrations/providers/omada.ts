@@ -57,7 +57,8 @@ function isUsableIpv4(value: string) {
   const octets = value.split(".");
   if (octets.length !== 4) return false;
   const numbers = octets.map((octet) => Number(octet));
-  if (numbers.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  if (numbers.some((n) => !Number.isInteger(n) || n < 0 || n > 255))
+    return false;
   if (numbers[0] === 127 || numbers[0] === 0 || numbers[0] >= 224) return false;
   if (numbers[0] === 169 && numbers[1] === 254) return false;
   return true;
@@ -106,7 +107,8 @@ async function omadaRequest(
       url,
       method: options.method ?? "GET",
       headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      body:
+        options.body !== undefined ? JSON.stringify(options.body) : undefined,
       verifyTls: connection.verifyTls,
     },
     TARGET_LABEL,
@@ -472,6 +474,47 @@ async function omadaFetchInventory(
   const ssids: IntegrationWifiSsid[] = [];
 
   for (const site of sites) {
+    // Networks come first: the switch port parser needs the site's VLAN
+    // numbers to expand the built-in "All" trunk profile.
+    const networks = await omadaLanNetworks(
+      connection,
+      session,
+      site.siteId,
+      warnings,
+    );
+    const siteVlanNumbers: number[] = [];
+    for (const network of networks) {
+      const networkName = multiSite
+        ? `${site.name} ${network.name}`
+        : network.name;
+      if (network.vlanNumber != null) {
+        if (!siteVlanNumbers.includes(network.vlanNumber)) {
+          siteVlanNumbers.push(network.vlanNumber);
+        }
+        if (!seenVlans.has(network.vlanNumber)) {
+          seenVlans.add(network.vlanNumber);
+          vlans.push({ vlanNumber: network.vlanNumber, name: networkName });
+        }
+      }
+      if (network.cidr && !seenSubnets.has(network.cidr)) {
+        seenSubnets.add(network.cidr);
+        subnets.push({
+          cidr: network.cidr,
+          name: networkName,
+          vlanNumber: network.vlanNumber,
+        });
+      }
+      for (const pool of network.pools) {
+        dhcpScopes.push({
+          name: `${networkName} DHCP`,
+          startIp: pool.startIp,
+          endIp: pool.endIp,
+          subnetCidr: network.cidr,
+          note: "Omada DHCP server range",
+        });
+      }
+    }
+
     for (const row of await omadaSiteDevices(
       connection,
       session,
@@ -514,6 +557,34 @@ async function omadaFetchInventory(
             ).toLowerCase();
             const linkStatus = asNumber(port.linkStatus ?? port.status);
             const maxSpeed = asNumber(port.maxSpeed ?? port.linkSpeed);
+            const pvid = asNumber(port.pvid);
+            const untaggedVlanNumber =
+              pvid != null && pvid >= 1 && pvid <= 4094 ? pvid : null;
+            const profileName = asText(
+              port.profileName ?? port.profile,
+            ).toLowerCase();
+            // The built-in "All" profile is a trunk carrying every site
+            // VLAN; a plain PVID reads as an access port.
+            const vlanConfig =
+              profileName === "all"
+                ? {
+                    mode: "trunk" as const,
+                    untaggedVlanNumber,
+                    taggedVlanNumbers: siteVlanNumbers.filter(
+                      (number) => number !== untaggedVlanNumber,
+                    ),
+                  }
+                : untaggedVlanNumber != null
+                  ? {
+                      mode: "access" as const,
+                      untaggedVlanNumber,
+                      taggedVlanNumbers: [],
+                    }
+                  : {
+                      mode: null,
+                      untaggedVlanNumber: null,
+                      taggedVlanNumbers: [],
+                    };
             ports.push({
               name,
               kind: media.includes("sfp+")
@@ -529,6 +600,7 @@ async function omadaFetchInventory(
                   : null,
               linkState:
                 linkStatus === 1 ? "up" : linkStatus === 0 ? "down" : "unknown",
+              ...vlanConfig,
             });
           }
         } catch {
@@ -573,8 +645,7 @@ async function omadaFetchInventory(
           const vlan = asNumber(row.vlanId ?? row.vlan);
           ssids.push({
             name,
-            vlanNumber:
-              vlan != null && vlan >= 1 && vlan <= 4094 ? vlan : null,
+            vlanNumber: vlan != null && vlan >= 1 && vlan <= 4094 ? vlan : null,
             security: asText(row.security ?? row.securityMode) || null,
             hidden: row.hideSsid === true || row.ssidBroadcast === false,
           });
@@ -582,39 +653,6 @@ async function omadaFetchInventory(
       }
     } catch {
       // SSIDs stay empty when the endpoints are unavailable.
-    }
-
-    const networks = await omadaLanNetworks(
-      connection,
-      session,
-      site.siteId,
-      warnings,
-    );
-    for (const network of networks) {
-      const networkName = multiSite
-        ? `${site.name} ${network.name}`
-        : network.name;
-      if (network.vlanNumber != null && !seenVlans.has(network.vlanNumber)) {
-        seenVlans.add(network.vlanNumber);
-        vlans.push({ vlanNumber: network.vlanNumber, name: networkName });
-      }
-      if (network.cidr && !seenSubnets.has(network.cidr)) {
-        seenSubnets.add(network.cidr);
-        subnets.push({
-          cidr: network.cidr,
-          name: networkName,
-          vlanNumber: network.vlanNumber,
-        });
-      }
-      for (const pool of network.pools) {
-        dhcpScopes.push({
-          name: `${networkName} DHCP`,
-          startIp: pool.startIp,
-          endIp: pool.endIp,
-          subnetCidr: network.cidr,
-          note: "Omada DHCP server range",
-        });
-      }
     }
   }
 

@@ -95,7 +95,9 @@ export function parseIntegrationConnectionPublic(
     syncVlans: Boolean(row.syncVlans),
     syncSubnets: Boolean(row.syncSubnets),
     syncDhcp: Boolean(row.syncDhcp),
-    syncDevices: Boolean(row.syncDevices ?? 1),
+    syncSwitches: Boolean(row.syncSwitches ?? 1),
+    syncGateways: Boolean(row.syncGateways ?? 1),
+    syncAccessPoints: Boolean(row.syncAccessPoints ?? 1),
     syncWifi: Boolean(row.syncWifi ?? 1),
     lastStatus: parseStatus(row.lastStatus),
     lastCheckedAt: row.lastCheckedAt ? String(row.lastCheckedAt) : null,
@@ -175,7 +177,9 @@ export function loadIntegrationConnectionSecrets(
     syncVlans: Boolean(row.syncVlans),
     syncSubnets: Boolean(row.syncSubnets),
     syncDhcp: Boolean(row.syncDhcp),
-    syncDevices: Boolean(row.syncDevices ?? 1),
+    syncSwitches: Boolean(row.syncSwitches ?? 1),
+    syncGateways: Boolean(row.syncGateways ?? 1),
+    syncAccessPoints: Boolean(row.syncAccessPoints ?? 1),
     syncWifi: Boolean(row.syncWifi ?? 1),
     autoSyncEnabled: Boolean(row.autoSyncEnabled),
     autoSyncMode: parseAutoSyncMode(row.autoSyncMode),
@@ -214,7 +218,9 @@ export function createIntegrationConnection(input: {
   syncVlans?: boolean;
   syncSubnets?: boolean;
   syncDhcp?: boolean;
-  syncDevices?: boolean;
+  syncSwitches?: boolean;
+  syncGateways?: boolean;
+  syncAccessPoints?: boolean;
   syncWifi?: boolean;
 }) {
   assertProviderAuthKind(input.provider, input.authKind);
@@ -226,8 +232,9 @@ export function createIntegrationConnection(input: {
     INSERT INTO integrationConnections (
       id, labId, provider, name, baseUrl, authKind, authId, authSecretEnc,
       siteRef, scopeRefs, verifyTls, enabled, syncVlans, syncSubnets, syncDhcp,
-      syncDevices, syncWifi, lastStatus, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
+      syncSwitches, syncGateways, syncAccessPoints, syncWifi, lastStatus,
+      createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
   `,
   ).run(
     id,
@@ -247,7 +254,9 @@ export function createIntegrationConnection(input: {
     input.syncVlans === false ? 0 : 1,
     input.syncSubnets === false ? 0 : 1,
     input.syncDhcp === false ? 0 : 1,
-    input.syncDevices === false ? 0 : 1,
+    input.syncSwitches === false ? 0 : 1,
+    input.syncGateways === false ? 0 : 1,
+    input.syncAccessPoints === false ? 0 : 1,
     input.syncWifi === false ? 0 : 1,
     now,
     now,
@@ -270,7 +279,9 @@ export function updateIntegrationConnection(
     syncVlans: boolean;
     syncSubnets: boolean;
     syncDhcp: boolean;
-    syncDevices: boolean;
+    syncSwitches: boolean;
+    syncGateways: boolean;
+    syncAccessPoints: boolean;
     syncWifi: boolean;
     clearSecret: boolean;
     autoSyncEnabled: boolean;
@@ -341,12 +352,24 @@ export function updateIntegrationConnection(
         ? 1
         : 0
       : (existing.syncDhcp as number);
-  const nextSyncDevices =
-    input.syncDevices !== undefined
-      ? input.syncDevices
+  const nextSyncSwitches =
+    input.syncSwitches !== undefined
+      ? input.syncSwitches
         ? 1
         : 0
-      : ((existing.syncDevices as number) ?? 1);
+      : ((existing.syncSwitches as number) ?? 1);
+  const nextSyncGateways =
+    input.syncGateways !== undefined
+      ? input.syncGateways
+        ? 1
+        : 0
+      : ((existing.syncGateways as number) ?? 1);
+  const nextSyncAccessPoints =
+    input.syncAccessPoints !== undefined
+      ? input.syncAccessPoints
+        ? 1
+        : 0
+      : ((existing.syncAccessPoints as number) ?? 1);
   const nextSyncWifi =
     input.syncWifi !== undefined
       ? input.syncWifi
@@ -393,7 +416,9 @@ export function updateIntegrationConnection(
       syncVlans = ?,
       syncSubnets = ?,
       syncDhcp = ?,
-      syncDevices = ?,
+      syncSwitches = ?,
+      syncGateways = ?,
+      syncAccessPoints = ?,
       syncWifi = ?,
       autoSyncEnabled = ?,
       autoSyncMode = ?,
@@ -417,7 +442,9 @@ export function updateIntegrationConnection(
     nextSyncVlans,
     nextSyncSubnets,
     nextSyncDhcp,
-    nextSyncDevices,
+    nextSyncSwitches,
+    nextSyncGateways,
+    nextSyncAccessPoints,
     nextSyncWifi,
     nextAutoSyncEnabled,
     nextAutoSyncMode,

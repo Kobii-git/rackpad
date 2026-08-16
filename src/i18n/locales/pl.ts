@@ -2077,8 +2077,6 @@ export const pl = {
   "The controller reported no DHCP ranges.": "Kontroler nie zgłosił żadnych zakresów DHCP.",
   "The controller reported no devices.": "Kontroler nie zgłosił żadnych urządzeń.",
   "DHCP ranges are shown for review and never applied.": "Zakresy DHCP są pokazywane do przeglądu i nigdy nie są stosowane.",
-  "Switches, gateways, APs": "Przełączniki, bramy, punkty dostępowe",
-  "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.": "Importuje urządzenia kontrolera jako rekordy Rackpad, w tym porty przełączników. Do czasu zamontowania w szafie trafiają jako luźny sprzęt; istniejące urządzenia są dopasowywane po MAC lub nazwie hosta i nigdy nie są modyfikowane.",
   "Creates the WiFi controller, links AP devices to it, and imports SSIDs with their VLAN associations.": "Tworzy kontroler WiFi, przypisuje do niego urządzenia AP i importuje SSID wraz z powiązaniami VLAN.",
   "Firewall device": "Urządzenie zapory",
   "Imports the firewall itself as a Rackpad device record, placed as loose gear.": "Importuje samą zaporę jako rekord urządzenia Rackpad, umieszczoną jako luźny sprzęt.",
@@ -2108,4 +2106,8 @@ export const pl = {
   "Importing devices failed.": "Importowanie urządzeń nie powiodło się.",
   "Imported {deviceCount} device(s) with {portCount} port(s) and {ssidCount} SSID(s).": "Zaimportowano {deviceCount} urządzenie(a) z {portCount} portem(ami) i {ssidCount} SSID.",
   "Creates the new devices, ports, and SSIDs shown on the Import tab.": "Tworzy nowe urządzenia, porty i SSID pokazane na karcie Importuj.",
+  "Gateways": "Bramy",
+  "Imports switches as Rackpad devices with their full port list (media type, speed, link state). New records land as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.": "Importuje przełączniki jako urządzenia Rackpad wraz z pełną listą portów (typ nośnika, prędkość, stan łącza). Nowe rekordy trafiają jako luźny sprzęt, dopóki nie zamontujesz ich w szafie; istniejące urządzenia są dopasowywane po MAC lub nazwie hosta i nigdy nie są modyfikowane.",
+  "Imports gateways and routers as Rackpad devices, placed as loose gear. Existing devices are never modified.": "Importuje bramy i routery jako urządzenia Rackpad, umieszczone jako luźny sprzęt. Istniejące urządzenia nigdy nie są modyfikowane.",
+  "Imports access points as Rackpad devices and links them to the WiFi controller when SSIDs are pulled.": "Importuje punkty dostępu jako urządzenia Rackpad i przypisuje je do kontrolera WiFi, gdy pobierane są SSID.",
 } satisfies TranslationMap;

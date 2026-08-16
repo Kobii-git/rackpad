@@ -2077,8 +2077,6 @@ export const af = {
   "The controller reported no DHCP ranges.": "Die beheerder het geen DHCP-reekse gerapporteer nie.",
   "The controller reported no devices.": "Die beheerder het geen toestelle gerapporteer nie.",
   "DHCP ranges are shown for review and never applied.": "DHCP-reekse word vir nasien gewys en nooit toegepas nie.",
-  "Switches, gateways, APs": "Skakelaars, gateways, toegangspunte",
-  "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.": "Voer beheerder-toestelle as Rackpad-rekords in, insluitend switch-poorte. Hulle word as los toerusting geplaas totdat hulle in 'n rak gemonteer word; bestaande toestelle word volgens MAC of gasheernaam gepas en nooit gewysig nie.",
   "Creates the WiFi controller, links AP devices to it, and imports SSIDs with their VLAN associations.": "Skep die WiFi-beheerder, koppel AP-toestelle daaraan en voer SSID's met hul VLAN-assosiasies in.",
   "Firewall device": "Brandmuur-toestel",
   "Imports the firewall itself as a Rackpad device record, placed as loose gear.": "Voer die brandmuur self as 'n Rackpad-toestelrekord in, geplaas as los toerusting.",
@@ -2108,4 +2106,8 @@ export const af = {
   "Importing devices failed.": "Kon nie toestelle invoer nie.",
   "Imported {deviceCount} device(s) with {portCount} port(s) and {ssidCount} SSID(s).": "{deviceCount} toestel(le) met {portCount} poort(e) en {ssidCount} SSID('s) ingevoer.",
   "Creates the new devices, ports, and SSIDs shown on the Import tab.": "Skep die nuwe toestelle, poorte en SSID's wat op die Voer in-oortjie gewys word.",
+  "Gateways": "Gateways",
+  "Imports switches as Rackpad devices with their full port list (media type, speed, link state). New records land as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.": "Voer skakelaars as Rackpad-toestelle in met hul volledige poortlys (mediatipe, spoed, skakelstatus). Nuwe rekords beland as los toerusting totdat jy hulle in 'n rak monteer; bestaande toestelle word volgens MAC of gasheernaam gepas en nooit gewysig nie.",
+  "Imports gateways and routers as Rackpad devices, placed as loose gear. Existing devices are never modified.": "Voer gateways en roeteerders as Rackpad-toestelle in, geplaas as los toerusting. Bestaande toestelle word nooit gewysig nie.",
+  "Imports access points as Rackpad devices and links them to the WiFi controller when SSIDs are pulled.": "Voer toegangspunte as Rackpad-toestelle in en koppel hulle aan die WiFi-beheerder wanneer SSID's getrek word.",
 } satisfies TranslationMap;

@@ -59,7 +59,8 @@ function isUsableIpv4(value: string) {
   const octets = value.split(".");
   if (octets.length !== 4) return false;
   const numbers = octets.map((octet) => Number(octet));
-  if (numbers.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  if (numbers.some((n) => !Number.isInteger(n) || n < 0 || n > 255))
+    return false;
   if (numbers[0] === 127 || numbers[0] === 0 || numbers[0] >= 224) return false;
   if (numbers[0] === 169 && numbers[1] === 254) return false;
   return true;
@@ -257,8 +258,7 @@ function importableKind(
 
 function officialDeviceKind(features: unknown): IntegrationDeviceKind {
   const list = asArray(features).map(asText);
-  const keys =
-    list.length > 0 ? list : Object.keys(asRecord(features));
+  const keys = list.length > 0 ? list : Object.keys(asRecord(features));
   if (keys.includes("accessPoint") && !keys.includes("switching")) {
     return "access-point";
   }
@@ -339,6 +339,15 @@ async function officialFetchInventory(
               const port = asRecord(portEntry);
               const idx = asNumber(port.idx);
               const connector = asText(port.connector).toUpperCase();
+              // The integration API only exposes VLAN config on newer
+              // Network versions; read it defensively.
+              const nativeVlan = asNumber(
+                port.nativeVlanId ?? port.pvid ?? port.vlan,
+              );
+              const untaggedVlanNumber =
+                nativeVlan != null && nativeVlan >= 1 && nativeVlan <= 4094
+                  ? nativeVlan
+                  : null;
               ports.push({
                 name: `Port ${idx ?? ports.length + 1}`,
                 kind: connector.startsWith("QSFP")
@@ -355,6 +364,9 @@ async function officialFetchInventory(
                     : asText(port.state) === "DOWN"
                       ? "down"
                       : "unknown",
+                mode: untaggedVlanNumber != null ? "access" : null,
+                untaggedVlanNumber,
+                taggedVlanNumbers: [],
               });
             }
           } catch {
@@ -569,7 +581,10 @@ async function legacyJson(
 ): Promise<unknown[]> {
   const response = await integrationHttpRequest(
     {
-      url: buildIntegrationUrl(connection.baseUrl, `${session.apiPrefix}${apiPath}`),
+      url: buildIntegrationUrl(
+        connection.baseUrl,
+        `${session.apiPrefix}${apiPath}`,
+      ),
       method: "GET",
       headers: { Cookie: session.cookie },
       verifyTls: connection.verifyTls,
@@ -687,6 +702,61 @@ async function legacyTest(
   };
 }
 
+// Resolves a legacy port's VLAN behavior from its port profile (or the
+// device's per-port override): "native" forward means an access port on
+// the profile's native network, "all" is a trunk carrying every site
+// VLAN, and "customize" is a trunk with an explicit tagged list.
+function legacyPortVlanConfig(
+  port: Record<string, unknown>,
+  overrides: Map<number, Record<string, unknown>>,
+  profiles: Map<string, Record<string, unknown>>,
+  networkVlanById: Map<string, number | null>,
+  siteVlanNumbers: number[],
+): Pick<
+  IntegrationPortSpec,
+  "mode" | "untaggedVlanNumber" | "taggedVlanNumbers"
+> {
+  const idx = asNumber(port.port_idx);
+  const override = idx != null ? overrides.get(idx) : undefined;
+  const profileId = asText(override?.portconf_id ?? port.portconf_id);
+  const profile = profileId ? profiles.get(profileId) : undefined;
+  const forward =
+    asText(override?.forward) ||
+    asText(profile?.forward) ||
+    asText(port.forward);
+  const nativeId = asText(
+    override?.native_networkconf_id ?? profile?.native_networkconf_id,
+  );
+  const untaggedVlanNumber = nativeId
+    ? (networkVlanById.get(nativeId) ?? null)
+    : null;
+  if (forward === "native") {
+    return { mode: "access", untaggedVlanNumber, taggedVlanNumbers: [] };
+  }
+  if (forward === "all") {
+    return {
+      mode: "trunk",
+      untaggedVlanNumber,
+      taggedVlanNumbers: siteVlanNumbers.filter(
+        (number) => number !== untaggedVlanNumber,
+      ),
+    };
+  }
+  if (forward === "customize") {
+    const taggedVlanNumbers: number[] = [];
+    for (const idEntry of asArray(
+      override?.tagged_networkconf_ids ?? profile?.tagged_networkconf_ids,
+    )) {
+      const vlanNumber = networkVlanById.get(asText(idEntry));
+      if (vlanNumber != null && !taggedVlanNumbers.includes(vlanNumber)) {
+        taggedVlanNumbers.push(vlanNumber);
+      }
+    }
+    return { mode: "trunk", untaggedVlanNumber, taggedVlanNumbers };
+  }
+  return { mode: null, untaggedVlanNumber: null, taggedVlanNumbers: [] };
+}
+
 async function legacyFetchInventory(
   connection: IntegrationConnectionSecrets,
 ): Promise<IntegrationInventory> {
@@ -702,6 +772,40 @@ async function legacyFetchInventory(
   const networks: NetworkRecord[] = [];
 
   for (const site of sites) {
+    // Networks and port profiles come first: the device loop needs them to
+    // resolve each port's access/trunk VLAN behavior.
+    const networkRows = (
+      await legacyJson(connection, session, `/s/${site.key}/rest/networkconf`)
+    ).map(asRecord);
+    const networkVlanById = new Map<string, number | null>();
+    const siteVlanNumbers: number[] = [];
+    for (const row of networkRows) {
+      const networkId = asText(row._id);
+      if (!networkId || row.enabled === false) continue;
+      const vlanNumber =
+        row.vlan_enabled !== false && row.vlan != null
+          ? asNumber(row.vlan)
+          : null;
+      networkVlanById.set(networkId, vlanNumber ?? null);
+      if (vlanNumber != null && !siteVlanNumbers.includes(vlanNumber)) {
+        siteVlanNumbers.push(vlanNumber);
+      }
+    }
+    const portProfiles = new Map<string, Record<string, unknown>>();
+    try {
+      for (const entry of await legacyJson(
+        connection,
+        session,
+        `/s/${site.key}/rest/portconf`,
+      )) {
+        const row = asRecord(entry);
+        const profileId = asText(row._id);
+        if (profileId) portProfiles.set(profileId, row);
+      }
+    } catch {
+      // Port profiles are best-effort; ports import without VLAN config.
+    }
+
     for (const entry of await legacyJson(
       connection,
       session,
@@ -732,6 +836,12 @@ async function legacyFetchInventory(
 
       const deviceType = importableKind(kind);
       if (deviceType) {
+        const overrides = new Map<number, Record<string, unknown>>();
+        for (const overrideEntry of asArray(row.port_overrides)) {
+          const override = asRecord(overrideEntry);
+          const overrideIdx = asNumber(override.port_idx);
+          if (overrideIdx != null) overrides.set(overrideIdx, override);
+        }
         const ports: IntegrationPortSpec[] = [];
         for (const portEntry of asArray(row.port_table)) {
           const port = asRecord(portEntry);
@@ -747,6 +857,13 @@ async function legacyFetchInventory(
             speed: speedLabel(asNumber(port.speed)),
             linkState:
               port.up === true ? "up" : port.up === false ? "down" : "unknown",
+            ...legacyPortVlanConfig(
+              port,
+              overrides,
+              portProfiles,
+              networkVlanById,
+              siteVlanNumbers,
+            ),
           });
         }
         importableDevices.push({
@@ -783,12 +900,7 @@ async function legacyFetchInventory(
       // SSIDs stay empty when wlanconf is unavailable to this account.
     }
 
-    for (const entry of await legacyJson(
-      connection,
-      session,
-      `/s/${site.key}/rest/networkconf`,
-    )) {
-      const row = asRecord(entry);
+    for (const row of networkRows) {
       const purpose = asText(row.purpose);
       if (purpose === "wan" || purpose.endsWith("-vpn")) continue;
       if (row.enabled === false) continue;

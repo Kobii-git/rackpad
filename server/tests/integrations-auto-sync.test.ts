@@ -378,8 +378,25 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
       firmware: "7.1.20",
       online: true,
       ports: [
-        { name: "Port 1", kind: "rj45", speed: "1G", linkState: "up" },
-        { name: "SFP 1", kind: "sfp_plus", speed: "10G", linkState: "down" },
+        {
+          name: "Port 1",
+          kind: "rj45",
+          speed: "1G",
+          linkState: "up",
+          mode: "access",
+          untaggedVlanNumber: 10,
+          taggedVlanNumbers: [],
+        },
+        {
+          name: "SFP 1",
+          kind: "sfp_plus",
+          speed: "10G",
+          linkState: "down",
+          mode: "trunk",
+          untaggedVlanNumber: null,
+          // VLAN 20 does not exist in the lab and must be dropped silently.
+          taggedVlanNumbers: [10, 20],
+        },
       ],
     },
     {
@@ -494,12 +511,33 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
 
     const portRows = db
       .prepare(
-        "SELECT ports.name, ports.kind, ports.speed FROM ports JOIN devices ON devices.id = ports.deviceId WHERE devices.hostname = 'core-switch' ORDER BY ports.position",
+        "SELECT ports.name, ports.kind, ports.speed, ports.mode, ports.vlanId, ports.allowedVlanIds FROM ports JOIN devices ON devices.id = ports.deviceId WHERE devices.hostname = 'core-switch' ORDER BY ports.position",
       )
-      .all() as Array<{ name: string; kind: string; speed: string }>;
+      .all() as Array<{
+      name: string;
+      kind: string;
+      speed: string;
+      mode: string;
+      vlanId: string | null;
+      allowedVlanIds: string | null;
+    }>;
     assert.deepEqual(portRows, [
-      { name: "Port 1", kind: "rj45", speed: "1G" },
-      { name: "SFP 1", kind: "sfp_plus", speed: "10G" },
+      {
+        name: "Port 1",
+        kind: "rj45",
+        speed: "1G",
+        mode: "access",
+        vlanId: "v_test",
+        allowedVlanIds: null,
+      },
+      {
+        name: "SFP 1",
+        kind: "sfp_plus",
+        speed: "10G",
+        mode: "trunk",
+        vlanId: null,
+        allowedVlanIds: '["v_test"]',
+      },
     ]);
 
     const ssidRow = db

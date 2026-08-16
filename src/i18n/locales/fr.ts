@@ -2077,8 +2077,6 @@ export const fr = {
   "The controller reported no DHCP ranges.": "Le contrôleur n'a signalé aucune plage DHCP.",
   "The controller reported no devices.": "Le contrôleur n'a signalé aucun appareil.",
   "DHCP ranges are shown for review and never applied.": "Les plages DHCP sont affichées pour vérification et jamais appliquées.",
-  "Switches, gateways, APs": "Commutateurs, passerelles, points d'accès",
-  "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.": "Importe les équipements du contrôleur comme enregistrements Rackpad, y compris les ports de commutateur. Ils sont placés en matériel en vrac jusqu'à ce que vous les montiez en rack ; les équipements existants sont appariés par MAC ou nom d'hôte et ne sont jamais modifiés.",
   "Creates the WiFi controller, links AP devices to it, and imports SSIDs with their VLAN associations.": "Crée le contrôleur WiFi, y relie les équipements AP et importe les SSID avec leurs associations de VLAN.",
   "Firewall device": "Équipement pare-feu",
   "Imports the firewall itself as a Rackpad device record, placed as loose gear.": "Importe le pare-feu lui-même comme enregistrement d'équipement Rackpad, placé en matériel en vrac.",
@@ -2108,4 +2106,8 @@ export const fr = {
   "Importing devices failed.": "L'importation des équipements a échoué.",
   "Imported {deviceCount} device(s) with {portCount} port(s) and {ssidCount} SSID(s).": "{deviceCount} équipement(s) importé(s) avec {portCount} port(s) et {ssidCount} SSID.",
   "Creates the new devices, ports, and SSIDs shown on the Import tab.": "Crée les nouveaux équipements, ports et SSID affichés sur l'onglet Importer.",
+  "Gateways": "Passerelles",
+  "Imports switches as Rackpad devices with their full port list (media type, speed, link state). New records land as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.": "Importe les commutateurs comme équipements Rackpad avec leur liste complète de ports (type de média, vitesse, état du lien). Les nouveaux enregistrements arrivent en matériel en vrac jusqu'à ce que vous les montiez en rack ; les équipements existants sont appariés par MAC ou nom d'hôte et jamais modifiés.",
+  "Imports gateways and routers as Rackpad devices, placed as loose gear. Existing devices are never modified.": "Importe les passerelles et les routeurs comme équipements Rackpad, placés en matériel en vrac. Les équipements existants ne sont jamais modifiés.",
+  "Imports access points as Rackpad devices and links them to the WiFi controller when SSIDs are pulled.": "Importe les points d'accès comme équipements Rackpad et les relie au contrôleur WiFi lorsque les SSID sont récupérés.",
 } satisfies TranslationMap;

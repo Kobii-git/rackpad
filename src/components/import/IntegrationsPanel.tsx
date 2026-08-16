@@ -64,7 +64,9 @@ interface ConnectionForm {
   syncVlans: boolean;
   syncSubnets: boolean;
   syncDhcp: boolean;
-  syncDevices: boolean;
+  syncSwitches: boolean;
+  syncGateways: boolean;
+  syncAccessPoints: boolean;
   syncWifi: boolean;
 }
 
@@ -80,7 +82,9 @@ const EMPTY_FORM: ConnectionForm = {
   syncVlans: true,
   syncSubnets: true,
   syncDhcp: true,
-  syncDevices: true,
+  syncSwitches: true,
+  syncGateways: true,
+  syncAccessPoints: true,
   syncWifi: true,
 };
 
@@ -144,7 +148,9 @@ const PULL_TOGGLES: Record<
     vlans: PullToggleCopy | null;
     subnets: PullToggleCopy | null;
     dhcp: PullToggleCopy | null;
-    devices: PullToggleCopy | null;
+    switches: PullToggleCopy | null;
+    gateways: PullToggleCopy | null;
+    aps: PullToggleCopy | null;
     wifi: PullToggleCopy | null;
   }
 > = {
@@ -161,7 +167,9 @@ const PULL_TOGGLES: Record<
       label: "SDN DHCP ranges",
       hint: "DHCP ranges defined on SDN subnets. Shown for review only, never applied.",
     },
-    devices: null,
+    switches: null,
+    gateways: null,
+    aps: null,
     wifi: null,
   },
   unifi: {
@@ -177,9 +185,17 @@ const PULL_TOGGLES: Record<
       label: "DHCP server ranges",
       hint: "UniFi DHCP server pools. Shown for review only, never applied.",
     },
-    devices: {
-      label: "Switches, gateways, APs",
-      hint: "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.",
+    switches: {
+      label: "Switches",
+      hint: "Imports switches as Rackpad devices with their full port list (media type, speed, link state). New records land as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.",
+    },
+    gateways: {
+      label: "Gateways",
+      hint: "Imports gateways and routers as Rackpad devices, placed as loose gear. Existing devices are never modified.",
+    },
+    aps: {
+      label: "Access points",
+      hint: "Imports access points as Rackpad devices and links them to the WiFi controller when SSIDs are pulled.",
     },
     wifi: {
       label: "SSIDs",
@@ -199,9 +215,17 @@ const PULL_TOGGLES: Record<
       label: "DHCP server ranges",
       hint: "Omada DHCP server pools. Shown for review only, never applied.",
     },
-    devices: {
-      label: "Switches, gateways, APs",
-      hint: "Imports controller devices as Rackpad records, including switch ports. Placed as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.",
+    switches: {
+      label: "Switches",
+      hint: "Imports switches as Rackpad devices with their full port list (media type, speed, link state). New records land as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.",
+    },
+    gateways: {
+      label: "Gateways",
+      hint: "Imports gateways and routers as Rackpad devices, placed as loose gear. Existing devices are never modified.",
+    },
+    aps: {
+      label: "Access points",
+      hint: "Imports access points as Rackpad devices and links them to the WiFi controller when SSIDs are pulled.",
     },
     wifi: {
       label: "SSIDs",
@@ -221,17 +245,21 @@ const PULL_TOGGLES: Record<
       label: "Kea and Dnsmasq ranges",
       hint: "DHCP pools from Kea and Dnsmasq. ISC dhcpd does not expose ranges. Shown for review only, never applied.",
     },
-    devices: {
+    switches: null,
+    gateways: {
       label: "Firewall device",
       hint: "Imports the firewall itself as a Rackpad device record, placed as loose gear.",
     },
+    aps: null,
     wifi: null,
   },
   dockhand: {
     vlans: null,
     subnets: null,
     dhcp: null,
-    devices: null,
+    switches: null,
+    gateways: null,
+    aps: null,
     wifi: null,
   },
 };
@@ -388,6 +416,7 @@ export function IntegrationsPanel({
   const [allowDeletes, setAllowDeletes] = useState(false);
   const [applying, setApplying] = useState(false);
   const [importingDevices, setImportingDevices] = useState(false);
+  const [previewTab, setPreviewTab] = useState("vlans");
   const [proxmoxNodes, setProxmoxNodes] = useState<
     Record<string, ProxmoxIntegrationNode[]>
   >({});
@@ -460,7 +489,10 @@ export function IntegrationsPanel({
       void api
         .getProxmoxIntegrationNodes(connection.id)
         .then(({ nodes }) =>
-          setProxmoxNodes((current) => ({ ...current, [connection.id]: nodes })),
+          setProxmoxNodes((current) => ({
+            ...current,
+            [connection.id]: nodes,
+          })),
         )
         .catch(() => {});
     }
@@ -497,7 +529,9 @@ export function IntegrationsPanel({
       syncVlans: connection.syncVlans,
       syncSubnets: connection.syncSubnets,
       syncDhcp: connection.syncDhcp,
-      syncDevices: connection.syncDevices,
+      syncSwitches: connection.syncSwitches,
+      syncGateways: connection.syncGateways,
+      syncAccessPoints: connection.syncAccessPoints,
       syncWifi: connection.syncWifi,
     });
     setEditingId(connection.id);
@@ -566,7 +600,9 @@ export function IntegrationsPanel({
           syncVlans: form.syncVlans,
           syncSubnets: form.syncSubnets,
           syncDhcp: form.syncDhcp,
-          syncDevices: form.syncDevices,
+          syncSwitches: form.syncSwitches,
+          syncGateways: form.syncGateways,
+          syncAccessPoints: form.syncAccessPoints,
           syncWifi: form.syncWifi,
         });
         setSuccess(t("Integration connection updated."));
@@ -584,7 +620,9 @@ export function IntegrationsPanel({
           syncVlans: form.syncVlans,
           syncSubnets: form.syncSubnets,
           syncDhcp: form.syncDhcp,
-          syncDevices: form.syncDevices,
+          syncSwitches: form.syncSwitches,
+          syncGateways: form.syncGateways,
+          syncAccessPoints: form.syncAccessPoints,
           syncWifi: form.syncWifi,
         });
         setSuccess(t("Integration connection saved."));
@@ -655,6 +693,7 @@ export function IntegrationsPanel({
         policy,
       });
       setPull({ ...result, connectionId: connection.id });
+      setPreviewTab(result.preview.vlans.length > 0 ? "vlans" : "devices");
       await loadConnections();
     } catch (err) {
       setError(
@@ -1023,6 +1062,8 @@ export function IntegrationsPanel({
         .length +
       pull.deviceSync.ssids.filter((entry) => entry.action === "create").length
     : 0;
+  const isNetworkPreviewTab =
+    previewTab === "vlans" || previewTab === "subnets" || previewTab === "dhcp";
 
   return (
     <Card>
@@ -1225,7 +1266,9 @@ export function IntegrationsPanel({
                       ["vlans", "syncVlans"],
                       ["subnets", "syncSubnets"],
                       ["dhcp", "syncDhcp"],
-                      ["devices", "syncDevices"],
+                      ["switches", "syncSwitches"],
+                      ["gateways", "syncGateways"],
+                      ["aps", "syncAccessPoints"],
                       ["wifi", "syncWifi"],
                     ] as const
                   ).map(([toggleKey, formKey]) => {
@@ -1790,9 +1833,8 @@ export function IntegrationsPanel({
               ))}
 
               <Tabs
-                defaultValue={
-                  pull.preview.vlans.length > 0 ? "vlans" : "devices"
-                }
+                value={previewTab}
+                onValueChange={setPreviewTab}
                 className="flex min-h-0 flex-1 flex-col gap-3"
               >
                 <TabsList className="max-w-full overflow-x-auto [&>*]:shrink-0">
@@ -1986,24 +2028,27 @@ export function IntegrationsPanel({
               </Tabs>
 
               <div className="flex flex-wrap items-center gap-3 border-t border-[var(--color-line)] pt-3">
-                <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                  {t("Policy")}
-                  <select
-                    className="rk-control"
-                    value={policy}
-                    onChange={(event) =>
-                      setPolicy(event.target.value as SnmpSyncPolicy)
-                    }
-                  >
-                    <option value="merge">
-                      {t("Merge (add missing only)")}
-                    </option>
-                    <option value="mirror">
-                      {t("Mirror (create, update, delete)")}
-                    </option>
-                  </select>
-                </label>
-                {admin &&
+                {isNetworkPreviewTab && (
+                  <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                    {t("Policy")}
+                    <select
+                      className="rk-control"
+                      value={policy}
+                      onChange={(event) =>
+                        setPolicy(event.target.value as SnmpSyncPolicy)
+                      }
+                    >
+                      <option value="merge">
+                        {t("Merge (add missing only)")}
+                      </option>
+                      <option value="mirror">
+                        {t("Mirror (create, update, delete)")}
+                      </option>
+                    </select>
+                  </label>
+                )}
+                {isNetworkPreviewTab &&
+                  admin &&
                   policy === "mirror" &&
                   pull.preview.summary.vlanDeletes +
                     pull.preview.summary.subnetDeletes >
@@ -2019,14 +2064,19 @@ export function IntegrationsPanel({
                       {t("Allow deletes for unreferenced VLANs/subnets")}
                     </label>
                   )}
-                {!hasChanges && importCreates === 0 && (
+                {isNetworkPreviewTab && !hasChanges && (
+                  <span className="text-xs text-[var(--color-fg-subtle)]">
+                    {t("Rackpad already matches this controller's inventory.")}
+                  </span>
+                )}
+                {!isNetworkPreviewTab && importCreates === 0 && (
                   <span className="text-xs text-[var(--color-fg-subtle)]">
                     {t("Rackpad already matches this controller's inventory.")}
                   </span>
                 )}
                 <div className="ml-auto flex items-center gap-2">
                   {admin ? (
-                    <>
+                    isNetworkPreviewTab ? (
                       <Button
                         size="sm"
                         disabled={applying || !hasChanges}
@@ -2035,9 +2085,9 @@ export function IntegrationsPanel({
                         <ShieldCheck className="size-3.5" />
                         {applying ? t("Applying...") : t("Apply networks")}
                       </Button>
+                    ) : (
                       <Button
                         size="sm"
-                        variant="outline"
                         disabled={importingDevices || importCreates === 0}
                         title={t(
                           "Creates the new devices, ports, and SSIDs shown on the Import tab.",
@@ -2049,7 +2099,7 @@ export function IntegrationsPanel({
                           ? t("Importing...")
                           : t("Import devices")}
                       </Button>
-                    </>
+                    )
                   ) : (
                     <span className="text-xs text-[var(--color-fg-subtle)]">
                       {t(
