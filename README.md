@@ -79,6 +79,14 @@ Rackpad ships **light and dark themes**. Full-resolution 1920x1200 captures live
 
 <img src="./docs/screenshots/wifi.png" alt="Rackpad WiFi controller, SSID, AP, radio, and client inventory" width="100%">
 
+### Controller integrations
+
+<img src="./docs/screenshots/integrations-dark.png" alt="Rackpad controller integrations with per-connection pull toggles and sync schedules" width="100%">
+
+### Review-first inventory import
+
+<img src="./docs/screenshots/integrations-import-dark.png" alt="Rackpad integration preview dialog importing Proxmox hosts, guests, and virtual switches" width="100%">
+
 <details>
 <summary>More workspace screenshots</summary>
 
@@ -97,6 +105,14 @@ Rackpad ships **light and dark themes**. Full-resolution 1920x1200 captures live
 ### Devices
 
 <img src="./docs/screenshots/devices.png" alt="Rackpad device inventory" width="100%">
+
+### Controller integrations (light theme)
+
+<img src="./docs/screenshots/integrations.png" alt="Rackpad controller integrations in light theme" width="100%">
+
+### Integration inventory preview (light theme)
+
+<img src="./docs/screenshots/integrations-import.png" alt="Rackpad integration preview dialog in light theme" width="100%">
 
 ### Ports
 
