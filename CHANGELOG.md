@@ -6,7 +6,9 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
-> On the `dev` branch; not yet tagged/released.
+> Development continues on the `dev` branch after this beta release.
+
+## [1.8.0-beta.1] - 2026-08-17
 
 ### Fixed
 
@@ -48,7 +50,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   moving branch image tags from immutable semantic-version tags.
 - Hardened contributor, installation, security, SNMP, and AI-agent guidance to
   reflect the current runtime and release contract.
-- Set the next development identity to `1.8.0-dev.1` without creating a Git tag.
+- Promoted the exact `1.8.0-dev.1` application tree to the
+  `1.8.0-beta.1` release candidate.
 
 ### Test notes
 
