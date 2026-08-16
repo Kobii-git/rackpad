@@ -40,7 +40,10 @@ controllers stay reviewable.
 1. Create an API token: Datacenter → Permissions → API Tokens, e.g.
    `rackpad@pam!inventory` with **Privilege Separation** enabled.
 2. Give the token read access: Permissions → Add → API Token Permission,
-   path `/`, role `PVEAuditor`, propagate on.
+   path `/`, role `PVEAuditor`, propagate on. With Privilege Separation
+   enabled the token has its own ACL — the permission entry must name the
+   token itself, not just its user, or the API returns empty VM lists
+   instead of an error (Rackpad warns when a pull sees no guests).
 3. In Rackpad, add a Proxmox VE connection with the URL
    (`https://pve.example:8006`), the token ID (`rackpad@pam!inventory`), and
    the token secret.
@@ -52,7 +55,9 @@ controllers stay reviewable.
   whole stack from the host down: nodes as server devices, bridges as
   virtual switches on them, and QEMU/LXC guests as virtual devices under
   their node with NICs, MACs, VLAN tags, virtual switch links, and IPs
-  (from the guest agent or container interfaces). Templates are skipped.
+  (from the guest agent or container interfaces). Templates are skipped,
+  and OVS setups work: bridges are derived from their member ports when
+  the node does not list the OVSBridge rows themselves.
   The offline `collect-proxmox.sh` upload on the Imports tab remains for
   hosts Rackpad cannot reach.
 

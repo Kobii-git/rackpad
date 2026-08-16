@@ -136,6 +136,11 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - All MAC addresses imported by integrations are normalized to canonical
   uppercase colon-separated form (AA:BB:CC:DD:EE:FF), whether the
   controller reports dashes, lowercase, or bare hex.
+- Two real-world Proxmox quirks handled: OVS bridges are synthesized from
+  their member ports when the node lists only OVSPort rows, and a pull
+  that sees zero guests now warns that the API token lacks permissions
+  (privilege-separated tokens need their own PVEAuditor grant with
+  Propagate) instead of silently showing an empty Import tab.
 - Added a Dockhand integration (Bearer API token) that lists Docker
   environments with online state and container/stack counts, containers with
   image, IP, health, and compose stack, and Docker networks with drivers and

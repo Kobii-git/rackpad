@@ -84,7 +84,12 @@ const responses: Record<string, unknown> = {
       { iface: "vmbr0.20", type: "vlan", cidr: "10.0.20.2/24", active: 1 },
     ],
   },
-  "/api2/json/nodes/pve2/network": { data: [] },
+  "/api2/json/nodes/pve2/network": {
+    data: [
+      { iface: "nic1", type: "OVSPort", ovs_bridge: "vmbr9", active: 1 },
+      { iface: "nic2", type: "OVSPort", ovs_bridge: "vmbr9", active: 1 },
+    ],
+  },
   "/api2/json/nodes/pve2/qemu": { data: [] },
   "/api2/json/nodes/pve2/lxc": { data: [] },
   "/api2/json/cluster/sdn/vnets": {
@@ -267,7 +272,9 @@ test("proxmox inventory maps bridges, SDN vnets, and DHCP ranges", async () => {
   assert.equal(kinds.host, 2);
   assert.equal(kinds.vm, 1);
   assert.equal(kinds.container, 1);
-  assert.equal(kinds.bridge, 2);
+  // vmbr0 + vmbr0.20 on pve1, plus the OVS bridge synthesized from pve2's
+  // ovs_bridge references.
+  assert.equal(kinds.bridge, 3);
   assert.equal(inventory.warnings.length, 0);
 
   // The whole stack imports from the host down: nodes as servers, bridges
@@ -321,6 +328,12 @@ test("proxmox inventory maps bridges, SDN vnets, and DHCP ranges", async () => {
       hostName: "pve1",
       kind: "external",
       notes: "Members: eno1",
+    },
+    {
+      name: "vmbr9",
+      hostName: "pve2",
+      kind: "external",
+      notes: "Members: nic1 nic2",
     },
   ]);
 });

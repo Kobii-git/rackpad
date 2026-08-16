@@ -354,6 +354,51 @@ interface ProxmoxNetworkEntry {
   bridgePorts: string;
   active: boolean;
   comments: string;
+  ovsBridge: string;
+}
+
+// OVS setups often list only the member ports — the bridges exist solely
+// as ovs_bridge references on them. Synthesize entries for those bridges
+// (and fill member lists) so they preview and import as virtual switches.
+function withSyntheticOvsBridges(
+  entries: ProxmoxNetworkEntry[],
+): ProxmoxNetworkEntry[] {
+  const known = new Map(entries.map((entry) => [entry.iface, entry]));
+  const members = new Map<string, { ports: string[]; active: boolean }>();
+  for (const entry of entries) {
+    if (!entry.ovsBridge) continue;
+    const bucket = members.get(entry.ovsBridge) ?? {
+      ports: [],
+      active: false,
+    };
+    bucket.ports.push(entry.iface);
+    bucket.active = bucket.active || entry.active;
+    members.set(entry.ovsBridge, bucket);
+  }
+  const synthetic: ProxmoxNetworkEntry[] = [];
+  for (const [name, info] of members) {
+    const existing = known.get(name);
+    if (existing) {
+      if (!existing.bridgePorts) {
+        existing.bridgePorts = info.ports.sort().join(" ");
+      }
+      continue;
+    }
+    synthetic.push({
+      iface: name,
+      type: "OVSBridge",
+      address: "",
+      cidr: "",
+      gateway: "",
+      bridgePorts: info.ports.sort().join(" "),
+      active: info.active,
+      comments: "",
+      ovsBridge: "",
+    });
+  }
+  return [...entries, ...synthetic].sort((a, b) =>
+    a.iface.localeCompare(b.iface),
+  );
 }
 
 function parseNodeNetwork(data: unknown): ProxmoxNetworkEntry[] {
@@ -380,9 +425,10 @@ function parseNodeNetwork(data: unknown): ProxmoxNetworkEntry[] {
         address,
         cidr,
         gateway: asText(row.gateway),
-        bridgePorts: asText(row.bridge_ports),
+        bridgePorts: asText(row.bridge_ports || row.ovs_ports),
         active: Boolean(row.active),
         comments: asText(row.comments),
+        ovsBridge: asText(row.ovs_bridge),
       };
     })
     .filter((entry) => entry.iface && entry.iface !== "lo")
@@ -457,12 +503,14 @@ async function proxmoxFetchInventory(
     }
   }
 
+  let guestsSeen = 0;
   try {
     for (const entry of asArray(
       await proxmoxGet(connection, "/cluster/resources", { type: "vm" }),
     )) {
       const row = asRecord(entry);
       if (!nodeNames.has(asText(row.node))) continue;
+      guestsSeen += 1;
       const kind = asText(row.type) === "lxc" ? "container" : "vm";
       devices.push({
         name: asText(row.name) || `vmid-${asText(row.vmid)}`,
@@ -484,11 +532,13 @@ async function proxmoxFetchInventory(
 
   for (const node of nodes) {
     const requestErrors: string[] = [];
-    const network = parseNodeNetwork(
-      await tryProxmoxGet(
-        connection,
-        `/nodes/${node.node}/network`,
-        requestErrors,
+    const network = withSyntheticOvsBridges(
+      parseNodeNetwork(
+        await tryProxmoxGet(
+          connection,
+          `/nodes/${node.node}/network`,
+          requestErrors,
+        ),
       ),
     );
     for (const entry of network) {
@@ -555,6 +605,7 @@ async function proxmoxFetchInventory(
       )
         .map(asRecord)
         .sort((a, b) => workloadSortKey(a) - workloadSortKey(b));
+      guestsSeen += qemuItems.length + lxcItems.length;
       warnings.push(...guestErrors);
       for (const item of qemuItems) {
         const workload = await stageQemuWorkload(connection, node.node, item);
@@ -567,6 +618,14 @@ async function proxmoxFetchInventory(
         importableDevices.push(workloadImportable(workload, node.node));
       }
     }
+  }
+
+  // Proxmox filters listings by permission instead of erroring, so a
+  // token that cannot see guests just gets empty lists. Say so.
+  if (guestsSeen === 0) {
+    warnings.push(
+      "The API token sees no VMs or containers. If this cluster has guests, grant the token PVEAuditor on path / with Propagate — privilege-separated tokens carry no permissions of their own.",
+    );
   }
 
   const sdnErrors: string[] = [];
