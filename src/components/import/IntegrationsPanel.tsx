@@ -264,6 +264,16 @@ const PULL_TOGGLES: Record<
   },
 };
 
+const PULL_TOGGLE_FIELDS = [
+  ["vlans", "syncVlans"],
+  ["subnets", "syncSubnets"],
+  ["dhcp", "syncDhcp"],
+  ["switches", "syncSwitches"],
+  ["gateways", "syncGateways"],
+  ["aps", "syncAccessPoints"],
+  ["wifi", "syncWifi"],
+] as const;
+
 const SCOPE_KIND_LABELS: Record<IntegrationScopeKind, TranslationKey> = {
   sites: "Sites",
   nodes: "Cluster nodes",
@@ -417,6 +427,7 @@ export function IntegrationsPanel({
   const [applying, setApplying] = useState(false);
   const [importingDevices, setImportingDevices] = useState(false);
   const [previewTab, setPreviewTab] = useState("vlans");
+  const [syncOpenFor, setSyncOpenFor] = useState<Record<string, boolean>>({});
   const [proxmoxNodes, setProxmoxNodes] = useState<
     Record<string, ProxmoxIntegrationNode[]>
   >({});
@@ -654,6 +665,39 @@ export function IntegrationsPanel({
           ? err.message
           : t("Deleting the integration connection failed."),
       );
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function handlePullToggle(
+    connection: IntegrationConnection,
+    field: (typeof PULL_TOGGLE_FIELDS)[number][1],
+    checked: boolean,
+  ) {
+    setBusyId(connection.id);
+    resetMessages();
+    try {
+      await api.updateIntegrationConnection(connection.id, {
+        syncVlans: field === "syncVlans" ? checked : connection.syncVlans,
+        syncSubnets: field === "syncSubnets" ? checked : connection.syncSubnets,
+        syncDhcp: field === "syncDhcp" ? checked : connection.syncDhcp,
+        syncSwitches:
+          field === "syncSwitches" ? checked : connection.syncSwitches,
+        syncGateways:
+          field === "syncGateways" ? checked : connection.syncGateways,
+        syncAccessPoints:
+          field === "syncAccessPoints" ? checked : connection.syncAccessPoints,
+        syncWifi: field === "syncWifi" ? checked : connection.syncWifi,
+      });
+      await loadConnections();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("Saving the integration connection failed."),
+      );
+      await loadConnections();
     } finally {
       setBusyId("");
     }
@@ -998,7 +1042,7 @@ export function IntegrationsPanel({
           </label>
           <label className="space-y-1 text-sm">
             <span className="text-[var(--text-secondary)]">
-              {t("Schedule")}
+              {t("When to sync")}
             </span>
             <select
               className="rk-control w-full"
@@ -1017,7 +1061,7 @@ export function IntegrationsPanel({
           </label>
           <div className="space-y-1 text-sm">
             <span className="block text-[var(--text-secondary)]">
-              {t("Target labs")}
+              {t("Where to sync to")}
             </span>
             {labMultiSelect(draft.labIds, !admin || busy, (labIds) =>
               onDraftChange({ labIds }),
@@ -1083,15 +1127,7 @@ export function IntegrationsPanel({
         </Badge>
       </CardHeader>
       <CardBody className="space-y-4">
-        <Tabs defaultValue="connections" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="connections">{t("Connections")}</TabsTrigger>
-            <TabsTrigger value="auto-sync">
-              <CalendarClock className="mr-1.5 inline size-3" />
-              {t("Auto-sync")}
-            </TabsTrigger>
-          </TabsList>
-
+        <div className="space-y-4">
           {error && (
             <div className="rounded-[var(--radius-md)] border border-[var(--danger-border)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">
               {error}
@@ -1103,7 +1139,7 @@ export function IntegrationsPanel({
             </div>
           )}
 
-          <TabsContent value="connections" className="space-y-4">
+          <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
               {providers.map((provider) => (
                 <Button
@@ -1241,60 +1277,56 @@ export function IntegrationsPanel({
                   </label>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--text-secondary)]">
-                  <label
-                    className="flex items-center gap-2"
-                    title={t(
-                      "Turn off for controllers with self-signed certificates.",
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={form.verifyTls}
-                      disabled={saving}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          verifyTls: event.target.checked,
-                        }))
-                      }
-                    />
-                    {t("Verify TLS certificate")}
-                  </label>
-                  {(
-                    [
-                      ["vlans", "syncVlans"],
-                      ["subnets", "syncSubnets"],
-                      ["dhcp", "syncDhcp"],
-                      ["switches", "syncSwitches"],
-                      ["gateways", "syncGateways"],
-                      ["aps", "syncAccessPoints"],
-                      ["wifi", "syncWifi"],
-                    ] as const
-                  ).map(([toggleKey, formKey]) => {
-                    const copy = formPullToggles[toggleKey];
-                    if (!copy) return null;
-                    return (
-                      <label
-                        key={toggleKey}
-                        className="flex items-center gap-2"
-                        title={t(copy.hint)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form[formKey]}
-                          disabled={saving}
-                          onChange={(event) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              [formKey]: event.target.checked,
-                            }))
-                          }
-                        />
-                        {t(copy.label)}
-                      </label>
-                    );
-                  })}
+                <label
+                  className="flex items-center gap-2 text-xs text-[var(--text-secondary)]"
+                  title={t(
+                    "Turn off for controllers with self-signed certificates.",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.verifyTls}
+                    disabled={saving}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        verifyTls: event.target.checked,
+                      }))
+                    }
+                  />
+                  {t("Verify TLS certificate")}
+                </label>
+
+                <div className="space-y-1">
+                  <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                    {t("What to sync")}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--text-secondary)]">
+                    {PULL_TOGGLE_FIELDS.map(([toggleKey, formKey]) => {
+                      const copy = formPullToggles[toggleKey];
+                      if (!copy) return null;
+                      return (
+                        <label
+                          key={toggleKey}
+                          className="flex items-center gap-2"
+                          title={t(copy.hint)}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form[formKey]}
+                            disabled={saving}
+                            onChange={(event) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                [formKey]: event.target.checked,
+                              }))
+                            }
+                          />
+                          {t(copy.label)}
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {formScopeKind && (
@@ -1431,6 +1463,10 @@ export function IntegrationsPanel({
               const summaryProduct = connection.lastSummary?.product;
               const summaryVersion = connection.lastSummary?.version;
               const nodes = proxmoxNodes[connection.id] ?? [];
+              const connectionSchedules =
+                schedulesByConnection[connection.id] ?? [];
+              const newDraft = newScheduleFor[connection.id];
+              const syncOpen = syncOpenFor[connection.id] === true;
               return (
                 <div
                   key={connection.id}
@@ -1520,6 +1556,34 @@ export function IntegrationsPanel({
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={busy}
+                        title={t(
+                          "What this connection syncs, on which schedules, into which labs.",
+                        )}
+                        onClick={() =>
+                          setSyncOpenFor((prev) => ({
+                            ...prev,
+                            [connection.id]: !prev[connection.id],
+                          }))
+                        }
+                      >
+                        <CalendarClock className="size-3.5" />
+                        {t("Auto-sync")}
+                        {/* i18n-ignore -- numeric schedule-count badge, no translatable copy. */}
+                        {connectionSchedules.length > 0
+                          ? ` (${connectionSchedules.length})`
+                          : ""}
+                        <ChevronDown
+                          className={
+                            syncOpen
+                              ? "size-3 rotate-180 transition-transform"
+                              : "size-3 transition-transform"
+                          }
+                        />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
                         disabled={!canEdit || busy}
                         onClick={() => openEditForm(connection)}
                       >
@@ -1566,236 +1630,269 @@ export function IntegrationsPanel({
                       </select>
                     </label>
                   )}
-                </div>
-              );
-            })}
-          </TabsContent>
-
-          <TabsContent value="auto-sync" className="space-y-4">
-            <p className="text-xs text-[var(--text-tertiary)]">
-              {t(
-                "Auto-sync is opt-in per schedule and runs on the server without a review step. Each connection can have several schedules with their own cadence, mode, and target labs. Repeated failures back off automatically and surface here.",
-              )}
-            </p>
-            {connections.length === 0 && (
-              <p className="text-sm text-[var(--text-tertiary)]">
-                {t("Add a connection first to configure auto-sync.")}
-              </p>
-            )}
-            {connections.map((connection) => {
-              const connectionSchedules =
-                schedulesByConnection[connection.id] ?? [];
-              const newDraft = newScheduleFor[connection.id];
-              const busy = busyId === connection.id;
-              return (
-                <div
-                  key={connection.id}
-                  className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <IntegrationIcon
-                      provider={connection.provider}
-                      className="size-4 shrink-0 text-[var(--accent-secondary)]"
-                    />
-                    <span className="text-sm font-medium text-[var(--text-primary)]">
-                      {connection.name}
-                    </span>
-                    <Badge tone="neutral">
-                      {t("{count} schedule(s)", {
-                        count: connectionSchedules.length,
-                      })}
-                    </Badge>
-                    <div className="ml-auto">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={!admin || busy || newDraft !== undefined}
-                        onClick={() =>
-                          setNewScheduleFor((prev) => ({
-                            ...prev,
-                            [connection.id]: emptyScheduleDraft(
-                              connection.labId,
-                            ),
-                          }))
-                        }
-                      >
-                        <Plus className="size-3.5" />
-                        {t("Add schedule")}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {newDraft && (
-                    <div className="space-y-3 rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] p-3">
-                      {scheduleEditor(newDraft, busy, (patch) =>
-                        setNewScheduleFor((prev) => ({
-                          ...prev,
-                          [connection.id]: { ...newDraft, ...patch },
-                        })),
-                      )}
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          disabled={
-                            !admin ||
-                            busy ||
-                            !newDraft.name.trim() ||
-                            (newDraft.preset === "custom" &&
-                              !newDraft.cron.trim())
-                          }
-                          onClick={() => void handleScheduleCreate(connection)}
-                        >
-                          <CheckCircle2 className="size-3.5" />
-                          {t("Create schedule")}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={busy}
-                          onClick={() =>
-                            setNewScheduleFor((prev) => ({
-                              ...prev,
-                              [connection.id]: undefined,
-                            }))
-                          }
-                        >
-                          {t("Cancel")}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {connectionSchedules.length === 0 && !newDraft && (
-                    <p className="text-xs text-[var(--text-tertiary)]">
-                      {t(
-                        "No schedules yet — syncs for this connection run manually.",
-                      )}
-                    </p>
-                  )}
-
-                  {connectionSchedules.map((schedule) => {
-                    const draft =
-                      scheduleDrafts[schedule.id] ??
-                      draftFromSchedule(schedule);
-                    const scheduleBusy = busyId === schedule.id;
-                    const paused =
-                      schedule.pausedUntil &&
-                      new Date(schedule.pausedUntil).getTime() > Date.now();
-                    return (
-                      <div
-                        key={schedule.id}
-                        className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] p-3"
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <label className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                            <input
-                              type="checkbox"
-                              checked={draft.enabled}
-                              disabled={!admin || scheduleBusy}
-                              onChange={(event) =>
-                                updateScheduleDraft(schedule, {
-                                  enabled: event.target.checked,
-                                })
-                              }
-                            />
-                            {schedule.name}
-                          </label>
-                          <Badge
-                            tone={
-                              schedule.enabled
-                                ? runStatusTone(schedule.lastRunStatus)
-                                : "neutral"
-                            }
-                          >
-                            {!schedule.enabled
-                              ? t("Auto-sync off")
-                              : schedule.lastRunStatus === "ok"
-                                ? t("Synced")
-                                : schedule.lastRunStatus === "drift"
-                                  ? t("Drift")
-                                  : schedule.lastRunStatus === "error"
-                                    ? t("Error")
-                                    : t("Never run")}
-                          </Badge>
-                          {paused && (
-                            <Badge tone="warn">{t("Backing off")}</Badge>
-                          )}
-                          {schedule.lastRunAt && (
-                            <span className="text-xs text-[var(--text-tertiary)]">
-                              {t("Last run: {time}", {
-                                time: new Date(
-                                  schedule.lastRunAt,
-                                ).toLocaleString(),
-                              })}
-                            </span>
-                          )}
+                  {syncOpen && (
+                    <div className="space-y-3 border-t border-[var(--color-line)] pt-2">
+                      <div className="space-y-1">
+                        <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                          {t("What to sync")}
                         </div>
-                        {schedule.lastRunMessage &&
-                          schedule.lastRunStatus !== "ok" && (
-                            <div
-                              className={`text-xs ${
-                                schedule.lastRunStatus === "error"
-                                  ? "text-[var(--danger)]"
-                                  : "text-[var(--warning)]"
-                              }`}
-                            >
-                              {schedule.lastRunMessage}
-                            </div>
-                          )}
+                        <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--text-secondary)]">
+                          {PULL_TOGGLE_FIELDS.map(([toggleKey, field]) => {
+                            const copy =
+                              PULL_TOGGLES[connection.provider][toggleKey];
+                            if (!copy) return null;
+                            return (
+                              <label
+                                key={toggleKey}
+                                className="flex items-center gap-2"
+                                title={t(copy.hint)}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={connection[field]}
+                                  disabled={!canEdit || busy}
+                                  onChange={(event) =>
+                                    void handlePullToggle(
+                                      connection,
+                                      field,
+                                      event.target.checked,
+                                    )
+                                  }
+                                />
+                                {t(copy.label)}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
 
-                        {scheduleEditor(draft, scheduleBusy, (patch) =>
-                          updateScheduleDraft(schedule, patch),
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                            {t("When to sync")}
+                          </div>
+                          <Badge tone="neutral">
+                            {t("{count} schedule(s)", {
+                              count: connectionSchedules.length,
+                            })}
+                          </Badge>
+                          <div className="ml-auto">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={
+                                !admin || busy || newDraft !== undefined
+                              }
+                              onClick={() =>
+                                setNewScheduleFor((prev) => ({
+                                  ...prev,
+                                  [connection.id]: emptyScheduleDraft(
+                                    connection.labId,
+                                  ),
+                                }))
+                              }
+                            >
+                              <Plus className="size-3.5" />
+                              {t("Add schedule")}
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-[var(--text-tertiary)]">
+                          {t(
+                            "Auto-sync is opt-in per schedule and runs on the server without a review step. Each connection can have several schedules with their own cadence, mode, and target labs. Repeated failures back off automatically and surface here.",
+                          )}
+                        </p>
+
+                        {newDraft && (
+                          <div className="space-y-3 rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] p-3">
+                            {scheduleEditor(newDraft, busy, (patch) =>
+                              setNewScheduleFor((prev) => ({
+                                ...prev,
+                                [connection.id]: { ...newDraft, ...patch },
+                              })),
+                            )}
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                disabled={
+                                  !admin ||
+                                  busy ||
+                                  !newDraft.name.trim() ||
+                                  (newDraft.preset === "custom" &&
+                                    !newDraft.cron.trim())
+                                }
+                                onClick={() =>
+                                  void handleScheduleCreate(connection)
+                                }
+                              >
+                                <CheckCircle2 className="size-3.5" />
+                                {t("Create schedule")}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={busy}
+                                onClick={() =>
+                                  setNewScheduleFor((prev) => ({
+                                    ...prev,
+                                    [connection.id]: undefined,
+                                  }))
+                                }
+                              >
+                                {t("Cancel")}
+                              </Button>
+                            </div>
+                          </div>
                         )}
 
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            size="sm"
-                            disabled={
-                              !admin ||
-                              scheduleBusy ||
-                              (draft.preset === "custom" && !draft.cron.trim())
-                            }
-                            onClick={() => void handleScheduleSave(schedule)}
-                          >
-                            <CheckCircle2 className="size-3.5" />
-                            {scheduleBusy ? t("Saving...") : t("Save schedule")}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={
-                              !admin || scheduleBusy || !connection.enabled
-                            }
-                            onClick={() => void handleScheduleRun(schedule)}
-                          >
-                            <PlayCircle className="size-3.5" />
-                            {scheduleBusy ? t("Working...") : t("Run now")}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={!admin || scheduleBusy}
-                            onClick={() => void handleScheduleDelete(schedule)}
-                          >
-                            <Trash2 className="size-3.5" />
-                            {t("Delete")}
-                          </Button>
-                        </div>
+                        {connectionSchedules.length === 0 && !newDraft && (
+                          <p className="text-xs text-[var(--text-tertiary)]">
+                            {t(
+                              "No schedules yet — syncs for this connection run manually.",
+                            )}
+                          </p>
+                        )}
+
+                        {connectionSchedules.map((schedule) => {
+                          const draft =
+                            scheduleDrafts[schedule.id] ??
+                            draftFromSchedule(schedule);
+                          const scheduleBusy = busyId === schedule.id;
+                          const paused =
+                            schedule.pausedUntil &&
+                            new Date(schedule.pausedUntil).getTime() >
+                              Date.now();
+                          return (
+                            <div
+                              key={schedule.id}
+                              className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] p-3"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <label className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+                                  <input
+                                    type="checkbox"
+                                    checked={draft.enabled}
+                                    disabled={!admin || scheduleBusy}
+                                    onChange={(event) =>
+                                      updateScheduleDraft(schedule, {
+                                        enabled: event.target.checked,
+                                      })
+                                    }
+                                  />
+                                  {schedule.name}
+                                </label>
+                                <Badge
+                                  tone={
+                                    schedule.enabled
+                                      ? runStatusTone(schedule.lastRunStatus)
+                                      : "neutral"
+                                  }
+                                >
+                                  {!schedule.enabled
+                                    ? t("Auto-sync off")
+                                    : schedule.lastRunStatus === "ok"
+                                      ? t("Synced")
+                                      : schedule.lastRunStatus === "drift"
+                                        ? t("Drift")
+                                        : schedule.lastRunStatus === "error"
+                                          ? t("Error")
+                                          : t("Never run")}
+                                </Badge>
+                                {paused && (
+                                  <Badge tone="warn">{t("Backing off")}</Badge>
+                                )}
+                                {schedule.lastRunAt && (
+                                  <span className="text-xs text-[var(--text-tertiary)]">
+                                    {t("Last run: {time}", {
+                                      time: new Date(
+                                        schedule.lastRunAt,
+                                      ).toLocaleString(),
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                              {schedule.lastRunMessage &&
+                                schedule.lastRunStatus !== "ok" && (
+                                  <div
+                                    className={
+                                      schedule.lastRunStatus === "error"
+                                        ? "text-xs text-[var(--danger)]"
+                                        : "text-xs text-[var(--warning)]"
+                                    }
+                                  >
+                                    {schedule.lastRunMessage}
+                                  </div>
+                                )}
+
+                              {scheduleEditor(draft, scheduleBusy, (patch) =>
+                                updateScheduleDraft(schedule, patch),
+                              )}
+
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  disabled={
+                                    !admin ||
+                                    scheduleBusy ||
+                                    (draft.preset === "custom" &&
+                                      !draft.cron.trim())
+                                  }
+                                  onClick={() =>
+                                    void handleScheduleSave(schedule)
+                                  }
+                                >
+                                  <CheckCircle2 className="size-3.5" />
+                                  {scheduleBusy
+                                    ? t("Saving...")
+                                    : t("Save schedule")}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={
+                                    !admin ||
+                                    scheduleBusy ||
+                                    !connection.enabled
+                                  }
+                                  onClick={() =>
+                                    void handleScheduleRun(schedule)
+                                  }
+                                >
+                                  <PlayCircle className="size-3.5" />
+                                  {scheduleBusy
+                                    ? t("Working...")
+                                    : t("Run now")}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={!admin || scheduleBusy}
+                                  onClick={() =>
+                                    void handleScheduleDelete(schedule)
+                                  }
+                                >
+                                  <Trash2 className="size-3.5" />
+                                  {t("Delete")}
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {!admin && (
+                          <span className="text-xs text-[var(--color-fg-subtle)]">
+                            {t(
+                              "Administrator access is required to configure auto-sync.",
+                            )}
+                          </span>
+                        )}
                       </div>
-                    );
-                  })}
-                  {!admin && (
-                    <span className="text-xs text-[var(--color-fg-subtle)]">
-                      {t(
-                        "Administrator access is required to configure auto-sync.",
-                      )}
-                    </span>
+                    </div>
                   )}
                 </div>
               );
             })}
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
 
         {pull && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]">

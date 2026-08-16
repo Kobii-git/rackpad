@@ -155,9 +155,12 @@ skipped record kinds are called out in the preview warnings.
 
 ## Scheduled auto-sync (opt-in)
 
-The **Auto-sync** tab on the Integrations panel manages sync schedules per
-connection. It is off by default and only administrators can configure it,
-because scheduled runs write without a per-run review.
+Each connection carries its own **Auto-sync** section (expand it with the
+Auto-sync button on the connection row), structured as what to sync → when
+to sync → where to sync to: the connection's pull toggles (editable inline),
+its schedules, and each schedule's target-labs multi-select. Auto-sync is
+off by default and only administrators can configure it, because scheduled
+runs write without a per-run review.
 
 - **Multiple schedules per connection:** each connection can have any number
   of named schedules, each with its own cadence, mode, and target labs — for
@@ -181,7 +184,7 @@ because scheduled runs write without a per-run review.
   also import new devices and SSIDs (merge-only — existing records are
   never modified).
 - **Errors without instability:** failures are recorded on the schedule
-  (status badge plus the exact error message in the Auto-sync tab — nothing
+  (status badge plus the exact error message on the schedule — nothing
   modal) and audited. Consecutive failures back off exponentially (5m, 10m,
   20m, ... capped at 6 hours) per schedule, runs are strictly sequential,
   and overlapping ticks are skipped, so a dead or slow controller cannot

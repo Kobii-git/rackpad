@@ -2005,7 +2005,6 @@ export const en = {
   "Bridge": "Bridge",
   "Unchanged": "Unchanged",
   "Auto-sync": "Auto-sync",
-  "Add a connection first to configure auto-sync.": "Add a connection first to configure auto-sync.",
   "Auto-sync off": "Auto-sync off",
   "Synced": "Synced",
   "Drift": "Drift",
@@ -2015,7 +2014,6 @@ export const en = {
   "Sync mode": "Sync mode",
   "Overwrite (add and update, never delete)": "Overwrite (add and update, never delete)",
   "Skip (detect drift, write nothing)": "Skip (detect drift, write nothing)",
-  "Schedule": "Schedule",
   "Every 15 minutes": "Every 15 minutes",
   "Every 30 minutes": "Every 30 minutes",
   "Hourly": "Hourly",
@@ -2024,7 +2022,6 @@ export const en = {
   "Weekly on Sunday at 02:00": "Weekly on Sunday at 02:00",
   "Custom cron (advanced)": "Custom cron (advanced)",
   "Cron expression (minute hour day month weekday)": "Cron expression (minute hour day month weekday)",
-  "Target labs": "Target labs",
   "{count} lab(s)": "{count} lab(s)",
   "Save schedule": "Save schedule",
   "Auto-sync settings saved.": "Auto-sync settings saved.",
@@ -2120,6 +2117,11 @@ export const en = {
     "Imports gateways and routers as Rackpad devices, placed as loose gear. Existing devices are never modified.",
   "Imports access points as Rackpad devices and links them to the WiFi controller when SSIDs are pulled.":
     "Imports access points as Rackpad devices and links them to the WiFi controller when SSIDs are pulled.",
+  "What to sync": "What to sync",
+  "When to sync": "When to sync",
+  "Where to sync to": "Where to sync to",
+  "What this connection syncs, on which schedules, into which labs.":
+    "What this connection syncs, on which schedules, into which labs.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

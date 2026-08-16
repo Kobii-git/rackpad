@@ -63,16 +63,18 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   case-insensitively across the type field variants so switches are never
   dropped, and an empty per-site device list falls back to the
   controller-wide endpoint with a warning.
-- Added opt-in scheduled auto-sync on a new Auto-sync tab (the panel now
-  splits into Connections and Auto-sync tabs): each connection supports
-  multiple named schedules, each with its own basic preset or custom cron
-  (advanced), merge / overwrite / skip mode (deletes never run
-  automatically), and checkbox multi-select of target labs — so one
-  controller can feed different labs on different cadences. Configuration
-  is admin-only; failures surface non-intrusively on the schedule with the
-  exact error, back off exponentially (capped at 6 hours), and runs are
-  sequential so a broken controller cannot destabilize the server. A Run
-  now action executes any schedule on demand.
+- Added opt-in scheduled auto-sync, folded into each connection as an
+  expandable section that reads connection → what to sync (the pull
+  toggles, editable inline) → when to sync (schedules) → where to sync to
+  (a target-labs multi-select per schedule). Each connection supports
+  multiple named schedules with basic presets or custom cron (advanced)
+  and merge / overwrite / skip modes (deletes never run automatically),
+  so one controller can feed different labs on different cadences.
+  Configuration is admin-only; failures surface non-intrusively on the
+  schedule with the exact error, back off exponentially (capped at 6
+  hours), and runs are sequential so a broken controller cannot
+  destabilize the server. A Run now action executes any schedule on
+  demand.
 - Integration pulls can now import real devices: UniFi and Omada switches,
   gateways, and access points — each behind its own per-category pull
   checkbox — and the OPNsense firewall become Rackpad device records,
