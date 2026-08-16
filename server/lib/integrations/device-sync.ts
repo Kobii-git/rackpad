@@ -13,6 +13,8 @@ const IMPORTABLE_DEVICE_TYPES = [
   "firewall",
   "ap",
   "server",
+  "vm",
+  "container",
   "other",
 ] as const;
 

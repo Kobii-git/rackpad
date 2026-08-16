@@ -1757,7 +1757,6 @@ export const en = {
   "Overlaps {value1}": "Overlaps {value1}",
   "Pending placement": "Pending placement",
   "Primary IP": "Primary IP",
-  "Proxmox node": "Proxmox node",
   "Proxmox version": "Proxmox version",
   "R /": "R /",
   "Rack width": "Rack width",
@@ -2094,8 +2093,6 @@ export const en = {
   "Creating the schedule failed.": "Creating the schedule failed.",
   "Schedule deleted.": "Schedule deleted.",
   "Deleting the schedule failed.": "Deleting the schedule failed.",
-  "No schedules yet — syncs for this connection run manually.":
-    "No schedules yet — syncs for this connection run manually.",
   "Nothing importable — enable the device or SSID pull options on the connection.":
     "Nothing importable — enable the device or SSID pull options on the connection.",
   "New records are created as loose gear (no rack) with their ports; matched records are left untouched.":
@@ -2122,6 +2119,15 @@ export const en = {
   "Where to sync to": "Where to sync to",
   "What this connection syncs, on which schedules, into which labs.":
     "What this connection syncs, on which schedules, into which labs.",
+  "Proxmox node": "Proxmox node",
+  "Select all": "Select all",
+  "VMs & containers": "VMs & containers",
+  "Imports the selected Proxmox nodes as Rackpad server devices, placed as loose gear.":
+    "Imports the selected Proxmox nodes as Rackpad server devices, placed as loose gear.",
+  "Imports QEMU VMs and LXC containers as devices with their running state. Use Stage import for full detail like NICs, VLANs, and IPs.":
+    "Imports QEMU VMs and LXC containers as devices with their running state. Use Stage import for full detail like NICs, VLANs, and IPs.",
+  "Proxmox nodes to stage": "Proxmox nodes to stage",
+  "Select at least one Proxmox node to stage.": "Select at least one Proxmox node to stage.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

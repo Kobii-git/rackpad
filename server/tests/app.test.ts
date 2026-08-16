@@ -8517,7 +8517,7 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
   assert.equal(source.enabled, 1);
   assert.equal(tlsColumn?.dflt_value, "0");
   assert.equal(duplicateMacColumn?.dflt_value, "0");
-  assert.equal(version.version, 41);
+  assert.equal(version.version, 42);
   migrated.close();
 });
 
@@ -8668,7 +8668,7 @@ test("storage topology migration upgrades a version-34 database without changing
     .prepare("SELECT version FROM schemaVersion WHERE id = 1")
     .get() as { version: number };
   assert.equal(device.storageGb, 9876);
-  assert.equal(version.version, 41);
+  assert.equal(version.version, 42);
   migrated.close();
 });
 

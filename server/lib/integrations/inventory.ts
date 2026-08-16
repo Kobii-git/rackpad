@@ -59,7 +59,15 @@ export interface IntegrationPortSpec {
 // (switches with their ports, gateways, APs, firewalls).
 export interface IntegrationImportableDevice {
   name: string;
-  deviceType: "switch" | "router" | "firewall" | "ap" | "server" | "other";
+  deviceType:
+    | "switch"
+    | "router"
+    | "firewall"
+    | "ap"
+    | "server"
+    | "vm"
+    | "container"
+    | "other";
   model: string | null;
   macAddress: string | null;
   ipAddress: string | null;

@@ -9,6 +9,7 @@ import {
   connectionScopeRefs,
   type IntegrationClient,
   type IntegrationDevicePreview,
+  type IntegrationImportableDevice,
   type IntegrationInventory,
   type IntegrationScope,
   type IntegrationTestResult,
@@ -408,6 +409,7 @@ async function proxmoxFetchInventory(
     );
   }
   const nodeNames = new Set(nodes.map((entry) => entry.node));
+  const importableDevices: IntegrationImportableDevice[] = [];
   for (const node of nodes) {
     devices.push({
       name: node.node,
@@ -423,6 +425,19 @@ async function proxmoxFetchInventory(
         .filter(Boolean)
         .join(", ") || null,
     });
+    if (connection.syncHosts) {
+      importableDevices.push({
+        name: node.node,
+        deviceType: "server",
+        model: "Proxmox VE node",
+        macAddress: null,
+        ipAddress: null,
+        serial: null,
+        firmware: null,
+        online: node.status === "online",
+        ports: [],
+      });
+    }
   }
 
   try {
@@ -441,6 +456,20 @@ async function proxmoxFetchInventory(
         status: asText(row.status) || null,
         detail: `VMID ${asText(row.vmid)} on ${asText(row.node)}`,
       });
+      if (connection.syncGuests) {
+        importableDevices.push({
+          name: asText(row.name) || `vmid-${asText(row.vmid)}`,
+          deviceType: kind,
+          model:
+            kind === "container" ? "LXC container" : "QEMU virtual machine",
+          macAddress: null,
+          ipAddress: null,
+          serial: null,
+          firmware: null,
+          online: asText(row.status) === "running",
+          ports: [],
+        });
+      }
     }
   } catch (error) {
     warnings.push(
@@ -549,7 +578,13 @@ async function proxmoxFetchInventory(
     );
   }
 
-  return { collection: { vlans, subnets, dhcpScopes }, devices, warnings };
+  return {
+    collection: { vlans, subnets, dhcpScopes },
+    devices,
+    importableDevices,
+    wifi: null,
+    warnings,
+  };
 }
 
 interface StagedDisk {
@@ -903,21 +938,30 @@ function workloadSortKey(entry: JsonRecord) {
 
 export async function fetchProxmoxStagedInventory(
   connection: IntegrationConnectionSecrets,
-  nodeName?: string | null,
+  nodeNames?: string[] | null,
 ) {
   const nodes = await fetchProxmoxNodes(connection);
   if (nodes.length === 0) {
     throw new ValidationError("Proxmox VE reported no nodes for this token.", 502);
   }
-  const requested = nodeName?.trim();
-  const node = requested
-    ? nodes.find((entry) => entry.node === requested)?.node
-    : nodes[0].node;
-  if (!node) {
+  const requested = (nodeNames ?? [])
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const missing = requested.filter(
+    (name) => !nodes.some((entry) => entry.node === name),
+  );
+  if (missing.length > 0) {
     throw new ValidationError(
-      `Node ${requested} was not found on this Proxmox VE connection.`,
+      `Node ${missing.join(", ")} was not found on this Proxmox VE connection.`,
     );
   }
+  const selectedNodes =
+    requested.length > 0
+      ? nodes.filter((entry) => requested.includes(entry.node))
+      : [nodes[0]];
+  // The wizard payload models one host; the first selected node provides
+  // the host summary while workloads and networks come from every node.
+  const node = selectedNodes[0].node;
 
   const collectorErrors: string[] = [];
   const version = asRecord(
@@ -926,33 +970,60 @@ export async function fetchProxmoxStagedInventory(
   const status = asRecord(
     await tryProxmoxGet(connection, `/nodes/${node}/status`, collectorErrors),
   );
-  const network = parseNodeNetwork(
-    await tryProxmoxGet(connection, `/nodes/${node}/network`, collectorErrors),
-  );
 
   const cpuinfo = asRecord(status.cpuinfo);
   const memory = asRecord(status.memory);
   const versionText = asText(version.version);
-  const hostIps = unique(network.map((entry) => cleanIpv4(entry.address)));
 
-  const qemuItems = asArray(
-    await tryProxmoxGet(connection, `/nodes/${node}/qemu`, collectorErrors),
-  )
-    .map(asRecord)
-    .sort((a, b) => workloadSortKey(a) - workloadSortKey(b));
-  const lxcItems = asArray(
-    await tryProxmoxGet(connection, `/nodes/${node}/lxc`, collectorErrors),
-  )
-    .map(asRecord)
-    .sort((a, b) => workloadSortKey(a) - workloadSortKey(b));
-
+  const allNetwork: ReturnType<typeof parseNodeNetwork> = [];
   const vms: unknown[] = [];
-  for (const item of qemuItems) {
-    vms.push(await stageQemuWorkload(connection, node, item));
+  let qemuCount = 0;
+  let lxcCount = 0;
+  for (const selected of selectedNodes) {
+    const nodeNetwork = parseNodeNetwork(
+      await tryProxmoxGet(
+        connection,
+        `/nodes/${selected.node}/network`,
+        collectorErrors,
+      ),
+    );
+    allNetwork.push(...nodeNetwork);
+    const qemuItems = asArray(
+      await tryProxmoxGet(
+        connection,
+        `/nodes/${selected.node}/qemu`,
+        collectorErrors,
+      ),
+    )
+      .map(asRecord)
+      .sort((a, b) => workloadSortKey(a) - workloadSortKey(b));
+    const lxcItems = asArray(
+      await tryProxmoxGet(
+        connection,
+        `/nodes/${selected.node}/lxc`,
+        collectorErrors,
+      ),
+    )
+      .map(asRecord)
+      .sort((a, b) => workloadSortKey(a) - workloadSortKey(b));
+    qemuCount += qemuItems.length;
+    lxcCount += lxcItems.length;
+    for (const item of qemuItems) {
+      vms.push(await stageQemuWorkload(connection, selected.node, item));
+    }
+    for (const item of lxcItems) {
+      vms.push(await stageLxcWorkload(connection, selected.node, item));
+    }
   }
-  for (const item of lxcItems) {
-    vms.push(await stageLxcWorkload(connection, node, item));
-  }
+  const hostIps = unique(allNetwork.map((entry) => cleanIpv4(entry.address)));
+  // Bridges commonly share names (vmbr0) across cluster nodes; keep the
+  // first occurrence so guest adapters keep matching their switch by name.
+  const seenIfaces = new Set<string>();
+  const network = allNetwork.filter((entry) => {
+    if (seenIfaces.has(entry.iface)) return false;
+    seenIfaces.add(entry.iface);
+    return true;
+  });
 
   return {
     schema: PROXMOX_SCHEMA,
@@ -1009,9 +1080,9 @@ export async function fetchProxmoxStagedInventory(
     })),
     vms,
     summary: {
-      node,
-      qemu: qemuItems.length,
-      lxc: lxcItems.length,
+      node: selectedNodes.map((entry) => entry.node).join(", "),
+      qemu: qemuCount,
+      lxc: lxcCount,
       workloads: vms.length,
     },
     collectorErrors: unique(collectorErrors),

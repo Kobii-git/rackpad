@@ -33,6 +33,8 @@ const apiKeyConnection: IntegrationConnectionSecrets = {
   syncSwitches: true,
   syncGateways: true,
   syncAccessPoints: true,
+  syncHosts: true,
+  syncGuests: true,
   syncWifi: true,
 };
 

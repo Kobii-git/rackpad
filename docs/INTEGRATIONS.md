@@ -199,9 +199,15 @@ just as read-only previews:
 
 - **What comes in:** switches, gateways/routers, and access points from
   UniFi and Omada — each behind its own pull checkbox, so you can import
-  just switches, just APs, or any mix — and the OPNsense firewall itself.
-  Model, MAC, IP, serial, firmware, and online status are captured when
-  the controller reports them.
+  just switches, just APs, or any mix — the OPNsense firewall itself, and
+  from Proxmox the whole stack from the host down: the selected nodes as
+  server devices plus their QEMU VMs and LXC containers (Hosts and
+  VMs & containers checkboxes). Model, MAC, IP, serial, firmware, and
+  online status are captured when the controller reports them; for full
+  guest detail (NICs, VLAN tags, IPs) use **Stage import** into the
+  Proxmox wizard, which now stages several nodes at once via a checkbox
+  multi-select with Select all (the first selected node provides the host
+  summary; workloads and bridges come from every selected node).
 - **Switch ports with VLAN behavior:** the full port list comes in (name,
   RJ45/SFP/SFP+ media type, speed, link state), and when the controller
   exposes per-port VLAN configuration it is mapped onto Rackpad's port

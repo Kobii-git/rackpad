@@ -98,6 +98,17 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   into a checkbox dropdown matching the rest of the UI, and staging a
   Proxmox node into the import wizard now reports parse failures on the
   Integrations panel instead of silently bouncing back to the Imports tab.
+- Proxmox connections now import the whole stack from the host down:
+  selected nodes become Rackpad server devices and their QEMU VMs and LXC
+  containers become devices with running state, behind new Hosts and
+  VMs & containers pull checkboxes. Stage import accepts several nodes at
+  once, and every checkbox multi-select in the panel (target labs,
+  discovered sites/nodes/environments, staging nodes) gains a Select all
+  row.
+- The inventory preview dialog only shows tabs the product actually
+  returned data for — no more empty VLANs/Subnets/DHCP tabs on container
+  platforms — and the auto-sync explainer appears once above the
+  connections list instead of repeating per connection.
 - Added a Dockhand integration (Bearer API token) that lists Docker
   environments with online state and container/stack counts, containers with
   image, IP, health, and compose stack, and Docker networks with drivers and

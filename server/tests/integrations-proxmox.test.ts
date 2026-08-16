@@ -36,6 +36,8 @@ const connection: IntegrationConnectionSecrets = {
   syncSwitches: true,
   syncGateways: true,
   syncAccessPoints: true,
+  syncHosts: true,
+  syncGuests: true,
   syncWifi: true,
 };
 
@@ -257,7 +259,7 @@ test("proxmox inventory maps bridges, SDN vnets, and DHCP ranges", async () => {
 
 test("proxmox staged inventory mirrors the offline collector payload", async () => {
   useFakeProxmox();
-  const payload = await fetchProxmoxStagedInventory(connection, "pve1");
+  const payload = await fetchProxmoxStagedInventory(connection, ["pve1"]);
 
   assert.equal(payload.schema, "rackpad.proxmox.inventory.v1");
   assert.equal(payload.provider, "proxmox");
@@ -323,7 +325,7 @@ test("proxmox staged inventory mirrors the offline collector payload", async () 
 test("proxmox staged inventory validates the requested node", async () => {
   useFakeProxmox();
   await assert.rejects(
-    fetchProxmoxStagedInventory(connection, "missing-node"),
+    fetchProxmoxStagedInventory(connection, ["missing-node"]),
     /missing-node was not found/,
   );
 });

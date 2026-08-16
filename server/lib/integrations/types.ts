@@ -116,6 +116,8 @@ export interface IntegrationConnectionPublic {
   syncSwitches: boolean;
   syncGateways: boolean;
   syncAccessPoints: boolean;
+  syncHosts: boolean;
+  syncGuests: boolean;
   syncWifi: boolean;
   lastStatus: IntegrationConnectionStatus;
   lastCheckedAt: string | null;
@@ -153,6 +155,8 @@ export interface IntegrationConnectionSecrets {
   syncSwitches: boolean;
   syncGateways: boolean;
   syncAccessPoints: boolean;
+  syncHosts: boolean;
+  syncGuests: boolean;
   syncWifi: boolean;
   autoSyncEnabled: boolean;
   autoSyncMode: IntegrationAutoSyncMode;

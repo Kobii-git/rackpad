@@ -159,6 +159,8 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       syncSwitches: optionalBoolean(body, "syncSwitches") ?? true,
       syncGateways: optionalBoolean(body, "syncGateways") ?? true,
       syncAccessPoints: optionalBoolean(body, "syncAccessPoints") ?? true,
+      syncHosts: optionalBoolean(body, "syncHosts") ?? true,
+      syncGuests: optionalBoolean(body, "syncGuests") ?? true,
       syncWifi: optionalBoolean(body, "syncWifi") ?? true,
     });
 
@@ -223,6 +225,8 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         syncSwitches: true,
         syncGateways: true,
         syncAccessPoints: true,
+        syncHosts: true,
+        syncGuests: true,
         syncWifi: true,
         autoSyncEnabled: false,
         autoSyncMode: "merge",
@@ -316,6 +320,8 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         syncGateways: optionalBoolean(body, "syncGateways") ?? undefined,
         syncAccessPoints:
           optionalBoolean(body, "syncAccessPoints") ?? undefined,
+        syncHosts: optionalBoolean(body, "syncHosts") ?? undefined,
+        syncGuests: optionalBoolean(body, "syncGuests") ?? undefined,
         syncWifi: optionalBoolean(body, "syncWifi") ?? undefined,
         clearSecret: optionalBoolean(body, "clearSecret") ?? false,
       });
@@ -811,6 +817,9 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
 
       const body = req.body == null ? {} : asObject(req.body);
       const node = optionalString(body, "node", { maxLength: 120 }) ?? null;
+      const nodeList =
+        optionalStringArray(body, "nodes", { maxItems: 64 }) ??
+        (node ? [node] : null);
 
       const connection = loadIntegrationConnectionSecrets(req.params.id);
       if (!connection.authSecret) {
@@ -821,7 +830,10 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const payload = await fetchProxmoxStagedInventory(connection, node);
+        const payload = await fetchProxmoxStagedInventory(
+          connection,
+          nodeList,
+        );
         const previousSummary =
           parseIntegrationConnectionPublic(existing).lastSummary ?? {};
         recordIntegrationConnectionStatus(req.params.id, {

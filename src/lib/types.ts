@@ -325,6 +325,8 @@ export interface IntegrationConnection {
   syncSwitches: boolean;
   syncGateways: boolean;
   syncAccessPoints: boolean;
+  syncHosts: boolean;
+  syncGuests: boolean;
   syncWifi: boolean;
   lastStatus: "unknown" | "ok" | "error";
   lastCheckedAt: string | null;
@@ -381,7 +383,15 @@ export interface IntegrationPortSpec {
 
 export interface IntegrationImportableDevice {
   name: string;
-  deviceType: "switch" | "router" | "firewall" | "ap" | "server" | "other";
+  deviceType:
+    | "switch"
+    | "router"
+    | "firewall"
+    | "ap"
+    | "server"
+    | "vm"
+    | "container"
+    | "other";
   model: string | null;
   macAddress: string | null;
   ipAddress: string | null;

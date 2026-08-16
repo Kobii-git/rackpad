@@ -67,6 +67,8 @@ interface ConnectionForm {
   syncSwitches: boolean;
   syncGateways: boolean;
   syncAccessPoints: boolean;
+  syncHosts: boolean;
+  syncGuests: boolean;
   syncWifi: boolean;
 }
 
@@ -85,6 +87,8 @@ const EMPTY_FORM: ConnectionForm = {
   syncSwitches: true,
   syncGateways: true,
   syncAccessPoints: true,
+  syncHosts: true,
+  syncGuests: true,
   syncWifi: true,
 };
 
@@ -148,6 +152,8 @@ const PULL_TOGGLES: Record<
     vlans: PullToggleCopy | null;
     subnets: PullToggleCopy | null;
     dhcp: PullToggleCopy | null;
+    hosts: PullToggleCopy | null;
+    guests: PullToggleCopy | null;
     switches: PullToggleCopy | null;
     gateways: PullToggleCopy | null;
     aps: PullToggleCopy | null;
@@ -167,6 +173,14 @@ const PULL_TOGGLES: Record<
       label: "SDN DHCP ranges",
       hint: "DHCP ranges defined on SDN subnets. Shown for review only, never applied.",
     },
+    hosts: {
+      label: "Hosts",
+      hint: "Imports the selected Proxmox nodes as Rackpad server devices, placed as loose gear.",
+    },
+    guests: {
+      label: "VMs & containers",
+      hint: "Imports QEMU VMs and LXC containers as devices with their running state. Use Stage import for full detail like NICs, VLANs, and IPs.",
+    },
     switches: null,
     gateways: null,
     aps: null,
@@ -185,6 +199,8 @@ const PULL_TOGGLES: Record<
       label: "DHCP server ranges",
       hint: "UniFi DHCP server pools. Shown for review only, never applied.",
     },
+    hosts: null,
+    guests: null,
     switches: {
       label: "Switches",
       hint: "Imports switches as Rackpad devices with their full port list (media type, speed, link state). New records land as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.",
@@ -215,6 +231,8 @@ const PULL_TOGGLES: Record<
       label: "DHCP server ranges",
       hint: "Omada DHCP server pools. Shown for review only, never applied.",
     },
+    hosts: null,
+    guests: null,
     switches: {
       label: "Switches",
       hint: "Imports switches as Rackpad devices with their full port list (media type, speed, link state). New records land as loose gear until you rack them; existing devices are matched by MAC or hostname and never modified.",
@@ -245,6 +263,8 @@ const PULL_TOGGLES: Record<
       label: "Kea and Dnsmasq ranges",
       hint: "DHCP pools from Kea and Dnsmasq. ISC dhcpd does not expose ranges. Shown for review only, never applied.",
     },
+    hosts: null,
+    guests: null,
     switches: null,
     gateways: {
       label: "Firewall device",
@@ -257,6 +277,8 @@ const PULL_TOGGLES: Record<
     vlans: null,
     subnets: null,
     dhcp: null,
+    hosts: null,
+    guests: null,
     switches: null,
     gateways: null,
     aps: null,
@@ -268,6 +290,8 @@ const PULL_TOGGLE_FIELDS = [
   ["vlans", "syncVlans"],
   ["subnets", "syncSubnets"],
   ["dhcp", "syncDhcp"],
+  ["hosts", "syncHosts"],
+  ["guests", "syncGuests"],
   ["switches", "syncSwitches"],
   ["gateways", "syncGateways"],
   ["aps", "syncAccessPoints"],
@@ -298,6 +322,8 @@ const DEVICE_KIND_LABELS: Record<
 
 const IMPORT_TYPE_LABELS: Record<string, TranslationKey> = {
   switch: "Switch",
+  vm: "VM",
+  container: "Container",
   router: "Router",
   firewall: "Firewall",
   ap: "Access point",
@@ -432,7 +458,7 @@ export function IntegrationsPanel({
     Record<string, ProxmoxIntegrationNode[]>
   >({});
   const [proxmoxNodeChoice, setProxmoxNodeChoice] = useState<
-    Record<string, string>
+    Record<string, string[]>
   >({});
   const [scheduleDrafts, setScheduleDrafts] = useState<
     Record<string, ScheduleDraft>
@@ -499,12 +525,20 @@ export function IntegrationsPanel({
       if (proxmoxNodes[connection.id]) continue;
       void api
         .getProxmoxIntegrationNodes(connection.id)
-        .then(({ nodes }) =>
+        .then(({ nodes }) => {
           setProxmoxNodes((current) => ({
             ...current,
             [connection.id]: nodes,
-          })),
-        )
+          }));
+          setProxmoxNodeChoice((current) =>
+            current[connection.id]
+              ? current
+              : {
+                  ...current,
+                  [connection.id]: nodes.map((entry) => entry.node),
+                },
+          );
+        })
         .catch(() => {});
     }
   }, [connections]);
@@ -543,6 +577,8 @@ export function IntegrationsPanel({
       syncSwitches: connection.syncSwitches,
       syncGateways: connection.syncGateways,
       syncAccessPoints: connection.syncAccessPoints,
+      syncHosts: connection.syncHosts,
+      syncGuests: connection.syncGuests,
       syncWifi: connection.syncWifi,
     });
     setEditingId(connection.id);
@@ -614,6 +650,8 @@ export function IntegrationsPanel({
           syncSwitches: form.syncSwitches,
           syncGateways: form.syncGateways,
           syncAccessPoints: form.syncAccessPoints,
+          syncHosts: form.syncHosts,
+          syncGuests: form.syncGuests,
           syncWifi: form.syncWifi,
         });
         setSuccess(t("Integration connection updated."));
@@ -634,6 +672,8 @@ export function IntegrationsPanel({
           syncSwitches: form.syncSwitches,
           syncGateways: form.syncGateways,
           syncAccessPoints: form.syncAccessPoints,
+          syncHosts: form.syncHosts,
+          syncGuests: form.syncGuests,
           syncWifi: form.syncWifi,
         });
         setSuccess(t("Integration connection saved."));
@@ -688,6 +728,8 @@ export function IntegrationsPanel({
           field === "syncGateways" ? checked : connection.syncGateways,
         syncAccessPoints:
           field === "syncAccessPoints" ? checked : connection.syncAccessPoints,
+        syncHosts: field === "syncHosts" ? checked : connection.syncHosts,
+        syncGuests: field === "syncGuests" ? checked : connection.syncGuests,
         syncWifi: field === "syncWifi" ? checked : connection.syncWifi,
       });
       await loadConnections();
@@ -737,7 +779,19 @@ export function IntegrationsPanel({
         policy,
       });
       setPull({ ...result, connectionId: connection.id });
-      setPreviewTab(result.preview.vlans.length > 0 ? "vlans" : "devices");
+      const counts = {
+        vlans: result.preview.vlans.length,
+        subnets: result.preview.subnets.length,
+        dhcp: result.preview.dhcp.scopes.length,
+        devices: result.devices.length,
+        import:
+          result.deviceSync.devices.length + result.deviceSync.ssids.length,
+      };
+      setPreviewTab(
+        (["vlans", "subnets", "dhcp", "devices", "import"] as const).find(
+          (tab) => counts[tab] > 0,
+        ) ?? "devices",
+      );
       await loadConnections();
     } catch (err) {
       setError(
@@ -816,10 +870,14 @@ export function IntegrationsPanel({
         nodes = (await api.getProxmoxIntegrationNodes(connection.id)).nodes;
         setProxmoxNodes((current) => ({ ...current, [connection.id]: nodes! }));
       }
-      const node =
-        proxmoxNodeChoice[connection.id] ?? nodes[0]?.node ?? undefined;
+      const selected =
+        proxmoxNodeChoice[connection.id] ?? nodes.map((entry) => entry.node);
+      if (selected.length === 0) {
+        setError(t("Select at least one Proxmox node to stage."));
+        return;
+      }
       const payload = await api.pullProxmoxStagedInventory(connection.id, {
-        node,
+        nodes: selected,
       });
       const staged = onStageProxmoxPayload(payload);
       if (staged) {
@@ -953,11 +1011,17 @@ export function IntegrationsPanel({
     }
   }
 
-  function labMultiSelect(
-    selected: string[],
-    disabled: boolean,
-    onChange: (labIds: string[]) => void,
-  ) {
+  function multiSelectPopover(options: {
+    items: Array<{ id: string; label: string }>;
+    selected: string[];
+    disabled: boolean;
+    triggerLabel: string;
+    triggerTitle?: string;
+    onChange: (ids: string[]) => void;
+  }) {
+    const { items, selected, disabled, triggerLabel, triggerTitle, onChange } =
+      options;
+    const allSelected = items.length > 0 && selected.length === items.length;
     return (
       <Popover>
         <PopoverTrigger asChild>
@@ -967,30 +1031,44 @@ export function IntegrationsPanel({
             size="sm"
             className="w-full justify-between"
             disabled={disabled}
+            title={triggerTitle}
           >
-            {t("{count} lab(s)", { count: selected.length })}
+            {triggerLabel}
             <ChevronDown className="size-3.5" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-64 space-y-1">
-          {labs.map((entry) => (
+          <label className="flex items-center gap-2 rounded border-b border-[var(--color-line)] px-1 pb-1 text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              disabled={disabled || items.length === 0}
+              onChange={(event) =>
+                onChange(
+                  event.target.checked ? items.map((item) => item.id) : [],
+                )
+              }
+            />
+            {t("Select all")}
+          </label>
+          {items.map((item) => (
             <label
-              key={entry.id}
+              key={item.id}
               className="flex items-center gap-2 rounded px-1 py-0.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
             >
               <input
                 type="checkbox"
-                checked={selected.includes(entry.id)}
+                checked={selected.includes(item.id)}
                 disabled={disabled}
                 onChange={(event) =>
                   onChange(
                     event.target.checked
-                      ? [...selected, entry.id]
-                      : selected.filter((id) => id !== entry.id),
+                      ? [...selected, item.id]
+                      : selected.filter((id) => id !== item.id),
                   )
                 }
               />
-              {entry.name}
+              {item.label}
             </label>
           ))}
         </PopoverContent>
@@ -1063,9 +1141,18 @@ export function IntegrationsPanel({
             <span className="block text-[var(--text-secondary)]">
               {t("Where to sync to")}
             </span>
-            {labMultiSelect(draft.labIds, !admin || busy, (labIds) =>
-              onDraftChange({ labIds }),
-            )}
+            {multiSelectPopover({
+              items: labs.map((entry) => ({
+                id: entry.id,
+                label: entry.name,
+              })),
+              selected: draft.labIds,
+              disabled: !admin || busy,
+              triggerLabel: t("{count} lab(s)", {
+                count: draft.labIds.length,
+              }),
+              onChange: (labIds) => onDraftChange({ labIds }),
+            })}
           </div>
         </div>
         {draft.preset === "custom" && (
@@ -1106,8 +1193,31 @@ export function IntegrationsPanel({
         .length +
       pull.deviceSync.ssids.filter((entry) => entry.action === "create").length
     : 0;
+  const previewTabCounts = pull
+    ? {
+        vlans: pull.preview.vlans.length,
+        subnets: pull.preview.subnets.length,
+        dhcp: pull.preview.dhcp.scopes.length,
+        devices: pull.devices.length,
+        import: pull.deviceSync.devices.length + pull.deviceSync.ssids.length,
+      }
+    : null;
+  // Only offer tabs the product actually returned data for; Devices is
+  // the fallback so the dialog always has one tab.
+  const visiblePreviewTabs: string[] = previewTabCounts
+    ? ["vlans", "subnets", "dhcp", "devices", "import"].filter(
+        (tab) =>
+          tab === "devices" ||
+          previewTabCounts[tab as keyof typeof previewTabCounts] > 0,
+      )
+    : [];
+  const activePreviewTab = visiblePreviewTabs.includes(previewTab)
+    ? previewTab
+    : (visiblePreviewTabs[0] ?? "devices");
   const isNetworkPreviewTab =
-    previewTab === "vlans" || previewTab === "subnets" || previewTab === "dhcp";
+    activePreviewTab === "vlans" ||
+    activePreviewTab === "subnets" ||
+    activePreviewTab === "dhcp";
 
   return (
     <Card>
@@ -1349,60 +1459,29 @@ export function IntegrationsPanel({
                       <PlugZap className="size-3.5" />
                       {discovering ? t("Testing…") : t("Test & discover")}
                     </Button>
-                    <div className="space-y-1 text-sm">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="min-w-48 justify-between"
-                            disabled={saving || !discoveredScopes}
-                            title={
-                              discoveredScopes
-                                ? undefined
-                                : t(
-                                    "Run Test & discover first to list the choices.",
-                                  )
-                            }
-                          >
-                            {form.scopeRefs.length > 0
-                              ? t("{count} of {kind} selected", {
-                                  count: form.scopeRefs.length,
-                                  kind: t(SCOPE_KIND_LABELS[formScopeKind]),
-                                })
-                              : t("{kind}: default selection", {
-                                  kind: t(SCOPE_KIND_LABELS[formScopeKind]),
-                                })}
-                            <ChevronDown className="size-3.5" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 space-y-1">
-                          {(discoveredScopes ?? []).map((scope) => (
-                            <label
-                              key={scope.id}
-                              className="flex items-center gap-2 rounded px-1 py-0.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={form.scopeRefs.includes(scope.id)}
-                                disabled={saving}
-                                onChange={(event) =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    scopeRefs: event.target.checked
-                                      ? [...prev.scopeRefs, scope.id]
-                                      : prev.scopeRefs.filter(
-                                          (id) => id !== scope.id,
-                                        ),
-                                  }))
-                                }
-                              />
-                              {scope.label}
-                            </label>
-                          ))}
-                        </PopoverContent>
-                      </Popover>
+                    <div className="w-64 space-y-1 text-sm">
+                      {multiSelectPopover({
+                        items: (discoveredScopes ?? []).map((scope) => ({
+                          id: scope.id,
+                          label: scope.label,
+                        })),
+                        selected: form.scopeRefs,
+                        disabled: saving || !discoveredScopes,
+                        triggerTitle: discoveredScopes
+                          ? undefined
+                          : t("Run Test & discover first to list the choices."),
+                        triggerLabel:
+                          form.scopeRefs.length > 0
+                            ? t("{count} of {kind} selected", {
+                                count: form.scopeRefs.length,
+                                kind: t(SCOPE_KIND_LABELS[formScopeKind]),
+                              })
+                            : t("{kind}: default selection", {
+                                kind: t(SCOPE_KIND_LABELS[formScopeKind]),
+                              }),
+                        onChange: (scopeRefs) =>
+                          setForm((prev) => ({ ...prev, scopeRefs })),
+                      })}
                     </div>
                     {!discoveredScopes && form.scopeRefs.length > 0 && (
                       <Mono className="text-[10px] text-[var(--text-tertiary)]">
@@ -1443,10 +1522,17 @@ export function IntegrationsPanel({
             )}
 
             {connections.length > 0 && (
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
-                {t("Existing connections ({count})", {
-                  count: connections.length,
-                })}
+              <div className="space-y-1">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                  {t("Existing connections ({count})", {
+                    count: connections.length,
+                  })}
+                </div>
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  {t(
+                    "Auto-sync is opt-in per schedule and runs on the server without a review step. Each connection can have several schedules with their own cadence, mode, and target labs. Repeated failures back off automatically and surface here.",
+                  )}
+                </p>
               </div>
             )}
             {connections.length === 0 && !formOpen && (
@@ -1608,27 +1694,33 @@ export function IntegrationsPanel({
                       </div>
                     )}
                   {connection.provider === "proxmox" && nodes.length > 1 && (
-                    <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                      {t("Proxmox node")}
-                      <select
-                        className="rk-control"
-                        value={
-                          proxmoxNodeChoice[connection.id] ?? nodes[0].node
-                        }
-                        onChange={(event) =>
-                          setProxmoxNodeChoice((current) => ({
-                            ...current,
-                            [connection.id]: event.target.value,
-                          }))
-                        }
-                      >
-                        {nodes.map((node) => (
-                          <option key={node.node} value={node.node}>
-                            {node.node}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                      {t("Proxmox nodes to stage")}
+                      <div className="w-56">
+                        {multiSelectPopover({
+                          items: nodes.map((entry) => ({
+                            id: entry.node,
+                            label: entry.node,
+                          })),
+                          selected:
+                            proxmoxNodeChoice[connection.id] ??
+                            nodes.map((entry) => entry.node),
+                          disabled: busy,
+                          triggerLabel: t("{count} of {kind} selected", {
+                            count: (
+                              proxmoxNodeChoice[connection.id] ??
+                              nodes.map((entry) => entry.node)
+                            ).length,
+                            kind: t("Cluster nodes"),
+                          }),
+                          onChange: (ids) =>
+                            setProxmoxNodeChoice((current) => ({
+                              ...current,
+                              [connection.id]: ids,
+                            })),
+                        })}
+                      </div>
+                    </div>
                   )}
                   {syncOpen && (
                     <div className="space-y-3 border-t border-[var(--color-line)] pt-2">
@@ -1697,11 +1789,6 @@ export function IntegrationsPanel({
                             </Button>
                           </div>
                         </div>
-                        <p className="text-xs text-[var(--text-tertiary)]">
-                          {t(
-                            "Auto-sync is opt-in per schedule and runs on the server without a review step. Each connection can have several schedules with their own cadence, mode, and target labs. Repeated failures back off automatically and surface here.",
-                          )}
-                        </p>
 
                         {newDraft && (
                           <div className="space-y-3 rounded-[var(--radius-sm)] border border-dashed border-[var(--color-line)] p-3">
@@ -1743,14 +1830,6 @@ export function IntegrationsPanel({
                               </Button>
                             </div>
                           </div>
-                        )}
-
-                        {connectionSchedules.length === 0 && !newDraft && (
-                          <p className="text-xs text-[var(--text-tertiary)]">
-                            {t(
-                              "No schedules yet — syncs for this connection run manually.",
-                            )}
-                          </p>
                         )}
 
                         {connectionSchedules.map((schedule) => {
@@ -1930,29 +2009,37 @@ export function IntegrationsPanel({
               ))}
 
               <Tabs
-                value={previewTab}
+                value={activePreviewTab}
                 onValueChange={setPreviewTab}
                 className="flex min-h-0 flex-1 flex-col gap-3"
               >
                 <TabsList className="max-w-full overflow-x-auto [&>*]:shrink-0">
-                  <TabsTrigger value="vlans">
-                    {t("VLANs")} ({pull.preview.vlans.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="subnets">
-                    {t("Subnets")} ({pull.preview.subnets.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="dhcp">
-                    {t("DHCP")} ({pull.preview.dhcp.scopes.length})
-                  </TabsTrigger>
+                  {visiblePreviewTabs.includes("vlans") && (
+                    <TabsTrigger value="vlans">
+                      {t("VLANs")} ({pull.preview.vlans.length})
+                    </TabsTrigger>
+                  )}
+                  {visiblePreviewTabs.includes("subnets") && (
+                    <TabsTrigger value="subnets">
+                      {t("Subnets")} ({pull.preview.subnets.length})
+                    </TabsTrigger>
+                  )}
+                  {visiblePreviewTabs.includes("dhcp") && (
+                    <TabsTrigger value="dhcp">
+                      {t("DHCP")} ({pull.preview.dhcp.scopes.length})
+                    </TabsTrigger>
+                  )}
                   <TabsTrigger value="devices">
                     {t("Devices")} ({pull.devices.length})
                   </TabsTrigger>
-                  <TabsTrigger value="import">
-                    {t("Import")} (
-                    {pull.deviceSync.devices.length +
-                      pull.deviceSync.ssids.length}
-                    )
-                  </TabsTrigger>
+                  {visiblePreviewTabs.includes("import") && (
+                    <TabsTrigger value="import">
+                      {t("Import")} (
+                      {pull.deviceSync.devices.length +
+                        pull.deviceSync.ssids.length}
+                      )
+                    </TabsTrigger>
+                  )}
                 </TabsList>
 
                 <TabsContent

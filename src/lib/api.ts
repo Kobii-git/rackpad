@@ -1594,6 +1594,8 @@ export const api = {
     syncSwitches?: boolean;
     syncGateways?: boolean;
     syncAccessPoints?: boolean;
+    syncHosts?: boolean;
+    syncGuests?: boolean;
     syncWifi?: boolean;
   }) {
     return request<IntegrationConnection>("/integrations/connections", {
@@ -1640,6 +1642,8 @@ export const api = {
       syncSwitches: boolean;
       syncGateways: boolean;
       syncAccessPoints: boolean;
+      syncHosts: boolean;
+      syncGuests: boolean;
       syncWifi: boolean;
       clearSecret: boolean;
     }>,
@@ -1757,7 +1761,7 @@ export const api = {
     );
   },
 
-  pullProxmoxStagedInventory(id: ID, body?: { node?: string }) {
+  pullProxmoxStagedInventory(id: ID, body?: { nodes?: string[] }) {
     return request<Record<string, unknown>>(
       `/integrations/connections/${id}/proxmox/staged-inventory`,
       { method: "POST", body: JSON.stringify(body ?? {}) },

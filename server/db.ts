@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 41;
+const CURRENT_SCHEMA_VERSION = 42;
 
 export const db = new Database(DB_PATH);
 
@@ -1144,6 +1144,13 @@ const SCHEMA_MIGRATIONS = [
       SET syncSwitches = syncDevices,
           syncGateways = syncDevices,
           syncAccessPoints = syncDevices;
+    `,
+  },
+  {
+    version: 42,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN syncHosts INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE integrationConnections ADD COLUMN syncGuests INTEGER NOT NULL DEFAULT 1;
     `,
   },
 ] as const;
