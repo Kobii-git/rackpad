@@ -2878,7 +2878,7 @@ function findSubnet(
 
 function isSlotPort(kind: PortKind) {
   return (
-    kind === "sfp" || kind === "sfp_plus" || kind === "qsfp" || kind === "fiber"
+    kind === "sfp" || kind === "sfp_plus" || kind === "qsfp" || kind === "fiber" || kind === "sff"
   );
 }
 

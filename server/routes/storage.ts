@@ -28,6 +28,7 @@ import {
 } from "../lib/storage.js";
 import {
   asObject,
+  optionalBoolean,
   optionalEnum,
   optionalInteger,
   optionalNumber,
@@ -59,6 +60,13 @@ type PoolRow = {
   status: string;
   notes: string | null;
 };
+type DriveSlotSectionSettings = {
+  sectionName: string;
+  sectionOrder: number;
+  face: string;
+  layout: string;
+  columns: number | null;
+};
 
 function getDevice(deviceId: string) {
   return db
@@ -82,6 +90,96 @@ function getPool(poolId: string) {
   `,
     )
     .get(poolId) as PoolRow | undefined;
+}
+
+function driveSlotSectionSettings(
+  row: Record<string, unknown>,
+): DriveSlotSectionSettings {
+  return {
+    sectionName: String(row.sectionName),
+    sectionOrder: Number(row.sectionOrder),
+    face: String(row.face),
+    layout: String(row.layout),
+    columns: row.columns == null ? null : Number(row.columns),
+  };
+}
+
+function sameDriveSlotSectionSettings(
+  left: DriveSlotSectionSettings,
+  right: DriveSlotSectionSettings,
+) {
+  return (
+    left.sectionName === right.sectionName &&
+    left.sectionOrder === right.sectionOrder &&
+    left.face === right.face &&
+    left.layout === right.layout &&
+    left.columns === right.columns
+  );
+}
+
+function annotateMixedDriveSlotSections(rows: Record<string, unknown>[]) {
+  const settingsBySection = new Map<string, DriveSlotSectionSettings>();
+  const mixedSections = new Set<string>();
+  for (const row of rows) {
+    const key = `${String(row.deviceId)}\u0000${String(row.sectionName)}`;
+    const settings = driveSlotSectionSettings(row);
+    const first = settingsBySection.get(key);
+    if (first && !sameDriveSlotSectionSettings(first, settings)) {
+      mixedSections.add(key);
+    } else if (!first) {
+      settingsBySection.set(key, settings);
+    }
+  }
+  return rows.map((row) => ({
+    ...row,
+    sectionInconsistent: mixedSections.has(
+      `${String(row.deviceId)}\u0000${String(row.sectionName)}`,
+    ),
+  }));
+}
+
+function parseNewSectionSettings(
+  body: Record<string, unknown>,
+  sectionName: string,
+): DriveSlotSectionSettings {
+  const sectionOrder =
+    optionalInteger(body, "sectionOrder", { min: 0, max: 100 }) ?? 0;
+  const face = optionalEnum(body, "face", DRIVE_SLOT_FACES) ?? "front";
+  const layout = optionalEnum(body, "layout", DRIVE_SLOT_LAYOUTS) ?? "grid";
+  const parsedColumns = optionalInteger(body, "columns", { min: 1, max: 24 });
+  return {
+    sectionName,
+    sectionOrder,
+    face,
+    layout,
+    columns: layout === "grid" ? (parsedColumns ?? 4) : null,
+  };
+}
+
+function assertExistingSectionMatchesRequest(
+  body: Record<string, unknown>,
+  settings: DriveSlotSectionSettings,
+) {
+  const requested = parseNewSectionSettings(body, settings.sectionName);
+  const explicitlyRequested: Array<keyof DriveSlotSectionSettings> = [
+    "sectionOrder",
+    "face",
+    "layout",
+    "columns",
+  ];
+  for (const key of explicitlyRequested) {
+    if (!(key in body)) continue;
+    const nextValue =
+      key === "columns" && requested.layout === "list"
+        ? null
+        : requested[key];
+    if (nextValue !== settings[key]) {
+      throw new ValidationError(
+        `New slots in ${settings.sectionName} must match the section's shared layout settings.`,
+        409,
+      );
+    }
+  }
 }
 
 function parseTemplateDeviceTypes(body: Record<string, unknown>) {
@@ -467,11 +565,12 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
         filter.labIds,
         "devices.labId",
       );
-      return db
+      const rows = db
         .prepare(
           `${filtered.sql} ORDER BY driveSlots.deviceId, driveSlots.sectionOrder, driveSlots.position, driveSlots.id`,
         )
-        .all(...filtered.params);
+        .all(...filtered.params) as Record<string, unknown>[];
+      return annotateMixedDriveSlotSections(rows);
     },
   );
 
@@ -518,24 +617,41 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
     const name = requiredString(body, "name", { maxLength: 80 });
     const sectionName =
       optionalString(body, "sectionName", { maxLength: 80 }) ?? "Drive bays";
-    const sectionOrder =
-      optionalInteger(body, "sectionOrder", { min: 0, max: 100 }) ?? 0;
-    const row = db
+    const sectionRows = db
       .prepare(
-        "SELECT MAX(position) AS maxPosition FROM driveSlots WHERE deviceId = ? AND sectionName = ?",
+        "SELECT * FROM driveSlots WHERE deviceId = ? AND sectionName = ? ORDER BY position, id",
       )
-      .get(deviceId, sectionName) as { maxPosition?: number | null };
+      .all(deviceId, sectionName) as Record<string, unknown>[];
+    let sectionSettings: DriveSlotSectionSettings;
+    if (sectionRows.length > 0) {
+      sectionSettings = driveSlotSectionSettings(sectionRows[0]);
+      if (
+        sectionRows.some(
+          (row) =>
+            !sameDriveSlotSectionSettings(
+              sectionSettings,
+              driveSlotSectionSettings(row),
+            ),
+        )
+      ) {
+        throw new ValidationError(
+          `Repair the mixed settings in ${sectionName} before adding another slot.`,
+          409,
+        );
+      }
+      assertExistingSectionMatchesRequest(body, sectionSettings);
+    } else {
+      sectionSettings = parseNewSectionSettings(body, sectionName);
+    }
+    const maxPosition = sectionRows.reduce(
+      (maximum, row) => Math.max(maximum, Number(row.position) || 0),
+      0,
+    );
     const position =
       optionalInteger(body, "position", { min: 1, max: 1000 }) ??
-      (row.maxPosition ?? 0) + 1;
+      maxPosition + 1;
     const slotType =
       optionalEnum(body, "slotType", DRIVE_SLOT_TYPES) ?? "generic";
-    const face = optionalEnum(body, "face", DRIVE_SLOT_FACES) ?? "front";
-    const layout = optionalEnum(body, "layout", DRIVE_SLOT_LAYOUTS) ?? "grid";
-    const columns =
-      layout === "grid"
-        ? (optionalInteger(body, "columns", { min: 1, max: 24 }) ?? 4)
-        : null;
     const id = createId("ds");
     const now = new Date().toISOString();
     db.transaction(() => {
@@ -549,13 +665,13 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
         id,
         deviceId,
         name,
-        sectionName,
-        sectionOrder,
+        sectionSettings.sectionName,
+        sectionSettings.sectionOrder,
         position,
         slotType,
-        face,
-        layout,
-        columns,
+        sectionSettings.face,
+        sectionSettings.layout,
+        sectionSettings.columns,
         now,
         now,
       );
@@ -587,60 +703,114 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
         .get(req.params.id) as Record<string, unknown> | undefined;
       if (!assertLabWriteFromRow(req, reply, existing)) return;
       const body = asObject(req.body);
-      const updates: string[] = [];
-      const values: unknown[] = [];
-      const strings = [
-        ["name", 80],
-        ["sectionName", 80],
-      ] as const;
-      for (const [key, maxLength] of strings) {
-        const value = optionalString(body, key, { maxLength });
-        if (value !== undefined) {
-          if (!value) throw new ValidationError(`${key} cannot be empty.`);
-          updates.push(`${key} = ?`);
-          values.push(value);
-        }
+      const slotUpdates: string[] = [];
+      const slotValues: unknown[] = [];
+      const name = optionalString(body, "name", { maxLength: 80 });
+      if (name !== undefined) {
+        if (!name) throw new ValidationError("name cannot be empty.");
+        slotUpdates.push("name = ?");
+        slotValues.push(name);
       }
       const nextName =
-        optionalString(body, "name", { maxLength: 80 }) ??
-        String(existing!.name);
-      const integers = [
-        ["sectionOrder", 0, 100],
-        ["position", 1, 1000],
-      ] as const;
-      for (const [key, min, max] of integers) {
-        const value = optionalInteger(body, key, { min, max });
-        if (value !== undefined) {
-          if (value == null)
-            throw new ValidationError(`${key} cannot be empty.`);
-          updates.push(`${key} = ?`);
-          values.push(value);
-        }
+        name ?? String(existing!.name);
+      const position = optionalInteger(body, "position", {
+        min: 1,
+        max: 1000,
+      });
+      if (position !== undefined) {
+        if (position == null)
+          throw new ValidationError("position cannot be empty.");
+        slotUpdates.push("position = ?");
+        slotValues.push(position);
       }
       if ("slotType" in body) {
-        updates.push("slotType = ?");
-        values.push(requiredEnum(body, "slotType", DRIVE_SLOT_TYPES));
+        slotUpdates.push("slotType = ?");
+        slotValues.push(requiredEnum(body, "slotType", DRIVE_SLOT_TYPES));
       }
-      if ("face" in body) {
-        updates.push("face = ?");
-        values.push(requiredEnum(body, "face", DRIVE_SLOT_FACES));
+
+      const sharedKeys = [
+        "sectionName",
+        "sectionOrder",
+        "face",
+        "layout",
+        "columns",
+      ] as const;
+      const updatesSection = sharedKeys.some((key) => key in body);
+      const currentSection = driveSlotSectionSettings(existing!);
+      let nextSection = currentSection;
+      if (updatesSection) {
+        const sectionName =
+          optionalString(body, "sectionName", { maxLength: 80 }) ??
+          currentSection.sectionName;
+        if (!sectionName)
+          throw new ValidationError("sectionName cannot be empty.");
+        const sectionOrder = optionalInteger(body, "sectionOrder", {
+          min: 0,
+          max: 100,
+        });
+        if (sectionOrder === null)
+          throw new ValidationError("sectionOrder cannot be empty.");
+        const face =
+          "face" in body
+            ? requiredEnum(body, "face", DRIVE_SLOT_FACES)
+            : currentSection.face;
+        const layout =
+          "layout" in body
+            ? requiredEnum(body, "layout", DRIVE_SLOT_LAYOUTS)
+            : currentSection.layout;
+        const columns = optionalInteger(body, "columns", {
+          min: 1,
+          max: 24,
+        });
+        nextSection = {
+          sectionName,
+          sectionOrder: sectionOrder ?? currentSection.sectionOrder,
+          face,
+          layout,
+          columns:
+            layout === "list"
+              ? null
+              : (columns ?? currentSection.columns ?? 4),
+        };
+        if (sectionName !== currentSection.sectionName) {
+          const destination = db
+            .prepare(
+              "SELECT id FROM driveSlots WHERE deviceId = ? AND sectionName = ? LIMIT 1",
+            )
+            .get(existing!.deviceId, sectionName);
+          if (destination) {
+            throw new ValidationError(
+              "A different section already uses that name.",
+              409,
+            );
+          }
+        }
       }
-      if ("layout" in body) {
-        updates.push("layout = ?");
-        values.push(requiredEnum(body, "layout", DRIVE_SLOT_LAYOUTS));
-      }
-      if ("columns" in body) {
-        updates.push("columns = ?");
-        values.push(optionalInteger(body, "columns", { min: 1, max: 24 }));
-      }
-      if (updates.length === 0)
+      if (slotUpdates.length === 0 && !updatesSection)
         throw new ValidationError("No valid fields to update.");
-      updates.push("updatedAt = ?");
-      values.push(new Date().toISOString(), req.params.id);
+      const now = new Date().toISOString();
       db.transaction(() => {
-        db.prepare(
-          `UPDATE driveSlots SET ${updates.join(", ")} WHERE id = ?`,
-        ).run(...values);
+        if (slotUpdates.length > 0) {
+          db.prepare(
+            `UPDATE driveSlots SET ${slotUpdates.join(", ")}, updatedAt = ? WHERE id = ?`,
+          ).run(...slotValues, now, req.params.id);
+        }
+        if (updatesSection) {
+          db.prepare(
+            `UPDATE driveSlots
+             SET sectionName = ?, sectionOrder = ?, face = ?, layout = ?, columns = ?, updatedAt = ?
+             WHERE deviceId = ? AND sectionName = ?`,
+          ).run(
+            nextSection.sectionName,
+            nextSection.sectionOrder,
+            nextSection.face,
+            nextSection.layout,
+            nextSection.columns,
+            now,
+            existing!.deviceId,
+            currentSection.sectionName,
+          );
+        }
         writeAuditLogEntry({
           user: req.authUser!.username,
           action: "storage.slot.update",
@@ -830,6 +1000,37 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
     return updated;
   });
 
+  app.post<{ Params: { id: string } }>("/drives/:id/duplicate", async (req, reply) => {
+    const existing = getDrive(req.params.id);
+    if (!assertLabWriteFromRow(req, reply, existing)) return;
+    const body = asObject(req.body);
+    const serial = optionalString(body, "serial", { maxLength: 160 }) ?? null;
+    if (serial && serial === existing!.serial) {
+      throw new ValidationError("A duplicated drive must use a new or blank serial.", 409);
+    }
+    const id = createId("drv");
+    const now = new Date().toISOString();
+    const result = db.transaction(() => {
+      db.prepare(`INSERT INTO storageDrives
+        (id, labId, manufacturer, model, serial, capacityGb, interface, formFactor, notes, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        id, existing!.labId, existing!.manufacturer, existing!.model, serial,
+        existing!.capacityGb, existing!.interface, existing!.formFactor,
+        existing!.notes, now, now,
+      );
+      const created = getDriveResult(id);
+      writeAuditLogEntry({
+        user: req.authUser!.username,
+        action: "storage.drive.duplicate",
+        entityType: "StorageDrive",
+        entityId: id,
+        summary: `Duplicated drive ${storageDriveLabel(existing!)} without copying its placement or pool membership`,
+      });
+      return created;
+    })();
+    return reply.status(201).send(result);
+  });
+
   app.delete<{ Params: { id: string } }>("/drives/:id", async (req, reply) => {
     const existing = getDrive(req.params.id);
     if (!assertLabWriteFromRow(req, reply, existing)) return;
@@ -1001,6 +1202,55 @@ export const storageRoutes: FastifyPluginAsync = async (app) => {
       return result;
     })();
     return updated;
+  });
+
+  app.post<{ Params: { id: string } }>("/pools/:id/replace-drive", async (req, reply) => {
+    const pool = getPool(req.params.id);
+    if (!assertLabWriteFromRow(req, reply, pool)) return;
+    const body = asObject(req.body);
+    const oldDriveId = requiredString(body, "oldDriveId", { maxLength: 80 });
+    const oldDrive = getDrive(oldDriveId);
+    if (!oldDrive || oldDrive.labId !== pool!.labId) {
+      throw new ValidationError("Replacement drive must stay inside the pool lab.");
+    }
+    const membership = db.prepare("SELECT 1 FROM storagePoolDrives WHERE poolId = ? AND driveId = ?").get(pool!.id, oldDriveId);
+    if (!membership) throw new ValidationError("Selected drive is not a member of this pool.", 409);
+    const slot = db.prepare("SELECT id FROM driveSlots WHERE driveId = ?").get(oldDriveId) as { id: string } | undefined;
+    if (!slot) throw new ValidationError("The old pool drive must be installed in a slot.", 409);
+    const replacement = asObject(body.replacement);
+    const serial = optionalString(replacement, "serial", { maxLength: 160 }) ?? null;
+    if (serial && serial === oldDrive.serial) throw new ValidationError("Replacement serial must be new or blank.", 409);
+    const manufacturer = optionalString(replacement, "manufacturer", { maxLength: 120 });
+    const model = optionalString(replacement, "model", { maxLength: 120 });
+    const notes = optionalString(replacement, "notes", { maxLength: 2000 });
+    const capacityGb = "capacityGb" in replacement ? requiredCapacity(replacement, "capacityGb") : oldDrive.capacityGb;
+    const driveInterface = "interface" in replacement ? requiredEnum(replacement, "interface", DRIVE_INTERFACES) : oldDrive.interface;
+    const formFactor = "formFactor" in replacement ? requiredEnum(replacement, "formFactor", DRIVE_FORM_FACTORS) : oldDrive.formFactor;
+    const deleteOld = optionalBoolean(body, "deleteOld") ?? false;
+    const replacementId = createId("drv");
+    const now = new Date().toISOString();
+    const result = db.transaction(() => {
+      db.prepare(`INSERT INTO storageDrives
+        (id, labId, manufacturer, model, serial, capacityGb, interface, formFactor, notes, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        replacementId, pool!.labId, manufacturer ?? oldDrive.manufacturer,
+        model ?? oldDrive.model, serial, capacityGb, driveInterface, formFactor,
+        notes ?? oldDrive.notes, now, now,
+      );
+      db.prepare("UPDATE driveSlots SET driveId = ?, updatedAt = ? WHERE id = ?").run(replacementId, now, slot.id);
+      db.prepare("DELETE FROM storagePoolDrives WHERE poolId = ? AND driveId = ?").run(pool!.id, oldDriveId);
+      db.prepare("INSERT INTO storagePoolDrives (poolId, driveId, createdAt) VALUES (?, ?, ?)").run(pool!.id, replacementId, now);
+      if (deleteOld) db.prepare("DELETE FROM storageDrives WHERE id = ?").run(oldDriveId);
+      writeAuditLogEntry({
+        user: req.authUser!.username,
+        action: "storage.pool.drive.replace",
+        entityType: "StoragePool",
+        entityId: pool!.id,
+        summary: `Replaced a drive in storage pool ${pool!.name}${deleteOld ? " and deleted the retired drive" : ""}`,
+      });
+      return { pool: listPoolsWithMembers([getPool(pool!.id)!])[0], replacement: getDriveResult(replacementId), oldDrive: deleteOld ? null : getDriveResult(oldDriveId) };
+    })();
+    return reply.status(201).send(result);
   });
 
   app.delete<{ Params: { id: string } }>("/pools/:id", async (req, reply) => {

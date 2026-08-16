@@ -374,7 +374,6 @@ siteNames.forEach((siteName, idx) => {
   const sub = id("sub");
   data.subnets.push({ id: sub, labId: LAB, cidr: `${base}.0/24`, name: siteName, description: "Remote site network", vlanId: vlanIdRow });
   subnetByVlan[siteVlan] = { subId: sub, cidr: `${base}.0/24`, base };
-  const thisVlan = siteVlan;
   siteVlan++;
 
   const room = addRoom(siteName, "Remote Site", `${siteName} field cabinet`);
@@ -391,7 +390,7 @@ siteNames.forEach((siteName, idx) => {
     if (i === 2) cable(sp.uplink[1], sws[0].uplink[1], pick(CABLES.fiber), "20m", "aqua");
   }
   // an OT/SCADA PLC gateway + AP + UPS
-  const plc = addDevice({ rackId: rack, roomId: room, hostname: `site${idx + 1}-plc-gw`, displayName: `${siteName} PLC Gateway`, deviceType: "server", manufacturer: "Siemens", model: "SIMATIC IPC", mgmt: true, startU: uPos--, heightU: 1, tags: ["ot", "scada"], cpuCores: 4, memoryGb: 16, storageGb: 256 });
+  const plc = addDevice({ rackId: rack, roomId: room, hostname: `site${idx + 1}-plc-gw`, displayName: `${siteName} PLC Gateway`, deviceType: "server", manufacturer: "Siemens", model: "SIMATIC IPC", mgmt: true, startU: uPos, heightU: 1, tags: ["ot", "scada"], cpuCores: 4, memoryGb: 16, storageGb: 256 });
   cable(nicPorts(plc, 2, "rj45", "1G")[0], sws[0].access[0], pick(CABLES.copper), "3m", "purple");
   assignIp(60, `${subnetByVlan[60].base}.${20 + idx}`, "device", plc, `${siteName} PLC`, "SCADA gateway");
   // a couple of cameras (CCTV)

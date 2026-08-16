@@ -100,7 +100,7 @@ export default function DocumentationView() {
       .getDocumentationLinks({ pageId: selectedPage.id })
       .then(setPageLinks)
       .catch(() => setPageLinks([]));
-  }, [selectedPage?.id]);
+  }, [selectedPage]);
 
   const linkableDevices = useMemo(
     () => devices.filter((device) => device.labId === lab.id),

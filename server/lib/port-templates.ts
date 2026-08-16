@@ -1,8 +1,8 @@
 import { db, parseRow } from '../db.js'
 import { createId } from './ids.js'
 
-const PORT_KINDS = ['rj45', 'sfp', 'sfp_plus', 'qsfp', 'fiber', 'power', 'console', 'usb', 'virtual', 'wifi'] as const
-export type PortTemplateKind = (typeof PORT_KINDS)[number]
+const _PORT_KINDS = ['rj45', 'sfp', 'sfp_plus', 'qsfp', 'fiber', 'power', 'console', 'usb', 'virtual', 'wifi', 'sff', 'other'] as const
+export type PortTemplateKind = (typeof _PORT_KINDS)[number]
 export type PortTemplateMode = 'access' | 'trunk'
 
 export interface PortTemplatePort {

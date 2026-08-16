@@ -23,7 +23,7 @@ import {
 } from '../lib/validation.js'
 
 const WIFI_BANDS = ['2.4ghz', '5ghz', '6ghz'] as const
-const DEVICE_TYPES = [
+const _DEVICE_TYPES = [
   'switch',
   'router',
   'firewall',
@@ -42,7 +42,7 @@ const DEVICE_TYPES = [
   'kvm',
   'other',
 ] as const
-const DEVICE_PLACEMENTS = ['rack', 'room', 'wireless', 'virtual', 'shelf'] as const
+const _DEVICE_PLACEMENTS = ['rack', 'room', 'wireless', 'virtual', 'shelf'] as const
 
 function parseWifiController(row: Record<string, unknown>) {
   return {
@@ -158,8 +158,8 @@ function getDevice(deviceId: string) {
     | {
         id: string
         labId: string
-        deviceType: (typeof DEVICE_TYPES)[number]
-        placement: (typeof DEVICE_PLACEMENTS)[number] | null
+        deviceType: (typeof _DEVICE_TYPES)[number]
+        placement: (typeof _DEVICE_PLACEMENTS)[number] | null
         hostname: string
       }
     | undefined
@@ -466,7 +466,7 @@ export const wifiRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(filter.status).send({ error: filter.error })
     }
 
-    let sql = `
+    const sql = `
       SELECT
         d.id AS deviceId,
         d.deviceType,

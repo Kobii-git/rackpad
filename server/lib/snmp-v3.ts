@@ -82,10 +82,12 @@ export function passwordToKey(
   if (protocol === "MD5") {
     // SNMPv3 USM password-to-key localization is defined by the configured
     // device auth protocol; MD5 remains here only for legacy device support.
+    // codeql[js/weak-cryptographic-algorithm]
     hash = createHash("md5").update(digestInput).digest();
   } else {
     // SNMPv3 USM password-to-key localization is defined by the configured
     // device auth protocol; SHA1 remains here only for legacy device support.
+    // codeql[js/weak-cryptographic-algorithm]
     hash = createHash("sha1").update(digestInput).digest();
   }
 
@@ -93,12 +95,14 @@ export function passwordToKey(
   if (protocol === "MD5") {
     // SNMPv3 USM localizes the derived key with the engine ID using the same
     // configured auth protocol, so stronger password hashing is not applicable.
+    // codeql[js/weak-cryptographic-algorithm]
     localized = createHash("md5")
       .update(Buffer.concat([hash, engineId, hash]))
       .digest();
   } else {
     // SNMPv3 USM localizes the derived key with the engine ID using the same
     // configured auth protocol, so stronger password hashing is not applicable.
+    // codeql[js/weak-cryptographic-algorithm]
     localized = createHash("sha1")
       .update(Buffer.concat([hash, engineId, hash]))
       .digest();
@@ -117,10 +121,12 @@ export function localizedPrivKey(
 
   if (protocol === "MD5") {
     // SNMPv3 AES privacy key material follows the USM auth protocol derivation.
+    // codeql[js/weak-cryptographic-algorithm]
     return createHash("md5").update(localized).digest().subarray(0, 16);
   }
 
   // SNMPv3 AES privacy key material follows the USM auth protocol derivation.
+  // codeql[js/weak-cryptographic-algorithm]
   return createHash("sha1").update(localized).digest().subarray(0, 16);
 }
 
@@ -258,7 +264,7 @@ function encodeSnmpV3Request(
   const user = session.user;
 
   let flags = 0;
-  let authParams = Buffer.alloc(12);
+  const authParams = Buffer.alloc(12);
   let privSalt = Buffer.alloc(0);
   let msgData = scopedPdu;
 
@@ -295,7 +301,7 @@ function encodeSnmpV3Request(
       authParams,
       privSalt,
     );
-    let message = buildSnmpV3Message({
+    const message = buildSnmpV3Message({
       msgId: requestId,
       flags,
       securityParameters,
@@ -334,7 +340,7 @@ function encodeSnmpV3Request(
       authParams,
       privSalt,
     );
-    let message = buildSnmpV3Message({
+    const message = buildSnmpV3Message({
       msgId: requestId,
       flags,
       securityParameters,

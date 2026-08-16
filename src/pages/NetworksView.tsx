@@ -413,9 +413,18 @@ export default function NetworksView() {
     selectedNetwork?.kind === "subnet"
       ? selectedNetwork.vlan
       : selectedNetwork?.vlan;
-  const assignments = selectedNetwork?.assignments ?? [];
-  const subnetScopes = selectedNetwork?.dhcpScopes ?? [];
-  const subnetZones = selectedNetwork?.zones ?? [];
+  const assignments = useMemo(
+    () => selectedNetwork?.assignments ?? [],
+    [selectedNetwork],
+  );
+  const subnetScopes = useMemo(
+    () => selectedNetwork?.dhcpScopes ?? [],
+    [selectedNetwork],
+  );
+  const subnetZones = useMemo(
+    () => selectedNetwork?.zones ?? [],
+    [selectedNetwork],
+  );
   const subnetNeedsRepair = Boolean(subnet && subnet.integrity.state !== "ok");
   const canRepairSubnet = currentUser?.role === "admin";
   const canCreateSubnetChild = canEdit && !subnetNeedsRepair;

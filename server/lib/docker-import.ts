@@ -801,6 +801,12 @@ export async function syncDockerImportSources() {
 let dockerSyncHandle: NodeJS.Timeout | null = null;
 let dockerSyncRunning = false;
 
+export function dockerSyncOperationalStatus() {
+  const sources = db.prepare("SELECT COUNT(*) AS count FROM dockerImportSources WHERE enabled = 1").get() as { count: number };
+  const failures = db.prepare("SELECT COUNT(*) AS count FROM dockerImportSources WHERE enabled = 1 AND lastSyncStatus = 'error'").get() as { count: number };
+  return { loopActive: dockerSyncHandle != null, running: dockerSyncRunning, enabledSources: sources.count, failingSources: failures.count };
+}
+
 export function startDockerStatusSyncLoop(intervalMs: number) {
   if (intervalMs <= 0) return () => {};
   if (dockerSyncHandle) clearInterval(dockerSyncHandle);

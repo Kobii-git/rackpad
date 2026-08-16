@@ -20,7 +20,7 @@ export const labsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(filter.status).send({ error: filter.error });
     }
 
-    let sql = "SELECT * FROM labs";
+    const sql = "SELECT * FROM labs";
     const { sql: nextSql, params } = appendLabFilter(
       sql,
       [],

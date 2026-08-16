@@ -8,6 +8,57 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+### Fixed
+
+- Restored the documented five-minute monitoring interval for direct Node
+  startup and made malformed runtime interval values fall back safely.
+- Backup export and restore now preserve scoped user/lab grants, reject invalid
+  user roles, lab roles, missing references, duplicate grants, and snapshots
+  from newer schemas before any restore mutation begins.
+- Configuration validation now inventories runtime and Compose-only variables,
+  verifies Compose pass-through, and detects default drift from `.env.example`.
+- Drive-slot section settings now propagate transactionally, while legacy mixed
+  sections remain visible with an explicit repair path.
+- SNMP inventory apply now commits valid DHCP scopes atomically and reports
+  invalid, missing-subnet, out-of-range, and overlap conflicts.
+
+### Added
+
+- Added a read-only device Compute tab for eligible hosts, owned workloads, and
+  virtual switches, with links back to the global Compute workspace.
+- Added optional operator-mounted native SQLite snapshots with admin scheduling,
+  retention, create/download/delete controls, integrity checks, and an offline
+  atomic restore CLI that creates a safety copy first.
+- Added drive duplication and atomic pool-member replacement workflows, plus
+  fixed `sff` and `other` port kinds across API validation, templates, backup,
+  labels, and visual rendering.
+- Added bounded RE2-compatible SNMP regex matches, per-device sync schedules,
+  a pfSense/OPNsense profile, and authenticated admin operational status.
+- Linked the displayed Rackpad version to the project repository with keyboard
+  and assistive-technology support.
+
+### Changed
+
+- Expanded the local quality gate with lint proofing, server/client/test
+  typechecks, configuration and durable-agent-document checks, builds, bundle
+  budgeting, and browser coverage.
+- Narrowed CodeQL and Trivy scanner scope to generated or fixture-specific
+  exceptions instead of broad project-level suppression.
+- Documented the `dev` to `beta` to `main` promotion flow and distinguished
+  moving branch image tags from immutable semantic-version tags.
+- Hardened contributor, installation, security, SNMP, and AI-agent guidance to
+  reflect the current runtime and release contract.
+- Set the next development identity to `1.8.0-dev.1` without creating a Git tag.
+
+### Test notes
+
+- Start the compiled server without `MONITOR_INTERVAL_MS` and with malformed
+  interval values; verify the documented fallback is used.
+- Export and restore a scoped editor, then confirm invalid authorization data
+  is rejected without deleting sessions or existing grants.
+- Render every Compose variant and run the environment contract check after
+  changing any documented or interpolated default.
+
 ## [1.8.0-beta.0] - 2026-08-11
 
 ### Added

@@ -2,12 +2,14 @@ import { collectIpAdEntSubnets, ipAdEntSubnetsProfile } from './ip-adent-subnets
 import { collectQBridgeVlans, qBridgeVlanProfile } from './q-bridge-vlan.js'
 import type { SnmpProfileDefinition, SnmpProfileCollection } from './types.js'
 import type { SnmpSession } from '../snmp.js'
+import { pfsenseOpnsenseProfile } from './pfsense-opnsense.js'
 
 export * from './types.js'
 export { parseDot1qVlanStaticNames, parseDot1qVlanStaticIndex } from './q-bridge-vlan.js'
 export { parseIpAdEntSubnets } from './ip-adent-subnets.js'
 
 const PROFILES: SnmpProfileDefinition[] = [
+  pfsenseOpnsenseProfile,
   qBridgeVlanProfile,
   ipAdEntSubnetsProfile,
   {

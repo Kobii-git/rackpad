@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { RefreshCcw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Input } from "@/components/ui/Input";
 import { useI18n } from "@/i18n";
 import type { TranslationKey } from "@/i18n/translations";
 import { api } from "@/lib/api";
@@ -10,6 +11,7 @@ import type {
   SnmpSyncPolicy,
   SnmpSyncPreview,
   SnmpSyncProfile,
+  SnmpSyncSchedule,
 } from "@/lib/types";
 
 function actionTone(action: string) {
@@ -57,6 +59,10 @@ export function SnmpSyncPanel({
   const [applyLoading, setApplyLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [schedule, setSchedule] = useState<SnmpSyncSchedule | null>(null);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleMinutes, setScheduleMinutes] = useState("1440");
+  const [scheduleLoading, setScheduleLoading] = useState(false);
 
   useEffect(() => {
     setCredentialId(snmpCredentialId ?? "");
@@ -71,12 +77,11 @@ export function SnmpSyncPanel({
         if (cancelled) return;
         setProfiles(items);
         setFeatureEnabled(true);
-        if (
-          items.length > 0 &&
-          !items.some((entry) => entry.id === profileId)
-        ) {
-          setProfileId(items[0].id);
-        }
+        setProfileId((current) =>
+          items.length > 0 && !items.some((entry) => entry.id === current)
+            ? items[0].id
+            : current,
+        );
       })
       .catch((err) => {
         if (cancelled) return;
@@ -94,7 +99,28 @@ export function SnmpSyncPanel({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .getSnmpSyncSchedules()
+      .then((items) => {
+        if (cancelled) return;
+        const current = items.find(
+          (entry) => entry.deviceId === deviceId && entry.labId === labId,
+        );
+        setSchedule(current ?? null);
+        setScheduleEnabled(current?.enabled ?? false);
+        setScheduleMinutes(String((current?.intervalMs ?? 86_400_000) / 60_000));
+      })
+      .catch(() => {
+        if (!cancelled) setSchedule(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceId, labId]);
 
   const selectedProfile = useMemo(
     () => profiles.find((entry) => entry.id === profileId),
@@ -168,6 +194,49 @@ export function SnmpSyncPanel({
       );
     } finally {
       setApplyLoading(false);
+    }
+  }
+
+  async function saveSchedule() {
+    const intervalMinutes = Number(scheduleMinutes);
+    if (!Number.isInteger(intervalMinutes) || intervalMinutes < 1) {
+      setError(t("Interval minutes"));
+      return;
+    }
+    setScheduleLoading(true);
+    setError("");
+    try {
+      const body = {
+        profileId,
+        policy,
+        intervalMs: intervalMinutes * 60_000,
+        enabled: scheduleEnabled,
+      };
+      const updated = schedule
+        ? await api.updateSnmpSyncSchedule(schedule.id, body)
+        : await api.createSnmpSyncSchedule({ deviceId, ...body });
+      setSchedule(updated);
+      setMessage(t("Save"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("Save"));
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
+  async function deleteSchedule() {
+    if (!schedule) return;
+    setScheduleLoading(true);
+    setError("");
+    try {
+      await api.deleteSnmpSyncSchedule(schedule.id);
+      setSchedule(null);
+      setScheduleEnabled(false);
+      setScheduleMinutes("1440");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("Delete"));
+    } finally {
+      setScheduleLoading(false);
     }
   }
 
@@ -269,6 +338,66 @@ export function SnmpSyncPanel({
             description: selectedProfile.description,
             collects: selectedProfile.collects.join(", "),
           })}
+        </div>
+      ) : null}
+
+      {isAdmin ? (
+        <div className="space-y-2 border-t border-[var(--color-line)] pt-3">
+          <div className="text-xs font-medium text-[var(--color-fg)]">
+            {t("Scheduled scans")}
+          </div>
+          <div className="grid items-end gap-3 sm:grid-cols-[auto_minmax(8rem,1fr)_auto_auto]">
+            <label className="flex h-8 items-center gap-2 text-xs text-[var(--color-fg-subtle)]">
+              <input
+                type="checkbox"
+                checked={scheduleEnabled}
+                disabled={disabled || scheduleLoading}
+                onChange={(event) => setScheduleEnabled(event.target.checked)}
+              />
+              {t("Enabled")}
+            </label>
+            <label className="block text-xs">
+              <span className="rk-field-label">{t("Interval minutes")}</span>
+              <Input
+                type="number"
+                min="1"
+                max="525600"
+                value={scheduleMinutes}
+                disabled={disabled || scheduleLoading}
+                onChange={(event) => setScheduleMinutes(event.target.value)}
+              />
+            </label>
+            <Button
+              size="sm"
+              disabled={disabled || scheduleLoading}
+              onClick={() => void saveSchedule()}
+            >
+              {t("Save")}
+            </Button>
+            {schedule ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={disabled || scheduleLoading}
+                onClick={() => void deleteSchedule()}
+              >
+                {t("Delete")}
+              </Button>
+            ) : null}
+          </div>
+          {schedule ? (
+            <div className="text-xs text-[var(--color-fg-subtle)]">
+              {t("Last run")}: {schedule.lastRunAt ?? t("Never")}
+              {schedule.lastResult
+                ? t("· {value1}", {
+                    value1:
+                      schedule.lastResult === "success"
+                        ? t("Success")
+                        : t("Error"),
+                  })
+                : ""}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

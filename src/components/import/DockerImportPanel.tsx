@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Container, RefreshCw } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { Badge } from "@/components/ui/Badge";
@@ -50,17 +50,17 @@ export function DockerImportPanel() {
   const [sources, setSources] = useState<DockerImportSource[]>([]);
   const [sourceSavingId, setSourceSavingId] = useState("");
 
-  async function loadSources() {
+  const loadSources = useCallback(async () => {
     try {
       setSources(await api.getDockerImportSources(lab.id));
     } catch {
       setSources([]);
     }
-  }
+  }, [lab.id]);
 
   useEffect(() => {
     void loadSources();
-  }, [lab.id]);
+  }, [loadSources]);
 
   const hostDevices = useMemo(
     () =>

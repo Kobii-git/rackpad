@@ -58,6 +58,8 @@ export const portTypeColor: Record<PortKind, string> = {
   usb: "var(--color-port-usb)",
   virtual: "var(--color-port-virtual)",
   wifi: "var(--color-port-wifi)",
+  sff: "var(--color-port-sfp)",
+  other: "var(--color-port-console)",
 };
 
 // ---------- Link state ----------

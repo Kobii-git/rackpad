@@ -167,12 +167,15 @@ function AllocateIpForm({
     setDhcpScopeId(scopesForSubnet[0]?.id ?? "");
   }, [allocationMode, dhcpScopeId, scopesForSubnet]);
 
+  // The helper reads these store slices directly; they intentionally invalidate
+  // this memo even though they are not passed as arguments.
   const preview = useMemo(() => {
     if (!subnetId) return null;
     return previewNextIpAllocation(subnetId, assignmentType, {
       allocationMode,
       dhcpScopeId: effectiveDhcpScopeId || null,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- helper reads these store slices directly
   }, [
     allocationMode,
     assignmentType,
@@ -400,10 +403,11 @@ function AllocateVlanForm({
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // previewNextVlanId reads the store directly; vlans is its invalidation key.
   const previewId = useMemo(() => {
     if (!rangeId) return null;
     return previewNextVlanId(rangeId);
-  }, [rangeId, vlans]);
+  }, [rangeId, vlans]); // eslint-disable-line react-hooks/exhaustive-deps -- helper reads vlans from the store directly
 
   const range = ranges.find((entry) => entry.id === rangeId);
   const canSubmit = previewId != null && name.trim().length > 0;

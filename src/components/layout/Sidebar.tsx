@@ -90,7 +90,14 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
             {t("Homelab inventory")}
           </div>
         </div>
-        <div
+        <a
+          href="https://github.com/Kobii-git/rackpad"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={t("{value1}: {name}", {
+            value1: t("Rackpad"),
+            name: APP_VERSION_TAG,
+          })}
           className="ml-auto hidden shrink-0 flex-col items-end gap-1 xl:flex"
           data-testid="sidebar-version"
         >
@@ -109,7 +116,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
               {APP_CHANNEL_LABEL}
             </span>
           )}
-        </div>
+        </a>
       </div>
 
       <div className="relative mx-2 mb-3 xl:mx-3">

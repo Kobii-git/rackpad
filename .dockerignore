@@ -2,6 +2,9 @@
 .github
 node_modules
 dist
+dist-server
+.tsbuild
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
@@ -9,5 +12,17 @@ dist
 .idea
 .DS_Store
 *.log
+.cache
+coverage
+test-results/
+*.db
+*.db-shm
+*.db-wal
+rackpad-backup-*.json
+*.pfx
+*.pem
+*.key
+.ai/local/
+docs/reference-standard-analysis/
 README.md
 LICENSE

@@ -4,12 +4,8 @@ paths-ignore:
   - server/tests/**
 
 query-filters:
+  # Fastify applies one global @fastify/rate-limit policy in server/app.ts.
+  # CodeQL does not currently model that plugin registration. Review this
+  # repository-wide query exception by 2026-11-30.
   - exclude:
       id: js/missing-rate-limiting
-  # SNMPv3 USM requires MD5/SHA1 password-to-key and message auth support for
-  # legacy device compatibility. Rackpad confines that compatibility to
-  # server/lib/snmp-v3.ts and does not use these algorithms for app passwords.
-  - exclude:
-      id: js/insufficient-password-hash
-  - exclude:
-      id: js/weak-cryptographic-algorithm

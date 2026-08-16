@@ -2,13 +2,14 @@ import Database from "better-sqlite3";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createId } from "./lib/ids.js";
+import { CURRENT_SCHEMA_VERSION } from "./schema-version.js";
+
+export { CURRENT_SCHEMA_VERSION } from "./schema-version.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const DB_PATH =
+export const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 35;
-
 export const db = new Database(DB_PATH);
 
 db.pragma("journal_mode = WAL");
@@ -1034,6 +1035,27 @@ const SCHEMA_MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS idx_storage_pool_drives_pool_id
         ON storagePoolDrives (poolId);
+    `,
+  },
+  {
+    version: 36,
+    sql: `
+      CREATE TABLE IF NOT EXISTS snmpSyncSchedules (
+        id          TEXT PRIMARY KEY,
+        labId       TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        deviceId    TEXT NOT NULL UNIQUE REFERENCES devices(id) ON DELETE CASCADE,
+        profileId   TEXT NOT NULL,
+        policy      TEXT NOT NULL DEFAULT 'merge',
+        intervalMs  INTEGER NOT NULL DEFAULT 86400000,
+        enabled     INTEGER NOT NULL DEFAULT 0,
+        lastRunAt   TEXT,
+        lastResult  TEXT,
+        lastMessage TEXT,
+        createdAt   TEXT NOT NULL,
+        updatedAt   TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_snmp_sync_schedules_lab_due
+        ON snmpSyncSchedules (labId, enabled, lastRunAt);
     `,
   },
 ] as const;

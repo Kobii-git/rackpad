@@ -226,7 +226,7 @@ export default function DiscoveryView() {
       },
       {},
     );
-  }, [deviceById, devices, discoveredDevices]);
+  }, [devices, discoveredDevices]);
 
   const duplicateCount = useMemo(
     () =>
@@ -1851,7 +1851,7 @@ function compareDiscoveredDevices(
   sort: SortState<DiscoverySortKey>,
   duplicateMatchesById: Record<string, Device[]>,
 ) {
-  let result = 0;
+  let result: number;
   if (sort.key === "ip") {
     result = compareIp(a.ipAddress, b.ipAddress);
   } else if (sort.key === "hostname") {

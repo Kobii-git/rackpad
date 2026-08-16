@@ -29,10 +29,12 @@ import { PortGrid } from "@/components/ports/PortGrid";
 import { PortList } from "@/components/ports/PortList";
 import { DevicePortEditor } from "@/components/ports/DevicePortEditor";
 import { StorageTopologyPanel } from "@/components/storage/StorageTopologyPanel";
+import { DeviceComputePanel } from "@/components/compute/DeviceComputePanel";
 import { SnmpCredentialsPanel } from "@/components/shared/SnmpCredentialsPanel";
 import { SnmpSyncPanel } from "@/components/shared/SnmpSyncPanel";
 import { api } from "@/lib/api";
 import { buildSnmpVerifiedPortIdsForDevice } from "@/lib/snmp-port-status";
+import { selectComputeInventory } from "@/lib/compute";
 import {
   canEditInventory,
   createIpAssignmentRecord,
@@ -130,6 +132,7 @@ const SNMP_MATCH_MODE_OPTIONS: Array<{
   { value: "equals", label: "Equals" },
   { value: "notEquals", label: "Not equals" },
   { value: "in", label: "In list (comma-separated)" },
+  { value: "regex", label: "Regex (RE2)" },
 ];
 
 const SNMP_OID_PRESETS = [
@@ -237,6 +240,7 @@ const DEVICE_DETAIL_TABS = new Set([
   "overview",
   "ports",
   "storage",
+  "compute",
   "network",
   "monitoring",
   "services",
@@ -251,9 +255,6 @@ export default function DeviceDetail() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab") ?? "overview";
-  const selectedTab = DEVICE_DETAIL_TABS.has(requestedTab)
-    ? requestedTab
-    : "overview";
   const currentUser = useStore((s) => s.currentUser);
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
@@ -346,6 +347,21 @@ export default function DeviceDetail() {
     baseDeviceType === "storage" ||
     deviceDriveSlots.length > 0 ||
     deviceStoragePools.length > 0;
+  const computeInventory = useMemo(
+    () => selectComputeInventory(devices, deviceTypes),
+    [devices, deviceTypes],
+  );
+  const showCompute = Boolean(
+    device &&
+      (computeInventory.hosts.some((entry) => entry.id === device.id) ||
+        (computeInventory.guestsByHostId[device.id]?.length ?? 0) > 0 ||
+        virtualSwitches.some((entry) => entry.hostDeviceId === device.id)),
+  );
+  const selectedTab =
+    DEVICE_DETAIL_TABS.has(requestedTab) &&
+    (requestedTab !== "compute" || showCompute)
+      ? requestedTab
+      : "overview";
   useEffect(() => {
     if (!device) {
       setLinkedDocumentation([]);
@@ -355,7 +371,7 @@ export default function DeviceDetail() {
       .getDocumentationLinks({ deviceId: device.id })
       .then(setLinkedDocumentation)
       .catch(() => setLinkedDocumentation([]));
-  }, [device?.id]);
+  }, [device]);
 
   const linkedDocumentationPages = useMemo(
     () =>
@@ -582,7 +598,10 @@ export default function DeviceDetail() {
     setServiceError("");
   }, [selectedService]);
 
-  const devicePorts = device?.id ? (portsByDeviceId[device.id] ?? []) : [];
+  const devicePorts = useMemo(
+    () => (device?.id ? (portsByDeviceId[device.id] ?? []) : []),
+    [device?.id, portsByDeviceId],
+  );
   const networkAssignablePorts = devicePorts.filter(
     (port) => port.kind !== "power",
   );
@@ -605,9 +624,13 @@ export default function DeviceDetail() {
   const parentDevice = device?.parentDeviceId
     ? deviceById[device.parentDeviceId]
     : undefined;
-  const childDevices = device
-    ? devices.filter((entry) => entry.parentDeviceId === device.id)
-    : [];
+  const childDevices = useMemo(
+    () =>
+      device
+        ? devices.filter((entry) => entry.parentDeviceId === device.id)
+        : [],
+    [device, devices],
+  );
   const childCapacity = useMemo(
     () => ({
       cpu: childDevices.reduce((sum, entry) => sum + (entry.cpuCores ?? 0), 0),
@@ -1460,6 +1483,7 @@ export default function DeviceDetail() {
                 {t("Storage")} | {deviceDriveSlots.length}
               </TabsTrigger>
             )}
+            {showCompute && <TabsTrigger value="compute">{t("Compute")} | {(computeInventory.guestsByHostId[device.id] ?? []).length}</TabsTrigger>}
             <TabsTrigger value="network">
               {t("Network")} | {displayedDeviceIpCount}
             </TabsTrigger>
@@ -1893,6 +1917,12 @@ export default function DeviceDetail() {
           {showStorage && (
             <TabsContent value="storage" className="pt-4">
               <StorageTopologyPanel deviceId={device.id} />
+            </TabsContent>
+          )}
+
+          {showCompute && (
+            <TabsContent value="compute" className="pt-4">
+              <DeviceComputePanel deviceId={device.id} />
             </TabsContent>
           )}
 

@@ -1720,7 +1720,7 @@ function excelCell(value: CsvValue) {
 
 function sheetName(name: string, index: number) {
   const safe =
-    name.replace(/[:\\/?*\[\]]/g, " ").trim() || `Sheet ${index + 1}`;
+    name.replace(/[:\\/?*[\]]/g, " ").trim() || `Sheet ${index + 1}`;
   return safe.slice(0, 31);
 }
 

@@ -17,7 +17,6 @@ import type {
   DockerImportSource,
   DiscoveredDevice,
   DiscoveryScanJobResponse,
-  DiscoveryScanResult,
   DiscoveryScanSchedule,
   DhcpScope,
   IpAssignment,
@@ -25,6 +24,9 @@ import type {
   ID,
   Lab,
   LabAccessEntry,
+  NativeBackupEntry,
+  NativeBackupSettings,
+  NativeBackupStatus,
   Port,
   PortLink,
   PortTemplate,
@@ -37,6 +39,7 @@ import type {
   SnmpSyncApplyResult,
   SnmpSyncPreview,
   SnmpSyncProfile,
+  SnmpSyncSchedule,
   SnmpTrapLogEntry,
   SnmpTrapReceiverStatus,
   Subnet,
@@ -568,6 +571,29 @@ export const api = {
     return request<AlertSettings>("/admin/alert-settings");
   },
 
+  getNativeBackups() {
+    return request<NativeBackupStatus>("/admin/native-backups");
+  },
+
+  updateNativeBackupSettings(body: NativeBackupSettings) {
+    return request<NativeBackupSettings>("/admin/native-backups/settings", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+
+  createNativeBackup() {
+    return request<NativeBackupEntry>("/admin/native-backups", { method: "POST" });
+  },
+
+  downloadNativeBackup(name: string) {
+    return requestBlob(`/admin/native-backups/${encodeURIComponent(name)}/download`);
+  },
+
+  deleteNativeBackup(name: string) {
+    return request<void>(`/admin/native-backups/${encodeURIComponent(name)}`, { method: "DELETE" });
+  },
+
   updateAlertSettings(body: AlertSettings) {
     return request<AlertSettings>("/admin/alert-settings", {
       method: "PUT",
@@ -980,6 +1006,13 @@ export const api = {
     });
   },
 
+  duplicateStorageDrive(id: string, serial?: string | null) {
+    return request<StorageDrive>(`/storage/drives/${id}/duplicate`, {
+      method: "POST",
+      body: JSON.stringify({ serial: serial ?? null }),
+    });
+  },
+
   deleteStorageDrive(id: string) {
     return request<void>(`/storage/drives/${id}`, { method: "DELETE" });
   },
@@ -1004,6 +1037,16 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     });
+  },
+
+  replaceStoragePoolDrive(
+    poolId: string,
+    body: { oldDriveId: string; replacement: Partial<StorageDrive>; deleteOld?: boolean },
+  ) {
+    return request<{ pool: StoragePool; replacement: StorageDrive; oldDrive: StorageDrive | null }>(
+      `/storage/pools/${poolId}/replace-drive`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
   },
 
   deleteStoragePool(id: string) {
@@ -1551,6 +1594,39 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     });
+  },
+
+  getSnmpSyncSchedules() {
+    return request<SnmpSyncSchedule[]>("/snmp-sync/schedules");
+  },
+
+  createSnmpSyncSchedule(body: {
+    deviceId: string;
+    profileId: string;
+    policy: SnmpSyncSchedule["policy"];
+    intervalMs: number;
+    enabled: boolean;
+  }) {
+    return request<SnmpSyncSchedule>("/snmp-sync/schedules", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateSnmpSyncSchedule(
+    id: string,
+    body: Partial<
+      Pick<SnmpSyncSchedule, "profileId" | "policy" | "intervalMs" | "enabled">
+    >,
+  ) {
+    return request<SnmpSyncSchedule>(`/snmp-sync/schedules/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteSnmpSyncSchedule(id: string) {
+    return request<void>(`/snmp-sync/schedules/${id}`, { method: "DELETE" });
   },
 
   getDiscoveredDevices(params?: { labId?: string; status?: string }) {

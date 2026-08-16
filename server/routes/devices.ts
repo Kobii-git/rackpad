@@ -704,7 +704,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
             parentDeviceId ??
             (existing.parentDeviceId ? String(existing.parentDeviceId) : null);
           if (resolvedParentId) {
-            let resolvedSsidId = wifiSsidId ?? null;
+            const resolvedSsidId = wifiSsidId ?? null;
             if (resolvedSsidId) {
               const ssid = db
                 .prepare("SELECT id FROM wifiSsids WHERE id = ? AND labId = ?")

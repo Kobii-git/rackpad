@@ -199,6 +199,26 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
     : null;
   const selectedPool = pools.find((pool) => pool.id === selectedPoolId) ?? null;
   const highlightedPoolId = focusedPoolId ?? hoveredPoolId;
+  const inconsistentSections = useMemo(
+    () => [
+      ...new Set(
+        slots
+          .filter((slot) => slot.sectionInconsistent)
+          .map((slot) => slot.sectionName),
+      ),
+    ],
+    [slots],
+  );
+
+  function repairSection(sectionName: string) {
+    const firstSlot = [...slots]
+      .filter((slot) => slot.sectionName === sectionName)
+      .sort((left, right) => left.position - right.position)[0];
+    if (!firstSlot) return;
+    setCreatingSlot(false);
+    setSelectedSlotId(firstSlot.id);
+    setSlotForm(slotToForm(firstSlot));
+  }
 
   useEffect(() => {
     if (compatibleTemplates.length === 0) {
@@ -223,8 +243,28 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
 
   useEffect(() => {
     if (creatingSlot) {
-      const maxPosition = Math.max(0, ...slots.map((slot) => slot.position));
-      setSlotForm({ ...EMPTY_SLOT_FORM, position: String(maxPosition + 1) });
+      const sample = [...slots].sort(
+        (left, right) =>
+          left.sectionOrder - right.sectionOrder ||
+          left.position - right.position,
+      )[0];
+      const sectionSlots = sample
+        ? slots.filter((slot) => slot.sectionName === sample.sectionName)
+        : [];
+      const maxPosition = Math.max(
+        0,
+        ...sectionSlots.map((slot) => slot.position),
+      );
+      setSlotForm(
+        sample
+          ? {
+              ...slotToForm(sample),
+              name: "",
+              position: String(maxPosition + 1),
+              slotType: "generic",
+            }
+          : { ...EMPTY_SLOT_FORM },
+      );
       setDriveForm(EMPTY_DRIVE_FORM);
       return;
     }
@@ -514,6 +554,34 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
             </div>
           )}
 
+          {inconsistentSections.length > 0 && (
+            <div
+              className="mb-4 flex items-start gap-2 rounded-[var(--radius-sm)] border border-[var(--warning-border)] bg-[var(--warning-soft)] px-3 py-2 text-xs text-[var(--warning)]"
+              role="status"
+            >
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">{t("Storage attention")}</div>
+                <div>{t("Shared section settings do not match.")}</div>
+                {canEdit && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {inconsistentSections.map((sectionName) => (
+                      <Button
+                        key={sectionName}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => repairSection(sectionName)}
+                      >
+                        {t("Repair section")}: {sectionName}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {slots.length === 0 && !creatingSlot ? (
             <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] px-4 py-10 text-center">
               <HardDrive className="mx-auto size-7 text-[var(--text-muted)]" />
@@ -558,6 +626,8 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
                     form={slotForm}
                     onChange={setSlotForm}
                     disabled={!canEdit}
+                    slots={slots}
+                    creating={creatingSlot}
                   />
                   {canEdit && (
                     <div className="flex flex-wrap gap-2">
@@ -621,7 +691,7 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
                             disabled={!installDriveId || saving}
                             onClick={() => void handleInstallExistingDrive()}
                           >
-                            {t("Installed")}
+                            {t("Install")}
                           </Button>
                         </div>
                       )}
@@ -971,14 +1041,45 @@ function SlotEditor({
   form,
   onChange,
   disabled,
+  slots,
+  creating,
 }: {
   form: SlotForm;
   onChange: (next: SlotForm) => void;
   disabled: boolean;
+  slots: DriveSlot[];
+  creating: boolean;
 }) {
   const { t } = useI18n();
+  const sectionNames = [...new Set(slots.map((slot) => slot.sectionName))];
+  const selectedExistingSection = creating
+    ? (sectionNames.find((sectionName) => sectionName === form.sectionName) ??
+      "")
+    : "";
+  const sharedSettingsLocked = disabled || Boolean(selectedExistingSection);
   const set = <K extends keyof SlotForm>(key: K, value: SlotForm[K]) =>
     onChange({ ...form, [key]: value });
+  const setSectionName = (sectionName: string) => {
+    const sample = slots.find((slot) => slot.sectionName === sectionName);
+    if (!sample) {
+      set("sectionName", sectionName);
+      return;
+    }
+    const sectionSlots = slots.filter(
+      (slot) => slot.sectionName === sectionName,
+    );
+    onChange({
+      ...form,
+      sectionName,
+      sectionOrder: String(sample.sectionOrder),
+      position: creating
+        ? String(Math.max(0, ...sectionSlots.map((slot) => slot.position)) + 1)
+        : form.position,
+      face: sample.face,
+      layout: sample.layout,
+      columns: String(sample.columns ?? 4),
+    });
+  };
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
       <Field label={t("Name")}>
@@ -989,11 +1090,42 @@ function SlotEditor({
         />
       </Field>
       <Field label={t("Section")}>
-        <Input
-          value={form.sectionName}
-          onChange={(event) => set("sectionName", event.target.value)}
-          disabled={disabled}
-        />
+        {creating ? (
+          <div className="space-y-2">
+            <Select
+              value={selectedExistingSection || "__new__"}
+              onChange={(event) => {
+                if (event.target.value === "__new__") {
+                  set("sectionName", "");
+                } else {
+                  setSectionName(event.target.value);
+                }
+              }}
+              disabled={disabled}
+            >
+              {sectionNames.map((sectionName) => (
+                <option key={sectionName} value={sectionName}>
+                  {sectionName}
+                </option>
+              ))}
+              <option value="__new__">{t("Add section")}</option>
+            </Select>
+            {!selectedExistingSection && (
+              <Input
+                value={form.sectionName}
+                onChange={(event) => setSectionName(event.target.value)}
+                disabled={disabled}
+                placeholder={t("Add section")}
+              />
+            )}
+          </div>
+        ) : (
+          <Input
+            value={form.sectionName}
+            onChange={(event) => setSectionName(event.target.value)}
+            disabled={disabled}
+          />
+        )}
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label={t("Section order")}>
@@ -1002,7 +1134,7 @@ function SlotEditor({
             min={0}
             value={form.sectionOrder}
             onChange={(event) => set("sectionOrder", event.target.value)}
-            disabled={disabled}
+            disabled={sharedSettingsLocked}
           />
         </Field>
         <Field label={t("Position")}>
@@ -1037,7 +1169,7 @@ function SlotEditor({
             onChange={(event) =>
               set("face", event.target.value as DriveSlotFace)
             }
-            disabled={disabled}
+            disabled={sharedSettingsLocked}
           >
             <option value="front">{t("Front")}</option>
             <option value="rear">{t("Rear")}</option>
@@ -1052,22 +1184,24 @@ function SlotEditor({
             onChange={(event) =>
               set("layout", event.target.value as DriveSlotLayout)
             }
-            disabled={disabled}
+            disabled={sharedSettingsLocked}
           >
             <option value="grid">{t("Grid")}</option>
             <option value="list">{t("List")}</option>
           </Select>
         </Field>
-        <Field label={t("Columns")}>
-          <Input
-            type="number"
-            min={1}
-            max={24}
-            value={form.columns}
-            onChange={(event) => set("columns", event.target.value)}
-            disabled={disabled || form.layout === "list"}
-          />
-        </Field>
+        {form.layout === "grid" && (
+          <Field label={t("Columns")}>
+            <Input
+              type="number"
+              min={1}
+              max={24}
+              value={form.columns}
+              onChange={(event) => set("columns", event.target.value)}
+              disabled={sharedSettingsLocked}
+            />
+          </Field>
+        )}
       </div>
     </div>
   );

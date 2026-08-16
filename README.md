@@ -50,7 +50,6 @@ contains the core material you need:
 - [OIDC login guide](./docs/OIDC.md)
 - [SNMP monitoring, traps & sync guide](./docs/SNMP.md)
 - [Discovery deployment (Proxmox/LXC/host networking)](./docs/DISCOVERY_DEPLOYMENT.md)
-- [SNMP implementation plan & outstanding work](./docs/SNMP_IMPLEMENTATION_PLAN.md)
 - [Documentation and images guide](./docs/DOCUMENTATION.md)
 - [Security policy](./SECURITY.md)
 - [Community Discord](https://discord.gg/g25tEafYDX)
@@ -196,7 +195,8 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - Audit log writes for the main workflows
 - User bootstrap, login, logout, and user management
 - Optional OIDC login with PKCE, role mapping, and Authentik-style issuer/debug guidance
-- Admin-only JSON backup export from the users screen
+- Admin-only portable JSON backup/restore plus optional scheduled native SQLite
+  snapshots and an offline restore CLI
 - Backup exports preserve password hashes, documentation pages, device images, MACs, and parent-linked devices for restore, but redact stored alert-delivery secrets before download
 - Device health-check configuration, alert destinations, repeat-alert controls, and on-demand monitor runs
 - Multiple monitor targets per device so servers, firewalls, and multi-NIC systems can track separate management, service, storage, or VIP endpoints
@@ -241,16 +241,22 @@ Every shipped change should update the version and add a matching changelog entr
 
 ## Release channels
 
-Rackpad now uses two long-lived Git branches:
+Rackpad uses three ordered release branches:
 
 - `main`: stable release branch intended for production and tagged releases
 - `beta`: pre-release testing branch for changes that should be validated before they land on `main`
+- `dev`: integration branch for work that is not yet ready for beta testing
 
 Recommended workflow:
 
-- test new work from `beta`
-- merge validated fixes and features into `main`
-- create version tags like `v1.6.7` from `main`
+- integrate new work into `dev`
+- promote validated development changes from `dev` to `beta`
+- promote validated beta changes from `beta` to `main`
+- create version tags like `vX.Y.Z` from `main`
+
+Branch image tags such as `dev`, `beta`, and `latest` move as their branches are
+published. Immutable semantic-version image tags such as `1.8.0` are created
+only from an explicitly approved Git release tag.
 
 If you want the newest testing build instead of the latest stable tag:
 
@@ -314,43 +320,9 @@ Start the compiled app:
 npm start
 ```
 
-Default environment variables:
-
-```bash
-HOST=0.0.0.0
-PORT=3000
-DATABASE_PATH=./rackpad.db
-RACKPAD_SECRET_KEY=
-SNMP_TRAP_ENABLED=1
-SNMP_TRAP_PORT=1162
-SNMP_TRAP_BIND=0.0.0.0
-SNMP_INVENTORY_SYNC=1
-MONITOR_INTERVAL_MS=300000
-DISCOVERY_SCAN_MAX_ACTIVE=2
-DISCOVERY_SCAN_MAX_ACTIVE_PER_LAB=1
-DISCOVERY_SCAN_MAX_QUEUED=32
-NODE_ENV=production
-TRUST_PROXY=0
-TRUSTED_HOSTS=
-TRUSTED_ORIGINS=
-APP_URL=
-OIDC_ENABLED=0
-OIDC_ISSUER_URL=
-OIDC_CLIENT_ID=
-OIDC_CLIENT_SECRET=
-OIDC_REDIRECT_URI=
-OIDC_LABEL=OIDC
-OIDC_DEFAULT_ROLE=viewer
-OIDC_DEBUG=0
-OIDC_ADMIN_USERS=
-OIDC_EDITOR_USERS=
-OIDC_VIEWER_USERS=
-OIDC_ADMIN_GROUPS=
-OIDC_EDITOR_GROUPS=
-OIDC_VIEWER_GROUPS=
-OUI_AUTO_UPDATE=1
-DISCOVERY_MAC_SCAN_MODE=auto
-```
+The authoritative environment-variable contract and defaults are documented in
+[`.env.example`](./.env.example). CI checks that every supported runtime variable
+is represented there and passed through all intended Compose manifests.
 
 OIDC uses the authorization-code flow with PKCE. Configure the provider
 redirect URI as `APP_URL/api/auth/oidc/callback`, or set `OIDC_REDIRECT_URI`
@@ -415,12 +387,12 @@ curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/inst
 ```
 
 Use `RACKPAD_TAG=latest` if you want the newest stable GHCR image,
-`RACKPAD_TAG=1.6.7` if you want a specific release, or `RACKPAD_TAG=beta` if
+`RACKPAD_TAG=1.7.3` if you want a specific release, or `RACKPAD_TAG=beta` if
 you want the newest testing image:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
-RACKPAD_TAG=1.6.7 bash /tmp/install-rackpad.sh
+RACKPAD_TAG=1.7.3 bash /tmp/install-rackpad.sh
 ```
 
 Open:
@@ -548,15 +520,17 @@ Linux and Docker remain the preferred validation paths.
 
 ## Quality checks
 
-These are wired into the repo now:
+Run the standard non-browser completion gate:
 
 ```bash
-npm run build
-npm run lint
-npm run test:server
+npm run check
 ```
 
-`npm run test:server` is expected to work on Linux/Node 22 or any environment where `better-sqlite3` can load successfully.
+`npm run check:full` adds Playwright browser and accessibility tests and is the
+full CI/release application gate. The canonical validation ladder is in
+[`.ai/COMMANDS.md`](./.ai/COMMANDS.md); `package.json` owns the command bodies.
+
+Server tests require Node 22 on a platform where `better-sqlite3` can load.
 
 ## Project layout
 

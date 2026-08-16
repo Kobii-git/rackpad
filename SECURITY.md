@@ -61,7 +61,9 @@ Before exposing Rackpad beyond a trusted LAN, use:
 
 Rackpad backup exports still contain user password hashes so restores remain
 possible, but stored notification delivery secrets are redacted from the JSON
-export before download.
+export before download. Exports also contain lab-scoped authorization grants and
+the schema version; active sessions are intentionally excluded and invalidated
+on restore. Treat every database and JSON export as sensitive.
 
 See:
 

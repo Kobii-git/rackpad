@@ -4,7 +4,10 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readdirSync,
+  readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
@@ -12,6 +15,7 @@ import path from "node:path";
 import dgram from "node:dgram";
 import { execFileSync } from "node:child_process";
 import { CONTENT_SECURITY_POLICY } from "../security-headers.js";
+import type { DiscoveryScanResult } from "../routes/discovery.js";
 
 const tempDir = mkdtempSync(path.join(os.tmpdir(), "rackpad-tests-"));
 const spaDistDir = path.resolve(process.cwd(), "dist");
@@ -23,17 +27,24 @@ process.env.RACKPAD_SECRET_KEY = "rackpad-test-secret-key";
 process.env.SNMP_INVENTORY_SYNC = "1";
 
 const { createApp } = await import("../app.js");
-const { db } = await import("../db.js");
+const { CURRENT_SCHEMA_VERSION, db } = await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
 const { setDockerHttpJsonFetcherForTests } =
   await import("../lib/docker-import.js");
 const { resetLocalUserPassword } = await import("../lib/password-reset.js");
 const { parseIeeeOuiText } = await import("../lib/oui.js");
+const {
+  initializeNativeBackupScheduleBaseline,
+  nativeBackupStatus,
+  resetNativeBackupSchedulerStateForTests,
+  runNativeBackupScheduleTick,
+} = await import("../lib/native-backup.js");
+const { CURRENT_RACKPAD_SCHEMA_COLUMNS } =
+  await import("../lib/native-backup-validation.js");
 const { cidrOverlaps, ipToInt } = await import("../lib/ip-cidr.js");
 const { resolveSnmpSessionForTarget } = await import("../lib/snmp-session.js");
-const { inferDiscoveryPlacement } = await import(
-  "../lib/discovery-placement.js"
-);
+const { inferDiscoveryPlacement } =
+  await import("../lib/discovery-placement.js");
 const { setNetworkHostLookupForTests, setPinnedRequestTransportForTests } =
   await import("../lib/net-guard.js");
 const {
@@ -62,6 +73,7 @@ afterEach(async () => {
   resetDiscoveryScanJobsForTests();
   setNetworkHostLookupForTests(null);
   setPinnedRequestTransportForTests(null);
+  resetNativeBackupSchedulerStateForTests();
   await app.close();
 });
 
@@ -1355,20 +1367,24 @@ test("admin export returns a backup snapshot and blocks viewer access", async ()
 
   const snapshot = readJson(exportRes) as {
     format: string;
+    schemaVersion: number;
     appVersion: string;
     secretsRedacted: boolean;
     data: {
       labs: unknown[];
       users: Array<{ username: string }>;
+      userLabAccess: unknown[];
       userSessions?: unknown[];
     };
   };
 
   assert.equal(snapshot.format, "rackpad-backup-v1");
+  assert.equal(snapshot.schemaVersion, CURRENT_SCHEMA_VERSION);
   assert.ok(snapshot.appVersion);
   assert.equal(snapshot.secretsRedacted, true);
   assert.equal(snapshot.data.labs.length, 1);
   assert.equal(snapshot.data.users[0]?.username, "admin");
+  assert.deepEqual(snapshot.data.userLabAccess, []);
   assert.equal(snapshot.data.userSessions, undefined);
 
   const alertSettingsRow = (
@@ -1424,6 +1440,473 @@ test("admin export returns a backup snapshot and blocks viewer access", async ()
 
   assert.equal(forbiddenRes.statusCode, 403);
   assert.match(forbiddenRes.body, /administrator/i);
+});
+
+test("backup schema coverage requires an explicit decision for every application table", async () => {
+  const adminToken = await bootstrapAdmin();
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(exportRes.statusCode, 200);
+
+  const snapshot = readJson(exportRes) as {
+    data: Record<string, unknown>;
+  };
+  const schemaTables = (
+    db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+      )
+      .all() as Array<{ name: string }>
+  ).map((row) => row.name);
+
+  const excludedTables = new Map([
+    // Schema metadata is runtime-owned and is represented by the snapshot's
+    // top-level schemaVersion rather than restored as application data.
+    ["schemaVersion", "runtime schema metadata"],
+    // Sessions are deliberately invalidated on restore so every user must
+    // authenticate again against the restored account and permission state.
+    ["userSessions", "ephemeral authentication state"],
+  ]);
+  const representedTables = new Set(Object.keys(snapshot.data));
+  const missingDecisions = schemaTables.filter(
+    (table) => !representedTables.has(table) && !excludedTables.has(table),
+  );
+  const unknownSnapshotTables = [...representedTables].filter(
+    (table) => !schemaTables.includes(table),
+  );
+  const staleExclusions = [...excludedTables.keys()].filter(
+    (table) => !schemaTables.includes(table),
+  );
+
+  assert.deepEqual(missingDecisions, []);
+  assert.deepEqual(unknownSnapshotTables, []);
+  assert.deepEqual(staleExclusions, []);
+});
+
+test("native backup schema validation manifest matches the current database", () => {
+  const tables = (
+    db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+      )
+      .all() as Array<{ name: string }>
+  ).map((row) => row.name);
+  const actual = Object.fromEntries(
+    tables.map((table) => [
+      table,
+      (
+        db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+          name: string;
+        }>
+      ).map((column) => column.name),
+    ]),
+  );
+  assert.deepEqual(actual, CURRENT_RACKPAD_SCHEMA_COLUMNS);
+});
+
+test("backup restore handles every table the export produces", async () => {
+  const adminToken = await bootstrapAdmin();
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(exportRes.statusCode, 200);
+  const exportedTables = Object.keys(
+    (readJson(exportRes) as { data: Record<string, unknown> }).data,
+  );
+
+  // Schema coverage alone only proves the export side. Restore keeps its own
+  // hand-maintained delete and insert lists, so the two can still drift apart
+  // and silently drop a table's rows. This structural check fails when a table
+  // reaches the snapshot without a matching restore path.
+  const adminSource = readFileSync(
+    new URL("../routes/admin.ts", import.meta.url),
+    "utf8",
+  );
+  const restoreDeletes = new Set(
+    [...adminSource.matchAll(/DELETE FROM ([A-Za-z]+)/g)].map(
+      (match) => match[1],
+    ),
+  );
+  const restoreInserts = new Set(
+    [...adminSource.matchAll(/INSERT INTO ([A-Za-z]+)/g)].map(
+      (match) => match[1],
+    ),
+  );
+
+  assert.deepEqual(
+    exportedTables.filter((table) => !restoreDeletes.has(table)),
+    [],
+  );
+  assert.deepEqual(
+    exportedTables.filter((table) => !restoreInserts.has(table)),
+    [],
+  );
+});
+
+test("backup restore preserves scoped user lab grants and authorization", async () => {
+  const adminToken = await bootstrapAdmin();
+  const secondLabRes = await app.inject({
+    method: "POST",
+    url: "/api/labs",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { id: "lab_restore_other", name: "Restore Other Lab" },
+  });
+  assert.equal(secondLabRes.statusCode, 201);
+
+  const userRes = await app.inject({
+    method: "POST",
+    url: "/api/users",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      username: "restore-scoped",
+      displayName: "Restore Scoped",
+      password: "restore-scoped-password",
+      role: "editor",
+      labAccess: [{ labId: "lab_home", role: "editor" }],
+    },
+  });
+  assert.equal(userRes.statusCode, 201);
+  const user = readJson(userRes) as { id: string };
+
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(exportRes.statusCode, 200);
+  const snapshot = readJson(exportRes) as {
+    data: {
+      users: Array<{ id: string; role: string }>;
+      userLabAccess: Array<{ userId: string; labId: string; role: string }>;
+    };
+  };
+  assert.deepEqual(snapshot.data.userLabAccess, [
+    { userId: user.id, labId: "lab_home", role: "editor" },
+  ]);
+
+  db.prepare("DELETE FROM userLabAccess WHERE userId = ?").run(user.id);
+  const restoreRes = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: snapshot,
+  });
+  assert.equal(restoreRes.statusCode, 200, restoreRes.body);
+
+  const restoredGrant = db
+    .prepare(
+      "SELECT userId, labId, role FROM userLabAccess WHERE userId = ? AND labId = ?",
+    )
+    .get(user.id, "lab_home");
+  assert.deepEqual(restoredGrant, {
+    userId: user.id,
+    labId: "lab_home",
+    role: "editor",
+  });
+
+  const loginRes = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: {
+      username: "restore-scoped",
+      password: "restore-scoped-password",
+    },
+  });
+  assert.equal(loginRes.statusCode, 200);
+  const scopedToken = (readJson(loginRes) as { token: string }).token;
+
+  const allowedRes = await app.inject({
+    method: "GET",
+    url: "/api/racks?labId=lab_home",
+    headers: { authorization: `Bearer ${scopedToken}` },
+  });
+  assert.equal(allowedRes.statusCode, 200);
+  const deniedRes = await app.inject({
+    method: "GET",
+    url: "/api/racks?labId=lab_restore_other",
+    headers: { authorization: `Bearer ${scopedToken}` },
+  });
+  assert.equal(deniedRes.statusCode, 403);
+
+  const adminLoginRes = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: { username: "admin", password: "super-secret-1" },
+  });
+  assert.equal(adminLoginRes.statusCode, 200);
+  const restoredAdminToken = (readJson(adminLoginRes) as { token: string })
+    .token;
+
+  const invalidSnapshots = [
+    (() => {
+      const next = structuredClone(snapshot);
+      next.data.users.find((entry) => entry.id === user.id)!.role = "owner";
+      return next;
+    })(),
+    (() => {
+      const next = structuredClone(snapshot);
+      next.data.userLabAccess[0].role = "admin";
+      return next;
+    })(),
+    (() => {
+      const next = structuredClone(snapshot);
+      next.data.userLabAccess[0].userId = "missing_restore_user";
+      return next;
+    })(),
+    (() => {
+      const next = structuredClone(snapshot);
+      next.data.userLabAccess[0].labId = "missing_restore_lab";
+      return next;
+    })(),
+    (() => {
+      const next = structuredClone(snapshot);
+      next.data.userLabAccess.push({ ...next.data.userLabAccess[0] });
+      return next;
+    })(),
+  ];
+
+  for (const invalidSnapshot of invalidSnapshots) {
+    const rejectedRestoreRes = await app.inject({
+      method: "POST",
+      url: "/api/admin/restore",
+      headers: { authorization: `Bearer ${restoredAdminToken}` },
+      payload: invalidSnapshot,
+    });
+    assert.equal(rejectedRestoreRes.statusCode, 422, rejectedRestoreRes.body);
+  }
+
+  const sessionSurvivedRes = await app.inject({
+    method: "GET",
+    url: "/api/racks?labId=lab_home",
+    headers: { authorization: `Bearer ${scopedToken}` },
+  });
+  assert.equal(sessionSurvivedRes.statusCode, 200);
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT userId, labId, role FROM userLabAccess WHERE userId = ? AND labId = ?",
+      )
+      .get(user.id, "lab_home"),
+    { userId: user.id, labId: "lab_home", role: "editor" },
+  );
+});
+
+test("admin restore rejects snapshots from a newer schema without changing data", async () => {
+  const adminToken = await bootstrapAdmin();
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(exportRes.statusCode, 200);
+  const snapshot = readJson(exportRes) as Record<string, unknown> & {
+    schemaVersion: number;
+  };
+  snapshot.schemaVersion = CURRENT_SCHEMA_VERSION + 1;
+
+  const sentinelRes = await app.inject({
+    method: "POST",
+    url: "/api/racks",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { labId: "lab_home", name: "Newer schema sentinel", totalU: 42 },
+  });
+  assert.equal(sentinelRes.statusCode, 201);
+
+  const restoreRes = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: snapshot,
+  });
+  assert.equal(restoreRes.statusCode, 400);
+  assert.match(restoreRes.body, /newer than this Rackpad version supports/i);
+  assert.ok(
+    db
+      .prepare("SELECT id FROM racks WHERE name = ?")
+      .get("Newer schema sentinel"),
+  );
+});
+
+test("native backups are admin-scoped, configured explicitly, retained, and path-safe", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "native-backup-viewer",
+    displayName: "Native Backup Viewer",
+    password: "native-backup-viewer-1",
+    role: "viewer",
+  });
+  const guardedRequests = [
+    { method: "GET" as const, url: "/api/admin/native-backups" },
+    {
+      method: "PUT" as const,
+      url: "/api/admin/native-backups/settings",
+      payload: { enabled: false, intervalHours: 24, retentionCount: 7 },
+    },
+    { method: "POST" as const, url: "/api/admin/native-backups" },
+    {
+      method: "GET" as const,
+      url: "/api/admin/native-backups/rackpad-native-2026-01-01T00-00-00-000Z.db/download",
+    },
+    {
+      method: "DELETE" as const,
+      url: "/api/admin/native-backups/rackpad-native-2026-01-01T00-00-00-000Z.db",
+    },
+  ];
+  for (const request of guardedRequests) {
+    const unauthenticated = await app.inject(request);
+    assert.equal(unauthenticated.statusCode, 401);
+    const forbidden = await app.inject({
+      ...request,
+      headers: { authorization: `Bearer ${viewerToken}` },
+    });
+    assert.equal(forbidden.statusCode, 403);
+  }
+  delete process.env.RACKPAD_NATIVE_BACKUP_DIR;
+  const unavailable = await app.inject({
+    method: "POST",
+    url: "/api/admin/native-backups",
+    headers,
+  });
+  assert.equal(unavailable.statusCode, 409);
+  const unavailableSettings = await app.inject({
+    method: "PUT",
+    url: "/api/admin/native-backups/settings",
+    headers,
+    payload: { enabled: true, intervalHours: 12, retentionCount: 1 },
+  });
+  assert.equal(unavailableSettings.statusCode, 409);
+
+  const nativeDirectory = path.join(tempDir, `native-${Date.now()}`);
+  mkdirSync(nativeDirectory);
+  process.env.RACKPAD_NATIVE_BACKUP_DIR = nativeDirectory;
+  try {
+    const settings = await app.inject({
+      method: "PUT",
+      url: "/api/admin/native-backups/settings",
+      headers,
+      payload: { enabled: true, intervalHours: 12, retentionCount: 1 },
+    });
+    assert.equal(settings.statusCode, 200, settings.body);
+
+    const creationAttempts = await Promise.all([
+      app.inject({ method: "POST", url: "/api/admin/native-backups", headers }),
+      app.inject({ method: "POST", url: "/api/admin/native-backups", headers }),
+    ]);
+    assert.deepEqual(
+      creationAttempts.map((response) => response.statusCode).sort(),
+      [201, 409],
+    );
+    const created = creationAttempts.find(
+      (response) => response.statusCode === 201,
+    )!;
+    const backup = readJson(created) as { name: string; createdAt: string };
+    assert.match(backup.name, /^rackpad-native-.*\.db$/);
+    assert.equal(
+      statSync(path.join(nativeDirectory, backup.name)).mode & 0o777,
+      0o600,
+    );
+
+    const disabled = await app.inject({
+      method: "PUT",
+      url: "/api/admin/native-backups/settings",
+      headers,
+      payload: { enabled: false, intervalHours: 12, retentionCount: 1 },
+    });
+    assert.equal(disabled.statusCode, 200, disabled.body);
+    resetNativeBackupSchedulerStateForTests();
+    initializeNativeBackupScheduleBaseline();
+    assert.equal(
+      nativeBackupStatus().scheduler.lastSuccessAt,
+      backup.createdAt,
+      "restart status must discover the newest valid manual snapshot even when scheduling is disabled",
+    );
+    const reenabled = await app.inject({
+      method: "PUT",
+      url: "/api/admin/native-backups/settings",
+      headers,
+      payload: { enabled: true, intervalHours: 12, retentionCount: 1 },
+    });
+    assert.equal(reenabled.statusCode, 200, reenabled.body);
+
+    resetNativeBackupSchedulerStateForTests();
+    assert.equal(
+      await runNativeBackupScheduleTick(
+        Date.parse(backup.createdAt) + 60 * 60 * 1000,
+      ),
+      false,
+      "a restart must use the newest valid snapshot as the schedule baseline",
+    );
+    assert.equal(readdirSync(nativeDirectory).length, 1);
+
+    writeFileSync(path.join(nativeDirectory, backup.name), "corrupt after baseline");
+    assert.equal(
+      await runNativeBackupScheduleTick(
+        Date.parse(backup.createdAt) + 2 * 60 * 60 * 1000,
+      ),
+      false,
+      "the validated restart baseline must be cached between schedule ticks",
+    );
+    assert.deepEqual(readdirSync(nativeDirectory), [backup.name]);
+
+    const retained = await app.inject({
+      method: "POST",
+      url: "/api/admin/native-backups",
+      headers,
+    });
+    assert.equal(retained.statusCode, 201, retained.body);
+    const retainedBackup = readJson(retained) as { name: string };
+    assert.notEqual(retainedBackup.name, backup.name);
+    assert.deepEqual(readdirSync(nativeDirectory), [retainedBackup.name]);
+
+    const status = await app.inject({
+      method: "GET",
+      url: "/api/admin/native-backups",
+      headers,
+    });
+    assert.equal(status.statusCode, 200);
+    const statusBody = readJson(status) as {
+      configured: boolean;
+      backups: Array<{ name: string }>;
+      settings: { retentionCount: number };
+    };
+    assert.equal(statusBody.configured, true);
+    assert.equal(statusBody.settings.retentionCount, 1);
+    assert.deepEqual(
+      statusBody.backups.map((entry) => entry.name),
+      [retainedBackup.name],
+    );
+
+    const download = await app.inject({
+      method: "GET",
+      url: `/api/admin/native-backups/${retainedBackup.name}/download`,
+      headers,
+    });
+    assert.equal(download.statusCode, 200);
+    assert.equal(download.headers["content-type"], "application/vnd.sqlite3");
+
+    const invalid = await app.inject({
+      method: "DELETE",
+      url: "/api/admin/native-backups/not-a-backup.db",
+      headers,
+    });
+    assert.equal(invalid.statusCode, 400);
+    const removed = await app.inject({
+      method: "DELETE",
+      url: `/api/admin/native-backups/${retainedBackup.name}`,
+      headers,
+    });
+    assert.equal(removed.statusCode, 204);
+    assert.equal(readdirSync(nativeDirectory).length, 0);
+  } finally {
+    delete process.env.RACKPAD_NATIVE_BACKUP_DIR;
+    rmSync(nativeDirectory, { recursive: true, force: true });
+  }
 });
 
 test("admin restore reloads a backup snapshot and invalidates the previous session", async () => {
@@ -5578,6 +6061,103 @@ test("snmp inventory sync preview and merge apply require feature flag and admin
   );
 });
 
+test("SNMP sync schedules are admin-managed, lab-readable, backed up, and operationally reported", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers,
+    payload: {
+      labId: "lab_home",
+      hostname: "scheduled-firewall",
+      deviceType: "firewall",
+      managementIp: "192.0.2.50",
+      status: "unknown",
+    },
+  });
+  const device = readJson(deviceRes) as { id: string };
+  const profiles = await app.inject({
+    method: "GET",
+    url: "/api/snmp-sync/profiles",
+    headers,
+  });
+  assert.ok(
+    (readJson(profiles) as Array<{ id: string }>).some(
+      (entry) => entry.id === "pfsense-opnsense",
+    ),
+  );
+  const created = await app.inject({
+    method: "POST",
+    url: "/api/snmp-sync/schedules",
+    headers,
+    payload: {
+      deviceId: device.id,
+      profileId: "pfsense-opnsense",
+      policy: "merge",
+      intervalMs: 3_600_000,
+      enabled: true,
+    },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  const schedule = readJson(created) as { id: string };
+
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "sync-viewer",
+    displayName: "Sync Viewer",
+    password: "sync-viewer-password",
+    role: "viewer",
+  });
+  const viewerHeaders = { authorization: `Bearer ${viewerToken}` };
+  const readable = await app.inject({
+    method: "GET",
+    url: "/api/snmp-sync/schedules",
+    headers: viewerHeaders,
+  });
+  assert.equal(readable.statusCode, 200);
+  assert.deepEqual(
+    (readJson(readable) as Array<{ id: string }>).map((entry) => entry.id),
+    [schedule.id],
+  );
+  const forbidden = await app.inject({
+    method: "POST",
+    url: "/api/snmp-sync/schedules",
+    headers: viewerHeaders,
+    payload: { deviceId: device.id, profileId: "standard-l2-l3" },
+  });
+  assert.equal(forbidden.statusCode, 403);
+
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers,
+  });
+  const snapshot = readJson(exportRes) as {
+    data: { snmpSyncSchedules: Array<{ id: string }> };
+  };
+  assert.deepEqual(
+    snapshot.data.snmpSyncSchedules.map((entry) => entry.id),
+    [schedule.id],
+  );
+  const status = await app.inject({
+    method: "GET",
+    url: "/api/admin/operations/status",
+    headers,
+  });
+  assert.equal(status.statusCode, 200);
+  assert.equal(
+    (readJson(status) as { snmpSync: { enabledSchedules: number } }).snmpSync
+      .enabledSchedules,
+    1,
+  );
+  const deniedStatus = await app.inject({
+    method: "GET",
+    url: "/api/admin/operations/status",
+    headers: viewerHeaders,
+  });
+  assert.equal(deniedStatus.statusCode, 403);
+});
+
 test("ports can be updated and deleted with a custom MAC address", async () => {
   const adminToken = await bootstrapAdmin();
 
@@ -5663,6 +6243,106 @@ test("ports can be updated and deleted with a custom MAC address", async () => {
   assert.equal(listRes.statusCode, 200);
   const ports = readJson(listRes) as Array<{ id: string }>;
   assert.equal(ports.length, 0);
+});
+
+test("SFF and other port kinds validate and round-trip through API and backup restore", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers,
+    payload: {
+      labId: "lab_home",
+      hostname: "special-ports",
+      deviceType: "other",
+      status: "online",
+    },
+  });
+  const device = readJson(deviceRes) as { id: string };
+  for (const [name, kind] of [
+    ["SFF-8644", "sff"],
+    ["Vendor connector", "other"],
+  ] as const) {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/ports",
+      headers,
+      payload: {
+        deviceId: device.id,
+        name,
+        kind,
+        linkState: "unknown",
+        mode: "access",
+        description:
+          kind === "other" ? "Vendor-specific service connector" : null,
+      },
+    });
+    assert.equal(response.statusCode, 201, response.body);
+    assert.equal((readJson(response) as { kind: string }).kind, kind);
+  }
+  const invalid = await app.inject({
+    method: "POST",
+    url: "/api/ports",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "Invalid",
+      kind: "custom-kind",
+      linkState: "unknown",
+      mode: "access",
+    },
+  });
+  assert.equal(invalid.statusCode, 400);
+  const list = await app.inject({
+    method: "GET",
+    url: `/api/ports?deviceId=${device.id}`,
+    headers,
+  });
+  assert.deepEqual(
+    (readJson(list) as Array<{ kind: string }>)
+      .map((entry) => entry.kind)
+      .sort(),
+    ["other", "sff"],
+  );
+
+  const exportResponse = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers,
+  });
+  assert.equal(exportResponse.statusCode, 200, exportResponse.body);
+  const snapshot = readJson(exportResponse) as {
+    data: { ports: Array<{ kind: string; description: string | null }> };
+  };
+  assert.deepEqual(
+    snapshot.data.ports
+      .filter((port) => port.kind === "sff" || port.kind === "other")
+      .map((port) => [port.kind, port.description]),
+    [
+      ["sff", null],
+      ["other", "Vendor-specific service connector"],
+    ],
+  );
+  db.prepare("DELETE FROM ports WHERE deviceId = ?").run(device.id);
+  const restoreResponse = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers,
+    payload: snapshot,
+  });
+  assert.equal(restoreResponse.statusCode, 200, restoreResponse.body);
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT kind, description FROM ports WHERE deviceId = ? ORDER BY position, id",
+      )
+      .all(device.id),
+    [
+      { kind: "sff", description: null },
+      { kind: "other", description: "Vendor-specific service connector" },
+    ],
+  );
 });
 
 test("bulk cable updates are validated, deduplicated, permission-aware, and atomic", async () => {
@@ -8512,7 +9192,7 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
   assert.equal(source.enabled, 1);
   assert.equal(tlsColumn?.dflt_value, "0");
   assert.equal(duplicateMacColumn?.dflt_value, "0");
-  assert.equal(version.version, 35);
+  assert.equal(version.version, CURRENT_SCHEMA_VERSION);
   migrated.close();
 });
 
@@ -8620,7 +9300,7 @@ test("storage topology migration upgrades a version-34 database without changing
     .prepare("SELECT version FROM schemaVersion WHERE id = 1")
     .get() as { version: number };
   assert.equal(device.storageGb, 9876);
-  assert.equal(version.version, 35);
+  assert.equal(version.version, CURRENT_SCHEMA_VERSION);
   migrated.close();
 });
 
@@ -9491,22 +10171,8 @@ function readJson(response: { body: string }) {
 }
 
 function makeDiscoveryScanResult(
-  overrides: Partial<{
-    chunkCount: number;
-    scannedHostCount: number;
-    discoveredCount: number;
-    macAddressCount: number;
-    vendorCount: number;
-    technicalCount: number;
-    diagnostics: Array<{
-      code: string;
-      severity: "info" | "warning";
-      message: string;
-      detail?: string;
-    }>;
-    rows: unknown[];
-  }> = {},
-) {
+  overrides: Partial<DiscoveryScanResult> = {},
+): DiscoveryScanResult {
   return {
     chunkCount: 1,
     scannedHostCount: 2,

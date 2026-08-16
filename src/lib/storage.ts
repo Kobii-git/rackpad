@@ -148,7 +148,7 @@ export function driveSlotTypeLabel(
       return "U.2";
     case "2.5":
     case "3.5":
-      return `${slotType}\"`;
+      return `${slotType}"`;
     case "generic":
       return t("Other");
   }
@@ -174,7 +174,7 @@ export function driveFormFactorLabel(
       return "U.2";
     case "2.5":
     case "3.5":
-      return `${formFactor}\"`;
+      return `${formFactor}"`;
     case "other":
     case "generic":
       return t("Other");

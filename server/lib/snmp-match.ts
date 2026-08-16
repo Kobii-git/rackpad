@@ -1,7 +1,18 @@
 import type { DiscoveredSnmpInterface } from './snmp-if-mib.js'
+import { RE2 } from 're2-wasm'
 
-export const SNMP_MATCH_MODES = ['any', 'equals', 'notEquals', 'in'] as const
+export const SNMP_MATCH_MODES = ['any', 'equals', 'notEquals', 'in', 'regex'] as const
 export type SnmpMatchMode = (typeof SNMP_MATCH_MODES)[number]
+
+export function isValidSnmpRegex(pattern: string) {
+  if (!pattern.trim() || pattern.length > 200) return false
+  try {
+    new RE2(pattern, 'u')
+    return true
+  } catch {
+    return false
+  }
+}
 
 export function evaluateSnmpMatch(
   mode: SnmpMatchMode | null | undefined,
@@ -33,6 +44,15 @@ export function evaluateSnmpMatch(
       .map((entry) => entry.trim())
       .filter(Boolean)
     return allowed.includes(actual)
+  }
+
+  if (normalizedMode === 'regex') {
+    if (expectedValue.length > 200 || actual.length > 4096) return false
+    try {
+      return new RE2(expectedValue, 'u').test(actual)
+    } catch {
+      return false
+    }
   }
 
   return actual === expectedValue

@@ -2485,6 +2485,18 @@ export async function updateStorageDriveRecord(
   return updated;
 }
 
+export async function duplicateStorageDriveRecord(
+  id: string,
+  serial?: string | null,
+): Promise<StorageDrive> {
+  const created = await api.duplicateStorageDrive(id, serial);
+  setState((prev) => ({
+    ...prev,
+    storageDrives: sortStorageDrives([...prev.storageDrives, created]),
+  }));
+  return created;
+}
+
 export async function deleteStorageDriveRecord(id: string): Promise<void> {
   await api.deleteStorageDrive(id);
   setState((prev) => ({
@@ -2549,6 +2561,34 @@ export async function updateStoragePoolRecord(
     ),
   }));
   return updated;
+}
+
+export async function replaceStoragePoolDriveRecord(
+  poolId: string,
+  oldDriveId: string,
+  replacement: Partial<StorageDrive>,
+  deleteOld = false,
+) {
+  const result = await api.replaceStoragePoolDrive(poolId, {
+    oldDriveId,
+    replacement,
+    deleteOld,
+  });
+  setState((prev) => ({
+    ...prev,
+    storagePools: replaceById(prev.storagePools, result.pool, (pools) =>
+      sortStoragePools(pools, prev.devices),
+    ),
+    storageDrives: sortStorageDrives([
+      ...prev.storageDrives.filter(
+        (drive) => drive.id !== oldDriveId && drive.id !== result.replacement.id,
+      ),
+      ...(result.oldDrive ? [result.oldDrive] : []),
+      result.replacement,
+    ]),
+    driveSlots: reconcileDriveSlotAssignment(prev.driveSlots, result.replacement),
+  }));
+  return result;
 }
 
 export async function deleteStoragePoolRecord(id: string): Promise<void> {

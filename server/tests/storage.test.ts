@@ -15,8 +15,28 @@ const { db } = await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
 
 type AppInstance = Awaited<ReturnType<typeof createApp>>;
-type Slot = { id: string; driveId: string | null };
-type Drive = { id: string; slotId: string | null };
+type Slot = {
+  id: string;
+  driveId: string | null;
+  name: string;
+  sectionName: string;
+  sectionOrder: number;
+  face: string;
+  layout: string;
+  columns: number | null;
+  sectionInconsistent?: boolean;
+};
+type Drive = {
+  id: string;
+  slotId: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  serial?: string | null;
+  capacityGb?: number;
+  interface?: string;
+  formFactor?: string;
+  poolId?: string | null;
+};
 type Pool = {
   id: string;
   driveIds: string[];
@@ -630,6 +650,343 @@ test("storage backup restore preserves relationships and accepts legacy backups"
   assert.equal(result.counts.storagePoolDrives, 0);
 });
 
+test("drive-slot section settings are detected, permissioned, and propagated atomically", async () => {
+  const adminToken = await bootstrapAdmin();
+  const labId = await firstLabId(adminToken);
+  const device = await createDevice(adminToken, {
+    labId,
+    hostname: "mixed-section-host",
+    deviceType: "storage",
+    driveBayTemplateId: "storage-4x3-5",
+  });
+  const initialSlots = await listSlots(adminToken, device.id);
+  assert.equal(initialSlots.length, 4);
+
+  db.prepare(
+    "UPDATE driveSlots SET face = 'rear', layout = 'list', columns = NULL WHERE id = ?",
+  ).run(initialSlots[1].id);
+  const mixedSlots = await listSlots(adminToken, device.id);
+  assert.ok(mixedSlots.every((slot) => slot.sectionInconsistent));
+
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "section-viewer",
+    displayName: "Section Viewer",
+    password: "section-viewer-1",
+    role: "viewer",
+    labAccess: [{ labId, role: "viewer" }],
+  });
+  const viewerList = await listSlots(viewerToken, device.id);
+  assert.ok(viewerList.every((slot) => slot.sectionInconsistent));
+  const viewerPatch = await app.inject({
+    method: "PATCH",
+    url: `/api/storage/drive-slots/${initialSlots[0].id}`,
+    headers: authHeaders(viewerToken),
+    payload: { face: "rear" },
+  });
+  assert.equal(viewerPatch.statusCode, 403);
+
+  const editorToken = await createUserAndLogin(adminToken, {
+    username: "section-editor",
+    displayName: "Section Editor",
+    password: "section-editor-1",
+    role: "editor",
+    labAccess: [{ labId, role: "editor" }],
+  });
+  const normalized = await app.inject({
+    method: "PATCH",
+    url: `/api/storage/drive-slots/${initialSlots[0].id}`,
+    headers: authHeaders(editorToken),
+    payload: {
+      sectionName: "Front bays",
+      sectionOrder: 2,
+      face: "rear",
+      layout: "list",
+      columns: null,
+    },
+  });
+  assert.equal(normalized.statusCode, 200, normalized.body);
+  const repairedSlots = await listSlots(editorToken, device.id);
+  assert.ok(repairedSlots.every((slot) => !slot.sectionInconsistent));
+  assert.ok(
+    repairedSlots.every(
+      (slot) =>
+        slot.sectionOrder === 2 &&
+        slot.face === "rear" &&
+        slot.layout === "list" &&
+        slot.columns === null,
+    ),
+  );
+
+  const mismatchedCreate = await app.inject({
+    method: "POST",
+    url: "/api/storage/drive-slots",
+    headers: authHeaders(editorToken),
+    payload: {
+      deviceId: device.id,
+      name: "Mismatched bay",
+      sectionName: "Front bays",
+      face: "front",
+    },
+  });
+  assert.equal(mismatchedCreate.statusCode, 409);
+  const matchingCreate = await app.inject({
+    method: "POST",
+    url: "/api/storage/drive-slots",
+    headers: authHeaders(editorToken),
+    payload: {
+      deviceId: device.id,
+      name: "Bay 5",
+      sectionName: "Front bays",
+    },
+  });
+  assert.equal(matchingCreate.statusCode, 201, matchingCreate.body);
+  const createdSlot = json(matchingCreate) as Slot;
+  assert.equal(createdSlot.face, "rear");
+  assert.equal(createdSlot.layout, "list");
+  assert.equal(createdSlot.sectionOrder, 2);
+
+  db.exec(`
+    CREATE TRIGGER fail_section_propagation
+    BEFORE UPDATE ON driveSlots
+    WHEN OLD.id != '${initialSlots[0].id}' AND NEW.sectionOrder = 9
+    BEGIN
+      SELECT RAISE(ABORT, 'forced section propagation failure');
+    END;
+  `);
+  try {
+    const failedPropagation = await app.inject({
+      method: "PATCH",
+      url: `/api/storage/drive-slots/${initialSlots[0].id}`,
+      headers: authHeaders(editorToken),
+      payload: { name: "Must roll back", sectionOrder: 9 },
+    });
+    assert.equal(failedPropagation.statusCode, 500);
+  } finally {
+    db.exec("DROP TRIGGER IF EXISTS fail_section_propagation;");
+  }
+  const afterFailure = await listSlots(editorToken, device.id);
+  assert.ok(afterFailure.every((slot) => slot.sectionOrder === 2));
+  assert.equal(
+    afterFailure.find((slot) => slot.id === initialSlots[0].id)?.name,
+    initialSlots[0].name,
+  );
+});
+
+test("drive duplication and pool replacement preserve storage relationships atomically", async () => {
+  const adminToken = await bootstrapAdmin();
+  const labId = await firstLabId(adminToken);
+  const device = await createDevice(adminToken, {
+    labId,
+    hostname: "replacement-host",
+    deviceType: "storage",
+    driveBayTemplateId: "storage-4x3-5",
+  });
+  const slots = await listSlots(adminToken, device.id);
+  const oldDrive = await createDrive(adminToken, {
+    labId,
+    serial: "OLD-001",
+    slotId: slots[0].id,
+  });
+  const poolResponse = await app.inject({
+    method: "POST",
+    url: "/api/storage/pools",
+    headers: authHeaders(adminToken),
+    payload: poolPayload(device.id, "replace-pool", [oldDrive.id]),
+  });
+  const pool = json(poolResponse) as Pool;
+
+  const duplicateConflict = await app.inject({
+    method: "POST",
+    url: `/api/storage/drives/${oldDrive.id}/duplicate`,
+    headers: authHeaders(adminToken),
+    payload: { serial: "OLD-001" },
+  });
+  assert.equal(duplicateConflict.statusCode, 409);
+  const duplicate = await app.inject({
+    method: "POST",
+    url: `/api/storage/drives/${oldDrive.id}/duplicate`,
+    headers: authHeaders(adminToken),
+    payload: { serial: "" },
+  });
+  assert.equal(duplicate.statusCode, 201, duplicate.body);
+  const duplicatedDrive = json(duplicate) as Drive;
+  assert.equal(duplicatedDrive.slotId, null);
+  assert.equal(duplicatedDrive.poolId, null);
+  assert.equal(duplicatedDrive.serial, null);
+  assert.equal(duplicatedDrive.manufacturer, "Seagate");
+  assert.equal(duplicatedDrive.model, "Exos");
+  assert.equal(duplicatedDrive.capacityGb, 6000);
+  assert.equal(duplicatedDrive.interface, "sas");
+  assert.equal(duplicatedDrive.formFactor, "3.5");
+
+  await createDrive(adminToken, {
+    labId,
+    serial: "EXISTING-CONFLICT",
+  });
+  const serialConflict = await app.inject({
+    method: "POST",
+    url: `/api/storage/pools/${pool.id}/replace-drive`,
+    headers: authHeaders(adminToken),
+    payload: {
+      oldDriveId: oldDrive.id,
+      replacement: { serial: "EXISTING-CONFLICT" },
+    },
+  });
+  assert.equal(serialConflict.statusCode, 409);
+  assert.equal(
+    (await listSlots(adminToken, device.id)).find(
+      (slot) => slot.id === slots[0].id,
+    )?.driveId,
+    oldDrive.id,
+  );
+
+  db.exec(`
+    CREATE TRIGGER fail_drive_replacement
+    BEFORE INSERT ON storagePoolDrives
+    WHEN NEW.poolId = '${pool.id}' AND NEW.driveId != '${oldDrive.id}'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced replacement failure');
+    END;
+  `);
+  try {
+    const failedReplacement = await app.inject({
+      method: "POST",
+      url: `/api/storage/pools/${pool.id}/replace-drive`,
+      headers: authHeaders(adminToken),
+      payload: {
+        oldDriveId: oldDrive.id,
+        replacement: { serial: "NEW-ROLLBACK" },
+      },
+    });
+    assert.equal(failedReplacement.statusCode, 500);
+  } finally {
+    db.exec("DROP TRIGGER IF EXISTS fail_drive_replacement;");
+  }
+  assert.equal(
+    (await listSlots(adminToken, device.id)).find(
+      (slot) => slot.id === slots[0].id,
+    )?.driveId,
+    oldDrive.id,
+  );
+  assert.deepEqual((await listPools(adminToken, device.id))[0].driveIds, [
+    oldDrive.id,
+  ]);
+  assert.equal(
+    (
+      db
+        .prepare("SELECT COUNT(*) AS count FROM storageDrives WHERE serial = ?")
+        .get("NEW-ROLLBACK") as { count: number }
+    ).count,
+    0,
+  );
+
+  const replaced = await app.inject({
+    method: "POST",
+    url: `/api/storage/pools/${pool.id}/replace-drive`,
+    headers: authHeaders(adminToken),
+    payload: { oldDriveId: oldDrive.id, replacement: { serial: "NEW-001" } },
+  });
+  assert.equal(replaced.statusCode, 201, replaced.body);
+  const replacementResult = json(replaced) as {
+    replacement: Drive;
+    oldDrive: Drive;
+    pool: Pool;
+  };
+  assert.equal(replacementResult.replacement.slotId, slots[0].id);
+  assert.equal(replacementResult.oldDrive.slotId, null);
+  assert.deepEqual(replacementResult.pool.driveIds, [
+    replacementResult.replacement.id,
+  ]);
+  assert.equal(
+    countAuditRows("storage.pool.drive.replace", "StoragePool", pool.id),
+    1,
+  );
+
+  const retiredForDeletion = await createDrive(adminToken, {
+    labId,
+    serial: "OLD-DELETE",
+    slotId: slots[1].id,
+  });
+  const expandedPool = await app.inject({
+    method: "PATCH",
+    url: `/api/storage/pools/${pool.id}`,
+    headers: authHeaders(adminToken),
+    payload: {
+      driveIds: [replacementResult.replacement.id, retiredForDeletion.id],
+    },
+  });
+  assert.equal(expandedPool.statusCode, 200, expandedPool.body);
+  const deletedRetired = await app.inject({
+    method: "POST",
+    url: `/api/storage/pools/${pool.id}/replace-drive`,
+    headers: authHeaders(adminToken),
+    payload: {
+      oldDriveId: retiredForDeletion.id,
+      replacement: { serial: "NEW-DELETE" },
+      deleteOld: true,
+    },
+  });
+  assert.equal(deletedRetired.statusCode, 201, deletedRetired.body);
+  assert.equal(
+    (json(deletedRetired) as { oldDrive: Drive | null }).oldDrive,
+    null,
+  );
+  assert.equal(countRows("storageDrives", "id", retiredForDeletion.id), 0);
+
+  const otherLabResponse = await app.inject({
+    method: "POST",
+    url: "/api/labs",
+    headers: authHeaders(adminToken),
+    payload: { name: "Storage Other Lab" },
+  });
+  assert.equal(otherLabResponse.statusCode, 201, otherLabResponse.body);
+  const otherLabId = (json(otherLabResponse) as { id: string }).id;
+  const otherDevice = await createDevice(adminToken, {
+    labId: otherLabId,
+    hostname: "other-storage-host",
+    deviceType: "storage",
+    driveBayTemplateId: "storage-4x3-5",
+  });
+  const otherSlots = await listSlots(adminToken, otherDevice.id);
+  const otherDrive = await createDrive(adminToken, {
+    labId: otherLabId,
+    serial: "OTHER-001",
+    slotId: otherSlots[0].id,
+  });
+  const otherPoolResponse = await app.inject({
+    method: "POST",
+    url: "/api/storage/pools",
+    headers: authHeaders(adminToken),
+    payload: poolPayload(otherDevice.id, "other-pool", [otherDrive.id]),
+  });
+  assert.equal(otherPoolResponse.statusCode, 201, otherPoolResponse.body);
+  const otherPool = json(otherPoolResponse) as Pool;
+  const homeEditor = await createUserAndLogin(adminToken, {
+    username: "replacement-home-editor",
+    displayName: "Replacement Home Editor",
+    password: "replacement-home-1",
+    role: "editor",
+    labAccess: [{ labId, role: "editor" }],
+  });
+  const crossLabDuplicate = await app.inject({
+    method: "POST",
+    url: `/api/storage/drives/${otherDrive.id}/duplicate`,
+    headers: authHeaders(homeEditor),
+    payload: {},
+  });
+  assert.equal(crossLabDuplicate.statusCode, 403);
+  const crossLabReplacement = await app.inject({
+    method: "POST",
+    url: `/api/storage/pools/${otherPool.id}/replace-drive`,
+    headers: authHeaders(homeEditor),
+    payload: {
+      oldDriveId: otherDrive.id,
+      replacement: { serial: "OTHER-NEW" },
+    },
+  });
+  assert.equal(crossLabReplacement.statusCode, 403);
+});
+
 function resetDatabase() {
   db.exec(`
     DELETE FROM userSessions;
@@ -829,7 +1186,12 @@ function json(response: { body: string }) {
   return JSON.parse(response.body);
 }
 
-function countRows(table: "ports" | "driveSlots", key: string, value: string) {
+function countRows(
+  table:
+    "ports" | "driveSlots" | "devices" | "storageDrives" | "storagePoolDrives",
+  key: string,
+  value: string,
+) {
   return (
     db
       .prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${key} = ?`)

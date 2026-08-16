@@ -42,6 +42,7 @@ test-results/
 .cache
 .eslintcache
 .turbo
+.ai/local/
 
 # local database
 *.db

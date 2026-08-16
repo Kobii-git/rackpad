@@ -790,7 +790,6 @@ export function VisualizerCanvas({
                   </svg>
                   <ZonePanels
                     model={model}
-                    healthOverlay={healthOverlay}
                     onToggleRackRun={onToggleRackRun}
                     onToggleGroup={onToggleGroup}
                   />
@@ -956,12 +955,10 @@ export function VisualizerCanvas({
 
 function ZonePanels({
   model,
-  healthOverlay,
   onToggleRackRun,
   onToggleGroup,
 }: {
   model: VisualizerModel;
-  healthOverlay: boolean;
   onToggleRackRun: (key: string) => void;
   onToggleGroup: (key: string) => void;
 }) {
@@ -2072,7 +2069,10 @@ function TracePicker({
     [model],
   );
   const [deviceId, setDeviceId] = useState(traceDevices[0]?.device.id ?? "");
-  const devicePorts = deviceId ? (model.portsByDeviceId[deviceId] ?? []) : [];
+  const devicePorts = useMemo(
+    () => (deviceId ? (model.portsByDeviceId[deviceId] ?? []) : []),
+    [deviceId, model.portsByDeviceId],
+  );
   const [portId, setPortId] = useState(devicePorts[0]?.id ?? "");
 
   useEffect(() => {

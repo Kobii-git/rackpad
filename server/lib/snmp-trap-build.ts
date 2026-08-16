@@ -159,7 +159,7 @@ export function buildSnmpV3TrapPacket(options: {
     Buffer.alloc(12),
     privacyParameters,
   );
-  let message = buildSnmpV3Message({
+  const message = buildSnmpV3Message({
     msgId,
     flags,
     securityParameters,

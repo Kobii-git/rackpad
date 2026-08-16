@@ -1,5 +1,10 @@
 # SNMP Monitoring — Full Implementation Plan
 
+> **Historical document:** this implementation plan is superseded by the current
+> source and [`SNMP.md`](./SNMP.md). Dates, schema versions, test counts, checkbox
+> state, and rollback notes below are retained only as design history and must not
+> be treated as current requirements or feature status.
+
 Tracks GitHub issue **#35** and related monitoring/inventory requests.
 
 **Last updated:** 2026-06-11  

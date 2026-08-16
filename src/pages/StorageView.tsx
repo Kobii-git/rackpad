@@ -34,6 +34,8 @@ import {
   deleteDriveBayTemplateRecord,
   deleteStorageDriveRecord,
   deleteStoragePoolRecord,
+  duplicateStorageDriveRecord,
+  replaceStoragePoolDriveRecord,
   updateDriveBayTemplateRecord,
   updateStorageDriveRecord,
   updateStoragePoolRecord,
@@ -103,6 +105,10 @@ type PoolForm = {
   status: StoragePoolStatus;
   notes: string;
   driveIds: string[];
+};
+
+type ReplacementForm = Omit<DriveForm, "slotId"> & {
+  deleteOld: boolean;
 };
 
 type TemplateSectionDraft = {
@@ -185,12 +191,15 @@ export default function StorageView() {
   const currentUser = useStore((state) => state.currentUser);
   const lab = useStore((state) => state.lab);
   const devices = useStore((state) => state.devices);
-  const deviceTypes = useStore((state) => state.deviceTypes);
   const slots = useStore((state) => state.driveSlots);
   const drives = useStore((state) => state.storageDrives);
   const pools = useStore((state) => state.storagePools);
   const templates = useStore((state) => state.driveBayTemplates);
   const canEdit = canEditInventory(currentUser, lab.id);
+  const [createRequest, setCreateRequest] = useState<{
+    kind: "drive" | "pool";
+    id: number;
+  } | null>(null);
   const isAdmin = currentUser?.role === "admin";
   const requestedTab = searchParams.get("tab") as WorkspaceTab | null;
   const tab: WorkspaceTab = [
@@ -214,12 +223,38 @@ export default function StorageView() {
     [devices],
   );
 
+  function beginCreate(kind: "drive" | "pool") {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", kind === "drive" ? "drives" : "pools");
+    next.delete("driveId");
+    setSearchParams(next, { replace: true });
+    setCreateRequest((current) => ({ kind, id: (current?.id ?? 0) + 1 }));
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <TopBar
         title={t("Storage")}
         subtitle={t("Storage inventory")}
         meta={t("Physical drives, device bays, and logical pools")}
+        actions={
+          canEdit ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => beginCreate("drive")}
+              >
+                <Plus className="size-3.5" />
+                {t("Add drive")}
+              </Button>
+              <Button size="sm" onClick={() => beginCreate("pool")}>
+                <Plus className="size-3.5" />
+                {t("Add pool")}
+              </Button>
+            </>
+          ) : undefined
+        }
       />
       <main className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4 xl:p-6">
         <Tabs
@@ -256,10 +291,18 @@ export default function StorageView() {
             <DriveInventory
               canEdit={canEdit}
               requestedDriveId={searchParams.get("driveId")}
+              createRequestId={
+                createRequest?.kind === "drive" ? createRequest.id : null
+              }
             />
           </TabsContent>
           <TabsContent value="pools">
-            <PoolInventory canEdit={canEdit} />
+            <PoolInventory
+              canEdit={canEdit}
+              createRequestId={
+                createRequest?.kind === "pool" ? createRequest.id : null
+              }
+            />
           </TabsContent>
           <TabsContent value="templates">
             <TemplateLibrary isAdmin={isAdmin} />
@@ -412,9 +455,11 @@ function PoolAttentionRow({
 function DriveInventory({
   canEdit,
   requestedDriveId,
+  createRequestId,
 }: {
   canEdit: boolean;
   requestedDriveId: string | null;
+  createRequestId: number | null;
 }) {
   const { t } = useI18n();
   const devices = useStore((state) => state.devices);
@@ -462,6 +507,14 @@ function DriveInventory({
       if (requestedDrive) setForm(driveToForm(requestedDrive));
     }
   }, [drives, requestedDriveId]);
+
+  useEffect(() => {
+    if (createRequestId === null) return;
+    setCreating(true);
+    setEditingId(null);
+    setForm(EMPTY_DRIVE_FORM);
+    setError("");
+  }, [createRequestId]);
 
   function openDrive(drive?: StorageDrive) {
     setCreating(!drive);
@@ -523,6 +576,24 @@ function DriveInventory({
     }
   }
 
+  async function duplicateDrive() {
+    if (!selected) return;
+    setSaving(true);
+    setError("");
+    try {
+      const created = await duplicateStorageDriveRecord(selected.id, null);
+      openDrive(created);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : t("Storage changes could not be saved."),
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <Card>
@@ -536,7 +607,7 @@ function DriveInventory({
           {canEdit && (
             <Button size="sm" onClick={() => openDrive()}>
               <Plus className="size-3.5" />
-              {t("New drive")}
+              {t("Add drive")}
             </Button>
           )}
         </CardHeader>
@@ -563,7 +634,18 @@ function DriveInventory({
                 {filtered.map((drive) => (
                   <tr
                     key={drive.id}
-                    className="hover:bg-[var(--surface-hover)]"
+                    className={cn(
+                      "cursor-pointer hover:bg-[var(--surface-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--accent-primary)]",
+                      selected?.id === drive.id && "bg-[var(--surface-hover)]",
+                    )}
+                    tabIndex={0}
+                    aria-selected={selected?.id === drive.id}
+                    onClick={() => openDrive(drive)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      openDrive(drive);
+                    }}
                   >
                     <td className="px-3 py-2">
                       <div className="font-medium text-[var(--text-primary)]">
@@ -602,7 +684,10 @@ function DriveInventory({
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => openDrive(drive)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openDrive(drive);
+                          }}
                           aria-label={t("Edit {name}", {
                             name: driveLabel(drive),
                           })}
@@ -791,20 +876,31 @@ function DriveInventory({
                 <div className="text-xs text-[var(--danger)]">{error}</div>
               )}
               {canEdit && (
-                <div className="flex justify-between gap-2">
-                  {selected ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={saving}
-                      onClick={() => void removeDrive()}
-                    >
-                      <Trash2 className="size-3.5" />
-                      {t("Delete drive")}
-                    </Button>
-                  ) : (
-                    <span />
-                  )}
+                <div className="flex flex-wrap justify-between gap-2">
+                  <div className="flex gap-2">
+                    {selected ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={saving}
+                          onClick={() => void duplicateDrive()}
+                        >
+                          <Plus className="size-3.5" />
+                          {t("Duplicate")}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={saving}
+                          onClick={() => void removeDrive()}
+                        >
+                          <Trash2 className="size-3.5" />
+                          {t("Delete drive")}
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
                   <Button
                     size="sm"
                     disabled={saving}
@@ -823,7 +919,13 @@ function DriveInventory({
   );
 }
 
-function PoolInventory({ canEdit }: { canEdit: boolean }) {
+function PoolInventory({
+  canEdit,
+  createRequestId,
+}: {
+  canEdit: boolean;
+  createRequestId: number | null;
+}) {
   const { t } = useI18n();
   const devices = useStore((state) => state.devices);
   const drives = useStore((state) => state.storageDrives);
@@ -833,7 +935,22 @@ function PoolInventory({ canEdit }: { canEdit: boolean }) {
   const [form, setForm] = useState<PoolForm>(EMPTY_POOL_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [replacementTargetId, setReplacementTargetId] = useState<string | null>(
+    null,
+  );
+  const [replacementForm, setReplacementForm] =
+    useState<ReplacementForm | null>(null);
   const selected = pools.find((pool) => pool.id === editingId) ?? null;
+
+  useEffect(() => {
+    if (createRequestId === null) return;
+    setCreating(true);
+    setEditingId(null);
+    setForm({ ...EMPTY_POOL_FORM, deviceId: devices[0]?.id ?? "" });
+    setReplacementTargetId(null);
+    setReplacementForm(null);
+    setError("");
+  }, [createRequestId, devices]);
 
   function openPool(pool?: StoragePool) {
     setCreating(!pool);
@@ -844,6 +961,8 @@ function PoolInventory({ canEdit }: { canEdit: boolean }) {
         : { ...EMPTY_POOL_FORM, deviceId: devices[0]?.id ?? "" },
     );
     setError("");
+    setReplacementTargetId(null);
+    setReplacementForm(null);
   }
 
   async function savePool() {
@@ -901,6 +1020,62 @@ function PoolInventory({ canEdit }: { canEdit: boolean }) {
     }
   }
 
+  function openReplacement(drive: StorageDrive) {
+    const seeded = driveToForm(drive);
+    setReplacementTargetId(drive.id);
+    setReplacementForm({
+      manufacturer: seeded.manufacturer,
+      model: seeded.model,
+      serial: "",
+      capacity: seeded.capacity,
+      capacityUnit: seeded.capacityUnit,
+      interface: seeded.interface,
+      formFactor: seeded.formFactor,
+      notes: seeded.notes,
+      deleteOld: false,
+    });
+    setError("");
+  }
+
+  async function replacePoolDrive() {
+    if (!selected || !replacementTargetId || !replacementForm) return;
+    const capacity = Number(replacementForm.capacity);
+    if (!Number.isFinite(capacity) || capacity < 0) {
+      setError(t("Capacity"));
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const result = await replaceStoragePoolDriveRecord(
+        selected.id,
+        replacementTargetId,
+        {
+          manufacturer: replacementForm.manufacturer.trim() || null,
+          model: replacementForm.model.trim() || null,
+          serial: replacementForm.serial.trim() || null,
+          capacityGb:
+            replacementForm.capacityUnit === "tb" ? capacity * 1000 : capacity,
+          interface: replacementForm.interface,
+          formFactor: replacementForm.formFactor,
+          notes: replacementForm.notes.trim() || null,
+        },
+        replacementForm.deleteOld,
+      );
+      setForm(poolToForm(result.pool));
+      setReplacementTargetId(null);
+      setReplacementForm(null);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : t("Storage changes could not be saved."),
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const groupedDrives = useMemo(() => {
     const groups = new Map<string, StorageDrive[]>();
     for (const drive of drives) {
@@ -924,7 +1099,7 @@ function PoolInventory({ canEdit }: { canEdit: boolean }) {
           {canEdit && (
             <Button size="sm" onClick={() => openPool()}>
               <Plus className="size-3.5" />
-              {t("New pool")}
+              {t("Add pool")}
             </Button>
           )}
         </CardHeader>
@@ -1160,7 +1335,7 @@ function PoolInventory({ canEdit }: { canEdit: boolean }) {
                           );
                           const checked = form.driveIds.includes(drive.id);
                           return (
-                            <label
+                            <div
                               key={drive.id}
                               className={cn(
                                 "flex items-start gap-2 rounded px-2 py-1.5 text-xs",
@@ -1169,49 +1344,67 @@ function PoolInventory({ canEdit }: { canEdit: boolean }) {
                                   : "opacity-50",
                               )}
                             >
-                              <input
-                                type="checkbox"
-                                className="mt-0.5"
-                                checked={checked}
-                                disabled={!canEdit || (!eligible && !checked)}
-                                onChange={(e) =>
-                                  setForm({
-                                    ...form,
-                                    driveIds: e.target.checked
-                                      ? [...form.driveIds, drive.id]
-                                      : form.driveIds.filter(
-                                          (id) => id !== drive.id,
-                                        ),
-                                  })
-                                }
-                              />
-                              <span className="min-w-0">
-                                <span className="block text-[var(--text-primary)]">
-                                  {driveLabel(drive)}
+                              <label className="flex min-w-0 flex-1 items-start gap-2">
+                                <input
+                                  type="checkbox"
+                                  className="mt-0.5"
+                                  checked={checked}
+                                  disabled={!canEdit || (!eligible && !checked)}
+                                  onChange={(e) =>
+                                    setForm({
+                                      ...form,
+                                      driveIds: e.target.checked
+                                        ? [...form.driveIds, drive.id]
+                                        : form.driveIds.filter(
+                                            (id) => id !== drive.id,
+                                          ),
+                                    })
+                                  }
+                                />
+                                <span className="min-w-0">
+                                  <span className="block text-[var(--text-primary)]">
+                                    {driveLabel(drive)}
+                                  </span>
+                                  <span className="block font-mono text-[10px] text-[var(--text-muted)]">
+                                    {drive.serial || "—"}
+                                  </span>
+                                  <span className="block text-[var(--text-muted)]">
+                                    {drive.slotName
+                                      ? t("{value1}{value2}", {
+                                          value1: drive.slotSectionName,
+                                          value2: t("· {value1}", {
+                                            value1: drive.slotName,
+                                          }),
+                                        })
+                                      : t(
+                                          "Member missing from a physical slot",
+                                        )}
+                                    {drive.poolName &&
+                                    drive.poolId !== selected?.id
+                                      ? t("· {value1}", {
+                                          value1: t("Assigned to {name}", {
+                                            name: drive.poolName,
+                                          }),
+                                        })
+                                      : ""}
+                                  </span>
                                 </span>
-                                <span className="block font-mono text-[10px] text-[var(--text-muted)]">
-                                  {drive.serial || "—"}
-                                </span>
-                                <span className="block text-[var(--text-muted)]">
-                                  {drive.slotName
-                                    ? t("{value1}{value2}", {
-                                        value1: drive.slotSectionName,
-                                        value2: t("· {value1}", {
-                                          value1: drive.slotName,
-                                        }),
-                                      })
-                                    : t("Member missing from a physical slot")}
-                                  {drive.poolName &&
-                                  drive.poolId !== selected?.id
-                                    ? t("· {value1}", {
-                                        value1: t("Assigned to {name}", {
-                                          name: drive.poolName,
-                                        }),
-                                      })
-                                    : ""}
-                                </span>
-                              </span>
-                            </label>
+                              </label>
+                              {canEdit &&
+                              selected &&
+                              checked &&
+                              drive.slotId ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={saving}
+                                  onClick={() => openReplacement(drive)}
+                                >
+                                  {t("Replace drive")}
+                                </Button>
+                              ) : null}
+                            </div>
                           );
                         })}
                       </div>
@@ -1219,6 +1412,181 @@ function PoolInventory({ canEdit }: { canEdit: boolean }) {
                   ))}
                 </div>
               </FieldGroup>
+              {replacementForm && replacementTargetId && (
+                <div
+                  className="space-y-3 rounded-[var(--radius-md)] border border-[var(--accent-primary-border)] bg-[var(--accent-primary-soft)] p-3"
+                  role="group"
+                  aria-label={t("Replace drive")}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="rk-kicker">{t("Replace drive")}</div>
+                      <div className="mt-1 text-xs text-[var(--text-secondary)]">
+                        {t(
+                          "The retired drive will be left unassigned by default.",
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("Close")}
+                      onClick={() => {
+                        setReplacementTargetId(null);
+                        setReplacementForm(null);
+                      }}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label={t("Manufacturer")}>
+                      <Input
+                        value={replacementForm.manufacturer}
+                        onChange={(event) =>
+                          setReplacementForm({
+                            ...replacementForm,
+                            manufacturer: event.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label={t("Model")}>
+                      <Input
+                        value={replacementForm.model}
+                        onChange={(event) =>
+                          setReplacementForm({
+                            ...replacementForm,
+                            model: event.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                  </div>
+                  <Field label={t("Serial")}>
+                    <Input
+                      autoFocus
+                      value={replacementForm.serial}
+                      onChange={(event) =>
+                        setReplacementForm({
+                          ...replacementForm,
+                          serial: event.target.value,
+                        })
+                      }
+                    />
+                  </Field>
+                  <div className="grid grid-cols-[1fr_90px] gap-3">
+                    <Field label={t("Capacity")}>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={replacementForm.capacity}
+                        onChange={(event) =>
+                          setReplacementForm({
+                            ...replacementForm,
+                            capacity: event.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label={t("Capacity unit")}>
+                      <select
+                        className={selectClass}
+                        value={replacementForm.capacityUnit}
+                        onChange={(event) =>
+                          setReplacementForm({
+                            ...replacementForm,
+                            capacityUnit: event.target.value as "gb" | "tb",
+                          })
+                        }
+                      >
+                        <option value="gb">
+                          {t("{value1}", { value1: "GB" })}
+                        </option>
+                        <option value="tb">
+                          {t("{value1}", { value1: "TB" })}
+                        </option>
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label={t("Interface")}>
+                      <select
+                        className={selectClass}
+                        value={replacementForm.interface}
+                        onChange={(event) =>
+                          setReplacementForm({
+                            ...replacementForm,
+                            interface: event.target.value as DriveInterface,
+                          })
+                        }
+                      >
+                        {DRIVE_INTERFACE_OPTIONS.map((value) => (
+                          <option key={value} value={value}>
+                            {driveInterfaceLabel(value, t)}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label={t("Form factor")}>
+                      <select
+                        className={selectClass}
+                        value={replacementForm.formFactor}
+                        onChange={(event) =>
+                          setReplacementForm({
+                            ...replacementForm,
+                            formFactor: event.target.value as DriveFormFactor,
+                          })
+                        }
+                      >
+                        {DRIVE_FORM_FACTOR_OPTIONS.map((value) => (
+                          <option key={value} value={value}>
+                            {driveFormFactorLabel(value, t)}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label={t("Notes")}>
+                    <textarea
+                      className={textareaClass}
+                      rows={2}
+                      value={replacementForm.notes}
+                      onChange={(event) =>
+                        setReplacementForm({
+                          ...replacementForm,
+                          notes: event.target.value,
+                        })
+                      }
+                    />
+                  </Field>
+                  <label className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={replacementForm.deleteOld}
+                      onChange={(event) =>
+                        setReplacementForm({
+                          ...replacementForm,
+                          deleteOld: event.target.checked,
+                        })
+                      }
+                    />
+                    <span>{t("Delete retired drive")}</span>
+                  </label>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={saving}
+                      onClick={() => void replacePoolDrive()}
+                    >
+                      {t("Replace drive")}
+                    </Button>
+                  </div>
+                </div>
+              )}
               <Field label={t("Notes")}>
                 <textarea
                   className={textareaClass}

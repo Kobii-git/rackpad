@@ -122,3 +122,29 @@ test('applySnmpSyncPreview merge creates inventory and skips deletes', () => {
     .get('lab_home', 30) as { name: string }
   assert.equal(vlan.name, 'Guest')
 })
+
+test('DHCP sync reports conflicts and applies valid scopes idempotently', () => {
+  db.prepare(`INSERT INTO subnets (id, labId, cidr, name) VALUES ('s_dhcp', 'lab_home', '10.20.0.0/24', 'DHCP subnet')`).run()
+  db.prepare(`INSERT INTO dhcpScopes (id, subnetId, name, startIp, endIp) VALUES ('scope_existing', 's_dhcp', 'Existing', '10.20.0.20', '10.20.0.40')`).run()
+  const preview = buildSnmpSyncPreview({
+    profileId: 'pfsense-opnsense', deviceId: 'dev_test', labId: 'lab_home', target: '10.20.0.1', policy: 'merge',
+    collection: {
+      vlans: [], subnets: [{ cidr: '10.20.0.0/24', name: 'DHCP subnet' }],
+      dhcpScopes: [
+        { name: 'Valid', startIp: '10.20.0.100', endIp: '10.20.0.150', subnetCidr: '10.20.0.0/24' },
+        { name: 'Overlap', startIp: '10.20.0.30', endIp: '10.20.0.50', subnetCidr: '10.20.0.0/24' },
+      ],
+    },
+  })
+  assert.equal(preview.summary.dhcpCreates, 1)
+  assert.equal(preview.summary.dhcpConflicts, 1)
+  const first = applySnmpSyncPreview({ preview, actor: 'admin' })
+  assert.equal(first.createdDhcpScopeIds.length, 1)
+  assert.equal(first.skippedDhcpScopes, 1)
+  const secondPreview = buildSnmpSyncPreview({
+    profileId: 'pfsense-opnsense', deviceId: 'dev_test', labId: 'lab_home', target: '10.20.0.1', policy: 'merge',
+    collection: { vlans: [], subnets: [{ cidr: '10.20.0.0/24', name: 'DHCP subnet' }], dhcpScopes: [{ name: 'Valid', startIp: '10.20.0.100', endIp: '10.20.0.150', subnetCidr: '10.20.0.0/24' }] },
+  })
+  const second = applySnmpSyncPreview({ preview: secondPreview, actor: 'admin' })
+  assert.equal(second.createdDhcpScopeIds.length, 0)
+})

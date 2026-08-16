@@ -1214,6 +1214,16 @@ function queuedDiscoveryScanJobs() {
   );
 }
 
+export function discoveryOperationalStatus() {
+  const jobs = [...discoveryScanJobs.values()];
+  return {
+    running: jobs.filter((job) => job.status === "running").length,
+    queued: jobs.filter((job) => job.status === "queued").length,
+    failed: jobs.filter((job) => job.status === "failed").length,
+    limits: discoveryQueueLimits(),
+  };
+}
+
 function serializeDiscoveryScanJob(
   job: StoredDiscoveryScanJob,
 ): DiscoveryScanJob {

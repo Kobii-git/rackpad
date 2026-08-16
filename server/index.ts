@@ -5,24 +5,25 @@ import { startDiscoveryScanScheduleLoop } from './routes/discovery.js'
 import { startMonitoringLoop } from './lib/monitoring.js'
 import { startSnmpTrapReceiver } from './lib/snmp-traps.js'
 import { startDockerStatusSyncLoop } from './lib/docker-import.js'
+import { resolveRuntimeConfig } from './lib/runtime-config.js'
+import { startNativeBackupScheduleLoop } from './lib/native-backup.js'
+import { startSnmpSyncScheduleLoop } from './routes/snmp-sync.js'
 
-const PORT = Number.parseInt(process.env.PORT ?? '3000', 10)
-const HOST = process.env.HOST ?? '0.0.0.0'
-const MONITOR_INTERVAL_MS = Number.parseInt(process.env.MONITOR_INTERVAL_MS ?? '0', 10)
-const DISCOVERY_SCAN_SCHEDULE_INTERVAL_MS = Number.parseInt(process.env.DISCOVERY_SCAN_SCHEDULE_INTERVAL_MS ?? '60000', 10)
-const DOCKER_STATUS_SYNC_INTERVAL_MS = Number.parseInt(process.env.DOCKER_STATUS_SYNC_INTERVAL_MS ?? '300000', 10)
+const runtimeConfig = resolveRuntimeConfig()
 const SESSION_CLEANUP_INTERVAL_MS = 1000 * 60 * 60 * 24
 
 const app = await createApp()
 purgeExpiredSessions()
-const stopMonitoring = startMonitoringLoop(Number.isFinite(MONITOR_INTERVAL_MS) ? MONITOR_INTERVAL_MS : 0)
+const stopMonitoring = startMonitoringLoop(runtimeConfig.monitorIntervalMs)
 const stopDiscoveryScanSchedules = startDiscoveryScanScheduleLoop(
-  Number.isFinite(DISCOVERY_SCAN_SCHEDULE_INTERVAL_MS) ? DISCOVERY_SCAN_SCHEDULE_INTERVAL_MS : 60000,
+  runtimeConfig.discoveryScanScheduleIntervalMs,
 )
 const stopDockerStatusSync = startDockerStatusSyncLoop(
-  Number.isFinite(DOCKER_STATUS_SYNC_INTERVAL_MS) ? DOCKER_STATUS_SYNC_INTERVAL_MS : 300000,
+  runtimeConfig.dockerStatusSyncIntervalMs,
 )
 const stopTrapReceiver = startSnmpTrapReceiver()
+const stopNativeBackupSchedule = startNativeBackupScheduleLoop()
+const stopSnmpSyncSchedules = startSnmpSyncScheduleLoop()
 const sessionCleanupHandle = setInterval(() => {
   purgeExpiredSessions()
 }, SESSION_CLEANUP_INTERVAL_MS)
@@ -34,6 +35,8 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     stopDiscoveryScanSchedules()
     stopDockerStatusSync()
     stopTrapReceiver()
+    stopNativeBackupSchedule()
+    stopSnmpSyncSchedules()
     clearInterval(sessionCleanupHandle)
     await app.close()
     db.close()
@@ -42,8 +45,8 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 }
 
 try {
-  await app.listen({ port: PORT, host: HOST })
-  console.log(`[rackpad] Server listening on http://${HOST}:${PORT}`)
+  await app.listen({ port: runtimeConfig.port, host: runtimeConfig.host })
+  console.log(`[rackpad] Server listening on http://${runtimeConfig.host}:${runtimeConfig.port}`)
 } catch (error) {
   app.log.error(error)
   process.exit(1)

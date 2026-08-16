@@ -31,16 +31,18 @@ Beta versions use `-beta.N` suffixes (e.g. `1.6.0-beta.4`). Do not bump the vers
 
 ## Validation before you open a PR
 
-Please run these locally and fix any failures:
+Run the canonical standard validation and fix any failures:
 
 ```bash
-npm run lint
-npm run build
-npm run test:server
-npm run check:i18n
+npm run check
 ```
 
-`check:i18n` catches wrong-language values (for example French strings copied into non-French locales). Run it after editing translation files.
+`npm run check:full` adds the environment-heavy Playwright accessibility/browser
+suite used by CI and releases. Package scripts are the executable source of truth;
+see [`.ai/COMMANDS.md`](./.ai/COMMANDS.md) for risk-based targeted selection.
+
+`check:i18n` catches wrong-language values (for example French strings copied
+into non-French locales). Run it after editing translation files.
 
 ## Internationalization (i18n)
 

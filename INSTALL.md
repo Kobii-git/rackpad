@@ -1,6 +1,6 @@
 # Rackpad Installation Guide
 
-Current stable release: `v1.6.7`
+Current stable release: `v1.7.3`
 
 Rackpad is easiest to run from Docker. You can either pull the published image
 without cloning the repo, or clone the repo and build it yourself.
@@ -15,7 +15,7 @@ without cloning the repo, or clone the repo and build it yourself.
 ## Main Branch Or Version Tag?
 
 - `main` is the stable source branch and is fine for cloning the latest stable code.
-- `RACKPAD_TAG=1.6.7` pins the Docker image to a known release. Git tags use
+- `RACKPAD_TAG=1.7.3` pins the Docker image to a known release. Git tags use
   the `v` prefix, but Docker image tags do not.
 - `RACKPAD_TAG=latest` follows the newest published stable GHCR image and is
   convenient for quick installs or test labs.
@@ -47,11 +47,53 @@ TRUSTED_ORIGINS=
 Most users only change:
 
 - `RACKPAD_PORT`: host port to expose, default `3000`.
-- `RACKPAD_TAG`: release version to run, for example `1.6.7`, or `latest` for
+- `RACKPAD_TAG`: release version to run, for example `1.7.3`, or `latest` for
   the newest stable GHCR image.
 - `TRUST_PROXY`, `TRUSTED_HOSTS`, `TRUSTED_ORIGINS`: set these when using a reverse proxy.
 
+Set `RACKPAD_SECRET_KEY` before saving shared SNMP credentials. All supported
+environment variables are listed in [`.env.example`](./.env.example) and reach
+the process through each shipped Compose file. The normal Compose profiles do
+not publish UDP 1162; add an explicit `1162:1162/udp` mapping only when external
+SNMP traps must reach Rackpad, or use the privileged host-discovery profile.
+
 Rackpad stores its SQLite database in the Docker volume `rackpad_data`.
+
+### Native SQLite snapshots (optional)
+
+The JSON backup in **Users → Backup and release state** remains the portable
+backup format. Rackpad can additionally create native SQLite snapshots when the
+operator mounts a dedicated directory and sets `RACKPAD_NATIVE_BACKUP_DIR` to
+its path inside the container. For example, add this service volume:
+
+```yaml
+services:
+  rackpad:
+    volumes:
+      - rackpad_data:/data
+      - /srv/rackpad-native:/backups
+```
+
+Then set `RACKPAD_NATIVE_BACKUP_DIR=/backups`. Rackpad never creates or chooses
+the host directory. An administrator can enable the schedule in the Users page;
+the defaults are disabled, every 24 hours, with seven snapshots retained.
+Create-now, list, download, and delete operations are restricted to admins and
+to Rackpad-generated `rackpad-native-*.db` files in that directory.
+
+Create the host directory for Rackpad's fixed non-root UID and restrict it
+before mounting it:
+
+```bash
+sudo install -d -o 10001 -g 10001 -m 0700 /srv/rackpad-native
+```
+
+Rackpad creates snapshot files with mode `0600`.
+
+Native snapshots contain all durable SQLite state, including infrastructure
+inventory, embedded documentation and device images, password hashes, and
+encrypted secret values. Protect the mounted directory like the live database:
+restrict host access, encrypt storage where appropriate, and include it in the
+same retention and disposal controls as other sensitive backups.
 
 ## Linux Install
 
@@ -141,7 +183,7 @@ sudo docker compose up --build -d
 To build an exact release instead of current `main`:
 
 ```bash
-sudo git checkout v1.6.7
+sudo git checkout v1.7.3
 sudo docker compose up --build -d
 ```
 
@@ -390,6 +432,11 @@ Before updates, download a backup from:
 Users -> Backup and release state -> Download backup
 ```
 
+The logical backup includes the schema version, users, and per-lab permission
+grants. It deliberately excludes active sessions, so every user signs in again
+after restore. For important installations, also snapshot the `rackpad_data`
+volume before upgrading.
+
 Docker update:
 
 ```bash
@@ -409,6 +456,34 @@ docker compose up -d
 To update to a newer pinned release, change `RACKPAD_TAG` in `.env`, then run
 the same pull/up commands. To always pull the newest stable image, set
 `RACKPAD_TAG=latest`.
+
+Database migrations are forward-only. Do not run an older image against a
+database that has already been upgraded. Rollback requires restoring the
+pre-upgrade database/volume snapshot and then starting the matching older image;
+an older Rackpad version rejects logical backups from a newer schema.
+
+### Offline native restore
+
+Stop Rackpad before restoring a native snapshot. With the backup directory
+mounted as shown above, run the restore CLI in a one-off container:
+
+```bash
+cd /opt/rackpad
+sudo docker compose stop rackpad
+sudo docker compose run --rm --no-deps rackpad node dist-server/cli/restore-native-backup.js --source /backups/rackpad-native-YYYY-MM-DDTHH-MM-SS.db
+sudo docker compose up -d rackpad
+```
+
+The command rejects symlinks, the active database itself, corrupt SQLite files,
+and databases that do not match the current Rackpad schema. Restore an older
+native snapshot with its matching Rackpad image first, then upgrade normally.
+The CLI writes a timestamped `rackpad-pre-restore-*.db`
+safety copy beside the active database, preserves permissions, and replaces the
+database atomically on the same filesystem. Restart Rackpad manually afterward.
+To roll back, stop Rackpad again and run the same command with the safety copy as
+the source. Test this process with disposable data before relying on it. The
+offline restore CLI is supported in the shipped Linux container; Windows
+operators should use the Docker command above rather than native Node execution.
 
 ## Admin Password Recovery
 

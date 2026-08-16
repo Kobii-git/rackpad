@@ -51,6 +51,8 @@ const PORT_KINDS: Port["kind"][] = [
   "usb",
   "virtual",
   "wifi",
+  "sff",
+  "other",
 ];
 const PORT_MODES: NonNullable<Port["mode"]>[] = ["access", "trunk"];
 const PORT_MODE_KEYS: Record<NonNullable<Port["mode"]>, TranslationKey> = {

@@ -65,6 +65,7 @@ export interface SnmpSyncDhcpPreview {
   supported: boolean
   message: string
   scopes: SnmpCollectedDhcpScope[]
+  conflicts: Array<{ name: string; reason: string }>
 }
 
 export interface SnmpSyncPreview {
@@ -84,6 +85,8 @@ export interface SnmpSyncPreview {
     subnetCreates: number
     subnetUpdates: number
     subnetDeletes: number
+    dhcpCreates: number
+    dhcpConflicts: number
   }
   warnings: string[]
 }
@@ -102,6 +105,8 @@ export interface SnmpSyncApplyResult {
   createdSubnetIds: string[]
   updatedSubnetIds: string[]
   deletedSubnetIds: string[]
+  createdDhcpScopeIds: string[]
+  skippedDhcpScopes: number
   skippedDeletes: number
   warnings: string[]
 }

@@ -79,6 +79,8 @@ const PORT_KINDS: Port["kind"][] = [
   "usb",
   "virtual",
   "wifi",
+  "sff",
+  "other",
 ];
 const PORT_MODES: NonNullable<Port["mode"]>[] = ["access", "trunk"];
 const PORT_MODE_KEYS: Record<NonNullable<Port["mode"]>, TranslationKey> = {
@@ -515,7 +517,10 @@ export default function PortView() {
   ]);
 
   const device = deviceById[selectedDeviceId];
-  const devicePorts = portsByDeviceId[selectedDeviceId] ?? [];
+  const devicePorts = useMemo(
+    () => portsByDeviceId[selectedDeviceId] ?? [],
+    [portsByDeviceId, selectedDeviceId],
+  );
   const snmpVerifiedPortIds = useMemo(
     () =>
       selectedDeviceId

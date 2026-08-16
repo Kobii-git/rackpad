@@ -21,7 +21,9 @@ export type PortKind =
   | "console"
   | "usb"
   | "virtual"
-  | "wifi";
+  | "wifi"
+  | "sff"
+  | "other";
 
 export type RackFace = "front" | "rear";
 export type RackSlot = "full" | "left" | "right";
@@ -61,11 +63,7 @@ export type StoragePoolType =
   | "jbod"
   | "other";
 export type StoragePoolStatus =
-  | "healthy"
-  | "degraded"
-  | "rebuilding"
-  | "offline"
-  | "unknown";
+  "healthy" | "degraded" | "rebuilding" | "offline" | "unknown";
 export type DeviceServiceType =
   | "dhcp"
   | "dns"
@@ -85,6 +83,31 @@ export type { SupportedLanguage };
 
 export interface UiSettings {
   defaultLanguage: SupportedLanguage;
+}
+
+export interface NativeBackupEntry {
+  name: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface NativeBackupSettings {
+  enabled: boolean;
+  intervalHours: number;
+  retentionCount: number;
+}
+
+export interface NativeBackupStatus {
+  configured: boolean;
+  configurationError: string | null;
+  settings: NativeBackupSettings;
+  scheduler: {
+    running: boolean;
+    lastSuccessAt: string | null;
+    lastFailureAt: string | null;
+    lastError: string | null;
+  };
+  backups: NativeBackupEntry[];
 }
 
 export interface AlertSettings {
@@ -215,6 +238,21 @@ export interface SnmpSyncProfile {
 export type SnmpSyncDiffAction = "create" | "update" | "delete" | "unchanged";
 export type SnmpSyncPolicy = "merge" | "mirror";
 
+export interface SnmpSyncSchedule {
+  id: ID;
+  labId: ID;
+  deviceId: ID;
+  profileId: string;
+  policy: SnmpSyncPolicy;
+  intervalMs: number;
+  enabled: boolean;
+  lastRunAt?: string | null;
+  lastResult?: "success" | "error" | null;
+  lastMessage?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SnmpSyncVlanDiff {
   action: SnmpSyncDiffAction;
   vlanNumber: number;
@@ -255,6 +293,7 @@ export interface SnmpSyncPreview {
       subnetCidr?: string | null;
       note?: string | null;
     }>;
+    conflicts: Array<{ name: string; reason: string }>;
   };
   summary: {
     vlanCreates: number;
@@ -263,6 +302,8 @@ export interface SnmpSyncPreview {
     subnetCreates: number;
     subnetUpdates: number;
     subnetDeletes: number;
+    dhcpCreates: number;
+    dhcpConflicts: number;
   };
   warnings: string[];
 }
@@ -278,6 +319,8 @@ export interface SnmpSyncApplyResult {
   createdSubnetIds: string[];
   updatedSubnetIds: string[];
   deletedSubnetIds: string[];
+  createdDhcpScopeIds: string[];
+  skippedDhcpScopes: number;
   skippedDeletes: number;
   warnings: string[];
 }
@@ -560,7 +603,7 @@ export interface DeviceMonitor {
   snmpCommunity?: string | null;
   snmpOid?: string | null;
   snmpExpectedValue?: string | null;
-  snmpMatchMode?: "any" | "equals" | "notEquals" | "in" | null;
+  snmpMatchMode?: "any" | "equals" | "notEquals" | "in" | "regex" | null;
   portId?: ID | null;
   snmpIfIndex?: number | null;
   snmpCredentialId?: ID | null;
@@ -758,6 +801,7 @@ export interface DriveSlot {
   face: DriveSlotFace;
   layout: DriveSlotLayout;
   columns?: number | null;
+  sectionInconsistent?: boolean;
   driveId?: ID | null;
   createdAt: string;
   updatedAt: string;

@@ -2392,5 +2392,9 @@
     "key": "port",
     "locales": ["fr"],
     "reason": "Locale-invariant technical notation, product name, or placeholder-only format verified after translation."
+  },
+  {
+    "key": "SFF",
+    "reason": "Locale-invariant small-form-factor connector acronym."
   }
 ]

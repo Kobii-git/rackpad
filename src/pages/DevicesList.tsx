@@ -1599,7 +1599,7 @@ function compareDevices(
   deviceById: Record<string, Device>,
   portsByDeviceId: Record<string, Port[]>,
 ) {
-  let result = 0;
+  let result: number;
 
   if (sort.key === "hostname") {
     result = compareText(a.hostname, b.hostname);

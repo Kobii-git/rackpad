@@ -1,6 +1,7 @@
 import { db } from '../db.js'
 import { createId } from './ids.js'
 import { assertSubnetCidrAvailable } from './subnet-integrity.js'
+import { cidrContainsHostIp, ipToInt } from './ip-cidr.js'
 import type {
   SnmpCollectedDhcpScope,
   SnmpProfileCollection,
@@ -179,9 +180,8 @@ export function buildSnmpSyncPreview(input: {
   if (input.collection.vlans.length === 0 && input.collection.subnets.length === 0) {
     warnings.push('SNMP walk returned no VLAN or subnet inventory for this profile.')
   }
-  if (input.collection.dhcpScopes.length > 0) {
-    warnings.push('DHCP scopes were detected only as preview metadata; apply does not modify DHCP in v1.')
-  }
+  const dhcp = buildDhcpPreview(input.collection.dhcpScopes, input.labId, subnets)
+  if (dhcp.conflicts.length > 0) warnings.push(`${dhcp.conflicts.length} DHCP scope conflict(s) require review.`)
 
   return {
     profileId: input.profileId,
@@ -192,8 +192,8 @@ export function buildSnmpSyncPreview(input: {
     policy: input.policy,
     vlans,
     subnets,
-    dhcp: buildDhcpPreview(input.collection.dhcpScopes),
-    summary: summarizeDiff(vlans, subnets),
+    dhcp,
+    summary: summarizeDiff(vlans, subnets, dhcp),
     warnings,
   }
 }
@@ -214,6 +214,8 @@ export function applySnmpSyncPreview(input: {
     createdSubnetIds: [],
     updatedSubnetIds: [],
     deletedSubnetIds: [],
+    createdDhcpScopeIds: [],
+    skippedDhcpScopes: 0,
     skippedDeletes: 0,
     warnings: [...input.preview.warnings],
   }
@@ -318,6 +320,26 @@ export function applySnmpSyncPreview(input: {
         )
       }
     }
+
+    const conflictNames = new Set(input.preview.dhcp.conflicts.map((entry) => entry.name))
+    for (const scope of input.preview.dhcp.scopes) {
+      if (conflictNames.has(scope.name) || !scope.subnetCidr) {
+        result.skippedDhcpScopes += 1
+        continue
+      }
+      const subnet = db.prepare('SELECT id FROM subnets WHERE labId = ? AND cidr = ?').get(input.preview.labId, normalizeCidr(scope.subnetCidr)) as { id: string } | undefined
+      if (!subnet) {
+        result.skippedDhcpScopes += 1
+        continue
+      }
+      const existing = db.prepare('SELECT id FROM dhcpScopes WHERE subnetId = ? AND startIp = ? AND endIp = ?').get(subnet.id, scope.startIp, scope.endIp) as { id: string } | undefined
+      if (existing) continue
+      const id = createId('dhcp')
+      db.prepare(`INSERT INTO dhcpScopes (id, subnetId, name, startIp, endIp, gateway, dnsServers, description)
+        VALUES (?, ?, ?, ?, ?, NULL, NULL, ?)`).run(id, subnet.id, scope.name, scope.startIp, scope.endIp, scope.note ?? null)
+      result.createdDhcpScopeIds.push(id)
+      writeSyncAudit(input.actor, 'snmp.sync.dhcp.create', id, `Created DHCP scope ${scope.name}.`)
+    }
   })
 
   apply()
@@ -330,22 +352,49 @@ export function applySnmpSyncPreview(input: {
   return result
 }
 
-function buildDhcpPreview(scopes: SnmpCollectedDhcpScope[]) {
+function buildDhcpPreview(scopes: SnmpCollectedDhcpScope[], labId: string, subnetDiffs: SnmpSyncSubnetDiff[]) {
   if (scopes.length === 0) {
     return {
-      supported: false,
-      message: 'DHCP scope sync is preview-only in v1. No scopes were collected for this profile.',
+      supported: true,
+      message: 'No DHCP scopes were collected for this profile.',
       scopes: [],
+      conflicts: [],
     }
   }
+  const availableCidrs = new Set(subnetDiffs.filter((entry) => entry.action !== 'delete').map((entry) => normalizeCidr(entry.cidr)))
+  const existingSubnets = db.prepare('SELECT id, cidr FROM subnets WHERE labId = ?').all(labId) as Array<{ id: string; cidr: string }>
+  const subnetByCidr = new Map(existingSubnets.map((entry) => [normalizeCidr(entry.cidr), entry]))
+  const conflicts: Array<{ name: string; reason: string }> = []
+  for (const scope of scopes) {
+    const cidr = scope.subnetCidr ? normalizeCidr(scope.subnetCidr) : ''
+    if (!cidr || !availableCidrs.has(cidr)) {
+      conflicts.push({ name: scope.name, reason: 'DHCP scope does not identify an available subnet.' })
+      continue
+    }
+    try {
+      if (!cidrContainsHostIp(cidr, scope.startIp) || !cidrContainsHostIp(cidr, scope.endIp) || ipToInt(scope.startIp) > ipToInt(scope.endIp)) {
+        conflicts.push({ name: scope.name, reason: 'DHCP range is invalid or outside its subnet.' })
+        continue
+      }
+    } catch {
+      conflicts.push({ name: scope.name, reason: 'DHCP range contains an invalid IPv4 address.' })
+      continue
+    }
+    const subnet = subnetByCidr.get(cidr)
+    if (!subnet) continue
+    const existing = db.prepare('SELECT name, startIp, endIp FROM dhcpScopes WHERE subnetId = ?').all(subnet.id) as Array<{ name: string; startIp: string; endIp: string }>
+    const overlapping = existing.find((entry) => ipToInt(scope.startIp) <= ipToInt(entry.endIp) && ipToInt(scope.endIp) >= ipToInt(entry.startIp) && !(entry.startIp === scope.startIp && entry.endIp === scope.endIp))
+    if (overlapping) conflicts.push({ name: scope.name, reason: `DHCP range overlaps ${overlapping.name}.` })
+  }
   return {
-    supported: false,
-    message: 'DHCP scope sync is preview-only in v1. Review scopes below; apply will not modify DHCP.',
+    supported: true,
+    message: conflicts.length > 0 ? 'Review DHCP conflicts before apply.' : 'DHCP scopes are ready to apply.',
     scopes,
+    conflicts,
   }
 }
 
-function summarizeDiff(vlans: SnmpSyncVlanDiff[], subnets: SnmpSyncSubnetDiff[]) {
+function summarizeDiff(vlans: SnmpSyncVlanDiff[], subnets: SnmpSyncSubnetDiff[], dhcp: ReturnType<typeof buildDhcpPreview>) {
   return {
     vlanCreates: vlans.filter((entry) => entry.action === 'create').length,
     vlanUpdates: vlans.filter((entry) => entry.action === 'update').length,
@@ -353,6 +402,8 @@ function summarizeDiff(vlans: SnmpSyncVlanDiff[], subnets: SnmpSyncSubnetDiff[])
     subnetCreates: subnets.filter((entry) => entry.action === 'create').length,
     subnetUpdates: subnets.filter((entry) => entry.action === 'update').length,
     subnetDeletes: subnets.filter((entry) => entry.action === 'delete').length,
+    dhcpCreates: dhcp.scopes.length - dhcp.conflicts.length,
+    dhcpConflicts: dhcp.conflicts.length,
   }
 }
 
