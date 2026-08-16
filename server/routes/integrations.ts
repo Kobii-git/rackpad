@@ -24,10 +24,6 @@ import {
   applyIntegrationNetworkPreview,
   buildIntegrationNetworkPreview,
 } from "../lib/integrations/network-sync.js";
-import {
-  fetchProxmoxNodes,
-  fetchProxmoxStagedInventory,
-} from "../lib/integrations/providers/proxmox.js";
 import { isValidCronExpression } from "../lib/integrations/cron.js";
 import { runIntegrationSyncSchedule } from "../lib/integrations/auto-sync.js";
 import {
@@ -43,6 +39,7 @@ import {
   buildIntegrationDeviceSyncPlan,
   filterImportableDevicesForConnection,
   sanitizeImportableDevices,
+  sanitizeVirtualSwitches,
   sanitizeWifiInventory,
 } from "../lib/integrations/device-sync.js";
 import {
@@ -466,10 +463,12 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
           inventory.importableDevices ?? [],
         );
         const wifi = connection.syncWifi ? (inventory.wifi ?? null) : null;
+        const virtualSwitches = inventory.virtualSwitches ?? [];
         const deviceSync = buildIntegrationDeviceSyncPlan({
           labId: connection.labId,
           importableDevices,
           wifi,
+          virtualSwitches,
         });
         return {
           connection: updated,
@@ -477,6 +476,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
           devices: inventory.devices,
           deviceSync,
           importableDevices,
+          virtualSwitches,
           wifi,
           warnings: inventory.warnings,
         };
@@ -735,7 +735,12 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         sanitizeImportableDevices(body.importableDevices),
       );
       const wifi = sanitizeWifiInventory(body.wifi);
-      if (importableDevices.length === 0 && !wifi) {
+      const virtualSwitches = sanitizeVirtualSwitches(body.virtualSwitches);
+      if (
+        importableDevices.length === 0 &&
+        !wifi &&
+        virtualSwitches.length === 0
+      ) {
         return reply.status(400).send({ error: "There is nothing to import." });
       }
 
@@ -744,117 +749,11 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         labId: String(existing.labId),
         importableDevices,
         wifi,
+        virtualSwitches,
         vendor: INTEGRATION_PROVIDER_INFO[provider].vendor,
         actor: req.authUser!.username,
       });
       return result;
-    },
-  );
-
-  app.get<{ Params: { id: string } }>(
-    "/connections/:id/proxmox/nodes",
-    async (req, reply) => {
-      if (!requireAuth(req, reply)) return;
-
-      const existing = getIntegrationConnectionRow(req.params.id);
-      if (!existing) {
-        return reply
-          .status(404)
-          .send({ error: "Integration connection not found." });
-      }
-      if (!assertLabWrite(req, reply, String(existing.labId))) return;
-      if (String(existing.provider) !== "proxmox") {
-        return reply
-          .status(400)
-          .send({ error: "This endpoint requires a Proxmox VE connection." });
-      }
-
-      const connection = loadIntegrationConnectionSecrets(req.params.id);
-      if (!connection.authSecret) {
-        return reply.status(400).send({
-          error:
-            "This connection has no stored secret. Enter the credential again first.",
-        });
-      }
-
-      try {
-        return { nodes: await fetchProxmoxNodes(connection) };
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Node listing failed.";
-        recordIntegrationConnectionStatus(req.params.id, {
-          status: "error",
-          error: message,
-        });
-        return reply.status(502).send({ error: message });
-      }
-    },
-  );
-
-  app.post<{ Params: { id: string } }>(
-    "/connections/:id/proxmox/staged-inventory",
-    async (req, reply) => {
-      if (!requireAuth(req, reply)) return;
-
-      const existing = getIntegrationConnectionRow(req.params.id);
-      if (!existing) {
-        return reply
-          .status(404)
-          .send({ error: "Integration connection not found." });
-      }
-      if (!assertLabWrite(req, reply, String(existing.labId))) return;
-      if (String(existing.provider) !== "proxmox") {
-        return reply
-          .status(400)
-          .send({ error: "This endpoint requires a Proxmox VE connection." });
-      }
-      if (!existing.enabled) {
-        return reply.status(409).send({
-          error:
-            "This connection is disabled. Enable it before pulling inventory.",
-        });
-      }
-
-      const body = req.body == null ? {} : asObject(req.body);
-      const node = optionalString(body, "node", { maxLength: 120 }) ?? null;
-      const nodeList =
-        optionalStringArray(body, "nodes", { maxItems: 64 }) ??
-        (node ? [node] : null);
-
-      const connection = loadIntegrationConnectionSecrets(req.params.id);
-      if (!connection.authSecret) {
-        return reply.status(400).send({
-          error:
-            "This connection has no stored secret. Enter the credential again first.",
-        });
-      }
-
-      try {
-        const payload = await fetchProxmoxStagedInventory(
-          connection,
-          nodeList,
-        );
-        const previousSummary =
-          parseIntegrationConnectionPublic(existing).lastSummary ?? {};
-        recordIntegrationConnectionStatus(req.params.id, {
-          status: "ok",
-          error: null,
-          summary: {
-            ...previousSummary,
-            stagedNode: payload.summary.node,
-            workloads: payload.summary.workloads,
-          },
-        });
-        return payload;
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Inventory staging failed.";
-        recordIntegrationConnectionStatus(req.params.id, {
-          status: "error",
-          error: message,
-        });
-        return reply.status(502).send({ error: message });
-      }
     },
   );
 };

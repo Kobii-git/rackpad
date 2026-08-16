@@ -5,10 +5,7 @@ import {
   setIntegrationHttpTransportForTests,
   type IntegrationHttpRequest,
 } from "../lib/integrations/http.js";
-import {
-  fetchProxmoxStagedInventory,
-  proxmoxIntegrationClient,
-} from "../lib/integrations/providers/proxmox.js";
+import { proxmoxIntegrationClient } from "../lib/integrations/providers/proxmox.js";
 import type { IntegrationConnectionSecrets } from "../lib/integrations/types.js";
 
 const connection: IntegrationConnectionSecrets = {
@@ -61,7 +58,13 @@ const responses: Record<string, unknown> = {
   },
   "/api2/json/cluster/resources": {
     data: [
-      { vmid: 100, type: "qemu", name: "web01", node: "pve1", status: "running" },
+      {
+        vmid: 100,
+        type: "qemu",
+        name: "web01",
+        node: "pve1",
+        status: "running",
+      },
       { vmid: 101, type: "lxc", name: "db01", node: "pve1", status: "running" },
     ],
   },
@@ -82,6 +85,8 @@ const responses: Record<string, unknown> = {
     ],
   },
   "/api2/json/nodes/pve2/network": { data: [] },
+  "/api2/json/nodes/pve2/qemu": { data: [] },
+  "/api2/json/nodes/pve2/lxc": { data: [] },
   "/api2/json/cluster/sdn/vnets": {
     data: [{ vnet: "vnet10", zone: "zone1", tag: 10, alias: "Servers" }],
   },
@@ -140,7 +145,11 @@ const responses: Record<string, unknown> = {
           name: "eth0",
           "hardware-address": "aa:bb:cc:dd:ee:01",
           "ip-addresses": [
-            { "ip-address": "10.0.20.5", "ip-address-type": "ipv4", prefix: 24 },
+            {
+              "ip-address": "10.0.20.5",
+              "ip-address-type": "ipv4",
+              prefix: 24,
+            },
             { "ip-address": "fe80::1", "ip-address-type": "ipv6", prefix: 64 },
           ],
         },
@@ -173,7 +182,9 @@ const responses: Record<string, unknown> = {
 
 let seenRequests: IntegrationHttpRequest[] = [];
 
-function useFakeProxmox(overrides: Record<string, { status: number; body?: unknown }> = {}) {
+function useFakeProxmox(
+  overrides: Record<string, { status: number; body?: unknown }> = {},
+) {
   seenRequests = [];
   setIntegrationHttpTransportForTests(async (request) => {
     seenRequests.push(request);
@@ -188,7 +199,11 @@ function useFakeProxmox(overrides: Record<string, { status: number; body?: unkno
     }
     const body = responses[pathname];
     if (!body) {
-      return { status: 404, headers: {}, bodyText: JSON.stringify({ data: null }) };
+      return {
+        status: 404,
+        headers: {},
+        bodyText: JSON.stringify({ data: null }),
+      };
     }
     return { status: 200, headers: {}, bodyText: JSON.stringify(body) };
   });
@@ -223,10 +238,9 @@ test("proxmox inventory maps bridges, SDN vnets, and DHCP ranges", async () => {
   useFakeProxmox();
   const inventory = await proxmoxIntegrationClient.fetchInventory(connection);
 
-  assert.deepEqual(
-    inventory.collection.vlans,
-    [{ vlanNumber: 10, name: "Servers" }],
-  );
+  assert.deepEqual(inventory.collection.vlans, [
+    { vlanNumber: 10, name: "Servers" },
+  ]);
   const subnetByCidr = new Map(
     inventory.collection.subnets.map((subnet) => [subnet.cidr, subnet]),
   );
@@ -255,79 +269,60 @@ test("proxmox inventory maps bridges, SDN vnets, and DHCP ranges", async () => {
   assert.equal(kinds.container, 1);
   assert.equal(kinds.bridge, 2);
   assert.equal(inventory.warnings.length, 0);
-});
 
-test("proxmox staged inventory mirrors the offline collector payload", async () => {
-  useFakeProxmox();
-  const payload = await fetchProxmoxStagedInventory(connection, ["pve1"]);
-
-  assert.equal(payload.schema, "rackpad.proxmox.inventory.v1");
-  assert.equal(payload.provider, "proxmox");
-  assert.equal(payload.host.nodeName, "pve1");
-  assert.equal(payload.host.logicalProcessors, 16);
-  assert.equal(payload.host.memoryGb, 64);
-  assert.equal(payload.host.pveVersion, "pve-manager/8.2.4/faf36e24");
-  assert.equal(payload.host.kernelVersion, "Linux 6.8.12-1-pve");
-  assert.deepEqual(payload.host.hostIpAddresses, ["10.0.0.2"]);
-
+  // The whole stack imports from the host down: nodes as servers, bridges
+  // as virtual switches, guests with NICs/MACs/VLAN tags/IPs.
+  const importables = new Map(
+    (inventory.importableDevices ?? []).map((device) => [device.name, device]),
+  );
+  assert.deepEqual([...importables.keys()].sort(), [
+    "db01",
+    "pve1",
+    "pve2",
+    "web01",
+  ]);
+  assert.equal(importables.get("pve1")?.deviceType, "server");
+  const web = importables.get("web01")!;
+  assert.equal(web.deviceType, "vm");
+  assert.equal(web.parentName, "pve1");
+  assert.equal(web.macAddress, "AA:BB:CC:DD:EE:01");
+  assert.equal(web.ipAddress, "10.0.20.5");
   assert.deepEqual(
-    payload.switches.map((entry) => [entry.name, entry.kind]),
+    web.ports.map((port) => [
+      port.name,
+      port.kind,
+      port.virtualSwitchName,
+      port.mode,
+      port.untaggedVlanNumber,
+      port.macAddress,
+      port.ipAddresses,
+    ]),
     [
-      ["vmbr0", "external"],
-      ["vmbr0.20", "internal"],
+      [
+        "net0",
+        "virtual",
+        "vmbr0",
+        "access",
+        20,
+        "AA:BB:CC:DD:EE:01",
+        ["10.0.20.5"],
+      ],
     ],
   );
-  assert.equal(payload.switches[0].netAdapterName, "eno1");
-  assert.equal(payload.hostAdapters.length, 3);
-
-  assert.equal(payload.summary.qemu, 1);
-  assert.equal(payload.summary.lxc, 1);
-  assert.equal(payload.summary.workloads, 2);
-  assert.deepEqual(payload.collectorErrors, []);
-
-  const [qemu, lxc] = payload.vms as Array<Record<string, unknown>>;
-  assert.equal(qemu.id, "qemu-pve1-100");
-  assert.equal(qemu.name, "web01");
-  assert.equal(qemu.state, "running");
-  assert.equal(qemu.kind, "qemu");
-  assert.equal(qemu.processorCount, 4);
-  assert.equal(qemu.memoryAssignedGb, 8);
-  assert.equal(qemu.storageGb, 32);
-  assert.equal(qemu.onBoot, true);
-  const qemuDisks = qemu.disks as Array<Record<string, unknown>>;
-  assert.equal(qemuDisks.length, 1);
-  assert.equal(qemuDisks[0].storage, "local-lvm");
-  assert.equal(qemuDisks[0].sizeGb, 32);
-  const qemuNics = qemu.networkAdapters as Array<Record<string, unknown>>;
-  assert.equal(qemuNics.length, 1);
-  assert.equal(qemuNics[0].switchName, "vmbr0");
-  assert.equal(qemuNics[0].macAddress, "AA:BB:CC:DD:EE:01");
-  assert.equal(qemuNics[0].model, "virtio");
-  assert.deepEqual(qemuNics[0].ipAddresses, ["10.0.20.5"]);
-  const qemuVlan = qemuNics[0].vlan as Record<string, unknown>;
-  assert.equal(qemuVlan.mode, "access");
-  assert.equal(qemuVlan.accessVlanId, "20");
-
-  assert.equal(lxc.id, "lxc-pve1-101");
-  assert.equal(lxc.name, "db01");
-  assert.equal(lxc.kind, "lxc");
-  assert.equal(lxc.unprivileged, true);
-  assert.equal(lxc.swapGb, 0.5);
-  assert.equal(lxc.memoryAssignedGb, 2);
-  const lxcNics = lxc.networkAdapters as Array<Record<string, unknown>>;
-  assert.equal(lxcNics[0].name, "eth0");
-  assert.equal(lxcNics[0].macAddress, "AA:BB:CC:DD:EE:02");
-  assert.deepEqual(lxcNics[0].ipAddresses, ["10.0.30.7"]);
-  const lxcVlan = lxcNics[0].vlan as Record<string, unknown>;
-  assert.equal(lxcVlan.accessVlanId, "30");
-});
-
-test("proxmox staged inventory validates the requested node", async () => {
-  useFakeProxmox();
-  await assert.rejects(
-    fetchProxmoxStagedInventory(connection, ["missing-node"]),
-    /missing-node was not found/,
-  );
+  const dbCt = importables.get("db01")!;
+  assert.equal(dbCt.deviceType, "container");
+  assert.equal(dbCt.parentName, "pve1");
+  assert.equal(dbCt.ports[0]?.untaggedVlanNumber, 30);
+  assert.equal(dbCt.ports[0]?.macAddress, "AA:BB:CC:DD:EE:02");
+  assert.deepEqual(dbCt.ports[0]?.ipAddresses, ["10.0.30.7"]);
+  assert.deepEqual(inventory.virtualSwitches, [
+    {
+      name: "vmbr0",
+      hostName: "pve1",
+      kind: "external",
+      notes: "Members: eno1",
+    },
+  ]);
 });
 
 test("proxmox auth failures produce a clear error", async () => {

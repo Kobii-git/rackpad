@@ -117,7 +117,9 @@ interface DockhandEnvironment {
 async function dockhandEnvironments(
   connection: IntegrationConnectionSecrets,
 ): Promise<DockhandEnvironment[]> {
-  const environments = asArray(await dockhandJson(connection, "/api/environments"));
+  const environments = asArray(
+    await dockhandJson(connection, "/api/environments"),
+  );
   return environments
     .map((entry) => {
       const row = asRecord(entry);
@@ -243,17 +245,18 @@ async function dockhandFetchInventory(
       macAddress: null,
       ipAddress: environment.host,
       status: online ? "online" : "offline",
-      detail: [
-        environment.connectionType,
-        environmentStats?.containersTotal != null
-          ? `${environmentStats.containersRunning ?? 0}/${environmentStats.containersTotal} containers running`
-          : "",
-        environmentStats?.stacksTotal != null
-          ? `${environmentStats.stacksTotal} stack(s)`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" · ") || null,
+      detail:
+        [
+          environment.connectionType,
+          environmentStats?.containersTotal != null
+            ? `${environmentStats.containersRunning ?? 0}/${environmentStats.containersTotal} containers running`
+            : "",
+          environmentStats?.stacksTotal != null
+            ? `${environmentStats.stacksTotal} stack(s)`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" · ") || null,
     });
 
     if (!online) {
@@ -291,13 +294,14 @@ async function dockhandFetchInventory(
         macAddress: null,
         ipAddress: null,
         status: null,
-        detail: [
-          asText(row.driver),
-          subnets.join(", "),
-          memberCount > 0 ? `${memberCount} container(s)` : "",
-        ]
-          .filter(Boolean)
-          .join(" · ") || null,
+        detail:
+          [
+            asText(row.driver),
+            subnets.join(", "),
+            memberCount > 0 ? `${memberCount} container(s)` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ") || null,
       });
     }
   }

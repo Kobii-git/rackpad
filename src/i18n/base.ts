@@ -1996,8 +1996,6 @@ export const en = {
   "Pull inventory": "Pull inventory",
   "Inventory pull failed.": "Inventory pull failed.",
   "Inventory preview": "Inventory preview",
-  "Inventory staging failed.": "Inventory staging failed.",
-  "Stage import": "Stage import",
   "Rackpad already matches this controller's inventory.": "Rackpad already matches this controller's inventory.",
   "Applying the preview failed.": "Applying the preview failed.",
   "Administrator access is required to apply integration changes.": "Administrator access is required to apply integration changes.",
@@ -2026,7 +2024,6 @@ export const en = {
   "Auto-sync run failed.": "Auto-sync run failed.",
   "Administrator access is required to configure auto-sync.": "Administrator access is required to configure auto-sync.",
   "Credentials are stored encrypted. Inventory is only written after a reviewed preview or an explicit auto-sync schedule.": "Credentials are stored encrypted. Inventory is only written after a reviewed preview or an explicit auto-sync schedule.",
-  "Pulls nodes, VMs, containers, bridges, and SDN networks, and can stage a full node into the import wizard.": "Pulls nodes, VMs, containers, bridges, and SDN networks, and can stage a full node into the import wizard.",
   "Pulls switches, gateways, and APs plus networks, VLANs, and DHCP ranges per site.": "Pulls switches, gateways, and APs plus networks, VLANs, and DHCP ranges per site.",
   "Pulls switches, gateways, and APs plus LAN networks, VLANs, and DHCP ranges per site.": "Pulls switches, gateways, and APs plus LAN networks, VLANs, and DHCP ranges per site.",
   "Pulls interfaces, VLAN definitions, gateways, and DHCP ranges from the firewall.": "Pulls interfaces, VLAN definitions, gateways, and DHCP ranges from the firewall.",
@@ -2063,7 +2060,6 @@ export const en = {
   "{count} of {kind} selected": "{count} of {kind} selected",
   "Checks reachability and refreshes product and version.": "Checks reachability and refreshes product and version.",
   "Fetches inventory and opens a review preview. Nothing is written yet.": "Fetches inventory and opens a review preview. Nothing is written yet.",
-  "Loads a node's full inventory into the Proxmox import wizard.": "Loads a node's full inventory into the Proxmox import wizard.",
   "The controller reported no VLANs.": "The controller reported no VLANs.",
   "The controller reported no subnets.": "The controller reported no subnets.",
   "The controller reported no DHCP ranges.": "The controller reported no DHCP ranges.",
@@ -2078,9 +2074,6 @@ export const en = {
   "Existing connections ({count})": "Existing connections ({count})",
   "Run Test & discover first to list the choices.": "Run Test & discover first to list the choices.",
   "{kind}: default selection": "{kind}: default selection",
-  "Staged the Proxmox inventory in the import wizard.": "Staged the Proxmox inventory in the import wizard.",
-  "The pulled Proxmox inventory could not be staged. Open the Imports tab for the exact parse error.":
-    "The pulled Proxmox inventory could not be staged. Open the Imports tab for the exact parse error.",
   "Auto-sync is opt-in per schedule and runs on the server without a review step. Each connection can have several schedules with their own cadence, mode, and target labs. Repeated failures back off automatically and surface here.":
     "Auto-sync is opt-in per schedule and runs on the server without a review step. Each connection can have several schedules with their own cadence, mode, and target labs. Repeated failures back off automatically and surface here.",
   "{count} schedule(s)": "{count} schedule(s)",
@@ -2116,20 +2109,21 @@ export const en = {
   "Proxmox node": "Proxmox node",
   "Select all": "Select all",
   "VMs & containers": "VMs & containers",
-  "Imports the selected Proxmox nodes as Rackpad server devices, placed as loose gear.":
-    "Imports the selected Proxmox nodes as Rackpad server devices, placed as loose gear.",
-  "Imports QEMU VMs and LXC containers as devices with their running state. Use Stage import for full detail like NICs, VLANs, and IPs.":
-    "Imports QEMU VMs and LXC containers as devices with their running state. Use Stage import for full detail like NICs, VLANs, and IPs.",
-  "Proxmox nodes to stage": "Proxmox nodes to stage",
-  "Select at least one Proxmox node to stage.": "Select at least one Proxmox node to stage.",
   "Merge": "Merge",
   "Skip": "Skip",
   "Merge only adds missing records. Skip also updates existing records but never deletes anything. Mirror deletes records that are gone from the source — records still in use are protected, and devices are never deleted automatically.":
     "Merge only adds missing records. Skip also updates existing records but never deletes anything. Mirror deletes records that are gone from the source — records still in use are protected, and devices are never deleted automatically.",
-  "Imported {deviceCount} device(s) with {portCount} port(s), {ssidCount} SSID(s), and {ipCount} IP assignment(s).":
-    "Imported {deviceCount} device(s) with {portCount} port(s), {ssidCount} SSID(s), and {ipCount} IP assignment(s).",
-  "New records are created as loose gear (no rack) with their ports; matched records are never modified. Device IPs inside a known subnet are linked as IP assignments.":
-    "New records are created as loose gear (no rack) with their ports; matched records are never modified. Device IPs inside a known subnet are linked as IP assignments.",
+  "Pulls nodes, VMs, containers, bridges, and SDN networks, and imports the whole stack from the host down.":
+    "Pulls nodes, VMs, containers, bridges, and SDN networks, and imports the whole stack from the host down.",
+  "Imports the selected Proxmox nodes as Rackpad server devices with their bridges as virtual switches, placed as loose gear.":
+    "Imports the selected Proxmox nodes as Rackpad server devices with their bridges as virtual switches, placed as loose gear.",
+  "Imports QEMU VMs and LXC containers as virtual devices under their host, with NICs, MACs, VLAN tags, virtual switch links, and IPs. Templates are skipped.":
+    "Imports QEMU VMs and LXC containers as virtual devices under their host, with NICs, MACs, VLAN tags, virtual switch links, and IPs. Templates are skipped.",
+  "Imported {deviceCount} device(s) with {portCount} port(s), {vswitchCount} virtual switch(es), {ssidCount} SSID(s), and {ipCount} IP assignment(s).":
+    "Imported {deviceCount} device(s) with {portCount} port(s), {vswitchCount} virtual switch(es), {ssidCount} SSID(s), and {ipCount} IP assignment(s).",
+  "Physical gear is created as loose gear (no rack) with its ports; VMs and containers attach under their host with their virtual NICs. Matched records are never modified, and device IPs inside a known subnet are linked as IP assignments.":
+    "Physical gear is created as loose gear (no rack) with its ports; VMs and containers attach under their host with their virtual NICs. Matched records are never modified, and device IPs inside a known subnet are linked as IP assignments.",
+  "Virtual switch on {name}": "Virtual switch on {name}",
 } as const;
 
 export type TranslationKey = keyof typeof en;

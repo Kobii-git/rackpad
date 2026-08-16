@@ -1,3 +1,4 @@
+import { canonicalMacAddress } from "../device-sync.js";
 import { ValidationError } from "../../validation.js";
 import { canonicalizeIpv4Cidr } from "../../ip-cidr.js";
 import {
@@ -396,7 +397,7 @@ function omadaDevicePreview(
     name: asText(row.name) || asText(row.mac),
     kind: omadaDeviceKind(row),
     model: asText(row.model) || null,
-    macAddress: asText(row.mac) || null,
+    macAddress: canonicalMacAddress(asText(row.mac)),
     ipAddress: usableIpv4(row.ip) || asText(row.ip) || null,
     status:
       status != null
@@ -612,7 +613,7 @@ async function omadaFetchInventory(
         name: asText(row.name) || mac,
         deviceType,
         model: asText(row.model) || null,
-        macAddress: mac || null,
+        macAddress: canonicalMacAddress(mac),
         ipAddress: usableIpv4(row.ip) || null,
         serial: asText(row.sn) || null,
         firmware: asText(row.firmwareVersion) || null,

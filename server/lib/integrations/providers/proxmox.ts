@@ -11,8 +11,10 @@ import {
   type IntegrationDevicePreview,
   type IntegrationImportableDevice,
   type IntegrationInventory,
+  type IntegrationPortSpec,
   type IntegrationScope,
   type IntegrationTestResult,
+  type IntegrationVirtualSwitchSpec,
 } from "../inventory.js";
 import type { IntegrationConnectionSecrets } from "../types.js";
 import type {
@@ -24,7 +26,6 @@ import type {
 const TARGET_LABEL = "Proxmox VE";
 // Mirrors scripts/collect-proxmox.sh so API pulls stage the same payload the
 // offline collector produces and the existing import wizard already accepts.
-const PROXMOX_SCHEMA = "rackpad.proxmox.inventory.v1";
 const DISK_KEY_RE = /^(ide|sata|scsi|virtio)\d+$/;
 const LXC_MOUNT_RE = /^(rootfs|mp\d+)$/;
 const NET_KEY_RE = /^net\d+$/;
@@ -115,7 +116,9 @@ function parseConfigString(value: unknown) {
   parts.forEach((part, index) => {
     const eq = part.indexOf("=");
     if (eq > 0) {
-      options[part.slice(0, eq).trim().toLowerCase()] = part.slice(eq + 1).trim();
+      options[part.slice(0, eq).trim().toLowerCase()] = part
+        .slice(eq + 1)
+        .trim();
     } else if (index === 0) {
       options._volume = part;
     }
@@ -126,13 +129,18 @@ function parseConfigString(value: unknown) {
 function normalizeMac(value: unknown) {
   const text = asText(value).replace(/-/g, ":").toLowerCase();
   if (!text) return "";
-  const parts = text.split(":").filter(Boolean).map((part) => part.padStart(2, "0"));
+  const parts = text
+    .split(":")
+    .filter(Boolean)
+    .map((part) => part.padStart(2, "0"));
   return parts.length === 6 ? parts.join(":") : text;
 }
 
 function displayMac(value: unknown) {
   const normalized = normalizeMac(value);
-  return normalized ? normalized.toUpperCase() : "";
+  if (normalized.length !== 12) return normalized.toUpperCase();
+  // Canonical MAC form: uppercase, colon-separated.
+  return (normalized.match(/.{2}/g) ?? []).join(":").toUpperCase();
 }
 
 function isUsableIpv4(value: string) {
@@ -176,7 +184,8 @@ function splitVlanValues(value: unknown) {
 function vlanFromOptions(options: Record<string, string>) {
   const tag = options.tag || options.vlan || "";
   const trunks = options.trunks || options.trunk || options.vlans || "";
-  const native = options.native || options.nativevlan || options.native_vlan || "";
+  const native =
+    options.native || options.nativevlan || options.native_vlan || "";
   if (!tag && !trunks && !native) return null;
   const raw = [
     tag ? `tag=${tag}` : "",
@@ -199,7 +208,11 @@ async function proxmoxGet(
   apiPath: string,
   query?: Record<string, string | number | boolean | undefined>,
 ): Promise<unknown> {
-  const url = buildIntegrationUrl(connection.baseUrl, `/api2/json${apiPath}`, query);
+  const url = buildIntegrationUrl(
+    connection.baseUrl,
+    `/api2/json${apiPath}`,
+    query,
+  );
   const response = await integrationHttpRequest(
     {
       url,
@@ -243,7 +256,9 @@ async function tryProxmoxGet(
     return await proxmoxGet(connection, apiPath, query);
   } catch (error) {
     errors.push(
-      error instanceof Error ? `${apiPath}: ${error.message}` : `${apiPath}: request failed`,
+      error instanceof Error
+        ? `${apiPath}: ${error.message}`
+        : `${apiPath}: request failed`,
     );
     return null;
   }
@@ -271,7 +286,9 @@ function parseNodeList(data: unknown): ProxmoxNodeEntry[] {
     .sort((a, b) => a.node.localeCompare(b.node));
 }
 
-export async function fetchProxmoxNodes(connection: IntegrationConnectionSecrets) {
+export async function fetchProxmoxNodes(
+  connection: IntegrationConnectionSecrets,
+) {
   const data = await proxmoxGet(connection, "/nodes");
   return parseNodeList(data);
 }
@@ -397,9 +414,7 @@ async function proxmoxFetchInventory(
   const allNodes = parseNodeList(await proxmoxGet(connection, "/nodes"));
   const nodes =
     scopeRefs.length > 0
-      ? allNodes.filter((entry) =>
-          scopeRefs.includes(entry.node.toLowerCase()),
-        )
+      ? allNodes.filter((entry) => scopeRefs.includes(entry.node.toLowerCase()))
       : allNodes;
   if (nodes.length === 0) {
     throw new ValidationError(
@@ -410,6 +425,7 @@ async function proxmoxFetchInventory(
   }
   const nodeNames = new Set(nodes.map((entry) => entry.node));
   const importableDevices: IntegrationImportableDevice[] = [];
+  const virtualSwitches: IntegrationVirtualSwitchSpec[] = [];
   for (const node of nodes) {
     devices.push({
       name: node.node,
@@ -418,12 +434,13 @@ async function proxmoxFetchInventory(
       macAddress: null,
       ipAddress: null,
       status: node.status,
-      detail: [
-        node.maxcpu != null ? `${node.maxcpu} CPU` : "",
-        node.maxmemGb != null ? `${node.maxmemGb} GB RAM` : "",
-      ]
-        .filter(Boolean)
-        .join(", ") || null,
+      detail:
+        [
+          node.maxcpu != null ? `${node.maxcpu} CPU` : "",
+          node.maxmemGb != null ? `${node.maxmemGb} GB RAM` : "",
+        ]
+          .filter(Boolean)
+          .join(", ") || null,
     });
     if (connection.syncHosts) {
       importableDevices.push({
@@ -456,20 +473,6 @@ async function proxmoxFetchInventory(
         status: asText(row.status) || null,
         detail: `VMID ${asText(row.vmid)} on ${asText(row.node)}`,
       });
-      if (connection.syncGuests) {
-        importableDevices.push({
-          name: asText(row.name) || `vmid-${asText(row.vmid)}`,
-          deviceType: kind,
-          model:
-            kind === "container" ? "LXC container" : "QEMU virtual machine",
-          macAddress: null,
-          ipAddress: null,
-          serial: null,
-          firmware: null,
-          online: asText(row.status) === "running",
-          ports: [],
-        });
-      }
     }
   } catch (error) {
     warnings.push(
@@ -482,7 +485,11 @@ async function proxmoxFetchInventory(
   for (const node of nodes) {
     const requestErrors: string[] = [];
     const network = parseNodeNetwork(
-      await tryProxmoxGet(connection, `/nodes/${node.node}/network`, requestErrors),
+      await tryProxmoxGet(
+        connection,
+        `/nodes/${node.node}/network`,
+        requestErrors,
+      ),
     );
     for (const entry of network) {
       if (isBridgeInterface(entry)) {
@@ -497,6 +504,16 @@ async function proxmoxFetchInventory(
             ? `Ports: ${entry.bridgePorts}`
             : entry.comments || null,
         });
+        // VLAN subinterfaces (vmbr0.20) ride on the bridge; only the
+        // bridge itself becomes a virtual switch.
+        if (connection.syncHosts && !entry.iface.includes(".")) {
+          virtualSwitches.push({
+            name: entry.iface,
+            hostName: node.node,
+            kind: entry.bridgePorts ? "external" : "internal",
+            notes: entry.bridgePorts ? `Members: ${entry.bridgePorts}` : null,
+          });
+        }
       }
       if (entry.cidr && cleanIpv4(entry.cidr.split("/")[0])) {
         try {
@@ -518,6 +535,40 @@ async function proxmoxFetchInventory(
     warnings.push(...requestErrors);
   }
 
+  // Guests come from per-node config walks — the same NIC/MAC/VLAN/IP
+  // detail the offline collector gathers. Templates are skipped: they are
+  // images, not running gear.
+  if (connection.syncGuests) {
+    for (const node of nodes) {
+      const guestErrors: string[] = [];
+      const qemuItems = asArray(
+        await tryProxmoxGet(
+          connection,
+          `/nodes/${node.node}/qemu`,
+          guestErrors,
+        ),
+      )
+        .map(asRecord)
+        .sort((a, b) => workloadSortKey(a) - workloadSortKey(b));
+      const lxcItems = asArray(
+        await tryProxmoxGet(connection, `/nodes/${node.node}/lxc`, guestErrors),
+      )
+        .map(asRecord)
+        .sort((a, b) => workloadSortKey(a) - workloadSortKey(b));
+      warnings.push(...guestErrors);
+      for (const item of qemuItems) {
+        const workload = await stageQemuWorkload(connection, node.node, item);
+        if (workload.template) continue;
+        importableDevices.push(workloadImportable(workload, node.node));
+      }
+      for (const item of lxcItems) {
+        const workload = await stageLxcWorkload(connection, node.node, item);
+        if (workload.template) continue;
+        importableDevices.push(workloadImportable(workload, node.node));
+      }
+    }
+  }
+
   const sdnErrors: string[] = [];
   const vnets = asArray(
     await tryProxmoxGet(connection, "/cluster/sdn/vnets", sdnErrors),
@@ -528,7 +579,10 @@ async function proxmoxFetchInventory(
     const tag = asNumber(row.tag);
     if (tag != null && tag > 0 && !seenVlans.has(tag)) {
       seenVlans.add(tag);
-      vlans.push({ vlanNumber: tag, name: asText(row.alias) || vnet || `VLAN ${tag}` });
+      vlans.push({
+        vlanNumber: tag,
+        name: asText(row.alias) || vnet || `VLAN ${tag}`,
+      });
     }
     if (!vnet) continue;
     const subnetErrors: string[] = [];
@@ -582,6 +636,7 @@ async function proxmoxFetchInventory(
     collection: { vlans, subnets, dhcpScopes },
     devices,
     importableDevices,
+    virtualSwitches,
     wifi: null,
     warnings,
   };
@@ -663,7 +718,7 @@ function lxcNetworkAdapter(
   const configuredIp = cleanIpv4(options.ip);
   const liveIps = [
     ...(liveByName.get(name) ?? []),
-    ...(macKey ? liveByMac.get(macKey) ?? [] : []),
+    ...(macKey ? (liveByMac.get(macKey) ?? []) : []),
   ];
   return {
     id: `lxc-${vmid}-${key}`,
@@ -709,7 +764,9 @@ async function qemuAgentIpMap(
     const ips: string[] = [];
     for (const ipEntry of asArray(row["ip-addresses"])) {
       const ipRow = asRecord(ipEntry);
-      const ipType = asText(ipRow["ip-address-type"] ?? ipRow.type).toLowerCase();
+      const ipType = asText(
+        ipRow["ip-address-type"] ?? ipRow.type,
+      ).toLowerCase();
       if (ipType && ipType !== "ipv4") continue;
       const ip = cleanIpv4(ipRow["ip-address"] ?? ipRow.address);
       if (ip) ips.push(ip);
@@ -758,6 +815,56 @@ async function lxcLiveIpMaps(
   }
 }
 
+type StagedWorkload =
+  | Awaited<ReturnType<typeof stageQemuWorkload>>
+  | Awaited<ReturnType<typeof stageLxcWorkload>>;
+
+function guestVlanNumber(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 1 && number <= 4094
+    ? number
+    : null;
+}
+
+function workloadImportable(
+  workload: StagedWorkload,
+  node: string,
+): IntegrationImportableDevice {
+  const adapters = workload.networkAdapters;
+  const ports: IntegrationPortSpec[] = adapters.map((adapter, index) => {
+    const vlan = adapter.vlan;
+    return {
+      name: adapter.name || `net${index}`,
+      kind: "virtual",
+      speed: "virtual",
+      linkState: adapter.connected === false ? "down" : "up",
+      mode: vlan ? (vlan.mode === "trunk" ? "trunk" : "access") : null,
+      untaggedVlanNumber: guestVlanNumber(
+        vlan?.accessVlanId ?? vlan?.nativeVlanId,
+      ),
+      taggedVlanNumbers: (vlan?.allowedVlanIds ?? [])
+        .map((entry) => guestVlanNumber(entry))
+        .filter((entry): entry is number => entry != null),
+      macAddress: adapter.macAddress || null,
+      virtualSwitchName: adapter.switchName || null,
+      ipAddresses: adapter.ipAddresses,
+    };
+  });
+  return {
+    name: workload.name,
+    deviceType: workload.kind === "lxc" ? "container" : "vm",
+    model: workload.kind === "lxc" ? "LXC container" : "QEMU virtual machine",
+    macAddress: adapters.map((entry) => entry.macAddress).find(Boolean) ?? null,
+    ipAddress: adapters.flatMap((entry) => entry.ipAddresses)[0] ?? null,
+    serial: null,
+    firmware: null,
+    online: workload.state === "running",
+    parentName: node,
+    ports,
+  };
+}
+
 async function stageQemuWorkload(
   connection: IntegrationConnectionSecrets,
   node: string,
@@ -766,7 +873,11 @@ async function stageQemuWorkload(
   const vmid = asText(item.vmid);
   const errors: string[] = [];
   const config = asRecord(
-    await tryProxmoxGet(connection, `/nodes/${node}/qemu/${vmid}/config`, errors),
+    await tryProxmoxGet(
+      connection,
+      `/nodes/${node}/qemu/${vmid}/config`,
+      errors,
+    ),
   );
   const status = asRecord(
     await tryProxmoxGet(
@@ -775,13 +886,18 @@ async function stageQemuWorkload(
       errors,
     ),
   );
-  const { byMac, error: agentError } = await qemuAgentIpMap(connection, node, vmid);
+  const { byMac, error: agentError } = await qemuAgentIpMap(
+    connection,
+    node,
+    vmid,
+  );
   if (agentError) errors.push(agentError);
 
   const disks = Object.entries(config)
     .filter(
       ([key, value]) =>
-        DISK_KEY_RE.test(key) && !asText(value).toLowerCase().includes("media=cdrom"),
+        DISK_KEY_RE.test(key) &&
+        !asText(value).toLowerCase().includes("media=cdrom"),
     )
     .map(([key, value]) => diskFromConfig(key, value));
   const adapters = Object.entries(config)
@@ -848,7 +964,11 @@ async function stageLxcWorkload(
   const vmid = asText(item.vmid);
   const errors: string[] = [];
   const config = asRecord(
-    await tryProxmoxGet(connection, `/nodes/${node}/lxc/${vmid}/config`, errors),
+    await tryProxmoxGet(
+      connection,
+      `/nodes/${node}/lxc/${vmid}/config`,
+      errors,
+    ),
   );
   const status = asRecord(
     await tryProxmoxGet(
@@ -858,12 +978,11 @@ async function stageLxcWorkload(
     ),
   );
   const running = (asText(status.status) || asText(item.status)) === "running";
-  const { byName, byMac, error: liveError } = await lxcLiveIpMaps(
-    connection,
-    node,
-    vmid,
-    running,
-  );
+  const {
+    byName,
+    byMac,
+    error: liveError,
+  } = await lxcLiveIpMaps(connection, node, vmid, running);
   if (liveError) errors.push(liveError);
 
   const disks = Object.entries(config)
@@ -934,159 +1053,6 @@ function splitTags(value: unknown) {
 
 function workloadSortKey(entry: JsonRecord) {
   return asNumber(entry.vmid) ?? Number.MAX_SAFE_INTEGER;
-}
-
-export async function fetchProxmoxStagedInventory(
-  connection: IntegrationConnectionSecrets,
-  nodeNames?: string[] | null,
-) {
-  const nodes = await fetchProxmoxNodes(connection);
-  if (nodes.length === 0) {
-    throw new ValidationError("Proxmox VE reported no nodes for this token.", 502);
-  }
-  const requested = (nodeNames ?? [])
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-  const missing = requested.filter(
-    (name) => !nodes.some((entry) => entry.node === name),
-  );
-  if (missing.length > 0) {
-    throw new ValidationError(
-      `Node ${missing.join(", ")} was not found on this Proxmox VE connection.`,
-    );
-  }
-  const selectedNodes =
-    requested.length > 0
-      ? nodes.filter((entry) => requested.includes(entry.node))
-      : [nodes[0]];
-  // The wizard payload models one host; the first selected node provides
-  // the host summary while workloads and networks come from every node.
-  const node = selectedNodes[0].node;
-
-  const collectorErrors: string[] = [];
-  const version = asRecord(
-    await tryProxmoxGet(connection, "/version", collectorErrors),
-  );
-  const status = asRecord(
-    await tryProxmoxGet(connection, `/nodes/${node}/status`, collectorErrors),
-  );
-
-  const cpuinfo = asRecord(status.cpuinfo);
-  const memory = asRecord(status.memory);
-  const versionText = asText(version.version);
-
-  const allNetwork: ReturnType<typeof parseNodeNetwork> = [];
-  const vms: unknown[] = [];
-  let qemuCount = 0;
-  let lxcCount = 0;
-  for (const selected of selectedNodes) {
-    const nodeNetwork = parseNodeNetwork(
-      await tryProxmoxGet(
-        connection,
-        `/nodes/${selected.node}/network`,
-        collectorErrors,
-      ),
-    );
-    allNetwork.push(...nodeNetwork);
-    const qemuItems = asArray(
-      await tryProxmoxGet(
-        connection,
-        `/nodes/${selected.node}/qemu`,
-        collectorErrors,
-      ),
-    )
-      .map(asRecord)
-      .sort((a, b) => workloadSortKey(a) - workloadSortKey(b));
-    const lxcItems = asArray(
-      await tryProxmoxGet(
-        connection,
-        `/nodes/${selected.node}/lxc`,
-        collectorErrors,
-      ),
-    )
-      .map(asRecord)
-      .sort((a, b) => workloadSortKey(a) - workloadSortKey(b));
-    qemuCount += qemuItems.length;
-    lxcCount += lxcItems.length;
-    for (const item of qemuItems) {
-      vms.push(await stageQemuWorkload(connection, selected.node, item));
-    }
-    for (const item of lxcItems) {
-      vms.push(await stageLxcWorkload(connection, selected.node, item));
-    }
-  }
-  const hostIps = unique(allNetwork.map((entry) => cleanIpv4(entry.address)));
-  // Bridges commonly share names (vmbr0) across cluster nodes; keep the
-  // first occurrence so guest adapters keep matching their switch by name.
-  const seenIfaces = new Set<string>();
-  const network = allNetwork.filter((entry) => {
-    if (seenIfaces.has(entry.iface)) return false;
-    seenIfaces.add(entry.iface);
-    return true;
-  });
-
-  return {
-    schema: PROXMOX_SCHEMA,
-    provider: "proxmox",
-    collectorVersion: "api-1",
-    collectedAt: new Date().toISOString(),
-    host: {
-      computerName: node,
-      fqdn: node,
-      manufacturer: null,
-      model: null,
-      logicalProcessors: asNumber(cpuinfo.cpus),
-      memoryGb: bytesToGb(memory.total),
-      osCaption: versionText ? `Proxmox VE ${versionText}` : "Proxmox VE",
-      osVersion: asText(version.release) || null,
-      nodeName: node,
-      pveVersion: asText(status.pveversion) || versionText || null,
-      pveVersionVerbose: null,
-      kernelVersion: asText(status.kversion) || null,
-      statusError: null,
-      hostIpAddresses: hostIps,
-    },
-    switches: network.filter(isBridgeInterface).map((entry) => {
-      const members = entry.bridgePorts
-        ? entry.bridgePorts.split(/\s+/).filter(Boolean)
-        : [];
-      const ips = unique([cleanIpv4(entry.address)]);
-      const notes = [
-        "Imported from Proxmox Linux bridge/OVS interface.",
-        members.length > 0 ? `Members: ${members.join(", ")}` : "",
-        entry.active ? "State: active" : "State: inactive",
-        ips.length > 0 ? `Host IPs: ${ips.join(", ")}` : "",
-        entry.comments ? `Comment: ${entry.comments}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
-      return {
-        id: entry.iface,
-        name: entry.iface,
-        kind: members.length > 0 ? "external" : "internal",
-        notes,
-        netAdapterName: members.length > 0 ? members.join(", ") : null,
-        netAdapterInterfaceDescription: "Proxmox bridge",
-        allowManagementOS: ips.length > 0,
-      };
-    }),
-    hostAdapters: network.map((entry) => ({
-      name: entry.iface,
-      interfaceDescription: entry.type,
-      macAddress: "",
-      status: entry.active ? "up" : "down",
-      linkSpeed: "",
-      ipAddresses: unique([cleanIpv4(entry.address)]),
-    })),
-    vms,
-    summary: {
-      node: selectedNodes.map((entry) => entry.node).join(", "),
-      qemu: qemuCount,
-      lxc: lxcCount,
-      workloads: vms.length,
-    },
-    collectorErrors: unique(collectorErrors),
-  };
 }
 
 async function proxmoxListScopes(

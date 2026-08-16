@@ -226,7 +226,8 @@ test("omada inventory maps devices, LAN networks, and DHCP pools with version fa
       ["Loft AP", "access-point", "disconnected"],
     ],
   );
-  assert.equal(inventory.devices[0].macAddress, "AA-BB-CC-DD-EE-01");
+  // Dashed controller MACs are canonicalized to colon form.
+  assert.equal(inventory.devices[0].macAddress, "AA:BB:CC:DD:EE:01");
 
   assert.deepEqual(inventory.collection.vlans, [
     { vlanNumber: 1, name: "Default" },

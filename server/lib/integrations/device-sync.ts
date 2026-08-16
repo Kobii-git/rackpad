@@ -5,6 +5,7 @@ import {
   INTEGRATION_PORT_KINDS,
   type IntegrationImportableDevice,
   type IntegrationPortKind,
+  type IntegrationVirtualSwitchSpec,
   type IntegrationWifiInventory,
 } from "./inventory.js";
 
@@ -80,6 +81,14 @@ export function sanitizeImportableDevices(
                 "access" | "trunk" | null,
               untaggedVlanNumber: sanitizeVlanNumber(port.untaggedVlanNumber),
               taggedVlanNumbers,
+              macAddress: canonicalMacAddress(text(port.macAddress, 40)),
+              virtualSwitchName: text(port.virtualSwitchName, 120) || null,
+              ipAddresses: Array.isArray(port.ipAddresses)
+                ? port.ipAddresses
+                    .slice(0, 16)
+                    .map((entry) => text(entry, 60))
+                    .filter((entry) => /^\d{1,3}(\.\d{1,3}){3}$/.test(entry))
+                : [],
             },
           ];
         })
@@ -88,15 +97,41 @@ export function sanitizeImportableDevices(
       name,
       deviceType: deviceType as IntegrationImportableDevice["deviceType"],
       model: text(row.model, 120) || null,
-      macAddress: text(row.macAddress, 40) || null,
+      macAddress: canonicalMacAddress(text(row.macAddress, 40)),
       ipAddress: text(row.ipAddress, 60) || null,
       serial: text(row.serial, 120) || null,
       firmware: text(row.firmware, 120) || null,
       online: row.online === true ? true : row.online === false ? false : null,
+      parentName: text(row.parentName, 120) || null,
       ports,
     });
   }
   return devices;
+}
+
+export function sanitizeVirtualSwitches(
+  value: unknown,
+): IntegrationVirtualSwitchSpec[] {
+  if (!Array.isArray(value)) return [];
+  const switches: IntegrationVirtualSwitchSpec[] = [];
+  for (const entry of value.slice(0, 200)) {
+    if (!entry || typeof entry !== "object") continue;
+    const row = entry as Record<string, unknown>;
+    const name = text(row.name, 120);
+    const hostName = text(row.hostName, 120);
+    if (!name || !hostName) continue;
+    const kind = text(row.kind, 20);
+    switches.push({
+      name,
+      hostName,
+      kind:
+        kind === "internal" || kind === "private"
+          ? (kind as "internal" | "private")
+          : "external",
+      notes: text(row.notes, 500) || null,
+    });
+  }
+  return switches;
 }
 
 export function sanitizeWifiInventory(
@@ -154,10 +189,17 @@ export interface IntegrationSsidDiff {
   vlanNumber: number | null;
 }
 
+export interface IntegrationVirtualSwitchDiff {
+  action: "create" | "exists";
+  name: string;
+  hostName: string;
+}
+
 export interface IntegrationDeviceSyncPlan {
   labId: string;
   devices: IntegrationDeviceDiff[];
   ssids: IntegrationSsidDiff[];
+  virtualSwitches: IntegrationVirtualSwitchDiff[];
   controllerName: string | null;
 }
 
@@ -165,6 +207,7 @@ export interface IntegrationDeviceSyncResult {
   createdDeviceIds: string[];
   createdPortCount: number;
   createdSsidIds: string[];
+  createdVirtualSwitchIds: string[];
   createdIpAssignmentIds: string[];
   linkedAccessPoints: number;
   skipped: string[];
@@ -173,6 +216,16 @@ export interface IntegrationDeviceSyncResult {
 function normalizeMac(value: string | null | undefined) {
   if (!value) return "";
   return value.replace(/[^0-9a-fA-F]/g, "").toLowerCase();
+}
+
+// Stored MACs are canonicalized to uppercase colon-separated form
+// (AA:BB:CC:DD:EE:FF) regardless of how the controller writes them.
+export function canonicalMacAddress(
+  value: string | null | undefined,
+): string | null {
+  const normalized = normalizeMac(value);
+  if (normalized.length !== 12) return value?.trim() || null;
+  return (normalized.match(/.{2}/g) ?? []).join(":").toUpperCase();
 }
 
 interface ExistingDeviceRow {
@@ -215,6 +268,7 @@ export function buildIntegrationDeviceSyncPlan(input: {
   labId: string;
   importableDevices: IntegrationImportableDevice[];
   wifi: IntegrationWifiInventory | null;
+  virtualSwitches?: IntegrationVirtualSwitchSpec[];
 }): IntegrationDeviceSyncPlan {
   const existing = existingLabDevices(input.labId);
   const devices: IntegrationDeviceDiff[] = [];
@@ -262,10 +316,38 @@ export function buildIntegrationDeviceSyncPlan(input: {
     }
   }
 
+  const virtualSwitches: IntegrationVirtualSwitchDiff[] = [];
+  if (input.virtualSwitches && input.virtualSwitches.length > 0) {
+    const existingSwitches = new Set(
+      (
+        db
+          .prepare(
+            `SELECT devices.hostname AS host, virtualSwitches.name AS name
+             FROM virtualSwitches
+             JOIN devices ON devices.id = virtualSwitches.hostDeviceId
+             WHERE devices.labId = ?`,
+          )
+          .all(input.labId) as Array<{ host: string; name: string }>
+      ).map(
+        (row) =>
+          `${row.host.trim().toLowerCase()}|${row.name.trim().toLowerCase()}`,
+      ),
+    );
+    for (const vswitch of input.virtualSwitches) {
+      const key = `${vswitch.hostName.trim().toLowerCase()}|${vswitch.name.trim().toLowerCase()}`;
+      virtualSwitches.push({
+        action: existingSwitches.has(key) ? "exists" : "create",
+        name: vswitch.name,
+        hostName: vswitch.hostName,
+      });
+    }
+  }
+
   return {
     labId: input.labId,
     devices,
     ssids,
+    virtualSwitches,
     controllerName: input.wifi?.controllerName ?? null,
   };
 }
@@ -274,6 +356,7 @@ export function applyIntegrationDeviceSync(input: {
   labId: string;
   importableDevices: IntegrationImportableDevice[];
   wifi: IntegrationWifiInventory | null;
+  virtualSwitches?: IntegrationVirtualSwitchSpec[] | null;
   vendor: string;
   actor: string;
 }): IntegrationDeviceSyncResult {
@@ -281,6 +364,7 @@ export function applyIntegrationDeviceSync(input: {
     createdDeviceIds: [],
     createdPortCount: 0,
     createdSsidIds: [],
+    createdVirtualSwitchIds: [],
     createdIpAssignmentIds: [],
     linkedAccessPoints: 0,
     skipped: [],
@@ -297,6 +381,10 @@ export function applyIntegrationDeviceSync(input: {
   const insertPort = db.prepare(`
     INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, macAddress)
     VALUES (@id, @deviceId, @name, @position, @kind, @speed, @linkState, @mode, @vlanId, @allowedVlanIds, @description, @face, @virtualSwitchId, @macAddress)
+  `);
+  const insertVirtualSwitch = db.prepare(`
+    INSERT INTO virtualSwitches (id, hostDeviceId, name, kind, membersShareHostIp, notes)
+    VALUES (?, ?, ?, ?, 0, ?)
   `);
   const writeAudit = db.prepare(`
     INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
@@ -316,13 +404,14 @@ export function applyIntegrationDeviceSync(input: {
       "SELECT id FROM ipAssignments WHERE subnetId = ? AND ipAddress = ?",
     );
     const insertAssignment = db.prepare(`
-      INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, allocationMode, deviceId, hostname, description)
-      VALUES (?, ?, ?, 'device', 'static', ?, ?, ?)
+      INSERT INTO ipAssignments (id, subnetId, ipAddress, assignmentType, allocationMode, deviceId, portId, hostname, description)
+      VALUES (?, ?, ?, 'device', 'static', ?, ?, ?, ?)
     `);
     const linkDeviceIp = (
       deviceId: string,
       name: string,
       ipAddress: string | null,
+      portId: string | null = null,
     ) => {
       if (!ipAddress || !/^\d{1,3}(\.\d{1,3}){3}$/.test(ipAddress)) return;
       const subnet = labSubnets.find((entry) => {
@@ -340,6 +429,7 @@ export function applyIntegrationDeviceSync(input: {
         subnet.id,
         ipAddress,
         deviceId,
+        portId,
         name,
         "Linked by a controller integration import.",
       );
@@ -361,26 +451,61 @@ export function applyIntegrationDeviceSync(input: {
       ).map((row) => [Number(row.vlanId), row.id]),
     );
 
-    for (const device of input.importableDevices) {
+    const resolveDeviceIdByName = (value: string | null | undefined) => {
+      if (!value) return null;
+      const key = value.trim().toLowerCase();
+      if (!key) return null;
+      const row = existing.find(
+        (entry) =>
+          entry.hostname.trim().toLowerCase() === key ||
+          (entry.displayName ?? "").trim().toLowerCase() === key,
+      );
+      return row?.id ?? null;
+    };
+    const vswitchIdByKey = new Map<string, string>();
+    for (const row of db
+      .prepare(
+        `SELECT virtualSwitches.id, virtualSwitches.hostDeviceId, virtualSwitches.name
+         FROM virtualSwitches
+         JOIN devices ON devices.id = virtualSwitches.hostDeviceId
+         WHERE devices.labId = ?`,
+      )
+      .all(input.labId) as Array<{
+      id: string;
+      hostDeviceId: string;
+      name: string;
+    }>) {
+      vswitchIdByKey.set(
+        `${row.hostDeviceId}|${row.name.trim().toLowerCase()}`,
+        row.id,
+      );
+    }
+
+    const importOne = (device: IntegrationImportableDevice) => {
       const name = device.name.trim();
-      if (!name) continue;
+      if (!name) return;
+      const isGuest =
+        device.deviceType === "vm" || device.deviceType === "container";
+      const parentDeviceId = isGuest
+        ? resolveDeviceIdByName(device.parentName)
+        : null;
       const match = matchDevice(device, existing);
       if (match) {
         if (device.deviceType === "ap") apDeviceIds.push(match.id);
         linkDeviceIp(match.id, name, device.ipAddress);
-        continue;
+        return;
       }
       const hostnameTaken = existing.some(
         (row) => row.hostname.trim().toLowerCase() === name.toLowerCase(),
       );
       if (hostnameTaken) {
         result.skipped.push(name);
-        continue;
+        return;
       }
 
       const deviceId = createId("d");
-      // Loose gear: no rack, no room — visible in Devices and the
-      // loose-device visualizer layout until someone places it.
+      // Physical gear lands loose (no rack, no room) until someone places
+      // it; guests are virtual devices attached under their host.
       insertDevice.run(
         deviceId,
         input.labId,
@@ -392,14 +517,14 @@ export function applyIntegrationDeviceSync(input: {
         device.model,
         device.serial,
         device.ipAddress,
-        device.macAddress,
+        canonicalMacAddress(device.macAddress),
         device.online == null
           ? "unknown"
           : device.online
             ? "online"
             : "offline",
-        "room",
-        null,
+        isGuest ? "virtual" : "room",
+        parentDeviceId,
         "normal",
         null,
         null,
@@ -434,8 +559,17 @@ export function applyIntegrationDeviceSync(input: {
                 .map((number) => vlanIdByNumber.get(number))
                 .filter((id): id is string => Boolean(id))
             : [];
+        // A guest NIC lands on its host's virtual switch when both are
+        // known by name.
+        const virtualSwitchId =
+          port.virtualSwitchName && parentDeviceId
+            ? (vswitchIdByKey.get(
+                `${parentDeviceId}|${port.virtualSwitchName.trim().toLowerCase()}`,
+              ) ?? null)
+            : null;
+        const portId = createId("p");
         insertPort.run({
-          id: createId("p"),
+          id: portId,
           deviceId,
           name: port.name,
           position: index + 1,
@@ -448,10 +582,13 @@ export function applyIntegrationDeviceSync(input: {
             allowedVlanIds.length > 0 ? JSON.stringify(allowedVlanIds) : null,
           description: null,
           face: "front",
-          virtualSwitchId: null,
-          macAddress: null,
+          virtualSwitchId,
+          macAddress: canonicalMacAddress(port.macAddress),
         });
         result.createdPortCount += 1;
+        for (const ipAddress of port.ipAddresses ?? []) {
+          linkDeviceIp(deviceId, name, ipAddress, portId);
+        }
       });
 
       linkDeviceIp(deviceId, name, device.ipAddress);
@@ -464,6 +601,45 @@ export function applyIntegrationDeviceSync(input: {
         deviceId,
         `Imported ${device.deviceType} ${name} from a controller integration.`,
       );
+    };
+
+    // Hosts and physical gear first, then their virtual switches, then
+    // guests — so parent and vswitch links resolve in one pass.
+    for (const device of input.importableDevices) {
+      if (device.deviceType === "vm" || device.deviceType === "container") {
+        continue;
+      }
+      importOne(device);
+    }
+    for (const vswitch of input.virtualSwitches ?? []) {
+      const hostDeviceId = resolveDeviceIdByName(vswitch.hostName);
+      if (!hostDeviceId) continue;
+      const key = `${hostDeviceId}|${vswitch.name.trim().toLowerCase()}`;
+      if (vswitchIdByKey.has(key)) continue;
+      const vswitchId = createId("vsw");
+      insertVirtualSwitch.run(
+        vswitchId,
+        hostDeviceId,
+        vswitch.name,
+        vswitch.kind,
+        vswitch.notes,
+      );
+      vswitchIdByKey.set(key, vswitchId);
+      result.createdVirtualSwitchIds.push(vswitchId);
+      writeAudit.run(
+        createId("a"),
+        now,
+        input.actor,
+        "integration.sync.vswitch.create",
+        vswitchId,
+        `Created virtual switch ${vswitch.name} on ${vswitch.hostName}.`,
+      );
+    }
+    for (const device of input.importableDevices) {
+      if (device.deviceType !== "vm" && device.deviceType !== "container") {
+        continue;
+      }
+      importOne(device);
     }
 
     if (input.wifi) {

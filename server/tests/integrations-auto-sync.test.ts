@@ -13,9 +13,8 @@ process.env.RACKPAD_SECRET_KEY = "rackpad-autosync-test-secret";
 const { createApp } = await import("../app.js");
 const { db } = await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
-const { setIntegrationClientOverrideForTests } = await import(
-  "../lib/integrations/inventory.js"
-);
+const { setIntegrationClientOverrideForTests } =
+  await import("../lib/integrations/inventory.js");
 const { cronMatches, isValidCronExpression, parseCronExpression } =
   await import("../lib/integrations/cron.js");
 const { findDueIntegrationSyncSchedules, runIntegrationSyncSchedule } =
@@ -148,10 +147,10 @@ test("multiple schedules per connection are admin-only and validated", async () 
     labIds: string[];
   }>;
   assert.equal(schedules.length, 2);
-  assert.deepEqual(
-    schedules.map((entry) => entry.mode).sort(),
-    ["merge", "mirror"],
-  );
+  assert.deepEqual(schedules.map((entry) => entry.mode).sort(), [
+    "merge",
+    "mirror",
+  ]);
 
   const patched = await app.inject({
     method: "PATCH",
@@ -276,7 +275,9 @@ test("schedule runs populate their own target labs and honor modes", async () =>
     "mirror deletes records missing from the source",
   );
   assert.ok(
-    db.prepare("SELECT id FROM vlans WHERE labId = ? AND vlanId = 10").get(labId),
+    db
+      .prepare("SELECT id FROM vlans WHERE labId = ? AND vlanId = 10")
+      .get(labId),
     "records present in the source survive a mirror",
   );
 });
@@ -430,12 +431,57 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
       name: "office-ap",
       deviceType: "ap",
       model: "U6-LR",
-      macAddress: "AA:BB:CC:00:11:33",
+      // Dashed lowercase on purpose: stored MACs are canonicalized.
+      macAddress: "aa-bb-cc-00-11-33",
       ipAddress: "192.168.1.3",
       serial: null,
       firmware: "6.6.55",
       online: true,
       ports: [],
+    },
+    {
+      name: "pve1",
+      deviceType: "server",
+      model: "Proxmox VE node",
+      macAddress: null,
+      ipAddress: null,
+      serial: null,
+      firmware: null,
+      online: true,
+      ports: [],
+    },
+    {
+      name: "web01",
+      deviceType: "vm",
+      model: "QEMU virtual machine",
+      macAddress: "AA:BB:CC:00:11:44",
+      ipAddress: "192.168.1.50",
+      serial: null,
+      firmware: null,
+      online: true,
+      parentName: "pve1",
+      ports: [
+        {
+          name: "net0",
+          kind: "virtual",
+          speed: "virtual",
+          linkState: "up",
+          mode: "access",
+          untaggedVlanNumber: 10,
+          taggedVlanNumbers: [],
+          macAddress: "AA:BB:CC:00:11:44",
+          virtualSwitchName: "vmbr0",
+          ipAddresses: ["192.168.1.50"],
+        },
+      ],
+    },
+  ];
+  const virtualSwitches = [
+    {
+      name: "vmbr0",
+      hostName: "pve1",
+      kind: "external",
+      notes: "Members: eno1",
     },
   ];
   const wifi = {
@@ -463,6 +509,8 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
       devices: [],
       importableDevices:
         importableDevices as unknown as import("../lib/integrations/inventory.js").IntegrationImportableDevice[],
+      virtualSwitches:
+        virtualSwitches as unknown as import("../lib/integrations/inventory.js").IntegrationVirtualSwitchSpec[],
       wifi,
       warnings: [],
     }),
@@ -490,6 +538,8 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
       [
         ["core-switch", "create", 2],
         ["office-ap", "create", 0],
+        ["pve1", "create", 0],
+        ["web01", "create", 1],
       ],
     );
     assert.deepEqual(pullBody.deviceSync.ssids, [
@@ -499,7 +549,9 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
     // Apply the networks first so the SSID VLAN link resolves, and seed a
     // management subnet so device IPs link as IP assignments.
     const vlanId = db
-      .prepare("INSERT INTO vlans (id, labId, vlanId, name) VALUES ('v_test', ?, 10, 'Servers')")
+      .prepare(
+        "INSERT INTO vlans (id, labId, vlanId, name) VALUES ('v_test', ?, 10, 'Servers')",
+      )
       .run(labId);
     assert.ok(vlanId);
     db.prepare(
@@ -510,7 +562,7 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
       method: "POST",
       url: `/api/integrations/connections/${created.id}/apply-devices`,
       headers: authHeaders(adminToken),
-      payload: { importableDevices, wifi },
+      payload: { importableDevices, wifi, virtualSwitches },
     });
     assert.equal(applyResponse.statusCode, 200, applyResponse.body);
     const applyBody = JSON.parse(applyResponse.body) as {
@@ -520,13 +572,13 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
       createdIpAssignmentIds: string[];
       linkedAccessPoints: number;
     };
-    assert.equal(applyBody.createdDeviceIds.length, 2);
-    assert.equal(applyBody.createdPortCount, 2);
+    assert.equal(applyBody.createdDeviceIds.length, 4);
+    assert.equal(applyBody.createdPortCount, 3);
     assert.equal(applyBody.createdSsidIds.length, 1);
     assert.equal(applyBody.linkedAccessPoints, 1);
     assert.equal(
       applyBody.createdIpAssignmentIds.length,
-      2,
+      3,
       "device IPs inside the seeded subnet become IP assignments",
     );
     const ipRows = db
@@ -536,8 +588,50 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
       .all() as Array<{ ipAddress: string }>;
     assert.deepEqual(
       ipRows.map((row) => row.ipAddress),
-      ["192.168.1.2", "192.168.1.3"],
+      ["192.168.1.2", "192.168.1.3", "192.168.1.50"],
     );
+
+    // MACs are canonicalized to uppercase colon form on the way in.
+    const apMac = db
+      .prepare("SELECT macAddress FROM devices WHERE hostname = 'office-ap'")
+      .get() as { macAddress: string };
+    assert.equal(apMac.macAddress, "AA:BB:CC:00:11:33");
+
+    // The guest hangs under its host with its NIC on the virtual switch.
+    const guestRow = db
+      .prepare(
+        "SELECT id, placement, parentDeviceId FROM devices WHERE hostname = 'web01'",
+      )
+      .get() as {
+      id: string;
+      placement: string;
+      parentDeviceId: string | null;
+    };
+    const hostRow = db
+      .prepare("SELECT id FROM devices WHERE hostname = 'pve1'")
+      .get() as { id: string };
+    assert.equal(guestRow.placement, "virtual");
+    assert.equal(guestRow.parentDeviceId, hostRow.id);
+    const vswitchRow = db
+      .prepare(
+        "SELECT id, kind FROM virtualSwitches WHERE hostDeviceId = ? AND name = 'vmbr0'",
+      )
+      .get(hostRow.id) as { id: string; kind: string };
+    assert.equal(vswitchRow.kind, "external");
+    const guestPort = db
+      .prepare(
+        "SELECT kind, virtualSwitchId, vlanId, macAddress FROM ports WHERE deviceId = ?",
+      )
+      .get(guestRow.id) as {
+      kind: string;
+      virtualSwitchId: string | null;
+      vlanId: string | null;
+      macAddress: string | null;
+    };
+    assert.equal(guestPort.kind, "virtual");
+    assert.equal(guestPort.virtualSwitchId, vswitchRow.id);
+    assert.equal(guestPort.vlanId, "v_test");
+    assert.equal(guestPort.macAddress, "AA:BB:CC:00:11:44");
 
     const switchRow = db
       .prepare(
@@ -587,7 +681,9 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
     ]);
 
     const ssidRow = db
-      .prepare("SELECT vlanId FROM wifiSsids WHERE labId = ? AND name = 'HomeLab'")
+      .prepare(
+        "SELECT vlanId FROM wifiSsids WHERE labId = ? AND name = 'HomeLab'",
+      )
       .get(labId) as { vlanId: string | null };
     assert.equal(ssidRow.vlanId, "v_test", "SSID linked to the VLAN");
     const apRow = db
@@ -602,7 +698,7 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
       method: "POST",
       url: `/api/integrations/connections/${created.id}/apply-devices`,
       headers: authHeaders(adminToken),
-      payload: { importableDevices, wifi },
+      payload: { importableDevices, wifi, virtualSwitches },
     });
     assert.equal(reapply.statusCode, 200);
     const reapplyBody = JSON.parse(reapply.body) as {
@@ -613,6 +709,12 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
     assert.equal(reapplyBody.createdDeviceIds.length, 0);
     assert.equal(reapplyBody.createdSsidIds.length, 0);
     assert.equal(reapplyBody.createdIpAssignmentIds.length, 0);
+    const vswitchCount = db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM virtualSwitches WHERE hostDeviceId = ?",
+      )
+      .get(hostRow.id) as { n: number };
+    assert.equal(vswitchCount.n, 1, "vswitch upsert is idempotent");
   } finally {
     setIntegrationClientOverrideForTests("unifi", null);
   }
@@ -693,10 +795,7 @@ async function createConnection(
   return JSON.parse(response.body) as { id: string };
 }
 
-async function createSchedule(
-  token: string,
-  payload: Record<string, unknown>,
-) {
+async function createSchedule(token: string, payload: Record<string, unknown>) {
   const response = await app.inject({
     method: "POST",
     url: "/api/integrations/schedules",

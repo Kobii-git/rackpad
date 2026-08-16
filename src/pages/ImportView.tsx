@@ -704,24 +704,6 @@ export default function ImportView() {
     stagePayload(structuredClone(SAMPLE_IMPORTS[provider]));
   }
 
-  function stageIntegrationPayload(payload: Record<string, unknown>): boolean {
-    try {
-      stagePayload(payload as HyperVPayload);
-      setImportTab("imports");
-      return true;
-    } catch (error) {
-      setPayload(null);
-      setHostDraft(null);
-      setVmDrafts([]);
-      setParseError(
-        error instanceof Error
-          ? error.message
-          : "Failed to stage the pulled inventory.",
-      );
-      return false;
-    }
-  }
-
   async function handleImport() {
     if (!payload || !canEdit) return;
     setImporting(true);
@@ -1075,9 +1057,7 @@ export default function ImportView() {
             </TabsContent>
 
             <TabsContent value="integrations" className="space-y-5">
-              <IntegrationsPanel
-                onStageProxmoxPayload={stageIntegrationPayload}
-              />
+              <IntegrationsPanel />
             </TabsContent>
           </Tabs>
         </div>

@@ -38,6 +38,7 @@ export const INTEGRATION_PORT_KINDS = [
   "rj45",
   "sfp",
   "sfp_plus",
+  "virtual",
   "qsfp",
   "wifi",
 ] as const;
@@ -53,6 +54,20 @@ export interface IntegrationPortSpec {
   mode?: "access" | "trunk" | null;
   untaggedVlanNumber?: number | null;
   taggedVlanNumbers?: number[];
+  macAddress?: string | null;
+  // Virtual NICs: the vswitch this NIC attaches to (resolved on the
+  // guest's parent host) and the addresses seen on it.
+  virtualSwitchName?: string | null;
+  ipAddresses?: string[];
+}
+
+// A hypervisor bridge/vswitch that becomes a Rackpad virtual switch on
+// its host device.
+export interface IntegrationVirtualSwitchSpec {
+  name: string;
+  hostName: string;
+  kind: "external" | "internal" | "private";
+  notes: string | null;
 }
 
 // A controller device that can become a real Rackpad device record
@@ -74,6 +89,8 @@ export interface IntegrationImportableDevice {
   serial: string | null;
   firmware: string | null;
   online: boolean | null;
+  // Guests (vm/container) attach under this host device by name.
+  parentName?: string | null;
   ports: IntegrationPortSpec[];
 }
 
@@ -96,6 +113,7 @@ export interface IntegrationInventory {
   devices: IntegrationDevicePreview[];
   importableDevices?: IntegrationImportableDevice[];
   wifi?: IntegrationWifiInventory | null;
+  virtualSwitches?: IntegrationVirtualSwitchSpec[];
   warnings: string[];
 }
 

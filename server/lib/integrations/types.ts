@@ -28,11 +28,7 @@ export type IntegrationConnectionStatus =
 // controller. mirror: also deletes destination records missing from the
 // source (per managed object type, referenced records protected). merge:
 // add missing records only. skip: add and update, but skip deletes.
-export const INTEGRATION_AUTO_SYNC_MODES = [
-  "merge",
-  "mirror",
-  "skip",
-] as const;
+export const INTEGRATION_AUTO_SYNC_MODES = ["merge", "mirror", "skip"] as const;
 export type IntegrationAutoSyncMode =
   (typeof INTEGRATION_AUTO_SYNC_MODES)[number];
 

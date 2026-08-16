@@ -115,6 +115,7 @@ export async function runIntegrationSyncSchedule(
           labId,
           importableDevices,
           wifi: wifiInventory,
+          virtualSwitches: inventory.virtualSwitches ?? [],
           vendor: INTEGRATION_PROVIDER_INFO[connection.provider].vendor,
           actor: AUTO_SYNC_ACTOR,
         });

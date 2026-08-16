@@ -1,5 +1,9 @@
 import { ValidationError } from "../../validation.js";
-import { canonicalizeIpv4Cidr, cidrHostBounds, intToIp } from "../../ip-cidr.js";
+import {
+  canonicalizeIpv4Cidr,
+  cidrHostBounds,
+  intToIp,
+} from "../../ip-cidr.js";
 import {
   buildIntegrationUrl,
   integrationHttpRequest,
@@ -209,7 +213,9 @@ function parseInterfaceRows(data: unknown): OpnsenseInterfaceRow[] {
     .filter((row) => row.device);
 }
 
-function parsePoolEntry(entry: string): { startIp: string; endIp: string } | null {
+function parsePoolEntry(
+  entry: string,
+): { startIp: string; endIp: string } | null {
   const text = entry.trim();
   if (!text) return null;
   if (text.includes("-")) {
@@ -221,7 +227,10 @@ function parsePoolEntry(entry: string): { startIp: string; endIp: string } | nul
   if (text.includes("/")) {
     try {
       const bounds = cidrHostBounds(canonicalizeIpv4Cidr(text));
-      return { startIp: intToIp(bounds.firstHost), endIp: intToIp(bounds.lastHost) };
+      return {
+        startIp: intToIp(bounds.firstHost),
+        endIp: intToIp(bounds.lastHost),
+      };
     } catch {
       return null;
     }
@@ -273,7 +282,11 @@ async function opnsenseFetchInventory(
 
   // VLAN definitions first so interface subnets can link to them.
   const vlanConfig = asRecord(
-    asRecord(asRecord(await tryOpnsenseGet(connection, "/api/interfaces/vlan_settings/get")).vlan).vlan,
+    asRecord(
+      asRecord(
+        await tryOpnsenseGet(connection, "/api/interfaces/vlan_settings/get"),
+      ).vlan,
+    ).vlan,
   );
   const vlanTagByDevice = new Map<string, number>();
   for (const entry of Object.values(vlanConfig)) {
@@ -312,7 +325,10 @@ async function opnsenseFetchInventory(
   const descriptionByIdentifier = new Map<string, string>();
   for (const row of interfaceRows) {
     if (row.identifier) {
-      descriptionByIdentifier.set(row.identifier, row.description || row.device);
+      descriptionByIdentifier.set(
+        row.identifier,
+        row.description || row.device,
+      );
     }
     devices.push({
       name: row.description || row.device,
@@ -321,13 +337,14 @@ async function opnsenseFetchInventory(
       macAddress: row.macaddr || null,
       ipAddress: usableIpv4(row.addresses[0]) || null,
       status: row.enabled ? row.status : "disabled",
-      detail: [
-        row.device,
-        row.vlanTag != null ? `VLAN ${row.vlanTag}` : "",
-        row.gateways.length > 0 ? `gateway: ${row.gateways.join(", ")}` : "",
-      ]
-        .filter(Boolean)
-        .join(" · ") || null,
+      detail:
+        [
+          row.device,
+          row.vlanTag != null ? `VLAN ${row.vlanTag}` : "",
+          row.gateways.length > 0 ? `gateway: ${row.gateways.join(", ")}` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ") || null,
     });
 
     const vlanNumber = row.vlanTag ?? vlanTagByDevice.get(row.device) ?? null;
@@ -352,7 +369,8 @@ async function opnsenseFetchInventory(
 
   // Kea DHCPv4 subnets (24.1+). Absent endpoints are skipped quietly.
   for (const entry of asArray(
-    asRecord(await tryOpnsenseGet(connection, "/api/kea/dhcpv4/searchSubnet")).rows,
+    asRecord(await tryOpnsenseGet(connection, "/api/kea/dhcpv4/searchSubnet"))
+      .rows,
   )) {
     const row = asRecord(entry);
     const rawSubnet = asText(row.subnet);
@@ -366,7 +384,9 @@ async function opnsenseFetchInventory(
     const pools = asText(row.pools)
       .split(/[\n,]+/)
       .map(parsePoolEntry)
-      .filter((pool): pool is { startIp: string; endIp: string } => pool != null);
+      .filter(
+        (pool): pool is { startIp: string; endIp: string } => pool != null,
+      );
     for (const pool of pools) {
       dhcpScopes.push({
         name: asText(row.description) || `Kea ${rawSubnet}`,
@@ -410,7 +430,8 @@ async function opnsenseFetchInventory(
   }
 
   for (const entry of asArray(
-    asRecord(await tryOpnsenseGet(connection, "/api/routes/gateway/status")).items,
+    asRecord(await tryOpnsenseGet(connection, "/api/routes/gateway/status"))
+      .items,
   )) {
     const row = asRecord(entry);
     const name = asText(row.name);
@@ -422,9 +443,10 @@ async function opnsenseFetchInventory(
       macAddress: null,
       ipAddress: usableIpv4(row.address) || null,
       status: asText(row.status_translated) || null,
-      detail: asText(row.delay) && asText(row.delay) !== "~"
-        ? `delay ${asText(row.delay)}, loss ${asText(row.loss)}`
-        : null,
+      detail:
+        asText(row.delay) && asText(row.delay) !== "~"
+          ? `delay ${asText(row.delay)}, loss ${asText(row.loss)}`
+          : null,
     });
   }
 

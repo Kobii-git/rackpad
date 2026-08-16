@@ -29,12 +29,12 @@ import type {
   IntegrationScopeKind,
   IntegrationSyncSchedule,
   IntegrationTestResult,
+  IntegrationVirtualSwitchSpec,
   IntegrationWifiInventory,
   IpAssignment,
   IpZone,
   ID,
   Lab,
-  ProxmoxIntegrationNode,
   LabAccessEntry,
   Port,
   PortLink,
@@ -1710,6 +1710,7 @@ export const api = {
     body: {
       importableDevices: IntegrationImportableDevice[];
       wifi: IntegrationWifiInventory | null;
+      virtualSwitches: IntegrationVirtualSwitchSpec[];
     },
   ) {
     return request<IntegrationDeviceSyncResult>(
@@ -1752,19 +1753,6 @@ export const api = {
     return request<SnmpSyncApplyResult>(
       `/integrations/connections/${id}/apply`,
       { method: "POST", body: JSON.stringify(body) },
-    );
-  },
-
-  getProxmoxIntegrationNodes(id: ID) {
-    return request<{ nodes: ProxmoxIntegrationNode[] }>(
-      `/integrations/connections/${id}/proxmox/nodes`,
-    );
-  },
-
-  pullProxmoxStagedInventory(id: ID, body?: { nodes?: string[] }) {
-    return request<Record<string, unknown>>(
-      `/integrations/connections/${id}/proxmox/staged-inventory`,
-      { method: "POST", body: JSON.stringify(body ?? {}) },
     );
   },
 

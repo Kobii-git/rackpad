@@ -1,3 +1,4 @@
+import { canonicalMacAddress } from "../device-sync.js";
 import { ValidationError } from "../../validation.js";
 import { canonicalizeIpv4Cidr } from "../../ip-cidr.js";
 import {
@@ -310,7 +311,7 @@ async function officialFetchInventory(
         name: asText(row.name) || asText(row.macAddress),
         kind,
         model: asText(row.model) || null,
-        macAddress: asText(row.macAddress) || null,
+        macAddress: canonicalMacAddress(asText(row.macAddress)),
         ipAddress: usableIpv4(row.ipAddress) || asText(row.ipAddress) || null,
         status: asText(row.state).toLowerCase() || null,
         detail:
@@ -377,7 +378,7 @@ async function officialFetchInventory(
           name: asText(row.name) || asText(row.macAddress),
           deviceType,
           model: asText(row.model) || null,
-          macAddress: asText(row.macAddress) || null,
+          macAddress: canonicalMacAddress(asText(row.macAddress)),
           ipAddress: usableIpv4(row.ipAddress) || null,
           serial: null,
           firmware: firmware || null,
@@ -819,7 +820,7 @@ async function legacyFetchInventory(
         name: asText(row.name) || asText(row.mac),
         kind,
         model: asText(row.model) || null,
-        macAddress: asText(row.mac) || null,
+        macAddress: canonicalMacAddress(asText(row.mac)),
         ipAddress: usableIpv4(row.ip) || asText(row.ip) || null,
         status:
           state != null
@@ -870,7 +871,7 @@ async function legacyFetchInventory(
           name: asText(row.name) || asText(row.mac),
           deviceType,
           model: asText(row.model) || null,
-          macAddress: asText(row.mac) || null,
+          macAddress: canonicalMacAddress(asText(row.mac)),
           ipAddress: usableIpv4(row.ip) || null,
           serial: asText(row.serial) || null,
           firmware: firmware || null,

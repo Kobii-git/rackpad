@@ -3,7 +3,6 @@ import {
   CalendarClock,
   CheckCircle2,
   ChevronDown,
-  DownloadCloud,
   HardDriveDownload,
   Pencil,
   PlayCircle,
@@ -47,7 +46,6 @@ import type {
   IntegrationScope,
   IntegrationScopeKind,
   IntegrationSyncSchedule,
-  ProxmoxIntegrationNode,
   SnmpSyncPolicy,
 } from "@/lib/types";
 import { canEditInventory, isAdmin, loadAll, useStore } from "@/lib/store";
@@ -128,7 +126,7 @@ const AUTH_KIND_LABELS: Record<IntegrationAuthKind, TranslationKey> = {
 // prose on the panel.
 const PROVIDER_DESCRIPTIONS: Record<IntegrationProvider, TranslationKey> = {
   proxmox:
-    "Pulls nodes, VMs, containers, bridges, and SDN networks, and can stage a full node into the import wizard.",
+    "Pulls nodes, VMs, containers, bridges, and SDN networks, and imports the whole stack from the host down.",
   unifi:
     "Pulls switches, gateways, and APs plus networks, VLANs, and DHCP ranges per site.",
   omada:
@@ -175,11 +173,11 @@ const PULL_TOGGLES: Record<
     },
     hosts: {
       label: "Hosts",
-      hint: "Imports the selected Proxmox nodes as Rackpad server devices, placed as loose gear.",
+      hint: "Imports the selected Proxmox nodes as Rackpad server devices with their bridges as virtual switches, placed as loose gear.",
     },
     guests: {
       label: "VMs & containers",
-      hint: "Imports QEMU VMs and LXC containers as devices with their running state. Use Stage import for full detail like NICs, VLANs, and IPs.",
+      hint: "Imports QEMU VMs and LXC containers as virtual devices under their host, with NICs, MACs, VLAN tags, virtual switch links, and IPs. Templates are skipped.",
     },
     switches: null,
     gateways: null,
@@ -423,11 +421,7 @@ function connectionScopes(connection: IntegrationConnection) {
   return connection.siteRef ? [connection.siteRef] : [];
 }
 
-export function IntegrationsPanel({
-  onStageProxmoxPayload,
-}: {
-  onStageProxmoxPayload?: (payload: Record<string, unknown>) => boolean;
-}) {
+export function IntegrationsPanel() {
   const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
@@ -457,12 +451,6 @@ export function IntegrationsPanel({
   const [importingDevices, setImportingDevices] = useState(false);
   const [previewTab, setPreviewTab] = useState("vlans");
   const [syncOpenFor, setSyncOpenFor] = useState<Record<string, boolean>>({});
-  const [proxmoxNodes, setProxmoxNodes] = useState<
-    Record<string, ProxmoxIntegrationNode[]>
-  >({});
-  const [proxmoxNodeChoice, setProxmoxNodeChoice] = useState<
-    Record<string, string[]>
-  >({});
   const [scheduleDrafts, setScheduleDrafts] = useState<
     Record<string, ScheduleDraft>
   >({});
@@ -519,32 +507,6 @@ export function IntegrationsPanel({
     setNewScheduleFor({});
     void loadConnections();
   }, [lab.id]);
-
-  // Fetch node lists for Proxmox connections up front so the node selector
-  // is visible before the first Stage import click.
-  useEffect(() => {
-    for (const connection of connections) {
-      if (connection.provider !== "proxmox" || !connection.enabled) continue;
-      if (proxmoxNodes[connection.id]) continue;
-      void api
-        .getProxmoxIntegrationNodes(connection.id)
-        .then(({ nodes }) => {
-          setProxmoxNodes((current) => ({
-            ...current,
-            [connection.id]: nodes,
-          }));
-          setProxmoxNodeChoice((current) =>
-            current[connection.id]
-              ? current
-              : {
-                  ...current,
-                  [connection.id]: nodes.map((entry) => entry.node),
-                },
-          );
-        })
-        .catch(() => {});
-    }
-  }, [connections]);
 
   function resetMessages() {
     setError("");
@@ -791,7 +753,9 @@ export function IntegrationsPanel({
         dhcp: result.preview.dhcp.scopes.length,
         devices: result.devices.length,
         import:
-          result.deviceSync.devices.length + result.deviceSync.ssids.length,
+          result.deviceSync.devices.length +
+          result.deviceSync.ssids.length +
+          result.deviceSync.virtualSwitches.length,
       };
       setPreviewTab(
         (["vlans", "subnets", "dhcp", "devices", "import"] as const).find(
@@ -844,13 +808,15 @@ export function IntegrationsPanel({
       const result = await api.applyIntegrationDevices(pull.connectionId, {
         importableDevices: pull.importableDevices,
         wifi: pull.wifi,
+        virtualSwitches: pull.virtualSwitches,
       });
       setSuccess(
         t(
-          "Imported {deviceCount} device(s) with {portCount} port(s), {ssidCount} SSID(s), and {ipCount} IP assignment(s).",
+          "Imported {deviceCount} device(s) with {portCount} port(s), {vswitchCount} virtual switch(es), {ssidCount} SSID(s), and {ipCount} IP assignment(s).",
           {
             deviceCount: result.createdDeviceIds.length,
             portCount: result.createdPortCount,
+            vswitchCount: result.createdVirtualSwitchIds.length,
             ssidCount: result.createdSsidIds.length,
             ipCount: result.createdIpAssignmentIds.length,
           },
@@ -864,46 +830,6 @@ export function IntegrationsPanel({
       );
     } finally {
       setImportingDevices(false);
-    }
-  }
-
-  async function handleStageProxmox(connection: IntegrationConnection) {
-    if (!onStageProxmoxPayload) return;
-    setBusyId(connection.id);
-    resetMessages();
-    try {
-      let nodes = proxmoxNodes[connection.id];
-      if (!nodes) {
-        nodes = (await api.getProxmoxIntegrationNodes(connection.id)).nodes;
-        setProxmoxNodes((current) => ({ ...current, [connection.id]: nodes! }));
-      }
-      const selected =
-        proxmoxNodeChoice[connection.id] ?? nodes.map((entry) => entry.node);
-      if (selected.length === 0) {
-        setError(t("Select at least one Proxmox node to stage."));
-        return;
-      }
-      const payload = await api.pullProxmoxStagedInventory(connection.id, {
-        nodes: selected,
-      });
-      const staged = onStageProxmoxPayload(payload);
-      if (staged) {
-        setSuccess(t("Staged the Proxmox inventory in the import wizard."));
-      } else {
-        setError(
-          t(
-            "The pulled Proxmox inventory could not be staged. Open the Imports tab for the exact parse error.",
-          ),
-        );
-      }
-      await loadConnections();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("Inventory staging failed."),
-      );
-      await loadConnections();
-    } finally {
-      setBusyId("");
     }
   }
 
@@ -1198,7 +1124,11 @@ export function IntegrationsPanel({
   const importCreates = pull
     ? pull.deviceSync.devices.filter((entry) => entry.action === "create")
         .length +
-      pull.deviceSync.ssids.filter((entry) => entry.action === "create").length
+      pull.deviceSync.ssids.filter((entry) => entry.action === "create")
+        .length +
+      pull.deviceSync.virtualSwitches.filter(
+        (entry) => entry.action === "create",
+      ).length
     : 0;
   const previewTabCounts = pull
     ? {
@@ -1206,7 +1136,10 @@ export function IntegrationsPanel({
         subnets: pull.preview.subnets.length,
         dhcp: pull.preview.dhcp.scopes.length,
         devices: pull.devices.length,
-        import: pull.deviceSync.devices.length + pull.deviceSync.ssids.length,
+        import:
+          pull.deviceSync.devices.length +
+          pull.deviceSync.ssids.length +
+          pull.deviceSync.virtualSwitches.length,
       }
     : null;
   // Only offer tabs the product actually returned data for; Devices is
@@ -1555,7 +1488,6 @@ export function IntegrationsPanel({
               const busy = busyId === connection.id;
               const summaryProduct = connection.lastSummary?.product;
               const summaryVersion = connection.lastSummary?.version;
-              const nodes = proxmoxNodes[connection.id] ?? [];
               const connectionSchedules =
                 schedulesByConnection[connection.id] ?? [];
               const newDraft = newScheduleFor[connection.id];
@@ -1631,21 +1563,6 @@ export function IntegrationsPanel({
                         <RefreshCw className="size-3.5" />
                         {t("Pull inventory")}
                       </Button>
-                      {connection.provider === "proxmox" &&
-                        onStageProxmoxPayload && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={!canEdit || busy || !connection.enabled}
-                            title={t(
-                              "Loads a node's full inventory into the Proxmox import wizard.",
-                            )}
-                            onClick={() => void handleStageProxmox(connection)}
-                          >
-                            <DownloadCloud className="size-3.5" />
-                            {t("Stage import")}
-                          </Button>
-                        )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -1700,35 +1617,6 @@ export function IntegrationsPanel({
                         {connection.lastError}
                       </div>
                     )}
-                  {connection.provider === "proxmox" && nodes.length > 1 && (
-                    <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                      {t("Proxmox nodes to stage")}
-                      <div className="w-56">
-                        {multiSelectPopover({
-                          items: nodes.map((entry) => ({
-                            id: entry.node,
-                            label: entry.node,
-                          })),
-                          selected:
-                            proxmoxNodeChoice[connection.id] ??
-                            nodes.map((entry) => entry.node),
-                          disabled: busy,
-                          triggerLabel: t("{count} of {kind} selected", {
-                            count: (
-                              proxmoxNodeChoice[connection.id] ??
-                              nodes.map((entry) => entry.node)
-                            ).length,
-                            kind: t("Cluster nodes"),
-                          }),
-                          onChange: (ids) =>
-                            setProxmoxNodeChoice((current) => ({
-                              ...current,
-                              [connection.id]: ids,
-                            })),
-                        })}
-                      </div>
-                    </div>
-                  )}
                   {syncOpen && (
                     <div className="space-y-3 border-t border-[var(--color-line)] pt-2">
                       <div className="space-y-1">
@@ -2045,7 +1933,8 @@ export function IntegrationsPanel({
                     <TabsTrigger value="import">
                       {t("Import")} (
                       {pull.deviceSync.devices.length +
-                        pull.deviceSync.ssids.length}
+                        pull.deviceSync.ssids.length +
+                        pull.deviceSync.virtualSwitches.length}
                       )
                     </TabsTrigger>
                   )}
@@ -2163,7 +2052,8 @@ export function IntegrationsPanel({
                   className="min-h-0 flex-1 space-y-3 overflow-y-auto"
                 >
                   {pull.deviceSync.devices.length === 0 &&
-                  pull.deviceSync.ssids.length === 0 ? (
+                  pull.deviceSync.ssids.length === 0 &&
+                  pull.deviceSync.virtualSwitches.length === 0 ? (
                     <p className="text-sm text-[var(--color-fg-subtle)]">
                       {t(
                         "Nothing importable — enable the device or SSID pull options on the connection.",
@@ -2173,7 +2063,7 @@ export function IntegrationsPanel({
                     <>
                       <p className="text-xs text-[var(--text-tertiary)]">
                         {t(
-                          "New records are created as loose gear (no rack) with their ports; matched records are never modified. Device IPs inside a known subnet are linked as IP assignments.",
+                          "Physical gear is created as loose gear (no rack) with its ports; VMs and containers attach under their host with their virtual NICs. Matched records are never modified, and device IPs inside a known subnet are linked as IP assignments.",
                         )}
                       </p>
                       <IntegrationDiffRows
@@ -2200,6 +2090,21 @@ export function IntegrationsPanel({
                             : undefined,
                         }))}
                       />
+                      {pull.deviceSync.virtualSwitches.length > 0 && (
+                        <IntegrationDiffRows
+                          emptyText={t("The controller reported no devices.")}
+                          rows={pull.deviceSync.virtualSwitches.map(
+                            (entry, index) => ({
+                              key: `vswitch-${entry.name}-${index}`,
+                              label: entry.name,
+                              detail: t("Virtual switch on {name}", {
+                                name: entry.hostName,
+                              }),
+                              action: entry.action,
+                            }),
+                          )}
+                        />
+                      )}
                       {pull.deviceSync.ssids.length > 0 && (
                         <IntegrationDiffRows
                           emptyText={t("The controller reported no devices.")}

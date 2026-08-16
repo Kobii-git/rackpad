@@ -373,12 +373,22 @@ export interface IntegrationDevicePreview {
 
 export interface IntegrationPortSpec {
   name: string;
-  kind: "rj45" | "sfp" | "sfp_plus" | "qsfp" | "wifi";
+  kind: "rj45" | "sfp" | "sfp_plus" | "virtual" | "qsfp" | "wifi";
   speed: string | null;
   linkState: "up" | "down" | "unknown";
   mode?: "access" | "trunk" | null;
   untaggedVlanNumber?: number | null;
   taggedVlanNumbers?: number[];
+  macAddress?: string | null;
+  virtualSwitchName?: string | null;
+  ipAddresses?: string[];
+}
+
+export interface IntegrationVirtualSwitchSpec {
+  name: string;
+  hostName: string;
+  kind: "external" | "internal" | "private";
+  notes: string | null;
 }
 
 export interface IntegrationImportableDevice {
@@ -398,6 +408,7 @@ export interface IntegrationImportableDevice {
   serial: string | null;
   firmware: string | null;
   online: boolean | null;
+  parentName?: string | null;
   ports: IntegrationPortSpec[];
 }
 
@@ -431,6 +442,11 @@ export interface IntegrationDeviceSyncPlan {
     name: string;
     vlanNumber: number | null;
   }>;
+  virtualSwitches: Array<{
+    action: "create" | "exists";
+    name: string;
+    hostName: string;
+  }>;
   controllerName: string | null;
 }
 
@@ -438,6 +454,7 @@ export interface IntegrationDeviceSyncResult {
   createdDeviceIds: string[];
   createdPortCount: number;
   createdSsidIds: string[];
+  createdVirtualSwitchIds: string[];
   createdIpAssignmentIds: string[];
   linkedAccessPoints: number;
   skipped: string[];
@@ -466,15 +483,9 @@ export interface IntegrationInventoryResponse {
   devices: IntegrationDevicePreview[];
   deviceSync: IntegrationDeviceSyncPlan;
   importableDevices: IntegrationImportableDevice[];
+  virtualSwitches: IntegrationVirtualSwitchSpec[];
   wifi: IntegrationWifiInventory | null;
   warnings: string[];
-}
-
-export interface ProxmoxIntegrationNode {
-  node: string;
-  status: string;
-  maxcpu: number | null;
-  maxmemGb: number | null;
 }
 
 export interface DeviceImage {

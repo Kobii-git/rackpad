@@ -48,13 +48,13 @@ controllers stay reviewable.
 - **Test** reports the version, cluster name, node list, and workload counts.
 - **Pull inventory** previews bridge/VLAN-interface subnets and Proxmox SDN
   vnets/subnets (including SDN DHCP ranges) for IPAM, plus a read-only list
-  of nodes, VMs, containers, and bridges.
-- **Stage import** fetches the full node inventory over the API in the same
-  format as `collect-proxmox.sh` and stages it in the Proxmox import wizard
-  below — the same host mapping, VM/container review, virtual switch, port,
-  VLAN, and IP handling as a file upload, no shell access required. For
-  clusters, tick the nodes to stage (Select all included) — workloads and
-  bridges come from every selected node in one pass.
+  of nodes, VMs, containers, and bridges — and the Import tab carries the
+  whole stack from the host down: nodes as server devices, bridges as
+  virtual switches on them, and QEMU/LXC guests as virtual devices under
+  their node with NICs, MACs, VLAN tags, virtual switch links, and IPs
+  (from the guest agent or container interfaces). Templates are skipped.
+  The offline `collect-proxmox.sh` upload on the Imports tab remains for
+  hosts Rackpad cannot reach.
 
 ### UniFi Network
 
@@ -207,12 +207,11 @@ just as read-only previews:
   just switches, just APs, or any mix — the OPNsense firewall itself, and
   from Proxmox the whole stack from the host down: the selected nodes as
   server devices plus their QEMU VMs and LXC containers (Hosts and
-  VMs & containers checkboxes). Model, MAC, IP, serial, firmware, and
-  online status are captured when the controller reports them; for full
-  guest detail (NICs, VLAN tags, IPs) use **Stage import** into the
-  Proxmox wizard, which now stages several nodes at once via a checkbox
-  multi-select with Select all (the first selected node provides the host
-  summary; workloads and bridges come from every selected node).
+  VMs & containers checkboxes) with their NICs, MACs, VLAN tags, virtual
+  switch links, and IPs. Model, MAC, IP, serial, firmware, and online
+  status are captured when the controller reports them, and every MAC is
+  stored in canonical uppercase colon-separated form regardless of how
+  the controller writes it.
 - **Switch ports with VLAN behavior:** the full port list comes in (name,
   RJ45/SFP/SFP+ media type, speed, link state), and when the controller
   exposes per-port VLAN configuration it is mapped onto Rackpad's port
@@ -223,9 +222,11 @@ just as read-only previews:
   list); Omada reads the port PVID and treats the built-in "All" profile
   as a trunk. VLAN links resolve against the lab's VLANs by number, so
   apply the network preview first if the VLANs are new.
-- **Loose gear placement:** imported devices land unracked ("loose gear")
+- **Placement:** imported physical devices land unracked ("loose gear")
   so nothing guesses at physical location — rack them afterwards from the
-  Devices page.
+  Devices page. VMs and containers are created as virtual devices
+  attached under their host, with each virtual NIC landing on its host's
+  virtual switch.
 - **Merge-only matching:** existing devices are matched by MAC address
   first, then hostname/display name, and are never modified. The preview
   modal's **Import** tab shows exactly what will be created versus what is

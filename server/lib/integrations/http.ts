@@ -76,7 +76,10 @@ export async function integrationHttpRequest(
   } catch (error) {
     if (error instanceof ValidationError) throw error;
     const message = error instanceof Error ? error.message : "Request failed.";
-    throw new ValidationError(`Could not reach ${targetLabel}: ${message}`, 502);
+    throw new ValidationError(
+      `Could not reach ${targetLabel}: ${message}`,
+      502,
+    );
   }
 }
 

@@ -124,6 +124,18 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   pulled first and devices second come out interconnected — switches,
   ports, VLANs, subnets, and addresses — ready for the operator to take
   it from there.
+- The Proxmox pull now imports the entire virtualization stack in one
+  pass, replacing the separate Stage import wizard hand-off: nodes become
+  server devices, their bridges become virtual switches on those hosts,
+  and QEMU VMs / LXC containers become virtual devices attached under
+  their node — each with its virtual NICs carrying MAC, VLAN tag, the
+  virtual switch link, and IPs from the QEMU guest agent or container
+  interfaces (creating IP assignments where subnets match). Templates are
+  skipped. The offline collector upload on the Imports tab is unchanged
+  for unreachable hosts.
+- All MAC addresses imported by integrations are normalized to canonical
+  uppercase colon-separated form (AA:BB:CC:DD:EE:FF), whether the
+  controller reports dashes, lowercase, or bare hex.
 - Added a Dockhand integration (Bearer API token) that lists Docker
   environments with online state and container/stack counts, containers with
   image, IP, health, and compose stack, and Docker networks with drivers and
