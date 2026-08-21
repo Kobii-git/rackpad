@@ -225,9 +225,9 @@ function refreshDeviceMonitorRollup(deviceId: string, currentStatus: string | un
     .filter((monitor) => monitor.lastResult === 'online' && monitor.lastCheckAt)
     .map((monitor) => String(monitor.lastCheckAt))
     .sort()
-    .at(-1) ?? checkedAt
+    .at(-1)
 
-  if (currentStatus === 'maintenance') {
+  if (currentStatus === 'maintenance' || currentStatus === 'unmanaged') {
     if (latestOnlineCheck) {
       db.prepare('UPDATE devices SET lastSeen = ? WHERE id = ?').run(latestOnlineCheck, deviceId)
     }

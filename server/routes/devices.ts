@@ -51,6 +51,7 @@ const DEVICE_STATUSES = [
   "warning",
   "unknown",
   "maintenance",
+  "unmanaged",
 ] as const;
 const DEVICE_PLACEMENTS = [
   "rack",

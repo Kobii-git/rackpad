@@ -1139,6 +1139,17 @@ export default function UsersPage() {
                       "Backups include password hashes for local users, so keep the file somewhere private.",
                     )}
                   </div>
+                  <div className="mt-3 flex justify-end">
+                    <Button
+                      className="shrink-0"
+                      size="sm"
+                      onClick={() => void handleExport()}
+                      disabled={exporting}
+                    >
+                      <Download className="size-3.5" />
+                      {exporting ? t("Preparing...") : t("Download backup")}
+                    </Button>
+                  </div>
                 </div>
 
                 {exportError && (
@@ -1344,10 +1355,10 @@ export default function UsersPage() {
                                 ))
                               ? t("Success")
                               : nativeBackups.scheduler.lastFailureAt
-                              ? new Date(
-                                  nativeBackups.scheduler.lastFailureAt,
-                                ).toLocaleString()
-                              : "—")}
+                                ? new Date(
+                                    nativeBackups.scheduler.lastFailureAt,
+                                  ).toLocaleString()
+                                : "—")}
                         </div>
                       </div>
                     </div>
@@ -1369,13 +1380,14 @@ export default function UsersPage() {
                           <div className="flex gap-2">
                             <Button
                               size="sm"
-                              variant="ghost"
+                              variant="outline"
                               disabled={nativeBackupBusy}
                               onClick={() =>
                                 void downloadNativeSnapshot(backup.name)
                               }
                             >
-                              {t("Download")}
+                              <Download />
+                              {t("Download SQLite backup")}
                             </Button>
                             <Button
                               size="sm"
@@ -1403,21 +1415,10 @@ export default function UsersPage() {
                   </div>
                 )}
 
-                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-                  <div className="min-w-0 text-xs text-[var(--color-fg-subtle)]">
-                    {t(
-                      "Use this before Docker updates or test-database resets so you have a clean checkpoint.",
-                    )}
-                  </div>
-                  <Button
-                    className="shrink-0 self-end"
-                    size="sm"
-                    onClick={() => void handleExport()}
-                    disabled={exporting}
-                  >
-                    <Download className="size-3.5" />
-                    {exporting ? t("Preparing...") : t("Download backup")}
-                  </Button>
+                <div className="text-xs text-[var(--color-fg-subtle)]">
+                  {t(
+                    "Use this before Docker updates or test-database resets so you have a clean checkpoint.",
+                  )}
                 </div>
               </CardBody>
             </Card>

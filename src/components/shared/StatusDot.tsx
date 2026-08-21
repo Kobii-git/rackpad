@@ -48,6 +48,7 @@ export function StatusDot({
         glow = "var(--info-soft)";
         break;
       case "unknown":
+      case "unmanaged":
         color = "var(--neutral)";
         break;
     }

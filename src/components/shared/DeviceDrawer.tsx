@@ -49,6 +49,7 @@ const STATUS_OPTIONS: DeviceStatus[] = [
   "offline",
   "warning",
   "maintenance",
+  "unmanaged",
   "unknown",
 ];
 

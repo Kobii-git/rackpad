@@ -2739,10 +2739,13 @@ function portPoint(node: VisualizerNode, portId: string, peer: VisualizerNode) {
   };
 }
 
-function getDeviceHealth(
+export function getDeviceHealth(
   device: Device,
   monitors: DeviceMonitor[],
 ): VisualizerHealth {
+  if (device.status === "unmanaged") {
+    return "unknown";
+  }
   if (
     device.status === "offline" ||
     monitors.some((monitor) => monitor.lastResult === "offline")

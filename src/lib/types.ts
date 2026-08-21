@@ -11,6 +11,15 @@ export interface DeviceTypeDefinition {
   updatedAt?: string;
 }
 
+export interface DeviceTypeUsage {
+  id: DeviceType;
+  devices: number;
+  discoveredDevices: number;
+  portTemplates: number;
+  driveBayTemplates: number;
+  total: number;
+}
+
 export type PortKind =
   | "rj45"
   | "sfp"
@@ -31,7 +40,12 @@ export type LinkState = "up" | "down" | "disabled" | "unknown";
 export type PortMode = "access" | "trunk";
 export type PortRole = "physical" | "aggregate";
 export type DeviceStatus =
-  "online" | "offline" | "warning" | "unknown" | "maintenance";
+  | "online"
+  | "offline"
+  | "warning"
+  | "unknown"
+  | "maintenance"
+  | "unmanaged";
 export type DevicePlacement =
   "rack" | "room" | "wireless" | "virtual" | "shelf";
 export type IpAssignmentType =
@@ -325,6 +339,228 @@ export interface SnmpSyncApplyResult {
   warnings: string[];
 }
 
+export type IntegrationProvider =
+  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand";
+
+export type IntegrationAuthKind =
+  | "api-token"
+  | "api-key"
+  | "username-password"
+  | "client-credentials"
+  | "key-secret";
+
+export type IntegrationScopeKind = "sites" | "nodes" | "environments";
+
+export interface IntegrationProviderInfo {
+  id: IntegrationProvider;
+  label: string;
+  vendor: string;
+  authKinds: IntegrationAuthKind[];
+  defaultAuthKind: IntegrationAuthKind;
+  scopeKind: IntegrationScopeKind | null;
+}
+
+export interface IntegrationScope {
+  id: string;
+  label: string;
+}
+
+export type IntegrationAutoSyncMode = "merge" | "skip";
+
+export interface IntegrationConnection {
+  id: string;
+  labId: string;
+  provider: IntegrationProvider;
+  name: string;
+  baseUrl: string;
+  authKind: IntegrationAuthKind;
+  authId: string | null;
+  hasSecret: boolean;
+  siteRef: string | null;
+  scopeRefs: string[];
+  verifyTls: boolean;
+  enabled: boolean;
+  syncVlans: boolean;
+  syncSubnets: boolean;
+  syncDhcp: boolean;
+  syncSwitches: boolean;
+  syncGateways: boolean;
+  syncAccessPoints: boolean;
+  syncHosts: boolean;
+  syncGuests: boolean;
+  syncWifi: boolean;
+  lastStatus: "unknown" | "ok" | "error";
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  lastSummary: Record<string, unknown> | null;
+  autoSyncEnabled: boolean;
+  autoSyncMode: IntegrationAutoSyncMode;
+  autoSyncCron: string | null;
+  autoSyncLabIds: string[];
+  autoSyncFailureCount: number;
+  autoSyncPausedUntil: string | null;
+  lastAutoSyncAt: string | null;
+  lastAutoSyncStatus: "ok" | "error" | "drift" | null;
+  lastAutoSyncMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IntegrationTestResult {
+  product: string;
+  version: string | null;
+  summary: Record<string, unknown>;
+}
+
+export interface IntegrationDevicePreview {
+  name: string;
+  kind:
+    | "host"
+    | "vm"
+    | "container"
+    | "switch"
+    | "gateway"
+    | "access-point"
+    | "firewall"
+    | "bridge"
+    | "interface"
+    | "other";
+  model: string | null;
+  macAddress: string | null;
+  ipAddress: string | null;
+  status: string | null;
+  detail: string | null;
+}
+
+export interface IntegrationPortSpec {
+  name: string;
+  kind: "rj45" | "sfp" | "sfp_plus" | "virtual" | "qsfp" | "wifi";
+  speed: string | null;
+  linkState: "up" | "down" | "unknown";
+  mode?: "access" | "trunk" | null;
+  untaggedVlanNumber?: number | null;
+  taggedVlanNumbers?: number[];
+  macAddress?: string | null;
+  virtualSwitchName?: string | null;
+  ipAddresses?: string[];
+}
+
+export interface IntegrationVirtualSwitchSpec {
+  providerRecordId?: string;
+  name: string;
+  hostName: string;
+  kind: "external" | "internal" | "private";
+  notes: string | null;
+}
+
+export interface IntegrationImportableDevice {
+  providerRecordId?: string;
+  name: string;
+  deviceType:
+    | "switch"
+    | "router"
+    | "firewall"
+    | "ap"
+    | "server"
+    | "vm"
+    | "container"
+    | "other";
+  model: string | null;
+  macAddress: string | null;
+  ipAddress: string | null;
+  serial: string | null;
+  firmware: string | null;
+  online: boolean | null;
+  parentName?: string | null;
+  ports: IntegrationPortSpec[];
+}
+
+export interface IntegrationWifiInventory {
+  controllerName: string;
+  vendor: string;
+  managementIp: string | null;
+  ssids: Array<{
+    providerRecordId?: string;
+    name: string;
+    vlanNumber: number | null;
+    security: string | null;
+    hidden: boolean;
+  }>;
+}
+
+export interface IntegrationDeviceSyncPlan {
+  labId: string;
+  devices: Array<{
+    providerRecordId: string;
+    action: "create" | "exists";
+    name: string;
+    deviceType: IntegrationImportableDevice["deviceType"];
+    model: string | null;
+    macAddress: string | null;
+    ipAddress: string | null;
+    portCount: number;
+    existingId?: string;
+    existingHostname?: string;
+    proposedUpdates: string[];
+  }>;
+  ssids: Array<{
+    providerRecordId: string;
+    action: "create" | "exists";
+    name: string;
+    vlanNumber: number | null;
+  }>;
+  virtualSwitches: Array<{
+    providerRecordId: string;
+    action: "create" | "exists";
+    name: string;
+    hostName: string;
+  }>;
+  controllerName: string | null;
+}
+
+export interface IntegrationDeviceSyncResult {
+  createdDeviceIds: string[];
+  createdPortCount: number;
+  createdSsidIds: string[];
+  createdVirtualSwitchIds: string[];
+  createdIpAssignmentIds: string[];
+  linkedAccessPoints: number;
+  skipped: string[];
+}
+
+export interface IntegrationSyncSchedule {
+  id: string;
+  connectionId: string;
+  name: string;
+  enabled: boolean;
+  mode: IntegrationAutoSyncMode;
+  cron: string;
+  labIds: string[];
+  failureCount: number;
+  pausedUntil: string | null;
+  lastRunAt: string | null;
+  lastRunStatus: "ok" | "error" | "drift" | null;
+  lastRunMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IntegrationInventoryResponse {
+  connection: IntegrationConnection | null;
+  preview: SnmpSyncPreview;
+  mode: IntegrationAutoSyncMode;
+  networkPreviewToken: string;
+  networkPreviewExpiresAt: string;
+  deviceSnapshotToken: string;
+  deviceSnapshotExpiresAt: string;
+  devices: IntegrationDevicePreview[];
+  deviceSync: IntegrationDeviceSyncPlan;
+  importableDevices: IntegrationImportableDevice[];
+  virtualSwitches: IntegrationVirtualSwitchSpec[];
+  wifi: IntegrationWifiInventory | null;
+  warnings: string[];
+}
+
 export interface DeviceImage {
   id: ID;
   deviceId: ID;
@@ -501,6 +737,7 @@ export interface DockerImportSource {
   endpoint: string;
   hasToken: boolean;
   enabled: boolean;
+  verifyTls: boolean;
   lastSyncAt?: string | null;
   lastSyncStatus?: string | null;
   lastSyncMessage?: string | null;

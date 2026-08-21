@@ -87,6 +87,46 @@ test("offline native restore validates, preserves mode, and creates a safety sna
   }
 });
 
+test("offline native restore round-trips unmanaged device status", async () => {
+  const directory = temporaryRestoreDirectory();
+  const active = path.join(directory, "active.db");
+  const source = path.join(directory, "source.db");
+  try {
+    fixture(active, "before");
+    fixture(source, "after");
+    const sourceDatabase = new Database(source);
+    sourceDatabase
+      .prepare("INSERT INTO labs (id, name) VALUES (?, ?)")
+      .run("lab-unmanaged", "Unmanaged restore lab");
+    sourceDatabase
+      .prepare(
+        "INSERT INTO devices (id, labId, hostname, deviceType, status) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(
+        "device-unmanaged",
+        "lab-unmanaged",
+        "unmanaged-restore",
+        "server",
+        "unmanaged",
+      );
+    sourceDatabase.close();
+
+    await restoreNativeBackup({ source, active });
+
+    const restoredDatabase = new Database(active, { readonly: true });
+    try {
+      const restored = restoredDatabase
+        .prepare("SELECT status FROM devices WHERE id = ?")
+        .get("device-unmanaged") as { status: string };
+      assert.equal(restored.status, "unmanaged");
+    } finally {
+      restoredDatabase.close();
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("offline native restore includes committed WAL data in the replacement", async () => {
   const directory = temporaryRestoreDirectory();
   const active = path.join(directory, "active.db");

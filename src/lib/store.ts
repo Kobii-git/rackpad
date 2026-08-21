@@ -2581,12 +2581,16 @@ export async function replaceStoragePoolDriveRecord(
     ),
     storageDrives: sortStorageDrives([
       ...prev.storageDrives.filter(
-        (drive) => drive.id !== oldDriveId && drive.id !== result.replacement.id,
+        (drive) =>
+          drive.id !== oldDriveId && drive.id !== result.replacement.id,
       ),
       ...(result.oldDrive ? [result.oldDrive] : []),
       result.replacement,
     ]),
-    driveSlots: reconcileDriveSlotAssignment(prev.driveSlots, result.replacement),
+    driveSlots: reconcileDriveSlotAssignment(
+      prev.driveSlots,
+      result.replacement,
+    ),
   }));
   return result;
 }
@@ -3391,6 +3395,7 @@ export async function unlinkDocumentationDeviceRecord(
 export async function importDockerContainerRecord(input: {
   endpoint: string;
   token?: string;
+  verifyTls?: boolean;
   containerId: string;
   labId: string;
   hostDeviceId: string;

@@ -4,6 +4,7 @@ import type { Device, DeviceTypeDefinition, Port } from "@/lib/types";
 import {
   buildSearchResults,
   buildVisualizerModel,
+  getDeviceHealth,
   summarizeCableLengths,
   visualizerCableLaneIndexes,
   visualizerCablePath,
@@ -16,6 +17,26 @@ import type {
   VisualizerCable,
   VisualizerNode,
 } from "./types";
+
+test("unmanaged devices remain neutral in visualizer health", () => {
+  const device = { ...testDevice("unmanaged-device"), status: "unmanaged" as const };
+  assert.equal(getDeviceHealth(device, []), "unknown");
+  assert.equal(
+    getDeviceHealth(device, [
+      {
+        id: "monitor-offline",
+        deviceId: device.id,
+        name: "Reachability",
+        type: "icmp",
+        enabled: true,
+        ignoreTlsErrors: false,
+        sortOrder: 0,
+        lastResult: "offline",
+      },
+    ]),
+    "unknown",
+  );
+});
 
 function testDevice(id: string): Device {
   return {

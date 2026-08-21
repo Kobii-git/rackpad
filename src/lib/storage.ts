@@ -269,6 +269,47 @@ export function summarizeStorage(
   };
 }
 
+export type OverviewStorageSource =
+  | "usable-topology"
+  | "raw-topology"
+  | "manual-imported";
+
+export function deriveOverviewStorage(
+  deviceId: string,
+  manualStorageGb: number | null | undefined,
+  drives: StorageDrive[],
+  pools: StoragePool[],
+): { capacityGb: number | undefined; source: OverviewStorageSource } {
+  const ownedPools = pools.filter((pool) => pool.deviceId === deviceId);
+  if (ownedPools.length > 0) {
+    return {
+      capacityGb: ownedPools.reduce(
+        (sum, pool) => sum + pool.usableCapacityGb,
+        0,
+      ),
+      source: "usable-topology",
+    };
+  }
+
+  const installedDrives = drives.filter(
+    (drive) => drive.deviceId === deviceId && Boolean(drive.slotId),
+  );
+  if (installedDrives.length > 0) {
+    return {
+      capacityGb: installedDrives.reduce(
+        (sum, drive) => sum + drive.capacityGb,
+        0,
+      ),
+      source: "raw-topology",
+    };
+  }
+
+  return {
+    capacityGb: manualStorageGb ?? undefined,
+    source: "manual-imported",
+  };
+}
+
 export function isPoolDriveEligible(
   drive: StorageDrive,
   poolId?: string | null,

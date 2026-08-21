@@ -18,7 +18,9 @@ Major domains are:
 
 Images and attachment-like data are stored as bounded base64 data URLs in SQLite.
 The database is therefore the complete durable state. The logical JSON backup is
-portable but deliberately redacts selected integration secrets.
+portable. Alert-delivery secrets are redacted, while controller integration
+credentials are preserved only as encrypted ciphertext so connections survive
+restore when the same `RACKPAD_SECRET_KEY` is retained.
 
 ## Invariants
 

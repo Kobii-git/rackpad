@@ -10,7 +10,16 @@ const DEFAULT_RESERVED_HOST_MESSAGE =
   "Target host must be a routable public/LAN host outside reserved ranges.";
 type HostLookup = (host: string) => Promise<LookupAddress[]>;
 let hostLookup: HostLookup = (host) => dns.lookup(host, { all: true });
-type PinnedRequestResult = { statusCode: number; location?: string };
+type PinnedResponseHeaders = Record<
+  string,
+  string | string[] | undefined
+>;
+type PinnedRequestResult = {
+  statusCode: number;
+  location?: string;
+  headers?: PinnedResponseHeaders;
+  bodyText?: string;
+};
 type PinnedRequestTransport = (
   input: URL,
   resolved: LookupAddress,
@@ -20,6 +29,8 @@ type PinnedRequestTransport = (
     method: "GET" | "POST";
     body?: string;
     rejectUnauthorized: boolean;
+    captureBody?: boolean;
+    maxResponseBytes?: number;
   },
 ) => Promise<PinnedRequestResult>;
 let pinnedRequestTransport: PinnedRequestTransport = performPinnedRequest;
@@ -102,8 +113,59 @@ export async function requestPinnedUrl(
     method?: "GET" | "POST";
     body?: string;
     rejectUnauthorized?: boolean;
+    reservedHostMessage?: string;
+    sameOriginRedirects?: boolean;
   } = {},
 ): Promise<{ statusCode: number; url: URL }> {
+  const response = await requestPinnedUrlResponse(input, options);
+  return { statusCode: response.statusCode, url: response.url };
+}
+
+export async function requestPinnedUrlWithBody(
+  input: URL,
+  options: {
+    timeoutMs?: number;
+    maxRedirects?: number;
+    maxResponseBytes?: number;
+    headers?: Record<string, string>;
+    method?: "GET" | "POST";
+    body?: string;
+    rejectUnauthorized?: boolean;
+    reservedHostMessage?: string;
+    sameOriginRedirects?: boolean;
+  } = {},
+): Promise<{
+  statusCode: number;
+  url: URL;
+  headers: PinnedResponseHeaders;
+  bodyText: string;
+}> {
+  return requestPinnedUrlResponse(input, {
+    ...options,
+    captureBody: true,
+  });
+}
+
+async function requestPinnedUrlResponse(
+  input: URL,
+  options: {
+    timeoutMs?: number;
+    maxRedirects?: number;
+    maxResponseBytes?: number;
+    headers?: Record<string, string>;
+    method?: "GET" | "POST";
+    body?: string;
+    rejectUnauthorized?: boolean;
+    reservedHostMessage?: string;
+    sameOriginRedirects?: boolean;
+    captureBody?: boolean;
+  },
+): Promise<{
+  statusCode: number;
+  url: URL;
+  headers: PinnedResponseHeaders;
+  bodyText: string;
+}> {
   const timeoutMs = options.timeoutMs ?? 5_000;
   const maxRedirects = options.maxRedirects ?? 3;
   if (input.protocol !== "http:" && input.protocol !== "https:") {
@@ -113,29 +175,62 @@ export async function requestPinnedUrl(
     throw new ValidationError("Target URL must not contain credentials.");
   }
 
-  const resolved = await resolveRoutableHost(input);
+  const resolved = await resolveRoutableHost(
+    input,
+    options.reservedHostMessage,
+  );
   const status = await pinnedRequestTransport(input, resolved, {
     timeoutMs,
     headers: options.headers ?? {},
     method: options.method ?? "GET",
     body: options.body,
     rejectUnauthorized: options.rejectUnauthorized ?? true,
+    captureBody: options.captureBody,
+    maxResponseBytes: options.maxResponseBytes,
   });
 
   if (status.statusCode >= 300 && status.statusCode < 400 && status.location) {
     if (maxRedirects <= 0) {
       throw new ValidationError("Target returned too many redirects.");
     }
+    const redirectUrl = new URL(status.location, input);
+    if (
+      redirectUrl.origin !== input.origin &&
+      (options.sameOriginRedirects || hasCredentialHeaders(options.headers))
+    ) {
+      throw new ValidationError(
+        "Target redirected credentials to a different origin.",
+      );
+    }
     const preserveMethod =
       status.statusCode === 307 || status.statusCode === 308;
-    return requestPinnedUrl(new URL(status.location, input), {
+    return requestPinnedUrlResponse(redirectUrl, {
       ...options,
       maxRedirects: maxRedirects - 1,
       method: preserveMethod ? options.method : "GET",
       body: preserveMethod ? options.body : undefined,
     });
   }
-  return { statusCode: status.statusCode, url: input };
+  return {
+    statusCode: status.statusCode,
+    url: input,
+    headers: status.headers ?? {},
+    bodyText: status.bodyText ?? "",
+  };
+}
+
+function hasCredentialHeaders(headers: Record<string, string> | undefined) {
+  if (!headers) return false;
+  const credentialHeaders = new Set([
+    "authorization",
+    "proxy-authorization",
+    "cookie",
+    "x-api-key",
+    "x-auth-token",
+  ]);
+  return Object.keys(headers).some((header) =>
+    credentialHeaders.has(header.toLowerCase()),
+  );
 }
 
 export function buildPinnedRequestOptions(
@@ -176,6 +271,8 @@ function performPinnedRequest(
     method: "GET" | "POST";
     body?: string;
     rejectUnauthorized: boolean;
+    captureBody?: boolean;
+    maxResponseBytes?: number;
   },
 ) {
   return new Promise<PinnedRequestResult>((resolve, reject) => {
@@ -197,8 +294,46 @@ function performPinnedRequest(
     request.on("response", (response) => {
       const statusCode = response.statusCode ?? 0;
       const location = response.headers.location;
-      response.resume();
-      response.on("end", () => resolve({ statusCode, location }));
+      if (!options.captureBody) {
+        response.resume();
+        response.on("end", () =>
+          resolve({ statusCode, location, headers: response.headers }),
+        );
+        return;
+      }
+
+      let settled = false;
+      let bodyText = "";
+      let bytes = 0;
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+      response.setEncoding("utf8");
+      response.on("data", (chunk: string) => {
+        if (settled) return;
+        bytes += Buffer.byteLength(chunk);
+        if (bytes > (options.maxResponseBytes ?? 8 * 1024 * 1024)) {
+          const error = new Error("Response exceeded the allowed size.");
+          fail(error);
+          response.destroy(error);
+          return;
+        }
+        bodyText += chunk;
+      });
+      response.on("aborted", () => fail(new Error("Response was aborted.")));
+      response.on("error", fail);
+      response.on("end", () => {
+        if (settled) return;
+        settled = true;
+        resolve({
+          statusCode,
+          location,
+          headers: response.headers,
+          bodyText,
+        });
+      });
     });
     request.end(options.body);
   });

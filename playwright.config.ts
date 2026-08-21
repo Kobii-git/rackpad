@@ -14,7 +14,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "mkdir -p .cache .cache/rackpad-e2e-native && rm -f .cache/rackpad-e2e.db .cache/rackpad-e2e.db-shm .cache/rackpad-e2e.db-wal && DATABASE_PATH=.cache/rackpad-e2e.db RACKPAD_NATIVE_BACKUP_DIR=.cache/rackpad-e2e-native NODE_ENV=test RACKPAD_RATE_LIMIT_DISABLED=1 npm run dev:all",
+      "mkdir -p .cache .cache/rackpad-e2e-native && rm -f .cache/rackpad-e2e.db .cache/rackpad-e2e.db-shm .cache/rackpad-e2e.db-wal && DATABASE_PATH=.cache/rackpad-e2e.db RACKPAD_NATIVE_BACKUP_DIR=.cache/rackpad-e2e-native RACKPAD_SECRET_KEY=rackpad-e2e-integration-secret NODE_ENV=test RACKPAD_RATE_LIMIT_DISABLED=1 npm run dev:all",
     url: "http://127.0.0.1:5173/api/auth/status",
     timeout: 120_000,
     reuseExistingServer: false,

@@ -3,8 +3,10 @@ import { test } from "node:test";
 import {
   DEFAULT_DISCOVERY_SCAN_SCHEDULE_INTERVAL_MS,
   DEFAULT_DOCKER_STATUS_SYNC_INTERVAL_MS,
+  DEFAULT_INTEGRATION_STATUS_SYNC_INTERVAL_MS,
   DEFAULT_MONITOR_INTERVAL_MS,
   parsePositiveInteger,
+  parseNonNegativeInteger,
   resolveRuntimeConfig,
 } from "../lib/runtime-config.js";
 
@@ -16,6 +18,8 @@ test("runtime intervals use documented defaults", () => {
     discoveryScanScheduleIntervalMs:
       DEFAULT_DISCOVERY_SCAN_SCHEDULE_INTERVAL_MS,
     dockerStatusSyncIntervalMs: DEFAULT_DOCKER_STATUS_SYNC_INTERVAL_MS,
+    integrationStatusSyncIntervalMs:
+      DEFAULT_INTEGRATION_STATUS_SYNC_INTERVAL_MS,
   });
 });
 
@@ -27,6 +31,7 @@ test("runtime intervals accept positive integers", () => {
       MONITOR_INTERVAL_MS: "15000",
       DISCOVERY_SCAN_SCHEDULE_INTERVAL_MS: "30000",
       DOCKER_STATUS_SYNC_INTERVAL_MS: "45000",
+      INTEGRATION_STATUS_SYNC_INTERVAL_MS: "60000",
     }),
     {
       port: 3100,
@@ -34,8 +39,16 @@ test("runtime intervals accept positive integers", () => {
       monitorIntervalMs: 15000,
       discoveryScanScheduleIntervalMs: 30000,
       dockerStatusSyncIntervalMs: 45000,
+      integrationStatusSyncIntervalMs: 60000,
     },
   );
+});
+
+test("integration status sync allows zero to disable the loop", () => {
+  assert.equal(parseNonNegativeInteger("0", 1234), 0);
+  for (const value of ["-1", "1.5", "not-a-number", "12ms", ""]) {
+    assert.equal(parseNonNegativeInteger(value, 1234), 1234);
+  }
 });
 
 test("invalid runtime integers fall back instead of disabling background work", () => {

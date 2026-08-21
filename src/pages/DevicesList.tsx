@@ -89,6 +89,15 @@ interface DuplicateMacGroup {
   ignored: boolean;
 }
 
+const DEVICE_STATUS_OPTIONS = [
+  "online",
+  "offline",
+  "warning",
+  "maintenance",
+  "unmanaged",
+  "unknown",
+] as const satisfies readonly DeviceStatus[];
+
 const EMPTY_BULK_DEVICE_FORM: BulkDeviceForm = {
   tags: "",
   placement: "",
@@ -143,6 +152,10 @@ export default function DevicesList() {
   );
   const [duplicateMacError, setDuplicateMacError] = useState("");
   const typeParam = searchParams.get("type");
+  const requestedStatus = searchParams.get("status");
+  const statusParam = DEVICE_STATUS_OPTIONS.find(
+    (status) => status === requestedStatus,
+  ) ?? null;
   const placementParam = searchParams.get("placement");
   const macParam = searchParams.get("mac");
   const ipParam = searchParams.get("ip");
@@ -280,6 +293,7 @@ export default function DevicesList() {
     return devices
       .filter((device) => {
         if (type && device.deviceType !== type) return false;
+        if (statusParam && device.status !== statusParam) return false;
         if (showUnplacedOnly && !isUnplacedDevice(device)) return false;
         if (showDuplicateMacs && !visibleDuplicateMacDeviceIds.has(device.id))
           return false;
@@ -326,6 +340,7 @@ export default function DevicesList() {
     rackById,
     roomById,
     sort,
+    statusParam,
     showUnplacedOnly,
     showDuplicateMacs,
     showIpMismatches,
@@ -546,6 +561,16 @@ export default function DevicesList() {
     setSearchParams(nextParams);
   }
 
+  function setStatusFilter(status: DeviceStatus | null) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (status) {
+      nextParams.set("status", status);
+    } else {
+      nextParams.delete("status");
+    }
+    setSearchParams(nextParams);
+  }
+
   function setDuplicateMacFilter(duplicatesOnly: boolean) {
     const nextParams = new URLSearchParams(searchParams);
     if (duplicatesOnly) {
@@ -701,6 +726,20 @@ export default function DevicesList() {
               className="pl-7"
             />
           </div>
+          <Select
+            ariaLabel={t("Status")}
+            value={statusParam ?? ""}
+            onChange={(value) =>
+              setStatusFilter((value || null) as DeviceStatus | null)
+            }
+          >
+            <option value="">{t("All")} {t("Status")}</option>
+            {DEVICE_STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>
+                {t(statusLabel[status] as never)}
+              </option>
+            ))}
+          </Select>
           <Mono
             data-testid="device-filter-count"
             className="whitespace-nowrap text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]"
@@ -1092,15 +1131,7 @@ export default function DevicesList() {
                     }
                   >
                     <option value="">{t("Keep current status")}</option>
-                    {(
-                      [
-                        "online",
-                        "offline",
-                        "warning",
-                        "maintenance",
-                        "unknown",
-                      ] as const
-                    ).map((status) => (
+                    {DEVICE_STATUS_OPTIONS.map((status) => (
                       <option key={status} value={status}>
                         {statusLabel[status]}
                       </option>
@@ -1186,7 +1217,10 @@ export default function DevicesList() {
                 </div>
               )}
 
-              {bulkFields.has("status") && monitoredStatusCount > 0 && (
+              {bulkFields.has("status") &&
+                monitoredStatusCount > 0 &&
+                bulkForm.status !== "maintenance" &&
+                bulkForm.status !== "unmanaged" && (
                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/8 px-3 py-2 text-xs text-[var(--color-fg-subtle)]">
                   {monitoredStatusCount} {t("selected monitored device")}
                   {monitoredStatusCount === 1 ? "" : t("s")}{" "}
@@ -1574,13 +1608,16 @@ function Select({
   value,
   onChange,
   children,
+  ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
   children: ReactNode;
+  ariaLabel?: string;
 }) {
   return (
     <select
+      aria-label={ariaLabel}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       className="rk-control h-8 w-full px-2 text-sm text-[var(--text-primary)]"

@@ -5,10 +5,54 @@ type ImageAsset = {
   mimeType?: string | null;
 };
 
+const SAFE_EMBEDDED_IMAGE =
+  /^data:image\/(?:gif|jpeg|png|webp)(?:;base64)?,/i;
+
+export function resolveSafeImageSource(
+  source: string,
+  baseUrl = window.location.href,
+) {
+  const trimmed = source.trim();
+  if (SAFE_EMBEDDED_IMAGE.test(trimmed)) return trimmed;
+
+  try {
+    const url = new URL(trimmed, baseUrl);
+    if (
+      url.protocol === "http:" ||
+      url.protocol === "https:" ||
+      url.protocol === "blob:"
+    ) {
+      return url.href;
+    }
+  } catch {
+    // Invalid and unsafe sources are deliberately inert.
+  }
+  return null;
+}
+
+export function openImageSource(source: string) {
+  const safeSource = resolveSafeImageSource(source);
+  if (!safeSource) return false;
+
+  const objectUrl = safeSource.startsWith("data:")
+    ? URL.createObjectURL(dataUrlToBlob(safeSource))
+    : null;
+  const opened = window.open(
+    objectUrl ?? safeSource,
+    "_blank",
+    "noopener,noreferrer",
+  );
+  if (objectUrl) {
+    window.setTimeout(
+      () => URL.revokeObjectURL(objectUrl),
+      opened ? 60_000 : 1_000,
+    );
+  }
+  return Boolean(opened);
+}
+
 export function openImageAsset(image: ImageAsset) {
-  const url = imageDataUrlToObjectUrl(image);
-  const opened = window.open(url, "_blank", "noopener,noreferrer");
-  window.setTimeout(() => URL.revokeObjectURL(url), opened ? 60_000 : 1_000);
+  openImageSource(image.dataUrl);
 }
 
 export function downloadImageAsset(image: ImageAsset) {

@@ -4,9 +4,11 @@ import {
   buildPinnedRequestOptions,
   ensureRoutableHost,
   requestPinnedUrl,
+  requestPinnedUrlWithBody,
   setNetworkHostLookupForTests,
   setPinnedRequestTransportForTests,
 } from "../lib/net-guard.js";
+import { integrationHttpRequest } from "../lib/integrations/http.js";
 
 test("ensureRoutableHost rejects reserved address ranges", async () => {
   await assert.rejects(
@@ -168,6 +170,178 @@ test("redirects cannot switch to a blocked destination", async () => {
       () => requestPinnedUrl(new URL("https://public.example/start")),
       /reserved ranges/,
     );
+  } finally {
+    setPinnedRequestTransportForTests(null);
+    setNetworkHostLookupForTests(null);
+  }
+});
+
+test("credentialed and explicitly same-origin requests reject cross-origin redirects", async () => {
+  setNetworkHostLookupForTests(async () => [
+    { address: "10.20.30.40", family: 4 },
+  ]);
+  setPinnedRequestTransportForTests(async () => ({
+    statusCode: 302,
+    location: "https://other.example/final",
+  }));
+  try {
+    await assert.rejects(
+      () =>
+        requestPinnedUrl(new URL("https://controller.example/start"), {
+          headers: { Authorization: "Bearer secret" },
+        }),
+      /redirected credentials to a different origin/,
+    );
+    await assert.rejects(
+      () =>
+        requestPinnedUrl(new URL("https://controller.example/start"), {
+          sameOriginRedirects: true,
+        }),
+      /redirected credentials to a different origin/,
+    );
+  } finally {
+    setPinnedRequestTransportForTests(null);
+    setNetworkHostLookupForTests(null);
+  }
+});
+
+test("same-origin redirects are capped and revalidated on every hop", async () => {
+  const resolvedHosts: string[] = [];
+  let requestCount = 0;
+  setNetworkHostLookupForTests(async (host) => {
+    resolvedHosts.push(host);
+    return [{ address: "10.20.30.40", family: 4 }];
+  });
+  setPinnedRequestTransportForTests(async () => {
+    requestCount += 1;
+    return {
+      statusCode: 302,
+      location: `/redirect-${requestCount}`,
+    };
+  });
+  try {
+    await assert.rejects(
+      () =>
+        requestPinnedUrl(new URL("https://controller.example/start"), {
+          maxRedirects: 3,
+          sameOriginRedirects: true,
+        }),
+      /too many redirects/,
+    );
+    assert.equal(requestCount, 4);
+    assert.deepEqual(resolvedHosts, Array(4).fill("controller.example"));
+  } finally {
+    setPinnedRequestTransportForTests(null);
+    setNetworkHostLookupForTests(null);
+  }
+});
+
+test("body requests enforce the supplied TLS, timeout, and response bounds", async () => {
+  setNetworkHostLookupForTests(async () => [
+    { address: "10.20.30.40", family: 4 },
+  ]);
+  let seenOptions:
+    | {
+        timeoutMs: number;
+        rejectUnauthorized: boolean;
+        captureBody?: boolean;
+        maxResponseBytes?: number;
+      }
+    | undefined;
+  setPinnedRequestTransportForTests(async (_url, _resolved, options) => {
+    seenOptions = options;
+    return {
+      statusCode: 200,
+      headers: { "content-type": "application/json" },
+      bodyText: '{"ok":true}',
+    };
+  });
+  try {
+    const result = await requestPinnedUrlWithBody(
+      new URL("https://controller.example/api"),
+      {
+        timeoutMs: 9_000,
+        maxResponseBytes: 8 * 1024 * 1024,
+      },
+    );
+    assert.equal(result.bodyText, '{"ok":true}');
+    assert.deepEqual(seenOptions, {
+      timeoutMs: 9_000,
+      headers: {},
+      method: "GET",
+      body: undefined,
+      rejectUnauthorized: true,
+      captureBody: true,
+      maxResponseBytes: 8 * 1024 * 1024,
+    });
+  } finally {
+    setPinnedRequestTransportForTests(null);
+    setNetworkHostLookupForTests(null);
+  }
+});
+
+test("integration HTTP uses the shared pinned guard with secure bounds", async () => {
+  setNetworkHostLookupForTests(async () => [
+    { address: "10.20.30.40", family: 4 },
+  ]);
+  let seenOptions:
+    | {
+        timeoutMs: number;
+        headers: Record<string, string>;
+        rejectUnauthorized: boolean;
+        captureBody?: boolean;
+        maxResponseBytes?: number;
+      }
+    | undefined;
+  setPinnedRequestTransportForTests(async (_url, _resolved, options) => {
+    seenOptions = options;
+    return { statusCode: 200, bodyText: '{"ok":true}' };
+  });
+  try {
+    const response = await integrationHttpRequest(
+      {
+        url: new URL("https://controller.example/api"),
+        headers: { Authorization: "Bearer secret" },
+      },
+      "Test controller",
+    );
+    assert.equal(response.bodyText, '{"ok":true}');
+    assert.equal(seenOptions?.timeoutMs, 15_000);
+    assert.equal(seenOptions?.rejectUnauthorized, true);
+    assert.equal(seenOptions?.captureBody, true);
+    assert.equal(seenOptions?.maxResponseBytes, 8 * 1024 * 1024);
+    assert.deepEqual(seenOptions?.headers, {
+      Accept: "application/json",
+      Authorization: "Bearer secret",
+    });
+  } finally {
+    setPinnedRequestTransportForTests(null);
+    setNetworkHostLookupForTests(null);
+  }
+});
+
+test("body requests reject transport timeout, size, abort, and response errors", async () => {
+  setNetworkHostLookupForTests(async () => [
+    { address: "10.20.30.40", family: 4 },
+  ]);
+  try {
+    for (const message of [
+      "Request timed out.",
+      "Response exceeded the allowed size.",
+      "Response was aborted.",
+      "Socket failed.",
+    ]) {
+      setPinnedRequestTransportForTests(async () => {
+        throw new Error(message);
+      });
+      await assert.rejects(
+        () =>
+          requestPinnedUrlWithBody(
+            new URL("https://controller.example/api"),
+          ),
+        new RegExp(message.replaceAll(".", "\\.")),
+      );
+    }
   } finally {
     setPinnedRequestTransportForTests(null);
     setNetworkHostLookupForTests(null);

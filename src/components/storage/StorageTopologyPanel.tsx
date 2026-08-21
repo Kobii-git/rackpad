@@ -177,6 +177,18 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
     () => summarizeStorage(deviceDrives, slots, pools, drives),
     [deviceDrives, drives, pools, slots],
   );
+  const attachedPools = useMemo(() => {
+    const installedDriveIds = new Set(
+      drives
+        .filter((drive) => drive.deviceId === deviceId && drive.slotId)
+        .map((drive) => drive.id),
+    );
+    return allPools.filter(
+      (pool) =>
+        pool.deviceId !== deviceId &&
+        pool.driveIds.some((driveId) => installedDriveIds.has(driveId)),
+    );
+  }, [allPools, deviceId, drives]);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [applyingTemplate, setApplyingTemplate] = useState(false);
@@ -490,6 +502,66 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
       <p className="text-xs text-[var(--text-muted)]">
         {t("Storage (GB) remains an independent imported or manual value.")}
       </p>
+
+      {attachedPools.length > 0 && (
+        <Card data-testid="attached-storage-pools">
+          <CardHeader>
+            <CardTitle>
+              <CardLabel>{t("Relationships")}</CardLabel>
+              <CardHeading>{t("Logical pools")}</CardHeading>
+            </CardTitle>
+          </CardHeader>
+          <CardBody>
+            <div className="space-y-2">
+              {attachedPools.map((pool) => {
+                const owner = devices.find(
+                  (entry) => entry.id === pool.deviceId,
+                );
+                const memberCount = pool.driveIds.filter((driveId) =>
+                  drives.some(
+                    (drive) =>
+                      drive.id === driveId &&
+                      drive.deviceId === deviceId &&
+                      drive.slotId,
+                  ),
+                ).length;
+                return (
+                  <div
+                    key={pool.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="break-words text-sm font-semibold">
+                        {pool.name}
+                      </div>
+                      <div className="mt-0.5 text-xs text-[var(--text-muted)]">
+                        {memberCount} {t("Drives")}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone="info">{t("External / attached")}</Badge>
+                      <span className="text-xs text-[var(--text-muted)]">
+                        {t("Pool owner")}:
+                      </span>
+                      {owner ? (
+                        <Button variant="link" size="sm" asChild>
+                          <Link to={`/devices/${owner.id}?tab=storage`}>
+                            {owner.hostname}
+                          </Link>
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-[var(--color-warning)]">
+                          {t("Unassigned")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       {error && (
         <div className="rounded-[var(--radius-sm)] border border-[var(--danger-border)] bg-[var(--danger-soft)] px-3 py-2 text-xs text-[var(--danger)]">
@@ -845,6 +917,7 @@ export function StorageTopologyPanel({ deviceId }: StorageTopologyPanelProps) {
                   pool={selectedPool}
                   drives={drives}
                   devices={devices}
+                  ownerDeviceId={deviceId}
                   disabled={!canEdit}
                   onSave={() => void handleSavePool()}
                   onDelete={() => void handleDeletePool()}
@@ -1318,6 +1391,7 @@ function PoolEditor({
   pool,
   drives,
   devices,
+  ownerDeviceId,
   disabled,
   onSave,
   onDelete,
@@ -1332,6 +1406,7 @@ function PoolEditor({
   pool: StoragePool | null;
   drives: StorageDrive[];
   devices: Array<{ id: string; hostname: string }>;
+  ownerDeviceId: string;
   disabled: boolean;
   onSave: () => void;
   onDelete: () => void;
@@ -1439,6 +1514,11 @@ function PoolEditor({
               hoverPoolId && hoverPoolId === highlightedPoolId,
             );
             const inputId = `storage-pool-drive-${pool?.id ?? "new"}-${drive.id}`;
+            const installation = !drive.slotId
+              ? "unassigned"
+              : drive.deviceId === ownerDeviceId
+                ? "internal"
+                : "external";
             return (
               <div
                 key={drive.id}
@@ -1488,14 +1568,26 @@ function PoolEditor({
                     )
                   }
                 />
-                <label htmlFor={inputId} className="min-w-0 flex-1">
-                  <span className="block break-words text-xs font-medium">
+                <div className="min-w-0 flex-1">
+                  <label
+                    htmlFor={inputId}
+                    className="block break-words text-xs font-medium"
+                  >
                     {driveLabel(drive)}
-                  </span>
+                  </label>
                   <span className="mt-0.5 block break-words font-mono text-[10px] text-[var(--text-muted)]">
-                    {drive.deviceId
-                      ? hostnameById.get(drive.deviceId)
-                      : t("Unassigned")}
+                    {installation === "external" && drive.deviceId ? (
+                      <Link
+                        className="text-[var(--color-accent)] hover:underline"
+                        to={`/devices/${drive.deviceId}?tab=storage`}
+                      >
+                        {hostnameById.get(drive.deviceId) ?? t("Unassigned")}
+                      </Link>
+                    ) : installation === "internal" ? (
+                      hostnameById.get(drive.deviceId ?? "")
+                    ) : (
+                      t("Unassigned")
+                    )}
                     {drive.slotName
                       ? t("· {value1}", { value1: drive.slotName })
                       : ""}
@@ -1503,7 +1595,14 @@ function PoolEditor({
                       ? t("· {value1}", { value1: drive.serial })
                       : ""}
                   </span>
-                </label>
+                </div>
+                <Badge tone={installation === "external" ? "info" : "neutral"}>
+                  {installation === "internal"
+                    ? t("Internal")
+                    : installation === "external"
+                      ? t("External / attached")
+                      : t("Unassigned")}
+                </Badge>
                 {assignedElsewhere && (
                   <Badge tone="neutral">{drive.poolName}</Badge>
                 )}

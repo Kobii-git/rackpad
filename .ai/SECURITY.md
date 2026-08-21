@@ -40,8 +40,9 @@ constraints for changes.
   AI context.
 - `RACKPAD_SECRET_KEY` protects supported stored integration secrets. Losing or
   rotating it makes existing encrypted values unreadable; re-entry is required.
-- Backups remain sensitive because they contain password hashes and infrastructure
-  data even when selected notification secrets are redacted.
+- Backups remain sensitive because they contain password hashes, infrastructure
+  data, and encrypted controller credentials even when selected notification
+  secrets are redacted.
 
 ## High-risk files
 

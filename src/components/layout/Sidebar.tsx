@@ -20,6 +20,7 @@ import {
   Route,
   UploadCloud,
   HardDrive,
+  Tags,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { selectLab, useStore } from "@/lib/store";
@@ -63,6 +64,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
     currentUser?.role === "admin"
       ? ([
           ...baseNavItems,
+          { to: "/admin/device-types", icon: Tags, label: "Device types" },
           { to: "/admin", icon: Shield, label: "Admin" },
         ] as const)
       : baseNavItems;
@@ -201,7 +203,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.to === "/"}
+            end={item.to === "/" || item.to === "/admin"}
             title={t(item.label)}
             className={({ isActive }) =>
               cn(

@@ -374,7 +374,7 @@ export function listDeviceTypesWithObserved(): DeviceTypeDefinition[] {
   return [...listed, ...observed]
 }
 
-function deviceTypeUsage(deviceType: string) {
+export function deviceTypeUsage(deviceType: string) {
   const devices = db.prepare(`
     SELECT COUNT(*) AS count
     FROM devices
@@ -410,4 +410,19 @@ function deviceTypeUsage(deviceType: string) {
     portTemplates: countTemplateUsage(templates),
     driveBayTemplates: countTemplateUsage(driveBayTemplates),
   }
+}
+
+export function listDeviceTypeUsage() {
+  return listDeviceTypesWithObserved().map((type) => {
+    const usage = deviceTypeUsage(type.id)
+    return {
+      id: type.id,
+      ...usage,
+      total:
+        usage.devices +
+        usage.discoveredDevices +
+        usage.portTemplates +
+        usage.driveBayTemplates,
+    }
+  })
 }

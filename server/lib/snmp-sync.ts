@@ -202,7 +202,11 @@ export function applySnmpSyncPreview(input: {
   preview: SnmpSyncPreview
   allowDeletes?: boolean
   actor: string
+  audit?: { entityType?: string; actionPrefix?: string; label?: string }
 }): SnmpSyncApplyResult {
+  const auditEntityType = input.audit?.entityType ?? 'SnmpSync'
+  const auditPrefix = input.audit?.actionPrefix ?? 'snmp.sync'
+  const auditLabel = input.audit?.label ?? 'SNMP sync'
   const result: SnmpSyncApplyResult = {
     profileId: input.preview.profileId,
     deviceId: input.preview.deviceId,
@@ -239,18 +243,30 @@ export function applySnmpSyncPreview(input: {
         `).run(id, input.preview.labId, diff.vlanNumber, diff.name)
         vlanIdByNumber.set(diff.vlanNumber, id)
         result.createdVlanIds.push(id)
-        writeSyncAudit(input.actor, 'snmp.sync.vlan.create', id, `Created VLAN ${diff.vlanNumber} (${diff.name}).`)
+        writeSyncAudit(
+          input.actor,
+          `${auditPrefix}.vlan.create`,
+          id,
+          `Created VLAN ${diff.vlanNumber} (${diff.name}).`,
+          auditEntityType,
+        )
         continue
       }
 
       if (diff.action === 'update' && diff.existingId) {
-        db.prepare('UPDATE vlans SET name = ? WHERE id = ?').run(diff.name, diff.existingId)
+        const update = db.prepare('UPDATE vlans SET name = ? WHERE id = ? AND labId = ?').run(
+          diff.name,
+          diff.existingId,
+          input.preview.labId,
+        )
+        if (update.changes === 0) continue
         result.updatedVlanIds.push(diff.existingId)
         writeSyncAudit(
           input.actor,
-          'snmp.sync.vlan.update',
+          `${auditPrefix}.vlan.update`,
           diff.existingId,
           `Updated VLAN ${diff.vlanNumber} name to ${diff.name}.`,
+          auditEntityType,
         )
         continue
       }
@@ -260,13 +276,18 @@ export function applySnmpSyncPreview(input: {
           result.skippedDeletes += 1
           continue
         }
-        db.prepare('DELETE FROM vlans WHERE id = ?').run(diff.existingId)
+        const deletion = db.prepare('DELETE FROM vlans WHERE id = ? AND labId = ?').run(
+          diff.existingId,
+          input.preview.labId,
+        )
+        if (deletion.changes === 0) continue
         result.deletedVlanIds.push(diff.existingId)
         writeSyncAudit(
           input.actor,
-          'snmp.sync.vlan.delete',
+          `${auditPrefix}.vlan.delete`,
           diff.existingId,
           `Deleted VLAN ${diff.vlanNumber} (${diff.existingName ?? diff.name}).`,
+          auditEntityType,
         )
       }
     }
@@ -283,24 +304,32 @@ export function applySnmpSyncPreview(input: {
           VALUES (?, ?, ?, ?, NULL, ?)
         `).run(id, input.preview.labId, cidr, diff.name, linkedVlanId)
         result.createdSubnetIds.push(id)
-        writeSyncAudit(input.actor, 'snmp.sync.subnet.create', id, `Created subnet ${cidr}.`)
+        writeSyncAudit(
+          input.actor,
+          `${auditPrefix}.subnet.create`,
+          id,
+          `Created subnet ${cidr}.`,
+          auditEntityType,
+        )
         continue
       }
 
       if (diff.action === 'update' && diff.existingId) {
         const linkedVlanId =
           diff.vlanNumber != null ? vlanIdByNumber.get(diff.vlanNumber) ?? null : null
-        db.prepare(`
+        const update = db.prepare(`
           UPDATE subnets
           SET name = ?, vlanId = COALESCE(?, vlanId)
-          WHERE id = ?
-        `).run(diff.name, linkedVlanId, diff.existingId)
+          WHERE id = ? AND labId = ?
+        `).run(diff.name, linkedVlanId, diff.existingId, input.preview.labId)
+        if (update.changes === 0) continue
         result.updatedSubnetIds.push(diff.existingId)
         writeSyncAudit(
           input.actor,
-          'snmp.sync.subnet.update',
+          `${auditPrefix}.subnet.update`,
           diff.existingId,
           `Updated subnet ${diff.cidr}.`,
+          auditEntityType,
         )
         continue
       }
@@ -310,13 +339,18 @@ export function applySnmpSyncPreview(input: {
           result.skippedDeletes += 1
           continue
         }
-        db.prepare('DELETE FROM subnets WHERE id = ?').run(diff.existingId)
+        const deletion = db.prepare('DELETE FROM subnets WHERE id = ? AND labId = ?').run(
+          diff.existingId,
+          input.preview.labId,
+        )
+        if (deletion.changes === 0) continue
         result.deletedSubnetIds.push(diff.existingId)
         writeSyncAudit(
           input.actor,
-          'snmp.sync.subnet.delete',
+          `${auditPrefix}.subnet.delete`,
           diff.existingId,
           `Deleted subnet ${diff.cidr}.`,
+          auditEntityType,
         )
       }
     }
@@ -345,9 +379,10 @@ export function applySnmpSyncPreview(input: {
   apply()
   writeSyncAudit(
     input.actor,
-    'snmp.sync.apply',
+    `${auditPrefix}.apply`,
     input.preview.deviceId,
-    `SNMP sync (${input.preview.profileId}, ${input.preview.policy}) created ${result.createdVlanIds.length} VLAN(s) and ${result.createdSubnetIds.length} subnet(s).`,
+    `${auditLabel} (${input.preview.profileId}, ${input.preview.policy}) created ${result.createdVlanIds.length} VLAN(s) and ${result.createdSubnetIds.length} subnet(s).`,
+    auditEntityType,
   )
   return result
 }
@@ -448,11 +483,12 @@ function writeSyncAudit(
   action: string,
   entityId: string,
   summary: string,
+  entityType = 'SnmpSync',
 ) {
   db.prepare(`
     INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
-    VALUES (?, ?, ?, ?, 'SnmpSync', ?, ?)
-  `).run(createId('a'), new Date().toISOString(), actor, action, entityId, summary)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(createId('a'), new Date().toISOString(), actor, action, entityType, entityId, summary)
 }
 
 export function snmpInventorySyncEnabled() {

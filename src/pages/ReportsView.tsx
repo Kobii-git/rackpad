@@ -1815,6 +1815,8 @@ function statusTone(status: string) {
       return "var(--warning)";
     case "maintenance":
       return "var(--info)";
+    case "unmanaged":
+      return "var(--neutral)";
     case "offline":
       return "var(--danger)";
     default:
@@ -1832,6 +1834,8 @@ function statusBadgeTone(status: string) {
       return "err";
     case "maintenance":
       return "info";
+    case "unmanaged":
+      return "neutral";
     default:
       return "neutral";
   }

@@ -1058,6 +1058,141 @@ const SCHEMA_MIGRATIONS = [
         ON snmpSyncSchedules (labId, enabled, lastRunAt);
     `,
   },
+  {
+    version: 37,
+    sql: `
+      CREATE TABLE IF NOT EXISTS integrationConnections (
+        id            TEXT PRIMARY KEY,
+        labId         TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        provider      TEXT NOT NULL,
+        name          TEXT NOT NULL,
+        baseUrl       TEXT NOT NULL,
+        authKind      TEXT NOT NULL,
+        authId        TEXT,
+        authSecretEnc TEXT,
+        siteRef       TEXT,
+        verifyTls     INTEGER NOT NULL DEFAULT 1,
+        enabled       INTEGER NOT NULL DEFAULT 1,
+        syncVlans     INTEGER NOT NULL DEFAULT 1,
+        syncSubnets   INTEGER NOT NULL DEFAULT 1,
+        syncDhcp      INTEGER NOT NULL DEFAULT 1,
+        lastStatus    TEXT NOT NULL DEFAULT 'unknown',
+        lastCheckedAt TEXT,
+        lastError     TEXT,
+        lastSummary   TEXT,
+        createdAt     TEXT NOT NULL,
+        updatedAt     TEXT NOT NULL,
+        UNIQUE(labId, name COLLATE NOCASE)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_integration_connections_lab_provider
+        ON integrationConnections (labId, provider);
+    `,
+  },
+  {
+    version: 38,
+    sql: `
+      ALTER TABLE dockerImportSources ADD COLUMN verifyTls INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
+  {
+    version: 39,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncEnabled INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncMode TEXT NOT NULL DEFAULT 'merge';
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncCron TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncLabIds TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncFailureCount INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncPausedUntil TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN lastAutoSyncAt TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN lastAutoSyncStatus TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN lastAutoSyncMessage TEXT;
+    `,
+  },
+  {
+    version: 40,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN scopeRefs TEXT;
+    `,
+  },
+  {
+    version: 41,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN syncDevices INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE integrationConnections ADD COLUMN syncWifi INTEGER NOT NULL DEFAULT 1;
+
+      CREATE TABLE IF NOT EXISTS integrationSyncSchedules (
+        id             TEXT PRIMARY KEY,
+        connectionId   TEXT NOT NULL REFERENCES integrationConnections(id) ON DELETE CASCADE,
+        name           TEXT NOT NULL,
+        enabled        INTEGER NOT NULL DEFAULT 1,
+        mode           TEXT NOT NULL DEFAULT 'merge',
+        cron           TEXT NOT NULL,
+        labIds         TEXT,
+        failureCount   INTEGER NOT NULL DEFAULT 0,
+        pausedUntil    TEXT,
+        lastRunAt      TEXT,
+        lastRunStatus  TEXT,
+        lastRunMessage TEXT,
+        createdAt      TEXT NOT NULL,
+        updatedAt      TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_integration_sync_schedules_connection
+        ON integrationSyncSchedules (connectionId, enabled);
+
+      INSERT INTO integrationSyncSchedules (
+        id, connectionId, name, enabled, mode, cron, labIds,
+        failureCount, pausedUntil, lastRunAt, lastRunStatus, lastRunMessage,
+        createdAt, updatedAt
+      )
+      SELECT
+        'intsch_' || id, id, 'Default schedule', autoSyncEnabled, autoSyncMode,
+        autoSyncCron, autoSyncLabIds, autoSyncFailureCount, autoSyncPausedUntil,
+        lastAutoSyncAt, lastAutoSyncStatus, lastAutoSyncMessage,
+        createdAt, updatedAt
+      FROM integrationConnections
+      WHERE autoSyncCron IS NOT NULL;
+    `,
+  },
+  {
+    version: 42,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN syncSwitches INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE integrationConnections ADD COLUMN syncGateways INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE integrationConnections ADD COLUMN syncAccessPoints INTEGER NOT NULL DEFAULT 1;
+
+      UPDATE integrationConnections
+      SET syncSwitches = syncDevices,
+          syncGateways = syncDevices,
+          syncAccessPoints = syncDevices;
+    `,
+  },
+  {
+    version: 43,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN syncHosts INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE integrationConnections ADD COLUMN syncGuests INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
+  {
+    version: 44,
+    sql: `
+      -- Earlier development builds used "skip" for drift-only behavior and
+      -- "overwrite" for create/update without deletes. Preserve those
+      -- semantics under the final merge/skip names.
+      UPDATE integrationSyncSchedules SET mode = 'merge' WHERE mode = 'skip';
+      UPDATE integrationSyncSchedules SET mode = 'skip' WHERE mode = 'overwrite';
+    `,
+  },
+  {
+    version: 45,
+    sql: `
+      -- Mirror remains unavailable until controller provenance is durable.
+      UPDATE integrationSyncSchedules SET mode = 'skip' WHERE mode = 'mirror';
+      UPDATE integrationConnections SET autoSyncMode = 'skip' WHERE autoSyncMode = 'mirror';
+    `,
+  },
 ] as const;
 
 const applySchema = db.transaction(() => {

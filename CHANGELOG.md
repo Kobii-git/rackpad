@@ -8,8 +8,31 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+No changes yet.
+
+## [1.8.0-beta.2] - 2026-08-21
+
 ### Fixed
 
+- Controller integration previews and device imports are now bound to
+  short-lived, single-use server snapshots, revalidate connection access at
+  apply time, serialize writes, and keep manual records non-destructive.
+- Controller and Docker HTTP requests now share DNS-pinned redirect, timeout,
+  TLS, response-size, and pagination safety bounds.
+- Production images now install current Debian security updates so fixed base
+  image vulnerabilities do not remain in the shipped runtime.
+- Virtual devices now show a navigable host relationship, Storage identifies
+  internal, attached, and unassigned pool members, and the JSON backup action
+  appears with the other snapshot controls.
+- Native SQLite snapshots now expose a prominent, explicitly labeled download
+  action, while JSON backup remains in the Export Snapshot section.
+- Documentation images are safe full-size controls for mouse and keyboard users;
+  embedded data images reuse blob conversion and unsafe URL schemes stay inert.
+- Device Overview storage now prefers owned-pool usable capacity, then installed
+  raw drive capacity, then the stored manual/imported value without mutating it.
+- Unmanaged is now a fixed device status throughout API validation, inventory,
+  filters, reports, backups, translations, and neutral health presentation;
+  monitoring preserves it while still recording successful last-seen checks.
 - Restored the documented five-minute monitoring interval for direct Node
   startup and made malformed runtime interval values fall back safely.
 - Backup export and restore now preserve scoped user/lab grants, reject invalid
@@ -24,6 +47,11 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Added
 
+- Added UniFi, Omada, OPNsense, Proxmox, and Dockhand controller connections
+  with manual network/device previews and automatic UTC schedules using
+  non-destructive Merge and Skip modes.
+- Added an administrator Device Types workspace with usage counts, custom-type
+  editing, deletion guidance, immutable IDs, and read-only built-in types.
 - Added a read-only device Compute tab for eligible hosts, owned workloads, and
   virtual switches, with links back to the global Compute workspace.
 - Added optional operator-mounted native SQLite snapshots with admin scheduling,
@@ -48,16 +76,26 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   moving branch image tags from immutable semantic-version tags.
 - Hardened contributor, installation, security, SNMP, and AI-agent guidance to
   reflect the current runtime and release contract.
-- Set the next development identity to `1.8.0-dev.1` without creating a Git tag.
+- Set the beta identity to `1.8.0-beta.2` for focused verification.
 
 ### Test notes
 
-- Start the compiled server without `MONITOR_INTERVAL_MS` and with malformed
-  interval values; verify the documented fallback is used.
-- Export and restore a scoped editor, then confirm invalid authorization data
-  is rejected without deleting sessions or existing grants.
-- Render every Compose variant and run the environment contract check after
-  changing any documented or interpolated default.
+- Verify a server-owned pool with local and enclosure drives, both relationship
+  links, Internal and External / attached labels, and the missing-member state.
+- Create, download, and delete a native backup; confirm the visible SQLite
+  download action and the JSON Export Snapshot placement.
+- Verify Hosted by links for VM/container records, custom inherited hosts, and
+  the safe missing-host fallback.
+- Verify separated built-in/custom Device Type sections, parent inheritance
+  guidance, CRUD, usage counts, in-use deletion denial, and viewer restrictions.
+- Open embedded documentation images with mouse and keyboard and confirm each
+  full-size image opens in a new tab.
+- Verify usable-pool precedence, raw-drive fallback, manual fallback, source
+  indicators, and unchanged stored `storageGb` data.
+- Select Unmanaged through edit and bulk controls, filter and report it, and
+  confirm online/offline monitoring results do not overwrite the manual state.
+- Recheck controller previews, automatic schedules, scoped backup restore,
+  runtime configuration defaults, and every rendered Compose variant.
 
 ## [1.8.0-beta.0] - 2026-08-11
 

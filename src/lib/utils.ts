@@ -27,6 +27,7 @@ export const statusColor: Record<DeviceStatus, string> = {
   warning: "var(--color-warn)",
   unknown: "var(--color-fg-subtle)",
   maintenance: "var(--color-info)",
+  unmanaged: "var(--color-fg-subtle)",
 };
 
 export const statusGlow: Record<DeviceStatus, string> = {
@@ -35,6 +36,7 @@ export const statusGlow: Record<DeviceStatus, string> = {
   warning: "var(--color-warn-glow)",
   unknown: "transparent",
   maintenance: "var(--color-info-glow)",
+  unmanaged: "transparent",
 };
 
 export const statusLabel: Record<DeviceStatus, string> = {
@@ -43,6 +45,7 @@ export const statusLabel: Record<DeviceStatus, string> = {
   warning: "Warning",
   unknown: "Unknown",
   maintenance: "Maintenance",
+  unmanaged: "Unmanaged",
 };
 
 // ---------- Port type colors ----------

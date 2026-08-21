@@ -2396,5 +2396,18 @@
   {
     "key": "SFF",
     "reason": "Locale-invariant small-form-factor connector acronym."
+  },
+  {
+    "key": "SSID · VLAN {number}",
+    "reason": "Technical identifier built from networking acronyms and a placeholder"
+  },
+  {
+    "key": "{count} port(s)",
+    "locales": ["fr"],
+    "reason": "French spells port(s) identically to English; mirrors the existing fr allowances for Port/Ports"
+  },
+  {
+    "key": "UTC",
+    "reason": "Locale-invariant Coordinated Universal Time abbreviation used for scheduler semantics."
   }
 ]

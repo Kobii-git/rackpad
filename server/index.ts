@@ -8,6 +8,8 @@ import { startDockerStatusSyncLoop } from './lib/docker-import.js'
 import { resolveRuntimeConfig } from './lib/runtime-config.js'
 import { startNativeBackupScheduleLoop } from './lib/native-backup.js'
 import { startSnmpSyncScheduleLoop } from './routes/snmp-sync.js'
+import { startIntegrationStatusSyncLoop } from './lib/integrations/status-sync.js'
+import { startIntegrationAutoSyncLoop } from './lib/integrations/auto-sync.js'
 
 const runtimeConfig = resolveRuntimeConfig()
 const SESSION_CLEANUP_INTERVAL_MS = 1000 * 60 * 60 * 24
@@ -21,6 +23,10 @@ const stopDiscoveryScanSchedules = startDiscoveryScanScheduleLoop(
 const stopDockerStatusSync = startDockerStatusSyncLoop(
   runtimeConfig.dockerStatusSyncIntervalMs,
 )
+const stopIntegrationStatusSync = startIntegrationStatusSyncLoop(
+  runtimeConfig.integrationStatusSyncIntervalMs,
+)
+const stopIntegrationAutoSync = startIntegrationAutoSyncLoop()
 const stopTrapReceiver = startSnmpTrapReceiver()
 const stopNativeBackupSchedule = startNativeBackupScheduleLoop()
 const stopSnmpSyncSchedules = startSnmpSyncScheduleLoop()
@@ -34,6 +40,8 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     stopMonitoring()
     stopDiscoveryScanSchedules()
     stopDockerStatusSync()
+    stopIntegrationStatusSync()
+    stopIntegrationAutoSync()
     stopTrapReceiver()
     stopNativeBackupSchedule()
     stopSnmpSyncSchedules()

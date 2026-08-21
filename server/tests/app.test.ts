@@ -1247,6 +1247,149 @@ test("bulk wireless placement requires an access point", async () => {
   assert.match(bulkRes.body, /access point/i);
 });
 
+test("unmanaged status validates across device mutations, survives monitoring, and round-trips logical backup", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+
+  const invalidCreate = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers,
+    payload: {
+      labId: "lab_home",
+      hostname: "invalid-unmanaged-status",
+      deviceType: "server",
+      status: "ignored",
+    },
+  });
+  assert.equal(invalidCreate.statusCode, 400);
+
+  const createdResponses = await Promise.all(
+    ["unmanaged-primary", "unmanaged-bulk"].map((hostname) =>
+      app.inject({
+        method: "POST",
+        url: "/api/devices",
+        headers,
+        payload: {
+          labId: "lab_home",
+          hostname,
+          deviceType: "server",
+          status: hostname === "unmanaged-primary" ? "unmanaged" : "online",
+        },
+      }),
+    ),
+  );
+  for (const response of createdResponses) {
+    assert.equal(response.statusCode, 201, response.body);
+  }
+  const [primary, bulkTarget] = createdResponses.map(
+    (response) => readJson(response) as { id: string; status: string },
+  );
+  assert.equal(primary.status, "unmanaged");
+
+  const updateResponse = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${bulkTarget.id}`,
+    headers,
+    payload: { status: "unmanaged" },
+  });
+  assert.equal(updateResponse.statusCode, 200, updateResponse.body);
+  assert.equal(
+    (readJson(updateResponse) as { status: string }).status,
+    "unmanaged",
+  );
+
+  const resetResponse = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${bulkTarget.id}`,
+    headers,
+    payload: { status: "online" },
+  });
+  assert.equal(resetResponse.statusCode, 200, resetResponse.body);
+  const bulkResponse = await app.inject({
+    method: "POST",
+    url: "/api/devices/bulk",
+    headers,
+    payload: {
+      deviceIds: [primary.id, bulkTarget.id],
+      changes: { status: "unmanaged" },
+    },
+  });
+  assert.equal(bulkResponse.statusCode, 200, bulkResponse.body);
+  assert.deepEqual(
+    (
+      readJson(bulkResponse) as { devices: Array<{ status: string }> }
+    ).devices.map((device) => device.status),
+    ["unmanaged", "unmanaged"],
+  );
+
+  const monitorResponse = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers,
+    payload: {
+      deviceId: primary.id,
+      name: "Unmanaged reachability",
+      type: "tcp",
+      target: "8.8.8.8",
+      port: 443,
+      enabled: true,
+    },
+  });
+  assert.equal(monitorResponse.statusCode, 200, monitorResponse.body);
+  const monitor = readJson(monitorResponse) as { id: string };
+  const { recordMonitorResult } = await import("../lib/monitoring.js");
+  await recordMonitorResult(monitor.id, {
+    result: "offline",
+    message: "Intentional unmanaged offline result.",
+  });
+  let preserved = db
+    .prepare("SELECT status, lastSeen FROM devices WHERE id = ?")
+    .get(primary.id) as { status: string; lastSeen: string | null };
+  assert.deepEqual(preserved, { status: "unmanaged", lastSeen: null });
+
+  await recordMonitorResult(monitor.id, {
+    result: "online",
+    message: "Intentional unmanaged online result.",
+  });
+  preserved = db
+    .prepare("SELECT status, lastSeen FROM devices WHERE id = ?")
+    .get(primary.id) as { status: string; lastSeen: string | null };
+  assert.equal(preserved.status, "unmanaged");
+  assert.ok(preserved.lastSeen);
+
+  const exportResponse = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers,
+  });
+  assert.equal(exportResponse.statusCode, 200, exportResponse.body);
+  const snapshot = readJson(exportResponse) as {
+    data: { devices: Array<{ id: string; status: string }> };
+  };
+  assert.equal(
+    snapshot.data.devices.find((device) => device.id === primary.id)?.status,
+    "unmanaged",
+  );
+  db.prepare("UPDATE devices SET status = 'online' WHERE id = ?").run(primary.id);
+
+  const restoreResponse = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers,
+    payload: snapshot,
+  });
+  assert.equal(restoreResponse.statusCode, 200, restoreResponse.body);
+  assert.equal(
+    (
+      db.prepare("SELECT status FROM devices WHERE id = ?").get(primary.id) as {
+        status: string;
+      }
+    ).status,
+    "unmanaged",
+  );
+});
+
 test("documentation pages and device images can be created", async () => {
   const adminToken = await bootstrapAdmin();
 
@@ -1545,6 +1688,109 @@ test("backup restore handles every table the export produces", async () => {
   assert.deepEqual(
     exportedTables.filter((table) => !restoreInserts.has(table)),
     [],
+  );
+});
+
+test("integration connections and schedules round-trip with ciphertext preserved", async () => {
+  const adminToken = await bootstrapAdmin();
+  const connectionResponse = await app.inject({
+    method: "POST",
+    url: "/api/integrations/connections",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      provider: "unifi",
+      name: "Backup controller",
+      baseUrl: "https://controller.example.internal",
+      authKind: "api-key",
+      authSecret: "backup-controller-secret",
+    },
+  });
+  assert.equal(connectionResponse.statusCode, 201, connectionResponse.body);
+  const connection = readJson(connectionResponse) as { id: string };
+
+  const scheduleResponse = await app.inject({
+    method: "POST",
+    url: "/api/integrations/schedules",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      connectionId: connection.id,
+      name: "Nightly safe sync",
+      mode: "skip",
+      cron: "0 2 * * *",
+      labIds: ["lab_home"],
+    },
+  });
+  assert.equal(scheduleResponse.statusCode, 201, scheduleResponse.body);
+  const schedule = readJson(scheduleResponse) as { id: string };
+
+  const storedCiphertext = (
+    db
+      .prepare("SELECT authSecretEnc FROM integrationConnections WHERE id = ?")
+      .get(connection.id) as { authSecretEnc: string }
+  ).authSecretEnc;
+  assert.ok(storedCiphertext);
+  assert.ok(!storedCiphertext.includes("backup-controller-secret"));
+
+  const exportResponse = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(exportResponse.statusCode, 200, exportResponse.body);
+  const snapshot = readJson(exportResponse) as {
+    data: {
+      integrationConnections: Array<{
+        id: string;
+        authSecretEnc: string;
+      }>;
+      integrationSyncSchedules: Array<{
+        id: string;
+        connectionId: string;
+        mode: string;
+      }>;
+    };
+  };
+  assert.equal(
+    snapshot.data.integrationConnections.find(
+      (entry) => entry.id === connection.id,
+    )?.authSecretEnc,
+    storedCiphertext,
+  );
+  const exportedSchedule = snapshot.data.integrationSyncSchedules.find(
+    (entry) => entry.id === schedule.id,
+  );
+  assert.equal(exportedSchedule?.connectionId, connection.id);
+  assert.equal(exportedSchedule?.mode, "skip");
+
+  db.prepare("DELETE FROM integrationConnections WHERE id = ?").run(
+    connection.id,
+  );
+  const restoreResponse = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: snapshot,
+  });
+  assert.equal(restoreResponse.statusCode, 200, restoreResponse.body);
+
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT authSecretEnc FROM integrationConnections WHERE id = ? AND labId = ?",
+        )
+        .get(connection.id, "lab_home") as { authSecretEnc: string }
+    ).authSecretEnc,
+    storedCiphertext,
+  );
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT connectionId, mode FROM integrationSyncSchedules WHERE id = ?",
+      )
+      .get(schedule.id),
+    { connectionId: connection.id, mode: "skip" },
   );
 });
 
@@ -2831,6 +3077,50 @@ test("custom device types can be created and used by devices and templates", asy
   assert.equal(templateRes.statusCode, 201);
   const template = readJson(templateRes) as { deviceTypes: string[] };
   assert.deepEqual(template.deviceTypes, ["ip_camera"]);
+
+  const usageRes = await app.inject({
+    method: "GET",
+    url: "/api/device-types/usage",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(usageRes.statusCode, 200, usageRes.body);
+  const usage = (
+    readJson(usageRes) as Array<{
+      id: string;
+      devices: number;
+      discoveredDevices: number;
+      portTemplates: number;
+      driveBayTemplates: number;
+      total: number;
+    }>
+  ).find((entry) => entry.id === deviceType.id);
+  assert.deepEqual(usage, {
+    id: deviceType.id,
+    devices: 1,
+    discoveredDevices: 0,
+    portTemplates: 1,
+    driveBayTemplates: 0,
+    total: 2,
+  });
+
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "device-types-viewer",
+    displayName: "Device Types Viewer",
+    password: "device-types-viewer-1",
+    role: "viewer",
+  });
+  const viewerUsage = await app.inject({
+    method: "GET",
+    url: "/api/device-types/usage",
+    headers: { authorization: `Bearer ${viewerToken}` },
+  });
+  assert.equal(viewerUsage.statusCode, 403);
+  const viewerList = await app.inject({
+    method: "GET",
+    url: "/api/device-types",
+    headers: { authorization: `Bearer ${viewerToken}` },
+  });
+  assert.equal(viewerList.statusCode, 200);
 
   const listRes = await app.inject({
     method: "GET",
@@ -9136,6 +9426,10 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
     DROP INDEX idx_docker_import_sources_enabled;
     DROP INDEX idx_docker_import_sources_lab_id;
 
+    DROP TABLE integrationSyncSchedules;
+    DROP TABLE integrationConnections;
+    DROP TABLE snmpSyncSchedules;
+
     CREATE TABLE dockerImportSourcesV31 (
       id TEXT PRIMARY KEY,
       labId TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
@@ -9238,6 +9532,10 @@ test("storage topology migration upgrades a version-34 database without changing
     DROP TABLE driveSlots;
     DROP TABLE storageDrives;
     DROP TABLE driveBayTemplates;
+    DROP TABLE integrationSyncSchedules;
+    DROP TABLE integrationConnections;
+    DROP TABLE snmpSyncSchedules;
+    ALTER TABLE dockerImportSources DROP COLUMN verifyTls;
 
     UPDATE schemaVersion
     SET version = 34, updatedAt = '2026-08-01T00:00:00.000Z'
@@ -9302,6 +9600,115 @@ test("storage topology migration upgrades a version-34 database without changing
   assert.equal(device.storageGb, 9876);
   assert.equal(version.version, CURRENT_SCHEMA_VERSION);
   migrated.close();
+});
+
+test("integration migrations upgrade schema 35 and remap legacy mirror schedules", async () => {
+  const legacyPath = path.join(tempDir, "integration-source-v35.db");
+  const { default: Database } = await import("better-sqlite3");
+  const initializeDatabase = () =>
+    execFileSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        "await import('./server/db.ts')",
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          DATABASE_PATH: legacyPath,
+          NODE_ENV: "test",
+        },
+        stdio: "pipe",
+      },
+    );
+
+  initializeDatabase();
+  const legacy = new Database(legacyPath);
+  legacy.exec(`
+    DROP TABLE integrationSyncSchedules;
+    DROP TABLE integrationConnections;
+    DROP TABLE snmpSyncSchedules;
+    ALTER TABLE dockerImportSources DROP COLUMN verifyTls;
+    UPDATE schemaVersion
+    SET version = 35, updatedAt = '2026-08-01T00:00:00.000Z'
+    WHERE id = 1;
+  `);
+  legacy.close();
+
+  initializeDatabase();
+  const upgraded = new Database(legacyPath);
+  const upgradedVersion = upgraded
+    .prepare("SELECT version FROM schemaVersion WHERE id = 1")
+    .get() as { version: number };
+  assert.equal(upgradedVersion.version, CURRENT_SCHEMA_VERSION);
+  assert.ok(
+    upgraded
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'integrationConnections'",
+      )
+      .get(),
+  );
+  assert.ok(
+    upgraded
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'integrationSyncSchedules'",
+      )
+      .get(),
+  );
+  const dockerTlsColumn = (
+    upgraded.prepare("PRAGMA table_info(dockerImportSources)").all() as Array<{
+      name: string;
+      dflt_value: string | null;
+    }>
+  ).find((column) => column.name === "verifyTls");
+  assert.equal(dockerTlsColumn?.dflt_value, "1");
+
+  upgraded.exec(`
+    INSERT INTO labs (id, name, description, location)
+    VALUES ('lab_integration_v44', 'Integration migration', NULL, NULL);
+    INSERT INTO integrationConnections (
+      id, labId, provider, name, baseUrl, authKind, autoSyncMode,
+      createdAt, updatedAt
+    ) VALUES (
+      'intg_v44', 'lab_integration_v44', 'unifi', 'Legacy mirror',
+      'https://controller.example.internal', 'api-key', 'mirror',
+      '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z'
+    );
+    INSERT INTO integrationSyncSchedules (
+      id, connectionId, name, mode, cron, createdAt, updatedAt
+    ) VALUES (
+      'intsch_v44', 'intg_v44', 'Legacy mirror', 'mirror', '0 2 * * *',
+      '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z'
+    );
+    UPDATE schemaVersion
+    SET version = 44, updatedAt = '2026-08-01T00:00:00.000Z'
+    WHERE id = 1;
+  `);
+  upgraded.close();
+
+  initializeDatabase();
+  const remapped = new Database(legacyPath, { readonly: true });
+  assert.deepEqual(
+    remapped
+      .prepare(
+        "SELECT autoSyncMode FROM integrationConnections WHERE id = 'intg_v44'",
+      )
+      .get(),
+    { autoSyncMode: "skip" },
+  );
+  assert.deepEqual(
+    remapped
+      .prepare(
+        "SELECT mode FROM integrationSyncSchedules WHERE id = 'intsch_v44'",
+      )
+      .get(),
+    { mode: "skip" },
+  );
+  remapped.close();
 });
 
 test("docker import scopes duplicate hostnames to the selected host", async () => {

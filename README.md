@@ -43,6 +43,7 @@ contains the core material you need:
 - [Hyper-V import guide](./docs/HYPERV_IMPORT.md)
 - [Proxmox import guide](./docs/PROXMOX_IMPORT.md)
 - [Networks, VLANs, DHCP, and IPAM guide](./docs/NETWORKS_IPAM.md)
+- [Controller integrations guide (Proxmox/UniFi/Omada/OPNsense/Dockhand)](./docs/INTEGRATIONS.md)
 - [Discovery guide](./docs/DISCOVERY.md)
 - [Reports guide](./docs/REPORTS.md)
 - [Storage topology guide](./docs/STORAGE.md)
@@ -191,6 +192,8 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - DHCP reservation allocation from IP zones instead of treating the whole DHCP scope as assignable
 - Direct links between devices, ports, IPAM assignments, racks, rooms, dashboard cards, reports, and visualizer inspector entries
 - Bulk device status edits and bulk delete with dependency cleanup
+- Unmanaged device status across inventory, filters, reports, backups,
+  and monitoring; health checks continue but do not overwrite that manual state
 - Atomic bulk cable type, length, and color edits across selected inventory rows
 - Audit log writes for the main workflows
 - User bootstrap, login, logout, and user management
@@ -210,6 +213,7 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - Device image attachments with labels and notes on device detail pages
 - Hyper-V import wizard for staging hosts, VMs, power state, guest OS, virtual switches, virtual NICs, VLANs, IPs, CPU, memory, and disk data from a local PowerShell export, with editable host mapping before import
 - Proxmox import wizard for staging nodes, Linux bridges, QEMU VMs, LXC containers, MACs, VLAN tags/trunks, guest IPs, CPU, RAM, disks, boot flags, and Proxmox metadata from a local node export
+- Controller API integrations for Proxmox VE, UniFi Network, TP-Link Omada, OPNsense, and Dockhand with encrypted stored credentials, background connection-status refresh, token-bound manual previews, non-destructive scheduled sync, DHCP range previews, and selectable device/guest imports
 - Expanded demo data with multiple labs, MAC addresses, discovery states, custom templates/device types, multi-target monitors, room tech, documentation pages, device image examples, compute, and WiFi examples
 - Production build of the frontend and backend
 - Docker packaging for the frontend + API together
@@ -223,6 +227,7 @@ Use these when you want the workflow steps rather than just the overview:
 - [Reports](./docs/REPORTS.md): generate a clean inventory report, print/save to PDF, and export CSV or Excel-compatible files.
 - [Storage topology](./docs/STORAGE.md): document physical drive bays, lab-wide drive inventory, cross-device pools, and missing members.
 - [Networks/IPAM](./docs/NETWORKS_IPAM.md): create tagged or untagged networks, document DHCP scopes, zones, reservations, and VLAN planning ranges.
+- [Controller integrations](./docs/INTEGRATIONS.md): connect Proxmox VE, UniFi, Omada, OPNsense, and Dockhand APIs, store credentials encrypted, pull live inventory, and apply reviewed VLAN/subnet changes.
 - [Discovery](./docs/DISCOVERY.md): run manual or scheduled scans, keep results review-first, and understand Docker/LXC visibility limits.
 - [Visualizer](./docs/VISUALIZER.md): inspect rack, loose-room, port, and cable relationships from existing Rackpad data.
 - [OIDC login](./docs/OIDC.md): configure Authentik or another IdP, map roles, and debug issuer/discovery URL problems.

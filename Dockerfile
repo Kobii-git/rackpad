@@ -42,6 +42,7 @@ ENV PORT=3000
 ENV DATABASE_PATH=/data/rackpad.db
 
 RUN apt-get update \
+  && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends arp-scan iproute2 iputils-ping net-tools nmap \
   && rm -rf /var/lib/apt/lists/* \
   && rm -rf /usr/local/lib/node_modules/npm \

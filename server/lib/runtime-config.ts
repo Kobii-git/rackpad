@@ -1,6 +1,7 @@
 export const DEFAULT_MONITOR_INTERVAL_MS = 300_000;
 export const DEFAULT_DISCOVERY_SCAN_SCHEDULE_INTERVAL_MS = 60_000;
 export const DEFAULT_DOCKER_STATUS_SYNC_INTERVAL_MS = 300_000;
+export const DEFAULT_INTEGRATION_STATUS_SYNC_INTERVAL_MS = 300_000;
 
 export function parsePositiveInteger(
   value: string | undefined,
@@ -9,6 +10,15 @@ export function parsePositiveInteger(
   if (value === undefined || value.trim() === "") return fallback;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function parseNonNegativeInteger(
+  value: string | undefined,
+  fallback: number,
+) {
+  if (value === undefined || value.trim() === "") return fallback;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 export function resolveRuntimeConfig(
@@ -28,6 +38,10 @@ export function resolveRuntimeConfig(
     dockerStatusSyncIntervalMs: parsePositiveInteger(
       environment.DOCKER_STATUS_SYNC_INTERVAL_MS,
       DEFAULT_DOCKER_STATUS_SYNC_INTERVAL_MS,
+    ),
+    integrationStatusSyncIntervalMs: parseNonNegativeInteger(
+      environment.INTEGRATION_STATUS_SYNC_INTERVAL_MS,
+      DEFAULT_INTEGRATION_STATUS_SYNC_INTERVAL_MS,
     ),
   };
 }

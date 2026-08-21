@@ -1,8 +1,15 @@
 # Storage Topology
 
 Rackpad Storage Topology documents physical drives, where they are installed,
-and which logical pools use them. It is deliberately separate from the existing
-device `Storage (GB)` field used by imports and summary reports.
+and which logical pools use them. The stored device `Storage (GB)` field remains
+an independent manual or imported value; topology never rewrites it.
+
+The device Overview derives its displayed storage value without changing that
+stored field. It shows the sum of usable capacity for pools owned by the device
+when any owned pool exists, otherwise the raw capacity of drives installed on
+the device, and otherwise the manual/imported `Storage (GB)` value. A source
+label identifies **Usable topology**, **Raw topology**, or **Manual / imported**
+so operators can distinguish the display calculation from stored data.
 
 ## Storage workspace
 
@@ -10,7 +17,7 @@ Open **Storage** in the sidebar. The workspace provides four views:
 
 - **Overview** totals installed raw capacity, manually documented usable pool
   capacity, occupied slots, unassigned drives, unhealthy pools, and physically
-  missing pool members.
+  missing pool members. These topology totals do not mutate device fields.
 - **Drives** searches manufacturer, model, serial, device, slot, and pool. An
   editor can create, duplicate, edit, move, pull, or delete inventory records.
 - **Pools** lists the owner device, RAID or pool type, manual usable capacity,

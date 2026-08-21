@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   commitDriveBaySlotCount,
+  deriveOverviewStorage,
   driveBayTemplateDisplayCopy,
   driveFormFactorLabel,
   driveInterfaceLabel,
@@ -122,6 +123,46 @@ test("device summaries treat same-lab cross-device members as physically present
   assert.equal(result.rawCapacityGb, 6000);
   assert.equal(result.occupiedSlots, 1);
   assert.deepEqual(result.missingPoolMemberIds, [missingDrive.id]);
+});
+
+test("overview storage prefers owned usable topology, then installed raw topology, then manual data", () => {
+  const drives = [
+    drive("drive-local", 600, {
+      slotId: "slot-local",
+      deviceId: "device-1",
+    }),
+    drive("drive-other", 900, {
+      slotId: "slot-other",
+      deviceId: "device-2",
+    }),
+  ];
+  const manualStorageGb = 217;
+
+  assert.deepEqual(
+    deriveOverviewStorage(
+      "device-1",
+      manualStorageGb,
+      drives,
+      [
+        pool("pool-owned-a", ["drive-local"], { usableCapacityGb: 450 }),
+        pool("pool-owned-b", [], { usableCapacityGb: 25 }),
+        pool("pool-other", ["drive-other"], {
+          deviceId: "device-2",
+          usableCapacityGb: 800,
+        }),
+      ],
+    ),
+    { capacityGb: 475, source: "usable-topology" },
+  );
+  assert.deepEqual(
+    deriveOverviewStorage("device-1", manualStorageGb, drives, []),
+    { capacityGb: 600, source: "raw-topology" },
+  );
+  assert.deepEqual(
+    deriveOverviewStorage("device-1", manualStorageGb, [], []),
+    { capacityGb: 217, source: "manual-imported" },
+  );
+  assert.equal(manualStorageGb, 217);
 });
 
 test("template generation is ordered and respects dense-grid limits", () => {

@@ -99,6 +99,10 @@ import {
   localizedDeviceTypeIdLabel,
 } from "@/lib/device-types";
 import {
+  deriveOverviewStorage,
+  type OverviewStorageSource,
+} from "@/lib/storage";
+import {
   defaultImageLabel,
   imageSizeLimitLabel,
   readImageFileAsDataUrl,
@@ -272,6 +276,7 @@ export default function DeviceDetail() {
   const portTemplates = useStore((s) => s.portTemplates);
   const deviceTypes = useStore((s) => s.deviceTypes);
   const driveSlots = useStore((s) => s.driveSlots);
+  const storageDrives = useStore((s) => s.storageDrives);
   const storagePools = useStore((s) => s.storagePools);
   const documentationPages = useStore((s) => s.documentationPages);
 
@@ -339,6 +344,14 @@ export default function DeviceDetail() {
   const deviceStoragePools = id
     ? storagePools.filter((entry) => entry.deviceId === id)
     : [];
+  const overviewStorage = device
+    ? deriveOverviewStorage(
+        device.id,
+        device.storageGb,
+        storageDrives,
+        storagePools,
+      )
+    : null;
   const baseDeviceType = device
     ? deviceTypeBase(device.deviceType, deviceTypes)
     : null;
@@ -353,9 +366,9 @@ export default function DeviceDetail() {
   );
   const showCompute = Boolean(
     device &&
-      (computeInventory.hosts.some((entry) => entry.id === device.id) ||
-        (computeInventory.guestsByHostId[device.id]?.length ?? 0) > 0 ||
-        virtualSwitches.some((entry) => entry.hostDeviceId === device.id)),
+    (computeInventory.hosts.some((entry) => entry.id === device.id) ||
+      (computeInventory.guestsByHostId[device.id]?.length ?? 0) > 0 ||
+      virtualSwitches.some((entry) => entry.hostDeviceId === device.id)),
   );
   const selectedTab =
     DEVICE_DETAIL_TABS.has(requestedTab) &&
@@ -1438,6 +1451,26 @@ export default function DeviceDetail() {
                     </>
                   )}
                 </div>
+                {device.placement === "virtual" && device.parentDeviceId && (
+                  <div
+                    className="mt-1 text-xs text-[var(--color-fg-subtle)]"
+                    data-testid="device-host-relationship"
+                  >
+                    {t("Hosted by")}{" "}
+                    {parentDevice ? (
+                      <Link
+                        className="font-medium text-[var(--color-accent)] hover:underline"
+                        to={`/devices/${parentDevice.id}`}
+                      >
+                        {parentDevice.hostname}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-[var(--color-warning)]">
+                        {t("Host unavailable")}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             <dl className="grid w-full grid-cols-2 gap-x-5 gap-y-2 text-[11px] sm:grid-cols-3 lg:w-auto lg:gap-x-6 lg:gap-y-1">
@@ -1483,7 +1516,12 @@ export default function DeviceDetail() {
                 {t("Storage")} | {deviceDriveSlots.length}
               </TabsTrigger>
             )}
-            {showCompute && <TabsTrigger value="compute">{t("Compute")} | {(computeInventory.guestsByHostId[device.id] ?? []).length}</TabsTrigger>}
+            {showCompute && (
+              <TabsTrigger value="compute">
+                {t("Compute")} |{" "}
+                {(computeInventory.guestsByHostId[device.id] ?? []).length}
+              </TabsTrigger>
+            )}
             <TabsTrigger value="network">
               {t("Network")} | {displayedDeviceIpCount}
             </TabsTrigger>
@@ -1537,7 +1575,28 @@ export default function DeviceDetail() {
                     />
                     <Row
                       label={t("Storage")}
-                      value={formatCapacityUnit(device.storageGb, "GB")}
+                      value={
+                        overviewStorage?.capacityGb == null ? undefined : (
+                          <span className="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5">
+                            <span>
+                              {formatCapacityUnit(
+                                overviewStorage.capacityGb,
+                                "GB",
+                              )}
+                            </span>
+                            <span
+                              data-testid="device-overview-storage-source"
+                              className="text-[10px] font-normal text-[var(--color-fg-subtle)]"
+                            >
+                              {t(
+                                overviewStorageSourceLabel(
+                                  overviewStorage.source,
+                                ),
+                              )}
+                            </span>
+                          </span>
+                        )
+                      }
                       mono
                     />
                   </dl>
@@ -1572,7 +1631,22 @@ export default function DeviceDetail() {
                               ? t("Rack shelf")
                               : t("Parent")
                       }
-                      value={parentDevice?.hostname}
+                      value={
+                        device.parentDeviceId ? (
+                          parentDevice ? (
+                            <Link
+                              className="font-medium text-[var(--color-accent)] hover:underline"
+                              to={`/devices/${parentDevice.id}`}
+                            >
+                              {parentDevice.hostname}
+                            </Link>
+                          ) : (
+                            <span className="text-[var(--color-warning)]">
+                              {t("Host unavailable")}
+                            </span>
+                          )
+                        ) : undefined
+                      }
                     />
                     <Row label={t("Face")} value={device.face} />
                     <Row
@@ -3452,7 +3526,7 @@ function Row({
   mono,
 }: {
   label: string;
-  value?: string;
+  value?: ReactNode;
   mono?: boolean;
 }) {
   if (!value) return null;
@@ -3716,4 +3790,10 @@ function formatCapacityValue(value?: number) {
 function formatCapacityUnit(value: number | undefined, unit: string) {
   const formatted = formatCapacityValue(value);
   return formatted === "-" ? undefined : `${formatted} ${unit}`;
+}
+
+function overviewStorageSourceLabel(source: OverviewStorageSource) {
+  if (source === "usable-topology") return "Usable topology" as const;
+  if (source === "raw-topology") return "Raw topology" as const;
+  return "Manual / imported" as const;
 }
