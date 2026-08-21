@@ -52,6 +52,7 @@ contains the core material you need:
 - [SNMP monitoring, traps & sync guide](./docs/SNMP.md)
 - [Discovery deployment (Proxmox/LXC/host networking)](./docs/DISCOVERY_DEPLOYMENT.md)
 - [Documentation and images guide](./docs/DOCUMENTATION.md)
+- [Automation roadmap (proposed)](./docs/AUTOMATION_ROADMAP.md)
 - [Security policy](./SECURITY.md)
 - [Community Discord](https://discord.gg/g25tEafYDX)
 - [Changelog](./CHANGELOG.md)
