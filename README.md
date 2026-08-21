@@ -1,13 +1,31 @@
 # Rackpad
 
-[![Release](https://img.shields.io/github/v/tag/Kobii-git/rackpad?sort=semver&label=release&color=2f81f7)](https://github.com/Kobii-git/rackpad/tags)
+[![Latest tag](https://img.shields.io/github/v/tag/Kobii-git/rackpad?sort=semver&label=latest%20tag&color=2f81f7)](https://github.com/Kobii-git/rackpad/tags)
 [![Build](https://img.shields.io/github/actions/workflow/status/Kobii-git/rackpad/docker-publish.yml?branch=main&label=build)](https://github.com/Kobii-git/rackpad/actions/workflows/docker-publish.yml)
 [![Container](https://img.shields.io/badge/ghcr.io-rackpad-2496ed?logo=docker&logoColor=white)](https://github.com/Kobii-git/rackpad/pkgs/container/rackpad)
 [![License](https://img.shields.io/github/license/Kobii-git/rackpad?color=success)](./LICENSE)
 [![Stars](https://img.shields.io/github/stars/Kobii-git/rackpad?style=flat)](https://github.com/Kobii-git/rackpad/stargazers)
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/g25tEafYDX)
 
-Rackpad is a self-hosted infrastructure inventory and operations workspace for homelabs, small racks, network rooms, and lab environments. It brings racks, devices, ports, cables, VLANs, IPAM, WiFi, compute, discovery, monitoring, docs, images, labs, and an admin area into one clean app.
+> [!IMPORTANT]
+> **Help shape Rackpad’s next phase**
+>
+> We have published a proposed automation roadmap covering the public API,
+> optional agents, deeper infrastructure integrations, network and IPAM
+> automation, major provider support, and carefully controlled infrastructure
+> management.
+>
+> These are proposed directions rather than shipped features or fixed delivery
+> dates. We would like community feedback before implementation begins.
+>
+> **[Read the roadmap and share your feedback →](https://github.com/Kobii-git/rackpad/discussions/132)**
+>
+> [View the detailed engineering roadmap](./docs/AUTOMATION_ROADMAP.md)
+
+Rackpad is a self-hosted infrastructure inventory and operations application
+for homelabs, small racks, network rooms, and lab environments. It brings
+racks, devices, ports, cables, VLANs, IPAM, Wi-Fi, compute, discovery,
+monitoring, documentation, reports, and topology into one clean app.
 
 See the [changelog](./CHANGELOG.md) for release history; the badge above tracks the latest tag.
 
@@ -27,8 +45,8 @@ Built with:
 - **IPAM** — subnets, DHCP zones and reservations, gateway/DNS protection, and multi-IP device records (device- and interface-level)
 - **Monitoring** — per-device ICMP, TCP, HTTP/HTTPS, and SNMP health checks with email/Discord/Telegram alerting
 - **Discovery** — IPAM-subnet, all-subnet, and manual-CIDR scanning with import reconciliation
-- **WiFi, compute & docs** — controller/SSID/AP/radio/client inventory, virtualization hosts, and markdown docs with images
-- **Light & dark themes**, self-hosted fonts (works offline / air-gapped), and English/French localization
+- **Wi-Fi, compute & docs** — controller/SSID/AP/radio/client inventory, virtualization hosts, and markdown docs with images
+- **Light & dark themes**, self-hosted fonts (works offline / air-gapped), and multilingual support across 24 interface languages
 - **Self-hosted** — single Docker container, SQLite persistence, session auth with admin/editor/viewer roles, optional OIDC
 
 See the [changelog](./CHANGELOG.md) for what landed in each release.
@@ -49,8 +67,8 @@ contains the core material you need:
 - [OIDC login guide](./docs/OIDC.md)
 - [SNMP monitoring, traps & sync guide](./docs/SNMP.md)
 - [Discovery deployment (Proxmox/LXC/host networking)](./docs/DISCOVERY_DEPLOYMENT.md)
-- [SNMP implementation plan & outstanding work](./docs/SNMP_IMPLEMENTATION_PLAN.md)
 - [Documentation and images guide](./docs/DOCUMENTATION.md)
+- [Automation roadmap (proposed)](./docs/AUTOMATION_ROADMAP.md)
 - [Security policy](./SECURITY.md)
 - [Community Discord](https://discord.gg/g25tEafYDX)
 - [Changelog](./CHANGELOG.md)
@@ -232,23 +250,30 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 - The app version lives in [package.json](./package.json).
 - Release notes live in [CHANGELOG.md](./CHANGELOG.md).
-- The `v1.0` rollout checklist lives in [V1_CHECKLIST.md](./V1_CHECKLIST.md).
+- The proposed long-term automation direction lives in
+  [docs/AUTOMATION_ROADMAP.md](./docs/AUTOMATION_ROADMAP.md).
+- The completed pre-1.0 rollout plan remains in
+  [V1_CHECKLIST.md](./V1_CHECKLIST.md) as a historical record.
 - Install and deploy examples should pin a version instead of assuming `main`.
 
 Every shipped change should update the version and add a matching changelog entry describing what changed.
 
 ## Release channels
 
-Rackpad now uses two long-lived Git branches:
+Rackpad uses three ordered release branches:
 
 - `main`: stable release branch intended for production and tagged releases
 - `beta`: pre-release testing branch for changes that should be validated before they land on `main`
+- `dev`: integration branch for work that is not yet ready for beta testing
 
 Recommended workflow:
 
-- test new work from `beta`
-- merge validated fixes and features into `main`
-- create version tags like `v1.6.7` from `main`
+- integrate new work into `dev`
+- promote validated development changes from `dev` to `beta`
+- promote validated beta changes from `beta` to `main`
+- create version tags like `vX.Y.Z` from `main`
+
+The promotion order is `dev` → `beta` → `main`.
 
 If you want the newest testing build instead of the latest stable tag:
 
@@ -312,43 +337,9 @@ Start the compiled app:
 npm start
 ```
 
-Default environment variables:
-
-```bash
-HOST=0.0.0.0
-PORT=3000
-DATABASE_PATH=./rackpad.db
-RACKPAD_SECRET_KEY=
-SNMP_TRAP_ENABLED=1
-SNMP_TRAP_PORT=1162
-SNMP_TRAP_BIND=0.0.0.0
-SNMP_INVENTORY_SYNC=1
-MONITOR_INTERVAL_MS=300000
-DISCOVERY_SCAN_MAX_ACTIVE=2
-DISCOVERY_SCAN_MAX_ACTIVE_PER_LAB=1
-DISCOVERY_SCAN_MAX_QUEUED=32
-NODE_ENV=production
-TRUST_PROXY=0
-TRUSTED_HOSTS=
-TRUSTED_ORIGINS=
-APP_URL=
-OIDC_ENABLED=0
-OIDC_ISSUER_URL=
-OIDC_CLIENT_ID=
-OIDC_CLIENT_SECRET=
-OIDC_REDIRECT_URI=
-OIDC_LABEL=OIDC
-OIDC_DEFAULT_ROLE=viewer
-OIDC_DEBUG=0
-OIDC_ADMIN_USERS=
-OIDC_EDITOR_USERS=
-OIDC_VIEWER_USERS=
-OIDC_ADMIN_GROUPS=
-OIDC_EDITOR_GROUPS=
-OIDC_VIEWER_GROUPS=
-OUI_AUTO_UPDATE=1
-DISCOVERY_MAC_SCAN_MODE=auto
-```
+Supported runtime variables and defaults are documented in
+[`.env.example`](./.env.example). See [INSTALL.md](./INSTALL.md) for deployment,
+secret, OIDC, discovery, and reverse-proxy configuration.
 
 OIDC uses the authorization-code flow with PKCE. Configure the provider
 redirect URI as `APP_URL/api/auth/oidc/callback`, or set `OIDC_REDIRECT_URI`
@@ -413,12 +404,12 @@ curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/inst
 ```
 
 Use `RACKPAD_TAG=latest` if you want the newest stable GHCR image,
-`RACKPAD_TAG=1.6.7` if you want a specific release, or `RACKPAD_TAG=beta` if
+`RACKPAD_TAG=1.7.3` if you want a specific release, or `RACKPAD_TAG=beta` if
 you want the newest testing image:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
-RACKPAD_TAG=1.6.7 bash /tmp/install-rackpad.sh
+RACKPAD_TAG=1.7.3 bash /tmp/install-rackpad.sh
 ```
 
 Open:
@@ -479,7 +470,12 @@ To stop it:
 docker compose down
 ```
 
-To stop it and remove the database volume:
+> [!CAUTION]
+> `docker compose down -v` permanently removes the `rackpad_data` volume and
+> its Rackpad database. Export a backup first and use this only when you intend
+> to delete the installation's stored data.
+
+To stop it and permanently remove the database volume:
 
 ```bash
 docker compose down -v
@@ -533,28 +529,20 @@ The app already sets:
 
 So the main deployment job is to terminate TLS, forward the correct `X-Forwarded-*` headers, and keep Rackpad reachable only through the hostname you trust.
 
-## Windows note
+## Native development note
 
-On this Windows machine, the app builds and lints cleanly, but the local runtime is still blocked under Node 24 because `better-sqlite3` does not have a matching native binding installed.
-
-The intended local fix is:
-
-- switch to Node 22
-- rerun `npm install`
-
-Linux and Docker remain the preferred validation paths.
+Native development on Windows, Linux, and macOS requires Node 22. Docker
+remains the recommended deployment method.
 
 ## Quality checks
 
-These are wired into the repo now:
+Run the maintained local validation gate:
 
 ```bash
-npm run build
-npm run lint
-npm run test:server
+npm run check
 ```
 
-`npm run test:server` is expected to work on Linux/Node 22 or any environment where `better-sqlite3` can load successfully.
+Server tests require Node 22 on a platform where `better-sqlite3` can load.
 
 ## Project layout
 
