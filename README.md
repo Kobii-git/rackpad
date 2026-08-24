@@ -1,13 +1,32 @@
 # Rackpad
 
-[![Release](https://img.shields.io/github/v/tag/Kobii-git/rackpad?sort=semver&label=release&color=2f81f7)](https://github.com/Kobii-git/rackpad/tags)
+[![Latest tag](https://img.shields.io/github/v/tag/Kobii-git/rackpad?sort=semver&label=latest%20tag&color=2f81f7)](https://github.com/Kobii-git/rackpad/tags)
 [![Build](https://img.shields.io/github/actions/workflow/status/Kobii-git/rackpad/docker-publish.yml?branch=main&label=build)](https://github.com/Kobii-git/rackpad/actions/workflows/docker-publish.yml)
 [![Container](https://img.shields.io/badge/ghcr.io-rackpad-2496ed?logo=docker&logoColor=white)](https://github.com/Kobii-git/rackpad/pkgs/container/rackpad)
 [![License](https://img.shields.io/github/license/Kobii-git/rackpad?color=success)](./LICENSE)
 [![Stars](https://img.shields.io/github/stars/Kobii-git/rackpad?style=flat)](https://github.com/Kobii-git/rackpad/stargazers)
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/g25tEafYDX)
 
-Rackpad is a self-hosted infrastructure inventory and operations workspace for homelabs, small racks, network rooms, and lab environments. It brings racks, devices, ports, cables, Networks/IPAM, storage, WiFi, compute, discovery, monitoring, docs, images, integrations, labs, and administration into one clean app.
+> [!IMPORTANT]
+> **Help shape Rackpad’s next phase**
+>
+> We have published a proposed automation roadmap covering the public API,
+> optional agents, deeper infrastructure integrations, network and IPAM
+> automation, major provider support, and carefully controlled infrastructure
+> management.
+>
+> These are proposed directions rather than shipped features or fixed delivery
+> dates. We would like community feedback before implementation begins.
+>
+> **[Read the roadmap and share your feedback →](https://github.com/Kobii-git/rackpad/discussions/132)**
+>
+> [View the detailed engineering roadmap](./docs/AUTOMATION_ROADMAP.md)
+
+Rackpad is a self-hosted infrastructure inventory and operations workspace for
+homelabs, small racks, network rooms, and lab environments. It brings racks,
+devices, ports, cables, Networks/IPAM, storage, Wi-Fi, compute, discovery,
+monitoring, documentation, images, integrations, reports, labs, and
+administration into one clean app.
 
 See the [changelog](./CHANGELOG.md) for release history; the badge above tracks the latest tag.
 
@@ -28,8 +47,8 @@ Built with:
 - **Storage topology** — drive inventory, physical bays and enclosures, cross-device pools, missing members, and reusable templates
 - **Monitoring** — per-device ICMP, TCP, HTTP/HTTPS, and SNMP health checks with email/Discord/Telegram alerting
 - **Discovery** — IPAM-subnet, all-subnet, and manual-CIDR scanning with import reconciliation
-- **WiFi, compute & docs** — controller/SSID/AP/radio/client inventory, virtualization hosts, and markdown docs with images
-- **Light & dark themes**, self-hosted fonts (works offline / air-gapped), and English/French localization
+- **Wi-Fi, compute & docs** — controller/SSID/AP/radio/client inventory, virtualization hosts, and markdown docs with images
+- **Light & dark themes**, self-hosted fonts (works offline / air-gapped), and multilingual support across 24 interface languages
 - **Self-hosted** — single Docker container, SQLite persistence, session auth with admin/editor/viewer roles, optional OIDC
 
 See the [changelog](./CHANGELOG.md) for what landed in each release.
@@ -276,7 +295,10 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 - The app version lives in [package.json](./package.json).
 - Release notes live in [CHANGELOG.md](./CHANGELOG.md).
-- The `v1.0` rollout checklist lives in [V1_CHECKLIST.md](./V1_CHECKLIST.md).
+- The proposed long-term automation direction lives in
+  [docs/AUTOMATION_ROADMAP.md](./docs/AUTOMATION_ROADMAP.md).
+- The completed pre-1.0 rollout plan remains in
+  [V1_CHECKLIST.md](./V1_CHECKLIST.md) as a historical record.
 - Install and deploy examples should pin a version instead of assuming `main`.
 
 Every shipped change should update the version and add a matching changelog entry describing what changed.
@@ -295,6 +317,8 @@ Recommended workflow:
 - promote validated development changes from `dev` to `beta`
 - promote validated beta changes from `beta` to `main`
 - create version tags like `vX.Y.Z` from `main`
+
+The promotion order is `dev` → `beta` → `main`.
 
 Branch image tags such as `dev`, `beta`, and `latest` move as their branches are
 published. Immutable semantic-version image tags such as `1.8.0` are created
@@ -364,7 +388,9 @@ npm start
 
 The authoritative environment-variable contract and defaults are documented in
 [`.env.example`](./.env.example). CI checks that every supported runtime variable
-is represented there and passed through all intended Compose manifests.
+is represented there and passed through all intended Compose manifests. See
+[INSTALL.md](./INSTALL.md) for deployment, secret, OIDC, discovery, and
+reverse-proxy configuration.
 
 OIDC uses the authorization-code flow with PKCE. Configure the provider
 redirect URI as `APP_URL/api/auth/oidc/callback`, or set `OIDC_REDIRECT_URI`
@@ -495,7 +521,12 @@ To stop it:
 docker compose down
 ```
 
-To stop it and remove the database volume:
+> [!CAUTION]
+> `docker compose down -v` permanently removes the `rackpad_data` volume and
+> its Rackpad database. Export a backup first and use this only when you intend
+> to delete the installation's stored data.
+
+To stop it and permanently remove the database volume:
 
 ```bash
 docker compose down -v
@@ -549,16 +580,10 @@ The app already sets:
 
 So the main deployment job is to terminate TLS, overwrite the client-facing `X-Forwarded-*` headers, and keep the Rackpad application port reachable only through exactly the configured proxy chain. Do not enable `TRUST_PROXY` while clients can also connect directly to Rackpad; otherwise forwarded client identity and rate-limit buckets are not trustworthy. Invalid values fail closed to `0` (disabled), while `true`, `yes`, and `on` remain aliases for one hop.
 
-## Windows note
+## Native development note
 
-On this Windows machine, the app builds and lints cleanly, but the local runtime is still blocked under Node 24 because `better-sqlite3` does not have a matching native binding installed.
-
-The intended local fix is:
-
-- switch to Node 22
-- rerun `npm install`
-
-Linux and Docker remain the preferred validation paths.
+Native development on Windows, Linux, and macOS requires Node 22. Docker
+remains the recommended deployment method.
 
 ## Quality checks
 
