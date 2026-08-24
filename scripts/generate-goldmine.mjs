@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Generates a massive, realistic gold-mine network as a rackpad-backup-v1 JSON.
 import { writeFileSync } from "node:fs";
-import { scryptSync, randomBytes } from "node:crypto";
+import { randomBytes, randomInt, scryptSync } from "node:crypto";
 
 const now = Date.now();
 const iso = (ms = 0) => new Date(now - ms).toISOString();
-const rand = (n) => Math.floor(Math.random() * n);
+const rand = (n) => randomInt(n);
 const pick = (a) => a[rand(a.length)];
 
 const counters = {};
@@ -501,4 +501,3 @@ writeFileSync(out, JSON.stringify(snapshot, null, 0));
 const counts = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.length]).filter(([, n]) => n > 0));
 console.log("wrote", out);
 console.log(JSON.stringify(counts, null, 2));
-console.log("disabled demo admin password:", demoAdminPassword);

@@ -221,7 +221,8 @@ export function nativeBackupStatus() {
   let configurationError: string | null = null;
   const configured = (() => {
     try {
-      return requireRoot() != null;
+      requireRoot();
+      return true;
     } catch (error) {
       configurationError =
         error instanceof Error
