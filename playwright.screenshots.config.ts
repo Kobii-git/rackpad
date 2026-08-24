@@ -20,12 +20,19 @@ export default defineConfig({
     screenshot: "off",
     trace: "retain-on-failure",
     launchOptions: {
-      args: ["--hide-scrollbars", "--force-color-profile=srgb"],
+      args: [
+        "--hide-scrollbars",
+        "--force-color-profile=srgb",
+        "--disable-gpu",
+        "--disable-lcd-text",
+        "--disable-font-subpixel-positioning",
+        "--font-render-hinting=none",
+      ],
     },
   },
   webServer: {
     command:
-      'RACKPAD_CAPTURE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/rackpad-screenshots.XXXXXX"); trap \'rm -rf "$RACKPAD_CAPTURE_DIR"\' EXIT INT TERM; mkdir -p "$RACKPAD_CAPTURE_DIR/native"; DATABASE_PATH="$RACKPAD_CAPTURE_DIR/rackpad.db" RACKPAD_NATIVE_BACKUP_DIR="$RACKPAD_CAPTURE_DIR/native" RACKPAD_SECRET_KEY=rackpad-screenshot-capture-secret NODE_ENV=test RACKPAD_RATE_LIMIT_DISABLED=1 SNMP_INVENTORY_SYNC=1 INTEGRATION_STATUS_INTERVAL_MS=0 npm run dev:all',
+      'RACKPAD_CAPTURE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/rackpad-screenshots.XXXXXX"); trap \'rm -rf "$RACKPAD_CAPTURE_DIR"\' EXIT INT TERM; mkdir -p "$RACKPAD_CAPTURE_DIR/native"; DATABASE_PATH="$RACKPAD_CAPTURE_DIR/rackpad.db" RACKPAD_NATIVE_BACKUP_DIR="$RACKPAD_CAPTURE_DIR/native" RACKPAD_SECRET_KEY=rackpad-screenshot-capture-secret NODE_ENV=test RACKPAD_RATE_LIMIT_DISABLED=1 SNMP_INVENTORY_SYNC=1 INTEGRATION_STATUS_INTERVAL_MS=0 RACKPAD_FREEZE_SCREENSHOT_TIME=1 NODE_OPTIONS=--import=./scripts/screenshots/fixed-time.mjs npm run dev:all',
     url: "http://127.0.0.1:5173/api/auth/status",
     timeout: 120_000,
     reuseExistingServer: false,

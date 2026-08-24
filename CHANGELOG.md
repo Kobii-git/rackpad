@@ -8,11 +8,16 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.0] - 2026-08-24
+
 ### Changed
 
 - Refreshed the opt-in demo inventory for current storage, custom device type,
   integration, monitoring, and review workflows, and rebuilt the documentation
   gallery as a deterministic 37-image Playwright suite.
+- Container security and publishing builds now pull the current base image and
+  rebuild the runtime stage so cached Debian upgrade layers cannot retain
+  fixable vulnerabilities.
 
 ### Fixed
 
@@ -23,6 +28,17 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Global API throttling now returns its intended 429 response, and trusted proxy
   client identity uses bounded hop counts with forwarding-header-safe proxy
   examples.
+
+### Test notes
+
+- Verify same-name controller records remain distinct when MAC or parent scope
+  identifies them, while ambiguous records remain visible and blocked.
+- Verify the global limiter shares a bucket across routes, preserves 429
+  headers, rejects spoofed forwarding identity, and supports one- and two-hop
+  controlled proxy chains.
+- Regenerate the 37-image gallery and confirm the stable version is displayed,
+  all outbound demo targets remain non-routable, and the legacy IPAM capture is
+  absent.
 
 ## [1.8.0-beta.2] - 2026-08-21
 

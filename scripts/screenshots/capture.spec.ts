@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 
 const WIDTH = 1920;
 const HEIGHT = 1200;
+// Keep this synchronized with fixed-time.mjs, which freezes the server clock.
+const SCREENSHOT_TIME_MS = Date.parse("2026-08-24T18:00:00.000Z");
 const OUTPUT_DIR = resolve(process.cwd(), "docs/screenshots");
 const LEGACY_ASSETS = ["ipam.png"] as const;
 
@@ -239,11 +241,24 @@ test("capture the deterministic Rackpad documentation suite", async ({
   expect(backupResponse.status(), await backupResponse.text()).toBe(201);
 
   await page.addInitScript(
-    ({ authToken }) => {
+    ({ authToken, referenceTimeMs }) => {
+      const RealDate = globalThis.Date;
+      globalThis.Date = new Proxy(RealDate, {
+        construct(target, args) {
+          return Reflect.construct(
+            target,
+            args.length === 0 ? [referenceTimeMs] : args,
+          );
+        },
+        get(target, property, receiver) {
+          if (property === "now") return () => referenceTimeMs;
+          return Reflect.get(target, property, receiver);
+        },
+      });
       localStorage.setItem("rackpad.auth.token", authToken);
       localStorage.setItem("rackpad.language", "en");
     },
-    { authToken: token },
+    { authToken: token, referenceTimeMs: SCREENSHOT_TIME_MS },
   );
   await mkdir(OUTPUT_DIR, { recursive: true });
 
