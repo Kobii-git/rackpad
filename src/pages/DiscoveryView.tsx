@@ -56,6 +56,8 @@ import type {
   Subnet,
 } from "@/lib/types";
 import { cidrContainsIp, ipToInt } from "@/lib/utils";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
+import { matchesMacAwareSearch } from "@/lib/network-labels";
 import {
   applySortDirection,
   compareDate,
@@ -224,7 +226,7 @@ export default function DiscoveryView() {
       },
       {},
     );
-  }, [deviceById, devices, discoveredDevices]);
+  }, [devices, discoveredDevices]);
 
   const duplicateCount = useMemo(
     () =>
@@ -274,7 +276,7 @@ export default function DiscoveryView() {
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        return haystack.includes(normalizedQuery);
+        return matchesMacAwareSearch(haystack, normalizedQuery);
       })
       .sort((a, b) =>
         compareDiscoveredDevices(a, b, sort, duplicateMatchesById),
@@ -1181,7 +1183,11 @@ export default function DiscoveryView() {
                                 className="size-3.5 text-[var(--color-accent)]"
                               />
                               <span className="capitalize text-[var(--color-fg-muted)]">
-                                {device.deviceType ?? t("endpoint")}
+                                {localizedDeviceTypeIdLabel(
+                                  device.deviceType ?? "endpoint",
+                                  deviceTypes,
+                                  t,
+                                )}
                               </span>
                             </span>
                           </Td>
@@ -1424,7 +1430,12 @@ export default function DiscoveryView() {
                         >
                           {deviceTypes.map((deviceType) => (
                             <option key={deviceType.id} value={deviceType.id}>
-                              {deviceType.label}
+                              {localizedDeviceTypeIdLabel(
+                                deviceType.id,
+                                deviceTypes,
+                                t,
+                                deviceType.label,
+                              )}
                             </option>
                           ))}
                         </Select>
@@ -1840,7 +1851,7 @@ function compareDiscoveredDevices(
   sort: SortState<DiscoverySortKey>,
   duplicateMatchesById: Record<string, Device[]>,
 ) {
-  let result = 0;
+  let result: number;
   if (sort.key === "ip") {
     result = compareIp(a.ipAddress, b.ipAddress);
   } else if (sort.key === "hostname") {

@@ -11,6 +11,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/Tooltip";
 import { useI18n } from "@/i18n";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
+import { useStore } from "@/lib/store";
 
 interface RackViewProps {
   rack: Rack;
@@ -267,6 +269,7 @@ function DeviceTile({
   style: CSSProperties;
 }) {
   const { t } = useI18n();
+  const deviceTypes = useStore((state) => state.deviceTypes);
   const tone = statusColor[device.status];
   const glow = statusGlow[device.status];
   const deviceAccent =
@@ -346,7 +349,12 @@ function DeviceTile({
                     })
                   : [device.manufacturer, device.model]
                       .filter(Boolean)
-                      .join(" ") || device.deviceType.replace("_", " ")}
+                      .join(" ") ||
+                    localizedDeviceTypeIdLabel(
+                      device.deviceType,
+                      deviceTypes,
+                      t,
+                    )}
               </span>
             )}
           </div>

@@ -45,6 +45,7 @@ import type {
   WifiSsid,
 } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import {
   cidrSize,
   formatBandwidthMbps,
@@ -453,7 +454,7 @@ export default function ReportsView() {
                             className="size-4 text-[var(--accent-primary)]"
                           />
                           <span className="min-w-0 flex-1 text-xs capitalize leading-tight text-[var(--text-secondary)]">
-                            {type.replace("_", " ")}
+                            {localizedDeviceTypeIdLabel(type, deviceTypes, t)}
                           </span>
                           <Mono className="text-[var(--text-primary)]">
                             {count}
@@ -1719,7 +1720,7 @@ function excelCell(value: CsvValue) {
 
 function sheetName(name: string, index: number) {
   const safe =
-    name.replace(/[:\\/?*\[\]]/g, " ").trim() || `Sheet ${index + 1}`;
+    name.replace(/[:\\/?*[\]]/g, " ").trim() || `Sheet ${index + 1}`;
   return safe.slice(0, 31);
 }
 
@@ -1814,6 +1815,8 @@ function statusTone(status: string) {
       return "var(--warning)";
     case "maintenance":
       return "var(--info)";
+    case "unmanaged":
+      return "var(--neutral)";
     case "offline":
       return "var(--danger)";
     default:
@@ -1831,6 +1834,8 @@ function statusBadgeTone(status: string) {
       return "err";
     case "maintenance":
       return "info";
+    case "unmanaged":
+      return "neutral";
     default:
       return "neutral";
   }

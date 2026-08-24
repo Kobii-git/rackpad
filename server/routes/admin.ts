@@ -2,8 +2,14 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyPluginAsync } from "fastify";
-import { db, ensurePatchPanelPassThroughPorts, parseRow } from "../db.js";
-import { requireAdmin, setBootstrapState } from "../lib/auth.js";
+import {
+  CURRENT_SCHEMA_VERSION,
+  db,
+  ensurePatchPanelPassThroughPorts,
+  parseRow,
+} from "../db.js";
+import { requireAdmin, setBootstrapState, USER_ROLES } from "../lib/auth.js";
+import { LAB_ROLES } from "../lib/lab-access.js";
 import {
   DEFAULT_ALERT_SETTINGS,
   loadAlertSettings,
@@ -28,6 +34,35 @@ import {
 import { cidrContainsHostIp, cidrOverlaps, ipToInt } from "../lib/ip-cidr.js";
 import { getSubnetIntegrity } from "../lib/subnet-integrity.js";
 import { listAssignmentIntegrityIssues } from "../lib/ip-assignment-integrity.js";
+import { getSnmpProfile } from "../lib/snmp-profiles/index.js";
+import { monitoringOperationalStatus } from "../lib/monitoring.js";
+import { dockerSyncOperationalStatus } from "../lib/docker-import.js";
+import { discoveryOperationalStatus } from "./discovery.js";
+import { snmpSyncOperationalStatus } from "./snmp-sync.js";
+import {
+  createNativeBackup,
+  deleteNativeBackup,
+  listNativeBackups,
+  NativeBackupBusyError,
+  nativeBackupReadStream,
+  nativeBackupStatus,
+  saveNativeBackupSettings,
+} from "../lib/native-backup.js";
+
+function writeAdminAudit(user: string, action: string, summary: string) {
+  db.prepare(
+    `INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    createId("a"),
+    new Date().toISOString(),
+    user,
+    action,
+    "NativeBackup",
+    createId("nb"),
+    summary,
+  );
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "../..");
@@ -82,6 +117,7 @@ const exportBackupSnapshot = db.transaction(
 
     const snapshot = {
       format: "rackpad-backup-v1",
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       appVersion: APP_VERSION,
       exportedAt,
       exportedBy,
@@ -113,6 +149,29 @@ const exportBackupSnapshot = db.transaction(
             .prepare("SELECT * FROM portTemplates ORDER BY name, id")
             .all() as Record<string, unknown>[]
         ).map((row) => parseRow(row, ["deviceTypes", "ports"])),
+        driveBayTemplates: (
+          db
+            .prepare("SELECT * FROM driveBayTemplates ORDER BY name, id")
+            .all() as Record<string, unknown>[]
+        ).map((row) => parseRow(row, ["deviceTypes", "sections"])),
+        storageDrives: db
+          .prepare(
+            "SELECT * FROM storageDrives ORDER BY labId, manufacturer, model, id",
+          )
+          .all(),
+        driveSlots: db
+          .prepare(
+            "SELECT * FROM driveSlots ORDER BY deviceId, sectionOrder, position, id",
+          )
+          .all(),
+        storagePools: db
+          .prepare("SELECT * FROM storagePools ORDER BY deviceId, name, id")
+          .all(),
+        storagePoolDrives: db
+          .prepare(
+            "SELECT * FROM storagePoolDrives ORDER BY poolId, createdAt, driveId",
+          )
+          .all(),
         vlans: db.prepare("SELECT * FROM vlans ORDER BY vlanId, id").all(),
         vlanRanges: db
           .prepare("SELECT * FROM vlanRanges ORDER BY startVlan, id")
@@ -144,6 +203,21 @@ const exportBackupSnapshot = db.transaction(
         discoveryScanSchedules: db
           .prepare(
             "SELECT * FROM discoveryScanSchedules ORDER BY labId, cidr, id",
+          )
+          .all(),
+        snmpSyncSchedules: db
+          .prepare(
+            "SELECT * FROM snmpSyncSchedules ORDER BY labId, deviceId, id",
+          )
+          .all(),
+        integrationConnections: db
+          .prepare(
+            "SELECT * FROM integrationConnections ORDER BY labId, provider, name, id",
+          )
+          .all(),
+        integrationSyncSchedules: db
+          .prepare(
+            "SELECT * FROM integrationSyncSchedules ORDER BY connectionId, name, id",
           )
           .all(),
         documentationPages: db
@@ -178,6 +252,11 @@ const exportBackupSnapshot = db.transaction(
       `,
           )
           .all(),
+        userLabAccess: db
+          .prepare(
+            "SELECT userId, labId, role FROM userLabAccess ORDER BY userId, labId",
+          )
+          .all(),
         oidcIdentities: db
           .prepare("SELECT * FROM oidcIdentities ORDER BY issuer, subject")
           .all(),
@@ -186,7 +265,7 @@ const exportBackupSnapshot = db.transaction(
           .all(),
         dockerImportSources: db
           .prepare(
-            "SELECT id, labId, name, endpoint, NULL AS tokenEnc, lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt, enabled FROM dockerImportSources ORDER BY labId, name, id",
+            "SELECT id, labId, name, endpoint, NULL AS tokenEnc, lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt, enabled, verifyTls FROM dockerImportSources ORDER BY labId, name, id",
           )
           .all(),
         dockerContainerLinks: db
@@ -263,6 +342,77 @@ function normalizeArrayRecordArray(value: unknown, key: string) {
     throw new ValidationError(`${key} must be an array.`);
   }
   return value.map((entry) => asObject(entry));
+}
+
+function validateBackupAuthorizationIntegrity(input: {
+  labs: Record<string, unknown>[];
+  users: Record<string, unknown>[];
+  userLabAccess: Record<string, unknown>[];
+}) {
+  const invalid = (
+    message: string,
+    entityType: string,
+    entityId: string,
+  ): never => {
+    throw new ValidationError(message, 422, "BACKUP_INTEGRITY_INVALID", {
+      entityType,
+      entityId,
+    });
+  };
+  const labIds = new Set(input.labs.map((row) => String(row.id ?? "")));
+  const userIds = new Set<string>();
+
+  for (const user of input.users) {
+    const userId = String(user.id ?? "");
+    const role = String(user.role ?? "");
+    if (!userId)
+      invalid("Backup user is missing an ID.", "user", "(missing id)");
+    if (userIds.has(userId)) {
+      invalid("Backup contains duplicate user IDs.", "user", userId);
+    }
+    if (!(USER_ROLES as readonly string[]).includes(role)) {
+      invalid(`Backup user ${userId} has an invalid role.`, "user", userId);
+    }
+    userIds.add(userId);
+  }
+
+  const grantKeys = new Set<string>();
+  for (const grant of input.userLabAccess) {
+    const userId = String(grant.userId ?? "");
+    const labId = String(grant.labId ?? "");
+    const role = String(grant.role ?? "");
+    const grantId = `${userId || "(missing user)"}/${labId || "(missing lab)"}`;
+    if (!userIds.has(userId)) {
+      invalid(
+        "Backup lab grant references a missing user.",
+        "userLabAccess",
+        grantId,
+      );
+    }
+    if (!labIds.has(labId)) {
+      invalid(
+        "Backup lab grant references a missing lab.",
+        "userLabAccess",
+        grantId,
+      );
+    }
+    if (!(LAB_ROLES as readonly string[]).includes(role)) {
+      invalid(
+        "Backup lab grant has an invalid role.",
+        "userLabAccess",
+        grantId,
+      );
+    }
+    const key = `${userId}\u0000${labId}`;
+    if (grantKeys.has(key)) {
+      invalid(
+        "Backup contains duplicate user/lab grants.",
+        "userLabAccess",
+        grantId,
+      );
+    }
+    grantKeys.add(key);
+  }
 }
 
 function validateBackupNetworkIntegrity(input: {
@@ -661,10 +811,236 @@ function validateBackupNetworkIntegrity(input: {
   }
 }
 
+function validateBackupStorageIntegrity(input: {
+  labs: Record<string, unknown>[];
+  devices: Record<string, unknown>[];
+  storageDrives: Record<string, unknown>[];
+  driveSlots: Record<string, unknown>[];
+  storagePools: Record<string, unknown>[];
+  storagePoolDrives: Record<string, unknown>[];
+}) {
+  const labIds = new Set(input.labs.map((row) => String(row.id)));
+  const devices = new Map(
+    input.devices.map((row) => [
+      String(row.id),
+      { labId: String(row.labId ?? "") },
+    ]),
+  );
+  const drives = new Map(
+    input.storageDrives.map((row) => [
+      String(row.id),
+      { labId: String(row.labId ?? "") },
+    ]),
+  );
+  const slottedDriveIds = new Set<string>();
+
+  for (const [driveId, drive] of drives) {
+    if (!labIds.has(drive.labId)) {
+      throw new ValidationError(
+        `Backup storage drive ${driveId} references a missing lab.`,
+      );
+    }
+  }
+
+  for (const row of input.driveSlots) {
+    const slotId = String(row.id);
+    const device = devices.get(String(row.deviceId ?? ""));
+    if (!device) {
+      throw new ValidationError(
+        `Backup drive slot ${slotId} references a missing device.`,
+      );
+    }
+    if (!row.driveId) continue;
+    const driveId = String(row.driveId);
+    const drive = drives.get(driveId);
+    if (!drive || drive.labId !== device.labId) {
+      throw new ValidationError(
+        `Backup drive slot ${slotId} contains a drive from another lab or a missing drive.`,
+      );
+    }
+    if (slottedDriveIds.has(driveId)) {
+      throw new ValidationError(
+        `Backup storage drive ${driveId} is installed in more than one slot.`,
+      );
+    }
+    slottedDriveIds.add(driveId);
+  }
+
+  const pools = new Map<string, { labId: string }>();
+  for (const row of input.storagePools) {
+    const poolId = String(row.id);
+    const device = devices.get(String(row.deviceId ?? ""));
+    if (!device) {
+      throw new ValidationError(
+        `Backup storage pool ${poolId} references a missing device.`,
+      );
+    }
+    pools.set(poolId, { labId: device.labId });
+  }
+
+  const pooledDriveIds = new Set<string>();
+  for (const row of input.storagePoolDrives) {
+    const poolId = String(row.poolId ?? "");
+    const driveId = String(row.driveId ?? "");
+    const pool = pools.get(poolId);
+    const drive = drives.get(driveId);
+    if (!pool || !drive || pool.labId !== drive.labId) {
+      throw new ValidationError(
+        `Backup pool membership ${poolId}/${driveId} crosses labs or references missing storage.`,
+      );
+    }
+    if (pooledDriveIds.has(driveId)) {
+      throw new ValidationError(
+        `Backup storage drive ${driveId} belongs to more than one pool.`,
+      );
+    }
+    pooledDriveIds.add(driveId);
+  }
+}
+
+function validateBackupSnmpSchedules(input: {
+  labs: Record<string, unknown>[];
+  devices: Record<string, unknown>[];
+  schedules: Record<string, unknown>[];
+}) {
+  const labs = new Set(input.labs.map((row) => String(row.id)));
+  const devices = new Map(
+    input.devices.map((row) => [String(row.id), String(row.labId)]),
+  );
+  const scheduledDevices = new Set<string>();
+  for (const row of input.schedules) {
+    const id = String(row.id ?? "(missing id)");
+    const labId = String(row.labId ?? "");
+    const deviceId = String(row.deviceId ?? "");
+    if (!labs.has(labId) || devices.get(deviceId) !== labId) {
+      throw new ValidationError(
+        `Backup SNMP schedule ${id} crosses labs or references missing inventory.`,
+        422,
+        "BACKUP_INTEGRITY_INVALID",
+      );
+    }
+    if (!getSnmpProfile(String(row.profileId ?? ""))) {
+      throw new ValidationError(
+        `Backup SNMP schedule ${id} references an unknown profile.`,
+        422,
+        "BACKUP_INTEGRITY_INVALID",
+      );
+    }
+    if (row.policy !== "merge" && row.policy !== "mirror") {
+      throw new ValidationError(
+        `Backup SNMP schedule ${id} has an invalid policy.`,
+        422,
+        "BACKUP_INTEGRITY_INVALID",
+      );
+    }
+    if (scheduledDevices.has(deviceId)) {
+      throw new ValidationError(
+        `Backup contains duplicate SNMP schedules for device ${deviceId}.`,
+        422,
+        "BACKUP_INTEGRITY_INVALID",
+      );
+    }
+    scheduledDevices.add(deviceId);
+  }
+}
+
+function backupStringArray(value: unknown) {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (typeof value !== "string" || !value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function validateBackupIntegrations(input: {
+  labs: Record<string, unknown>[];
+  connections: Record<string, unknown>[];
+  schedules: Record<string, unknown>[];
+}) {
+  const labIds = new Set(input.labs.map((row) => String(row.id)));
+  const connectionIds = new Set<string>();
+  const providers = new Set([
+    "proxmox",
+    "unifi",
+    "omada",
+    "opnsense",
+    "dockhand",
+  ]);
+  for (const row of input.connections) {
+    const id = String(row.id ?? "");
+    if (!id || connectionIds.has(id)) {
+      throw new ValidationError(
+        `Backup contains a missing or duplicate integration connection ID ${id || "(missing)"}.`,
+        422,
+        "BACKUP_INTEGRITY_INVALID",
+      );
+    }
+    if (!labIds.has(String(row.labId ?? ""))) {
+      throw new ValidationError(
+        `Backup integration connection ${id} references a missing lab.`,
+        422,
+        "BACKUP_INTEGRITY_INVALID",
+      );
+    }
+    if (!providers.has(String(row.provider ?? ""))) {
+      throw new ValidationError(
+        `Backup integration connection ${id} has an unknown provider.`,
+        422,
+        "BACKUP_INTEGRITY_INVALID",
+      );
+    }
+    connectionIds.add(id);
+  }
+
+  const scheduleIds = new Set<string>();
+  for (const row of input.schedules) {
+    const id = String(row.id ?? "");
+    if (!id || scheduleIds.has(id)) {
+      throw new ValidationError(
+        `Backup contains a missing or duplicate integration schedule ID ${id || "(missing)"}.`,
+        422,
+        "BACKUP_INTEGRITY_INVALID",
+      );
+    }
+    if (!connectionIds.has(String(row.connectionId ?? ""))) {
+      throw new ValidationError(
+        `Backup integration schedule ${id} references a missing connection.`,
+        422,
+        "BACKUP_INTEGRITY_INVALID",
+      );
+    }
+    if (!["merge", "skip", "mirror", "overwrite"].includes(String(row.mode))) {
+      throw new ValidationError(
+        `Backup integration schedule ${id} has an invalid mode.`,
+        422,
+        "BACKUP_INTEGRITY_INVALID",
+      );
+    }
+    // Deleted target labs are intentionally tolerated; runtime execution
+    // reports and skips them instead of making old backups unrestorable.
+    backupStringArray(row.labIds);
+    scheduleIds.add(id);
+  }
+}
+
 const restoreBackupSnapshot = db.transaction(
   (snapshot: Record<string, unknown>, restoredBy: string) => {
     if (snapshot.format !== "rackpad-backup-v1") {
       throw new ValidationError("Unsupported backup format.");
+    }
+    if (snapshot.schemaVersion !== undefined) {
+      const backupSchemaVersion = Number(snapshot.schemaVersion);
+      if (!Number.isInteger(backupSchemaVersion) || backupSchemaVersion < 1) {
+        throw new ValidationError("Backup schema version is invalid.");
+      }
+      if (backupSchemaVersion > CURRENT_SCHEMA_VERSION) {
+        throw new ValidationError(
+          `Backup schema version ${backupSchemaVersion} is newer than this Rackpad version supports (${CURRENT_SCHEMA_VERSION}).`,
+        );
+      }
     }
 
     const data = asObject(snapshot.data);
@@ -684,6 +1060,26 @@ const restoreBackupSnapshot = db.transaction(
     const portTemplates = normalizeArrayRecordArray(
       data.portTemplates ?? [],
       "data.portTemplates",
+    );
+    const driveBayTemplates = normalizeArrayRecordArray(
+      data.driveBayTemplates ?? [],
+      "data.driveBayTemplates",
+    );
+    const storageDrives = normalizeArrayRecordArray(
+      data.storageDrives ?? [],
+      "data.storageDrives",
+    );
+    const driveSlots = normalizeArrayRecordArray(
+      data.driveSlots ?? [],
+      "data.driveSlots",
+    );
+    const storagePools = normalizeArrayRecordArray(
+      data.storagePools ?? [],
+      "data.storagePools",
+    );
+    const storagePoolDrives = normalizeArrayRecordArray(
+      data.storagePoolDrives ?? [],
+      "data.storagePoolDrives",
     );
     const vlans = normalizeArrayRecordArray(data.vlans, "data.vlans");
     const vlanRanges = normalizeArrayRecordArray(
@@ -708,6 +1104,18 @@ const restoreBackupSnapshot = db.transaction(
       data.discoveryScanSchedules ?? [],
       "data.discoveryScanSchedules",
     );
+    const snmpSyncSchedules = normalizeArrayRecordArray(
+      data.snmpSyncSchedules ?? [],
+      "data.snmpSyncSchedules",
+    );
+    const integrationConnections = normalizeArrayRecordArray(
+      data.integrationConnections ?? [],
+      "data.integrationConnections",
+    );
+    const integrationSyncSchedules = normalizeArrayRecordArray(
+      data.integrationSyncSchedules ?? [],
+      "data.integrationSyncSchedules",
+    );
     const documentationPages = normalizeArrayRecordArray(
       data.documentationPages ?? [],
       "data.documentationPages",
@@ -726,6 +1134,10 @@ const restoreBackupSnapshot = db.transaction(
     );
     const auditLog = normalizeArrayRecordArray(data.auditLog, "data.auditLog");
     const users = normalizeArrayRecordArray(data.users, "data.users");
+    const userLabAccess = normalizeArrayRecordArray(
+      data.userLabAccess ?? [],
+      "data.userLabAccess",
+    );
     const oidcIdentities = normalizeArrayRecordArray(
       data.oidcIdentities ?? [],
       "data.oidcIdentities",
@@ -793,6 +1205,7 @@ const restoreBackupSnapshot = db.transaction(
       );
     }
 
+    validateBackupAuthorizationIntegrity({ labs, users, userLabAccess });
     validateBackupNetworkIntegrity({
       labs,
       vlans,
@@ -804,8 +1217,27 @@ const restoreBackupSnapshot = db.transaction(
       ports,
       ipAssignments,
     });
+    validateBackupStorageIntegrity({
+      labs,
+      devices,
+      storageDrives,
+      driveSlots,
+      storagePools,
+      storagePoolDrives,
+    });
+    validateBackupSnmpSchedules({
+      labs,
+      devices,
+      schedules: snmpSyncSchedules,
+    });
+    validateBackupIntegrations({
+      labs,
+      connections: integrationConnections,
+      schedules: integrationSyncSchedules,
+    });
 
     db.exec(`
+    DELETE FROM userLabAccess;
     DELETE FROM userSessions;
     DELETE FROM oidcIdentities;
     DELETE FROM wifiClientAssociations;
@@ -828,17 +1260,25 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM documentationDeviceLinks;
     DELETE FROM documentationPages;
     DELETE FROM ipAssignments;
+    DELETE FROM integrationSyncSchedules;
+    DELETE FROM integrationConnections;
+    DELETE FROM snmpSyncSchedules;
     DELETE FROM discoveryScanSchedules;
     DELETE FROM discoveredDevices;
     DELETE FROM portLinks;
     DELETE FROM ports;
     DELETE FROM virtualSwitches;
+    DELETE FROM storagePoolDrives;
+    DELETE FROM storagePools;
+    DELETE FROM driveSlots;
+    DELETE FROM storageDrives;
     DELETE FROM ipZones;
     DELETE FROM dhcpScopes;
     DELETE FROM subnets;
     DELETE FROM vlans;
     DELETE FROM vlanRanges;
     DELETE FROM portTemplates;
+    DELETE FROM driveBayTemplates;
     DELETE FROM devices;
     DELETE FROM racks;
     DELETE FROM rooms;
@@ -885,6 +1325,29 @@ const restoreBackupSnapshot = db.transaction(
     INSERT INTO portTemplates (id, name, description, deviceTypes, ports, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
+    const insertDriveBayTemplate = db.prepare(`
+    INSERT INTO driveBayTemplates (id, name, description, deviceTypes, sections, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertStorageDrive = db.prepare(`
+    INSERT INTO storageDrives
+      (id, labId, manufacturer, model, serial, capacityGb, interface, formFactor, notes, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertDriveSlot = db.prepare(`
+    INSERT INTO driveSlots
+      (id, deviceId, name, sectionName, sectionOrder, position, slotType, face, layout, columns, driveId, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertStoragePool = db.prepare(`
+    INSERT INTO storagePools
+      (id, deviceId, name, poolType, usableCapacityGb, status, notes, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertStoragePoolDrive = db.prepare(`
+    INSERT INTO storagePoolDrives (poolId, driveId, createdAt)
+    VALUES (?, ?, ?)
+  `);
     const insertVlan = db.prepare(
       "INSERT INTO vlans (id, labId, vlanId, name, description, color) VALUES (?, ?, ?, ?, ?, ?)",
     );
@@ -914,6 +1377,41 @@ const restoreBackupSnapshot = db.transaction(
       (id, labId, name, cidr, intervalMs, enabled, lastRunAt, lastResult, lastMessage, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+    const insertSnmpSyncSchedule = db.prepare(`
+    INSERT INTO snmpSyncSchedules
+      (id, labId, deviceId, profileId, policy, intervalMs, enabled, lastRunAt, lastResult, lastMessage, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertIntegrationConnection = db.prepare(`
+    INSERT INTO integrationConnections (
+      id, labId, provider, name, baseUrl, authKind, authId, authSecretEnc,
+      siteRef, verifyTls, enabled, syncVlans, syncSubnets, syncDhcp,
+      lastStatus, lastCheckedAt, lastError, lastSummary, createdAt, updatedAt,
+      autoSyncEnabled, autoSyncMode, autoSyncCron, autoSyncLabIds,
+      autoSyncFailureCount, autoSyncPausedUntil, lastAutoSyncAt,
+      lastAutoSyncStatus, lastAutoSyncMessage, scopeRefs, syncDevices, syncWifi,
+      syncSwitches, syncGateways, syncAccessPoints, syncHosts, syncGuests
+    ) VALUES (
+      @id, @labId, @provider, @name, @baseUrl, @authKind, @authId,
+      @authSecretEnc, @siteRef, @verifyTls, @enabled, @syncVlans,
+      @syncSubnets, @syncDhcp, @lastStatus, @lastCheckedAt, @lastError,
+      @lastSummary, @createdAt, @updatedAt, @autoSyncEnabled, @autoSyncMode,
+      @autoSyncCron, @autoSyncLabIds, @autoSyncFailureCount,
+      @autoSyncPausedUntil, @lastAutoSyncAt, @lastAutoSyncStatus,
+      @lastAutoSyncMessage, @scopeRefs, @syncDevices, @syncWifi,
+      @syncSwitches, @syncGateways, @syncAccessPoints, @syncHosts, @syncGuests
+    )
+  `);
+    const insertIntegrationSyncSchedule = db.prepare(`
+    INSERT INTO integrationSyncSchedules (
+      id, connectionId, name, enabled, mode, cron, labIds, failureCount,
+      pausedUntil, lastRunAt, lastRunStatus, lastRunMessage, createdAt, updatedAt
+    ) VALUES (
+      @id, @connectionId, @name, @enabled, @mode, @cron, @labIds,
+      @failureCount, @pausedUntil, @lastRunAt, @lastRunStatus,
+      @lastRunMessage, @createdAt, @updatedAt
+    )
+  `);
     const insertDocumentationPage = db.prepare(`
     INSERT INTO documentationPages (id, labId, title, content, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -936,6 +1434,10 @@ const restoreBackupSnapshot = db.transaction(
     const insertUser = db.prepare(`
     INSERT INTO users (id, username, displayName, passwordHash, role, disabled, createdAt, lastLoginAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertUserLabAccess = db.prepare(`
+    INSERT INTO userLabAccess (userId, labId, role)
+    VALUES (?, ?, ?)
   `);
     const insertOidcIdentity = db.prepare(`
     INSERT INTO oidcIdentities (issuer, subject, userId, email, displayName, createdAt, updatedAt)
@@ -979,8 +1481,9 @@ const restoreBackupSnapshot = db.transaction(
     const insertDockerImportSource = db.prepare(`
     INSERT INTO dockerImportSources (
       id, labId, name, endpoint, tokenEnc,
-      lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt, enabled
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      lastSyncAt, lastSyncStatus, lastSyncMessage, createdAt, updatedAt,
+      enabled, verifyTls
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDockerContainerLink = db.prepare(`
     INSERT INTO dockerContainerLinks (
@@ -1038,6 +1541,103 @@ const restoreBackupSnapshot = db.transaction(
         row.location ?? null,
       );
     }
+    for (const row of integrationConnections) {
+      insertIntegrationConnection.run({
+        id: row.id,
+        labId: row.labId,
+        provider: row.provider,
+        name: row.name,
+        baseUrl: row.baseUrl,
+        authKind: row.authKind,
+        authId: row.authId ?? null,
+        authSecretEnc: row.authSecretEnc ?? null,
+        siteRef: row.siteRef ?? null,
+        verifyTls: row.verifyTls == null ? 1 : Number(Boolean(row.verifyTls)),
+        enabled: row.enabled == null ? 1 : Number(Boolean(row.enabled)),
+        syncVlans: row.syncVlans == null ? 1 : Number(Boolean(row.syncVlans)),
+        syncSubnets:
+          row.syncSubnets == null ? 1 : Number(Boolean(row.syncSubnets)),
+        syncDhcp: row.syncDhcp == null ? 1 : Number(Boolean(row.syncDhcp)),
+        lastStatus: row.lastStatus ?? "unknown",
+        lastCheckedAt: row.lastCheckedAt ?? null,
+        lastError: row.lastError ?? null,
+        lastSummary:
+          typeof row.lastSummary === "string"
+            ? row.lastSummary
+            : row.lastSummary
+              ? JSON.stringify(row.lastSummary)
+              : null,
+        createdAt: row.createdAt ?? new Date().toISOString(),
+        updatedAt: row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+        autoSyncEnabled: Number(Boolean(row.autoSyncEnabled ?? 0)),
+        autoSyncMode:
+          row.autoSyncMode === "skip" ||
+          row.autoSyncMode === "mirror" ||
+          row.autoSyncMode === "overwrite"
+            ? "skip"
+            : "merge",
+        autoSyncCron: row.autoSyncCron ?? null,
+        autoSyncLabIds:
+          typeof row.autoSyncLabIds === "string"
+            ? row.autoSyncLabIds
+            : Array.isArray(row.autoSyncLabIds)
+              ? JSON.stringify(row.autoSyncLabIds)
+              : null,
+        autoSyncFailureCount: Number(row.autoSyncFailureCount ?? 0),
+        autoSyncPausedUntil: row.autoSyncPausedUntil ?? null,
+        lastAutoSyncAt: row.lastAutoSyncAt ?? null,
+        lastAutoSyncStatus: row.lastAutoSyncStatus ?? null,
+        lastAutoSyncMessage: row.lastAutoSyncMessage ?? null,
+        scopeRefs:
+          typeof row.scopeRefs === "string"
+            ? row.scopeRefs
+            : Array.isArray(row.scopeRefs)
+              ? JSON.stringify(row.scopeRefs)
+              : null,
+        syncDevices:
+          row.syncDevices == null ? 1 : Number(Boolean(row.syncDevices)),
+        syncWifi: row.syncWifi == null ? 1 : Number(Boolean(row.syncWifi)),
+        syncSwitches:
+          row.syncSwitches == null ? 1 : Number(Boolean(row.syncSwitches)),
+        syncGateways:
+          row.syncGateways == null ? 1 : Number(Boolean(row.syncGateways)),
+        syncAccessPoints:
+          row.syncAccessPoints == null
+            ? 1
+            : Number(Boolean(row.syncAccessPoints)),
+        syncHosts: row.syncHosts == null ? 1 : Number(Boolean(row.syncHosts)),
+        syncGuests:
+          row.syncGuests == null ? 1 : Number(Boolean(row.syncGuests)),
+      });
+    }
+    for (const row of integrationSyncSchedules) {
+      insertIntegrationSyncSchedule.run({
+        id: row.id,
+        connectionId: row.connectionId,
+        name: row.name,
+        enabled: row.enabled == null ? 1 : Number(Boolean(row.enabled)),
+        mode:
+          row.mode === "skip" ||
+          row.mode === "mirror" ||
+          row.mode === "overwrite"
+            ? "skip"
+            : "merge",
+        cron: row.cron,
+        labIds:
+          typeof row.labIds === "string"
+            ? row.labIds
+            : Array.isArray(row.labIds)
+              ? JSON.stringify(row.labIds)
+              : null,
+        failureCount: Number(row.failureCount ?? 0),
+        pausedUntil: row.pausedUntil ?? null,
+        lastRunAt: row.lastRunAt ?? null,
+        lastRunStatus: row.lastRunStatus ?? null,
+        lastRunMessage: row.lastRunMessage ?? null,
+        createdAt: row.createdAt ?? new Date().toISOString(),
+        updatedAt: row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      });
+    }
     for (const row of users) {
       insertUser.run(
         row.id,
@@ -1049,6 +1649,9 @@ const restoreBackupSnapshot = db.transaction(
         row.createdAt,
         row.lastLoginAt ?? null,
       );
+    }
+    for (const row of userLabAccess) {
+      insertUserLabAccess.run(row.userId, row.labId, row.role);
     }
     for (const row of oidcIdentities) {
       insertOidcIdentity.run(
@@ -1113,6 +1716,7 @@ const restoreBackupSnapshot = db.transaction(
         row.createdAt ?? new Date().toISOString(),
         row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
         row.enabled == null ? 1 : Number(Boolean(row.enabled)),
+        row.verifyTls == null ? 1 : Number(Boolean(row.verifyTls)),
       );
     }
     for (const row of devices) {
@@ -1163,6 +1767,58 @@ const restoreBackupSnapshot = db.transaction(
         continue;
       }
       updateDeviceParent.run(parentDeviceId, row.id);
+    }
+    for (const row of storageDrives) {
+      insertStorageDrive.run(
+        row.id,
+        row.labId,
+        row.manufacturer ?? null,
+        row.model ?? null,
+        row.serial ?? null,
+        row.capacityGb,
+        row.interface,
+        row.formFactor,
+        row.notes ?? null,
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      );
+    }
+    for (const row of driveSlots) {
+      insertDriveSlot.run(
+        row.id,
+        row.deviceId,
+        row.name,
+        row.sectionName,
+        row.sectionOrder ?? 0,
+        row.position,
+        row.slotType,
+        row.face,
+        row.layout,
+        row.columns ?? null,
+        row.driveId ?? null,
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      );
+    }
+    for (const row of storagePools) {
+      insertStoragePool.run(
+        row.id,
+        row.deviceId,
+        row.name,
+        row.poolType,
+        row.usableCapacityGb,
+        row.status,
+        row.notes ?? null,
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      );
+    }
+    for (const row of storagePoolDrives) {
+      insertStoragePoolDrive.run(
+        row.poolId,
+        row.driveId,
+        row.createdAt ?? new Date().toISOString(),
+      );
     }
     for (const row of dockerContainerLinks) {
       insertDockerContainerLink.run(
@@ -1303,6 +1959,17 @@ const restoreBackupSnapshot = db.transaction(
         row.updatedAt ?? new Date().toISOString(),
       );
     }
+    for (const row of driveBayTemplates) {
+      insertDriveBayTemplate.run(
+        row.id,
+        row.name,
+        row.description,
+        JSON.stringify(row.deviceTypes ?? []),
+        JSON.stringify(row.sections ?? []),
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      );
+    }
     for (const row of dhcpScopes) {
       insertDhcpScope.run(
         row.id,
@@ -1371,6 +2038,23 @@ const restoreBackupSnapshot = db.transaction(
         row.cidr,
         row.intervalMs ?? 3_600_000,
         row.enabled === false || row.enabled === 0 ? 0 : 1,
+        row.lastRunAt ?? null,
+        row.lastResult ?? null,
+        row.lastMessage ?? null,
+        row.createdAt ?? now,
+        row.updatedAt ?? row.createdAt ?? now,
+      );
+    }
+    for (const row of snmpSyncSchedules) {
+      const now = new Date().toISOString();
+      insertSnmpSyncSchedule.run(
+        row.id,
+        row.labId,
+        row.deviceId,
+        row.profileId,
+        row.policy ?? "merge",
+        row.intervalMs ?? 86_400_000,
+        row.enabled === true || row.enabled === 1 ? 1 : 0,
         row.lastRunAt ?? null,
         row.lastResult ?? null,
         row.lastMessage ?? null,
@@ -1579,12 +2263,18 @@ const restoreBackupSnapshot = db.transaction(
         virtualSwitches: virtualSwitches.length,
         discoveredDevices: discoveredDevices.length,
         discoveryScanSchedules: discoveryScanSchedules.length,
+        snmpSyncSchedules: snmpSyncSchedules.length,
         documentationPages: documentationPages.length,
         documentationDeviceLinks: documentationDeviceLinks.length,
         deviceImages: deviceImages.length,
         referenceImages: referenceImages.length,
         deviceServices: deviceServices.length,
         portTemplates: portTemplates.length,
+        driveBayTemplates: driveBayTemplates.length,
+        storageDrives: storageDrives.length,
+        driveSlots: driveSlots.length,
+        storagePools: storagePools.length,
+        storagePoolDrives: storagePoolDrives.length,
         wifiControllers: wifiControllers.length,
         wifiSsids: wifiSsids.length,
         wifiRadios: wifiRadios.length,
@@ -1592,12 +2282,23 @@ const restoreBackupSnapshot = db.transaction(
         vlans: vlans.length,
         subnets: subnets.length,
         users: users.length,
+        userLabAccess: userLabAccess.length,
       },
     };
   },
 );
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
+  app.get("/operations/status", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    return {
+      monitoring: monitoringOperationalStatus(),
+      discovery: discoveryOperationalStatus(),
+      dockerSync: dockerSyncOperationalStatus(),
+      snmpSync: snmpSyncOperationalStatus(),
+      nativeBackup: nativeBackupStatus(),
+    };
+  });
   app.get("/integrity", async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     const subnetRows = db
@@ -1677,6 +2378,95 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     if (!requireAdmin(req, reply)) return;
     return loadAlertSettings();
   });
+
+  app.get("/native-backups", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const status = nativeBackupStatus();
+    return { ...status, backups: listNativeBackups() };
+  });
+
+  app.put("/native-backups/settings", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const body = asObject(req.body);
+    const nextSettings = {
+      enabled: optionalBoolean(body, "enabled") ?? false,
+      intervalHours:
+        optionalInteger(body, "intervalHours", { min: 1, max: 8760 }) ?? 24,
+      retentionCount:
+        optionalInteger(body, "retentionCount", { min: 1, max: 365 }) ?? 7,
+    };
+    if (nextSettings.enabled && !nativeBackupStatus().configured) {
+      return reply.status(409).send({
+        error:
+          "Configure RACKPAD_NATIVE_BACKUP_DIR before enabling scheduled native backups.",
+      });
+    }
+    const settings = saveNativeBackupSettings(nextSettings);
+    writeAdminAudit(
+      req.authUser.username,
+      "admin.native_backup.settings",
+      "Updated native backup schedule settings.",
+    );
+    return settings;
+  });
+
+  app.post("/native-backups", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (!nativeBackupStatus().configured) {
+      return reply
+        .status(409)
+        .send({ error: "Native backup directory is not configured." });
+    }
+    try {
+      const backup = await createNativeBackup(req.authUser.username);
+      return reply.status(201).send(backup);
+    } catch (error) {
+      if (error instanceof NativeBackupBusyError) {
+        return reply.status(409).send({ error: error.message });
+      }
+      throw error;
+    }
+  });
+
+  app.get<{ Params: { name: string } }>(
+    "/native-backups/:name/download",
+    async (req, reply) => {
+      if (!requireAdmin(req, reply)) return;
+      try {
+        const stream = nativeBackupReadStream(req.params.name);
+        reply.header("Content-Type", "application/vnd.sqlite3");
+        reply.header(
+          "Content-Disposition",
+          `attachment; filename="${req.params.name}"`,
+        );
+        return reply.send(stream);
+      } catch {
+        return reply
+          .status(400)
+          .send({ error: "Invalid native backup selection." });
+      }
+    },
+  );
+
+  app.delete<{ Params: { name: string } }>(
+    "/native-backups/:name",
+    async (req, reply) => {
+      if (!requireAdmin(req, reply)) return;
+      try {
+        deleteNativeBackup(req.params.name);
+      } catch {
+        return reply
+          .status(400)
+          .send({ error: "Invalid native backup selection." });
+      }
+      writeAdminAudit(
+        req.authUser.username,
+        "admin.native_backup.delete",
+        "Deleted a native database snapshot.",
+      );
+      return reply.status(204).send();
+    },
+  );
 
   app.put("/alert-settings", async (req, reply) => {
     if (!requireAdmin(req, reply)) return;

@@ -11,7 +11,10 @@ import {
   assertLabWriteFromRow,
   resolveLabIdsForList,
 } from "../lib/lab-access.js";
-import { optionalDeviceType } from "../lib/device-types.js";
+import {
+  deviceTypeBase,
+  optionalDeviceType,
+} from "../lib/device-types.js";
 import {
   inferDiscoveryPlacement,
   inferDiscoveryPlacementHint,
@@ -525,8 +528,9 @@ function inferPlacement(
       macAddress: context.macAddress,
     });
   }
-  if (deviceType === "ap") return "wireless" as const;
-  if (deviceType === "vm" || deviceType === "container")
+  const baseType = deviceTypeBase(deviceType);
+  if (baseType === "ap") return "wireless" as const;
+  if (baseType === "vm" || baseType === "container")
     return "virtual" as const;
   return "room" as const;
 }
@@ -1208,6 +1212,16 @@ function queuedDiscoveryScanJobs() {
   return [...discoveryScanJobs.values()].filter(
     (job) => job.status === "queued",
   );
+}
+
+export function discoveryOperationalStatus() {
+  const jobs = [...discoveryScanJobs.values()];
+  return {
+    running: jobs.filter((job) => job.status === "running").length,
+    queued: jobs.filter((job) => job.status === "queued").length,
+    failed: jobs.filter((job) => job.status === "failed").length,
+    limits: discoveryQueueLimits(),
+  };
 }
 
 function serializeDiscoveryScanJob(

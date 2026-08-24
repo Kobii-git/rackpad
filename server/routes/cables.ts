@@ -85,7 +85,7 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(filter.status).send({ error: filter.error });
     }
 
-    let sql = `
+    const sql = `
       SELECT portLinks.*
       FROM portLinks
       JOIN ports fromPort ON fromPort.id = portLinks.fromPortId

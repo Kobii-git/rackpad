@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   evaluateSnmpMatch,
+  isValidSnmpRegex,
   matchPortForInterface,
   operStatusToLinkState,
 } from "../lib/snmp-match.js";
@@ -17,6 +18,17 @@ test("evaluateSnmpMatch supports equals, notEquals, in, and any modes", () => {
   assert.equal(evaluateSnmpMatch(null, "value", ""), true);
   assert.equal(evaluateSnmpMatch(null, "1", "1"), true);
   assert.equal(evaluateSnmpMatch(null, "value", "1"), false);
+  assert.equal(evaluateSnmpMatch("regex", "sw-core-01", "^sw-[a-z]+-\\d+$"), true);
+  assert.equal(evaluateSnmpMatch("regex", "sw-core-01", "(a+)+$"), false);
+  assert.equal(evaluateSnmpMatch("regex", "value", "(?=value)"), false);
+  assert.equal(evaluateSnmpMatch("regex", "x".repeat(4097), ".*"), false);
+});
+
+test("SNMP regex validation accepts bounded RE2 patterns and rejects unsupported syntax", () => {
+  assert.equal(isValidSnmpRegex("^sw-[a-z]+-\\d+$"), true);
+  assert.equal(isValidSnmpRegex("(?=value)"), false);
+  assert.equal(isValidSnmpRegex(""), false);
+  assert.equal(isValidSnmpRegex("x".repeat(201)), false);
 });
 
 test("matchPortForInterface prefers snmpIfIndex then normalized port names", () => {

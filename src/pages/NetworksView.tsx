@@ -64,6 +64,7 @@ import {
 } from "lucide-react";
 import { cidrSize } from "@/lib/utils";
 import { formatDeviceMac } from "@/lib/network-labels";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 
 const ASSIGNMENT_HEADING_KEYS: Record<
   IpAssignment["assignmentType"],
@@ -412,9 +413,18 @@ export default function NetworksView() {
     selectedNetwork?.kind === "subnet"
       ? selectedNetwork.vlan
       : selectedNetwork?.vlan;
-  const assignments = selectedNetwork?.assignments ?? [];
-  const subnetScopes = selectedNetwork?.dhcpScopes ?? [];
-  const subnetZones = selectedNetwork?.zones ?? [];
+  const assignments = useMemo(
+    () => selectedNetwork?.assignments ?? [],
+    [selectedNetwork],
+  );
+  const subnetScopes = useMemo(
+    () => selectedNetwork?.dhcpScopes ?? [],
+    [selectedNetwork],
+  );
+  const subnetZones = useMemo(
+    () => selectedNetwork?.zones ?? [],
+    [selectedNetwork],
+  );
   const subnetNeedsRepair = Boolean(subnet && subnet.integrity.state !== "ok");
   const canRepairSubnet = currentUser?.role === "admin";
   const canCreateSubnetChild = canEdit && !subnetNeedsRepair;
@@ -2527,6 +2537,7 @@ function AssignmentsSection({
   onUnassign: (id: string) => void;
 }) {
   const { t } = useI18n();
+  const deviceTypes = useStore((state) => state.deviceTypes);
   return (
     <>
       {VISIBLE_ASSIGNMENT_TYPES.map((type) => {
@@ -2595,7 +2606,11 @@ function AssignmentsSection({
                           {device
                             ? t("{hostname} ({deviceType})", {
                                 hostname: device.hostname,
-                                deviceType: device.deviceType,
+                                deviceType: localizedDeviceTypeIdLabel(
+                                  device.deviceType,
+                                  deviceTypes,
+                                  t,
+                                ),
                               })
                             : (assignment.description ?? "-")}
                         </div>

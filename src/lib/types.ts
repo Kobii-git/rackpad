@@ -11,6 +11,15 @@ export interface DeviceTypeDefinition {
   updatedAt?: string;
 }
 
+export interface DeviceTypeUsage {
+  id: DeviceType;
+  devices: number;
+  discoveredDevices: number;
+  portTemplates: number;
+  driveBayTemplates: number;
+  total: number;
+}
+
 export type PortKind =
   | "rj45"
   | "sfp"
@@ -21,7 +30,9 @@ export type PortKind =
   | "console"
   | "usb"
   | "virtual"
-  | "wifi";
+  | "wifi"
+  | "sff"
+  | "other";
 
 export type RackFace = "front" | "rear";
 export type RackSlot = "full" | "left" | "right";
@@ -29,7 +40,12 @@ export type LinkState = "up" | "down" | "disabled" | "unknown";
 export type PortMode = "access" | "trunk";
 export type PortRole = "physical" | "aggregate";
 export type DeviceStatus =
-  "online" | "offline" | "warning" | "unknown" | "maintenance";
+  | "online"
+  | "offline"
+  | "warning"
+  | "unknown"
+  | "maintenance"
+  | "unmanaged";
 export type DevicePlacement =
   "rack" | "room" | "wireless" | "virtual" | "shelf";
 export type IpAssignmentType =
@@ -42,6 +58,26 @@ export type DiscoveryStatus = "new" | "imported" | "dismissed";
 export type WifiBand = "2.4ghz" | "5ghz" | "6ghz";
 export type VirtualSwitchKind = "external" | "internal" | "private";
 export type DeviceNetworkMode = "normal" | "host-shared";
+export type DriveInterface = "sata" | "sas" | "nvme" | "usb" | "other";
+export type DriveFormFactor = "2.5" | "3.5" | "m2" | "u2" | "other";
+export type DriveSlotType = "2.5" | "3.5" | "m2" | "u2" | "generic";
+export type DriveSlotFace = "front" | "rear" | "internal";
+export type DriveSlotLayout = "grid" | "list";
+export type StoragePoolType =
+  | "raid0"
+  | "raid1"
+  | "raid5"
+  | "raid6"
+  | "raid10"
+  | "raidz1"
+  | "raidz2"
+  | "raidz3"
+  | "mirror"
+  | "unraid"
+  | "jbod"
+  | "other";
+export type StoragePoolStatus =
+  "healthy" | "degraded" | "rebuilding" | "offline" | "unknown";
 export type DeviceServiceType =
   | "dhcp"
   | "dns"
@@ -61,6 +97,31 @@ export type { SupportedLanguage };
 
 export interface UiSettings {
   defaultLanguage: SupportedLanguage;
+}
+
+export interface NativeBackupEntry {
+  name: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface NativeBackupSettings {
+  enabled: boolean;
+  intervalHours: number;
+  retentionCount: number;
+}
+
+export interface NativeBackupStatus {
+  configured: boolean;
+  configurationError: string | null;
+  settings: NativeBackupSettings;
+  scheduler: {
+    running: boolean;
+    lastSuccessAt: string | null;
+    lastFailureAt: string | null;
+    lastError: string | null;
+  };
+  backups: NativeBackupEntry[];
 }
 
 export interface AlertSettings {
@@ -191,6 +252,21 @@ export interface SnmpSyncProfile {
 export type SnmpSyncDiffAction = "create" | "update" | "delete" | "unchanged";
 export type SnmpSyncPolicy = "merge" | "mirror";
 
+export interface SnmpSyncSchedule {
+  id: ID;
+  labId: ID;
+  deviceId: ID;
+  profileId: string;
+  policy: SnmpSyncPolicy;
+  intervalMs: number;
+  enabled: boolean;
+  lastRunAt?: string | null;
+  lastResult?: "success" | "error" | null;
+  lastMessage?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SnmpSyncVlanDiff {
   action: SnmpSyncDiffAction;
   vlanNumber: number;
@@ -231,6 +307,7 @@ export interface SnmpSyncPreview {
       subnetCidr?: string | null;
       note?: string | null;
     }>;
+    conflicts: Array<{ name: string; reason: string }>;
   };
   summary: {
     vlanCreates: number;
@@ -239,6 +316,8 @@ export interface SnmpSyncPreview {
     subnetCreates: number;
     subnetUpdates: number;
     subnetDeletes: number;
+    dhcpCreates: number;
+    dhcpConflicts: number;
   };
   warnings: string[];
 }
@@ -254,7 +333,234 @@ export interface SnmpSyncApplyResult {
   createdSubnetIds: string[];
   updatedSubnetIds: string[];
   deletedSubnetIds: string[];
+  createdDhcpScopeIds: string[];
+  skippedDhcpScopes: number;
   skippedDeletes: number;
+  warnings: string[];
+}
+
+export type IntegrationProvider =
+  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand";
+
+export type IntegrationAuthKind =
+  | "api-token"
+  | "api-key"
+  | "username-password"
+  | "client-credentials"
+  | "key-secret";
+
+export type IntegrationScopeKind = "sites" | "nodes" | "environments";
+
+export interface IntegrationProviderInfo {
+  id: IntegrationProvider;
+  label: string;
+  vendor: string;
+  authKinds: IntegrationAuthKind[];
+  defaultAuthKind: IntegrationAuthKind;
+  scopeKind: IntegrationScopeKind | null;
+}
+
+export interface IntegrationScope {
+  id: string;
+  label: string;
+}
+
+export type IntegrationAutoSyncMode = "merge" | "skip";
+
+export interface IntegrationConnection {
+  id: string;
+  labId: string;
+  provider: IntegrationProvider;
+  name: string;
+  baseUrl: string;
+  authKind: IntegrationAuthKind;
+  authId: string | null;
+  hasSecret: boolean;
+  siteRef: string | null;
+  scopeRefs: string[];
+  verifyTls: boolean;
+  enabled: boolean;
+  syncVlans: boolean;
+  syncSubnets: boolean;
+  syncDhcp: boolean;
+  syncSwitches: boolean;
+  syncGateways: boolean;
+  syncAccessPoints: boolean;
+  syncHosts: boolean;
+  syncGuests: boolean;
+  syncWifi: boolean;
+  lastStatus: "unknown" | "ok" | "error";
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  lastSummary: Record<string, unknown> | null;
+  autoSyncEnabled: boolean;
+  autoSyncMode: IntegrationAutoSyncMode;
+  autoSyncCron: string | null;
+  autoSyncLabIds: string[];
+  autoSyncFailureCount: number;
+  autoSyncPausedUntil: string | null;
+  lastAutoSyncAt: string | null;
+  lastAutoSyncStatus: "ok" | "error" | "drift" | null;
+  lastAutoSyncMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IntegrationTestResult {
+  product: string;
+  version: string | null;
+  summary: Record<string, unknown>;
+}
+
+export interface IntegrationDevicePreview {
+  name: string;
+  kind:
+    | "host"
+    | "vm"
+    | "container"
+    | "switch"
+    | "gateway"
+    | "access-point"
+    | "firewall"
+    | "bridge"
+    | "interface"
+    | "other";
+  model: string | null;
+  macAddress: string | null;
+  ipAddress: string | null;
+  status: string | null;
+  detail: string | null;
+}
+
+export interface IntegrationPortSpec {
+  name: string;
+  kind: "rj45" | "sfp" | "sfp_plus" | "virtual" | "qsfp" | "wifi";
+  speed: string | null;
+  linkState: "up" | "down" | "unknown";
+  mode?: "access" | "trunk" | null;
+  untaggedVlanNumber?: number | null;
+  taggedVlanNumbers?: number[];
+  macAddress?: string | null;
+  virtualSwitchName?: string | null;
+  ipAddresses?: string[];
+}
+
+export interface IntegrationVirtualSwitchSpec {
+  providerRecordId?: string;
+  name: string;
+  hostName: string;
+  kind: "external" | "internal" | "private";
+  notes: string | null;
+}
+
+export interface IntegrationImportableDevice {
+  providerRecordId?: string;
+  name: string;
+  deviceType:
+    | "switch"
+    | "router"
+    | "firewall"
+    | "ap"
+    | "server"
+    | "vm"
+    | "container"
+    | "other";
+  model: string | null;
+  macAddress: string | null;
+  ipAddress: string | null;
+  serial: string | null;
+  firmware: string | null;
+  online: boolean | null;
+  parentName?: string | null;
+  ports: IntegrationPortSpec[];
+}
+
+export interface IntegrationWifiInventory {
+  controllerName: string;
+  vendor: string;
+  managementIp: string | null;
+  ssids: Array<{
+    providerRecordId?: string;
+    name: string;
+    vlanNumber: number | null;
+    security: string | null;
+    hidden: boolean;
+  }>;
+}
+
+export interface IntegrationDeviceSyncPlan {
+  labId: string;
+  devices: Array<{
+    providerRecordId: string;
+    action: "create" | "exists" | "conflict";
+    name: string;
+    deviceType: IntegrationImportableDevice["deviceType"];
+    parentName: string | null;
+    model: string | null;
+    macAddress: string | null;
+    ipAddress: string | null;
+    portCount: number;
+    existingId?: string;
+    existingHostname?: string;
+    reason: string | null;
+    proposedUpdates: string[];
+  }>;
+  ssids: Array<{
+    providerRecordId: string;
+    action: "create" | "exists";
+    name: string;
+    vlanNumber: number | null;
+  }>;
+  virtualSwitches: Array<{
+    providerRecordId: string;
+    action: "create" | "exists" | "conflict";
+    name: string;
+    hostName: string;
+    reason: string | null;
+  }>;
+  controllerName: string | null;
+}
+
+export interface IntegrationDeviceSyncResult {
+  createdDeviceIds: string[];
+  createdPortCount: number;
+  createdSsidIds: string[];
+  createdVirtualSwitchIds: string[];
+  createdIpAssignmentIds: string[];
+  linkedAccessPoints: number;
+  skipped: string[];
+}
+
+export interface IntegrationSyncSchedule {
+  id: string;
+  connectionId: string;
+  name: string;
+  enabled: boolean;
+  mode: IntegrationAutoSyncMode;
+  cron: string;
+  labIds: string[];
+  failureCount: number;
+  pausedUntil: string | null;
+  lastRunAt: string | null;
+  lastRunStatus: "ok" | "error" | "drift" | null;
+  lastRunMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IntegrationInventoryResponse {
+  connection: IntegrationConnection | null;
+  preview: SnmpSyncPreview;
+  mode: IntegrationAutoSyncMode;
+  networkPreviewToken: string;
+  networkPreviewExpiresAt: string;
+  deviceSnapshotToken: string;
+  deviceSnapshotExpiresAt: string;
+  devices: IntegrationDevicePreview[];
+  deviceSync: IntegrationDeviceSyncPlan;
+  importableDevices: IntegrationImportableDevice[];
+  virtualSwitches: IntegrationVirtualSwitchSpec[];
+  wifi: IntegrationWifiInventory | null;
   warnings: string[];
 }
 
@@ -434,6 +740,7 @@ export interface DockerImportSource {
   endpoint: string;
   hasToken: boolean;
   enabled: boolean;
+  verifyTls: boolean;
   lastSyncAt?: string | null;
   lastSyncStatus?: string | null;
   lastSyncMessage?: string | null;
@@ -536,7 +843,7 @@ export interface DeviceMonitor {
   snmpCommunity?: string | null;
   snmpOid?: string | null;
   snmpExpectedValue?: string | null;
-  snmpMatchMode?: "any" | "equals" | "notEquals" | "in" | null;
+  snmpMatchMode?: "any" | "equals" | "notEquals" | "in" | "regex" | null;
   portId?: ID | null;
   snmpIfIndex?: number | null;
   snmpCredentialId?: ID | null;
@@ -698,6 +1005,81 @@ export interface PortTemplate {
   deviceTypes: DeviceType[];
   ports: PortTemplatePort[];
   builtIn?: boolean;
+}
+
+export interface DriveBayTemplateSlot {
+  name: string;
+  position: number;
+  slotType: DriveSlotType;
+}
+
+export interface DriveBayTemplateSection {
+  name: string;
+  face: DriveSlotFace;
+  layout: DriveSlotLayout;
+  columns?: number | null;
+  slots: DriveBayTemplateSlot[];
+}
+
+export interface DriveBayTemplate {
+  id: ID;
+  name: string;
+  description: string;
+  deviceTypes: DeviceType[];
+  sections: DriveBayTemplateSection[];
+  builtIn?: boolean;
+}
+
+export interface DriveSlot {
+  id: ID;
+  deviceId: ID;
+  name: string;
+  sectionName: string;
+  sectionOrder: number;
+  position: number;
+  slotType: DriveSlotType;
+  face: DriveSlotFace;
+  layout: DriveSlotLayout;
+  columns?: number | null;
+  sectionInconsistent?: boolean;
+  driveId?: ID | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StorageDrive {
+  id: ID;
+  labId: ID;
+  manufacturer?: string | null;
+  model?: string | null;
+  serial?: string | null;
+  capacityGb: number;
+  interface: DriveInterface;
+  formFactor: DriveFormFactor;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  slotId?: ID | null;
+  deviceId?: ID | null;
+  deviceHostname?: string | null;
+  slotName?: string | null;
+  slotSectionName?: string | null;
+  poolId?: ID | null;
+  poolName?: string | null;
+}
+
+export interface StoragePool {
+  id: ID;
+  deviceId: ID;
+  labId: ID;
+  name: string;
+  poolType: StoragePoolType;
+  usableCapacityGb: number;
+  status: StoragePoolStatus;
+  notes?: string | null;
+  driveIds: ID[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DeviceWithPorts extends Device {

@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { X, Save, Network, Plus, Trash2 } from "lucide-react";
+import { X, Save, Network, Plus, Trash2, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Separator } from "@/components/ui/Separator";
@@ -26,9 +26,12 @@ import { useI18n } from "@/i18n";
 import type { TranslationKey } from "@/i18n/translations";
 import {
   BUILT_IN_DEVICE_TYPES,
+  deviceTypeBase,
   deviceTypeLabel,
   deviceTypeMatchesTemplate,
+  localizedDeviceTypeLabel,
 } from "@/lib/device-types";
+import { driveBayTemplateDisplayCopy } from "@/lib/storage";
 import { statusLabel } from "@/lib/utils";
 import type {
   Device,
@@ -46,6 +49,7 @@ const STATUS_OPTIONS: DeviceStatus[] = [
   "offline",
   "warning",
   "maintenance",
+  "unmanaged",
   "unknown",
 ];
 
@@ -76,6 +80,7 @@ interface FormState {
   face: RackFace;
   rackSlot: RackSlot;
   portTemplateId: string;
+  driveBayTemplateId: string;
   tags: string;
   notes: string;
 }
@@ -116,6 +121,7 @@ function blankForm(defaults?: Partial<FormState>): FormState {
     face: "front",
     rackSlot: "full",
     portTemplateId: "",
+    driveBayTemplateId: "",
     tags: "",
     notes: "",
     ...defaults,
@@ -160,6 +166,7 @@ function deviceToForm(device: Device): FormState {
     face: device.face ?? "front",
     rackSlot: device.rackSlot ?? "full",
     portTemplateId: "",
+    driveBayTemplateId: "",
     tags: (device.tags ?? []).join(", "),
     notes: device.notes ?? "",
   };
@@ -191,6 +198,8 @@ export function DeviceDrawer({
   const deviceTypes = useStore((s) => s.deviceTypes);
   const ports = useStore((s) => s.ports);
   const portTemplates = useStore((s) => s.portTemplates);
+  const driveBayTemplates = useStore((s) => s.driveBayTemplates);
+  const driveSlots = useStore((s) => s.driveSlots);
   const subnets = useStore((s) => s.subnets);
   const scopes = useStore((s) => s.scopes);
   const ipZones = useStore((s) => s.ipZones);
@@ -285,21 +294,47 @@ export function DeviceDrawer({
       ),
     [deviceTypes, form.deviceType, portTemplates],
   );
+  const deviceDriveSlotCount = useMemo(
+    () =>
+      device
+        ? driveSlots.filter((slot) => slot.deviceId === device.id).length
+        : 0,
+    [device, driveSlots],
+  );
+  const canApplyDriveTemplate = !device || deviceDriveSlotCount === 0;
+  const selectedDriveTemplate = driveBayTemplates.find(
+    (template) => template.id === form.driveBayTemplateId,
+  );
+  const compatibleDriveTemplates = useMemo(
+    () =>
+      driveBayTemplates.filter((template) =>
+        deviceTypeMatchesTemplate(
+          form.deviceType,
+          template.deviceTypes,
+          deviceTypes,
+        ),
+      ),
+    [deviceTypes, driveBayTemplates, form.deviceType],
+  );
   const isRackMounted = form.placement === "rack";
   const isShelfMounted = form.placement === "shelf";
+  const formBaseType = deviceTypeBase(form.deviceType, deviceTypes);
   const parentCandidates = useMemo(() => {
     return devices
       .filter((entry) => !device || entry.id !== device.id)
       .filter((entry) => {
-        if (form.placement === "wireless") return entry.deviceType === "ap";
+        if (form.placement === "wireless")
+          return deviceTypeBase(entry.deviceType, deviceTypes) === "ap";
         if (form.placement === "virtual")
-          return !["vm", "container"].includes(entry.deviceType);
+          return !["vm", "container"].includes(
+            deviceTypeBase(entry.deviceType, deviceTypes),
+          );
         if (form.placement === "shelf")
-          return entry.deviceType === "rack_shelf";
+          return deviceTypeBase(entry.deviceType, deviceTypes) === "rack_shelf";
         return true;
       })
       .sort((a, b) => a.hostname.localeCompare(b.hostname));
-  }, [device, devices, form.placement]);
+  }, [device, devices, deviceTypes, form.placement]);
   const showParentSelector =
     form.placement === "wireless" ||
     form.placement === "virtual" ||
@@ -322,7 +357,7 @@ export function DeviceDrawer({
     : undefined;
   const canUseHostSharedNetworking =
     form.placement === "virtual" &&
-    (form.deviceType === "vm" || form.deviceType === "container") &&
+    (formBaseType === "vm" || formBaseType === "container") &&
     Boolean(form.parentDeviceId);
   const managementIp = form.managementIp.trim();
   const managementSubnet = managementIp
@@ -358,10 +393,10 @@ export function DeviceDrawer({
     scopesForSelectedSubnet[0]?.id ||
     "";
   const managementAssignmentType = useMemo<IpAssignmentType>(() => {
-    if (form.deviceType === "vm") return "vm";
-    if (form.deviceType === "container") return "container";
+    if (formBaseType === "vm") return "vm";
+    if (formBaseType === "container") return "container";
     return "device";
-  }, [form.deviceType]);
+  }, [formBaseType]);
   const nextIpPreview = useMemo(() => {
     if (isEdit || canUseHostSharedNetworking || !selectedIpSubnetId)
       return null;
@@ -396,6 +431,17 @@ export function DeviceDrawer({
       return;
     setForm((prev) => ({ ...prev, portTemplateId: "" }));
   }, [compatibleTemplates, form.portTemplateId]);
+
+  useEffect(() => {
+    if (!form.driveBayTemplateId) return;
+    if (
+      compatibleDriveTemplates.some(
+        (template) => template.id === form.driveBayTemplateId,
+      )
+    )
+      return;
+    setForm((prev) => ({ ...prev, driveBayTemplateId: "" }));
+  }, [compatibleDriveTemplates, form.driveBayTemplateId]);
 
   useEffect(() => {
     if (manageableDeviceTypes.length === 0) {
@@ -435,10 +481,10 @@ export function DeviceDrawer({
   }, [form.placement]);
 
   useEffect(() => {
-    if (form.deviceType !== "rack_shelf") return;
+    if (formBaseType !== "rack_shelf") return;
     if (form.placement === "rack") return;
     setForm((prev) => ({ ...prev, placement: "rack", parentDeviceId: "" }));
-  }, [form.deviceType, form.placement]);
+  }, [form.placement, formBaseType]);
 
   useEffect(() => {
     if (showParentSelector) return;
@@ -739,6 +785,10 @@ export function DeviceDrawer({
           canApplyTemplate && form.portTemplateId
             ? form.portTemplateId
             : undefined,
+        driveBayTemplateId:
+          canApplyDriveTemplate && form.driveBayTemplateId
+            ? form.driveBayTemplateId
+            : undefined,
         tags: tags.length > 0 ? tags : undefined,
         notes: form.notes.trim() || undefined,
       };
@@ -889,7 +939,7 @@ export function DeviceDrawer({
                       >
                         {availableDeviceTypes.map((type) => (
                           <option key={type.id} value={type.id}>
-                            {type.label}
+                            {localizedDeviceTypeLabel(type, t)}
                           </option>
                         ))}
                       </Select>
@@ -921,7 +971,7 @@ export function DeviceDrawer({
                           >
                             {builtInDeviceTypes.map((type) => (
                               <option key={type.id} value={type.id}>
-                                {type.label}
+                                {localizedDeviceTypeLabel(type, t)}
                               </option>
                             ))}
                           </Select>
@@ -944,7 +994,7 @@ export function DeviceDrawer({
                               >
                                 {manageableDeviceTypes.map((type) => (
                                   <option key={type.id} value={type.id}>
-                                    {type.label}
+                                    {localizedDeviceTypeLabel(type, t)}
                                   </option>
                                 ))}
                               </Select>
@@ -984,7 +1034,7 @@ export function DeviceDrawer({
                               >
                                 {builtInDeviceTypes.map((type) => (
                                   <option key={type.id} value={type.id}>
-                                    {type.label}
+                                    {localizedDeviceTypeLabel(type, t)}
                                   </option>
                                 ))}
                               </Select>
@@ -1296,7 +1346,7 @@ export function DeviceDrawer({
                     >
                       <option value="rack">{t("Rack mounted")}</option>
                       <option value="room">{t("Loose / room tech")}</option>
-                      {form.deviceType !== "rack_shelf" && (
+                      {formBaseType !== "rack_shelf" && (
                         <option value="shelf">
                           {t("On rack shelf / tray")}
                         </option>
@@ -1493,6 +1543,55 @@ export function DeviceDrawer({
                       </div>
                     </div>
                   ) : null}
+
+                  <div className="mt-4 border-t border-[var(--border-subtle)] pt-4">
+                    <Field label={t("Drive-bay template")}>
+                      <Select
+                        value={form.driveBayTemplateId}
+                        onChange={(value) => set("driveBayTemplateId", value)}
+                        disabled={!canApplyDriveTemplate}
+                      >
+                        <option value="">{t("No drive-bay template")}</option>
+                        {compatibleDriveTemplates.map((template) => (
+                          <option key={template.id} value={template.id}>
+                            {driveBayTemplateDisplayCopy(template, t).name}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    {!canApplyDriveTemplate ? (
+                      <div className="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-fg-subtle)]">
+                        {t(
+                          "Templates can only be applied before slots are added.",
+                        )}
+                      </div>
+                    ) : selectedDriveTemplate ? (
+                      <div className="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-accent-soft)]/30 bg-[var(--color-accent)]/5 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-fg-subtle)]">
+                              {t("Layout preview")}
+                            </div>
+                            <div className="text-sm text-[var(--color-fg)]">
+                              {
+                                driveBayTemplateDisplayCopy(
+                                  selectedDriveTemplate,
+                                  t,
+                                ).description
+                              }
+                            </div>
+                          </div>
+                          <Badge tone="info">
+                            <HardDrive className="size-3" />
+                            {selectedDriveTemplate.sections.reduce(
+                              (sum, section) => sum + section.slots.length,
+                              0,
+                            )}
+                          </Badge>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 </Section>
 
                 <Separator />

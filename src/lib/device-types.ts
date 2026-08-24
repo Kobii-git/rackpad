@@ -1,4 +1,11 @@
-import type { Device, DeviceType, DeviceTypeDefinition, PortTemplate } from "./types";
+import type {
+  Device,
+  DeviceType,
+  DeviceTypeDefinition,
+  DriveBayTemplate,
+  PortTemplate,
+} from "./types";
+import type { TranslationKey } from "@/i18n/translations";
 
 export const BUILT_IN_DEVICE_TYPES: DeviceTypeDefinition[] = [
   { id: "switch", label: "Switch", builtIn: true },
@@ -14,6 +21,12 @@ export const BUILT_IN_DEVICE_TYPES: DeviceTypeDefinition[] = [
   { id: "brush_panel", label: "Brush panel", builtIn: true },
   { id: "blanking_panel", label: "Blanking panel", builtIn: true },
   { id: "storage", label: "Storage", builtIn: true },
+  {
+    id: "storage_enclosure",
+    label: "Storage enclosure",
+    builtIn: true,
+    parentType: "storage",
+  },
   { id: "pdu", label: "PDU", builtIn: true },
   { id: "ups", label: "UPS", builtIn: true },
   { id: "kvm", label: "KVM", builtIn: true },
@@ -21,6 +34,47 @@ export const BUILT_IN_DEVICE_TYPES: DeviceTypeDefinition[] = [
 ];
 
 const BUILT_IN_IDS = new Set(BUILT_IN_DEVICE_TYPES.map((type) => type.id));
+const LOCALIZED_BUILT_IN_LABELS = new Set<TranslationKey>([
+  "Switch",
+  "Router",
+  "Firewall",
+  "Server",
+  "Rack shelf",
+  "Access point",
+  "Endpoint",
+  "Virtual machine",
+  "Container",
+  "Patch panel",
+  "Brush panel",
+  "Blanking panel",
+  "Storage",
+  "Storage enclosure",
+  "Other",
+]);
+
+export function localizedDeviceTypeLabel(
+  type: DeviceTypeDefinition,
+  t: (key: TranslationKey) => string,
+) {
+  return BUILT_IN_IDS.has(type.id) &&
+    LOCALIZED_BUILT_IN_LABELS.has(type.label as TranslationKey)
+    ? t(type.label as TranslationKey)
+    : type.label;
+}
+
+export function localizedDeviceTypeIdLabel(
+  type: DeviceType | null | undefined,
+  definitions: DeviceTypeDefinition[],
+  t: (key: TranslationKey) => string,
+  fallbackLabel?: string,
+) {
+  if (!type) return t("Other");
+  const definition = [...BUILT_IN_DEVICE_TYPES, ...definitions].find(
+    (entry) => entry.id === type,
+  );
+  if (definition) return localizedDeviceTypeLabel(definition, t);
+  return fallbackLabel ?? defaultDeviceTypeLabel(type);
+}
 
 export function normalizeDeviceTypeId(value: string) {
   let normalized = "";
@@ -98,6 +152,30 @@ export function deviceTypeBase(
   return type;
 }
 
+export function deviceTypeChainIncludes(
+  type: DeviceType | null | undefined,
+  targetType: DeviceType,
+  definitions: DeviceTypeDefinition[] = BUILT_IN_DEVICE_TYPES,
+) {
+  if (!type) return false;
+  const byId = new Map(
+    [...BUILT_IN_DEVICE_TYPES, ...definitions].map((entry) => [
+      entry.id,
+      entry,
+    ]),
+  );
+  const seen = new Set<DeviceType>();
+  let current = type;
+  while (!seen.has(current)) {
+    if (current === targetType) return true;
+    seen.add(current);
+    const parent = byId.get(current)?.parentType;
+    if (!parent || parent === current) return false;
+    current = parent;
+  }
+  return false;
+}
+
 export function deviceTypeMatchesTemplate(
   deviceType: DeviceType,
   templateDeviceTypes: DeviceType[],
@@ -113,6 +191,7 @@ export function mergeDeviceTypeDefinitions(
   context: {
     devices?: Device[];
     portTemplates?: PortTemplate[];
+    driveBayTemplates?: DriveBayTemplate[];
   } = {},
 ) {
   const merged = new Map<string, DeviceTypeDefinition>();
@@ -130,6 +209,17 @@ export function mergeDeviceTypeDefinitions(
   }
 
   for (const template of context.portTemplates ?? []) {
+    for (const deviceType of template.deviceTypes) {
+      if (merged.has(deviceType)) continue;
+      merged.set(deviceType, {
+        id: deviceType,
+        label: defaultDeviceTypeLabel(deviceType),
+        builtIn: BUILT_IN_IDS.has(deviceType),
+      });
+    }
+  }
+
+  for (const template of context.driveBayTemplates ?? []) {
     for (const deviceType of template.deviceTypes) {
       if (merged.has(deviceType)) continue;
       merged.set(deviceType, {

@@ -9,20 +9,34 @@ import type {
   DevicePlacement,
   DeviceService,
   DeviceTypeDefinition,
+  DeviceTypeUsage,
   DeviceMonitor,
+  DriveBayTemplate,
+  DriveSlot,
   DiscoveredSnmpInterface,
   DocumentationPage,
   DockerImportSource,
   DiscoveredDevice,
   DiscoveryScanJobResponse,
-  DiscoveryScanResult,
   DiscoveryScanSchedule,
   DhcpScope,
+  IntegrationConnection,
+  IntegrationAutoSyncMode,
+  IntegrationDeviceSyncResult,
+  IntegrationInventoryResponse,
+  IntegrationProviderInfo,
+  IntegrationScope,
+  IntegrationScopeKind,
+  IntegrationSyncSchedule,
+  IntegrationTestResult,
   IpAssignment,
   IpZone,
   ID,
   Lab,
   LabAccessEntry,
+  NativeBackupEntry,
+  NativeBackupSettings,
+  NativeBackupStatus,
   Port,
   PortLink,
   PortTemplate,
@@ -35,9 +49,12 @@ import type {
   SnmpSyncApplyResult,
   SnmpSyncPreview,
   SnmpSyncProfile,
+  SnmpSyncSchedule,
   SnmpTrapLogEntry,
   SnmpTrapReceiverStatus,
   Subnet,
+  StorageDrive,
+  StoragePool,
   UiSettings,
   UserRole,
   Vlan,
@@ -187,6 +204,41 @@ export type PortLinkBulkPatch = Nullable<
 >;
 export type PortTemplatePatch = Nullable<
   Pick<PortTemplate, "name" | "description" | "deviceTypes" | "ports">
+>;
+export type DriveBayTemplatePatch = Nullable<
+  Pick<DriveBayTemplate, "name" | "description" | "deviceTypes" | "sections">
+>;
+export type DriveSlotPatch = Nullable<
+  Pick<
+    DriveSlot,
+    | "name"
+    | "sectionName"
+    | "sectionOrder"
+    | "position"
+    | "slotType"
+    | "face"
+    | "layout"
+    | "columns"
+  >
+>;
+export type StorageDrivePatch = Nullable<
+  Pick<
+    StorageDrive,
+    | "manufacturer"
+    | "model"
+    | "serial"
+    | "capacityGb"
+    | "interface"
+    | "formFactor"
+    | "notes"
+    | "slotId"
+  >
+>;
+export type StoragePoolPatch = Nullable<
+  Pick<
+    StoragePool,
+    "name" | "poolType" | "usableCapacityGb" | "status" | "notes" | "driveIds"
+  >
 >;
 export type DiscoveredDevicePatch = Nullable<
   Pick<
@@ -524,6 +576,35 @@ export const api = {
     return request<AlertSettings>("/admin/alert-settings");
   },
 
+  getNativeBackups() {
+    return request<NativeBackupStatus>("/admin/native-backups");
+  },
+
+  updateNativeBackupSettings(body: NativeBackupSettings) {
+    return request<NativeBackupSettings>("/admin/native-backups/settings", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+
+  createNativeBackup() {
+    return request<NativeBackupEntry>("/admin/native-backups", {
+      method: "POST",
+    });
+  },
+
+  downloadNativeBackup(name: string) {
+    return requestBlob(
+      `/admin/native-backups/${encodeURIComponent(name)}/download`,
+    );
+  },
+
+  deleteNativeBackup(name: string) {
+    return request<void>(`/admin/native-backups/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+    });
+  },
+
   updateAlertSettings(body: AlertSettings) {
     return request<AlertSettings>("/admin/alert-settings", {
       method: "PUT",
@@ -727,6 +808,10 @@ export const api = {
     return request<DeviceTypeDefinition[]>("/device-types");
   },
 
+  getDeviceTypeUsage() {
+    return request<DeviceTypeUsage[]>("/device-types/usage");
+  },
+
   createDeviceType(body: { id?: string; label: string; parentType?: string }) {
     return request<DeviceTypeDefinition>("/device-types", {
       method: "POST",
@@ -779,7 +864,11 @@ export const api = {
   },
 
   createDevice(
-    body: Omit<Device, "id"> & { id?: string; portTemplateId?: string },
+    body: Omit<Device, "id"> & {
+      id?: string;
+      portTemplateId?: string;
+      driveBayTemplateId?: string;
+    },
   ) {
     return request<Device>("/devices", {
       method: "POST",
@@ -789,7 +878,10 @@ export const api = {
 
   updateDevice(
     id: string,
-    body: DevicePatch & { portTemplateId?: string | null },
+    body: DevicePatch & {
+      portTemplateId?: string | null;
+      driveBayTemplateId?: string | null;
+    },
   ) {
     return request<Device>(`/devices/${id}`, {
       method: "PATCH",
@@ -839,6 +931,151 @@ export const api = {
     });
   },
 
+  getDriveBayTemplates() {
+    return request<DriveBayTemplate[]>("/storage/drive-bay-templates");
+  },
+
+  createDriveBayTemplate(
+    body: Omit<DriveBayTemplate, "builtIn" | "id"> & { id?: string },
+  ) {
+    return request<DriveBayTemplate>("/storage/drive-bay-templates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateDriveBayTemplate(id: string, body: DriveBayTemplatePatch) {
+    return request<DriveBayTemplate>(`/storage/drive-bay-templates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteDriveBayTemplate(id: string) {
+    return request<void>(`/storage/drive-bay-templates/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  getDriveSlots(params?: { labId?: string; deviceId?: string }) {
+    return request<DriveSlot[]>("/storage/drive-slots", undefined, params);
+  },
+
+  applyDriveBayTemplate(body: { deviceId: string; templateId: string }) {
+    return request<DriveSlot[]>("/storage/drive-slots/apply-template", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  createDriveSlot(
+    body: Omit<DriveSlot, "id" | "driveId" | "createdAt" | "updatedAt"> & {
+      id?: string;
+    },
+  ) {
+    return request<DriveSlot>("/storage/drive-slots", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateDriveSlot(id: string, body: DriveSlotPatch) {
+    return request<DriveSlot>(`/storage/drive-slots/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteDriveSlot(id: string) {
+    return request<void>(`/storage/drive-slots/${id}`, { method: "DELETE" });
+  },
+
+  getStorageDrives(params?: { labId?: string; deviceId?: string }) {
+    return request<StorageDrive[]>("/storage/drives", undefined, params);
+  },
+
+  createStorageDrive(
+    body: Omit<
+      StorageDrive,
+      | "id"
+      | "createdAt"
+      | "updatedAt"
+      | "deviceId"
+      | "deviceHostname"
+      | "slotName"
+      | "slotSectionName"
+      | "poolId"
+      | "poolName"
+    > & { id?: string },
+  ) {
+    return request<StorageDrive>("/storage/drives", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateStorageDrive(id: string, body: StorageDrivePatch) {
+    return request<StorageDrive>(`/storage/drives/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  duplicateStorageDrive(id: string, serial?: string | null) {
+    return request<StorageDrive>(`/storage/drives/${id}/duplicate`, {
+      method: "POST",
+      body: JSON.stringify({ serial: serial ?? null }),
+    });
+  },
+
+  deleteStorageDrive(id: string) {
+    return request<void>(`/storage/drives/${id}`, { method: "DELETE" });
+  },
+
+  getStoragePools(params?: { labId?: string; deviceId?: string }) {
+    return request<StoragePool[]>("/storage/pools", undefined, params);
+  },
+
+  createStoragePool(
+    body: Omit<StoragePool, "id" | "labId" | "createdAt" | "updatedAt"> & {
+      id?: string;
+    },
+  ) {
+    return request<StoragePool>("/storage/pools", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateStoragePool(id: string, body: StoragePoolPatch) {
+    return request<StoragePool>(`/storage/pools/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  replaceStoragePoolDrive(
+    poolId: string,
+    body: {
+      oldDriveId: string;
+      replacement: Partial<StorageDrive>;
+      deleteOld?: boolean;
+    },
+  ) {
+    return request<{
+      pool: StoragePool;
+      replacement: StorageDrive;
+      oldDrive: StorageDrive | null;
+    }>(`/storage/pools/${poolId}/replace-drive`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteStoragePool(id: string) {
+    return request<void>(`/storage/pools/${id}`, { method: "DELETE" });
+  },
+
   previewNetboxDeviceTypeImport(yaml: string) {
     return request<NetboxDeviceTypeImportPreview>(
       "/imports/netbox-device-type/preview",
@@ -868,6 +1105,7 @@ export const api = {
     endpoint: string;
     labId?: string;
     token?: string;
+    verifyTls?: boolean;
   }) {
     return request<{ containers: DockerContainerPreview[] }>(
       "/imports/docker/preview",
@@ -881,6 +1119,7 @@ export const api = {
   importDockerContainer(input: {
     endpoint: string;
     token?: string;
+    verifyTls?: boolean;
     containerId: string;
     labId: string;
     hostDeviceId: string;
@@ -905,7 +1144,10 @@ export const api = {
     });
   },
 
-  updateDockerImportSource(id: string, input: { enabled: boolean }) {
+  updateDockerImportSource(
+    id: string,
+    input: { enabled?: boolean; verifyTls?: boolean },
+  ) {
     return request<DockerImportSource>(`/imports/docker/sources/${id}`, {
       method: "PATCH",
       body: JSON.stringify(input),
@@ -1380,6 +1622,217 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     });
+  },
+
+  getSnmpSyncSchedules() {
+    return request<SnmpSyncSchedule[]>("/snmp-sync/schedules");
+  },
+
+  createSnmpSyncSchedule(body: {
+    deviceId: string;
+    profileId: string;
+    policy: SnmpSyncSchedule["policy"];
+    intervalMs: number;
+    enabled: boolean;
+  }) {
+    return request<SnmpSyncSchedule>("/snmp-sync/schedules", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateSnmpSyncSchedule(
+    id: string,
+    body: Partial<
+      Pick<SnmpSyncSchedule, "profileId" | "policy" | "intervalMs" | "enabled">
+    >,
+  ) {
+    return request<SnmpSyncSchedule>(`/snmp-sync/schedules/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteSnmpSyncSchedule(id: string) {
+    return request<void>(`/snmp-sync/schedules/${id}`, { method: "DELETE" });
+  },
+
+  getIntegrationProviders() {
+    return request<IntegrationProviderInfo[]>("/integrations/providers");
+  },
+
+  getIntegrationConnections(params?: { labId?: string }) {
+    return request<IntegrationConnection[]>(
+      "/integrations/connections",
+      undefined,
+      params,
+    );
+  },
+
+  createIntegrationConnection(body: {
+    labId: string;
+    provider: IntegrationConnection["provider"];
+    name: string;
+    baseUrl: string;
+    authKind?: IntegrationConnection["authKind"];
+    authId?: string;
+    authSecret: string;
+    siteRef?: string;
+    scopeRefs?: string[];
+    verifyTls?: boolean;
+    enabled?: boolean;
+    syncVlans?: boolean;
+    syncSubnets?: boolean;
+    syncDhcp?: boolean;
+    syncSwitches?: boolean;
+    syncGateways?: boolean;
+    syncAccessPoints?: boolean;
+    syncHosts?: boolean;
+    syncGuests?: boolean;
+    syncWifi?: boolean;
+  }) {
+    return request<IntegrationConnection>("/integrations/connections", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  discoverIntegrationScopes(body: {
+    connectionId?: string;
+    labId?: string;
+    provider?: IntegrationConnection["provider"];
+    baseUrl?: string;
+    authKind?: IntegrationConnection["authKind"];
+    authId?: string;
+    authSecret?: string;
+    verifyTls?: boolean;
+  }) {
+    return request<{
+      result: IntegrationTestResult;
+      scopeKind: IntegrationScopeKind | null;
+      scopes: IntegrationScope[];
+    }>("/integrations/discover-scopes", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateIntegrationConnection(
+    id: ID,
+    body: Partial<{
+      name: string;
+      baseUrl: string;
+      authKind: IntegrationConnection["authKind"];
+      authId: string | null;
+      authSecret: string;
+      siteRef: string | null;
+      scopeRefs: string[];
+      verifyTls: boolean;
+      enabled: boolean;
+      syncVlans: boolean;
+      syncSubnets: boolean;
+      syncDhcp: boolean;
+      syncSwitches: boolean;
+      syncGateways: boolean;
+      syncAccessPoints: boolean;
+      syncHosts: boolean;
+      syncGuests: boolean;
+      syncWifi: boolean;
+      clearSecret: boolean;
+    }>,
+  ) {
+    return request<IntegrationConnection>(`/integrations/connections/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteIntegrationConnection(id: ID) {
+    return request<void>(`/integrations/connections/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  testIntegrationConnection(id: ID) {
+    return request<{
+      connection: IntegrationConnection | null;
+      result: IntegrationTestResult;
+    }>(`/integrations/connections/${id}/test`, { method: "POST" });
+  },
+
+  pullIntegrationInventory(id: ID, body?: { mode?: IntegrationAutoSyncMode }) {
+    return request<IntegrationInventoryResponse>(
+      `/integrations/connections/${id}/inventory`,
+      { method: "POST", body: JSON.stringify(body ?? {}) },
+    );
+  },
+
+  applyIntegrationPreview(id: ID, body: { previewToken: string }) {
+    return request<SnmpSyncApplyResult>(
+      `/integrations/connections/${id}/apply`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  },
+
+  applyIntegrationDevices(
+    id: ID,
+    body: { snapshotToken: string; selectedProviderRecordIds: string[] },
+  ) {
+    return request<IntegrationDeviceSyncResult>(
+      `/integrations/connections/${id}/apply-devices`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  },
+
+  getIntegrationSchedules(params?: { connectionId?: string }) {
+    return request<IntegrationSyncSchedule[]>(
+      "/integrations/schedules",
+      undefined,
+      params,
+    );
+  },
+
+  createIntegrationSchedule(body: {
+    connectionId: string;
+    name: string;
+    enabled?: boolean;
+    mode?: IntegrationSyncSchedule["mode"];
+    cron: string;
+    labIds?: string[];
+  }) {
+    return request<IntegrationSyncSchedule>("/integrations/schedules", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateIntegrationSchedule(
+    id: ID,
+    body: Partial<{
+      name: string;
+      enabled: boolean;
+      mode: IntegrationSyncSchedule["mode"];
+      cron: string;
+      labIds: string[];
+    }>,
+  ) {
+    return request<IntegrationSyncSchedule>(`/integrations/schedules/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteIntegrationSchedule(id: ID) {
+    return request<void>(`/integrations/schedules/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  runIntegrationSchedule(id: ID) {
+    return request<{
+      result: { status: "ok" | "error" | "drift"; message: string };
+      schedule: IntegrationSyncSchedule | null;
+    }>(`/integrations/schedules/${id}/run`, { method: "POST" });
   },
 
   getDiscoveredDevices(params?: { labId?: string; status?: string }) {

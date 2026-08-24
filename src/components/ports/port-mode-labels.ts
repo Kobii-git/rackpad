@@ -15,6 +15,8 @@ export const PORT_TYPE_KEYS: Record<PortKind, TranslationKey> = {
   usb: "USB",
   virtual: "Virtual NIC",
   wifi: "WiFi",
+  sff: "SFF",
+  other: "Other",
 };
 
 export function formatPortTypeLabel(t: Translate, kind: PortKind) {

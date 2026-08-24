@@ -10,6 +10,11 @@ The Proxmox node does not need to exist in Rackpad first: the wizard can create
 it, auto-match an existing host, or let you select the exact existing device the
 VMs and containers should live under.
 
+After import, the host's **Compute** tab keeps its capacity, virtual switches,
+VMs, and containers together:
+
+![Rackpad Proxmox host Compute tab showing capacity, virtual switches, virtual machines, and containers](./screenshots/device-compute.png)
+
 ## What Rackpad Can Import
 
 - Proxmox node as a server device.

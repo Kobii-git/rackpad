@@ -20,7 +20,6 @@ import {
   updateLabRecord,
   useStore,
 } from "@/lib/store";
-import type { Lab } from "@/lib/types";
 import { Check, Pencil, Plus, Save, Trash2 } from "lucide-react";
 
 type LabForm = {

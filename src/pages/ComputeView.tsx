@@ -27,15 +27,9 @@ import {
   useStore,
 } from "@/lib/store";
 import type { Device, Port, VirtualSwitch } from "@/lib/types";
+import { selectComputeInventory } from "@/lib/compute";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { statusLabel } from "@/lib/utils";
-
-const HOST_DEVICE_TYPES = new Set<Device["deviceType"]>([
-  "server",
-  "storage",
-  "kvm",
-  "other",
-]);
 
 const VIRTUAL_SWITCH_KINDS: Array<VirtualSwitch["kind"]> = [
   "external",
@@ -61,6 +55,7 @@ export default function ComputeView() {
   const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const ports = useStore((s) => s.ports);
   const virtualSwitches = useStore((s) => s.virtualSwitches);
   const canEdit = canEditInventory(currentUser);
@@ -88,48 +83,15 @@ export default function ComputeView() {
     }, {});
   }, [devices]);
 
-  const vms = useMemo(
-    () =>
-      devices
-        .filter(
-          (device) =>
-            device.deviceType === "vm" || device.placement === "virtual",
-        )
-        .sort((a, b) => a.hostname.localeCompare(b.hostname)),
-    [devices],
+  const {
+    hosts,
+    workloads: vms,
+    guestsByHostId,
+    unassignedWorkloads: unassignedVms,
+  } = useMemo(
+    () => selectComputeInventory(devices, deviceTypes),
+    [devices, deviceTypes],
   );
-
-  const vmHostIds = useMemo(
-    () =>
-      new Set(
-        vms
-          .map((device) => device.parentDeviceId)
-          .filter((value): value is string => Boolean(value)),
-      ),
-    [vms],
-  );
-
-  const hosts = useMemo(
-    () =>
-      devices
-        .filter(
-          (device) =>
-            !["vm", "container"].includes(device.deviceType) &&
-            (vmHostIds.has(device.id) ||
-              HOST_DEVICE_TYPES.has(device.deviceType)),
-        )
-        .sort((a, b) => a.hostname.localeCompare(b.hostname)),
-    [devices, vmHostIds],
-  );
-
-  const guestsByHostId = useMemo(() => {
-    return vms.reduce<Record<string, Device[]>>((acc, device) => {
-      if (device.parentDeviceId) {
-        (acc[device.parentDeviceId] ??= []).push(device);
-      }
-      return acc;
-    }, {});
-  }, [vms]);
 
   const virtualSwitchesByHostId = useMemo(() => {
     return virtualSwitches.reduce<Record<string, VirtualSwitch[]>>(
@@ -165,16 +127,6 @@ export default function ComputeView() {
       return acc;
     }, {});
   }, [ports]);
-
-  const unassignedVms = useMemo(
-    () =>
-      vms.filter(
-        (device) =>
-          !device.parentDeviceId ||
-          !hosts.some((host) => host.id === device.parentDeviceId),
-      ),
-    [hosts, vms],
-  );
 
   const activeHosts = hosts.filter(
     (host) => (guestsByHostId[host.id] ?? []).length > 0,

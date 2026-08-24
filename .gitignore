@@ -38,9 +38,11 @@ pnpm-debug.log*
 
 # test / cache
 coverage
+test-results/
 .cache
 .eslintcache
 .turbo
+.ai/local/
 
 # local database
 *.db

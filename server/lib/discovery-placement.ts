@@ -1,5 +1,6 @@
 import { db } from '../db.js'
 import { cidrContainsIp } from './ip-cidr.js'
+import { deviceTypeBase } from './device-types.js'
 
 const WIRED_DEVICE_TYPES = new Set([
   'switch',
@@ -37,7 +38,7 @@ export function shouldSkipWifiAutoPlacement(input: {
   displayName?: string | null
   macAddress?: string | null
 }) {
-  if (WIRED_DEVICE_TYPES.has(input.deviceType)) return true
+  if (WIRED_DEVICE_TYPES.has(deviceTypeBase(input.deviceType))) return true
   const label = `${input.hostname ?? ''} ${input.displayName ?? ''}`.trim()
   if (label && WIRED_HOSTNAME_PATTERN.test(label)) return true
   return false
@@ -95,7 +96,7 @@ export function explainWifiClientPlacement(input: {
   excludeDeviceId?: string
 }): WifiPlacementExplanation {
   if (shouldSkipWifiAutoPlacement(input)) {
-    if (WIRED_DEVICE_TYPES.has(input.deviceType)) {
+    if (WIRED_DEVICE_TYPES.has(deviceTypeBase(input.deviceType))) {
       return { placement: 'room', hint: 'loose-wired-device-type', resolved: null }
     }
     return { placement: 'room', hint: 'loose-wired-hostname', resolved: null }
@@ -271,8 +272,9 @@ export function inferDiscoveryPlacement(input: {
   displayName?: string | null
   macAddress?: string | null
 }) {
-  if (input.deviceType === 'ap') return 'wireless' as const
-  if (input.deviceType === 'vm' || input.deviceType === 'container') {
+  const baseType = deviceTypeBase(input.deviceType)
+  if (baseType === 'ap') return 'wireless' as const
+  if (baseType === 'vm' || baseType === 'container') {
     return 'virtual' as const
   }
   return explainWifiClientPlacement(input).placement
@@ -286,7 +288,8 @@ export function inferDiscoveryPlacementHint(input: {
   displayName?: string | null
   macAddress?: string | null
 }): WifiPlacementHint {
-  if (input.deviceType === 'ap' || input.deviceType === 'vm' || input.deviceType === 'container') {
+  const baseType = deviceTypeBase(input.deviceType)
+  if (baseType === 'ap' || baseType === 'vm' || baseType === 'container') {
     return null
   }
   return explainWifiClientPlacement(input).hint

@@ -8,6 +8,205 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.0] - 2026-08-24
+
+### Changed
+
+- Refreshed the opt-in demo inventory for current storage, custom device type,
+  integration, monitoring, and review workflows, and rebuilt the documentation
+  gallery as a deterministic 37-image Playwright suite.
+- Container security and publishing builds now pull the current base image and
+  rebuild the runtime stage so cached Debian upgrade layers cannot retain
+  fixable vulnerabilities.
+
+### Fixed
+
+- Controller imports now preserve distinct same-name devices when MAC or guest
+  parent scope identifies them, expose ambiguous records instead of silently
+  dropping them, keep host dependencies selected, and report every apply-time
+  skip to the user.
+- Global API throttling now returns its intended 429 response, and trusted proxy
+  client identity uses bounded hop counts with forwarding-header-safe proxy
+  examples.
+
+### Test notes
+
+- Verify same-name controller records remain distinct when MAC or parent scope
+  identifies them, while ambiguous records remain visible and blocked.
+- Verify the global limiter shares a bucket across routes, preserves 429
+  headers, rejects spoofed forwarding identity, and supports one- and two-hop
+  controlled proxy chains.
+- Regenerate the 37-image gallery and confirm the stable version is displayed,
+  all outbound demo targets remain non-routable, and the legacy IPAM capture is
+  absent.
+
+## [1.8.0-beta.2] - 2026-08-21
+
+### Fixed
+
+- Controller integration previews and device imports are now bound to
+  short-lived, single-use server snapshots, revalidate connection access at
+  apply time, serialize writes, and keep manual records non-destructive.
+- Controller and Docker HTTP requests now share DNS-pinned redirect, timeout,
+  TLS, response-size, and pagination safety bounds.
+- Production images now install current Debian security updates so fixed base
+  image vulnerabilities do not remain in the shipped runtime.
+- Virtual devices now show a navigable host relationship, Storage identifies
+  internal, attached, and unassigned pool members, and the JSON backup action
+  appears with the other snapshot controls.
+- Native SQLite snapshots now expose a prominent, explicitly labeled download
+  action, while JSON backup remains in the Export Snapshot section.
+- Documentation images are safe full-size controls for mouse and keyboard users;
+  embedded data images reuse blob conversion and unsafe URL schemes stay inert.
+- Device Overview storage now prefers owned-pool usable capacity, then installed
+  raw drive capacity, then the stored manual/imported value without mutating it.
+- Unmanaged is now a fixed device status throughout API validation, inventory,
+  filters, reports, backups, translations, and neutral health presentation;
+  monitoring preserves it while still recording successful last-seen checks.
+- Restored the documented five-minute monitoring interval for direct Node
+  startup and made malformed runtime interval values fall back safely.
+- Backup export and restore now preserve scoped user/lab grants, reject invalid
+  user roles, lab roles, missing references, duplicate grants, and snapshots
+  from newer schemas before any restore mutation begins.
+- Configuration validation now inventories runtime and Compose-only variables,
+  verifies Compose pass-through, and detects default drift from `.env.example`.
+- Drive-slot section settings now propagate transactionally, while legacy mixed
+  sections remain visible with an explicit repair path.
+- SNMP inventory apply now commits valid DHCP scopes atomically and reports
+  invalid, missing-subnet, out-of-range, and overlap conflicts.
+
+### Added
+
+- Added UniFi, Omada, OPNsense, Proxmox, and Dockhand controller connections
+  with manual network/device previews and automatic UTC schedules using
+  non-destructive Merge and Skip modes.
+- Added an administrator Device Types workspace with usage counts, custom-type
+  editing, deletion guidance, immutable IDs, and read-only built-in types.
+- Added a read-only device Compute tab for eligible hosts, owned workloads, and
+  virtual switches, with links back to the global Compute workspace.
+- Added optional operator-mounted native SQLite snapshots with admin scheduling,
+  retention, create/download/delete controls, integrity checks, and an offline
+  atomic restore CLI that creates a safety copy first.
+- Added drive duplication and atomic pool-member replacement workflows, plus
+  fixed `sff` and `other` port kinds across API validation, templates, backup,
+  labels, and visual rendering.
+- Added bounded RE2-compatible SNMP regex matches, per-device sync schedules,
+  a pfSense/OPNsense profile, and authenticated admin operational status.
+- Linked the displayed Rackpad version to the project repository with keyboard
+  and assistive-technology support.
+
+### Changed
+
+- Expanded the local quality gate with lint proofing, server/client/test
+  typechecks, configuration and durable-agent-document checks, builds, bundle
+  budgeting, and browser coverage.
+- Narrowed CodeQL and Trivy scanner scope to generated or fixture-specific
+  exceptions instead of broad project-level suppression.
+- Documented the `dev` to `beta` to `main` promotion flow and distinguished
+  moving branch image tags from immutable semantic-version tags.
+- Hardened contributor, installation, security, SNMP, and AI-agent guidance to
+  reflect the current runtime and release contract.
+- Set the beta identity to `1.8.0-beta.2` for focused verification.
+
+### Test notes
+
+- Verify a server-owned pool with local and enclosure drives, both relationship
+  links, Internal and External / attached labels, and the missing-member state.
+- Create, download, and delete a native backup; confirm the visible SQLite
+  download action and the JSON Export Snapshot placement.
+- Verify Hosted by links for VM/container records, custom inherited hosts, and
+  the safe missing-host fallback.
+- Verify separated built-in/custom Device Type sections, parent inheritance
+  guidance, CRUD, usage counts, in-use deletion denial, and viewer restrictions.
+- Open embedded documentation images with mouse and keyboard and confirm each
+  full-size image opens in a new tab.
+- Verify usable-pool precedence, raw-drive fallback, manual fallback, source
+  indicators, and unchanged stored `storageGb` data.
+- Select Unmanaged through edit and bulk controls, filter and report it, and
+  confirm online/offline monitoring results do not overwrite the manual state.
+- Recheck controller previews, automatic schedules, scoped backup restore,
+  runtime configuration defaults, and every rendered Compose variant.
+
+## [1.8.0-beta.0] - 2026-08-11
+
+### Added
+
+- Added Storage Topology v1 with lab-wide physical-drive inventory, reusable
+  drive-bay templates, device slot layouts, and logical storage pools.
+- Added the **Storage** workspace, device **Storage** tab, built-in starter bay
+  layouts, and the **Storage enclosure** device subtype.
+- Added cross-device pool membership for same-lab JBOD and disk-shelf drives,
+  including exclusive membership, missing-member warnings, deterministic pool
+  highlighting, and safe drive move, pull, and deletion controls.
+- Added storage topology to admin backup/restore, audit lab resolution, demo
+  data, command-palette drive search, documentation, and supported locales.
+
+### Fixed
+
+- Docker container import now rejects duplicate container hostnames per host,
+  while allowing the same hostname to be imported under a different Docker host
+  ([#120](https://github.com/Kobii-git/rackpad/issues/120)).
+- MAC address search now accepts colon, hyphen, Cisco dot, and continuous hex
+  notation across device, command-palette, port, discovery, and Visualizer
+  searches ([#119](https://github.com/Kobii-git/rackpad/issues/119)).
+- Custom device types now inherit their parent type's placement, virtual-port,
+  access-point, patch-panel, virtual-switch, Wi-Fi classification, and Docker
+  import host behavior ([#115](https://github.com/Kobii-git/rackpad/issues/115)).
+- Storage enclosures are no longer offered as Compute virtualization hosts,
+  while regular Storage devices remain eligible
+  ([#117](https://github.com/Kobii-git/rackpad/issues/117)).
+- Preserved custom drive-slot names, positions, and types when template counts
+  are edited, and completed localized built-in template copy and drive values.
+- Localized device-type search metadata in the Visualizer and prevented handled
+  Storage editor conflicts from surfacing as browser promise errors.
+- Corrected storage terminology across every supported locale and localized
+  built-in device-type labels consistently while preserving custom labels.
+- Made linked drive details read-only for viewers, added pool-specific
+  accessible actions, and completed keyboard highlighting for drives assigned
+  to another pool.
+- Updated the affected transitive dependency releases to clear the current
+  `brace-expansion` and `fast-uri` security findings.
+
+### Changed
+
+- Device creation and editing can apply a drive-bay template snapshot while the
+  device has no storage slots. Later template edits do not alter devices.
+- Rackpad is now versioned as `1.8.0-beta.0` for beta testing. Existing
+  `storageGb`, import, and reporting behavior remains independent.
+
+### Test notes
+
+- Apply a 24-bay template to a storage device, populate bays, and verify the
+  dense layout remains readable in light/dark and narrow/desktop views.
+- Build a pool owned by a server with a member installed in a same-lab Storage
+  enclosure; pull that member and confirm membership and the missing warning
+  remain until it is removed from the pool.
+- Confirm viewers are read-only, editors can manage lab storage, and only
+  admins can create or modify templates.
+- Import identically named Docker containers under two different hosts, then
+  confirm a duplicate under the same host is rejected.
+- Search the device, port, discovery, and Visualizer views using hyphenated,
+  Cisco-dot, continuous, and colon-formatted MAC addresses.
+- Confirm custom VM, container, AP, rack-shelf, patch-panel, and server-derived
+  types inherit their parent behavior, while Storage enclosures stay out of
+  Compute host selection.
+
+## [1.7.4-beta.0] - 2026-08-03
+
+### Fixed
+
+- Custom device types based on Server, Storage, KVM, or Other now inherit
+  Compute host eligibility, including before any virtual guests are attached.
+- Virtual-device host selection now excludes custom device types based on a VM
+  or container so workloads cannot be selected as their own host class.
+
+### Test notes
+
+- Create a custom device type with **Server** as its parent, assign it to a
+  device, and confirm the device appears under **Compute** as an available host.
+- Add a VM to that custom host and confirm it moves to the active host section
+  with the VM listed beneath it.
+
 ## [1.7.3] - 2026-07-30
 
 ### Added

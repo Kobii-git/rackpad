@@ -1,9 +1,12 @@
 import { useI18n } from "@/i18n";
+import { openImageSource } from "@/lib/image-actions";
 import type { ReactNode } from "react";
 
 export function MarkdownPreview({ content }: { content: string }) {
   const { t } = useI18n();
-  const blocks = parseBlocks(content);
+  const imageOpenLabel = (name: string) =>
+    t("Open image {name} in a new tab", { name: name || t("Pictures") });
+  const blocks = parseBlocks(content, imageOpenLabel);
   if (blocks.length === 0) {
     return (
       <div className="text-sm text-[var(--color-fg-subtle)]">
@@ -18,7 +21,7 @@ export function MarkdownPreview({ content }: { content: string }) {
   );
 }
 
-function parseBlocks(content: string) {
+function parseBlocks(content: string, imageOpenLabel: (name: string) => string) {
   const lines = content.replace(/\r\n/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
   let index = 0;
@@ -62,14 +65,16 @@ function parseBlocks(content: string) {
           : level === 2
             ? "text-lg font-semibold tracking-tight"
             : "text-sm font-semibold uppercase tracking-[0.12em] text-[var(--color-fg-subtle)]";
-      blocks.push(renderHeading(level, heading[2], className, index));
+      blocks.push(
+        renderHeading(level, heading[2], className, index, imageOpenLabel),
+      );
       index += 1;
       continue;
     }
 
     const table = parseTable(lines, index);
     if (table) {
-      blocks.push(renderTable(table, index));
+      blocks.push(renderTable(table, index, imageOpenLabel));
       index = table.nextIndex;
       continue;
     }
@@ -86,7 +91,7 @@ function parseBlocks(content: string) {
           className="border-l-2 border-[var(--color-accent)] pl-3 text-sm text-[var(--color-fg-subtle)]"
         >
           {quoteLines.map((quote, lineIndex) => (
-            <p key={lineIndex}>{renderInline(quote)}</p>
+            <p key={lineIndex}>{renderInline(quote, imageOpenLabel)}</p>
           ))}
         </blockquote>,
       );
@@ -105,7 +110,7 @@ function parseBlocks(content: string) {
           className="list-disc space-y-1 pl-5 text-sm text-[var(--color-fg)]"
         >
           {items.map((item, itemIndex) => (
-            <li key={itemIndex}>{renderInline(item)}</li>
+            <li key={itemIndex}>{renderInline(item, imageOpenLabel)}</li>
           ))}
         </ul>,
       );
@@ -124,7 +129,7 @@ function parseBlocks(content: string) {
           className="list-decimal space-y-1 pl-5 text-sm text-[var(--color-fg)]"
         >
           {items.map((item, itemIndex) => (
-            <li key={itemIndex}>{renderInline(item)}</li>
+            <li key={itemIndex}>{renderInline(item, imageOpenLabel)}</li>
           ))}
         </ol>,
       );
@@ -151,7 +156,7 @@ function parseBlocks(content: string) {
         key={`p-${index}`}
         className="text-sm leading-6 text-[var(--color-fg)]"
       >
-        {renderInline(paragraphLines.join(" "))}
+        {renderInline(paragraphLines.join(" "), imageOpenLabel)}
       </p>,
     );
   }
@@ -212,7 +217,11 @@ function normalizeTableRow(cells: string[], size: number) {
   return [...cells, ...Array.from({ length: size - cells.length }, () => "")];
 }
 
-function renderTable(table: MarkdownTable, index: number) {
+function renderTable(
+  table: MarkdownTable,
+  index: number,
+  imageOpenLabel: (name: string) => string,
+) {
   return (
     <div
       key={`table-${index}`}
@@ -227,7 +236,7 @@ function renderTable(table: MarkdownTable, index: number) {
                 key={headerIndex}
                 className="border-b border-[var(--color-line)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-fg-subtle)]"
               >
-                {renderInline(header)}
+                {renderInline(header, imageOpenLabel)}
               </th>
             ))}
           </tr>
@@ -240,7 +249,7 @@ function renderTable(table: MarkdownTable, index: number) {
             >
               {row.map((cell, cellIndex) => (
                 <td key={cellIndex} className="px-3 py-2 align-top">
-                  {renderInline(cell)}
+                  {renderInline(cell, imageOpenLabel)}
                 </td>
               ))}
             </tr>
@@ -256,8 +265,9 @@ function renderHeading(
   text: string,
   className: string,
   index: number,
+  imageOpenLabel: (name: string) => string,
 ) {
-  const children = renderInline(text);
+  const children = renderInline(text, imageOpenLabel);
   if (level === 1) {
     return (
       <h2 key={`heading-${index}`} className={className}>
@@ -279,7 +289,7 @@ function renderHeading(
   );
 }
 
-function renderInline(text: string) {
+function renderInline(text: string, imageOpenLabel: (name: string) => string) {
   const parts: ReactNode[] = [];
   const pattern =
     /(!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*)/g;
@@ -292,14 +302,24 @@ function renderInline(text: string) {
     }
 
     if (match[2] !== undefined && match[3]) {
+      const imageAlt = match[2];
+      const imageSource = match[3];
       parts.push(
-        <img
+        <button
           key={`img-${match.index}`}
-          src={match[3]}
-          alt={match[2]}
-          className="my-3 max-h-[520px] max-w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] object-contain"
-          loading="lazy"
-        />,
+          type="button"
+          aria-label={imageOpenLabel(imageAlt)}
+          title={imageOpenLabel(imageAlt)}
+          className="my-3 inline-block max-w-full cursor-zoom-in rounded-[var(--radius-sm)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+          onClick={() => openImageSource(imageSource)}
+        >
+          <img
+            src={imageSource}
+            alt={imageAlt}
+            className="max-h-[520px] max-w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] object-contain"
+            loading="lazy"
+          />
+        </button>,
       );
     } else if (match[4] !== undefined && match[5]) {
       parts.push(

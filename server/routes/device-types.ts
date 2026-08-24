@@ -3,6 +3,7 @@ import { asObject, optionalString, requiredString } from '../lib/validation.js'
 import {
   createDeviceType,
   deleteDeviceType,
+  listDeviceTypeUsage,
   listDeviceTypesWithObserved,
   updateDeviceType,
 } from '../lib/device-types.js'
@@ -11,6 +12,11 @@ import { assertGlobalAdmin } from '../lib/lab-access.js'
 export const deviceTypesRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', async () => {
     return listDeviceTypesWithObserved()
+  })
+
+  app.get('/usage', async (req, reply) => {
+    if (!assertGlobalAdmin(req, reply)) return
+    return listDeviceTypeUsage()
   })
 
   app.post('/', async (req, reply) => {

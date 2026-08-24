@@ -53,6 +53,7 @@ import type {
   WifiSsid,
 } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
+import { deviceTypeBase } from "@/lib/device-types";
 import { relativeTime, statusLabel } from "@/lib/utils";
 import {
   Link2,
@@ -108,6 +109,7 @@ export default function WifiView() {
   const currentUser = useStore((s) => s.currentUser);
   const activeLab = useStore((s) => s.lab);
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const vlans = useStore((s) => s.vlans);
   const wifiControllers = useStore((s) => s.wifiControllers);
   const wifiSsids = useStore((s) => s.wifiSsids);
@@ -157,23 +159,25 @@ export default function WifiView() {
   const apDevices = useMemo(
     () =>
       devices
-        .filter((device) => device.deviceType === "ap")
+        .filter(
+          (device) => deviceTypeBase(device.deviceType, deviceTypes) === "ap",
+        )
         .sort((a, b) => a.hostname.localeCompare(b.hostname)),
-    [devices],
+    [devices, deviceTypes],
   );
   const wirelessClients = useMemo(
     () =>
       devices
         .filter(
           (device) =>
-            device.deviceType !== "ap" &&
+            deviceTypeBase(device.deviceType, deviceTypes) !== "ap" &&
             (device.placement === "wireless" ||
               wifiClientAssociations.some(
                 (entry) => entry.clientDeviceId === device.id,
               )),
         )
         .sort((a, b) => a.hostname.localeCompare(b.hostname)),
-    [devices, wifiClientAssociations],
+    [devices, deviceTypes, wifiClientAssociations],
   );
 
   const radiosByApId = useMemo(() => {
@@ -982,7 +986,10 @@ export default function WifiView() {
                 <ControllerEditor
                   controller={editor.controller}
                   devices={devices
-                    .filter((device) => device.deviceType !== "ap")
+                    .filter(
+                      (device) =>
+                        deviceTypeBase(device.deviceType, deviceTypes) !== "ap",
+                    )
                     .sort((a, b) => a.hostname.localeCompare(b.hostname))}
                   onCancel={() => setEditor(null)}
                   onDelete={

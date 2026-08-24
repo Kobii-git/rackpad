@@ -1,0 +1,427 @@
+import type {
+  DriveBayTemplate,
+  DriveBayTemplateSlot,
+  DriveBayTemplateSection,
+  DriveSlot,
+  DriveSlotFace,
+  DriveSlotLayout,
+  DriveSlotType,
+  StorageDrive,
+  StoragePool,
+  StoragePoolStatus,
+} from "./types";
+import type { TranslationKey } from "@/i18n/translations";
+
+type StorageTranslate = (
+  key: TranslationKey,
+  values?: Record<string, string | number | null | undefined>,
+) => string;
+
+export const DRIVE_INTERFACE_OPTIONS = [
+  "sata",
+  "sas",
+  "nvme",
+  "usb",
+  "other",
+] as const;
+export const DRIVE_FORM_FACTOR_OPTIONS = [
+  "2.5",
+  "3.5",
+  "m2",
+  "u2",
+  "other",
+] as const;
+export const DRIVE_SLOT_TYPE_OPTIONS = [
+  "2.5",
+  "3.5",
+  "m2",
+  "u2",
+  "generic",
+] as const;
+export const STORAGE_POOL_TYPE_OPTIONS = [
+  "raid0",
+  "raid1",
+  "raid5",
+  "raid6",
+  "raid10",
+  "raidz1",
+  "raidz2",
+  "raidz3",
+  "mirror",
+  "unraid",
+  "jbod",
+  "other",
+] as const;
+export const STORAGE_POOL_STATUS_OPTIONS = [
+  "healthy",
+  "degraded",
+  "rebuilding",
+  "offline",
+  "unknown",
+] as const;
+
+const POOL_COLORS = [
+  "#22d3ee",
+  "#a78bfa",
+  "#f59e0b",
+  "#34d399",
+  "#fb7185",
+  "#60a5fa",
+  "#e879f9",
+  "#f97316",
+] as const;
+
+export function driveLabel(drive: StorageDrive) {
+  const model = [drive.manufacturer, drive.model].filter(Boolean).join(" ");
+  return model || drive.serial || `Drive ${drive.id.slice(-6)}`;
+}
+
+export function driveSecondaryLabel(
+  drive: StorageDrive,
+  t: StorageTranslate,
+) {
+  return [
+    drive.serial,
+    formatStorageCapacity(drive.capacityGb),
+    driveInterfaceLabel(drive.interface, t),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export function formatStorageCapacity(capacityGb: number) {
+  if (!Number.isFinite(capacityGb)) return "—";
+  if (capacityGb >= 1000) {
+    const tb = capacityGb / 1000;
+    return `${Number.isInteger(tb) ? tb.toFixed(0) : tb.toFixed(tb >= 10 ? 1 : 2)} TB`;
+  }
+  return `${Number.isInteger(capacityGb) ? capacityGb.toFixed(0) : capacityGb.toFixed(1)} GB`;
+}
+
+export function poolTypeLabel(
+  type: StoragePool["poolType"],
+  t?: StorageTranslate,
+) {
+  const labels: Record<StoragePool["poolType"], string> = {
+    raid0: "RAID 0",
+    raid1: "RAID 1",
+    raid5: "RAID 5",
+    raid6: "RAID 6",
+    raid10: "RAID 10",
+    raidz1: "ZFS RAIDZ1",
+    raidz2: "ZFS RAIDZ2",
+    raidz3: "ZFS RAIDZ3",
+    mirror: "Mirror",
+    unraid: "unRAID",
+    jbod: "JBOD",
+    other: "Other",
+  };
+  const label = labels[type];
+  if (t && type === "mirror") return t("Mirror");
+  if (t && type === "other") return t("Other");
+  return label;
+}
+
+const STORAGE_POOL_STATUS_LABELS: Record<StoragePoolStatus, TranslationKey> = {
+  healthy: "Healthy",
+  degraded: "Degraded",
+  rebuilding: "Rebuilding",
+  offline: "Offline",
+  unknown: "Unknown",
+};
+
+export function storagePoolStatusLabel(
+  status: StoragePoolStatus,
+  t: StorageTranslate,
+) {
+  return t(STORAGE_POOL_STATUS_LABELS[status]);
+}
+
+export function driveSlotTypeLabel(
+  slotType: DriveSlotType,
+  t: StorageTranslate,
+) {
+  switch (slotType) {
+    case "m2":
+      return "M.2";
+    case "u2":
+      return "U.2";
+    case "2.5":
+    case "3.5":
+      return `${slotType}"`;
+    case "generic":
+      return t("Other");
+  }
+}
+
+export function driveInterfaceLabel(
+  driveInterface: (typeof DRIVE_INTERFACE_OPTIONS)[number],
+  t: StorageTranslate,
+) {
+  return driveInterface === "other" ? t("Other") : driveInterface.toUpperCase();
+}
+
+export function driveFormFactorLabel(
+  formFactor:
+    | (typeof DRIVE_FORM_FACTOR_OPTIONS)[number]
+    | (typeof DRIVE_SLOT_TYPE_OPTIONS)[number],
+  t: StorageTranslate,
+) {
+  switch (formFactor) {
+    case "m2":
+      return "M.2";
+    case "u2":
+      return "U.2";
+    case "2.5":
+    case "3.5":
+      return `${formFactor}"`;
+    case "other":
+    case "generic":
+      return t("Other");
+  }
+}
+
+const BUILT_IN_TEMPLATE_DISPLAY = {
+  "storage-4x3-5": {
+    name: "4 × 3.5-inch bays",
+    description: "Four front-facing 3.5-inch drive bays.",
+  },
+  "storage-8x3-5": {
+    name: "8 × 3.5-inch bays",
+    description: "Eight front-facing 3.5-inch drive bays in two rows.",
+  },
+  "storage-12x3-5": {
+    name: "12 × 3.5-inch bays",
+    description: "Twelve front-facing 3.5-inch drive bays in three rows.",
+  },
+  "storage-24x2-5": {
+    name: "24 × 2.5-inch bays",
+    description: "Twenty-four front-facing 2.5-inch drive bays in two rows.",
+  },
+  "storage-2xm2": {
+    name: "2 × M.2 internal slots",
+    description: "Two internal M.2 storage slots.",
+  },
+} as const satisfies Record<
+  string,
+  { name: TranslationKey; description: TranslationKey }
+>;
+
+export function driveBayTemplateDisplayCopy(
+  template: DriveBayTemplate,
+  t: StorageTranslate,
+) {
+  const display =
+    BUILT_IN_TEMPLATE_DISPLAY[
+      template.id as keyof typeof BUILT_IN_TEMPLATE_DISPLAY
+    ];
+  if (!template.builtIn || !display) {
+    return { name: template.name, description: template.description };
+  }
+  return {
+    name: t(display.name),
+    description: t(display.description),
+  };
+}
+
+export function poolColor(poolId: string) {
+  let hash = 0;
+  for (const character of poolId) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+  return POOL_COLORS[hash % POOL_COLORS.length];
+}
+
+export function summarizeStorage(
+  drives: StorageDrive[],
+  slots: DriveSlot[],
+  pools: StoragePool[],
+  poolMemberDrives: StorageDrive[] = drives,
+) {
+  const occupiedDriveIds = new Set(
+    slots.map((slot) => slot.driveId).filter((id): id is string => Boolean(id)),
+  );
+  const driveById = new Map(drives.map((drive) => [drive.id, drive]));
+  const poolDriveById = new Map(
+    poolMemberDrives.map((drive) => [drive.id, drive]),
+  );
+  const rawCapacityGb = [...occupiedDriveIds].reduce(
+    (sum, driveId) => sum + (driveById.get(driveId)?.capacityGb ?? 0),
+    0,
+  );
+  const usableCapacityGb = pools.reduce(
+    (sum, pool) => sum + pool.usableCapacityGb,
+    0,
+  );
+  const missingPoolMemberIds = pools.flatMap((pool) =>
+    pool.driveIds.filter((driveId) => !poolDriveById.get(driveId)?.slotId),
+  );
+  return {
+    occupiedSlots: occupiedDriveIds.size,
+    totalSlots: slots.length,
+    unassignedDrives: drives.filter((drive) => !drive.slotId).length,
+    rawCapacityGb,
+    usableCapacityGb,
+    unhealthyPools: pools.filter(
+      (pool) => pool.status === "degraded" || pool.status === "offline",
+    ).length,
+    missingPoolMemberIds: [...new Set(missingPoolMemberIds)],
+  };
+}
+
+export type OverviewStorageSource =
+  | "usable-topology"
+  | "raw-topology"
+  | "manual-imported";
+
+export function deriveOverviewStorage(
+  deviceId: string,
+  manualStorageGb: number | null | undefined,
+  drives: StorageDrive[],
+  pools: StoragePool[],
+): { capacityGb: number | undefined; source: OverviewStorageSource } {
+  const ownedPools = pools.filter((pool) => pool.deviceId === deviceId);
+  if (ownedPools.length > 0) {
+    return {
+      capacityGb: ownedPools.reduce(
+        (sum, pool) => sum + pool.usableCapacityGb,
+        0,
+      ),
+      source: "usable-topology",
+    };
+  }
+
+  const installedDrives = drives.filter(
+    (drive) => drive.deviceId === deviceId && Boolean(drive.slotId),
+  );
+  if (installedDrives.length > 0) {
+    return {
+      capacityGb: installedDrives.reduce(
+        (sum, drive) => sum + drive.capacityGb,
+        0,
+      ),
+      source: "raw-topology",
+    };
+  }
+
+  return {
+    capacityGb: manualStorageGb ?? undefined,
+    source: "manual-imported",
+  };
+}
+
+export function isPoolDriveEligible(
+  drive: StorageDrive,
+  poolId?: string | null,
+) {
+  return Boolean(drive.slotId) && (!drive.poolId || drive.poolId === poolId);
+}
+
+export function generateDriveBaySection(input: {
+  name: string;
+  count: number;
+  columns: number;
+  slotType: DriveSlotType;
+  prefix?: string;
+}): DriveBayTemplateSection {
+  const count = Math.max(1, Math.min(500, Math.floor(input.count)));
+  const columns = Math.max(1, Math.min(24, Math.floor(input.columns)));
+  return {
+    name: input.name.trim() || "Drive bays",
+    face: "front",
+    layout: "grid",
+    columns,
+    slots: Array.from({ length: count }, (_, index) => ({
+      name: `${input.prefix ?? "Bay "}${index + 1}`,
+      position: index + 1,
+      slotType: input.slotType,
+    })),
+  };
+}
+
+export function inferDriveBaySlotPrefix(slots: DriveBayTemplateSlot[]) {
+  if (slots.length === 0) return null;
+  const matches = slots.map((slot) => slot.name.match(/^(.*?)(\d+)$/));
+  const prefix = matches[0]?.[1];
+  if (
+    prefix === undefined ||
+    matches.some(
+      (match, index) =>
+        !match || match[1] !== prefix || Number(match[2]) !== index + 1,
+    )
+  ) {
+    return null;
+  }
+  return prefix;
+}
+
+export function uniformDriveBaySlotType(slots: DriveBayTemplateSlot[]) {
+  const first = slots[0]?.slotType;
+  if (!first || slots.some((slot) => slot.slotType !== first)) return null;
+  return first;
+}
+
+export function resizeDriveBaySlots(
+  slots: DriveBayTemplateSlot[],
+  count: number,
+  defaults: { prefix: string; slotType: DriveSlotType },
+) {
+  const nextCount = Math.max(1, Math.min(500, Math.floor(count)));
+  const preserved = slots.slice(0, nextCount).map((slot) => ({ ...slot }));
+  const highestPosition = slots.reduce(
+    (highest, slot) => Math.max(highest, slot.position),
+    0,
+  );
+  while (preserved.length < nextCount) {
+    const appendedIndex = preserved.length - slots.length + 1;
+    preserved.push({
+      name: `${defaults.prefix}${preserved.length + 1}`,
+      position: highestPosition + appendedIndex,
+      slotType: defaults.slotType,
+    });
+  }
+  return preserved;
+}
+
+export function commitDriveBaySlotCount(
+  slots: DriveBayTemplateSlot[],
+  countValue: string,
+  defaults: { prefix: string; slotType: DriveSlotType },
+) {
+  const count = Number(countValue);
+  if (!Number.isInteger(count) || count < 1 || count > 500) return null;
+  return resizeDriveBaySlots(slots, count, defaults);
+}
+
+export function renameDriveBaySlots(
+  slots: DriveBayTemplateSlot[],
+  prefix: string,
+) {
+  return slots.map((slot, index) => ({
+    ...slot,
+    name: `${prefix}${index + 1}`,
+  }));
+}
+
+export function setDriveBaySlotType(
+  slots: DriveBayTemplateSlot[],
+  slotType: DriveSlotType,
+) {
+  return slots.map((slot) => ({ ...slot, slotType }));
+}
+
+export function serializeDriveBayTemplateSection(input: {
+  name: string;
+  face: DriveSlotFace;
+  layout: DriveSlotLayout;
+  columns: number | null;
+  slots: DriveBayTemplateSlot[];
+}): DriveBayTemplateSection {
+  return {
+    name: input.name,
+    face: input.face,
+    layout: input.layout,
+    columns: input.columns,
+    slots: input.slots.map((slot) => ({ ...slot })),
+  };
+}

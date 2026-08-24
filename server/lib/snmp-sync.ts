@@ -1,6 +1,7 @@
 import { db } from '../db.js'
 import { createId } from './ids.js'
 import { assertSubnetCidrAvailable } from './subnet-integrity.js'
+import { cidrContainsHostIp, ipToInt } from './ip-cidr.js'
 import type {
   SnmpCollectedDhcpScope,
   SnmpProfileCollection,
@@ -179,9 +180,8 @@ export function buildSnmpSyncPreview(input: {
   if (input.collection.vlans.length === 0 && input.collection.subnets.length === 0) {
     warnings.push('SNMP walk returned no VLAN or subnet inventory for this profile.')
   }
-  if (input.collection.dhcpScopes.length > 0) {
-    warnings.push('DHCP scopes were detected only as preview metadata; apply does not modify DHCP in v1.')
-  }
+  const dhcp = buildDhcpPreview(input.collection.dhcpScopes, input.labId, subnets)
+  if (dhcp.conflicts.length > 0) warnings.push(`${dhcp.conflicts.length} DHCP scope conflict(s) require review.`)
 
   return {
     profileId: input.profileId,
@@ -192,8 +192,8 @@ export function buildSnmpSyncPreview(input: {
     policy: input.policy,
     vlans,
     subnets,
-    dhcp: buildDhcpPreview(input.collection.dhcpScopes),
-    summary: summarizeDiff(vlans, subnets),
+    dhcp,
+    summary: summarizeDiff(vlans, subnets, dhcp),
     warnings,
   }
 }
@@ -202,7 +202,11 @@ export function applySnmpSyncPreview(input: {
   preview: SnmpSyncPreview
   allowDeletes?: boolean
   actor: string
+  audit?: { entityType?: string; actionPrefix?: string; label?: string }
 }): SnmpSyncApplyResult {
+  const auditEntityType = input.audit?.entityType ?? 'SnmpSync'
+  const auditPrefix = input.audit?.actionPrefix ?? 'snmp.sync'
+  const auditLabel = input.audit?.label ?? 'SNMP sync'
   const result: SnmpSyncApplyResult = {
     profileId: input.preview.profileId,
     deviceId: input.preview.deviceId,
@@ -214,6 +218,8 @@ export function applySnmpSyncPreview(input: {
     createdSubnetIds: [],
     updatedSubnetIds: [],
     deletedSubnetIds: [],
+    createdDhcpScopeIds: [],
+    skippedDhcpScopes: 0,
     skippedDeletes: 0,
     warnings: [...input.preview.warnings],
   }
@@ -237,18 +243,30 @@ export function applySnmpSyncPreview(input: {
         `).run(id, input.preview.labId, diff.vlanNumber, diff.name)
         vlanIdByNumber.set(diff.vlanNumber, id)
         result.createdVlanIds.push(id)
-        writeSyncAudit(input.actor, 'snmp.sync.vlan.create', id, `Created VLAN ${diff.vlanNumber} (${diff.name}).`)
+        writeSyncAudit(
+          input.actor,
+          `${auditPrefix}.vlan.create`,
+          id,
+          `Created VLAN ${diff.vlanNumber} (${diff.name}).`,
+          auditEntityType,
+        )
         continue
       }
 
       if (diff.action === 'update' && diff.existingId) {
-        db.prepare('UPDATE vlans SET name = ? WHERE id = ?').run(diff.name, diff.existingId)
+        const update = db.prepare('UPDATE vlans SET name = ? WHERE id = ? AND labId = ?').run(
+          diff.name,
+          diff.existingId,
+          input.preview.labId,
+        )
+        if (update.changes === 0) continue
         result.updatedVlanIds.push(diff.existingId)
         writeSyncAudit(
           input.actor,
-          'snmp.sync.vlan.update',
+          `${auditPrefix}.vlan.update`,
           diff.existingId,
           `Updated VLAN ${diff.vlanNumber} name to ${diff.name}.`,
+          auditEntityType,
         )
         continue
       }
@@ -258,13 +276,18 @@ export function applySnmpSyncPreview(input: {
           result.skippedDeletes += 1
           continue
         }
-        db.prepare('DELETE FROM vlans WHERE id = ?').run(diff.existingId)
+        const deletion = db.prepare('DELETE FROM vlans WHERE id = ? AND labId = ?').run(
+          diff.existingId,
+          input.preview.labId,
+        )
+        if (deletion.changes === 0) continue
         result.deletedVlanIds.push(diff.existingId)
         writeSyncAudit(
           input.actor,
-          'snmp.sync.vlan.delete',
+          `${auditPrefix}.vlan.delete`,
           diff.existingId,
           `Deleted VLAN ${diff.vlanNumber} (${diff.existingName ?? diff.name}).`,
+          auditEntityType,
         )
       }
     }
@@ -281,24 +304,32 @@ export function applySnmpSyncPreview(input: {
           VALUES (?, ?, ?, ?, NULL, ?)
         `).run(id, input.preview.labId, cidr, diff.name, linkedVlanId)
         result.createdSubnetIds.push(id)
-        writeSyncAudit(input.actor, 'snmp.sync.subnet.create', id, `Created subnet ${cidr}.`)
+        writeSyncAudit(
+          input.actor,
+          `${auditPrefix}.subnet.create`,
+          id,
+          `Created subnet ${cidr}.`,
+          auditEntityType,
+        )
         continue
       }
 
       if (diff.action === 'update' && diff.existingId) {
         const linkedVlanId =
           diff.vlanNumber != null ? vlanIdByNumber.get(diff.vlanNumber) ?? null : null
-        db.prepare(`
+        const update = db.prepare(`
           UPDATE subnets
           SET name = ?, vlanId = COALESCE(?, vlanId)
-          WHERE id = ?
-        `).run(diff.name, linkedVlanId, diff.existingId)
+          WHERE id = ? AND labId = ?
+        `).run(diff.name, linkedVlanId, diff.existingId, input.preview.labId)
+        if (update.changes === 0) continue
         result.updatedSubnetIds.push(diff.existingId)
         writeSyncAudit(
           input.actor,
-          'snmp.sync.subnet.update',
+          `${auditPrefix}.subnet.update`,
           diff.existingId,
           `Updated subnet ${diff.cidr}.`,
+          auditEntityType,
         )
         continue
       }
@@ -308,44 +339,97 @@ export function applySnmpSyncPreview(input: {
           result.skippedDeletes += 1
           continue
         }
-        db.prepare('DELETE FROM subnets WHERE id = ?').run(diff.existingId)
+        const deletion = db.prepare('DELETE FROM subnets WHERE id = ? AND labId = ?').run(
+          diff.existingId,
+          input.preview.labId,
+        )
+        if (deletion.changes === 0) continue
         result.deletedSubnetIds.push(diff.existingId)
         writeSyncAudit(
           input.actor,
-          'snmp.sync.subnet.delete',
+          `${auditPrefix}.subnet.delete`,
           diff.existingId,
           `Deleted subnet ${diff.cidr}.`,
+          auditEntityType,
         )
       }
+    }
+
+    const conflictNames = new Set(input.preview.dhcp.conflicts.map((entry) => entry.name))
+    for (const scope of input.preview.dhcp.scopes) {
+      if (conflictNames.has(scope.name) || !scope.subnetCidr) {
+        result.skippedDhcpScopes += 1
+        continue
+      }
+      const subnet = db.prepare('SELECT id FROM subnets WHERE labId = ? AND cidr = ?').get(input.preview.labId, normalizeCidr(scope.subnetCidr)) as { id: string } | undefined
+      if (!subnet) {
+        result.skippedDhcpScopes += 1
+        continue
+      }
+      const existing = db.prepare('SELECT id FROM dhcpScopes WHERE subnetId = ? AND startIp = ? AND endIp = ?').get(subnet.id, scope.startIp, scope.endIp) as { id: string } | undefined
+      if (existing) continue
+      const id = createId('dhcp')
+      db.prepare(`INSERT INTO dhcpScopes (id, subnetId, name, startIp, endIp, gateway, dnsServers, description)
+        VALUES (?, ?, ?, ?, ?, NULL, NULL, ?)`).run(id, subnet.id, scope.name, scope.startIp, scope.endIp, scope.note ?? null)
+      result.createdDhcpScopeIds.push(id)
+      writeSyncAudit(input.actor, 'snmp.sync.dhcp.create', id, `Created DHCP scope ${scope.name}.`)
     }
   })
 
   apply()
   writeSyncAudit(
     input.actor,
-    'snmp.sync.apply',
+    `${auditPrefix}.apply`,
     input.preview.deviceId,
-    `SNMP sync (${input.preview.profileId}, ${input.preview.policy}) created ${result.createdVlanIds.length} VLAN(s) and ${result.createdSubnetIds.length} subnet(s).`,
+    `${auditLabel} (${input.preview.profileId}, ${input.preview.policy}) created ${result.createdVlanIds.length} VLAN(s) and ${result.createdSubnetIds.length} subnet(s).`,
+    auditEntityType,
   )
   return result
 }
 
-function buildDhcpPreview(scopes: SnmpCollectedDhcpScope[]) {
+function buildDhcpPreview(scopes: SnmpCollectedDhcpScope[], labId: string, subnetDiffs: SnmpSyncSubnetDiff[]) {
   if (scopes.length === 0) {
     return {
-      supported: false,
-      message: 'DHCP scope sync is preview-only in v1. No scopes were collected for this profile.',
+      supported: true,
+      message: 'No DHCP scopes were collected for this profile.',
       scopes: [],
+      conflicts: [],
     }
   }
+  const availableCidrs = new Set(subnetDiffs.filter((entry) => entry.action !== 'delete').map((entry) => normalizeCidr(entry.cidr)))
+  const existingSubnets = db.prepare('SELECT id, cidr FROM subnets WHERE labId = ?').all(labId) as Array<{ id: string; cidr: string }>
+  const subnetByCidr = new Map(existingSubnets.map((entry) => [normalizeCidr(entry.cidr), entry]))
+  const conflicts: Array<{ name: string; reason: string }> = []
+  for (const scope of scopes) {
+    const cidr = scope.subnetCidr ? normalizeCidr(scope.subnetCidr) : ''
+    if (!cidr || !availableCidrs.has(cidr)) {
+      conflicts.push({ name: scope.name, reason: 'DHCP scope does not identify an available subnet.' })
+      continue
+    }
+    try {
+      if (!cidrContainsHostIp(cidr, scope.startIp) || !cidrContainsHostIp(cidr, scope.endIp) || ipToInt(scope.startIp) > ipToInt(scope.endIp)) {
+        conflicts.push({ name: scope.name, reason: 'DHCP range is invalid or outside its subnet.' })
+        continue
+      }
+    } catch {
+      conflicts.push({ name: scope.name, reason: 'DHCP range contains an invalid IPv4 address.' })
+      continue
+    }
+    const subnet = subnetByCidr.get(cidr)
+    if (!subnet) continue
+    const existing = db.prepare('SELECT name, startIp, endIp FROM dhcpScopes WHERE subnetId = ?').all(subnet.id) as Array<{ name: string; startIp: string; endIp: string }>
+    const overlapping = existing.find((entry) => ipToInt(scope.startIp) <= ipToInt(entry.endIp) && ipToInt(scope.endIp) >= ipToInt(entry.startIp) && !(entry.startIp === scope.startIp && entry.endIp === scope.endIp))
+    if (overlapping) conflicts.push({ name: scope.name, reason: `DHCP range overlaps ${overlapping.name}.` })
+  }
   return {
-    supported: false,
-    message: 'DHCP scope sync is preview-only in v1. Review scopes below; apply will not modify DHCP.',
+    supported: true,
+    message: conflicts.length > 0 ? 'Review DHCP conflicts before apply.' : 'DHCP scopes are ready to apply.',
     scopes,
+    conflicts,
   }
 }
 
-function summarizeDiff(vlans: SnmpSyncVlanDiff[], subnets: SnmpSyncSubnetDiff[]) {
+function summarizeDiff(vlans: SnmpSyncVlanDiff[], subnets: SnmpSyncSubnetDiff[], dhcp: ReturnType<typeof buildDhcpPreview>) {
   return {
     vlanCreates: vlans.filter((entry) => entry.action === 'create').length,
     vlanUpdates: vlans.filter((entry) => entry.action === 'update').length,
@@ -353,6 +437,8 @@ function summarizeDiff(vlans: SnmpSyncVlanDiff[], subnets: SnmpSyncSubnetDiff[])
     subnetCreates: subnets.filter((entry) => entry.action === 'create').length,
     subnetUpdates: subnets.filter((entry) => entry.action === 'update').length,
     subnetDeletes: subnets.filter((entry) => entry.action === 'delete').length,
+    dhcpCreates: dhcp.scopes.length - dhcp.conflicts.length,
+    dhcpConflicts: dhcp.conflicts.length,
   }
 }
 
@@ -397,11 +483,12 @@ function writeSyncAudit(
   action: string,
   entityId: string,
   summary: string,
+  entityType = 'SnmpSync',
 ) {
   db.prepare(`
     INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
-    VALUES (?, ?, ?, ?, 'SnmpSync', ?, ?)
-  `).run(createId('a'), new Date().toISOString(), actor, action, entityId, summary)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(createId('a'), new Date().toISOString(), actor, action, entityType, entityId, summary)
 }
 
 export function snmpInventorySyncEnabled() {

@@ -1157,7 +1157,7 @@ function compareCables(
   portById: Record<string, Port>,
   deviceById: Record<string, Device>,
 ) {
-  let result = 0;
+  let result: number;
   if (sort.key === "from") {
     result = compareText(
       cableEndpointLabel(a.fromPortId, portById, deviceById),

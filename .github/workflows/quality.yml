@@ -33,20 +33,8 @@ jobs:
       - name: Install browser test runtime
         run: npx playwright install --with-deps chromium
 
-      - name: Validate translations
-        run: npm run check:i18n
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm run test:server && npm run test:client
-
-      - name: Build
-        run: npm run build
-
-      - name: Check bundle budget
-        run: npm run check:bundle
+      - name: Full repository validation
+        run: npm run check:full
 
       - name: Check shell scripts
         run: find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
@@ -59,6 +47,3 @@ jobs:
             [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors)
             if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
           }
-
-      - name: Browser and accessibility tests
-        run: npm run test:e2e

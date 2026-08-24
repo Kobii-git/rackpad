@@ -9,23 +9,19 @@ const localesDir = join(root, "src/i18n/locales");
 
 function parseObjectBody(body) {
   const entries = new Map();
-  const regex = /^\s*"((?:\\.|[^"\\])*)"\s*:\s*"((?:\\.|[^"\\])*)"\s*,?\s*$/gm;
+  const regex = /^\s*("(?:\\.|[^"\\])*")\s*:\s*("(?:\\.|[^"\\])*")\s*,?\s*$/gm;
   let match;
   while ((match = regex.exec(body)) !== null) {
-    entries.set(JSON.parse(`"${match[1]}"`), JSON.parse(`"${match[2]}"`));
+    entries.set(JSON.parse(match[1]), JSON.parse(match[2]));
   }
   return entries;
-}
-
-function escapeString(value) {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function buildLocaleObject(existing, exportName) {
   const lines = [`import type { TranslationMap } from "../base";`, "", `export const ${exportName} = {`];
   for (const [key, fallback] of enEntries) {
     const value = existing.get(key) ?? fallback;
-    lines.push(`  "${escapeString(key)}": "${escapeString(value)}",`);
+    lines.push(`  ${JSON.stringify(key)}: ${JSON.stringify(value)},`);
   }
   lines.push("} satisfies TranslationMap;", "");
   return lines.join("\n");

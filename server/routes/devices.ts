@@ -1,6 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
 import { db, parseRow } from "../db.js";
-import { requiredDeviceType } from "../lib/device-types.js";
+import { writeAuditLogEntry } from "../lib/audit-log.js";
+import {
+  deviceTypeBase,
+  requiredDeviceType,
+} from "../lib/device-types.js";
 import {
   applyWifiDiscoveryPlacementToDevice,
   upsertWifiClientAssociation,
@@ -18,6 +22,12 @@ import {
   createPortsFromTemplate,
   getPortTemplate,
 } from "../lib/port-templates.js";
+import {
+  assertTemplateCompatible,
+  createDriveSlotsFromTemplate,
+  getDriveBayTemplate,
+  insertDriveSlots,
+} from "../lib/storage.js";
 import { validateRackPlacement } from "../lib/rack-placement.js";
 import { assertSubnetChildMutationAllowed } from "../lib/subnet-integrity.js";
 import {
@@ -41,6 +51,7 @@ const DEVICE_STATUSES = [
   "warning",
   "unknown",
   "maintenance",
+  "unmanaged",
 ] as const;
 const DEVICE_PLACEMENTS = [
   "rack",
@@ -71,10 +82,11 @@ function derivePlacement(input: {
   if (input.placement) return input.placement;
   if (input.rackId || input.startU != null || input.heightU != null)
     return "rack";
-  if (input.deviceType === "vm" || input.deviceType === "container")
+  const baseType = deviceTypeBase(input.deviceType);
+  if (baseType === "vm" || baseType === "container")
     return "virtual";
-  if (input.deviceType === "ap") return "wireless";
-  if (input.deviceType === "rack_shelf") return "rack";
+  if (baseType === "ap") return "wireless";
+  if (baseType === "rack_shelf") return "rack";
   return "room";
 }
 
@@ -107,7 +119,7 @@ function normalizePlacement(input: {
         "A rack shelf / tray must be selected for shelf-mounted gear.",
       );
     }
-    if (parent.deviceType !== "rack_shelf") {
+    if (deviceTypeBase(parent.deviceType) !== "rack_shelf") {
       throw new ValidationError(
         "Shelf-mounted gear can only be attached to a rack shelf / tray.",
       );
@@ -221,7 +233,8 @@ function validateNetworkMode(input: {
       "Host-shared networking requires a parent host device.",
     );
   }
-  if (input.deviceType !== "vm" && input.deviceType !== "container") {
+  const baseType = deviceTypeBase(input.deviceType);
+  if (baseType !== "vm" && baseType !== "container") {
     throw new ValidationError(
       "Host-shared networking is only available for VMs and containers.",
     );
@@ -318,6 +331,9 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const portTemplateId = optionalString(body, "portTemplateId", {
       maxLength: 80,
     });
+    const driveBayTemplateId = optionalString(body, "driveBayTemplateId", {
+      maxLength: 80,
+    });
 
     if (managementIp) ensureIpv4(managementIp, "managementIp");
     if (lastSeen) ensureIsoDate(lastSeen, "lastSeen");
@@ -343,6 +359,15 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const template = portTemplateId ? getPortTemplate(portTemplateId) : null;
     if (portTemplateId && !template) {
       throw new ValidationError("Selected port template does not exist.");
+    }
+    const driveBayTemplate = driveBayTemplateId
+      ? getDriveBayTemplate(driveBayTemplateId)
+      : null;
+    if (driveBayTemplateId && !driveBayTemplate) {
+      throw new ValidationError("Selected drive-bay template does not exist.");
+    }
+    if (driveBayTemplate) {
+      assertTemplateCompatible(driveBayTemplate, deviceType);
     }
 
     const id = createId("d");
@@ -393,6 +418,17 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         ? createPortsFromTemplate(id, template.id)
         : []) {
         insertPort.run(port);
+      }
+      if (driveBayTemplate) {
+        const slots = createDriveSlotsFromTemplate(id, driveBayTemplate.id);
+        insertDriveSlots(slots);
+        writeAuditLogEntry({
+          user: req.authUser!.username,
+          action: "storage.template.apply",
+          entityType: "Device",
+          entityId: id,
+          summary: `Applied a ${slots.length}-slot drive-bay template to ${hostname}`,
+        });
       }
     });
 
@@ -572,9 +608,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
                 "SELECT id, labId, deviceType FROM devices WHERE id = ? AND labId = ?",
               )
               .get(nextParentId, labId) as
-              | { id: string; labId: string; deviceType: string }
-              | undefined;
-            if (!apDevice || apDevice.deviceType !== "ap") {
+              { id: string; labId: string; deviceType: string } | undefined;
+            if (!apDevice || deviceTypeBase(apDevice.deviceType) !== "ap") {
               throw new ValidationError(
                 "Wireless placement requires a valid access point in this lab.",
               );
@@ -670,7 +705,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
             parentDeviceId ??
             (existing.parentDeviceId ? String(existing.parentDeviceId) : null);
           if (resolvedParentId) {
-            let resolvedSsidId = wifiSsidId ?? null;
+            const resolvedSsidId = wifiSsidId ?? null;
             if (resolvedSsidId) {
               const ssid = db
                 .prepare("SELECT id FROM wifiSsids WHERE id = ? AND labId = ?")
@@ -945,43 +980,89 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const portTemplateId = optionalString(body, "portTemplateId", {
       maxLength: 80,
     });
-    if (portTemplateId) {
-      const hasPorts = db
-        .prepare("SELECT COUNT(*) AS count FROM ports WHERE deviceId = ?")
-        .get(req.params.id) as { count: number };
-      if (hasPorts.count > 0) {
-        return reply.status(409).send({
-          error:
-            "This device already has ports. Port templates can only be applied to empty devices.",
-        });
-      }
-      const template = getPortTemplate(portTemplateId);
-      if (!template) {
-        throw new ValidationError("Selected port template does not exist.");
-      }
-      const insertPort = db.prepare(`
-        INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId)
-        VALUES (@id, @deviceId, @name, @position, @kind, @speed, @linkState, @mode, @vlanId, @allowedVlanIds, @description, @face, @virtualSwitchId)
-      `);
-      const applyPorts = db.transaction(() => {
-        for (const port of createPortsFromTemplate(
-          req.params.id,
-          template.id,
-        )) {
-          insertPort.run(port);
-        }
-      });
-      applyPorts();
+    const portTemplate = portTemplateId
+      ? getPortTemplate(portTemplateId)
+      : null;
+    if (portTemplateId && !portTemplate) {
+      throw new ValidationError("Selected port template does not exist.");
     }
+    const ports = portTemplate
+      ? createPortsFromTemplate(req.params.id, portTemplate.id)
+      : [];
 
-    if (updates.length > 0) {
-      values.push(req.params.id);
-      db.prepare(`UPDATE devices SET ${updates.join(", ")} WHERE id = ?`).run(
-        ...values,
-      );
-    } else if (!portTemplateId) {
+    const driveBayTemplateId = optionalString(body, "driveBayTemplateId", {
+      maxLength: 80,
+    });
+    const driveBayTemplate = driveBayTemplateId
+      ? getDriveBayTemplate(driveBayTemplateId)
+      : null;
+    if (driveBayTemplateId && !driveBayTemplate) {
+      throw new ValidationError("Selected drive-bay template does not exist.");
+    }
+    if (driveBayTemplate) {
+      assertTemplateCompatible(driveBayTemplate, nextDeviceType);
+    }
+    const driveSlots = driveBayTemplate
+      ? createDriveSlotsFromTemplate(req.params.id, driveBayTemplate.id)
+      : [];
+
+    if (updates.length === 0 && !portTemplateId && !driveBayTemplateId) {
       return reply.status(400).send({ error: "No valid fields to update" });
     }
+
+    const insertPort = db.prepare(`
+      INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId)
+      VALUES (@id, @deviceId, @name, @position, @kind, @speed, @linkState, @mode, @vlanId, @allowedVlanIds, @description, @face, @virtualSwitchId)
+    `);
+    db.transaction(() => {
+      if (portTemplate) {
+        const hasPorts = db
+          .prepare("SELECT COUNT(*) AS count FROM ports WHERE deviceId = ?")
+          .get(req.params.id) as { count: number };
+        if (hasPorts.count > 0) {
+          throw new ValidationError(
+            "This device already has ports. Port templates can only be applied to empty devices.",
+            409,
+          );
+        }
+        for (const port of ports) insertPort.run(port);
+      }
+
+      if (driveBayTemplate) {
+        const hasSlots = db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM driveSlots WHERE deviceId = ?",
+          )
+          .get(req.params.id) as { count: number };
+        if (hasSlots.count > 0) {
+          throw new ValidationError(
+            "This device already has drive slots. Drive-bay templates can only be applied to empty devices.",
+            409,
+          );
+        }
+        insertDriveSlots(driveSlots);
+      }
+
+      if (updates.length > 0) {
+        db.prepare(`UPDATE devices SET ${updates.join(", ")} WHERE id = ?`).run(
+          ...values,
+          req.params.id,
+        );
+      }
+
+      if (driveBayTemplate) {
+        const updatedDevice = db
+          .prepare("SELECT hostname FROM devices WHERE id = ?")
+          .get(req.params.id) as { hostname: string };
+        writeAuditLogEntry({
+          user: req.authUser!.username,
+          action: "storage.template.apply",
+          entityType: "Device",
+          entityId: req.params.id,
+          summary: `Applied a ${driveSlots.length}-slot drive-bay template to ${updatedDevice.hostname}`,
+        });
+      }
+    })();
 
     const row = db
       .prepare("SELECT * FROM devices WHERE id = ?")

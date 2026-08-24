@@ -12,13 +12,13 @@ Open Rackpad -> `Visualizer`.
 | ------------------------------------------------------------ | ------------------------------------------------------------------------- |
 | ![Rackpad visualizer topology](./screenshots/visualizer.png) | ![Rackpad visualizer selected cable](./screenshots/visualizer-cables.png) |
 
-| Health overlay                                                            | Trace mode                                                           |
-| ------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| ![Rackpad visualizer health overlay](./screenshots/visualizer-health.png) | ![Rackpad visualizer trace mode](./screenshots/visualizer-trace.png) |
+| Health overlay                                                            | Pyramid layout                                                          |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| ![Rackpad visualizer health overlay](./screenshots/visualizer-health.png) | ![Rackpad visualizer pyramid layout](./screenshots/visualizer-pyramid.png) |
 
-| Loose devices below racks                                                      |
-| ------------------------------------------------------------------------------ |
-| ![Rackpad visualizer loose-device layout](./screenshots/visualizer-layout.png) |
+| Multi-hop trace preview                                                  | Loose devices below racks                                                      |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| ![Rackpad multi-hop cable trace preview](./screenshots/visualizer-trace.png) | ![Rackpad visualizer loose-device layout](./screenshots/visualizer-layout.png) |
 
 ## What It Shows
 

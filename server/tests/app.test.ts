@@ -4,7 +4,10 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readdirSync,
+  readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
@@ -12,6 +15,7 @@ import path from "node:path";
 import dgram from "node:dgram";
 import { execFileSync } from "node:child_process";
 import { CONTENT_SECURITY_POLICY } from "../security-headers.js";
+import type { DiscoveryScanResult } from "../routes/discovery.js";
 
 const tempDir = mkdtempSync(path.join(os.tmpdir(), "rackpad-tests-"));
 const spaDistDir = path.resolve(process.cwd(), "dist");
@@ -23,14 +27,24 @@ process.env.RACKPAD_SECRET_KEY = "rackpad-test-secret-key";
 process.env.SNMP_INVENTORY_SYNC = "1";
 
 const { createApp } = await import("../app.js");
-const { db } = await import("../db.js");
+const { CURRENT_SCHEMA_VERSION, db } = await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
 const { setDockerHttpJsonFetcherForTests } =
   await import("../lib/docker-import.js");
 const { resetLocalUserPassword } = await import("../lib/password-reset.js");
 const { parseIeeeOuiText } = await import("../lib/oui.js");
+const {
+  initializeNativeBackupScheduleBaseline,
+  nativeBackupStatus,
+  resetNativeBackupSchedulerStateForTests,
+  runNativeBackupScheduleTick,
+} = await import("../lib/native-backup.js");
+const { CURRENT_RACKPAD_SCHEMA_COLUMNS } =
+  await import("../lib/native-backup-validation.js");
 const { cidrOverlaps, ipToInt } = await import("../lib/ip-cidr.js");
 const { resolveSnmpSessionForTarget } = await import("../lib/snmp-session.js");
+const { inferDiscoveryPlacement } =
+  await import("../lib/discovery-placement.js");
 const { setNetworkHostLookupForTests, setPinnedRequestTransportForTests } =
   await import("../lib/net-guard.js");
 const {
@@ -59,6 +73,7 @@ afterEach(async () => {
   resetDiscoveryScanJobsForTests();
   setNetworkHostLookupForTests(null);
   setPinnedRequestTransportForTests(null);
+  resetNativeBackupSchedulerStateForTests();
   await app.close();
 });
 
@@ -623,6 +638,23 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
     assert.ok(seededTypes.has(deviceType), `missing device type ${deviceType}`);
   }
   assert.ok(seededTypes.has("laser_cutter"));
+  assert.ok(seededTypes.has("hypervisor_appliance"));
+  assert.ok(seededTypes.has("disk_shelf"));
+  const customTypeSetting = db
+    .prepare("SELECT value FROM appSettings WHERE key = 'deviceTypes'")
+    .get() as { value: string };
+  assert.deepEqual(
+    (
+      JSON.parse(customTypeSetting.value) as {
+        custom: Array<{ id: string; parentType: string }>;
+      }
+    ).custom.map(({ id, parentType }) => ({ id, parentType })),
+    [
+      { id: "laser_cutter", parentType: "other" },
+      { id: "hypervisor_appliance", parentType: "server" },
+      { id: "disk_shelf", parentType: "storage_enclosure" },
+    ],
+  );
   assert.ok(
     db
       .prepare(
@@ -642,6 +674,8 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
     "usb",
     "virtual",
     "wifi",
+    "sff",
+    "other",
   ];
   const seededPortKinds = new Set(
     (
@@ -703,6 +737,29 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
     ).count,
     0,
   );
+  const demoOutboundTargets = [
+    ...(db.prepare("SELECT target AS value FROM deviceMonitors").all() as Array<{
+      value: string;
+    }>),
+    ...(db
+      .prepare("SELECT cidr AS value FROM discoveryScanSchedules")
+      .all() as Array<{ value: string }>),
+    ...(db
+      .prepare("SELECT baseUrl AS value FROM integrationConnections")
+      .all() as Array<{ value: string }>),
+    ...(db
+      .prepare("SELECT endpoint AS value FROM dockerImportSources")
+      .all() as Array<{ value: string }>),
+  ];
+  for (const { value } of demoOutboundTargets) {
+    assert.ok(
+      value.includes(".example.invalid") ||
+        /^(?:https?:\/\/)?(?:192\.0\.2|198\.51\.100|203\.0\.113)\./.test(
+          value,
+        ),
+      `unsafe demo outbound target ${value}`,
+    );
+  }
   const demoV3Before = db
     .prepare("SELECT * FROM deviceMonitors WHERE id = 'mon_ups_snmp_v3'")
     .get() as Record<string, unknown>;
@@ -754,6 +811,24 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
   );
   assert.ok(db.prepare("SELECT id FROM snmpTrapSources LIMIT 1").get());
   assert.ok(db.prepare("SELECT id FROM snmpTrapLog LIMIT 1").get());
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT snmpMatchMode, snmpExpectedValue FROM deviceMonitors WHERE id = 'mon_sw_tor_snmp_v2c'",
+      )
+      .get(),
+    { snmpMatchMode: "regex", snmpExpectedValue: "^(1|up)$" },
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT ignoreTlsErrors FROM deviceMonitors WHERE id = 'mon_fw_https'",
+        )
+        .get() as { ignoreTlsErrors: number }
+    ).ignoreTlsErrors,
+    1,
+  );
 
   const requiredServiceTypes = [
     "dhcp",
@@ -854,6 +929,98 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
     ).count,
     0,
   );
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT id, rackSlot FROM devices WHERE rackId = 'rack_net' AND startU = 16 ORDER BY rackSlot",
+      )
+      .all(),
+    [
+      { id: "d_rack_console_bridge", rackSlot: "left" },
+      { id: "d_automation_gateway", rackSlot: "right" },
+    ],
+  );
+  assert.equal(
+    (
+      db
+        .prepare("SELECT status FROM devices WHERE id = 'd_room_sensor'")
+        .get() as { status: string }
+    ).status,
+    "unmanaged",
+  );
+  assert.ok(
+    db
+      .prepare(
+        `
+          SELECT d.id
+          FROM devices d
+          JOIN ipAssignments a ON a.deviceId = d.id
+          WHERE d.id = 'd_room_sensor'
+            AND a.assignmentType = 'device'
+            AND a.portId IS NULL
+            AND d.managementIp != a.ipAddress
+        `,
+      )
+      .get(),
+  );
+  assert.deepEqual(
+    db
+      .prepare(
+        `
+          SELECT macAddress, ignoreDuplicateMac, COUNT(*) AS count
+          FROM devices
+          WHERE macAddress IN ('02:54:00:aa:00:01', '02:42:ac:11:00:02')
+          GROUP BY macAddress, ignoreDuplicateMac
+          ORDER BY ignoreDuplicateMac
+        `,
+      )
+      .all(),
+    [
+      { macAddress: "02:54:00:aa:00:01", ignoreDuplicateMac: 0, count: 2 },
+      { macAddress: "02:42:ac:11:00:02", ignoreDuplicateMac: 1, count: 2 },
+    ],
+  );
+  assert.ok(
+    db
+      .prepare(
+        `
+          SELECT p.id
+          FROM storagePools p
+          JOIN storagePoolDrives pd ON pd.poolId = p.id
+          JOIN driveSlots s ON s.driveId = pd.driveId
+          WHERE p.id = 'sp_demo_tank'
+          GROUP BY p.id
+          HAVING COUNT(DISTINCT s.deviceId) > 1
+        `,
+      )
+      .get(),
+  );
+  assert.ok(
+    db
+      .prepare(
+        "SELECT id FROM driveBayTemplates WHERE id = 'dbt_demo_disk_shelf_12' AND deviceTypes LIKE '%disk_shelf%'",
+      )
+      .get(),
+  );
+  assert.ok(
+    db
+      .prepare(
+        "SELECT id FROM driveSlots WHERE deviceId = 'd_disk_shelf' AND driveId IS NOT NULL",
+      )
+      .get(),
+  );
+  assert.ok(
+    db
+      .prepare(
+        `
+          SELECT d.id
+          FROM storageDrives d
+          LEFT JOIN driveSlots s ON s.driveId = d.id
+          WHERE d.notes LIKE '%pulled%' AND s.id IS NULL
+        `,
+      )
+      .get(),
+  );
   assert.equal(
     (
       db
@@ -868,6 +1035,46 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
         .get() as { count: number }
     ).count,
     0,
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM snmpSyncSchedules WHERE enabled != 0",
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.ok(
+    db
+      .prepare(
+        "SELECT id FROM snmpSyncSchedules WHERE profileId = 'pfsense-opnsense' AND enabled = 0",
+      )
+      .get(),
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM integrationConnections WHERE enabled != 0 OR authSecretEnc IS NOT NULL OR baseUrl NOT LIKE '%.example.invalid%'",
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT enabled, cron, mode, labIds FROM integrationSyncSchedules WHERE id = 'intsch_demo_unifi_nightly'",
+      )
+      .get(),
+    {
+      enabled: 0,
+      cron: "0 2 * * *",
+      mode: "merge",
+      labIds: JSON.stringify(["lab_home"]),
+    },
   );
 
   const subnets = db
@@ -1232,6 +1439,149 @@ test("bulk wireless placement requires an access point", async () => {
   assert.match(bulkRes.body, /access point/i);
 });
 
+test("unmanaged status validates across device mutations, survives monitoring, and round-trips logical backup", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+
+  const invalidCreate = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers,
+    payload: {
+      labId: "lab_home",
+      hostname: "invalid-unmanaged-status",
+      deviceType: "server",
+      status: "ignored",
+    },
+  });
+  assert.equal(invalidCreate.statusCode, 400);
+
+  const createdResponses = await Promise.all(
+    ["unmanaged-primary", "unmanaged-bulk"].map((hostname) =>
+      app.inject({
+        method: "POST",
+        url: "/api/devices",
+        headers,
+        payload: {
+          labId: "lab_home",
+          hostname,
+          deviceType: "server",
+          status: hostname === "unmanaged-primary" ? "unmanaged" : "online",
+        },
+      }),
+    ),
+  );
+  for (const response of createdResponses) {
+    assert.equal(response.statusCode, 201, response.body);
+  }
+  const [primary, bulkTarget] = createdResponses.map(
+    (response) => readJson(response) as { id: string; status: string },
+  );
+  assert.equal(primary.status, "unmanaged");
+
+  const updateResponse = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${bulkTarget.id}`,
+    headers,
+    payload: { status: "unmanaged" },
+  });
+  assert.equal(updateResponse.statusCode, 200, updateResponse.body);
+  assert.equal(
+    (readJson(updateResponse) as { status: string }).status,
+    "unmanaged",
+  );
+
+  const resetResponse = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${bulkTarget.id}`,
+    headers,
+    payload: { status: "online" },
+  });
+  assert.equal(resetResponse.statusCode, 200, resetResponse.body);
+  const bulkResponse = await app.inject({
+    method: "POST",
+    url: "/api/devices/bulk",
+    headers,
+    payload: {
+      deviceIds: [primary.id, bulkTarget.id],
+      changes: { status: "unmanaged" },
+    },
+  });
+  assert.equal(bulkResponse.statusCode, 200, bulkResponse.body);
+  assert.deepEqual(
+    (
+      readJson(bulkResponse) as { devices: Array<{ status: string }> }
+    ).devices.map((device) => device.status),
+    ["unmanaged", "unmanaged"],
+  );
+
+  const monitorResponse = await app.inject({
+    method: "POST",
+    url: "/api/device-monitors",
+    headers,
+    payload: {
+      deviceId: primary.id,
+      name: "Unmanaged reachability",
+      type: "tcp",
+      target: "8.8.8.8",
+      port: 443,
+      enabled: true,
+    },
+  });
+  assert.equal(monitorResponse.statusCode, 200, monitorResponse.body);
+  const monitor = readJson(monitorResponse) as { id: string };
+  const { recordMonitorResult } = await import("../lib/monitoring.js");
+  await recordMonitorResult(monitor.id, {
+    result: "offline",
+    message: "Intentional unmanaged offline result.",
+  });
+  let preserved = db
+    .prepare("SELECT status, lastSeen FROM devices WHERE id = ?")
+    .get(primary.id) as { status: string; lastSeen: string | null };
+  assert.deepEqual(preserved, { status: "unmanaged", lastSeen: null });
+
+  await recordMonitorResult(monitor.id, {
+    result: "online",
+    message: "Intentional unmanaged online result.",
+  });
+  preserved = db
+    .prepare("SELECT status, lastSeen FROM devices WHERE id = ?")
+    .get(primary.id) as { status: string; lastSeen: string | null };
+  assert.equal(preserved.status, "unmanaged");
+  assert.ok(preserved.lastSeen);
+
+  const exportResponse = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers,
+  });
+  assert.equal(exportResponse.statusCode, 200, exportResponse.body);
+  const snapshot = readJson(exportResponse) as {
+    data: { devices: Array<{ id: string; status: string }> };
+  };
+  assert.equal(
+    snapshot.data.devices.find((device) => device.id === primary.id)?.status,
+    "unmanaged",
+  );
+  db.prepare("UPDATE devices SET status = 'online' WHERE id = ?").run(primary.id);
+
+  const restoreResponse = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers,
+    payload: snapshot,
+  });
+  assert.equal(restoreResponse.statusCode, 200, restoreResponse.body);
+  assert.equal(
+    (
+      db.prepare("SELECT status FROM devices WHERE id = ?").get(primary.id) as {
+        status: string;
+      }
+    ).status,
+    "unmanaged",
+  );
+});
+
 test("documentation pages and device images can be created", async () => {
   const adminToken = await bootstrapAdmin();
 
@@ -1352,20 +1702,24 @@ test("admin export returns a backup snapshot and blocks viewer access", async ()
 
   const snapshot = readJson(exportRes) as {
     format: string;
+    schemaVersion: number;
     appVersion: string;
     secretsRedacted: boolean;
     data: {
       labs: unknown[];
       users: Array<{ username: string }>;
+      userLabAccess: unknown[];
       userSessions?: unknown[];
     };
   };
 
   assert.equal(snapshot.format, "rackpad-backup-v1");
+  assert.equal(snapshot.schemaVersion, CURRENT_SCHEMA_VERSION);
   assert.ok(snapshot.appVersion);
   assert.equal(snapshot.secretsRedacted, true);
   assert.equal(snapshot.data.labs.length, 1);
   assert.equal(snapshot.data.users[0]?.username, "admin");
+  assert.deepEqual(snapshot.data.userLabAccess, []);
   assert.equal(snapshot.data.userSessions, undefined);
 
   const alertSettingsRow = (
@@ -1421,6 +1775,576 @@ test("admin export returns a backup snapshot and blocks viewer access", async ()
 
   assert.equal(forbiddenRes.statusCode, 403);
   assert.match(forbiddenRes.body, /administrator/i);
+});
+
+test("backup schema coverage requires an explicit decision for every application table", async () => {
+  const adminToken = await bootstrapAdmin();
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(exportRes.statusCode, 200);
+
+  const snapshot = readJson(exportRes) as {
+    data: Record<string, unknown>;
+  };
+  const schemaTables = (
+    db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+      )
+      .all() as Array<{ name: string }>
+  ).map((row) => row.name);
+
+  const excludedTables = new Map([
+    // Schema metadata is runtime-owned and is represented by the snapshot's
+    // top-level schemaVersion rather than restored as application data.
+    ["schemaVersion", "runtime schema metadata"],
+    // Sessions are deliberately invalidated on restore so every user must
+    // authenticate again against the restored account and permission state.
+    ["userSessions", "ephemeral authentication state"],
+  ]);
+  const representedTables = new Set(Object.keys(snapshot.data));
+  const missingDecisions = schemaTables.filter(
+    (table) => !representedTables.has(table) && !excludedTables.has(table),
+  );
+  const unknownSnapshotTables = [...representedTables].filter(
+    (table) => !schemaTables.includes(table),
+  );
+  const staleExclusions = [...excludedTables.keys()].filter(
+    (table) => !schemaTables.includes(table),
+  );
+
+  assert.deepEqual(missingDecisions, []);
+  assert.deepEqual(unknownSnapshotTables, []);
+  assert.deepEqual(staleExclusions, []);
+});
+
+test("native backup schema validation manifest matches the current database", () => {
+  const tables = (
+    db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+      )
+      .all() as Array<{ name: string }>
+  ).map((row) => row.name);
+  const actual = Object.fromEntries(
+    tables.map((table) => [
+      table,
+      (
+        db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+          name: string;
+        }>
+      ).map((column) => column.name),
+    ]),
+  );
+  assert.deepEqual(actual, CURRENT_RACKPAD_SCHEMA_COLUMNS);
+});
+
+test("backup restore handles every table the export produces", async () => {
+  const adminToken = await bootstrapAdmin();
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(exportRes.statusCode, 200);
+  const exportedTables = Object.keys(
+    (readJson(exportRes) as { data: Record<string, unknown> }).data,
+  );
+
+  // Schema coverage alone only proves the export side. Restore keeps its own
+  // hand-maintained delete and insert lists, so the two can still drift apart
+  // and silently drop a table's rows. This structural check fails when a table
+  // reaches the snapshot without a matching restore path.
+  const adminSource = readFileSync(
+    new URL("../routes/admin.ts", import.meta.url),
+    "utf8",
+  );
+  const restoreDeletes = new Set(
+    [...adminSource.matchAll(/DELETE FROM ([A-Za-z]+)/g)].map(
+      (match) => match[1],
+    ),
+  );
+  const restoreInserts = new Set(
+    [...adminSource.matchAll(/INSERT INTO ([A-Za-z]+)/g)].map(
+      (match) => match[1],
+    ),
+  );
+
+  assert.deepEqual(
+    exportedTables.filter((table) => !restoreDeletes.has(table)),
+    [],
+  );
+  assert.deepEqual(
+    exportedTables.filter((table) => !restoreInserts.has(table)),
+    [],
+  );
+});
+
+test("integration connections and schedules round-trip with ciphertext preserved", async () => {
+  const adminToken = await bootstrapAdmin();
+  const connectionResponse = await app.inject({
+    method: "POST",
+    url: "/api/integrations/connections",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      provider: "unifi",
+      name: "Backup controller",
+      baseUrl: "https://controller.example.internal",
+      authKind: "api-key",
+      authSecret: "backup-controller-secret",
+    },
+  });
+  assert.equal(connectionResponse.statusCode, 201, connectionResponse.body);
+  const connection = readJson(connectionResponse) as { id: string };
+
+  const scheduleResponse = await app.inject({
+    method: "POST",
+    url: "/api/integrations/schedules",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      connectionId: connection.id,
+      name: "Nightly safe sync",
+      mode: "skip",
+      cron: "0 2 * * *",
+      labIds: ["lab_home"],
+    },
+  });
+  assert.equal(scheduleResponse.statusCode, 201, scheduleResponse.body);
+  const schedule = readJson(scheduleResponse) as { id: string };
+
+  const storedCiphertext = (
+    db
+      .prepare("SELECT authSecretEnc FROM integrationConnections WHERE id = ?")
+      .get(connection.id) as { authSecretEnc: string }
+  ).authSecretEnc;
+  assert.ok(storedCiphertext);
+  assert.ok(!storedCiphertext.includes("backup-controller-secret"));
+
+  const exportResponse = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(exportResponse.statusCode, 200, exportResponse.body);
+  const snapshot = readJson(exportResponse) as {
+    data: {
+      integrationConnections: Array<{
+        id: string;
+        authSecretEnc: string;
+      }>;
+      integrationSyncSchedules: Array<{
+        id: string;
+        connectionId: string;
+        mode: string;
+      }>;
+    };
+  };
+  assert.equal(
+    snapshot.data.integrationConnections.find(
+      (entry) => entry.id === connection.id,
+    )?.authSecretEnc,
+    storedCiphertext,
+  );
+  const exportedSchedule = snapshot.data.integrationSyncSchedules.find(
+    (entry) => entry.id === schedule.id,
+  );
+  assert.equal(exportedSchedule?.connectionId, connection.id);
+  assert.equal(exportedSchedule?.mode, "skip");
+
+  db.prepare("DELETE FROM integrationConnections WHERE id = ?").run(
+    connection.id,
+  );
+  const restoreResponse = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: snapshot,
+  });
+  assert.equal(restoreResponse.statusCode, 200, restoreResponse.body);
+
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT authSecretEnc FROM integrationConnections WHERE id = ? AND labId = ?",
+        )
+        .get(connection.id, "lab_home") as { authSecretEnc: string }
+    ).authSecretEnc,
+    storedCiphertext,
+  );
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT connectionId, mode FROM integrationSyncSchedules WHERE id = ?",
+      )
+      .get(schedule.id),
+    { connectionId: connection.id, mode: "skip" },
+  );
+});
+
+test("backup restore preserves scoped user lab grants and authorization", async () => {
+  const adminToken = await bootstrapAdmin();
+  const secondLabRes = await app.inject({
+    method: "POST",
+    url: "/api/labs",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { id: "lab_restore_other", name: "Restore Other Lab" },
+  });
+  assert.equal(secondLabRes.statusCode, 201);
+
+  const userRes = await app.inject({
+    method: "POST",
+    url: "/api/users",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      username: "restore-scoped",
+      displayName: "Restore Scoped",
+      password: "restore-scoped-password",
+      role: "editor",
+      labAccess: [{ labId: "lab_home", role: "editor" }],
+    },
+  });
+  assert.equal(userRes.statusCode, 201);
+  const user = readJson(userRes) as { id: string };
+
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(exportRes.statusCode, 200);
+  const snapshot = readJson(exportRes) as {
+    data: {
+      users: Array<{ id: string; role: string }>;
+      userLabAccess: Array<{ userId: string; labId: string; role: string }>;
+    };
+  };
+  assert.deepEqual(snapshot.data.userLabAccess, [
+    { userId: user.id, labId: "lab_home", role: "editor" },
+  ]);
+
+  db.prepare("DELETE FROM userLabAccess WHERE userId = ?").run(user.id);
+  const restoreRes = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: snapshot,
+  });
+  assert.equal(restoreRes.statusCode, 200, restoreRes.body);
+
+  const restoredGrant = db
+    .prepare(
+      "SELECT userId, labId, role FROM userLabAccess WHERE userId = ? AND labId = ?",
+    )
+    .get(user.id, "lab_home");
+  assert.deepEqual(restoredGrant, {
+    userId: user.id,
+    labId: "lab_home",
+    role: "editor",
+  });
+
+  const loginRes = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: {
+      username: "restore-scoped",
+      password: "restore-scoped-password",
+    },
+  });
+  assert.equal(loginRes.statusCode, 200);
+  const scopedToken = (readJson(loginRes) as { token: string }).token;
+
+  const allowedRes = await app.inject({
+    method: "GET",
+    url: "/api/racks?labId=lab_home",
+    headers: { authorization: `Bearer ${scopedToken}` },
+  });
+  assert.equal(allowedRes.statusCode, 200);
+  const deniedRes = await app.inject({
+    method: "GET",
+    url: "/api/racks?labId=lab_restore_other",
+    headers: { authorization: `Bearer ${scopedToken}` },
+  });
+  assert.equal(deniedRes.statusCode, 403);
+
+  const adminLoginRes = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: { username: "admin", password: "super-secret-1" },
+  });
+  assert.equal(adminLoginRes.statusCode, 200);
+  const restoredAdminToken = (readJson(adminLoginRes) as { token: string })
+    .token;
+
+  const invalidSnapshots = [
+    (() => {
+      const next = structuredClone(snapshot);
+      next.data.users.find((entry) => entry.id === user.id)!.role = "owner";
+      return next;
+    })(),
+    (() => {
+      const next = structuredClone(snapshot);
+      next.data.userLabAccess[0].role = "admin";
+      return next;
+    })(),
+    (() => {
+      const next = structuredClone(snapshot);
+      next.data.userLabAccess[0].userId = "missing_restore_user";
+      return next;
+    })(),
+    (() => {
+      const next = structuredClone(snapshot);
+      next.data.userLabAccess[0].labId = "missing_restore_lab";
+      return next;
+    })(),
+    (() => {
+      const next = structuredClone(snapshot);
+      next.data.userLabAccess.push({ ...next.data.userLabAccess[0] });
+      return next;
+    })(),
+  ];
+
+  for (const invalidSnapshot of invalidSnapshots) {
+    const rejectedRestoreRes = await app.inject({
+      method: "POST",
+      url: "/api/admin/restore",
+      headers: { authorization: `Bearer ${restoredAdminToken}` },
+      payload: invalidSnapshot,
+    });
+    assert.equal(rejectedRestoreRes.statusCode, 422, rejectedRestoreRes.body);
+  }
+
+  const sessionSurvivedRes = await app.inject({
+    method: "GET",
+    url: "/api/racks?labId=lab_home",
+    headers: { authorization: `Bearer ${scopedToken}` },
+  });
+  assert.equal(sessionSurvivedRes.statusCode, 200);
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT userId, labId, role FROM userLabAccess WHERE userId = ? AND labId = ?",
+      )
+      .get(user.id, "lab_home"),
+    { userId: user.id, labId: "lab_home", role: "editor" },
+  );
+});
+
+test("admin restore rejects snapshots from a newer schema without changing data", async () => {
+  const adminToken = await bootstrapAdmin();
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(exportRes.statusCode, 200);
+  const snapshot = readJson(exportRes) as Record<string, unknown> & {
+    schemaVersion: number;
+  };
+  snapshot.schemaVersion = CURRENT_SCHEMA_VERSION + 1;
+
+  const sentinelRes = await app.inject({
+    method: "POST",
+    url: "/api/racks",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { labId: "lab_home", name: "Newer schema sentinel", totalU: 42 },
+  });
+  assert.equal(sentinelRes.statusCode, 201);
+
+  const restoreRes = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: snapshot,
+  });
+  assert.equal(restoreRes.statusCode, 400);
+  assert.match(restoreRes.body, /newer than this Rackpad version supports/i);
+  assert.ok(
+    db
+      .prepare("SELECT id FROM racks WHERE name = ?")
+      .get("Newer schema sentinel"),
+  );
+});
+
+test("native backups are admin-scoped, configured explicitly, retained, and path-safe", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "native-backup-viewer",
+    displayName: "Native Backup Viewer",
+    password: "native-backup-viewer-1",
+    role: "viewer",
+  });
+  const guardedRequests = [
+    { method: "GET" as const, url: "/api/admin/native-backups" },
+    {
+      method: "PUT" as const,
+      url: "/api/admin/native-backups/settings",
+      payload: { enabled: false, intervalHours: 24, retentionCount: 7 },
+    },
+    { method: "POST" as const, url: "/api/admin/native-backups" },
+    {
+      method: "GET" as const,
+      url: "/api/admin/native-backups/rackpad-native-2026-01-01T00-00-00-000Z.db/download",
+    },
+    {
+      method: "DELETE" as const,
+      url: "/api/admin/native-backups/rackpad-native-2026-01-01T00-00-00-000Z.db",
+    },
+  ];
+  for (const request of guardedRequests) {
+    const unauthenticated = await app.inject(request);
+    assert.equal(unauthenticated.statusCode, 401);
+    const forbidden = await app.inject({
+      ...request,
+      headers: { authorization: `Bearer ${viewerToken}` },
+    });
+    assert.equal(forbidden.statusCode, 403);
+  }
+  delete process.env.RACKPAD_NATIVE_BACKUP_DIR;
+  const unavailable = await app.inject({
+    method: "POST",
+    url: "/api/admin/native-backups",
+    headers,
+  });
+  assert.equal(unavailable.statusCode, 409);
+  const unavailableSettings = await app.inject({
+    method: "PUT",
+    url: "/api/admin/native-backups/settings",
+    headers,
+    payload: { enabled: true, intervalHours: 12, retentionCount: 1 },
+  });
+  assert.equal(unavailableSettings.statusCode, 409);
+
+  const nativeDirectory = path.join(tempDir, `native-${Date.now()}`);
+  mkdirSync(nativeDirectory);
+  process.env.RACKPAD_NATIVE_BACKUP_DIR = nativeDirectory;
+  try {
+    const settings = await app.inject({
+      method: "PUT",
+      url: "/api/admin/native-backups/settings",
+      headers,
+      payload: { enabled: true, intervalHours: 12, retentionCount: 1 },
+    });
+    assert.equal(settings.statusCode, 200, settings.body);
+
+    const creationAttempts = await Promise.all([
+      app.inject({ method: "POST", url: "/api/admin/native-backups", headers }),
+      app.inject({ method: "POST", url: "/api/admin/native-backups", headers }),
+    ]);
+    assert.deepEqual(
+      creationAttempts.map((response) => response.statusCode).sort(),
+      [201, 409],
+    );
+    const created = creationAttempts.find(
+      (response) => response.statusCode === 201,
+    )!;
+    const backup = readJson(created) as { name: string; createdAt: string };
+    assert.match(backup.name, /^rackpad-native-.*\.db$/);
+    assert.equal(
+      statSync(path.join(nativeDirectory, backup.name)).mode & 0o777,
+      0o600,
+    );
+
+    const disabled = await app.inject({
+      method: "PUT",
+      url: "/api/admin/native-backups/settings",
+      headers,
+      payload: { enabled: false, intervalHours: 12, retentionCount: 1 },
+    });
+    assert.equal(disabled.statusCode, 200, disabled.body);
+    resetNativeBackupSchedulerStateForTests();
+    initializeNativeBackupScheduleBaseline();
+    assert.equal(
+      nativeBackupStatus().scheduler.lastSuccessAt,
+      backup.createdAt,
+      "restart status must discover the newest valid manual snapshot even when scheduling is disabled",
+    );
+    const reenabled = await app.inject({
+      method: "PUT",
+      url: "/api/admin/native-backups/settings",
+      headers,
+      payload: { enabled: true, intervalHours: 12, retentionCount: 1 },
+    });
+    assert.equal(reenabled.statusCode, 200, reenabled.body);
+
+    resetNativeBackupSchedulerStateForTests();
+    assert.equal(
+      await runNativeBackupScheduleTick(
+        Date.parse(backup.createdAt) + 60 * 60 * 1000,
+      ),
+      false,
+      "a restart must use the newest valid snapshot as the schedule baseline",
+    );
+    assert.equal(readdirSync(nativeDirectory).length, 1);
+
+    writeFileSync(path.join(nativeDirectory, backup.name), "corrupt after baseline");
+    assert.equal(
+      await runNativeBackupScheduleTick(
+        Date.parse(backup.createdAt) + 2 * 60 * 60 * 1000,
+      ),
+      false,
+      "the validated restart baseline must be cached between schedule ticks",
+    );
+    assert.deepEqual(readdirSync(nativeDirectory), [backup.name]);
+
+    const retained = await app.inject({
+      method: "POST",
+      url: "/api/admin/native-backups",
+      headers,
+    });
+    assert.equal(retained.statusCode, 201, retained.body);
+    const retainedBackup = readJson(retained) as { name: string };
+    assert.notEqual(retainedBackup.name, backup.name);
+    assert.deepEqual(readdirSync(nativeDirectory), [retainedBackup.name]);
+
+    const status = await app.inject({
+      method: "GET",
+      url: "/api/admin/native-backups",
+      headers,
+    });
+    assert.equal(status.statusCode, 200);
+    const statusBody = readJson(status) as {
+      configured: boolean;
+      backups: Array<{ name: string }>;
+      settings: { retentionCount: number };
+    };
+    assert.equal(statusBody.configured, true);
+    assert.equal(statusBody.settings.retentionCount, 1);
+    assert.deepEqual(
+      statusBody.backups.map((entry) => entry.name),
+      [retainedBackup.name],
+    );
+
+    const download = await app.inject({
+      method: "GET",
+      url: `/api/admin/native-backups/${retainedBackup.name}/download`,
+      headers,
+    });
+    assert.equal(download.statusCode, 200);
+    assert.equal(download.headers["content-type"], "application/vnd.sqlite3");
+
+    const invalid = await app.inject({
+      method: "DELETE",
+      url: "/api/admin/native-backups/not-a-backup.db",
+      headers,
+    });
+    assert.equal(invalid.statusCode, 400);
+    const removed = await app.inject({
+      method: "DELETE",
+      url: `/api/admin/native-backups/${retainedBackup.name}`,
+      headers,
+    });
+    assert.equal(removed.statusCode, 204);
+    assert.equal(readdirSync(nativeDirectory).length, 0);
+  } finally {
+    delete process.env.RACKPAD_NATIVE_BACKUP_DIR;
+    rmSync(nativeDirectory, { recursive: true, force: true });
+  }
 });
 
 test("admin restore reloads a backup snapshot and invalidates the previous session", async () => {
@@ -2346,6 +3270,50 @@ test("custom device types can be created and used by devices and templates", asy
   const template = readJson(templateRes) as { deviceTypes: string[] };
   assert.deepEqual(template.deviceTypes, ["ip_camera"]);
 
+  const usageRes = await app.inject({
+    method: "GET",
+    url: "/api/device-types/usage",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(usageRes.statusCode, 200, usageRes.body);
+  const usage = (
+    readJson(usageRes) as Array<{
+      id: string;
+      devices: number;
+      discoveredDevices: number;
+      portTemplates: number;
+      driveBayTemplates: number;
+      total: number;
+    }>
+  ).find((entry) => entry.id === deviceType.id);
+  assert.deepEqual(usage, {
+    id: deviceType.id,
+    devices: 1,
+    discoveredDevices: 0,
+    portTemplates: 1,
+    driveBayTemplates: 0,
+    total: 2,
+  });
+
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "device-types-viewer",
+    displayName: "Device Types Viewer",
+    password: "device-types-viewer-1",
+    role: "viewer",
+  });
+  const viewerUsage = await app.inject({
+    method: "GET",
+    url: "/api/device-types/usage",
+    headers: { authorization: `Bearer ${viewerToken}` },
+  });
+  assert.equal(viewerUsage.statusCode, 403);
+  const viewerList = await app.inject({
+    method: "GET",
+    url: "/api/device-types",
+    headers: { authorization: `Bearer ${viewerToken}` },
+  });
+  assert.equal(viewerList.statusCode, 200);
+
   const listRes = await app.inject({
     method: "GET",
     url: "/api/device-types",
@@ -2445,6 +3413,119 @@ test("custom device types can be created and used by devices and templates", asy
     },
   });
   assert.equal(deleteBuiltInTypeRes.statusCode, 400);
+});
+
+test("custom device types inherit built-in placement and validation behavior", async () => {
+  const adminToken = await bootstrapAdmin();
+  const definitions = [
+    ["custom_vm", "Custom VM", "vm"],
+    ["custom_container", "Custom container", "container"],
+    ["custom_ap", "Custom AP", "ap"],
+    ["custom_shelf", "Custom shelf", "rack_shelf"],
+    ["custom_patch", "Custom patch panel", "patch_panel"],
+  ] as const;
+
+  for (const [id, label, parentType] of definitions) {
+    const typeRes = await app.inject({
+      method: "POST",
+      url: "/api/device-types",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { id, label, parentType },
+    });
+    assert.equal(typeRes.statusCode, 201, typeRes.body);
+  }
+
+  const hostRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      hostname: "custom-workload-host",
+      deviceType: "server",
+      status: "online",
+    },
+  });
+  assert.equal(hostRes.statusCode, 201, hostRes.body);
+  const host = readJson(hostRes) as { id: string };
+
+  const expectedPlacements = [
+    ["custom_vm", "virtual"],
+    ["custom_container", "virtual"],
+    ["custom_ap", "wireless"],
+    ["custom_shelf", "rack"],
+    ["custom_patch", "room"],
+  ] as const;
+  const created = new Map<string, { id: string; placement: string }>();
+
+  for (const [deviceType, expectedPlacement] of expectedPlacements) {
+    const deviceRes = await app.inject({
+      method: "POST",
+      url: "/api/devices",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        labId: "lab_home",
+        hostname: `${deviceType}-01`,
+        deviceType,
+        status: "unknown",
+        parentDeviceId:
+          deviceType === "custom_vm" || deviceType === "custom_container"
+            ? host.id
+            : undefined,
+        networkMode: deviceType === "custom_vm" ? "host-shared" : undefined,
+      },
+    });
+    assert.equal(deviceRes.statusCode, 201, deviceRes.body);
+    const device = readJson(deviceRes) as {
+      id: string;
+      placement: string;
+      networkMode: string;
+    };
+    assert.equal(device.placement, expectedPlacement);
+    if (deviceType === "custom_vm") {
+      assert.equal(device.networkMode, "host-shared");
+    }
+    created.set(deviceType, device);
+  }
+
+  assert.equal(
+    inferDiscoveryPlacement({
+      labId: "lab_home",
+      ipAddress: "192.0.2.20",
+      deviceType: "custom_ap",
+    }),
+    "wireless",
+  );
+  assert.equal(
+    inferDiscoveryPlacement({
+      labId: "lab_home",
+      ipAddress: "192.0.2.21",
+      deviceType: "custom_container",
+    }),
+    "virtual",
+  );
+
+  const customAp = created.get("custom_ap");
+  assert.ok(customAp);
+  const saveApRes = await app.inject({
+    method: "PUT",
+    url: `/api/wifi/access-points/${customAp.id}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: { location: "Custom AP room" },
+  });
+  assert.equal(saveApRes.statusCode, 200, saveApRes.body);
+
+  const listApRes = await app.inject({
+    method: "GET",
+    url: "/api/wifi/access-points?labId=lab_home",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(listApRes.statusCode, 200, listApRes.body);
+  const accessPoints = readJson(listApRes) as Array<{ deviceId: string }>;
+  assert.equal(
+    accessPoints.some((entry) => entry.deviceId === customAp.id),
+    true,
+  );
 });
 
 test("bulk device updates accept custom types and wireless placement", async () => {
@@ -5462,6 +6543,103 @@ test("snmp inventory sync preview and merge apply require feature flag and admin
   );
 });
 
+test("SNMP sync schedules are admin-managed, lab-readable, backed up, and operationally reported", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers,
+    payload: {
+      labId: "lab_home",
+      hostname: "scheduled-firewall",
+      deviceType: "firewall",
+      managementIp: "192.0.2.50",
+      status: "unknown",
+    },
+  });
+  const device = readJson(deviceRes) as { id: string };
+  const profiles = await app.inject({
+    method: "GET",
+    url: "/api/snmp-sync/profiles",
+    headers,
+  });
+  assert.ok(
+    (readJson(profiles) as Array<{ id: string }>).some(
+      (entry) => entry.id === "pfsense-opnsense",
+    ),
+  );
+  const created = await app.inject({
+    method: "POST",
+    url: "/api/snmp-sync/schedules",
+    headers,
+    payload: {
+      deviceId: device.id,
+      profileId: "pfsense-opnsense",
+      policy: "merge",
+      intervalMs: 3_600_000,
+      enabled: true,
+    },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  const schedule = readJson(created) as { id: string };
+
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "sync-viewer",
+    displayName: "Sync Viewer",
+    password: "sync-viewer-password",
+    role: "viewer",
+  });
+  const viewerHeaders = { authorization: `Bearer ${viewerToken}` };
+  const readable = await app.inject({
+    method: "GET",
+    url: "/api/snmp-sync/schedules",
+    headers: viewerHeaders,
+  });
+  assert.equal(readable.statusCode, 200);
+  assert.deepEqual(
+    (readJson(readable) as Array<{ id: string }>).map((entry) => entry.id),
+    [schedule.id],
+  );
+  const forbidden = await app.inject({
+    method: "POST",
+    url: "/api/snmp-sync/schedules",
+    headers: viewerHeaders,
+    payload: { deviceId: device.id, profileId: "standard-l2-l3" },
+  });
+  assert.equal(forbidden.statusCode, 403);
+
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers,
+  });
+  const snapshot = readJson(exportRes) as {
+    data: { snmpSyncSchedules: Array<{ id: string }> };
+  };
+  assert.deepEqual(
+    snapshot.data.snmpSyncSchedules.map((entry) => entry.id),
+    [schedule.id],
+  );
+  const status = await app.inject({
+    method: "GET",
+    url: "/api/admin/operations/status",
+    headers,
+  });
+  assert.equal(status.statusCode, 200);
+  assert.equal(
+    (readJson(status) as { snmpSync: { enabledSchedules: number } }).snmpSync
+      .enabledSchedules,
+    1,
+  );
+  const deniedStatus = await app.inject({
+    method: "GET",
+    url: "/api/admin/operations/status",
+    headers: viewerHeaders,
+  });
+  assert.equal(deniedStatus.statusCode, 403);
+});
+
 test("ports can be updated and deleted with a custom MAC address", async () => {
   const adminToken = await bootstrapAdmin();
 
@@ -5547,6 +6725,106 @@ test("ports can be updated and deleted with a custom MAC address", async () => {
   assert.equal(listRes.statusCode, 200);
   const ports = readJson(listRes) as Array<{ id: string }>;
   assert.equal(ports.length, 0);
+});
+
+test("SFF and other port kinds validate and round-trip through API and backup restore", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers,
+    payload: {
+      labId: "lab_home",
+      hostname: "special-ports",
+      deviceType: "other",
+      status: "online",
+    },
+  });
+  const device = readJson(deviceRes) as { id: string };
+  for (const [name, kind] of [
+    ["SFF-8644", "sff"],
+    ["Vendor connector", "other"],
+  ] as const) {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/ports",
+      headers,
+      payload: {
+        deviceId: device.id,
+        name,
+        kind,
+        linkState: "unknown",
+        mode: "access",
+        description:
+          kind === "other" ? "Vendor-specific service connector" : null,
+      },
+    });
+    assert.equal(response.statusCode, 201, response.body);
+    assert.equal((readJson(response) as { kind: string }).kind, kind);
+  }
+  const invalid = await app.inject({
+    method: "POST",
+    url: "/api/ports",
+    headers,
+    payload: {
+      deviceId: device.id,
+      name: "Invalid",
+      kind: "custom-kind",
+      linkState: "unknown",
+      mode: "access",
+    },
+  });
+  assert.equal(invalid.statusCode, 400);
+  const list = await app.inject({
+    method: "GET",
+    url: `/api/ports?deviceId=${device.id}`,
+    headers,
+  });
+  assert.deepEqual(
+    (readJson(list) as Array<{ kind: string }>)
+      .map((entry) => entry.kind)
+      .sort(),
+    ["other", "sff"],
+  );
+
+  const exportResponse = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers,
+  });
+  assert.equal(exportResponse.statusCode, 200, exportResponse.body);
+  const snapshot = readJson(exportResponse) as {
+    data: { ports: Array<{ kind: string; description: string | null }> };
+  };
+  assert.deepEqual(
+    snapshot.data.ports
+      .filter((port) => port.kind === "sff" || port.kind === "other")
+      .map((port) => [port.kind, port.description]),
+    [
+      ["sff", null],
+      ["other", "Vendor-specific service connector"],
+    ],
+  );
+  db.prepare("DELETE FROM ports WHERE deviceId = ?").run(device.id);
+  const restoreResponse = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers,
+    payload: snapshot,
+  });
+  assert.equal(restoreResponse.statusCode, 200, restoreResponse.body);
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT kind, description FROM ports WHERE deviceId = ? ORDER BY position, id",
+      )
+      .all(device.id),
+    [
+      { kind: "sff", description: null },
+      { kind: "other", description: "Vendor-specific service connector" },
+    ],
+  );
 });
 
 test("bulk cable updates are validated, deduplicated, permission-aware, and atomic", async () => {
@@ -8340,6 +9618,10 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
     DROP INDEX idx_docker_import_sources_enabled;
     DROP INDEX idx_docker_import_sources_lab_id;
 
+    DROP TABLE integrationSyncSchedules;
+    DROP TABLE integrationConnections;
+    DROP TABLE snmpSyncSchedules;
+
     CREATE TABLE dockerImportSourcesV31 (
       id TEXT PRIMARY KEY,
       labId TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
@@ -8396,8 +9678,305 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
   assert.equal(source.enabled, 1);
   assert.equal(tlsColumn?.dflt_value, "0");
   assert.equal(duplicateMacColumn?.dflt_value, "0");
-  assert.equal(version.version, 34);
+  assert.equal(version.version, CURRENT_SCHEMA_VERSION);
   migrated.close();
+});
+
+test("storage topology migration upgrades a version-34 database without changing storageGb", async () => {
+  const legacyPath = path.join(tempDir, "storage-source-v34.db");
+  const { default: Database } = await import("better-sqlite3");
+  const initializeDatabase = () =>
+    execFileSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        "await import('./server/db.ts')",
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          DATABASE_PATH: legacyPath,
+          NODE_ENV: "test",
+        },
+        stdio: "pipe",
+      },
+    );
+
+  initializeDatabase();
+  const legacy = new Database(legacyPath);
+  legacy.exec(`
+    INSERT INTO labs (id, name, description, location)
+    VALUES ('lab_storage_v34', 'Storage migration', NULL, NULL);
+
+    INSERT INTO devices (
+      id, labId, hostname, deviceType, status, storageGb
+    ) VALUES (
+      'device_storage_v34', 'lab_storage_v34', 'legacy-storage',
+      'server', 'online', 9876
+    );
+
+    DROP TABLE storagePoolDrives;
+    DROP TABLE storagePools;
+    DROP TABLE driveSlots;
+    DROP TABLE storageDrives;
+    DROP TABLE driveBayTemplates;
+    DROP TABLE integrationSyncSchedules;
+    DROP TABLE integrationConnections;
+    DROP TABLE snmpSyncSchedules;
+    ALTER TABLE dockerImportSources DROP COLUMN verifyTls;
+
+    UPDATE schemaVersion
+    SET version = 34, updatedAt = '2026-08-01T00:00:00.000Z'
+    WHERE id = 1;
+  `);
+  legacy.close();
+
+  initializeDatabase();
+  const migrated = new Database(legacyPath, { readonly: true });
+  const tableNames = (
+    migrated
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('driveBayTemplates', 'storageDrives', 'driveSlots', 'storagePools', 'storagePoolDrives')",
+      )
+      .all() as Array<{ name: string }>
+  ).map((row) => row.name);
+  assert.deepEqual(tableNames.sort(), [
+    "driveBayTemplates",
+    "driveSlots",
+    "storageDrives",
+    "storagePoolDrives",
+    "storagePools",
+  ]);
+  const indexNames = new Set(
+    (
+      migrated
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%storage%' OR type = 'index' AND name LIKE 'idx_drive_%'",
+        )
+        .all() as Array<{ name: string }>
+    ).map((row) => row.name),
+  );
+  for (const indexName of [
+    "idx_drive_bay_templates_name",
+    "idx_storage_drives_lab_id",
+    "idx_storage_drives_lab_serial",
+    "idx_drive_slots_device_id",
+    "idx_drive_slots_drive_id",
+    "idx_storage_pools_device_id",
+    "idx_storage_pool_drives_pool_id",
+  ]) {
+    assert.ok(indexNames.has(indexName), indexName);
+  }
+  for (const table of [
+    "driveBayTemplates",
+    "storageDrives",
+    "driveSlots",
+    "storagePools",
+    "storagePoolDrives",
+  ]) {
+    const row = migrated
+      .prepare(`SELECT COUNT(*) AS count FROM ${table}`)
+      .get() as { count: number };
+    assert.equal(row.count, 0, table);
+  }
+  const device = migrated
+    .prepare("SELECT storageGb FROM devices WHERE id = ?")
+    .get("device_storage_v34") as { storageGb: number };
+  const version = migrated
+    .prepare("SELECT version FROM schemaVersion WHERE id = 1")
+    .get() as { version: number };
+  assert.equal(device.storageGb, 9876);
+  assert.equal(version.version, CURRENT_SCHEMA_VERSION);
+  migrated.close();
+});
+
+test("integration migrations upgrade schema 35 and remap legacy mirror schedules", async () => {
+  const legacyPath = path.join(tempDir, "integration-source-v35.db");
+  const { default: Database } = await import("better-sqlite3");
+  const initializeDatabase = () =>
+    execFileSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        "await import('./server/db.ts')",
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          DATABASE_PATH: legacyPath,
+          NODE_ENV: "test",
+        },
+        stdio: "pipe",
+      },
+    );
+
+  initializeDatabase();
+  const legacy = new Database(legacyPath);
+  legacy.exec(`
+    DROP TABLE integrationSyncSchedules;
+    DROP TABLE integrationConnections;
+    DROP TABLE snmpSyncSchedules;
+    ALTER TABLE dockerImportSources DROP COLUMN verifyTls;
+    UPDATE schemaVersion
+    SET version = 35, updatedAt = '2026-08-01T00:00:00.000Z'
+    WHERE id = 1;
+  `);
+  legacy.close();
+
+  initializeDatabase();
+  const upgraded = new Database(legacyPath);
+  const upgradedVersion = upgraded
+    .prepare("SELECT version FROM schemaVersion WHERE id = 1")
+    .get() as { version: number };
+  assert.equal(upgradedVersion.version, CURRENT_SCHEMA_VERSION);
+  assert.ok(
+    upgraded
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'integrationConnections'",
+      )
+      .get(),
+  );
+  assert.ok(
+    upgraded
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'integrationSyncSchedules'",
+      )
+      .get(),
+  );
+  const dockerTlsColumn = (
+    upgraded.prepare("PRAGMA table_info(dockerImportSources)").all() as Array<{
+      name: string;
+      dflt_value: string | null;
+    }>
+  ).find((column) => column.name === "verifyTls");
+  assert.equal(dockerTlsColumn?.dflt_value, "1");
+
+  upgraded.exec(`
+    INSERT INTO labs (id, name, description, location)
+    VALUES ('lab_integration_v44', 'Integration migration', NULL, NULL);
+    INSERT INTO integrationConnections (
+      id, labId, provider, name, baseUrl, authKind, autoSyncMode,
+      createdAt, updatedAt
+    ) VALUES (
+      'intg_v44', 'lab_integration_v44', 'unifi', 'Legacy mirror',
+      'https://controller.example.internal', 'api-key', 'mirror',
+      '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z'
+    );
+    INSERT INTO integrationSyncSchedules (
+      id, connectionId, name, mode, cron, createdAt, updatedAt
+    ) VALUES (
+      'intsch_v44', 'intg_v44', 'Legacy mirror', 'mirror', '0 2 * * *',
+      '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z'
+    );
+    UPDATE schemaVersion
+    SET version = 44, updatedAt = '2026-08-01T00:00:00.000Z'
+    WHERE id = 1;
+  `);
+  upgraded.close();
+
+  initializeDatabase();
+  const remapped = new Database(legacyPath, { readonly: true });
+  assert.deepEqual(
+    remapped
+      .prepare(
+        "SELECT autoSyncMode FROM integrationConnections WHERE id = 'intg_v44'",
+      )
+      .get(),
+    { autoSyncMode: "skip" },
+  );
+  assert.deepEqual(
+    remapped
+      .prepare(
+        "SELECT mode FROM integrationSyncSchedules WHERE id = 'intsch_v44'",
+      )
+      .get(),
+    { mode: "skip" },
+  );
+  remapped.close();
+});
+
+test("docker import scopes duplicate hostnames to the selected host", async () => {
+  const adminToken = await bootstrapAdmin();
+  const hosts: Array<{ id: string }> = [];
+  for (const hostname of ["docker-host-01", "docker-host-02"]) {
+    const hostRes = await app.inject({
+      method: "POST",
+      url: "/api/devices",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        labId: "lab_home",
+        hostname,
+        deviceType: "server",
+        status: "online",
+      },
+    });
+    assert.equal(hostRes.statusCode, 201);
+    hosts.push(readJson(hostRes) as { id: string });
+  }
+
+  setDockerHttpJsonFetcherForTests(async (url) => {
+    const containerId = `container-${url.hostname}`;
+    return [
+      {
+        Id: containerId,
+        Names: ["/homepage"],
+        Image: "ghcr.io/gethomepage/homepage:latest",
+        State: "running",
+        Status: "Up 3 minutes",
+      },
+    ];
+  });
+
+  const importContainer = (endpoint: string, hostDeviceId: string) =>
+    app.inject({
+      method: "POST",
+      url: "/api/imports/docker/import",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        endpoint,
+        containerId: `container-${new URL(endpoint).hostname}`,
+        labId: "lab_home",
+        hostDeviceId,
+      },
+    });
+
+  try {
+    const firstImportRes = await importContainer(
+      "https://8.8.8.8:2375",
+      hosts[0]!.id,
+    );
+    assert.equal(firstImportRes.statusCode, 201);
+
+    const otherHostImportRes = await importContainer(
+      "https://1.1.1.1:2375",
+      hosts[1]!.id,
+    );
+    assert.equal(otherHostImportRes.statusCode, 201);
+    assert.equal(
+      (readJson(otherHostImportRes) as { parentDeviceId: string })
+        .parentDeviceId,
+      hosts[1]!.id,
+    );
+
+    const sameHostImportRes = await importContainer(
+      "https://9.9.9.9:2375",
+      hosts[1]!.id,
+    );
+    assert.equal(sameHostImportRes.statusCode, 409);
+    assert.deepEqual(readJson(sameHostImportRes), {
+      error: "Hostname homepage is already used on this host.",
+    });
+  } finally {
+    setDockerHttpJsonFetcherForTests(null);
+  }
 });
 
 test("docker import stores a sync source and refreshes container status", async () => {
@@ -9151,12 +10730,17 @@ function resetDatabase() {
     DELETE FROM portLinks;
     DELETE FROM ports;
     DELETE FROM virtualSwitches;
+    DELETE FROM storagePoolDrives;
+    DELETE FROM storagePools;
+    DELETE FROM driveSlots;
+    DELETE FROM storageDrives;
     DELETE FROM ipZones;
     DELETE FROM dhcpScopes;
     DELETE FROM subnets;
     DELETE FROM vlanRanges;
     DELETE FROM vlans;
     DELETE FROM portTemplates;
+    DELETE FROM driveBayTemplates;
     DELETE FROM devices;
     DELETE FROM racks;
     DELETE FROM rooms;
@@ -9186,22 +10770,8 @@ function readJson(response: { body: string }) {
 }
 
 function makeDiscoveryScanResult(
-  overrides: Partial<{
-    chunkCount: number;
-    scannedHostCount: number;
-    discoveredCount: number;
-    macAddressCount: number;
-    vendorCount: number;
-    technicalCount: number;
-    diagnostics: Array<{
-      code: string;
-      severity: "info" | "warning";
-      message: string;
-      detail?: string;
-    }>;
-    rows: unknown[];
-  }> = {},
-) {
+  overrides: Partial<DiscoveryScanResult> = {},
+): DiscoveryScanResult {
   return {
     chunkCount: 1,
     scannedHostCount: 2,

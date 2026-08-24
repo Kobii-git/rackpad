@@ -1,5 +1,8 @@
 # Rackpad 1.5 Beta Issue And Comment Map
 
+> **Historical document:** this point-in-time issue triage is retained for release
+> history only. Use current GitHub issues and repository source for active scope.
+
 This tracks the GitHub issues and follow-up comments reviewed for the 1.5 beta
 branch. It records what was requested, what Rackpad currently does to address
 it, and what remains open.

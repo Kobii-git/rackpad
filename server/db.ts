@@ -2,13 +2,14 @@ import Database from "better-sqlite3";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createId } from "./lib/ids.js";
+import { CURRENT_SCHEMA_VERSION } from "./schema-version.js";
+
+export { CURRENT_SCHEMA_VERSION } from "./schema-version.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const DB_PATH =
+export const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-const CURRENT_SCHEMA_VERSION = 34;
-
 export const db = new Database(DB_PATH);
 
 db.pragma("journal_mode = WAL");
@@ -946,6 +947,250 @@ const SCHEMA_MIGRATIONS = [
     version: 34,
     sql: `
       ALTER TABLE devices ADD COLUMN ignoreDuplicateMac INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
+  {
+    version: 35,
+    sql: `
+      CREATE TABLE IF NOT EXISTS driveBayTemplates (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        description TEXT NOT NULL,
+        deviceTypes TEXT NOT NULL,
+        sections    TEXT NOT NULL,
+        createdAt   TEXT NOT NULL,
+        updatedAt   TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_drive_bay_templates_name
+        ON driveBayTemplates (name COLLATE NOCASE);
+
+      CREATE TABLE IF NOT EXISTS storageDrives (
+        id           TEXT PRIMARY KEY,
+        labId        TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        manufacturer TEXT,
+        model        TEXT,
+        serial       TEXT,
+        capacityGb   REAL NOT NULL,
+        interface    TEXT NOT NULL,
+        formFactor   TEXT NOT NULL,
+        notes        TEXT,
+        createdAt    TEXT NOT NULL,
+        updatedAt    TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_storage_drives_lab_id
+        ON storageDrives (labId);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_storage_drives_lab_serial
+        ON storageDrives (labId, serial COLLATE NOCASE)
+        WHERE serial IS NOT NULL AND TRIM(serial) != '';
+
+      CREATE TABLE IF NOT EXISTS driveSlots (
+        id           TEXT PRIMARY KEY,
+        deviceId     TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        name         TEXT NOT NULL,
+        sectionName  TEXT NOT NULL,
+        sectionOrder INTEGER NOT NULL DEFAULT 0,
+        position     INTEGER NOT NULL,
+        slotType     TEXT NOT NULL,
+        face         TEXT NOT NULL,
+        layout       TEXT NOT NULL,
+        columns      INTEGER,
+        driveId      TEXT REFERENCES storageDrives(id) ON DELETE SET NULL,
+        createdAt    TEXT NOT NULL,
+        updatedAt    TEXT NOT NULL,
+        UNIQUE(deviceId, sectionName, name)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_drive_slots_device_id
+        ON driveSlots (deviceId, sectionOrder, position);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_drive_slots_drive_id
+        ON driveSlots (driveId)
+        WHERE driveId IS NOT NULL;
+
+      CREATE TABLE IF NOT EXISTS storagePools (
+        id               TEXT PRIMARY KEY,
+        deviceId         TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        name             TEXT NOT NULL,
+        poolType         TEXT NOT NULL,
+        usableCapacityGb REAL NOT NULL,
+        status           TEXT NOT NULL,
+        notes            TEXT,
+        createdAt        TEXT NOT NULL,
+        updatedAt        TEXT NOT NULL,
+        UNIQUE(deviceId, name COLLATE NOCASE)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_storage_pools_device_id
+        ON storagePools (deviceId);
+
+      CREATE TABLE IF NOT EXISTS storagePoolDrives (
+        poolId    TEXT NOT NULL REFERENCES storagePools(id) ON DELETE CASCADE,
+        driveId   TEXT NOT NULL UNIQUE REFERENCES storageDrives(id) ON DELETE RESTRICT,
+        createdAt TEXT NOT NULL,
+        PRIMARY KEY (poolId, driveId)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_storage_pool_drives_pool_id
+        ON storagePoolDrives (poolId);
+    `,
+  },
+  {
+    version: 36,
+    sql: `
+      CREATE TABLE IF NOT EXISTS snmpSyncSchedules (
+        id          TEXT PRIMARY KEY,
+        labId       TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        deviceId    TEXT NOT NULL UNIQUE REFERENCES devices(id) ON DELETE CASCADE,
+        profileId   TEXT NOT NULL,
+        policy      TEXT NOT NULL DEFAULT 'merge',
+        intervalMs  INTEGER NOT NULL DEFAULT 86400000,
+        enabled     INTEGER NOT NULL DEFAULT 0,
+        lastRunAt   TEXT,
+        lastResult  TEXT,
+        lastMessage TEXT,
+        createdAt   TEXT NOT NULL,
+        updatedAt   TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_snmp_sync_schedules_lab_due
+        ON snmpSyncSchedules (labId, enabled, lastRunAt);
+    `,
+  },
+  {
+    version: 37,
+    sql: `
+      CREATE TABLE IF NOT EXISTS integrationConnections (
+        id            TEXT PRIMARY KEY,
+        labId         TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+        provider      TEXT NOT NULL,
+        name          TEXT NOT NULL,
+        baseUrl       TEXT NOT NULL,
+        authKind      TEXT NOT NULL,
+        authId        TEXT,
+        authSecretEnc TEXT,
+        siteRef       TEXT,
+        verifyTls     INTEGER NOT NULL DEFAULT 1,
+        enabled       INTEGER NOT NULL DEFAULT 1,
+        syncVlans     INTEGER NOT NULL DEFAULT 1,
+        syncSubnets   INTEGER NOT NULL DEFAULT 1,
+        syncDhcp      INTEGER NOT NULL DEFAULT 1,
+        lastStatus    TEXT NOT NULL DEFAULT 'unknown',
+        lastCheckedAt TEXT,
+        lastError     TEXT,
+        lastSummary   TEXT,
+        createdAt     TEXT NOT NULL,
+        updatedAt     TEXT NOT NULL,
+        UNIQUE(labId, name COLLATE NOCASE)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_integration_connections_lab_provider
+        ON integrationConnections (labId, provider);
+    `,
+  },
+  {
+    version: 38,
+    sql: `
+      ALTER TABLE dockerImportSources ADD COLUMN verifyTls INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
+  {
+    version: 39,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncEnabled INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncMode TEXT NOT NULL DEFAULT 'merge';
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncCron TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncLabIds TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncFailureCount INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE integrationConnections ADD COLUMN autoSyncPausedUntil TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN lastAutoSyncAt TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN lastAutoSyncStatus TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN lastAutoSyncMessage TEXT;
+    `,
+  },
+  {
+    version: 40,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN scopeRefs TEXT;
+    `,
+  },
+  {
+    version: 41,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN syncDevices INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE integrationConnections ADD COLUMN syncWifi INTEGER NOT NULL DEFAULT 1;
+
+      CREATE TABLE IF NOT EXISTS integrationSyncSchedules (
+        id             TEXT PRIMARY KEY,
+        connectionId   TEXT NOT NULL REFERENCES integrationConnections(id) ON DELETE CASCADE,
+        name           TEXT NOT NULL,
+        enabled        INTEGER NOT NULL DEFAULT 1,
+        mode           TEXT NOT NULL DEFAULT 'merge',
+        cron           TEXT NOT NULL,
+        labIds         TEXT,
+        failureCount   INTEGER NOT NULL DEFAULT 0,
+        pausedUntil    TEXT,
+        lastRunAt      TEXT,
+        lastRunStatus  TEXT,
+        lastRunMessage TEXT,
+        createdAt      TEXT NOT NULL,
+        updatedAt      TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_integration_sync_schedules_connection
+        ON integrationSyncSchedules (connectionId, enabled);
+
+      INSERT INTO integrationSyncSchedules (
+        id, connectionId, name, enabled, mode, cron, labIds,
+        failureCount, pausedUntil, lastRunAt, lastRunStatus, lastRunMessage,
+        createdAt, updatedAt
+      )
+      SELECT
+        'intsch_' || id, id, 'Default schedule', autoSyncEnabled, autoSyncMode,
+        autoSyncCron, autoSyncLabIds, autoSyncFailureCount, autoSyncPausedUntil,
+        lastAutoSyncAt, lastAutoSyncStatus, lastAutoSyncMessage,
+        createdAt, updatedAt
+      FROM integrationConnections
+      WHERE autoSyncCron IS NOT NULL;
+    `,
+  },
+  {
+    version: 42,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN syncSwitches INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE integrationConnections ADD COLUMN syncGateways INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE integrationConnections ADD COLUMN syncAccessPoints INTEGER NOT NULL DEFAULT 1;
+
+      UPDATE integrationConnections
+      SET syncSwitches = syncDevices,
+          syncGateways = syncDevices,
+          syncAccessPoints = syncDevices;
+    `,
+  },
+  {
+    version: 43,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN syncHosts INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE integrationConnections ADD COLUMN syncGuests INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
+  {
+    version: 44,
+    sql: `
+      -- Earlier development builds used "skip" for drift-only behavior and
+      -- "overwrite" for create/update without deletes. Preserve those
+      -- semantics under the final merge/skip names.
+      UPDATE integrationSyncSchedules SET mode = 'merge' WHERE mode = 'skip';
+      UPDATE integrationSyncSchedules SET mode = 'skip' WHERE mode = 'overwrite';
+    `,
+  },
+  {
+    version: 45,
+    sql: `
+      -- Mirror remains unavailable until controller provenance is durable.
+      UPDATE integrationSyncSchedules SET mode = 'skip' WHERE mode = 'mirror';
+      UPDATE integrationConnections SET autoSyncMode = 'skip' WHERE autoSyncMode = 'mirror';
     `,
   },
 ] as const;

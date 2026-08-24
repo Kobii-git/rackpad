@@ -47,6 +47,12 @@ export interface DeviceMonitor {
 
 let intervalHandle: NodeJS.Timeout | null = null
 
+export function monitoringOperationalStatus() {
+  const enabled = db.prepare("SELECT COUNT(*) AS count FROM deviceMonitors WHERE enabled = 1 AND type != 'none'").get() as { count: number }
+  const failing = db.prepare("SELECT COUNT(*) AS count FROM deviceMonitors WHERE enabled = 1 AND lastResult = 'offline'").get() as { count: number }
+  return { loopActive: intervalHandle != null, enabledTargets: enabled.count, failingTargets: failing.count }
+}
+
 export function parseMonitor(row: Record<string, unknown>): DeviceMonitor {
   return {
     id: String(row.id),
@@ -219,9 +225,9 @@ function refreshDeviceMonitorRollup(deviceId: string, currentStatus: string | un
     .filter((monitor) => monitor.lastResult === 'online' && monitor.lastCheckAt)
     .map((monitor) => String(monitor.lastCheckAt))
     .sort()
-    .at(-1) ?? checkedAt
+    .at(-1)
 
-  if (currentStatus === 'maintenance') {
+  if (currentStatus === 'maintenance' || currentStatus === 'unmanaged') {
     if (latestOnlineCheck) {
       db.prepare('UPDATE devices SET lastSeen = ? WHERE id = ?').run(latestOnlineCheck, deviceId)
     }

@@ -31,6 +31,7 @@ import type {
   Lab,
   LabAccessEntry,
   LabRole,
+  NativeBackupStatus,
   SupportedLanguage,
   UserRole,
 } from "@/lib/types";
@@ -75,6 +76,12 @@ function roleChipLabel(role: UserRole, t: ReturnType<typeof useI18n>["t"]) {
   if (role === "admin") return t("Administrator");
   if (role === "editor") return t("Editor");
   return t("Viewer");
+}
+
+function formatBackupSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function defaultLabRoles(
@@ -166,6 +173,88 @@ export default function UsersPage() {
     useState<AdminIntegrityReport | null>(null);
   const [integrityLoading, setIntegrityLoading] = useState(false);
   const [integrityError, setIntegrityError] = useState("");
+  const [nativeBackups, setNativeBackups] = useState<NativeBackupStatus | null>(
+    null,
+  );
+  const [nativeBackupBusy, setNativeBackupBusy] = useState(false);
+  const [nativeBackupError, setNativeBackupError] = useState("");
+
+  async function refreshNativeBackups() {
+    try {
+      setNativeBackups(await api.getNativeBackups());
+      setNativeBackupError("");
+    } catch (err) {
+      setNativeBackupError(
+        err instanceof Error ? err.message : "Native backup status failed.",
+      );
+    }
+  }
+
+  useEffect(() => {
+    if (isAdmin(currentUser)) void refreshNativeBackups();
+  }, [currentUser]);
+
+  async function saveNativeBackups() {
+    if (!nativeBackups) return;
+    setNativeBackupBusy(true);
+    try {
+      await api.updateNativeBackupSettings(nativeBackups.settings);
+      await refreshNativeBackups();
+    } catch (err) {
+      setNativeBackupError(
+        err instanceof Error ? err.message : "Native backup settings failed.",
+      );
+    } finally {
+      setNativeBackupBusy(false);
+    }
+  }
+
+  async function createNativeSnapshot() {
+    setNativeBackupBusy(true);
+    try {
+      await api.createNativeBackup();
+      await refreshNativeBackups();
+    } catch (err) {
+      setNativeBackupError(
+        err instanceof Error ? err.message : "Native backup failed.",
+      );
+    } finally {
+      setNativeBackupBusy(false);
+    }
+  }
+
+  async function downloadNativeSnapshot(name: string) {
+    setNativeBackupError("");
+    try {
+      const { blob, filename } = await api.downloadNativeBackup(name);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename ?? name;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setNativeBackupError(
+        err instanceof Error ? err.message : "Native backup download failed.",
+      );
+    }
+  }
+
+  async function deleteNativeSnapshot(name: string) {
+    if (!window.confirm(t("Delete"))) return;
+    setNativeBackupBusy(true);
+    setNativeBackupError("");
+    try {
+      await api.deleteNativeBackup(name);
+      await refreshNativeBackups();
+    } catch (err) {
+      setNativeBackupError(
+        err instanceof Error ? err.message : "Native backup deletion failed.",
+      );
+    } finally {
+      setNativeBackupBusy(false);
+    }
+  }
 
   useEffect(() => {
     setDefaultLanguage(uiSettings.defaultLanguage);
@@ -1050,6 +1139,17 @@ export default function UsersPage() {
                       "Backups include password hashes for local users, so keep the file somewhere private.",
                     )}
                   </div>
+                  <div className="mt-3 flex justify-end">
+                    <Button
+                      className="shrink-0"
+                      size="sm"
+                      onClick={() => void handleExport()}
+                      disabled={exporting}
+                    >
+                      <Download className="size-3.5" />
+                      {exporting ? t("Preparing...") : t("Download backup")}
+                    </Button>
+                  </div>
                 </div>
 
                 {exportError && (
@@ -1113,21 +1213,212 @@ export default function UsersPage() {
                   </div>
                 )}
 
-                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-                  <div className="min-w-0 text-xs text-[var(--color-fg-subtle)]">
-                    {t(
-                      "Use this before Docker updates or test-database resets so you have a clean checkpoint.",
-                    )}
-                  </div>
-                  <Button
-                    className="shrink-0 self-end"
-                    size="sm"
-                    onClick={() => void handleExport()}
-                    disabled={exporting}
+                {nativeBackups && (
+                  <div
+                    className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] p-4"
+                    data-testid="native-backup-panel"
                   >
-                    <Download className="size-3.5" />
-                    {exporting ? t("Preparing...") : t("Download backup")}
-                  </Button>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]">
+                          {t("Operations")}
+                        </div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {t("Backup and release state")}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {nativeBackups.scheduler.running && (
+                          <Badge tone="info">{t("Running...")}</Badge>
+                        )}
+                        <Badge
+                          tone={nativeBackups.configured ? "ok" : "neutral"}
+                        >
+                          {nativeBackups.configured
+                            ? t("Configured")
+                            : t("Disabled")}
+                        </Badge>
+                      </div>
+                    </div>
+                    {nativeBackups.configurationError && (
+                      <div className="mt-3 rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10 px-3 py-2 text-xs text-[var(--color-warn)]">
+                        {nativeBackups.configurationError}
+                      </div>
+                    )}
+                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={nativeBackups.settings.enabled}
+                          disabled={!nativeBackups.configured}
+                          onChange={(event) =>
+                            setNativeBackups({
+                              ...nativeBackups,
+                              settings: {
+                                ...nativeBackups.settings,
+                                enabled: event.target.checked,
+                              },
+                            })
+                          }
+                        />
+                        {t("Enabled")}
+                      </label>
+                      <Field label={t("Interval")}>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={nativeBackups.settings.intervalHours}
+                          disabled={!nativeBackups.configured}
+                          onChange={(event) =>
+                            setNativeBackups({
+                              ...nativeBackups,
+                              settings: {
+                                ...nativeBackups.settings,
+                                intervalHours: Number(event.target.value),
+                              },
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label={t("Slot count")}>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={nativeBackups.settings.retentionCount}
+                          disabled={!nativeBackups.configured}
+                          onChange={(event) =>
+                            setNativeBackups({
+                              ...nativeBackups,
+                              settings: {
+                                ...nativeBackups.settings,
+                                retentionCount: Number(event.target.value),
+                              },
+                            })
+                          }
+                        />
+                      </Field>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={
+                          !nativeBackups.configured ||
+                          nativeBackupBusy ||
+                          nativeBackups.scheduler.running
+                        }
+                        onClick={() => void saveNativeBackups()}
+                      >
+                        <Save className="size-3.5" />
+                        {t("Save changes")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={
+                          !nativeBackups.configured ||
+                          nativeBackupBusy ||
+                          nativeBackups.scheduler.running
+                        }
+                        onClick={() => void createNativeSnapshot()}
+                      >
+                        {nativeBackupBusy || nativeBackups.scheduler.running
+                          ? t("Running...")
+                          : t("Create")}
+                      </Button>
+                    </div>
+                    <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                      <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] p-2">
+                        <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-fg-subtle)]">
+                          {t("Last run")}
+                        </div>
+                        <div className="mt-1">
+                          {nativeBackups.scheduler.lastSuccessAt
+                            ? new Date(
+                                nativeBackups.scheduler.lastSuccessAt,
+                              ).toLocaleString()
+                            : "—"}
+                        </div>
+                      </div>
+                      <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] p-2">
+                        <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-fg-subtle)]">
+                          {t("Last result")}
+                        </div>
+                        <div className="mt-1 break-words">
+                          {nativeBackups.scheduler.lastError ??
+                            (nativeBackups.scheduler.lastSuccessAt &&
+                            (!nativeBackups.scheduler.lastFailureAt ||
+                              Date.parse(
+                                nativeBackups.scheduler.lastSuccessAt,
+                              ) >=
+                                Date.parse(
+                                  nativeBackups.scheduler.lastFailureAt,
+                                ))
+                              ? t("Success")
+                              : nativeBackups.scheduler.lastFailureAt
+                                ? new Date(
+                                    nativeBackups.scheduler.lastFailureAt,
+                                  ).toLocaleString()
+                                : "—")}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {nativeBackups.backups.map((backup) => (
+                        <div
+                          key={backup.name}
+                          className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--color-line)] pt-2 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <div className="break-all font-mono">
+                              {backup.name}
+                            </div>
+                            <div className="mt-0.5 text-[var(--color-fg-subtle)]">
+                              {formatBackupSize(backup.size)} ·{" "}
+                              {new Date(backup.createdAt).toLocaleString()}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={nativeBackupBusy}
+                              onClick={() =>
+                                void downloadNativeSnapshot(backup.name)
+                              }
+                            >
+                              <Download />
+                              {t("Download SQLite backup")}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={
+                                nativeBackupBusy ||
+                                nativeBackups.scheduler.running
+                              }
+                              onClick={() =>
+                                void deleteNativeSnapshot(backup.name)
+                              }
+                            >
+                              {t("Delete")}
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {nativeBackupError && (
+                  <div className="text-sm text-[var(--color-err)]">
+                    {nativeBackupError}
+                  </div>
+                )}
+
+                <div className="text-xs text-[var(--color-fg-subtle)]">
+                  {t(
+                    "Use this before Docker updates or test-database resets so you have a clean checkpoint.",
+                  )}
                 </div>
               </CardBody>
             </Card>

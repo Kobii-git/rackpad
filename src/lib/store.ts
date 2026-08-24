@@ -6,7 +6,11 @@ import type {
   NetworkCreateResult,
   PortAggregateInput,
   PortAggregatePatch,
+  DriveBayTemplatePatch,
+  DriveSlotPatch,
   PortLinkBulkPatch,
+  StorageDrivePatch,
+  StoragePoolPatch,
   VlanPatch,
 } from "./api";
 import type {
@@ -17,6 +21,8 @@ import type {
   DeviceService,
   DeviceTypeDefinition,
   DeviceMonitor,
+  DriveBayTemplate,
+  DriveSlot,
   DiscoveredDevice,
   DiscoveryScanJob,
   DiscoveryScanResult,
@@ -38,6 +44,8 @@ import type {
   ReferenceImage,
   Room,
   Subnet,
+  StorageDrive,
+  StoragePool,
   UiSettings,
   UserRole,
   Vlan,
@@ -132,6 +140,10 @@ interface State {
   users: AppUser[];
   deviceMonitors: DeviceMonitor[];
   portTemplates: PortTemplate[];
+  driveBayTemplates: DriveBayTemplate[];
+  driveSlots: DriveSlot[];
+  storageDrives: StorageDrive[];
+  storagePools: StoragePool[];
   discoveredDevices: DiscoveredDevice[];
   discoveryScanSchedules: DiscoveryScanSchedule[];
   wifiControllers: WifiController[];
@@ -164,6 +176,10 @@ const EMPTY_DATA = {
   users: [] as AppUser[],
   deviceMonitors: [] as DeviceMonitor[],
   portTemplates: [] as PortTemplate[],
+  driveBayTemplates: [] as DriveBayTemplate[],
+  driveSlots: [] as DriveSlot[],
+  storageDrives: [] as StorageDrive[],
+  storagePools: [] as StoragePool[],
   discoveredDevices: [] as DiscoveredDevice[],
   discoveryScanSchedules: [] as DiscoveryScanSchedule[],
   wifiControllers: [] as WifiController[],
@@ -406,6 +422,49 @@ function sortPortTemplates(templates: PortTemplate[]) {
   });
 }
 
+function sortDriveBayTemplates(templates: DriveBayTemplate[]) {
+  return [...templates].sort((a, b) => {
+    if (Boolean(a.builtIn) !== Boolean(b.builtIn)) {
+      return a.builtIn ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+  });
+}
+
+function sortDriveSlots(slots: DriveSlot[]) {
+  return [...slots].sort(
+    (a, b) =>
+      a.deviceId.localeCompare(b.deviceId) ||
+      a.sectionOrder - b.sectionOrder ||
+      a.position - b.position ||
+      a.id.localeCompare(b.id),
+  );
+}
+
+function sortStorageDrives(drives: StorageDrive[]) {
+  return [...drives].sort(
+    (a, b) =>
+      (a.manufacturer ?? "").localeCompare(b.manufacturer ?? "") ||
+      (a.model ?? "").localeCompare(b.model ?? "") ||
+      (a.serial ?? "").localeCompare(b.serial ?? "") ||
+      a.id.localeCompare(b.id),
+  );
+}
+
+function sortStoragePools(pools: StoragePool[], devices = state.devices) {
+  const hostnames = new Map(
+    devices.map((device) => [device.id, device.hostname]),
+  );
+  return [...pools].sort(
+    (a, b) =>
+      (hostnames.get(a.deviceId) ?? a.deviceId).localeCompare(
+        hostnames.get(b.deviceId) ?? b.deviceId,
+      ) ||
+      a.name.localeCompare(b.name) ||
+      a.id.localeCompare(b.id),
+  );
+}
+
 function sortDiscoveredDevices(devices: DiscoveredDevice[]) {
   return [...devices].sort((a, b) => {
     const byStatus = a.status.localeCompare(b.status);
@@ -524,6 +583,9 @@ function filterAuditForLab(
     wifiAccessPointIds: Set<string>;
     wifiRadioIds: Set<string>;
     wifiClientAssociationIds: Set<string>;
+    driveSlotIds: Set<string>;
+    storageDriveIds: Set<string>;
+    storagePoolIds: Set<string>;
   },
 ) {
   return sortAudit(
@@ -579,6 +641,12 @@ function filterAuditForLab(
           return context.wifiRadioIds.has(entry.entityId);
         case "WifiClientAssociation":
           return context.wifiClientAssociationIds.has(entry.entityId);
+        case "DriveSlot":
+          return context.driveSlotIds.has(entry.entityId);
+        case "StorageDrive":
+          return context.storageDriveIds.has(entry.entityId);
+        case "StoragePool":
+          return context.storagePoolIds.has(entry.entityId);
         default:
           return false;
       }
@@ -1122,6 +1190,10 @@ export async function loadAll(
         auditLog: api.getAuditLog({ limit: 500 }),
         deviceMonitors: api.getDeviceMonitors(),
         portTemplates: api.getPortTemplates(),
+        driveBayTemplates: api.getDriveBayTemplates(),
+        driveSlots: api.getDriveSlots(),
+        storageDrives: api.getStorageDrives(),
+        storagePools: api.getStoragePools(),
         discoveredDevices: api.getDiscoveredDevices(),
         discoveryScanSchedules: api.getDiscoveryScanSchedules(),
         documentationPages: api.getDocumentationPages(),
@@ -1253,6 +1325,10 @@ export async function loadAll(
       const allPortTemplates = sortPortTemplates(
         (resolved.get("portTemplates") as PortTemplate[] | undefined) ?? [],
       );
+      const allDriveBayTemplates = sortDriveBayTemplates(
+        (resolved.get("driveBayTemplates") as DriveBayTemplate[] | undefined) ??
+          [],
+      );
       const allDeviceTypes = sortDeviceTypes(
         mergeDeviceTypeDefinitions(
           (resolved.get("deviceTypes") as DeviceTypeDefinition[] | undefined) ??
@@ -1260,9 +1336,34 @@ export async function loadAll(
           {
             devices: allDevices,
             portTemplates: allPortTemplates,
+            driveBayTemplates: allDriveBayTemplates,
           },
         ),
       );
+
+      const allDriveSlots = sortDriveSlots(
+        ((resolved.get("driveSlots") as DriveSlot[] | undefined) ?? []).filter(
+          (slot) => deviceIds.has(slot.deviceId),
+        ),
+      );
+      const driveSlotIds = new Set(allDriveSlots.map((slot) => slot.id));
+
+      const allStorageDrives = sortStorageDrives(
+        (
+          (resolved.get("storageDrives") as StorageDrive[] | undefined) ?? []
+        ).filter((drive) => drive.labId === activeLab.id),
+      );
+      const storageDriveIds = new Set(
+        allStorageDrives.map((drive) => drive.id),
+      );
+
+      const allStoragePools = sortStoragePools(
+        (
+          (resolved.get("storagePools") as StoragePool[] | undefined) ?? []
+        ).filter((pool) => deviceIds.has(pool.deviceId)),
+        allDevices,
+      );
+      const storagePoolIds = new Set(allStoragePools.map((pool) => pool.id));
 
       const allDiscoveredDevices = sortDiscoveredDevices(
         (
@@ -1405,6 +1506,9 @@ export async function loadAll(
           wifiAccessPointIds,
           wifiRadioIds,
           wifiClientAssociationIds,
+          driveSlotIds,
+          storageDriveIds,
+          storagePoolIds,
         },
       );
 
@@ -1434,6 +1538,10 @@ export async function loadAll(
         auditLog: filteredAudit,
         deviceMonitors: allMonitors,
         portTemplates: allPortTemplates,
+        driveBayTemplates: allDriveBayTemplates,
+        driveSlots: allDriveSlots,
+        storageDrives: allStorageDrives,
+        storagePools: allStoragePools,
         discoveredDevices: allDiscoveredDevices,
         discoveryScanSchedules: allDiscoveryScanSchedules,
         documentationPages: allDocumentationPages,
@@ -2029,6 +2137,7 @@ export async function createPortTemplateRecord(
       mergeDeviceTypeDefinitions(prev.deviceTypes, {
         devices: prev.devices,
         portTemplates: [...prev.portTemplates, created],
+        driveBayTemplates: prev.driveBayTemplates,
       }),
     ),
   }));
@@ -2062,6 +2171,7 @@ export async function importNetboxDeviceType(input: {
         mergeDeviceTypeDefinitions(prev.deviceTypes, {
           devices: prev.devices,
           portTemplates: [...prev.portTemplates, result.template!],
+          driveBayTemplates: prev.driveBayTemplates,
         }),
       ),
     }));
@@ -2163,6 +2273,7 @@ export async function createDeviceTypeRecord(input: {
       mergeDeviceTypeDefinitions([...prev.deviceTypes, created], {
         devices: prev.devices,
         portTemplates: prev.portTemplates,
+        driveBayTemplates: prev.driveBayTemplates,
       }),
     ),
   }));
@@ -2185,6 +2296,7 @@ export async function updateDeviceTypeRecord(
         {
           devices: prev.devices,
           portTemplates: prev.portTemplates,
+          driveBayTemplates: prev.driveBayTemplates,
         },
       ),
     ),
@@ -2202,7 +2314,297 @@ export async function deleteDeviceTypeRecord(id: string): Promise<void> {
         {
           devices: prev.devices,
           portTemplates: prev.portTemplates,
+          driveBayTemplates: prev.driveBayTemplates,
         },
+      ),
+    ),
+  }));
+}
+
+export async function createDriveBayTemplateRecord(
+  input: Omit<DriveBayTemplate, "builtIn" | "id"> & { id?: string },
+): Promise<DriveBayTemplate> {
+  const created = await api.createDriveBayTemplate(input);
+  setState((prev) => ({
+    ...prev,
+    driveBayTemplates: sortDriveBayTemplates([
+      ...prev.driveBayTemplates,
+      created,
+    ]),
+    deviceTypes: sortDeviceTypes(
+      mergeDeviceTypeDefinitions(prev.deviceTypes, {
+        devices: prev.devices,
+        portTemplates: prev.portTemplates,
+        driveBayTemplates: [...prev.driveBayTemplates, created],
+      }),
+    ),
+  }));
+  return created;
+}
+
+export async function updateDriveBayTemplateRecord(
+  id: string,
+  changes: DriveBayTemplatePatch,
+): Promise<DriveBayTemplate> {
+  const updated = await api.updateDriveBayTemplate(id, changes);
+  setState((prev) => {
+    const templates = replaceById(
+      prev.driveBayTemplates,
+      updated,
+      sortDriveBayTemplates,
+    );
+    return {
+      ...prev,
+      driveBayTemplates: templates,
+      deviceTypes: sortDeviceTypes(
+        mergeDeviceTypeDefinitions(prev.deviceTypes, {
+          devices: prev.devices,
+          portTemplates: prev.portTemplates,
+          driveBayTemplates: templates,
+        }),
+      ),
+    };
+  });
+  return updated;
+}
+
+export async function deleteDriveBayTemplateRecord(id: string): Promise<void> {
+  await api.deleteDriveBayTemplate(id);
+  setState((prev) => ({
+    ...prev,
+    driveBayTemplates: removeById(prev.driveBayTemplates, id),
+  }));
+}
+
+export async function applyDriveBayTemplateRecord(
+  deviceId: string,
+  templateId: string,
+): Promise<DriveSlot[]> {
+  const slots = await api.applyDriveBayTemplate({ deviceId, templateId });
+  setState((prev) => ({
+    ...prev,
+    driveSlots: sortDriveSlots([
+      ...prev.driveSlots.filter((slot) => slot.deviceId !== deviceId),
+      ...slots,
+    ]),
+  }));
+  return slots;
+}
+
+export async function createDriveSlotRecord(
+  input: Omit<DriveSlot, "id" | "driveId" | "createdAt" | "updatedAt">,
+): Promise<DriveSlot> {
+  const created = await api.createDriveSlot(input);
+  setState((prev) => ({
+    ...prev,
+    driveSlots: sortDriveSlots([...prev.driveSlots, created]),
+  }));
+  return created;
+}
+
+export async function updateDriveSlotRecord(
+  id: string,
+  changes: DriveSlotPatch,
+): Promise<DriveSlot> {
+  const updated = await api.updateDriveSlot(id, changes);
+  setState((prev) => ({
+    ...prev,
+    driveSlots: replaceById(prev.driveSlots, updated, sortDriveSlots),
+    storageDrives: prev.storageDrives.map((drive) =>
+      drive.slotId === id
+        ? {
+            ...drive,
+            slotName: updated.name,
+            slotSectionName: updated.sectionName,
+          }
+        : drive,
+    ),
+  }));
+  return updated;
+}
+
+export async function deleteDriveSlotRecord(id: string): Promise<void> {
+  await api.deleteDriveSlot(id);
+  setState((prev) => ({
+    ...prev,
+    driveSlots: removeById(prev.driveSlots, id),
+  }));
+}
+
+function reconcileDriveSlotAssignment(slots: DriveSlot[], drive: StorageDrive) {
+  return sortDriveSlots(
+    slots.map((slot) => ({
+      ...slot,
+      driveId:
+        slot.id === drive.slotId
+          ? drive.id
+          : slot.driveId === drive.id
+            ? null
+            : slot.driveId,
+    })),
+  );
+}
+
+export async function createStorageDriveRecord(
+  input: Omit<
+    StorageDrive,
+    | "id"
+    | "labId"
+    | "createdAt"
+    | "updatedAt"
+    | "deviceId"
+    | "deviceHostname"
+    | "slotName"
+    | "slotSectionName"
+    | "poolId"
+    | "poolName"
+  >,
+): Promise<StorageDrive> {
+  const created = await api.createStorageDrive({
+    ...input,
+    labId: state.lab.id,
+  });
+  setState((prev) => ({
+    ...prev,
+    storageDrives: sortStorageDrives([...prev.storageDrives, created]),
+    driveSlots: reconcileDriveSlotAssignment(prev.driveSlots, created),
+  }));
+  return created;
+}
+
+export async function updateStorageDriveRecord(
+  id: string,
+  changes: StorageDrivePatch,
+): Promise<StorageDrive> {
+  const updated = await api.updateStorageDrive(id, changes);
+  setState((prev) => ({
+    ...prev,
+    storageDrives: replaceById(prev.storageDrives, updated, sortStorageDrives),
+    driveSlots: reconcileDriveSlotAssignment(prev.driveSlots, updated),
+  }));
+  return updated;
+}
+
+export async function duplicateStorageDriveRecord(
+  id: string,
+  serial?: string | null,
+): Promise<StorageDrive> {
+  const created = await api.duplicateStorageDrive(id, serial);
+  setState((prev) => ({
+    ...prev,
+    storageDrives: sortStorageDrives([...prev.storageDrives, created]),
+  }));
+  return created;
+}
+
+export async function deleteStorageDriveRecord(id: string): Promise<void> {
+  await api.deleteStorageDrive(id);
+  setState((prev) => ({
+    ...prev,
+    storageDrives: removeById(prev.storageDrives, id),
+    driveSlots: prev.driveSlots.map((slot) =>
+      slot.driveId === id ? { ...slot, driveId: null } : slot,
+    ),
+  }));
+}
+
+function reconcilePoolDriveAssignments(
+  drives: StorageDrive[],
+  pool: StoragePool,
+  previousDriveIds: string[] = [],
+) {
+  const nextIds = new Set(pool.driveIds);
+  const previousIds = new Set(previousDriveIds);
+  return sortStorageDrives(
+    drives.map((drive) => {
+      if (nextIds.has(drive.id)) {
+        return { ...drive, poolId: pool.id, poolName: pool.name };
+      }
+      if (previousIds.has(drive.id) && drive.poolId === pool.id) {
+        return { ...drive, poolId: null, poolName: null };
+      }
+      return drive;
+    }),
+  );
+}
+
+export async function createStoragePoolRecord(
+  input: Omit<StoragePool, "id" | "labId" | "createdAt" | "updatedAt">,
+): Promise<StoragePool> {
+  const created = await api.createStoragePool(input);
+  setState((prev) => ({
+    ...prev,
+    storagePools: sortStoragePools(
+      [...prev.storagePools, created],
+      prev.devices,
+    ),
+    storageDrives: reconcilePoolDriveAssignments(prev.storageDrives, created),
+  }));
+  return created;
+}
+
+export async function updateStoragePoolRecord(
+  id: string,
+  changes: StoragePoolPatch,
+): Promise<StoragePool> {
+  const existing = state.storagePools.find((pool) => pool.id === id);
+  const updated = await api.updateStoragePool(id, changes);
+  setState((prev) => ({
+    ...prev,
+    storagePools: replaceById(prev.storagePools, updated, (pools) =>
+      sortStoragePools(pools, prev.devices),
+    ),
+    storageDrives: reconcilePoolDriveAssignments(
+      prev.storageDrives,
+      updated,
+      existing?.driveIds ?? [],
+    ),
+  }));
+  return updated;
+}
+
+export async function replaceStoragePoolDriveRecord(
+  poolId: string,
+  oldDriveId: string,
+  replacement: Partial<StorageDrive>,
+  deleteOld = false,
+) {
+  const result = await api.replaceStoragePoolDrive(poolId, {
+    oldDriveId,
+    replacement,
+    deleteOld,
+  });
+  setState((prev) => ({
+    ...prev,
+    storagePools: replaceById(prev.storagePools, result.pool, (pools) =>
+      sortStoragePools(pools, prev.devices),
+    ),
+    storageDrives: sortStorageDrives([
+      ...prev.storageDrives.filter(
+        (drive) =>
+          drive.id !== oldDriveId && drive.id !== result.replacement.id,
+      ),
+      ...(result.oldDrive ? [result.oldDrive] : []),
+      result.replacement,
+    ]),
+    driveSlots: reconcileDriveSlotAssignment(
+      prev.driveSlots,
+      result.replacement,
+    ),
+  }));
+  return result;
+}
+
+export async function deleteStoragePoolRecord(id: string): Promise<void> {
+  await api.deleteStoragePool(id);
+  setState((prev) => ({
+    ...prev,
+    storagePools: removeById(prev.storagePools, id),
+    storageDrives: sortStorageDrives(
+      prev.storageDrives.map((drive) =>
+        drive.poolId === id
+          ? { ...drive, poolId: null, poolName: null }
+          : drive,
       ),
     ),
   }));
@@ -2524,6 +2926,7 @@ export interface CreateDeviceInput {
   tags?: string[];
   notes?: string;
   portTemplateId?: string;
+  driveBayTemplateId?: string;
 }
 
 export async function createDevice(input: CreateDeviceInput): Promise<Device> {
@@ -2572,6 +2975,7 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
     notes: input.notes,
     lastSeen: new Date().toISOString(),
     portTemplateId: input.portTemplateId,
+    driveBayTemplateId: input.driveBayTemplateId,
   });
 
   let syncResult: { upserted?: IpAssignment; deletedId?: string } = {};
@@ -2587,6 +2991,9 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
   }
 
   const createdPorts = await api.getPorts({ deviceId: created.id });
+  const createdDriveSlots = input.driveBayTemplateId
+    ? await api.getDriveSlots({ deviceId: created.id })
+    : [];
   let refreshedWifiClientAssociations: WifiClientAssociation[] | null = null;
   if (created.placement === "wireless" || created.parentDeviceId) {
     try {
@@ -2605,9 +3012,11 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
       mergeDeviceTypeDefinitions(prev.deviceTypes, {
         devices: [...prev.devices, created],
         portTemplates: prev.portTemplates,
+        driveBayTemplates: prev.driveBayTemplates,
       }),
     ),
     ports: sortPorts([...prev.ports, ...createdPorts]),
+    driveSlots: sortDriveSlots([...prev.driveSlots, ...createdDriveSlots]),
     ipAssignments: applyAssignmentSync(prev.ipAssignments, syncResult),
     wifiClientAssociations: refreshedWifiClientAssociations
       ? sortWifiClientAssociations(refreshedWifiClientAssociations)
@@ -2628,6 +3037,7 @@ export async function updateDevice(
   id: string,
   changes: Partial<Omit<Device, "id" | "labId">> & {
     portTemplateId?: string;
+    driveBayTemplateId?: string;
     ipAllocationMode?: IpAllocationMode;
     dhcpScopeId?: string | null;
   },
@@ -2670,6 +3080,7 @@ export async function updateDevice(
       ? (nextManagementIp ?? null)
       : undefined,
     portTemplateId: changes.portTemplateId ?? undefined,
+    driveBayTemplateId: changes.driveBayTemplateId ?? undefined,
   });
   const syncResult = await syncDeviceManagementAssignment(
     updated,
@@ -2705,6 +3116,14 @@ export async function updateDevice(
       ...refreshedPorts,
     ]);
   }
+  let nextDriveSlots = state.driveSlots;
+  if (changes.driveBayTemplateId) {
+    const refreshedSlots = await api.getDriveSlots({ deviceId: id });
+    nextDriveSlots = sortDriveSlots([
+      ...state.driveSlots.filter((slot) => slot.deviceId !== id),
+      ...refreshedSlots,
+    ]);
+  }
 
   setState((prev) => ({
     ...prev,
@@ -2719,9 +3138,11 @@ export async function updateDevice(
           replaceById(prev.devices, updated, sortDevices),
         ),
         portTemplates: prev.portTemplates,
+        driveBayTemplates: prev.driveBayTemplates,
       }),
     ),
     ports: nextPorts,
+    driveSlots: nextDriveSlots,
     ipAssignments: applyAssignmentSync(prev.ipAssignments, syncResult),
   }));
 
@@ -2751,6 +3172,7 @@ export async function bulkUpdateDevices(input: {
       mergeDeviceTypeDefinitions(prev.deviceTypes, {
         devices: nextDevices,
         portTemplates: prev.portTemplates,
+        driveBayTemplates: prev.driveBayTemplates,
       }),
     ),
   }));
@@ -2770,6 +3192,11 @@ export async function bulkUpdateDevices(input: {
 export async function deleteDevice(id: string): Promise<boolean> {
   const device = state.devices.find((entry) => entry.id === id);
   if (!device) return false;
+  const removedPoolIds = new Set(
+    state.storagePools
+      .filter((pool) => pool.deviceId === id)
+      .map((pool) => pool.id),
+  );
 
   const devicePortIds = state.ports
     .filter((port) => port.deviceId === id)
@@ -2828,6 +3255,23 @@ export async function deleteDevice(id: string): Promise<boolean> {
     deviceServices: prev.deviceServices.filter(
       (service) => service.deviceId !== id,
     ),
+    driveSlots: prev.driveSlots.filter((slot) => slot.deviceId !== id),
+    storagePools: prev.storagePools.filter((pool) => pool.deviceId !== id),
+    storageDrives: prev.storageDrives.map((drive) => ({
+      ...drive,
+      ...(drive.deviceId === id
+        ? {
+            slotId: null,
+            deviceId: null,
+            deviceHostname: null,
+            slotName: null,
+            slotSectionName: null,
+          }
+        : {}),
+      ...(drive.poolId && removedPoolIds.has(drive.poolId)
+        ? { poolId: null, poolName: null }
+        : {}),
+    })),
     discoveredDevices: prev.discoveredDevices.map((entry) =>
       entry.importedDeviceId === id
         ? { ...entry, importedDeviceId: null, status: "new" }
@@ -2951,6 +3395,7 @@ export async function unlinkDocumentationDeviceRecord(
 export async function importDockerContainerRecord(input: {
   endpoint: string;
   token?: string;
+  verifyTls?: boolean;
   containerId: string;
   labId: string;
   hostDeviceId: string;

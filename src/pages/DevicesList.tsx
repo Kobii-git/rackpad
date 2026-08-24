@@ -35,7 +35,10 @@ import {
   X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/utils";
-import { deviceTypeLabel } from "@/lib/device-types";
+import {
+  deviceTypeBase,
+  localizedDeviceTypeIdLabel,
+} from "@/lib/device-types";
 import {
   applySortDirection,
   compareIp,
@@ -49,6 +52,10 @@ import {
   indexValidDeviceIpAssignments,
   matchingAssignedIps,
 } from "@/lib/device-ip-consistency";
+import {
+  canonicalMacAddress,
+  matchesMacAwareSearch,
+} from "@/lib/network-labels";
 
 type SortKey =
   | "hostname"
@@ -81,6 +88,15 @@ interface DuplicateMacGroup {
   devices: Device[];
   ignored: boolean;
 }
+
+const DEVICE_STATUS_OPTIONS = [
+  "online",
+  "offline",
+  "warning",
+  "maintenance",
+  "unmanaged",
+  "unknown",
+] as const satisfies readonly DeviceStatus[];
 
 const EMPTY_BULK_DEVICE_FORM: BulkDeviceForm = {
   tags: "",
@@ -136,6 +152,10 @@ export default function DevicesList() {
   );
   const [duplicateMacError, setDuplicateMacError] = useState("");
   const typeParam = searchParams.get("type");
+  const requestedStatus = searchParams.get("status");
+  const statusParam = DEVICE_STATUS_OPTIONS.find(
+    (status) => status === requestedStatus,
+  ) ?? null;
   const placementParam = searchParams.get("placement");
   const macParam = searchParams.get("mac");
   const ipParam = searchParams.get("ip");
@@ -170,9 +190,11 @@ export default function DevicesList() {
   const accessPointCandidates = useMemo(
     () =>
       devices
-        .filter((device) => device.deviceType === "ap")
+        .filter(
+          (device) => deviceTypeBase(device.deviceType, deviceTypes) === "ap",
+        )
         .sort((a, b) => a.hostname.localeCompare(b.hostname)),
-    [devices],
+    [devices, deviceTypes],
   );
 
   const deviceById = useMemo(() => {
@@ -271,6 +293,7 @@ export default function DevicesList() {
     return devices
       .filter((device) => {
         if (type && device.deviceType !== type) return false;
+        if (statusParam && device.status !== statusParam) return false;
         if (showUnplacedOnly && !isUnplacedDevice(device)) return false;
         if (showDuplicateMacs && !visibleDuplicateMacDeviceIds.has(device.id))
           return false;
@@ -294,7 +317,7 @@ export default function DevicesList() {
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        return haystack.includes(query.toLowerCase());
+        return matchesMacAwareSearch(haystack, query.toLowerCase());
       })
       .sort((a, b) =>
         compareDevices(
@@ -317,6 +340,7 @@ export default function DevicesList() {
     rackById,
     roomById,
     sort,
+    statusParam,
     showUnplacedOnly,
     showDuplicateMacs,
     showIpMismatches,
@@ -537,6 +561,16 @@ export default function DevicesList() {
     setSearchParams(nextParams);
   }
 
+  function setStatusFilter(status: DeviceStatus | null) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (status) {
+      nextParams.set("status", status);
+    } else {
+      nextParams.delete("status");
+    }
+    setSearchParams(nextParams);
+  }
+
   function setDuplicateMacFilter(duplicatesOnly: boolean) {
     const nextParams = new URLSearchParams(searchParams);
     if (duplicatesOnly) {
@@ -669,7 +703,12 @@ export default function DevicesList() {
               >
                 <DeviceTypeIcon type={entry.id} className="size-3" />
                 <span className="font-mono text-[10px] uppercase tracking-wider capitalize">
-                  {entry.label}
+                  {localizedDeviceTypeIdLabel(
+                    entry.id,
+                    deviceTypes,
+                    t,
+                    entry.label,
+                  )}
                 </span>
                 <Mono className="text-[10px]">{count}</Mono>
               </button>
@@ -687,6 +726,20 @@ export default function DevicesList() {
               className="pl-7"
             />
           </div>
+          <Select
+            ariaLabel={t("Status")}
+            value={statusParam ?? ""}
+            onChange={(value) =>
+              setStatusFilter((value || null) as DeviceStatus | null)
+            }
+          >
+            <option value="">{t("All")} {t("Status")}</option>
+            {DEVICE_STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>
+                {t(statusLabel[status] as never)}
+              </option>
+            ))}
+          </Select>
           <Mono
             data-testid="device-filter-count"
             className="whitespace-nowrap text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]"
@@ -1026,7 +1079,12 @@ export default function DevicesList() {
                     <option value="">{t("Keep current type")}</option>
                     {deviceTypes.map((entry) => (
                       <option key={entry.id} value={entry.id}>
-                        {entry.label}
+                        {localizedDeviceTypeIdLabel(
+                          entry.id,
+                          deviceTypes,
+                          t,
+                          entry.label,
+                        )}
                       </option>
                     ))}
                   </Select>
@@ -1073,15 +1131,7 @@ export default function DevicesList() {
                     }
                   >
                     <option value="">{t("Keep current status")}</option>
-                    {(
-                      [
-                        "online",
-                        "offline",
-                        "warning",
-                        "maintenance",
-                        "unknown",
-                      ] as const
-                    ).map((status) => (
+                    {DEVICE_STATUS_OPTIONS.map((status) => (
                       <option key={status} value={status}>
                         {statusLabel[status]}
                       </option>
@@ -1167,7 +1217,10 @@ export default function DevicesList() {
                 </div>
               )}
 
-              {bulkFields.has("status") && monitoredStatusCount > 0 && (
+              {bulkFields.has("status") &&
+                monitoredStatusCount > 0 &&
+                bulkForm.status !== "maintenance" &&
+                bulkForm.status !== "unmanaged" && (
                 <div className="rounded-[var(--radius-sm)] border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/8 px-3 py-2 text-xs text-[var(--color-fg-subtle)]">
                   {monitoredStatusCount} {t("selected monitored device")}
                   {monitoredStatusCount === 1 ? "" : t("s")}{" "}
@@ -1338,7 +1391,11 @@ export default function DevicesList() {
                       </Td>
                       <Td>
                         <span className="text-xs capitalize text-[var(--color-fg-muted)]">
-                          {deviceTypeLabel(device.deviceType, deviceTypes)}
+                          {localizedDeviceTypeIdLabel(
+                            device.deviceType,
+                            deviceTypes,
+                            t,
+                          )}
                         </span>
                       </Td>
                       <Td>
@@ -1551,13 +1608,16 @@ function Select({
   value,
   onChange,
   children,
+  ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
   children: ReactNode;
+  ariaLabel?: string;
 }) {
   return (
     <select
+      aria-label={ariaLabel}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       className="rk-control h-8 w-full px-2 text-sm text-[var(--text-primary)]"
@@ -1576,7 +1636,7 @@ function compareDevices(
   deviceById: Record<string, Device>,
   portsByDeviceId: Record<string, Port[]>,
 ) {
-  let result = 0;
+  let result: number;
 
   if (sort.key === "hostname") {
     result = compareText(a.hostname, b.hostname);
@@ -1615,13 +1675,6 @@ function compareDevices(
 
 function deviceModelSortValue(device: Device) {
   return [device.manufacturer, device.model].filter(Boolean).join(" ");
-}
-
-function canonicalMacAddress(value?: string | null) {
-  if (!value) return null;
-  const compact = value.trim().replace(/[:.\-\s]/g, "").toLowerCase();
-  if (!/^[0-9a-f]{12}$/.test(compact)) return null;
-  return compact.match(/.{2}/g)?.join(":") ?? null;
 }
 
 function devicePlacementSortValue(

@@ -5,6 +5,20 @@ homelab network layouts. It can create a VLAN, subnet, gateway/DNS records,
 DHCP pool, and IP zones together, or it can document an untagged subnet without
 forcing a VLAN record.
 
+## Screenshots
+
+### Consolidated Networks workspace
+
+![Rackpad Networks workspace showing VLAN, subnet, gateway, DNS, DHCP, zone, and assignment context](./screenshots/networks.png)
+
+### Duplicate MAC review
+
+![Rackpad device review showing an unresolved cloned-VM MAC group and an explicitly ignored host-shared container group](./screenshots/devices-duplicate-macs.png)
+
+### Management-IP mismatch review
+
+![Rackpad device review showing an unmanaged environment sensor whose management IP differs from its recorded assignment](./screenshots/devices-ip-mismatches.png)
+
 ## Subnet integrity
 
 Rackpad stores IPv4 CIDRs in canonical network form and rejects equivalent or

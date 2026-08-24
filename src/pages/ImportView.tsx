@@ -11,6 +11,8 @@ import {
 import { TopBar } from "@/components/layout/TopBar";
 import { NetBoxDeviceTypeImport } from "@/components/import/NetBoxDeviceTypeImport";
 import { DockerImportPanel } from "@/components/import/DockerImportPanel";
+import { IntegrationsPanel } from "@/components/import/IntegrationsPanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { useI18n } from "@/i18n";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -48,6 +50,7 @@ import type {
   VirtualSwitch,
 } from "@/lib/types";
 import { cidrBounds, cidrContainsIp, cn, ipToInt } from "@/lib/utils";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 
 type ImportProvider = "hyperv" | "proxmox";
 
@@ -603,6 +606,7 @@ export default function ImportView() {
   const [parseError, setParseError] = useState("");
   const [importing, setImporting] = useState(false);
   const [importLog, setImportLog] = useState<string[]>([]);
+  const [importTab, setImportTab] = useState("imports");
   const importProvider = payload ? providerForPayload(payload) : null;
   const importCopy = importProvider ? PROVIDER_COPY[importProvider] : null;
 
@@ -850,188 +854,212 @@ export default function ImportView() {
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <div className="mx-auto max-w-7xl space-y-5">
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                <CardLabel>{t("Inventory collectors")}</CardLabel>
-                <CardHeading>{t("Upload Hyper-V or Proxmox JSON")}</CardHeading>
-              </CardTitle>
-              <Badge tone="cyan">
-                <FileJson className="size-3" />
-                {t("review-first import")}
-              </Badge>
-            </CardHeader>
-            <CardBody className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-              <div className="space-y-3">
-                <p className="text-sm text-[var(--text-tertiary)]">
-                  {t(
-                    "Run a collector on the virtualization host, then upload the JSON here. Rackpad stages the host, guests, virtual networks, VLANs, ports, specs, MACs, and IPs before anything is written.",
-                  )}
-                </p>
-                <div className="grid gap-3 lg:grid-cols-2">
-                  <CollectorDownload provider="hyperv" />
-                  <CollectorDownload provider="proxmox" />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]">
-                    <Upload className="size-4" />
-                    {t("Choose import JSON")}
-                    <input
-                      type="file"
-                      accept="application/json,.json"
-                      className="hidden"
-                      onChange={(event) => void handleFile(event)}
-                    />
-                  </label>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => loadSample("proxmox")}
-                  >
-                    {t("Load sample Proxmox")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => loadSample("hyperv")}
-                  >
-                    {t("Load sample Hyper-V")}
-                  </Button>
-                </div>
-                <p className="text-xs text-[var(--text-tertiary)]">
-                  {t(
-                    "Samples populate this review only. Nothing is written until Import selected.",
-                  )}
-                </p>
-                {parseError && (
-                  <div className="rounded-[var(--radius-md)] border border-[var(--danger-border)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">
-                    {parseError}
-                  </div>
-                )}
-              </div>
+          <Tabs
+            value={importTab}
+            onValueChange={setImportTab}
+            className="space-y-5"
+          >
+            <TabsList>
+              <TabsTrigger value="imports">{t("Imports")}</TabsTrigger>
+              <TabsTrigger value="integrations">
+                {t("Integrations")}
+              </TabsTrigger>
+            </TabsList>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <ImportStat
-                  icon={Server}
-                  label={importCopy?.workloadNoun ?? t("Workloads selected")}
-                  value={summary?.selectedVms ?? 0}
-                  hint={t("{value1} matched existing", {
-                    value1: summary?.existingMatches ?? 0,
-                  })}
-                />
-                <ImportStat
-                  icon={Network}
-                  label={t("Virtual switches")}
-                  value={summary?.switches ?? 0}
-                  hint={t("external, internal, private")}
-                />
-                <ImportStat
-                  icon={HardDrive}
-                  label={t("Guest IPs")}
-                  value={summary?.ips ?? 0}
-                  hint={t("only matched subnets become IPAM records")}
-                />
-                <ImportStat
-                  icon={FileJson}
-                  label={t("VLAN IDs")}
-                  value={summary?.vlanIds.length ?? 0}
-                  hint={
-                    summary?.vlanIds.slice(0, 5).join(", ") || t("none found")
-                  }
-                />
-              </div>
-            </CardBody>
-          </Card>
-
-          <CollectorRunbooks />
-
-          <NetBoxDeviceTypeImport />
-
-          <DockerImportPanel />
-
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                <CardLabel>{t("Import categories")}</CardLabel>
-                <CardHeading>
-                  {t("Select what Rackpad should write")}
-                </CardHeading>
-              </CardTitle>
-            </CardHeader>
-            <CardBody>
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                {Object.entries(CATEGORY_COPY).map(([key, copy]) => (
-                  <label
-                    key={key}
-                    className="rk-panel-inset flex items-start gap-3 rounded-[var(--radius-md)] p-3"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={options[key as keyof ImportOptions]}
-                      onChange={(event) =>
-                        setOptions((current) => ({
-                          ...current,
-                          [key]: event.target.checked,
-                        }))
-                      }
-                      className="mt-1"
-                    />
-                    <span>
-                      <span className="block text-sm font-medium text-[var(--text-primary)]">
-                        {copy.title}
-                      </span>
-                      <span className="mt-1 block text-xs text-[var(--text-tertiary)]">
-                        {copy.description}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </CardBody>
-          </Card>
-
-          {payload && (
-            <div className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
-              <HostPreview
-                devices={devices}
-                devicesByHostname={devicesByHostname}
-                hostRecordEnabled={options.host}
-                onChange={setHostDraftValue}
-                payload={payload}
-                value={hostDraft}
-              />
-              <VmPreview
-                drafts={vmDrafts}
-                devicesByHostname={devicesByHostname}
-                ipAssignments={ipAssignments}
-                subnets={subnets}
-                onChange={setDraftValue}
-              />
-            </div>
-          )}
-
-          {importLog.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  <CardLabel>{t("Import log")}</CardLabel>
-                  <CardHeading>{t("What Rackpad changed")}</CardHeading>
-                </CardTitle>
-              </CardHeader>
-              <CardBody>
-                <div className="space-y-2">
-                  {importLog.map((entry, index) => (
-                    <div
-                      key={`${entry}-${index}`}
-                      className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2 text-xs text-[var(--text-secondary)]"
-                    >
-                      {entry}
+            <TabsContent value="imports" className="space-y-5">
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    <CardLabel>{t("Inventory collectors")}</CardLabel>
+                    <CardHeading>
+                      {t("Upload Hyper-V or Proxmox JSON")}
+                    </CardHeading>
+                  </CardTitle>
+                  <Badge tone="cyan">
+                    <FileJson className="size-3" />
+                    {t("review-first import")}
+                  </Badge>
+                </CardHeader>
+                <CardBody className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+                  <div className="space-y-3">
+                    <p className="text-sm text-[var(--text-tertiary)]">
+                      {t(
+                        "Run a collector on the virtualization host, then upload the JSON here. Rackpad stages the host, guests, virtual networks, VLANs, ports, specs, MACs, and IPs before anything is written.",
+                      )}
+                    </p>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      <CollectorDownload provider="hyperv" />
+                      <CollectorDownload provider="proxmox" />
                     </div>
-                  ))}
+                    <div className="flex flex-wrap gap-2">
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]">
+                        <Upload className="size-4" />
+                        {t("Choose import JSON")}
+                        <input
+                          type="file"
+                          accept="application/json,.json"
+                          className="hidden"
+                          onChange={(event) => void handleFile(event)}
+                        />
+                      </label>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => loadSample("proxmox")}
+                      >
+                        {t("Load sample Proxmox")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => loadSample("hyperv")}
+                      >
+                        {t("Load sample Hyper-V")}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-[var(--text-tertiary)]">
+                      {t(
+                        "Samples populate this review only. Nothing is written until Import selected.",
+                      )}
+                    </p>
+                    {parseError && (
+                      <div className="rounded-[var(--radius-md)] border border-[var(--danger-border)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">
+                        {parseError}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <ImportStat
+                      icon={Server}
+                      label={
+                        importCopy?.workloadNoun ?? t("Workloads selected")
+                      }
+                      value={summary?.selectedVms ?? 0}
+                      hint={t("{value1} matched existing", {
+                        value1: summary?.existingMatches ?? 0,
+                      })}
+                    />
+                    <ImportStat
+                      icon={Network}
+                      label={t("Virtual switches")}
+                      value={summary?.switches ?? 0}
+                      hint={t("external, internal, private")}
+                    />
+                    <ImportStat
+                      icon={HardDrive}
+                      label={t("Guest IPs")}
+                      value={summary?.ips ?? 0}
+                      hint={t("only matched subnets become IPAM records")}
+                    />
+                    <ImportStat
+                      icon={FileJson}
+                      label={t("VLAN IDs")}
+                      value={summary?.vlanIds.length ?? 0}
+                      hint={
+                        summary?.vlanIds.slice(0, 5).join(", ") ||
+                        t("none found")
+                      }
+                    />
+                  </div>
+                </CardBody>
+              </Card>
+
+              <CollectorRunbooks />
+
+              <NetBoxDeviceTypeImport />
+
+              <DockerImportPanel />
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    <CardLabel>{t("Import categories")}</CardLabel>
+                    <CardHeading>
+                      {t("Select what Rackpad should write")}
+                    </CardHeading>
+                  </CardTitle>
+                </CardHeader>
+                <CardBody>
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    {Object.entries(CATEGORY_COPY).map(([key, copy]) => (
+                      <label
+                        key={key}
+                        className="rk-panel-inset flex items-start gap-3 rounded-[var(--radius-md)] p-3"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={options[key as keyof ImportOptions]}
+                          onChange={(event) =>
+                            setOptions((current) => ({
+                              ...current,
+                              [key]: event.target.checked,
+                            }))
+                          }
+                          className="mt-1"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-[var(--text-primary)]">
+                            {copy.title}
+                          </span>
+                          <span className="mt-1 block text-xs text-[var(--text-tertiary)]">
+                            {copy.description}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </CardBody>
+              </Card>
+
+              {payload && (
+                <div className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
+                  <HostPreview
+                    devices={devices}
+                    devicesByHostname={devicesByHostname}
+                    hostRecordEnabled={options.host}
+                    onChange={setHostDraftValue}
+                    payload={payload}
+                    value={hostDraft}
+                  />
+                  <VmPreview
+                    drafts={vmDrafts}
+                    devicesByHostname={devicesByHostname}
+                    ipAssignments={ipAssignments}
+                    subnets={subnets}
+                    onChange={setDraftValue}
+                  />
                 </div>
-              </CardBody>
-            </Card>
-          )}
+              )}
+
+              {importLog.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      <CardLabel>{t("Import log")}</CardLabel>
+                      <CardHeading>{t("What Rackpad changed")}</CardHeading>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardBody>
+                    <div className="space-y-2">
+                      {importLog.map((entry, index) => (
+                        <div
+                          key={`${entry}-${index}`}
+                          className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[rgb(255_255_255_/_0.018)] px-3 py-2 text-xs text-[var(--text-secondary)]"
+                        >
+                          {entry}
+                        </div>
+                      ))}
+                    </div>
+                  </CardBody>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="integrations" className="space-y-5">
+              <IntegrationsPanel />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </>
@@ -1213,6 +1241,7 @@ function HostPreview({
   value: HostDraft | null;
 }) {
   const { t } = useI18n();
+  const deviceTypes = useStore((state) => state.deviceTypes);
   const provider = providerForPayload(payload);
   const copy = PROVIDER_COPY[provider];
   const host = payload.host;
@@ -1263,7 +1292,8 @@ function HostPreview({
             </option>
             {hostCandidates.map((device) => (
               <option key={device.id} value={device.id}>
-                {device.hostname} ({device.deviceType})
+                {device.hostname} (
+                {localizedDeviceTypeIdLabel(device.deviceType, deviceTypes, t)})
               </option>
             ))}
           </select>

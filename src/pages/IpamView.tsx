@@ -44,6 +44,7 @@ import type {
 import { Hash, Network, Plus, Save, Trash2 } from "lucide-react";
 import { cidrSize } from "@/lib/utils";
 import { formatDeviceMac } from "@/lib/network-labels";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 
 const ASSIGNMENT_HEADING_KEYS: Record<
   IpAssignment["assignmentType"],
@@ -143,6 +144,7 @@ export default function IpamView() {
   const subnets = useStore((s) => s.subnets);
   const vlans = useStore((s) => s.vlans);
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const allAssignments = useStore((s) => s.ipAssignments);
   const allScopes = useStore((s) => s.scopes);
   const allZones = useStore((s) => s.ipZones);
@@ -922,7 +924,11 @@ export default function IpamView() {
                               {device
                                 ? t("{hostname} ({deviceType})", {
                                     hostname: device.hostname,
-                                    deviceType: device.deviceType,
+                                    deviceType: localizedDeviceTypeIdLabel(
+                                      device.deviceType,
+                                      deviceTypes,
+                                      t,
+                                    ),
                                   })
                                 : (assignment.description ?? "-")}
                             </div>

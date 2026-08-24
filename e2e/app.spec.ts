@@ -17,6 +17,7 @@ const primaryRoutes = [
   "/racks",
   "/devices",
   "/compute",
+  "/storage",
   "/wifi",
   "/discovery",
   "/imports",
@@ -30,6 +31,1040 @@ const primaryRoutes = [
   "/documentation",
   "/admin",
 ];
+
+test("storage workspace and dense device topology stay readable", async ({
+  page,
+}) => {
+  await authenticate(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/storage");
+  await expect(
+    page.getByRole("heading", { name: "Storage", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Raw capacity", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Missing pool members", { exact: false }),
+  ).toBeVisible();
+
+  await page.getByRole("tab", { name: /Drive-bay templates/ }).click();
+  await expect(
+    page.getByRole("spinbutton", { name: "Slot count", exact: true }),
+  ).toHaveValue("12");
+  await expect(page.getByTitle("Bay 12", { exact: true })).toBeVisible();
+
+  await page.getByRole("tab", { name: /Drives/ }).click();
+  await expect(page.getByText("DEMO-STORE-01", { exact: false })).toBeVisible();
+  await page.goto("/storage?tab=drives&driveId=drv_demo_1");
+  await expect(
+    page.getByRole("textbox", { name: "Serial", exact: true }),
+  ).toHaveValue("DEMO-STORE-01");
+  await page.getByRole("tab", { name: /Logical pools/ }).click();
+  await expect(page.getByText("tank", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Open pool tank", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Edit pool tank", exact: true }),
+  ).toBeVisible();
+
+  await page.evaluate(() => localStorage.setItem("rackpad-theme", "dark"));
+  await page.setViewportSize({ width: 720, height: 900 });
+  await page.goto("/devices/d_srv_nas?tab=storage");
+  await expect(page.getByRole("tab", { name: /Storage/ })).toHaveAttribute(
+    "data-state",
+    "active",
+  );
+  await expect(page.getByText("Bay 24", { exact: true })).toBeVisible();
+  await expect(page.getByText("tank", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("DEMO-STORE-06", { exact: false })).toBeVisible();
+  await expect(
+    page.getByText("Missing", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByTestId("device-storage-attention")).toContainText("2");
+
+  const crossDeviceMember = page
+    .locator("[data-pool-member-row]")
+    .filter({ hasText: "DEMO-STORE-05" })
+    .first();
+  await crossDeviceMember.hover();
+  await expect(
+    page.locator('[data-pool-member-row][data-pool-highlighted="true"]'),
+  ).toHaveCount(6);
+  await expect(
+    page.locator('button[data-pool-highlighted="true"]'),
+  ).toHaveCount(4);
+  await expect(
+    page.getByRole("button", { name: "Open pool tank", exact: true }),
+  ).toBeVisible();
+  await crossDeviceMember.getByRole("checkbox").focus();
+  await expect(
+    page.locator('[data-pool-member-row][data-pool-highlighted="true"]'),
+  ).toHaveCount(6);
+  await expect(
+    page.locator('button[data-pool-highlighted="true"]'),
+  ).toHaveCount(4);
+
+  await page.getByRole("button", { name: "New pool", exact: true }).click();
+  const assignedElsewhereMember = page
+    .locator("[data-pool-member-row]")
+    .filter({ hasText: "DEMO-STORE-01" })
+    .first();
+  await expect(assignedElsewhereMember.getByRole("checkbox")).toBeDisabled();
+  await assignedElsewhereMember.focus();
+  await expect(assignedElsewhereMember).toBeFocused();
+  await expect(
+    page.locator('[data-pool-member-row][data-pool-highlighted="true"]'),
+  ).toHaveCount(6);
+  await expect(
+    page.locator('button[data-pool-highlighted="true"]'),
+  ).toHaveCount(4);
+});
+
+test("storage header actions, keyboard rows, duplication, and replacement work end to end", async ({
+  page,
+  request,
+}) => {
+  await authenticate(page);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  const headers = { authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(36);
+  const hostname = `storage-workflow-${suffix}`;
+  const serial = `STORAGE-OLD-${suffix}`;
+  const replacementSerial = `STORAGE-NEW-${suffix}`;
+  const poolName = `storage-pool-${suffix}`;
+  let deviceId = "";
+  let poolId = "";
+  let oldDriveId = "";
+  let duplicateDriveId = "";
+  let replacementDriveId = "";
+
+  try {
+    const deviceResponse = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        hostname,
+        deviceType: "storage",
+        placement: "room",
+        status: "online",
+        driveBayTemplateId: "storage-4x3-5",
+      },
+    });
+    expect(deviceResponse.status(), await deviceResponse.text()).toBe(201);
+    deviceId = ((await deviceResponse.json()) as { id: string }).id;
+    const slotsResponse = await request.get(
+      `/api/storage/drive-slots?deviceId=${deviceId}`,
+      { headers },
+    );
+    expect(slotsResponse.ok()).toBeTruthy();
+    const slots = (await slotsResponse.json()) as Array<{ id: string }>;
+    const driveResponse = await request.post("/api/storage/drives", {
+      headers,
+      data: {
+        labId: "lab_home",
+        manufacturer: "Seagate",
+        model: "Exos E2E",
+        serial,
+        capacityGb: 6000,
+        interface: "sas",
+        formFactor: "3.5",
+        notes: "Replacement workflow fixture",
+        slotId: slots[0].id,
+      },
+    });
+    expect(driveResponse.status(), await driveResponse.text()).toBe(201);
+    oldDriveId = ((await driveResponse.json()) as { id: string }).id;
+    const poolResponse = await request.post("/api/storage/pools", {
+      headers,
+      data: {
+        deviceId,
+        name: poolName,
+        poolType: "mirror",
+        usableCapacityGb: 6000,
+        status: "healthy",
+        driveIds: [oldDriveId],
+      },
+    });
+    expect(poolResponse.status(), await poolResponse.text()).toBe(201);
+    poolId = ((await poolResponse.json()) as { id: string }).id;
+
+    await page.goto("/storage");
+    await page.getByRole("button", { name: "Add drive", exact: true }).click();
+    await expect(page).toHaveURL(/tab=drives/);
+    await expect(
+      page.getByRole("heading", { name: "New drive", exact: true }),
+    ).toBeVisible();
+    await page.getByLabel("Close", { exact: true }).click();
+
+    const driveRow = page.getByRole("row").filter({ hasText: serial });
+    await driveRow.focus();
+    await driveRow.press("Enter");
+    await expect(
+      page.getByRole("textbox", { name: "Serial", exact: true }),
+    ).toHaveValue(serial);
+    const duplicateResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().endsWith(`/api/storage/drives/${oldDriveId}/duplicate`),
+    );
+    await page.getByRole("button", { name: "Duplicate", exact: true }).click();
+    const duplicateResponse = await duplicateResponsePromise;
+    expect(duplicateResponse.status()).toBe(201);
+    duplicateDriveId = ((await duplicateResponse.json()) as { id: string }).id;
+    await expect(
+      page.getByRole("textbox", { name: "Serial", exact: true }),
+    ).toHaveValue("");
+    await expect(
+      page.getByRole("textbox", { name: "Manufacturer", exact: true }),
+    ).toHaveValue("Seagate");
+
+    await page.goto("/storage");
+    await page.getByRole("button", { name: "Add pool", exact: true }).click();
+    await expect(page).toHaveURL(/tab=pools/);
+    await expect(
+      page.getByRole("heading", { name: "New pool", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await page
+      .getByRole("button", { name: `Open pool ${poolName}`, exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Replace drive", exact: true })
+      .click();
+    const replacement = page.getByRole("group", {
+      name: "Replace drive",
+      exact: true,
+    });
+    await expect(
+      replacement.getByRole("textbox", { name: "Manufacturer", exact: true }),
+    ).toHaveValue("Seagate");
+    await expect(
+      replacement.getByRole("checkbox", {
+        name: "Delete retired drive",
+        exact: true,
+      }),
+    ).not.toBeChecked();
+    await replacement
+      .getByRole("textbox", { name: "Serial", exact: true })
+      .fill(replacementSerial);
+    const replacementResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().endsWith(`/api/storage/pools/${poolId}/replace-drive`),
+    );
+    await replacement
+      .getByRole("button", { name: "Replace drive", exact: true })
+      .click();
+    const replacementResponse = await replacementResponsePromise;
+    expect(replacementResponse.status()).toBe(201);
+    replacementDriveId = (
+      (await replacementResponse.json()) as { replacement: { id: string } }
+    ).replacement.id;
+    await expect(
+      page.getByText(replacementSerial, { exact: true }),
+    ).toBeVisible();
+
+    const drivesResponse = await request.get(
+      "/api/storage/drives?labId=lab_home",
+      { headers },
+    );
+    const drives = (await drivesResponse.json()) as Array<{
+      id: string;
+      slotId: string | null;
+      poolId: string | null;
+    }>;
+    expect(drives.find((drive) => drive.id === oldDriveId)).toMatchObject({
+      slotId: null,
+      poolId: null,
+    });
+    expect(
+      drives.find((drive) => drive.id === replacementDriveId),
+    ).toMatchObject({ slotId: slots[0].id, poolId });
+  } finally {
+    if (poolId)
+      await request.delete(`/api/storage/pools/${poolId}`, { headers });
+    for (const driveId of [duplicateDriveId, oldDriveId, replacementDriveId]) {
+      if (driveId)
+        await request.delete(`/api/storage/drives/${driveId}`, { headers });
+    }
+    if (deviceId) await request.delete(`/api/devices/${deviceId}`, { headers });
+  }
+});
+
+test("native backup admin controls expose status, create, and delete", async ({
+  page,
+}) => {
+  await authenticate(page);
+  await page.goto("/admin");
+  const panel = page.getByTestId("native-backup-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText("Configured", { exact: true })).toBeVisible();
+  const creationResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/api/admin/native-backups"),
+  );
+  await panel.getByRole("button", { name: "Create", exact: true }).click();
+  const creationResponse = await creationResponsePromise;
+  expect(creationResponse.status()).toBe(201);
+  const created = (await creationResponse.json()) as { name: string };
+  await expect(panel.getByText(created.name, { exact: true })).toBeVisible();
+  await expect(panel.getByText(/MB|KB| B/).first()).toBeVisible();
+
+  const backupRow = panel
+    .getByText(created.name, { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'border-t')][1]");
+  const sqliteDownload = backupRow.getByRole("button", {
+    name: "Download SQLite backup",
+    exact: true,
+  });
+  await expect(sqliteDownload).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await sqliteDownload.click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(created.name);
+
+  page.once("dialog", (dialog) => void dialog.accept());
+  const deletionResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "DELETE" &&
+      response
+        .url()
+        .includes(
+          `/api/admin/native-backups/${encodeURIComponent(created.name)}`,
+        ),
+  );
+  await backupRow
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  const deletionResponse = await deletionResponsePromise;
+  expect(deletionResponse.status()).toBe(204);
+  await expect(panel.getByText(created.name, { exact: true })).toHaveCount(0);
+});
+
+test("template count editing preserves custom slot metadata", async ({
+  page,
+  request,
+}) => {
+  const suffix = Date.now().toString(36);
+  const templateName = `Lossless template ${suffix}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  const originalSlots = [
+    { name: "Boot A", position: 10, slotType: "m2" },
+    { name: "Archive left", position: 20, slotType: "3.5" },
+  ];
+  let templateId = "";
+  try {
+    const createResponse = await request.post(
+      "/api/storage/drive-bay-templates",
+      {
+        headers,
+        data: {
+          name: templateName,
+          description: "Mixed custom slots",
+          deviceTypes: ["storage"],
+          sections: [
+            {
+              name: "Mixed archive",
+              face: "rear",
+              layout: "list",
+              columns: null,
+              slots: originalSlots,
+            },
+          ],
+        },
+      },
+    );
+    const created = (await createResponse.json()) as {
+      id?: string;
+      error?: string;
+    };
+    expect(createResponse.status(), created.error).toBe(201);
+    templateId = created.id ?? "";
+    expect(templateId).not.toBe("");
+
+    await authenticate(page);
+    await page.goto("/storage?tab=templates");
+    await page.getByRole("button").filter({ hasText: templateName }).click();
+    const count = page.getByRole("spinbutton", {
+      name: "Slot count",
+      exact: true,
+    });
+    await expect(count).toHaveValue("2");
+    await count.fill("");
+    await count.pressSequentially("2");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+
+    const listResponse = await request.get("/api/storage/drive-bay-templates", {
+      headers,
+    });
+    expect(listResponse.ok()).toBeTruthy();
+    const saved = (
+      (await listResponse.json()) as Array<{
+        id: string;
+        sections: Array<{ slots: typeof originalSlots }>;
+      }>
+    ).find((entry) => entry.id === templateId);
+    expect(saved?.sections[0]?.slots).toEqual(originalSlots);
+  } finally {
+    if (templateId) {
+      const response = await request.delete(
+        `/api/storage/drive-bay-templates/${templateId}`,
+        { headers },
+      );
+      expect(response.status(), await response.text()).toBe(204);
+    }
+  }
+});
+
+test("storage labels localize built-ins while retaining technical values", async ({
+  page,
+  request,
+}) => {
+  const hostname = `storage-enclosure-locale-${Date.now().toString(36)}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  let deviceId = "";
+  try {
+    const response = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        hostname,
+        deviceType: "storage_enclosure",
+        placement: "room",
+        status: "online",
+      },
+    });
+    expect(response.status()).toBe(201);
+    deviceId = ((await response.json()) as { id: string }).id;
+
+    await authenticate(page, "fr");
+    await page.goto("/devices");
+    await expect(
+      page.getByText("Boîtier de stockage", { exact: true }).first(),
+    ).toBeVisible();
+
+    await page.goto(`/devices/${deviceId}`);
+    await expect(
+      page.getByText("Boîtier de stockage", { exact: true }).first(),
+    ).toBeVisible();
+
+    await page.keyboard.press("Control+k");
+    const commandSearch = page.getByPlaceholder("Rechercher des commandes");
+    await commandSearch.fill(hostname);
+    await expect(
+      page.getByText("Boîtier de stockage", { exact: true }).first(),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    await page.goto("/visualizer");
+    await page
+      .getByRole("textbox", { name: "Visualiseur de recherche", exact: true })
+      .fill(hostname);
+    await expect(
+      page.getByText("Boîtier de stockage", { exact: true }).first(),
+    ).toBeVisible();
+
+    await page.goto("/storage?tab=drives");
+    await page
+      .getByRole("button", { name: "Ajouter un disque", exact: true })
+      .click();
+    const driveInterface = page.getByRole("combobox", {
+      name: "Interface",
+      exact: true,
+    });
+    const driveFormFactor = page.getByRole("combobox", {
+      name: "Facteur de forme",
+      exact: true,
+    });
+    await driveInterface.selectOption("other");
+    await driveFormFactor.selectOption("other");
+    await expect(driveInterface.locator("option:checked")).toHaveText("Autre");
+    await expect(driveFormFactor.locator("option:checked")).toHaveText("Autre");
+    await page.getByRole("button", { name: "Fermer", exact: true }).click();
+
+    await page.keyboard.press("Control+k");
+    await page.getByPlaceholder("Rechercher des commandes").fill("DEMO-STORE");
+    await expect(
+      page.getByText("Disques", { exact: true }).first(),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    await page.goto("/storage?tab=pools");
+    await expect(page.getByText("Dégradé", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Pool de stockage", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: "Ouvrir le pool de stockage tank",
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    await page.getByRole("tab", { name: /Modèles de baie/ }).click();
+    await expect(
+      page
+        .getByText("12 × baies de disques de 3,5 pouces", { exact: true })
+        .first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("textbox", { name: "Descriptif", exact: true }),
+    ).toHaveValue(
+      "Douze baies frontales pour disques de 3,5 pouces sur trois rangées.",
+    );
+    await expect(
+      page.getByText("Boîtier de stockage", { exact: true }),
+    ).toBeVisible();
+
+    await page.evaluate(() => localStorage.setItem("rackpad.language", "af"));
+    await page.goto("/storage");
+    await expect(
+      page.getByRole("tab", { name: /Logiese bergingspoele/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Ontoegekende skywe", { exact: false }).first(),
+    ).toBeVisible();
+  } finally {
+    if (deviceId) {
+      const response = await request.delete(`/api/devices/${deviceId}`, {
+        headers,
+      });
+      expect(response.status(), await response.text()).toBe(204);
+    }
+  }
+});
+
+test("custom template drives a cross-device pool through the editor UI", async ({
+  browser,
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  const suffix = Date.now().toString(36);
+  const templateName = `E2E storage ${suffix}`;
+  const labName = `E2E Storage Lab ${suffix}`;
+  const hostName = `storage-host-with-a-deliberately-long-name-${suffix}`;
+  const enclosureName = `storage-enclosure-with-a-deliberately-long-name-${suffix}`;
+  const sectionName = `Long front storage bay section ${suffix}`;
+  const slotPrefix = `Long physical drive slot ${suffix} `;
+  const secondSlotName = `${slotPrefix}2`;
+  const poolName = `cross-device-storage-pool-with-a-long-name-${suffix}`;
+  const hostSerial = `E2E-HOST-${suffix}`;
+  const enclosureSerial = `E2E-JBOD-${suffix}`;
+  const editorUsername = `storage-editor-${suffix}`;
+  const editorPassword = "storage-editor-password";
+  const headers = { Authorization: `Bearer ${token}` };
+  let templateId = "";
+  let labId = "";
+  let editorId = "";
+  let editorContext: Awaited<ReturnType<typeof browser.newContext>> | null =
+    null;
+
+  try {
+    page.setDefaultTimeout(10_000);
+    await authenticate(page);
+    await page.goto("/storage?tab=templates");
+    await page
+      .getByRole("button", { name: "Custom template", exact: true })
+      .click();
+    await page
+      .getByRole("textbox", { name: "Name", exact: true })
+      .first()
+      .fill(templateName);
+    await page
+      .getByRole("textbox", { name: "Description", exact: true })
+      .fill("Two-bay E2E storage template");
+    await page
+      .getByRole("spinbutton", { name: "Slot count", exact: true })
+      .fill("2");
+    await page
+      .getByRole("textbox", { name: "Name", exact: true })
+      .last()
+      .fill(sectionName);
+    await page
+      .getByRole("textbox", { name: "Slot prefix", exact: true })
+      .fill(slotPrefix);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(
+      page.getByText(templateName, { exact: true }).first(),
+    ).toBeVisible();
+
+    const templatesResponse = await request.get(
+      "/api/storage/drive-bay-templates",
+      { headers },
+    );
+    expect(templatesResponse.ok()).toBeTruthy();
+    const templates = (await templatesResponse.json()) as Array<{
+      id: string;
+      name: string;
+    }>;
+    templateId =
+      templates.find((entry) => entry.name === templateName)?.id ?? "";
+    expect(templateId).not.toBe("");
+
+    const labResponse = await request.post("/api/labs", {
+      headers,
+      data: { name: labName, description: "Temporary storage E2E lab" },
+    });
+    expect(labResponse.status()).toBe(201);
+    labId = ((await labResponse.json()) as { id: string }).id;
+
+    const createDevice = async (hostname: string, deviceType: string) => {
+      const response = await request.post("/api/devices", {
+        headers,
+        data: {
+          labId,
+          hostname,
+          deviceType,
+          placement: "room",
+          status: "online",
+          driveBayTemplateId: templateId,
+        },
+      });
+      const result = (await response.json()) as { id?: string; error?: string };
+      expect(response.status(), result.error).toBe(201);
+      return { id: result.id! };
+    };
+    const host = await createDevice(hostName, "server");
+    const enclosure = await createDevice(enclosureName, "storage_enclosure");
+
+    const editorResponse = await request.post("/api/users", {
+      headers,
+      data: {
+        username: editorUsername,
+        displayName: "Storage E2E Editor",
+        password: editorPassword,
+        role: "editor",
+        labAccess: [{ labId, role: "editor" }],
+      },
+    });
+    expect(editorResponse.status()).toBe(201);
+    editorId = ((await editorResponse.json()) as { id: string }).id;
+    const loginResponse = await request.post("/api/auth/login", {
+      data: { username: editorUsername, password: editorPassword },
+    });
+    expect(loginResponse.ok()).toBeTruthy();
+    const editorToken = ((await loginResponse.json()) as { token: string })
+      .token;
+
+    editorContext = await browser.newContext();
+    const editorPage = await editorContext.newPage();
+    const storagePageErrors: string[] = [];
+    editorPage.on("pageerror", (error) =>
+      storagePageErrors.push(error.message),
+    );
+    editorPage.setDefaultTimeout(10_000);
+    await editorPage.addInitScript((authToken) => {
+      localStorage.setItem("rackpad.auth.token", authToken);
+      localStorage.setItem("rackpad.language", "en");
+    }, editorToken);
+
+    const createDrive = async (
+      deviceId: string,
+      manufacturer: string,
+      serial: string,
+      capacity: string,
+    ) => {
+      await editorPage.goto(
+        `http://127.0.0.1:5173/devices/${deviceId}?tab=storage`,
+      );
+      await expect(
+        editorPage.getByText(secondSlotName, { exact: true }),
+      ).toBeVisible();
+      await editorPage
+        .getByTitle("Empty slot", { exact: true })
+        .first()
+        .click();
+      await editorPage
+        .getByRole("textbox", { name: "Manufacturer", exact: true })
+        .fill(manufacturer);
+      await editorPage
+        .getByRole("textbox", { name: "Model", exact: true })
+        .fill("FlowDrive");
+      await editorPage
+        .getByRole("textbox", { name: "Serial", exact: true })
+        .fill(serial);
+      await editorPage
+        .getByRole("spinbutton", { name: "Capacity", exact: true })
+        .fill(capacity);
+      await editorPage
+        .getByRole("combobox", { name: "Capacity unit", exact: true })
+        .selectOption("gb");
+      await editorPage
+        .getByRole("button", { name: "Create drive", exact: true })
+        .click();
+      await expect(
+        editorPage.getByRole("textbox", { name: "Serial", exact: true }),
+      ).toHaveValue(serial);
+    };
+
+    await createDrive(host.id, "HostDisk", hostSerial, "4000");
+
+    await editorPage.goto(
+      `http://127.0.0.1:5173/devices/${enclosure.id}?tab=storage`,
+    );
+    await expect(
+      editorPage.getByText(secondSlotName, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      editorPage.getByTestId("device-storage-raw-capacity"),
+    ).toContainText("0 GB");
+    await expect(
+      editorPage.getByTitle("Empty slot", { exact: true }),
+    ).toHaveCount(2);
+    await editorPage.getByTitle("Empty slot", { exact: true }).first().click();
+    await editorPage
+      .getByRole("textbox", { name: "Manufacturer", exact: true })
+      .fill("ShelfDisk");
+    await editorPage
+      .getByRole("textbox", { name: "Model", exact: true })
+      .fill("FlowDrive");
+    await editorPage
+      .getByRole("textbox", { name: "Serial", exact: true })
+      .fill(hostSerial);
+    await editorPage
+      .getByRole("spinbutton", { name: "Capacity", exact: true })
+      .fill("6000");
+    await editorPage
+      .getByRole("combobox", { name: "Capacity unit", exact: true })
+      .selectOption("gb");
+    await editorPage
+      .getByRole("button", { name: "Create drive", exact: true })
+      .click();
+    await expect(
+      editorPage.getByText("That record conflicts with an existing value."),
+    ).toBeVisible();
+    await expect(
+      editorPage.getByTestId("device-storage-raw-capacity"),
+    ).toContainText("0 GB");
+    await expect(
+      editorPage.getByTitle("Empty slot", { exact: true }),
+    ).toHaveCount(2);
+    await editorPage
+      .getByRole("textbox", { name: "Serial", exact: true })
+      .fill(enclosureSerial);
+    await editorPage
+      .getByRole("button", { name: "Create drive", exact: true })
+      .click();
+    await expect(
+      editorPage.getByRole("textbox", { name: "Serial", exact: true }),
+    ).toHaveValue(enclosureSerial);
+    await expect(
+      editorPage.getByTestId("device-storage-raw-capacity"),
+    ).toContainText("6 TB");
+    expect(storagePageErrors).toEqual([]);
+
+    await editorPage.goto(
+      `http://127.0.0.1:5173/devices/${host.id}?tab=storage`,
+    );
+    await editorPage.getByRole("button", { name: "New pool" }).click();
+    await editorPage
+      .getByRole("textbox", { name: "Pool name", exact: true })
+      .fill(poolName);
+    await editorPage
+      .getByRole("spinbutton", { name: "Usable capacity", exact: true })
+      .fill("7000");
+    await editorPage
+      .getByRole("combobox", { name: "Capacity unit", exact: true })
+      .last()
+      .selectOption("gb");
+    await editorPage
+      .locator("[data-pool-member-row]")
+      .filter({ hasText: hostSerial })
+      .getByRole("checkbox")
+      .check();
+    await editorPage
+      .locator("[data-pool-member-row]")
+      .filter({ hasText: enclosureSerial })
+      .getByRole("checkbox")
+      .check();
+    await editorPage
+      .getByRole("button", { name: "Create pool", exact: true })
+      .click();
+
+    await expect(
+      editorPage.getByText(poolName, { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      editorPage.getByRole("button", {
+        name: `Open pool ${poolName}`,
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      editorPage.getByTestId("device-storage-raw-capacity"),
+    ).toContainText("4 TB");
+    await expect(
+      editorPage.getByTestId("device-storage-usable-capacity"),
+    ).toContainText("7 TB");
+    await expect(
+      editorPage.getByTestId("device-storage-attention"),
+    ).toContainText("0");
+    await editorPage.setViewportSize({ width: 720, height: 900 });
+    await expect(
+      editorPage.getByText(sectionName, { exact: true }),
+    ).toBeVisible();
+    expect(
+      await editorPage.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth + 1,
+      ),
+    ).toBeTruthy();
+
+    const remoteMember = editorPage
+      .locator("[data-pool-member-row]")
+      .filter({ hasText: enclosureSerial })
+      .first();
+    await remoteMember.hover();
+    await expect(
+      editorPage.locator(
+        '[data-pool-member-row][data-pool-highlighted="true"]',
+      ),
+    ).toHaveCount(2);
+    await expect(
+      editorPage.locator('button[data-pool-highlighted="true"]'),
+    ).toHaveCount(1);
+    await remoteMember.getByRole("checkbox").focus();
+    await expect(
+      editorPage.locator(
+        '[data-pool-member-row][data-pool-highlighted="true"]',
+      ),
+    ).toHaveCount(2);
+
+    await editorPage.goto(
+      `http://127.0.0.1:5173/devices/${enclosure.id}?tab=storage`,
+    );
+    await editorPage.locator('button[title*="ShelfDisk FlowDrive"]').click();
+    await editorPage
+      .getByRole("button", { name: "Pull drive", exact: true })
+      .click();
+    await editorPage.goto(
+      `http://127.0.0.1:5173/devices/${host.id}?tab=storage`,
+    );
+    await expect(
+      editorPage.getByTestId("device-storage-attention"),
+    ).toContainText("1");
+    await expect(
+      editorPage.getByText("Missing", { exact: true }).first(),
+    ).toBeVisible();
+  } finally {
+    await editorContext?.close();
+    if (editorId) {
+      const response = await request.delete(`/api/users/${editorId}`, {
+        headers,
+      });
+      expect(response.status(), await response.text()).toBe(204);
+    }
+    if (labId) {
+      const response = await request.delete(`/api/labs/${labId}`, { headers });
+      expect(response.status(), await response.text()).toBe(204);
+    }
+    if (templateId) {
+      const response = await request.delete(
+        `/api/storage/drive-bay-templates/${templateId}`,
+        { headers },
+      );
+      expect(response.status(), await response.text()).toBe(204);
+    }
+  }
+});
+
+test("storage inventory is read-only for viewers", async ({
+  browser,
+  request,
+}) => {
+  const suffix = Date.now().toString(36);
+  const username = `storage-viewer-${suffix}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  let viewerId = "";
+  let viewerContext: Awaited<ReturnType<typeof browser.newContext>> | null =
+    null;
+
+  try {
+    const viewerResponse = await request.post("/api/users", {
+      headers,
+      data: {
+        username,
+        displayName: "Storage Viewer",
+        password: "storage-viewer-password",
+        role: "viewer",
+      },
+    });
+    expect(viewerResponse.status()).toBe(201);
+    viewerId = ((await viewerResponse.json()) as { id: string }).id;
+
+    const loginResponse = await request.post("/api/auth/login", {
+      data: { username, password: "storage-viewer-password" },
+    });
+    expect(loginResponse.ok()).toBeTruthy();
+    const viewerToken = ((await loginResponse.json()) as { token: string })
+      .token;
+
+    viewerContext = await browser.newContext();
+    const viewerPage = await viewerContext.newPage();
+    await viewerPage.addInitScript((authToken) => {
+      localStorage.setItem("rackpad.auth.token", authToken);
+    }, viewerToken);
+
+    await viewerPage.goto("http://127.0.0.1:5173/storage?tab=drives");
+    await expect(
+      viewerPage.getByRole("heading", { name: "Storage", exact: true }),
+    ).toBeVisible();
+    await expect(viewerPage.getByText("DEMO-STORE-01")).toBeVisible();
+    await expect(
+      viewerPage.getByRole("button", { name: "New drive", exact: true }),
+    ).toHaveCount(0);
+
+    await viewerPage.goto(
+      "http://127.0.0.1:5173/storage?tab=drives&driveId=drv_demo_1",
+    );
+    for (const fieldName of ["Manufacturer", "Model", "Serial", "Notes"]) {
+      await expect(
+        viewerPage.getByRole("textbox", { name: fieldName, exact: true }),
+      ).toBeDisabled();
+    }
+    await expect(
+      viewerPage.getByRole("spinbutton", { name: "Capacity", exact: true }),
+    ).toBeDisabled();
+    for (const fieldName of [
+      "Capacity unit",
+      "Interface",
+      "Form factor",
+      "Select a slot",
+    ]) {
+      await expect(
+        viewerPage.getByRole("combobox", { name: fieldName, exact: true }),
+      ).toBeDisabled();
+    }
+    await expect(
+      viewerPage.getByRole("button", { name: "Save drive", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      viewerPage.getByRole("button", { name: "Delete drive", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      viewerPage.getByRole("button", { name: "Close", exact: true }),
+    ).toBeVisible();
+
+    await viewerPage.goto("http://127.0.0.1:5173/storage?tab=pools");
+    await viewerPage
+      .getByRole("button", { name: "Open pool tank", exact: true })
+      .click();
+    await expect(
+      viewerPage.getByRole("textbox", { name: "Pool name", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      viewerPage.getByRole("textbox", { name: "Notes", exact: true }),
+    ).toHaveValue(
+      "Cross-device demo pool with one disk-shelf member and one pulled member.",
+    );
+    await expect(viewerPage.getByText("DEMO-STORE-01")).toBeVisible();
+    await expect(viewerPage.getByText("DEMO-STORE-06")).toBeVisible();
+    const memberCheckboxes = viewerPage.getByRole("checkbox");
+    await expect(memberCheckboxes).toHaveCount(6);
+    for (let index = 0; index < 6; index += 1) {
+      await expect(memberCheckboxes.nth(index)).toBeDisabled();
+    }
+    await expect(
+      viewerPage.getByRole("button", { name: "Close", exact: true }),
+    ).toBeVisible();
+    for (const controlName of ["New pool", "Save pool", "Delete pool"]) {
+      await expect(
+        viewerPage.getByRole("button", { name: controlName, exact: true }),
+      ).toHaveCount(0);
+    }
+
+    await viewerPage.goto(
+      "http://127.0.0.1:5173/devices/d_srv_nas?tab=storage",
+    );
+    await expect(viewerPage.getByText("Bay 24", { exact: true })).toBeVisible();
+    for (const controlName of [
+      "Add slot",
+      "Save slot",
+      "Save drive",
+      "New pool",
+    ]) {
+      await expect(
+        viewerPage.getByRole("button", { name: controlName, exact: true }),
+      ).toHaveCount(0);
+    }
+
+    await viewerPage.goto("http://127.0.0.1:5173/storage?tab=templates");
+    await expect(
+      viewerPage.getByRole("button", {
+        name: "Custom template",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      viewerPage.getByRole("spinbutton", {
+        name: "Slot count",
+        exact: true,
+      }),
+    ).toBeDisabled();
+  } finally {
+    await viewerContext?.close();
+    if (viewerId) await request.delete(`/api/users/${viewerId}`, { headers });
+  }
+});
+
+test("storage interactive views remain accessible and responsive", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await authenticate(page);
+  await page.goto("/");
+  const routes = [
+    "/storage?tab=drives&driveId=drv_demo_1",
+    "/storage?tab=pools",
+    "/storage?tab=templates",
+    "/devices/d_srv_nas?tab=storage",
+  ];
+
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((selectedTheme) => {
+      localStorage.setItem("rackpad-theme", selectedTheme);
+    }, theme);
+    for (const viewport of [
+      { width: 720, height: 900 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      for (const route of routes) {
+        await page.goto(route);
+        await expect(page.locator("h1").first()).toBeVisible();
+        if (route === "/storage?tab=pools") {
+          await page
+            .getByRole("button", { name: "Open pool tank", exact: true })
+            .click();
+        }
+        if (route.includes("driveId=") || route.endsWith("tab=pools")) {
+          await expect(
+            page.getByRole("button", { name: "Close", exact: true }),
+          ).toBeVisible();
+        }
+        expect(
+          await page.evaluate(
+            () =>
+              document.documentElement.scrollWidth <=
+              document.documentElement.clientWidth + 1,
+          ),
+          `${route} overflowed in ${theme} at ${viewport.width}px`,
+        ).toBeTruthy();
+        const results = await new AxeBuilder({ page }).analyze();
+        expect(
+          results.violations.filter(
+            (violation) =>
+              violation.impact === "critical" || violation.impact === "serious",
+          ),
+          `${route} has serious accessibility violations in ${theme} at ${viewport.width}px`,
+        ).toEqual([]);
+      }
+    }
+  }
+});
 
 test.beforeAll(async ({ request }) => {
   const status = await request.get("/api/auth/status");
@@ -254,6 +1289,246 @@ test("all primary routes load without document overflow in both demo labs", asyn
         ),
         `${route} overflowed for ${labName}`,
       ).toBeTruthy();
+    }
+  }
+});
+
+test("Compute host eligibility distinguishes storage from storage enclosures", async ({
+  page,
+  request,
+}) => {
+  await authenticate(page);
+  const headers = { authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(16).slice(-7);
+  const serverTypeId = `e2e_compute_server_${suffix}`;
+  const endpointTypeId = `e2e_compute_endpoint_${suffix}`;
+  const storageTypeId = `e2e_compute_storage_${suffix}`;
+  const enclosureTypeId = `e2e_compute_enclosure_${suffix}`;
+  const serverHostname = `compute-host-${suffix}`;
+  const endpointHostname = `compute-endpoint-${suffix}`;
+  const storageHostname = `compute-storage-${suffix}`;
+  const enclosureHostname = `compute-enclosure-${suffix}`;
+  const customStorageHostname = `compute-custom-storage-${suffix}`;
+  const customEnclosureHostname = `compute-custom-enclosure-${suffix}`;
+  const guestHostname = `compute-guest-${suffix}`;
+  const containerHostname = `compute-container-${suffix}`;
+  const switchName = `compute-switch-${suffix}`;
+  const deviceIds: string[] = [];
+  const deviceTypeIds: string[] = [];
+  let virtualSwitchId = "";
+  let viewerId = "";
+  let viewerContext: Awaited<ReturnType<typeof page.context>> | null = null;
+
+  try {
+    for (const definition of [
+      {
+        id: serverTypeId,
+        label: `E2E compute server ${suffix}`,
+        parentType: "server",
+      },
+      {
+        id: endpointTypeId,
+        label: `E2E compute endpoint ${suffix}`,
+        parentType: "endpoint",
+      },
+      {
+        id: storageTypeId,
+        label: `E2E compute storage ${suffix}`,
+        parentType: "storage",
+      },
+      {
+        id: enclosureTypeId,
+        label: `E2E compute enclosure ${suffix}`,
+        parentType: "storage_enclosure",
+      },
+    ]) {
+      const response = await request.post("/api/device-types", {
+        headers,
+        data: definition,
+      });
+      expect(response.status()).toBe(201);
+      const created = (await response.json()) as {
+        id: string;
+        parentType: string;
+      };
+      expect(created.parentType).toBe(definition.parentType);
+      deviceTypeIds.push(created.id);
+    }
+
+    for (const device of [
+      {
+        hostname: serverHostname,
+        deviceType: serverTypeId,
+      },
+      {
+        hostname: endpointHostname,
+        deviceType: endpointTypeId,
+      },
+      {
+        hostname: storageHostname,
+        deviceType: "storage",
+      },
+      {
+        hostname: enclosureHostname,
+        deviceType: "storage_enclosure",
+      },
+      {
+        hostname: customStorageHostname,
+        deviceType: storageTypeId,
+      },
+      {
+        hostname: customEnclosureHostname,
+        deviceType: enclosureTypeId,
+      },
+    ]) {
+      const response = await request.post("/api/devices", {
+        headers,
+        data: {
+          labId: "lab_home",
+          ...device,
+          placement: "room",
+          status: "unknown",
+        },
+      });
+      expect(response.status()).toBe(201);
+      deviceIds.push(((await response.json()) as { id: string }).id);
+    }
+
+    const hostDeviceId = deviceIds[0];
+    await page.goto(`/devices/${hostDeviceId}`);
+    await expect(page.getByRole("tab", { name: /Compute/ })).toBeVisible();
+    await page.goto(`/devices/${deviceIds[3]}`);
+    await expect(page.getByRole("tab", { name: /Compute/ })).toHaveCount(0);
+
+    await page.goto("/compute");
+    await expect(page.locator("h1").first()).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: serverHostname, exact: true }),
+    ).toBeVisible();
+    for (const hostname of [storageHostname, customStorageHostname]) {
+      const hostCard = page
+        .getByRole("link", { name: hostname, exact: true })
+        .locator(
+          "xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' rk-panel-inset ')][1]",
+        );
+      await expect(hostCard).toBeVisible();
+      await expect(
+        hostCard.getByRole("button", { name: "Add bridge", exact: true }),
+      ).toBeVisible();
+    }
+    for (const hostname of [
+      endpointHostname,
+      enclosureHostname,
+      customEnclosureHostname,
+    ]) {
+      await expect(page.getByText(hostname, { exact: true })).toHaveCount(0);
+    }
+
+    for (const workload of [
+      {
+        hostname: guestHostname,
+        deviceType: "vm",
+        cpuCores: 4,
+        memoryGb: 8,
+        storageGb: 120,
+      },
+      {
+        hostname: containerHostname,
+        deviceType: "container",
+        cpuCores: 2,
+        memoryGb: 4,
+        storageGb: 40,
+      },
+    ]) {
+      const workloadResponse = await request.post("/api/devices", {
+        headers,
+        data: {
+          labId: "lab_home",
+          ...workload,
+          placement: "virtual",
+          parentDeviceId: hostDeviceId,
+          status: "online",
+        },
+      });
+      expect(workloadResponse.status()).toBe(201);
+      deviceIds.unshift(((await workloadResponse.json()) as { id: string }).id);
+    }
+    const switchResponse = await request.post("/api/virtual-switches", {
+      headers,
+      data: {
+        hostDeviceId,
+        name: switchName,
+        kind: "internal",
+        notes: "Read-only device Compute card",
+      },
+    });
+    expect(switchResponse.status()).toBe(201);
+    virtualSwitchId = ((await switchResponse.json()) as { id: string }).id;
+
+    await page.goto("/compute");
+    const activeHostCard = page
+      .getByRole("heading", { name: serverHostname, exact: true })
+      .locator(
+        "xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' rk-panel ')][1]",
+      );
+    await expect(activeHostCard).toBeVisible();
+    await expect(activeHostCard).toContainText(guestHostname);
+    await expect(activeHostCard).toContainText(containerHostname);
+    await expect(
+      activeHostCard.getByRole("button", { name: "Add VM on host" }),
+    ).toBeVisible();
+
+    await page.goto(`/devices/${hostDeviceId}?tab=compute`);
+    const deviceCompute = page.getByTestId("device-compute-panel");
+    await expect(deviceCompute).toBeVisible();
+    await expect(deviceCompute).toContainText(guestHostname);
+    await expect(deviceCompute).toContainText(containerHostname);
+    await expect(deviceCompute).toContainText(switchName);
+    await expect(deviceCompute).toContainText("Memory GB");
+    await expect(deviceCompute.getByRole("button")).toHaveCount(0);
+
+    const username = `compute-viewer-${suffix}`;
+    const viewerResponse = await request.post("/api/users", {
+      headers,
+      data: {
+        username,
+        displayName: "Compute Viewer",
+        password: "compute-viewer-password",
+        role: "viewer",
+      },
+    });
+    expect(viewerResponse.status()).toBe(201);
+    viewerId = ((await viewerResponse.json()) as { id: string }).id;
+    const viewerLogin = await request.post("/api/auth/login", {
+      data: { username, password: "compute-viewer-password" },
+    });
+    expect(viewerLogin.ok()).toBeTruthy();
+    const viewerToken = ((await viewerLogin.json()) as { token: string }).token;
+    viewerContext = await page.context().browser()!.newContext();
+    const viewerPage = await viewerContext.newPage();
+    await viewerPage.addInitScript((authToken) => {
+      localStorage.setItem("rackpad.auth.token", authToken);
+    }, viewerToken);
+    await viewerPage.goto(
+      `http://127.0.0.1:5173/devices/${hostDeviceId}?tab=compute`,
+    );
+    const viewerPanel = viewerPage.getByTestId("device-compute-panel");
+    await expect(viewerPanel).toContainText(guestHostname);
+    await expect(viewerPanel).toContainText(containerHostname);
+    await expect(viewerPanel.getByRole("button")).toHaveCount(0);
+  } finally {
+    await viewerContext?.close();
+    if (viewerId) await request.delete(`/api/users/${viewerId}`, { headers });
+    if (virtualSwitchId) {
+      await request.delete(`/api/virtual-switches/${virtualSwitchId}`, {
+        headers,
+      });
+    }
+    for (const deviceId of deviceIds) {
+      await request.delete(`/api/devices/${deviceId}`, { headers });
+    }
+    for (const deviceTypeId of deviceTypeIds.reverse()) {
+      await request.delete(`/api/device-types/${deviceTypeId}`, { headers });
     }
   }
 });
@@ -904,6 +2179,12 @@ test("UI regression surfaces remain reachable and unclipped", async ({
   await page.goto("/");
   const version = page.getByTestId("sidebar-version");
   await expect(version).toBeVisible();
+  await expect(version).toHaveAttribute(
+    "href",
+    "https://github.com/Kobii-git/rackpad",
+  );
+  await expect(version).toHaveAttribute("target", "_blank");
+  await expect(version).toHaveAttribute("rel", "noopener noreferrer");
   expect(
     await version.evaluate(
       (element) => element.scrollWidth <= element.clientWidth + 1,
@@ -970,7 +2251,7 @@ test("UI regression surfaces remain reachable and unclipped", async ({
   await expect(monitorEditor).toContainText("Last result");
   await expect(monitorEditor).toContainText("online");
   await expect(monitorEditor).toContainText(
-    "https://10.0.10.1:443/ returned 200.",
+    "Historical example.invalid sample: HTTPS returned 200 with its certificate exception.",
   );
   const monitorUpdateRequest = page.waitForRequest(
     (request) =>
@@ -981,7 +2262,7 @@ test("UI regression surfaces remain reachable and unclipped", async ({
   expect((await monitorUpdateRequest).postDataJSON()).toMatchObject({
     enabled: false,
     type: "https",
-    target: "10.0.10.1",
+    target: "firewall.example.invalid",
     port: 443,
     path: "/",
   });
@@ -1206,7 +2487,16 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
 
     await page.getByRole("button", { name: /Duplicate MACs/ }).click();
     await expect(page).toHaveURL(/mac=duplicates/);
-    await expect(filterCount).toHaveText(`2 of ${initialTotal} devices`);
+    await expect(filterCount).toHaveText(/\d+ of \d+ devices/);
+    const duplicateCountMatch = (await filterCount.textContent())?.match(
+      /(\d+) of (\d+) devices/,
+    );
+    expect(duplicateCountMatch).toBeTruthy();
+    const baseDuplicateCount = Number(duplicateCountMatch?.[1]) - 2;
+    expect(baseDuplicateCount).toBeGreaterThanOrEqual(2);
+    await expect(filterCount).toHaveText(
+      `${baseDuplicateCount + 2} of ${initialTotal} devices`,
+    );
 
     const summary = page.getByTestId("duplicate-mac-summary");
     await expect(summary).toBeVisible();
@@ -1240,7 +2530,9 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
         .getByTestId("duplicate-mac-group")
         .filter({ hasText: duplicateMac }),
     ).toHaveCount(0);
-    await expect(filterCount).toHaveText(`0 of ${initialTotal} devices`);
+    await expect(filterCount).toHaveText(
+      `${baseDuplicateCount} of ${initialTotal} devices`,
+    );
 
     const thirdDuplicateName = `duplicate-mac-c-${suffix}`;
     const thirdDuplicateRes = await request.post("/api/devices", {
@@ -1261,7 +2553,9 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
 
     await page.reload();
     const expandedTotal = initialTotal + 1;
-    await expect(filterCount).toHaveText(`3 of ${expandedTotal} devices`);
+    await expect(filterCount).toHaveText(
+      `${baseDuplicateCount + 3} of ${expandedTotal} devices`,
+    );
     group = summary
       .getByTestId("duplicate-mac-group")
       .filter({ hasText: duplicateMac });
@@ -1269,7 +2563,9 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
 
     await group.getByRole("button", { name: "Ignore duplicate" }).click();
     await expect(group).toHaveCount(0);
-    await expect(filterCount).toHaveText(`0 of ${expandedTotal} devices`);
+    await expect(filterCount).toHaveText(
+      `${baseDuplicateCount} of ${expandedTotal} devices`,
+    );
 
     await summary.getByRole("checkbox", { name: /Show ignored/ }).check();
     group = summary
@@ -1277,7 +2573,16 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
       .filter({ hasText: duplicateMac });
     await expect(group).toHaveAttribute("data-ignored", "true");
     await expect(group).toContainText("Ignored duplicate");
-    await expect(filterCount).toHaveText(`3 of ${expandedTotal} devices`);
+    const allDuplicateCountMatch = (await filterCount.textContent())?.match(
+      /(\d+) of (\d+) devices/,
+    );
+    expect(Number(allDuplicateCountMatch?.[1])).toBeGreaterThanOrEqual(
+      baseDuplicateCount + 3,
+    );
+    const allDuplicateCount = Number(allDuplicateCountMatch?.[1]);
+    await expect(filterCount).toHaveText(
+      `${allDuplicateCount} of ${expandedTotal} devices`,
+    );
     await expect(
       table.locator('tr[data-ignored-duplicate-mac="true"]').filter({
         hasText: thirdDuplicateName,
@@ -1291,7 +2596,9 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
     await expect(
       group.getByRole("button", { name: "Ignore duplicate" }),
     ).toBeVisible();
-    await expect(filterCount).toHaveText(`3 of ${expandedTotal} devices`);
+    await expect(filterCount).toHaveText(
+      `${allDuplicateCount} of ${expandedTotal} devices`,
+    );
   } finally {
     for (const deviceId of createdDeviceIds.reverse()) {
       await request.delete(`/api/devices/${deviceId}`, { headers });
@@ -1627,9 +2934,11 @@ test("explicit translation never rewrites user-provided hostnames", async ({
   await authenticate(page, "fr");
   await page.goto("/devices");
   await expect(
-    page.getByText("Unknown", { exact: true }).first(),
+    page.getByRole("link", { name: "Unknown", exact: true }),
   ).toBeVisible();
-  expect(await page.locator("text=Inconnu").count()).toBe(0);
+  await expect(
+    page.getByRole("link", { name: "Inconnu", exact: true }),
+  ).toHaveCount(0);
 });
 
 test("localized Admin controls stay contained and alert counts pluralize", async ({
@@ -1668,7 +2977,7 @@ test("localized Admin controls stay contained and alert counts pluralize", async
       actions: [
         "Enregistrer",
         "Restaurer la sauvegarde",
-        "Télécharger la sauvegarde",
+        "Télécharger la sauvegarde JSON",
         "Envoyer le test",
         "Enregistrer les notifications",
       ],
@@ -1682,7 +2991,7 @@ test("localized Admin controls stay contained and alert counts pluralize", async
       actions: [
         "حفظ التغييرات",
         "استعادة النسخة الاحتياطية",
-        "تنزيل النسخة الاحتياطية",
+        "تنزيل نسخة JSON الاحتياطية",
         "إرسال الاختبار",
         "حفظ الإخطارات",
       ],
@@ -1717,9 +3026,14 @@ test("localized Admin controls stay contained and alert counts pluralize", async
     await rolePicker
       .getByRole("button", { name: mode.role, exact: true })
       .click();
-    const assignmentSelects = page.locator("select").filter({
-      has: page.locator('option[value="none"]'),
-    });
+    const assignmentSelects = page
+      .locator("select")
+      .filter({
+        has: page.locator('option[value="none"]'),
+      })
+      .filter({
+        has: page.locator('option[value="viewer"]'),
+      });
     await expect(assignmentSelects).toHaveCount(2);
     for (const select of await assignmentSelects.all()) {
       expect(
@@ -1812,4 +3126,827 @@ test("failed locale loading falls back to bundled English", async ({
   await expect(notice).toBeVisible();
   await notice.getByRole("button", { name: "Dismiss language error" }).click();
   await expect(notice).toBeHidden();
+});
+
+test("beta feedback relationships and JSON snapshot action are visible", async ({
+  page,
+}) => {
+  await authenticate(page);
+  await page.goto("/admin");
+  await expect(
+    page.getByRole("button", { name: "Download JSON backup", exact: true }),
+  ).toHaveCount(1);
+
+  await page.goto("/devices/d_vm_gitea");
+  const hostedBy = page.getByTestId("device-host-relationship");
+  await expect(hostedBy).toContainText("Hosted by");
+  await expect(hostedBy.getByRole("link", { name: "pve-01" })).toHaveAttribute(
+    "href",
+    "/devices/d_srv_pve1",
+  );
+  await expect(
+    page.getByText("Host device", { exact: true }).locator(".."),
+  ).toContainText("pve-01");
+
+  await page.route("**/api/devices", async (route) => {
+    const response = await route.fetch();
+    const devices = (await response.json()) as Array<{
+      id: string;
+      parentDeviceId?: string | null;
+    }>;
+    const staleDevices = devices.map((device) =>
+      device.id === "d_vm_gitea"
+        ? { ...device, parentDeviceId: "d_missing_host" }
+        : device,
+    );
+    await route.fulfill({ response, json: staleDevices });
+  });
+  await page.reload();
+  await expect(page.getByTestId("device-host-relationship")).toContainText(
+    "Host unavailable",
+  );
+  await page.unroute("**/api/devices");
+
+  await page.goto("/devices/d_srv_nas?tab=storage");
+  const internalMember = page
+    .locator("[data-pool-member-row]")
+    .filter({ hasText: "DEMO-STORE-01" })
+    .first();
+  await expect(internalMember).toContainText("Internal");
+  const attachedMember = page
+    .locator("[data-pool-member-row]")
+    .filter({ hasText: "DEMO-STORE-05" })
+    .first();
+  await expect(attachedMember).toContainText("External / attached");
+  await expect(
+    attachedMember.getByRole("link", { name: "shelf-storage-01" }),
+  ).toHaveAttribute("href", "/devices/d_disk_shelf?tab=storage");
+  const unassignedMember = page
+    .locator("[data-pool-member-row]")
+    .filter({ hasText: "DEMO-STORE-06" })
+    .first();
+  await expect(unassignedMember).toContainText("Unassigned");
+  await expect(unassignedMember).toContainText("Missing");
+
+  await page.goto("/devices/d_disk_shelf?tab=storage");
+  const attachedPools = page.getByTestId("attached-storage-pools");
+  await expect(attachedPools).toContainText("External / attached");
+  await expect(
+    attachedPools.getByRole("link", { name: "truenas-01", exact: true }),
+  ).toHaveAttribute("href", "/devices/d_srv_nas?tab=storage");
+
+  await page.goto("/devices/d_srv_nas");
+  const source = page.getByTestId("device-overview-storage-source");
+  await expect(source).toHaveText("Usable topology");
+  await expect(source.locator("..")).toContainText("48000 GB");
+});
+
+test("documentation images open safely with mouse and keyboard", async ({
+  page,
+}) => {
+  await authenticate(page);
+  await page.goto("/documentation?pageId=doc_home_runbook");
+  const imageControl = page.getByRole("button", {
+    name: "Open image CMP-01 rack front reference in a new tab",
+    exact: true,
+  });
+  await expect(imageControl).toBeVisible();
+
+  await imageControl.focus();
+  const keyboardPopupPromise = page.waitForEvent("popup");
+  await imageControl.press("Enter");
+  const keyboardPopup = await keyboardPopupPromise;
+  await expect.poll(() => keyboardPopup.url()).toMatch(/^blob:/);
+  await keyboardPopup.close();
+
+  const mousePopupPromise = page.waitForEvent("popup");
+  await imageControl.click();
+  const mousePopup = await mousePopupPromise;
+  await expect.poll(() => mousePopup.url()).toMatch(/^blob:/);
+  await mousePopup.close();
+});
+
+test("device overview storage follows topology precedence without rewriting manual storage", async ({
+  page,
+  request,
+}) => {
+  const suffix = Date.now().toString(36);
+  const headers = { Authorization: `Bearer ${token}` };
+  const deviceIds: string[] = [];
+  const driveIds: string[] = [];
+  let poolId = "";
+
+  try {
+    const createDevice = async (
+      hostname: string,
+      storageGb: number,
+      withSlots: boolean,
+    ) => {
+      const response = await request.post("/api/devices", {
+        headers,
+        data: {
+          labId: "lab_home",
+          hostname,
+          deviceType: "storage",
+          placement: "room",
+          status: "unknown",
+          storageGb,
+          ...(withSlots ? { driveBayTemplateId: "storage-4x3-5" } : {}),
+        },
+      });
+      expect(response.status(), await response.text()).toBe(201);
+      const device = (await response.json()) as { id: string };
+      deviceIds.push(device.id);
+      return device.id;
+    };
+    const createInstalledDrive = async (
+      deviceId: string,
+      serial: string,
+      capacityGb: number,
+    ) => {
+      const slotsResponse = await request.get(
+        `/api/storage/drive-slots?deviceId=${deviceId}`,
+        { headers },
+      );
+      expect(slotsResponse.ok()).toBeTruthy();
+      const slots = (await slotsResponse.json()) as Array<{ id: string }>;
+      const driveResponse = await request.post("/api/storage/drives", {
+        headers,
+        data: {
+          labId: "lab_home",
+          serial,
+          capacityGb,
+          interface: "sas",
+          formFactor: "3.5",
+          slotId: slots[0].id,
+        },
+      });
+      expect(driveResponse.status(), await driveResponse.text()).toBe(201);
+      const drive = (await driveResponse.json()) as { id: string };
+      driveIds.push(drive.id);
+      return drive.id;
+    };
+
+    const usableDeviceId = await createDevice(
+      `overview-usable-${suffix}`,
+      111,
+      true,
+    );
+    const rawDeviceId = await createDevice(
+      `overview-raw-${suffix}`,
+      222,
+      true,
+    );
+    const manualDeviceId = await createDevice(
+      `overview-manual-${suffix}`,
+      333,
+      false,
+    );
+    const usableDriveId = await createInstalledDrive(
+      usableDeviceId,
+      `OVERVIEW-USABLE-${suffix}`,
+      600,
+    );
+    await createInstalledDrive(
+      rawDeviceId,
+      `OVERVIEW-RAW-${suffix}`,
+      700,
+    );
+    const poolResponse = await request.post("/api/storage/pools", {
+      headers,
+      data: {
+        deviceId: usableDeviceId,
+        name: `overview-pool-${suffix}`,
+        poolType: "mirror",
+        usableCapacityGb: 450,
+        status: "healthy",
+        driveIds: [usableDriveId],
+      },
+    });
+    expect(poolResponse.status(), await poolResponse.text()).toBe(201);
+    poolId = ((await poolResponse.json()) as { id: string }).id;
+
+    await authenticate(page);
+    for (const [deviceId, source, capacity] of [
+      [usableDeviceId, "Usable topology", "450 GB"],
+      [rawDeviceId, "Raw topology", "700 GB"],
+      [manualDeviceId, "Manual / imported", "333 GB"],
+    ] as const) {
+      await page.goto(`/devices/${deviceId}`);
+      const sourceIndicator = page.getByTestId(
+        "device-overview-storage-source",
+      );
+      await expect(sourceIndicator).toHaveText(source);
+      await expect(sourceIndicator.locator("..")).toContainText(capacity);
+    }
+
+    for (const [deviceId, storedStorageGb] of [
+      [usableDeviceId, 111],
+      [rawDeviceId, 222],
+      [manualDeviceId, 333],
+    ] as const) {
+      const response = await request.get(`/api/devices/${deviceId}`, {
+        headers,
+      });
+      expect(response.ok()).toBeTruthy();
+      expect(
+        ((await response.json()) as { storageGb: number }).storageGb,
+      ).toBe(storedStorageGb);
+    }
+  } finally {
+    if (poolId) await request.delete(`/api/storage/pools/${poolId}`, { headers });
+    for (const driveId of driveIds) {
+      await request.delete(`/api/storage/drives/${driveId}`, { headers });
+    }
+    for (const deviceId of deviceIds) {
+      await request.delete(`/api/devices/${deviceId}`, { headers });
+    }
+  }
+});
+
+test("unmanaged status is selectable, bulk editable, filterable, and reported", async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60_000);
+  const suffix = Date.now().toString(36);
+  const headers = { Authorization: `Bearer ${token}` };
+  const hostnames = [
+    `unmanaged-manual-${suffix}`,
+    `unmanaged-bulk-${suffix}`,
+  ];
+  const deviceIds: string[] = [];
+
+  try {
+    for (const hostname of hostnames) {
+      const response = await request.post("/api/devices", {
+        headers,
+        data: {
+          labId: "lab_home",
+          hostname,
+          deviceType: "server",
+          placement: "room",
+          status: "online",
+        },
+      });
+      expect(response.status(), await response.text()).toBe(201);
+      deviceIds.push(((await response.json()) as { id: string }).id);
+    }
+
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.goto("/devices");
+    await page.getByRole("button", { name: "Add device", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Unmanaged", exact: true }),
+    ).toBeVisible();
+    await page.getByLabel("Close", { exact: true }).click();
+
+    await page.goto(`/devices/${deviceIds[0]}`);
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("button", { name: "Unmanaged", exact: true }).click();
+    const editResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        response.url().endsWith(`/api/devices/${deviceIds[0]}`),
+    );
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    const editResponse = await editResponsePromise;
+    expect(editResponse.status(), await editResponse.text()).toBe(200);
+    expect(((await editResponse.json()) as { status: string }).status).toBe(
+      "unmanaged",
+    );
+
+    await page.goto("/devices");
+    for (const hostname of hostnames) {
+      await page.getByRole("checkbox", { name: `Select ${hostname}` }).check();
+    }
+    const bulkStatusField = page
+      .locator("label")
+      .filter({ hasText: "Status" })
+      .last();
+    await bulkStatusField.getByRole("checkbox").check();
+    await bulkStatusField.getByRole("combobox").selectOption("unmanaged");
+    const bulkResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().endsWith("/api/devices/bulk"),
+    );
+    await page
+      .getByRole("button", { name: "Apply changes", exact: true })
+      .click();
+    const bulkResponse = await bulkResponsePromise;
+    expect(bulkResponse.status(), await bulkResponse.text()).toBe(200);
+    expect(
+      (
+        (await bulkResponse.json()) as {
+          devices: Array<{ status: string }>;
+        }
+      ).devices.every((device) => device.status === "unmanaged"),
+    ).toBeTruthy();
+
+    const statusFilter = page.getByRole("combobox", {
+      name: "Status",
+      exact: true,
+    });
+    await statusFilter.selectOption("unmanaged");
+    await expect(statusFilter).toHaveValue("unmanaged");
+    for (const hostname of hostnames) {
+      await expect(page.getByText(hostname, { exact: true })).toBeVisible();
+    }
+
+    await page.goto("/reports");
+    await expect(page.getByText("Unmanaged", { exact: true })).toBeVisible();
+  } finally {
+    for (const deviceId of deviceIds) {
+      await request.delete(`/api/devices/${deviceId}`, { headers });
+    }
+  }
+});
+
+test("Device Types workspace supports CRUD, usage, and admin-only access", async ({
+  browser,
+  page,
+  request,
+}) => {
+  const suffix = Date.now().toString(36);
+  const typeId = `e2e_device_type_${suffix}`;
+  const username = `device-type-viewer-${suffix}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  let viewerId = "";
+  let deviceId = "";
+  let viewerContext: Awaited<ReturnType<typeof browser.newContext>> | null =
+    null;
+
+  try {
+    await authenticate(page);
+    await page.setViewportSize({ width: 720, height: 900 });
+    await page.goto("/admin/device-types");
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "Device types",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.getByTestId("device-type-section-built-in")).toBeVisible();
+    await expect(page.getByTestId("device-type-section-custom")).toBeVisible();
+    await page
+      .getByRole("textbox", { name: "Name", exact: true })
+      .fill(`E2E appliance ${suffix}`);
+    await page.getByRole("textbox", { name: "ID", exact: true }).fill(typeId);
+    await page
+      .getByRole("combobox", { name: "Parent", exact: true })
+      .selectOption("server");
+    await expect(
+      page.getByTestId("device-type-inheritance-summary"),
+    ).toContainText(
+      "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.",
+    );
+    await page.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.getByTestId("device-type-usage")).toContainText(
+      "Devices",
+    );
+    await expect(page.getByTestId("device-type-usage")).toContainText(
+      "Port templates",
+    );
+    await expect(
+      page.getByRole("textbox", { name: "ID", exact: true }),
+    ).toBeDisabled();
+
+    const updatedLabel = `E2E managed appliance ${suffix}`;
+    await page
+      .getByRole("textbox", { name: "Name", exact: true })
+      .fill(updatedLabel);
+    await page
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await expect(
+      page.getByText(updatedLabel, { exact: true }).first(),
+    ).toBeVisible();
+
+    const deviceResponse = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        hostname: `device-type-usage-${suffix}`,
+        deviceType: typeId,
+        status: "unknown",
+        placement: "room",
+      },
+    });
+    expect(deviceResponse.status(), await deviceResponse.text()).toBe(201);
+    deviceId = ((await deviceResponse.json()) as { id: string }).id;
+    await page.reload();
+    await page.getByText(updatedLabel, { exact: true }).first().click();
+    await expect(page.getByTestId("device-type-deletion-reason")).toContainText(
+      "Devices 1",
+    );
+    await expect(
+      page.getByRole("button", { name: "Delete", exact: true }),
+    ).toBeDisabled();
+
+    const viewerResponse = await request.post("/api/users", {
+      headers,
+      data: {
+        username,
+        displayName: "Device Type Viewer",
+        password: "device-type-viewer-password",
+        role: "viewer",
+      },
+    });
+    expect(viewerResponse.status()).toBe(201);
+    viewerId = ((await viewerResponse.json()) as { id: string }).id;
+    const viewerLogin = await request.post("/api/auth/login", {
+      data: { username, password: "device-type-viewer-password" },
+    });
+    expect(viewerLogin.ok()).toBeTruthy();
+    const viewerToken = ((await viewerLogin.json()) as { token: string }).token;
+    const generalTypes = await request.get("/api/device-types", {
+      headers: { Authorization: `Bearer ${viewerToken}` },
+    });
+    expect(generalTypes.status()).toBe(200);
+    const usage = await request.get("/api/device-types/usage", {
+      headers: { Authorization: `Bearer ${viewerToken}` },
+    });
+    expect(usage.status()).toBe(403);
+
+    viewerContext = await browser.newContext();
+    const viewerPage = await viewerContext.newPage();
+    await viewerPage.addInitScript((authToken) => {
+      localStorage.setItem("rackpad.auth.token", authToken);
+    }, viewerToken);
+    await viewerPage.goto("http://127.0.0.1:5173/admin/device-types");
+    await expect(
+      viewerPage.getByRole("heading", {
+        name: "Administrator access required",
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    await request.delete(`/api/devices/${deviceId}`, { headers });
+    deviceId = "";
+    await page.reload();
+    await page.getByText(updatedLabel, { exact: true }).first().click();
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(page.getByText(updatedLabel, { exact: true })).toHaveCount(0);
+  } finally {
+    await viewerContext?.close();
+    if (viewerId) await request.delete(`/api/users/${viewerId}`, { headers });
+    if (deviceId) await request.delete(`/api/devices/${deviceId}`, { headers });
+    await request.delete(`/api/device-types/${typeId}`, { headers });
+  }
+});
+
+test("integration previews expose safe modes, UTC schedules, and viewer read-only state", async ({
+  browser,
+  page,
+  request,
+}) => {
+  const suffix = Date.now().toString(36);
+  const headers = { Authorization: `Bearer ${token}` };
+  const connectionResponse = await request.post(
+    "/api/integrations/connections",
+    {
+      headers,
+      data: {
+        labId: "lab_home",
+        provider: "opnsense",
+        name: `E2E firewall ${suffix}`,
+        baseUrl: "https://8.8.8.8",
+        authKind: "key-secret",
+        authId: "e2e-key",
+        authSecret: "e2e-secret",
+      },
+    },
+  );
+  expect(connectionResponse.status(), await connectionResponse.text()).toBe(
+    201,
+  );
+  const connection = (await connectionResponse.json()) as {
+    id: string;
+    name: string;
+  } & Record<string, unknown>;
+  let scheduleId = "";
+  let viewerId = "";
+  let deviceApplyCount = 0;
+  const submittedDeviceSelections: string[][] = [];
+  let viewerContext: Awaited<ReturnType<typeof browser.newContext>> | null =
+    null;
+
+  try {
+    const scheduleResponse = await request.post("/api/integrations/schedules", {
+      headers,
+      data: {
+        connectionId: connection.id,
+        name: `Nightly safe sync ${suffix}`,
+        enabled: true,
+        mode: "skip",
+        cron: "0 2 * * *",
+        labIds: ["lab_home"],
+      },
+    });
+    expect(scheduleResponse.status(), await scheduleResponse.text()).toBe(201);
+    scheduleId = ((await scheduleResponse.json()) as { id: string }).id;
+
+    await authenticate(page);
+    await page.route(
+      `**/api/integrations/connections/${connection.id}/inventory`,
+      async (route) => {
+        await route.fulfill({
+          json: {
+            connection,
+            mode: "merge",
+            networkPreviewToken: "e2e-network-preview-token",
+            networkPreviewExpiresAt: new Date(
+              Date.now() + 60_000,
+            ).toISOString(),
+            deviceSnapshotToken: "e2e-device-snapshot-token",
+            deviceSnapshotExpiresAt: new Date(
+              Date.now() + 60_000,
+            ).toISOString(),
+            preview: {
+              profileId: "integration:opnsense",
+              deviceId: connection.id,
+              labId: "lab_home",
+              target: "E2E firewall",
+              collectedAt: new Date().toISOString(),
+              policy: "merge",
+              vlans: [
+                {
+                  action: "create",
+                  vlanNumber: 321,
+                  name: "E2E preview VLAN",
+                },
+              ],
+              subnets: [],
+              dhcp: {
+                supported: true,
+                message: "",
+                scopes: [],
+                conflicts: [],
+              },
+              summary: {
+                vlanCreates: 1,
+                vlanUpdates: 0,
+                vlanDeletes: 0,
+                subnetCreates: 0,
+                subnetUpdates: 0,
+                subnetDeletes: 0,
+                dhcpCreates: 0,
+                dhcpConflicts: 0,
+              },
+              warnings: [],
+            },
+            devices: [
+              {
+                name: "e2e-firewall",
+                kind: "firewall",
+                model: "OPNsense",
+                macAddress: "02:00:00:00:03:21",
+                ipAddress: "10.0.10.254",
+                status: "online",
+                detail: null,
+              },
+            ],
+            deviceSync: {
+              labId: "lab_home",
+              devices: [
+                {
+                  providerRecordId: "device:e2e-host",
+                  action: "create",
+                  name: "e2e-host",
+                  deviceType: "server",
+                  parentName: null,
+                  model: "Proxmox host",
+                  macAddress: "02:00:00:00:03:22",
+                  ipAddress: "10.0.10.22",
+                  portCount: 0,
+                  reason: null,
+                  proposedUpdates: [],
+                },
+                {
+                  providerRecordId: "device:e2e-guest",
+                  action: "create",
+                  name: "e2e-guest",
+                  deviceType: "vm",
+                  parentName: "e2e-host",
+                  model: "Virtual machine",
+                  macAddress: "02:00:00:00:03:23",
+                  ipAddress: "10.0.10.23",
+                  portCount: 1,
+                  reason: null,
+                  proposedUpdates: [],
+                },
+                {
+                  providerRecordId: "device:e2e-conflict",
+                  action: "conflict",
+                  name: "e2e-ambiguous",
+                  deviceType: "switch",
+                  parentName: null,
+                  model: null,
+                  macAddress: null,
+                  ipAddress: null,
+                  portCount: 0,
+                  reason:
+                    "Multiple controller records named e2e-ambiguous cannot be distinguished without a MAC address.",
+                  proposedUpdates: [],
+                },
+              ],
+              ssids: [],
+              virtualSwitches: [
+                {
+                  providerRecordId: "virtual-switch:e2e-vmbr0",
+                  action: "create",
+                  name: "e2e-vmbr0",
+                  hostName: "e2e-host",
+                  reason: null,
+                },
+              ],
+              controllerName: null,
+            },
+            importableDevices: [],
+            virtualSwitches: [],
+            wifi: null,
+            warnings: [],
+          },
+        });
+      },
+    );
+    await page.route(
+      `**/api/integrations/connections/${connection.id}/apply-devices`,
+      async (route) => {
+        const body = route.request().postDataJSON() as {
+          selectedProviderRecordIds: string[];
+        };
+        submittedDeviceSelections.push(body.selectedProviderRecordIds);
+        deviceApplyCount += 1;
+        const skipped =
+          deviceApplyCount === 1
+            ? []
+            : deviceApplyCount === 2
+              ? ["e2e-guest: parent host changed after preview."]
+              : ["e2e-host: controller identity became ambiguous."];
+        const created = deviceApplyCount === 3 ? 0 : 1;
+        await route.fulfill({
+          json: {
+            createdDeviceIds: created
+              ? [`device-created-${deviceApplyCount}`]
+              : [],
+            createdPortCount: created,
+            createdSsidIds: [],
+            createdVirtualSwitchIds: [],
+            createdIpAssignmentIds: [],
+            linkedAccessPoints: 0,
+            skipped,
+          },
+        });
+      },
+    );
+    await page.goto("/imports");
+    await page.getByRole("tab", { name: "Integrations", exact: true }).click();
+    await expect(
+      page.getByText(connection.name, { exact: true }),
+    ).toBeVisible();
+    const connectionPanel = page
+      .getByText(connection.name, { exact: true })
+      .locator(
+        "xpath=ancestor::div[.//button[normalize-space()='Pull inventory']][1]",
+      );
+    const pullInventory = connectionPanel.getByRole("button", {
+      name: "Pull inventory",
+      exact: true,
+    });
+    await pullInventory.click();
+    await expect(
+      page.getByText("Inventory preview", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("E2E preview VLAN", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Apply networks", exact: true }),
+    ).toBeEnabled();
+    await expect(page.locator('option[value="mirror"]')).toHaveCount(0);
+    await page.getByLabel("Close", { exact: true }).click();
+
+    const openImportPreview = async () => {
+      await pullInventory.click();
+      await page.getByRole("tab", { name: /^Import \(4\)$/ }).click();
+    };
+
+    await openImportPreview();
+    const hostSelection = page.getByLabel("Select e2e-host", { exact: true });
+    const guestSelection = page.getByLabel("Select e2e-guest", { exact: true });
+    const switchSelection = page.getByLabel("Select e2e-vmbr0", {
+      exact: true,
+    });
+    await expect(
+      page.getByLabel("Select e2e-ambiguous", { exact: true }),
+    ).toBeDisabled();
+    await hostSelection.uncheck();
+    await expect(guestSelection).not.toBeChecked();
+    await expect(switchSelection).not.toBeChecked();
+    await guestSelection.check();
+    await expect(hostSelection).toBeChecked();
+    await switchSelection.check();
+    await page.getByRole("button", { name: "Import devices" }).click();
+    await expect(page.getByText(/^Imported 1 device/)).toBeVisible();
+    expect(submittedDeviceSelections[0].sort()).toEqual(
+      [
+        "device:e2e-guest",
+        "device:e2e-host",
+        "virtual-switch:e2e-vmbr0",
+      ].sort(),
+    );
+
+    await openImportPreview();
+    await page.getByRole("button", { name: "Import devices" }).click();
+    await expect(
+      page.getByText("Some selected records were not imported.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/e2e-guest: parent host changed/),
+    ).toBeVisible();
+    await expect(page.getByText(/^Imported 1 device/)).toBeVisible();
+
+    await openImportPreview();
+    await page.getByRole("button", { name: "Import devices" }).click();
+    await expect(page.getByText(/e2e-host: controller identity/)).toBeVisible();
+    await expect(page.getByText(/^Imported \d+ device/)).toHaveCount(0);
+
+    await connectionPanel
+      .getByRole("button", { name: /Auto-sync \(1\)/, exact: true })
+      .click();
+    await expect(
+      page.getByText("When to sync (UTC)", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(`Nightly safe sync ${suffix}`, { exact: true }),
+    ).toBeVisible();
+    await expect(page.locator('option[value="merge"]')).not.toHaveCount(0);
+    await expect(page.locator('option[value="skip"]')).not.toHaveCount(0);
+    await expect(page.locator('option[value="mirror"]')).toHaveCount(0);
+
+    const viewerResponse = await request.post("/api/users", {
+      headers,
+      data: {
+        username: `integration-viewer-${suffix}`,
+        displayName: "Integration Viewer",
+        password: "integration-viewer-password",
+        role: "viewer",
+      },
+    });
+    expect(viewerResponse.status()).toBe(201);
+    viewerId = ((await viewerResponse.json()) as { id: string }).id;
+    const viewerLogin = await request.post("/api/auth/login", {
+      data: {
+        username: `integration-viewer-${suffix}`,
+        password: "integration-viewer-password",
+      },
+    });
+    expect(viewerLogin.ok()).toBeTruthy();
+    const viewerToken = ((await viewerLogin.json()) as { token: string }).token;
+    viewerContext = await browser.newContext();
+    const viewerPage = await viewerContext.newPage();
+    await viewerPage.addInitScript((authToken) => {
+      localStorage.setItem("rackpad.auth.token", authToken);
+    }, viewerToken);
+    await viewerPage.goto("http://127.0.0.1:5173/imports");
+    await viewerPage
+      .getByRole("tab", { name: "Integrations", exact: true })
+      .click();
+    const viewerConnectionPanel = viewerPage
+      .getByText(connection.name, { exact: true })
+      .locator(
+        "xpath=ancestor::div[.//button[normalize-space()='Pull inventory']][1]",
+      );
+    await expect(
+      viewerConnectionPanel.getByRole("button", {
+        name: "Pull inventory",
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await expect(
+      viewerConnectionPanel.getByRole("button", {
+        name: "Edit",
+        exact: true,
+      }),
+    ).toBeDisabled();
+  } finally {
+    await viewerContext?.close();
+    if (viewerId) await request.delete(`/api/users/${viewerId}`, { headers });
+    if (scheduleId) {
+      await request.delete(`/api/integrations/schedules/${scheduleId}`, {
+        headers,
+      });
+    }
+    await request.delete(`/api/integrations/connections/${connection.id}`, {
+      headers,
+    });
+  }
 });

@@ -25,17 +25,22 @@ import {
   Route,
   Shield,
   UploadCloud,
+  HardDrive,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { formatDeviceAddress } from "@/lib/network-labels";
+import {
+  formatDeviceAddress,
+  matchesMacAwareSearch,
+} from "@/lib/network-labels";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useStore } from "@/lib/store";
 import { useI18n } from "@/i18n";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 
 interface SearchResult {
   id: string;
-  group: "Pages" | "Devices" | "Networks" | "IPs";
+  group: "Pages" | "Devices" | "Drives" | "Networks" | "IPs";
   title: string;
   subtitle?: string;
   href: string;
@@ -58,7 +63,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const documentationPages = useStore((s) => s.documentationPages);
+  const storageDrives = useStore((s) => s.storageDrives);
   const vlans = useStore((s) => s.vlans);
   const ipAssignments = useStore((s) => s.ipAssignments);
   const deviceById = useMemo(
@@ -99,6 +106,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         subtitle: "Health overview",
         href: "/monitoring",
         Icon: Activity,
+      },
+      {
+        id: "p-storage",
+        group: "Pages",
+        title: t("Storage"),
+        subtitle: t("Physical drives, device bays, and logical pools"),
+        href: "/storage",
+        Icon: HardDrive,
+        keywords: ["storage", "drive", "disk", "pool", "raid", "jbod"],
       },
       {
         id: "p-imports",
@@ -206,13 +222,13 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         .join(" ")
         .toLowerCase();
 
-      if (haystack.includes(q)) {
+      if (matchesMacAwareSearch(haystack, q)) {
         out.push({
           id: device.id,
           group: "Devices",
           title: device.hostname,
           subtitle: [
-            device.deviceType.replace("_", " "),
+            localizedDeviceTypeIdLabel(device.deviceType, deviceTypes, t),
             device.manufacturer,
             device.model,
             formatDeviceAddress(device),
@@ -221,6 +237,28 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             .join(" · "),
           href: `/devices/${device.id}`,
           Icon: Server,
+        });
+      }
+    }
+
+    for (const drive of storageDrives) {
+      const haystack = [drive.serial, drive.manufacturer, drive.model]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (haystack.includes(q)) {
+        out.push({
+          id: `drive-${drive.id}`,
+          group: "Drives",
+          title:
+            [drive.manufacturer, drive.model].filter(Boolean).join(" ") ||
+            drive.serial ||
+            t("Unknown drive"),
+          subtitle: [drive.serial, drive.deviceHostname, drive.slotName]
+            .filter(Boolean)
+            .join(" · "),
+          href: `/storage?tab=drives&driveId=${drive.id}`,
+          Icon: HardDrive,
         });
       }
     }
@@ -302,11 +340,13 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     return out;
   }, [
     deviceById,
+    deviceTypes,
     devices,
     documentationPages,
     ipAssignments,
     pages,
     query,
+    storageDrives,
     t,
     vlans,
   ]);
@@ -448,9 +488,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                           <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
                             {group.label === "Devices"
                               ? t("Devices")
-                              : group.label === "Networks"
-                                ? t("Networks")
-                                : group.label}
+                              : group.label === "Drives"
+                                ? t("Drives")
+                                : group.label === "Networks"
+                                  ? t("Networks")
+                                  : group.label}
                           </span>
                           <span className="flex-1 border-t border-[var(--color-line)]" />
                         </div>

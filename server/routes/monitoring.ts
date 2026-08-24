@@ -11,7 +11,7 @@ import {
 import { createId } from '../lib/ids.js'
 import { listMonitors, MONITOR_TYPES, parseMonitor, reconcileDeviceMonitorRollup, runDeviceChecks, runMonitorCheck, SNMP_MATCH_MODES, SNMP_VERSIONS } from '../lib/monitoring.js'
 import { discoverIfMibInterfaces, formatSnmpHighSpeedMbps, interfaceMonitorName } from '../lib/snmp-if-mib.js'
-import { matchPortForInterface } from '../lib/snmp-match.js'
+import { isValidSnmpRegex, matchPortForInterface } from '../lib/snmp-match.js'
 import { resolveSnmpSessionForTarget } from '../lib/snmp-session.js'
 import {
   buildSnmpSessionFromCredential,
@@ -208,7 +208,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
       return listMonitors(query.deviceId)
     }
 
-    let sql = `
+    const sql = `
       SELECT deviceMonitors.id
       FROM deviceMonitors
       JOIN devices ON devices.id = deviceMonitors.deviceId
@@ -263,6 +263,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     if (type === 'snmp' && !snmpOid) {
       throw new ValidationError('SNMP OID is required for SNMP health checks.')
     }
+    validateRegexMatch(snmpMatchMode, snmpExpectedValue)
     validateSnmpOid(snmpOid)
     const validatedPortId = validateMonitorPortId(deviceId, linkedPortId)
     const validatedCredentialId = validateMonitorCredentialId(device.labId, snmpCredentialId)
@@ -432,6 +433,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     if (nextType === 'snmp' && !nextSnmpOid) {
       throw new ValidationError('SNMP OID is required for SNMP health checks.')
     }
+    validateRegexMatch(nextSnmpMatchMode, nextSnmpExpectedValue)
     validateSnmpOid(nextSnmpOid)
     const device = getDeviceLabRow(String(current.deviceId))
     if (!device) {
@@ -514,7 +516,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(filter.status).send({ error: filter.error })
     }
 
-    let sql = `
+    const sql = `
       SELECT deviceMonitors.id
       FROM deviceMonitors
       JOIN devices ON devices.id = deviceMonitors.deviceId
@@ -672,6 +674,16 @@ function validateMonitorPortId(deviceId: string, portId: string | null | undefin
     throw new ValidationError('Port must belong to the selected device.')
   }
   return portId
+}
+
+function validateRegexMatch(
+  mode: (typeof SNMP_MATCH_MODES)[number],
+  expected: string | null | undefined,
+) {
+  if (mode !== 'regex') return
+  if (!expected || !isValidSnmpRegex(expected)) {
+    throw new ValidationError('SNMP regex match requires a valid pattern of at most 200 characters.')
+  }
 }
 
 function writeMonitorAudit(

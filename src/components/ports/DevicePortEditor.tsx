@@ -16,9 +16,17 @@ import { Input } from "@/components/ui/Input";
 import { Mono } from "@/components/shared/Mono";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { createPortRecord, deletePortRecord, updatePort } from "@/lib/store";
-import type { Device, Port, PortLink, VirtualSwitch, Vlan } from "@/lib/types";
+import type {
+  Device,
+  DeviceTypeDefinition,
+  Port,
+  PortLink,
+  VirtualSwitch,
+  Vlan,
+} from "@/lib/types";
 import { Save, Trash2 } from "lucide-react";
 import { formatPortLabel } from "@/lib/utils";
+import { deviceTypeBase } from "@/lib/device-types";
 
 function formatVlanReference(vlanId: string, vlansById: Record<string, Vlan>) {
   const vlan = vlansById[vlanId];
@@ -43,6 +51,8 @@ const PORT_KINDS: Port["kind"][] = [
   "usb",
   "virtual",
   "wifi",
+  "sff",
+  "other",
 ];
 const PORT_MODES: NonNullable<Port["mode"]>[] = ["access", "trunk"];
 const PORT_MODE_KEYS: Record<NonNullable<Port["mode"]>, TranslationKey> = {
@@ -80,9 +90,12 @@ function portToForm(port: Port): PortFormState {
   };
 }
 
-function blankPortForm(device: Device): PortFormState {
-  const isVirtualDevice =
-    device.deviceType === "vm" || device.deviceType === "container";
+function blankPortForm(
+  device: Device,
+  deviceTypes: DeviceTypeDefinition[],
+): PortFormState {
+  const baseType = deviceTypeBase(device.deviceType, deviceTypes);
+  const isVirtualDevice = baseType === "vm" || baseType === "container";
   return {
     name: "",
     kind: isVirtualDevice ? "virtual" : "rj45",
@@ -140,6 +153,7 @@ function Select({
 
 export function DevicePortEditor({
   device,
+  deviceTypes,
   port,
   creating,
   canEdit,
@@ -155,6 +169,7 @@ export function DevicePortEditor({
   onDeleted,
 }: {
   device: Device;
+  deviceTypes: DeviceTypeDefinition[];
   port?: Port;
   creating: boolean;
   canEdit: boolean;
@@ -207,13 +222,13 @@ export function DevicePortEditor({
 
   useEffect(() => {
     if (creating) {
-      setForm(blankPortForm(device));
+      setForm(blankPortForm(device, deviceTypes));
       setError("");
       return;
     }
     setForm(port ? portToForm(port) : null);
     setError("");
-  }, [creating, device, port]);
+  }, [creating, device, deviceTypes, port]);
 
   async function handleSave() {
     if (!form) return;

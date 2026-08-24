@@ -54,6 +54,7 @@ import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { Mono } from "@/components/shared/Mono";
 import type { Port } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
+import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import { formatPortEndpointLabel } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import {
@@ -63,6 +64,7 @@ import {
   traceFromPort,
   tracePorts,
   typeLabel,
+  visualizerSearchResultMeta,
   visualizerCableLaneIndexes,
   visualizerCablePath,
 } from "./model";
@@ -678,7 +680,7 @@ export function VisualizerCanvas({
                               {result.label}
                             </span>
                             <span className="block truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-                              {result.meta}
+                              {visualizerSearchResultMeta(model, result, t)}
                             </span>
                           </span>
                           <Badge
@@ -788,7 +790,6 @@ export function VisualizerCanvas({
                   </svg>
                   <ZonePanels
                     model={model}
-                    healthOverlay={healthOverlay}
                     onToggleRackRun={onToggleRackRun}
                     onToggleGroup={onToggleGroup}
                   />
@@ -954,12 +955,10 @@ export function VisualizerCanvas({
 
 function ZonePanels({
   model,
-  healthOverlay,
   onToggleRackRun,
   onToggleGroup,
 }: {
   model: VisualizerModel;
-  healthOverlay: boolean;
   onToggleRackRun: (key: string) => void;
   onToggleGroup: (key: string) => void;
 }) {
@@ -1431,7 +1430,14 @@ function DeviceCard({
                   managementIp: node.device.managementIp,
                   macAddress: node.macAddress,
                 },
-                typeLabel(node.device.deviceType),
+                localizedDeviceTypeIdLabel(
+                  node.device.deviceType,
+                  [],
+                  t,
+                  model.deviceTypes.find(
+                    (entry) => entry.type === node.device.deviceType,
+                  )?.label ?? typeLabel(node.device.deviceType),
+                ),
               )}
             </div>
           )}
@@ -2010,7 +2016,12 @@ function VisualizerSidePanel({
               key={entry.type}
               active={typeFilters.has(entry.type)}
               label={t("{label} {count}", {
-                label: entry.label,
+                label: localizedDeviceTypeIdLabel(
+                  entry.type,
+                  [],
+                  t,
+                  entry.label,
+                ),
                 count: entry.count,
               })}
               onClick={() => toggleTypeFilter(entry.type)}
@@ -2058,7 +2069,10 @@ function TracePicker({
     [model],
   );
   const [deviceId, setDeviceId] = useState(traceDevices[0]?.device.id ?? "");
-  const devicePorts = deviceId ? (model.portsByDeviceId[deviceId] ?? []) : [];
+  const devicePorts = useMemo(
+    () => (deviceId ? (model.portsByDeviceId[deviceId] ?? []) : []),
+    [deviceId, model.portsByDeviceId],
+  );
   const [portId, setPortId] = useState(devicePorts[0]?.id ?? "");
 
   useEffect(() => {
@@ -2213,6 +2227,7 @@ function Inspector({
           )}
           {selectedNode && (
             <DeviceInspector
+              model={model}
               node={selectedNode}
               neighbors={neighbors}
               onSelectCable={onSelectCable}
@@ -2281,10 +2296,12 @@ function Inspector({
 }
 
 function DeviceInspector({
+  model,
   node,
   neighbors,
   onSelectCable,
 }: {
+  model: VisualizerModel;
   node: VisualizerNode;
   neighbors: Array<{
     device: VisualizerModel["deviceById"][string];
@@ -2307,7 +2324,17 @@ function DeviceInspector({
       <div className="grid grid-cols-2 gap-2">
         <InfoBox label={t("IP")} value={node.device.managementIp} mono />
         <InfoBox label={t("MAC")} value={node.macAddress} mono />
-        <InfoBox label={t("Type")} value={typeLabel(node.device.deviceType)} />
+        <InfoBox
+          label={t("Type")}
+          value={localizedDeviceTypeIdLabel(
+            node.device.deviceType,
+            [],
+            t,
+            model.deviceTypes.find(
+              (entry) => entry.type === node.device.deviceType,
+            )?.label ?? typeLabel(node.device.deviceType),
+          )}
+        />
         <InfoBox label={t("Placement")} value={placementLabel(node, t)} />
         <InfoBox
           label={t("Ports")}
@@ -2491,7 +2518,14 @@ function TraceSummary({
         rack: t("Rack"),
         room: t("Room"),
         unknown: t("Unknown"),
-        deviceType: typeLabel,
+        deviceType: (type) =>
+          localizedDeviceTypeIdLabel(
+            type,
+            [],
+            t,
+            model.deviceTypes.find((entry) => entry.type === type)?.label ??
+              typeLabel(type),
+          ),
         hops: (count) => t("{count} hops", { count }),
       },
       theme,
@@ -2661,9 +2695,7 @@ function TraceSummary({
                     data-testid="trace-preview-download-image"
                   >
                     <Download className="size-3.5" />
-                    {preparingImage
-                      ? t("Preparing...")
-                      : t("Download image")}
+                    {preparingImage ? t("Preparing...") : t("Download image")}
                   </Button>
                   <Button
                     ref={previewCloseButtonRef}

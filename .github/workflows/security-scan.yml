@@ -85,6 +85,8 @@ jobs:
           tags: rackpad:security-scan
           build-args: |
             RACKPAD_BUILD_CHANNEL=security-scan
+          pull: true
+          no-cache-filters: runtime
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Container, RefreshCw } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { Badge } from "@/components/ui/Badge";
@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/Input";
 import { Mono } from "@/components/shared/Mono";
 import { api, ApiError, type DockerContainerPreview } from "@/lib/api";
+import { deviceTypeBase } from "@/lib/device-types";
 import type { DockerImportSource } from "@/lib/types";
 import {
   canEditInventory,
@@ -25,17 +26,20 @@ import {
 type DockerConnectionMode = "socket" | "http";
 
 const DEFAULT_DOCKER_SOCKET_PATH = "/var/run/docker.sock";
+const DOCKER_HOST_DEVICE_TYPES = new Set(["server", "vm", "container"]);
 
 export function DockerImportPanel() {
   const { t } = useI18n();
   const currentUser = useStore((s) => s.currentUser);
   const lab = useStore((s) => s.lab);
   const devices = useStore((s) => s.devices);
+  const deviceTypes = useStore((s) => s.deviceTypes);
   const canEdit = canEditInventory(currentUser);
   const [connectionMode, setConnectionMode] =
     useState<DockerConnectionMode>("socket");
   const [endpoint, setEndpoint] = useState(DEFAULT_DOCKER_SOCKET_PATH);
   const [token, setToken] = useState("");
+  const [verifyTls, setVerifyTls] = useState(true);
   const [hostDeviceId, setHostDeviceId] = useState("");
   const [selectedContainerId, setSelectedContainerId] = useState("");
   const [containers, setContainers] = useState<DockerContainerPreview[]>([]);
@@ -47,26 +51,28 @@ export function DockerImportPanel() {
   const [sources, setSources] = useState<DockerImportSource[]>([]);
   const [sourceSavingId, setSourceSavingId] = useState("");
 
-  async function loadSources() {
+  const loadSources = useCallback(async () => {
     try {
       setSources(await api.getDockerImportSources(lab.id));
     } catch {
       setSources([]);
     }
-  }
+  }, [lab.id]);
 
   useEffect(() => {
     void loadSources();
-  }, [lab.id]);
+  }, [loadSources]);
 
   const hostDevices = useMemo(
     () =>
       devices.filter(
         (device) =>
           device.labId === lab.id &&
-          ["server", "vm", "container"].includes(device.deviceType),
+          DOCKER_HOST_DEVICE_TYPES.has(
+            deviceTypeBase(device.deviceType, deviceTypes),
+          ),
       ),
-    [devices, lab.id],
+    [devices, deviceTypes, lab.id],
   );
 
   function buildEndpointForRequest() {
@@ -110,6 +116,7 @@ export function DockerImportPanel() {
         labId: lab.id,
         token:
           connectionMode === "http" ? token.trim() || undefined : undefined,
+        verifyTls: connectionMode === "http" ? verifyTls : undefined,
       });
       setContainers(result.containers);
     } catch (err) {
@@ -135,6 +142,7 @@ export function DockerImportPanel() {
         endpoint: buildEndpointForRequest(),
         token:
           connectionMode === "http" ? token.trim() || undefined : undefined,
+        verifyTls: connectionMode === "http" ? verifyTls : undefined,
         containerId: selectedContainerId,
         labId: lab.id,
         hostDeviceId,
@@ -184,15 +192,15 @@ export function DockerImportPanel() {
     }
   }
 
-  async function handleSourceEnabled(
+  async function handleSourceUpdate(
     source: DockerImportSource,
-    enabled: boolean,
+    patch: { enabled?: boolean; verifyTls?: boolean },
   ) {
     if (!canEdit) return;
     setSourceSavingId(source.id);
     setError("");
     try {
-      await api.updateDockerImportSource(source.id, { enabled });
+      await api.updateDockerImportSource(source.id, patch);
       await loadSources();
     } catch (err) {
       setError(
@@ -292,6 +300,17 @@ export function DockerImportPanel() {
                 onChange={(event) => setToken(event.target.value)}
                 disabled={!canEdit}
               />
+            </label>
+          )}
+          {connectionMode === "http" && (
+            <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] md:col-span-2">
+              <input
+                type="checkbox"
+                checked={verifyTls}
+                disabled={!canEdit}
+                onChange={(event) => setVerifyTls(event.target.checked)}
+              />
+              {t("Verify TLS certificate")}
             </label>
           )}
           <label className="space-y-1 text-sm md:col-span-2">
@@ -412,11 +431,28 @@ export function DockerImportPanel() {
                     checked={source.enabled}
                     disabled={!canEdit || sourceSavingId === source.id}
                     onChange={(event) =>
-                      void handleSourceEnabled(source, event.target.checked)
+                      void handleSourceUpdate(source, {
+                        enabled: event.target.checked,
+                      })
                     }
                   />
                   {t("Enabled")}
                 </label>
+                {source.endpoint.startsWith("https://") && (
+                  <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                    <input
+                      type="checkbox"
+                      checked={source.verifyTls}
+                      disabled={!canEdit || sourceSavingId === source.id}
+                      onChange={(event) =>
+                        void handleSourceUpdate(source, {
+                          verifyTls: event.target.checked,
+                        })
+                      }
+                    />
+                    {t("Verify TLS certificate")}
+                  </label>
+                )}
                 <Button
                   variant="outline"
                   size="sm"

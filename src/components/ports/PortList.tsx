@@ -1,5 +1,12 @@
 import type { ReactNode } from "react";
-import type { Device, Port, PortLink, VirtualSwitch, Vlan } from "@/lib/types";
+import type {
+  Device,
+  DeviceTypeDefinition,
+  Port,
+  PortLink,
+  VirtualSwitch,
+  Vlan,
+} from "@/lib/types";
 import { cn, formatPortLabel, portTypeColor } from "@/lib/utils";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { Mono } from "@/components/shared/Mono";
@@ -9,12 +16,14 @@ import {
   formatPortModeSummary,
   formatPortTypeLabel,
 } from "@/components/ports/port-mode-labels";
+import { deviceTypeBase } from "@/lib/device-types";
 
 interface PortListProps {
   ports: Port[];
   links: Record<string, PortLink>;
   portsById: Record<string, Port>;
   devicesById: Record<string, Device>;
+  deviceTypes: DeviceTypeDefinition[];
   vlansById?: Record<string, Vlan>;
   virtualSwitchesById?: Record<string, VirtualSwitch>;
   snmpVerifiedPortIds?: Set<string>;
@@ -29,6 +38,7 @@ export function PortList({
   links,
   portsById,
   devicesById,
+  deviceTypes,
   vlansById = {},
   virtualSwitchesById = {},
   snmpVerifiedPortIds,
@@ -40,7 +50,10 @@ export function PortList({
   const { t } = useI18n();
   const isPatchPanel =
     ports.length > 0 &&
-    devicesById[ports[0].deviceId]?.deviceType === "patch_panel";
+    deviceTypeBase(
+      devicesById[ports[0].deviceId]?.deviceType,
+      deviceTypes,
+    ) === "patch_panel";
   const patchPanelRows = isPatchPanel ? buildPatchPanelRows(ports) : [];
 
   return (

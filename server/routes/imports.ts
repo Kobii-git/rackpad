@@ -59,13 +59,27 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
       if (!assertLabWrite(req, reply, source.labId)) return;
       const body = asObject(req.body);
       const enabled = optionalBoolean(body, "enabled");
-      if (enabled == null) {
-        return reply.status(400).send({ error: "enabled is required." });
+      const verifyTls = optionalBoolean(body, "verifyTls");
+      if (enabled == null && verifyTls == null) {
+        return reply
+          .status(400)
+          .send({ error: "enabled or verifyTls is required." });
       }
       const updatedAt = new Date().toISOString();
       db.prepare(
-        "UPDATE dockerImportSources SET enabled = ?, updatedAt = ? WHERE id = ?",
-      ).run(enabled ? 1 : 0, updatedAt, source.id);
+        `
+        UPDATE dockerImportSources
+        SET enabled = COALESCE(?, enabled),
+            verifyTls = COALESCE(?, verifyTls),
+            updatedAt = ?
+        WHERE id = ?
+      `,
+      ).run(
+        enabled == null ? null : enabled ? 1 : 0,
+        verifyTls == null ? null : verifyTls ? 1 : 0,
+        updatedAt,
+        source.id,
+      );
       return listDockerImportSources(source.labId).find(
         (entry) => entry.id === source.id,
       );
@@ -241,11 +255,13 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
     const labId = requiredString(body, "labId", { maxLength: 80 });
     const endpoint = requiredString(body, "endpoint", { maxLength: 500 });
     const token = optionalString(body, "token", { maxLength: 500 });
+    const verifyTls = optionalBoolean(body, "verifyTls") ?? true;
     if (!assertLabWrite(req, reply, labId)) return;
 
     const containers = await fetchDockerContainersPreview(
       endpoint,
       token ?? undefined,
+      { verifyTls },
     );
     return { containers };
   });
@@ -254,6 +270,7 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
     const body = asObject(req.body);
     const endpoint = requiredString(body, "endpoint", { maxLength: 500 });
     const token = optionalString(body, "token", { maxLength: 500 });
+    const verifyTls = optionalBoolean(body, "verifyTls") ?? true;
     const containerId = requiredString(body, "containerId", { maxLength: 120 });
     const labId = requiredString(body, "labId", { maxLength: 80 });
     const hostDeviceId = requiredString(body, "hostDeviceId", {
@@ -275,6 +292,7 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
     const containers = await fetchDockerContainersPreview(
       endpoint,
       token ?? undefined,
+      { verifyTls },
     );
     const container = containers.find((entry) => entry.id === containerId);
     if (!container) {
@@ -285,16 +303,23 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
 
     const hostname = hostnameOverride ?? container.name.slice(0, 120);
     const existing = db
-      .prepare("SELECT id FROM devices WHERE labId = ? AND hostname = ?")
-      .get(labId, hostname) as { id: string } | undefined;
+      .prepare(
+        "SELECT id FROM devices WHERE labId = ? AND hostname = ? AND parentDeviceId = ?",
+      )
+      .get(labId, hostname, hostDeviceId) as { id: string } | undefined;
     if (existing) {
       return reply.status(409).send({
-        error: `Hostname ${hostname} is already used in this lab.`,
+        error: `Hostname ${hostname} is already used on this host.`,
       });
     }
 
     const createImportedContainer = db.transaction(() => {
-      const source = upsertDockerImportSource({ labId, endpoint, token });
+      const source = upsertDockerImportSource({
+        labId,
+        endpoint,
+        token,
+        verifyTls,
+      });
       const deviceId = createId("d");
       const importedAt = new Date().toISOString();
       db.prepare(

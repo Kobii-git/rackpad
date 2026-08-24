@@ -16,6 +16,7 @@ const RackViewPage = lazy(() => import("@/pages/RackViewPage"));
 const DevicesList = lazy(() => import("@/pages/DevicesList"));
 const DeviceDetail = lazy(() => import("@/pages/DeviceDetail"));
 const ComputeView = lazy(() => import("@/pages/ComputeView"));
+const StorageView = lazy(() => import("@/pages/StorageView"));
 const WifiView = lazy(() => import("@/pages/WifiView"));
 const DiscoveryView = lazy(() => import("@/pages/DiscoveryView"));
 const ImportView = lazy(() => import("@/pages/ImportView"));
@@ -28,6 +29,7 @@ const AuditLogView = lazy(() => import("@/pages/AuditLogView"));
 const VisualizerView = lazy(() => import("@/pages/VisualizerView"));
 const DocumentationView = lazy(() => import("@/pages/DocumentationView"));
 const AdminPage = lazy(() => import("@/pages/UsersPage"));
+const DeviceTypesPage = lazy(() => import("@/pages/DeviceTypesPage"));
 const OidcCallback = lazy(() => import("@/pages/OidcCallback"));
 
 export default function App() {
@@ -87,6 +89,14 @@ export default function App() {
           element={
             <RouteFrame>
               <ComputeView />
+            </RouteFrame>
+          }
+        />
+        <Route
+          path="/storage"
+          element={
+            <RouteFrame>
+              <StorageView />
             </RouteFrame>
           }
         />
@@ -185,6 +195,14 @@ export default function App() {
           element={
             <RouteFrame>
               <AdminPage />
+            </RouteFrame>
+          }
+        />
+        <Route
+          path="/admin/device-types"
+          element={
+            <RouteFrame>
+              <DeviceTypesPage />
             </RouteFrame>
           }
         />

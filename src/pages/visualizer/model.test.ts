@@ -2,17 +2,41 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Device, DeviceTypeDefinition, Port } from "@/lib/types";
 import {
+  buildSearchResults,
   buildVisualizerModel,
+  getDeviceHealth,
   summarizeCableLengths,
   visualizerCableLaneIndexes,
   visualizerCablePath,
+  visualizerSearchResultMeta,
 } from "./model";
+import type { TranslationKey } from "@/i18n/translations";
 import type {
   RoomGroup,
   TraceSegment,
   VisualizerCable,
   VisualizerNode,
 } from "./types";
+
+test("unmanaged devices remain neutral in visualizer health", () => {
+  const device = { ...testDevice("unmanaged-device"), status: "unmanaged" as const };
+  assert.equal(getDeviceHealth(device, []), "unknown");
+  assert.equal(
+    getDeviceHealth(device, [
+      {
+        id: "monitor-offline",
+        deviceId: device.id,
+        name: "Reachability",
+        type: "icmp",
+        enabled: true,
+        ignoreTlsErrors: false,
+        sortOrder: 0,
+        lastResult: "offline",
+      },
+    ]),
+    "unknown",
+  );
+});
 
 function testDevice(id: string): Device {
   return {
@@ -274,6 +298,171 @@ test("custom device type parents drive visualizer grouping and counts", () => {
   assert.deepEqual(model.deviceTypes, [
     { type: "switch", label: "Switch", count: 2 },
   ]);
+});
+
+test("custom server and storage types keep pyramid root priority", () => {
+  const devices: Device[] = [
+    { ...testDevice("custom_server"), deviceType: "mini_server" },
+    testDevice("server_endpoint"),
+    { ...testDevice("custom_storage"), deviceType: "disk_array" },
+    testDevice("storage_endpoint"),
+  ];
+  const ports = [
+    testPort("custom_server", "custom_server_port", 1),
+    testPort("server_endpoint", "server_endpoint_port", 1),
+    testPort("custom_storage", "custom_storage_port", 1),
+    testPort("storage_endpoint", "storage_endpoint_port", 1),
+  ];
+  const model = buildVisualizerModel({
+    racks: [],
+    rooms: [],
+    devices,
+    deviceTypes: [
+      {
+        id: "mini_server",
+        label: "Mini server",
+        parentType: "server",
+        builtIn: false,
+      },
+      {
+        id: "disk_array",
+        label: "Disk array",
+        parentType: "storage",
+        builtIn: false,
+      },
+    ],
+    ports,
+    portLinks: [
+      {
+        id: "server_link",
+        fromPortId: "custom_server_port",
+        toPortId: "server_endpoint_port",
+      },
+      {
+        id: "storage_link",
+        fromPortId: "custom_storage_port",
+        toPortId: "storage_endpoint_port",
+      },
+    ],
+    deviceMonitors: [],
+    subnets: [],
+    vlans: [],
+    discoveredDevices: [],
+    virtualSwitches: [],
+    expandedRackRuns: new Set(),
+    collapsedGroups: new Set(),
+    layout: { topologyLayout: "pyramid" },
+  });
+
+  const customServer = model.nodesByDeviceId.custom_server;
+  const serverEndpoint = model.nodesByDeviceId.server_endpoint;
+  const customStorage = model.nodesByDeviceId.custom_storage;
+  const storageEndpoint = model.nodesByDeviceId.storage_endpoint;
+  assert.ok(customServer);
+  assert.ok(serverEndpoint);
+  assert.ok(customStorage);
+  assert.ok(storageEndpoint);
+  assert.equal(customServer.effectiveDeviceType, "server");
+  assert.equal(customStorage.effectiveDeviceType, "storage");
+  assert.ok(customServer.y < serverEndpoint.y);
+  assert.ok(customStorage.y < storageEndpoint.y);
+});
+
+test("visualizer search localizes built-in types and preserves custom labels", () => {
+  const deviceTypes: DeviceTypeDefinition[] = [
+    { id: "storage", label: "Storage", builtIn: true },
+    {
+      id: "storage_enclosure",
+      label: "Storage enclosure",
+      builtIn: true,
+      parentType: "storage",
+    },
+    { id: "archive_shelf", label: "Archive shelf", builtIn: false },
+  ];
+  const model = buildVisualizerModel({
+    racks: [],
+    rooms: [],
+    devices: [
+      {
+        id: "d_enclosure",
+        labId: "lab_visualizer_types",
+        hostname: "jbod-lab",
+        deviceType: "storage_enclosure",
+        status: "online",
+        placement: "room",
+      },
+      {
+        id: "d_archive",
+        labId: "lab_visualizer_types",
+        hostname: "archive-lab",
+        deviceType: "archive_shelf",
+        status: "online",
+        placement: "room",
+      },
+    ],
+    deviceTypes,
+    ports: [],
+    portLinks: [],
+    deviceMonitors: [],
+    subnets: [],
+    vlans: [],
+    discoveredDevices: [],
+    virtualSwitches: [],
+    expandedRackRuns: new Set(),
+    collapsedGroups: new Set(),
+  });
+  const t = (key: TranslationKey) =>
+    key === "Storage enclosure" ? "Boîtier de stockage" : key;
+  const enclosure = buildSearchResults(model, "jbod-lab")[0];
+  const archive = buildSearchResults(model, "archive-lab")[0];
+  assert.ok(enclosure);
+  assert.ok(archive);
+  assert.equal(enclosure.meta, "");
+  assert.equal(
+    visualizerSearchResultMeta(model, enclosure, t),
+    "Boîtier de stockage",
+  );
+  assert.equal(
+    visualizerSearchResultMeta(model, archive, t),
+    "Archive shelf",
+  );
+});
+
+test("visualizer search canonicalizes full MAC queries without changing fuzzy search", () => {
+  const model = buildVisualizerModel({
+    racks: [],
+    rooms: [],
+    devices: [
+      {
+        ...testDevice("core-switch"),
+        hostname: "core-sw-01",
+        managementIp: "10.10.0.5",
+        macAddress: "00:11:22:33:44:55",
+        manufacturer: "Aruba",
+      },
+    ],
+    deviceTypes: [],
+    ports: [],
+    portLinks: [],
+    deviceMonitors: [],
+    subnets: [],
+    vlans: [],
+    discoveredDevices: [],
+    virtualSwitches: [],
+    expandedRackRuns: new Set(),
+    collapsedGroups: new Set(),
+  });
+
+  const macScores = [
+    "00:11:22:33:44:55",
+    "00-11-22-33-44-55",
+    "0011.2233.4455",
+    "001122334455",
+  ].map((query) => buildSearchResults(model, query)[0]?.score ?? 0);
+
+  assert.ok(macScores.every((score) => score > 0));
+  assert.ok(macScores.every((score) => score === macScores[0]));
+  assert.equal(buildSearchResults(model, "crs1")[0]?.score, 40);
 });
 
 test("visualizer marks aggregate endpoint links as logical LAG links", () => {

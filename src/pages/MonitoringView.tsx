@@ -319,11 +319,9 @@ export default function MonitoringView() {
     setError("");
     setBulkMessage("");
     let updated = 0;
-    let skipped = 0;
     try {
       for (const device of selectedDevices) {
         if (!device.managementIp) {
-          skipped += 1;
           continue;
         }
         const existingIcmp = (allDeviceMonitorMap[device.id] ?? []).find(
@@ -366,7 +364,6 @@ export default function MonitoringView() {
     setBulkMessage("");
 
     let updated = 0;
-    let skipped = 0;
     const monitorName = bulkMonitorName.trim();
     const parsedPort = bulkMonitorPort.trim()
       ? Number.parseInt(bulkMonitorPort.trim(), 10)
@@ -379,7 +376,6 @@ export default function MonitoringView() {
     try {
       for (const device of selectedDevices) {
         if (!device.managementIp) {
-          skipped += 1;
           continue;
         }
         const existing = (allDeviceMonitorMap[device.id] ?? []).find(
@@ -409,7 +405,6 @@ export default function MonitoringView() {
           ? await updateDeviceMonitorConfig(existing.id, payload)
           : await createDeviceMonitorConfig(device.id, payload);
         if (!monitor) {
-          skipped += 1;
           continue;
         }
         if (bulkRunFirstCheck) {
@@ -1508,7 +1503,7 @@ function compareMonitorEntries(
   },
   sort: SortState<MonitorSortKey>,
 ) {
-  let result = 0;
+  let result: number;
   if (sort.key === "hostname") {
     result = compareText(a.device.hostname, b.device.hostname);
   } else if (sort.key === "status") {
