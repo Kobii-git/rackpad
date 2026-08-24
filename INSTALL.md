@@ -61,6 +61,8 @@ Rackpad stores its SQLite database in the Docker volume `rackpad_data`.
 
 ### Native SQLite snapshots (optional)
 
+![Rackpad Administration native-backup panel showing a configured capture-only SQLite snapshot](./docs/screenshots/admin-backups.png)
+
 The JSON backup in **Users → Backup and release state** remains the portable
 backup format. Rackpad can additionally create native SQLite snapshots when the
 operator mounts a dedicated directory and sets `RACKPAD_NATIVE_BACKUP_DIR` to
@@ -526,7 +528,8 @@ Only use `down -v` if you are okay deleting Rackpad's stored data.
 Keep Rackpad private, behind a VPN, or behind a TLS reverse proxy.
 
 If you expose Rackpad through Caddy, Nginx, Cloudflare, Traefik, IIS, or another
-proxy, set:
+proxy, set the exact number of controlled proxy hops between the client and
+Rackpad. The included examples use one hop:
 
 ```bash
 TRUST_PROXY=1
@@ -539,7 +542,14 @@ Included examples:
 - [deploy/Caddyfile.example](./deploy/Caddyfile.example)
 - [deploy/nginx-rackpad.conf](./deploy/nginx-rackpad.conf)
 
-Your proxy should pass:
+For a controlled chain of two proxies, use `TRUST_PROXY=2`; values from `1` to
+`10` are supported, and invalid values fail closed to `0` (disabled). The
+compatibility values `true`, `yes`, and `on` mean one hop. Rackpad must not be
+directly reachable while proxy trust is enabled: permit traffic to the
+application port only from the configured chain, and have its public-facing
+proxy overwrite client-supplied forwarding headers.
+
+Your final proxy hop should pass:
 
 - `Host`
 - `X-Forwarded-Host`

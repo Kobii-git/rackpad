@@ -40,6 +40,16 @@ const probes = [
     `,
   },
   {
+    label: "single Fastify application factory",
+    filePath: "server/routes/__lint_gate_fastify_probe__.ts",
+    requiredRules: ["no-restricted-imports"],
+    code: `
+      import Fastify from "fastify";
+
+      export const app = Fastify();
+    `,
+  },
+  {
     label: "repository scripts",
     filePath: "scripts/__lint_gate_probe__.mjs",
     requiredRules: ["no-undef"],

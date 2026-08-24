@@ -19,9 +19,10 @@ internet exposure, third-party scripts, or a different frontend trust model.
 
 ## Single-instance in-memory throttle/state
 
-Login attempts and some OIDC/scheduling state are process-local and reset on
-restart. Reverse-proxy auth rate limiting is recommended. Reconsider before
-horizontal scaling or a formal availability/security SLA.
+The global API limiter, login attempts, and some OIDC/scheduling state are
+process-local and reset on restart. An upstream proxy limit remains recommended
+for exposed deployments. Reconsider before horizontal scaling or a formal
+availability/security SLA.
 
 ## Forward-only migrations
 
@@ -51,7 +52,9 @@ require legacy protocols.
 
 ## Remaining validation gaps
 
-Authorization remains per-handler without a robust route-inventory gate. CodeQL’s
-global missing-rate-limit exception exists because the query does not model the
-Fastify plugin and must be reviewed by its dated comment. These are manual review
-obligations, not completed automation.
+Authorization remains per-handler without a robust route-inventory gate and is
+still a manual review obligation. CodeQL's global `js/missing-rate-limiting`
+exception exists because the query does not model the Fastify plugin. Runtime
+cross-route and proxy-identity tests plus the ESLint single-app-factory rule and
+its `lint:proof` probe compensate. Owner `@Kobii-git` must review or remove the
+exception by 2026-11-30.

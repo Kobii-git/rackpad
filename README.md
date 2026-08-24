@@ -7,7 +7,7 @@
 [![Stars](https://img.shields.io/github/stars/Kobii-git/rackpad?style=flat)](https://github.com/Kobii-git/rackpad/stargazers)
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/g25tEafYDX)
 
-Rackpad is a self-hosted infrastructure inventory and operations workspace for homelabs, small racks, network rooms, and lab environments. It brings racks, devices, ports, cables, VLANs, IPAM, WiFi, compute, discovery, monitoring, docs, images, labs, and an admin area into one clean app.
+Rackpad is a self-hosted infrastructure inventory and operations workspace for homelabs, small racks, network rooms, and lab environments. It brings racks, devices, ports, cables, Networks/IPAM, storage, WiFi, compute, discovery, monitoring, docs, images, integrations, labs, and administration into one clean app.
 
 See the [changelog](./CHANGELOG.md) for release history; the badge above tracks the latest tag.
 
@@ -24,7 +24,8 @@ Built with:
 
 - **Visual topology** — a movable React Flow network map with cable routes, health overlays, and rack/pyramid layouts
 - **Racks, devices, ports & cables** — dense rack elevations, switch-panel port maps, and full cable patching
-- **IPAM** — subnets, DHCP zones and reservations, gateway/DNS protection, and multi-IP device records (device- and interface-level)
+- **Networks and IPAM** — VLANs, subnets, DHCP zones and reservations, gateway/DNS protection, and multi-IP device records
+- **Storage topology** — drive inventory, physical bays and enclosures, cross-device pools, missing members, and reusable templates
 - **Monitoring** — per-device ICMP, TCP, HTTP/HTTPS, and SNMP health checks with email/Discord/Telegram alerting
 - **Discovery** — IPAM-subnet, all-subnet, and manual-CIDR scanning with import reconciliation
 - **WiFi, compute & docs** — controller/SSID/AP/radio/client inventory, virtualization hosts, and markdown docs with images
@@ -61,105 +62,140 @@ contains the core material you need:
 
 ## Preview
 
-Rackpad ships **light and dark themes**. Full-resolution 1920x1200 captures live in [`docs/screenshots`](./docs/screenshots) and are shown full-width here so GitHub keeps them sharp.
+Rackpad ships **light and dark themes**. This preview is generated from a safe, opt-in demo database at 1920x1200; the lossless source captures live in [`docs/screenshots`](./docs/screenshots).
 
-### Operations dashboard
+### Dashboard — inventory, health, and activity
 
-<img src="./docs/screenshots/dashboard-dark.png" alt="Rackpad operations dashboard" width="100%">
+<img src="./docs/screenshots/dashboard-dark.png" alt="Rackpad dark operations dashboard showing inventory totals, health status, capacity, and recent activity" width="100%">
 
-### Diagram visualizer
+### Storage — drives, bays, and pool health
 
-<img src="./docs/screenshots/visualizer-dark.png" alt="Rackpad React Flow diagram visualizer" width="100%">
+<img src="./docs/screenshots/storage-dark.png" alt="Rackpad dark Storage pool editor showing degraded cross-device membership, capacity, and a pulled drive" width="100%">
 
-### IPAM, DHCP zones, and reservations
+### Visualizer — physical and logical topology
 
-<img src="./docs/screenshots/ipam.png" alt="Rackpad IPAM workspace with zones, scopes, and address utilization" width="100%">
+<img src="./docs/screenshots/visualizer-dark.png" alt="Rackpad dark Visualizer diagram connecting racks, devices, workloads, WiFi, and documented cables" width="100%">
 
-### WiFi inventory
+### Networks — VLANs, subnets, DHCP, and IPAM
 
-<img src="./docs/screenshots/wifi.png" alt="Rackpad WiFi controller, SSID, AP, radio, and client inventory" width="100%">
+<img src="./docs/screenshots/networks.png" alt="Rackpad Networks workspace consolidating VLAN, subnet, gateway, DNS, DHCP scope, zone, and assignment context" width="100%">
+
+### Integrations — controllers and UTC schedules
+
+<img src="./docs/screenshots/integrations.png" alt="Rackpad Integrations workspace showing provider tiles, a disabled UniFi example, sync scope, and an expanded UTC schedule" width="100%">
+
+### WiFi — controllers, SSIDs, radios, and clients
+
+<img src="./docs/screenshots/wifi.png" alt="Rackpad WiFi workspace showing controllers, SSIDs, access points, radios, associated clients, and signal context" width="100%">
 
 <details>
-<summary>More workspace screenshots</summary>
+<summary>Inventory and physical infrastructure workspaces</summary>
+
+### Labs and locations
+
+<img src="./docs/screenshots/labs.png" alt="Rackpad Labs workspace showing the Home Lab and Studio inventory boundaries" width="100%">
+
+### Racks, rooms, and half-width placement
+
+<img src="./docs/screenshots/racks.png" alt="Rackpad Racks workspace showing room-grouped rack elevations, mounted equipment, and paired half-width appliances" width="100%">
+
+### Device inventory
+
+<img src="./docs/screenshots/devices.png" alt="Rackpad Devices workspace with searchable physical, wireless, virtual, unmanaged, and custom-type inventory" width="100%">
+
+### Compute hosts and workloads
+
+<img src="./docs/screenshots/compute.png" alt="Rackpad Compute workspace summarizing inherited hypervisor appliances, virtual machines, containers, and capacity" width="100%">
+
+### Storage drive inventory in light theme
+
+<img src="./docs/screenshots/storage.png" alt="Rackpad light Storage drive inventory showing installed, unassigned, and pulled media across devices" width="100%">
+
+### Aggregate ports and member links
+
+<img src="./docs/screenshots/ports.png" alt="Rackpad Ports workspace with the pve-01 aggregate-port inspector and physical member relationships" width="100%">
+
+### Cable inventory and bulk editing
+
+<img src="./docs/screenshots/cables.png" alt="Rackpad Cables workspace with two links selected in the bulk metadata editor" width="100%">
+
+</details>
+
+<details>
+<summary>Operations, review, and administration workspaces</summary>
 
 ### Operations dashboard (light theme)
 
-<img src="./docs/screenshots/dashboard.png" alt="Rackpad operations dashboard in light theme" width="100%">
+<img src="./docs/screenshots/dashboard.png" alt="Rackpad light operations dashboard showing inventory, health, capacity, and recent activity" width="100%">
+
+### Discovery inbox and scheduled scans
+
+<img src="./docs/screenshots/discovery.png" alt="Rackpad Discovery workspace with staged network findings, reconciliation context, and a disabled sample scan schedule" width="100%">
+
+### Review-first Proxmox import
+
+<img src="./docs/screenshots/imports.png" alt="Rackpad Imports workspace staging a sample Proxmox host, bridges, virtual machines, containers, MACs, and IPs for review" width="100%">
+
+### Monitoring targets
+
+<img src="./docs/screenshots/monitoring.png" alt="Rackpad Monitoring workspace summarizing disabled ICMP, TCP, HTTP, HTTPS, and SNMP demo targets" width="100%">
+
+### Reports and exports
+
+<img src="./docs/screenshots/reports.png" alt="Rackpad Reports workspace with printable, spreadsheet-compatible, and CSV inventory exports" width="100%">
+
+### Audit history
+
+<img src="./docs/screenshots/audit-log.png" alt="Rackpad Audit Log showing storage, device-type, integration, network-review, and inventory history" width="100%">
+
+### Administration
+
+<img src="./docs/screenshots/admin.png" alt="Rackpad Administration workspace for users, settings, integrity review, snapshots, and operational controls" width="100%">
+
+</details>
+
+<details>
+<summary>Documentation, customization, and alternate topology workspace views</summary>
 
 ### Diagram visualizer (light theme)
 
-<img src="./docs/screenshots/visualizer.png" alt="Rackpad React Flow diagram visualizer in light theme" width="100%">
+<img src="./docs/screenshots/visualizer.png" alt="Rackpad light Visualizer diagram showing physical and logical inventory relationships" width="100%">
 
-### Racks and rooms
+### Documentation and linked runbooks
 
-<img src="./docs/screenshots/racks.png" alt="Rackpad racks and rooms workspace" width="100%">
+<img src="./docs/screenshots/documentation.png" alt="Rackpad Documentation workspace with Markdown runbooks, inline reference images, and linked devices" width="100%">
 
-### Devices
+### Managed custom device types
 
-<img src="./docs/screenshots/devices.png" alt="Rackpad device inventory" width="100%">
+<img src="./docs/screenshots/device-types.png" alt="Rackpad Device Types workspace with Disk shelf selected, storage-enclosure inheritance, and live usage counts" width="100%">
 
-### Ports
-
-<img src="./docs/screenshots/ports.png" alt="Rackpad ports workspace" width="100%">
-
-### Cables
-
-<img src="./docs/screenshots/cables.png" alt="Rackpad cables workspace" width="100%">
-
-### Visualizer rack layout
-
-<img src="./docs/screenshots/visualizer-cables.png" alt="Rackpad grouped visualizer layout" width="100%">
-
-### Visualizer health overlay
-
-<img src="./docs/screenshots/visualizer-health.png" alt="Rackpad visualizer health overlay" width="100%">
-
-### Visualizer pyramid view
-
-<img src="./docs/screenshots/visualizer-trace.png" alt="Rackpad pyramid visualizer view" width="100%">
-
-### Loose device layout
-
-<img src="./docs/screenshots/visualizer-layout.png" alt="Rackpad visualizer loose device layout" width="100%">
-
-### Monitoring
-
-<img src="./docs/screenshots/monitoring.png" alt="Rackpad monitoring workspace" width="100%">
+</details>
 
 HTTP/HTTPS checks may target public hosts, RFC1918 LAN addresses, and IPv6 ULA
 addresses. Rackpad pins each DNS resolution and blocks loopback, link-local,
 metadata-service, multicast, and reserved destinations, including redirects.
-
-### Compute
-
-<img src="./docs/screenshots/compute.png" alt="Rackpad compute workspace" width="100%">
-
-### Discovery
-
-<img src="./docs/screenshots/discovery.png" alt="Rackpad discovery workspace" width="100%">
-
-### Documentation
-
-<img src="./docs/screenshots/documentation.png" alt="Rackpad documentation workspace" width="100%">
-
-</details>
 
 ## What you can see before install
 
 From the GitHub repo alone, you can already preview the major Rackpad workspaces:
 
 - Dashboard for inventory, health, capacity, and recent activity
+- Storage for drives, bays, custom enclosure layouts, cross-device pools, and missing-member review
 - Racks for physical placement, mounted gear, and room-tech context
 - Devices for searchable inventory and placement-aware records
+- Device Types for managed custom types, built-in inheritance, and usage counts
 - Ports for switch, host, AP, VM, and patch-panel connectivity
 - Compute for hosts, VMs, and virtual switch / bridge membership
 - WiFi for controllers, SSIDs, radios, clients, and signal context
 - Discovery for staged imports, MAC/vendor hints, and duplicate detection
 - Monitoring for multi-target ICMP, TCP, HTTP, and HTTPS checks
-- IPAM for subnets, DHCP scopes, DHCP reservations, IP zones, and linked assignments
+- Networks for consolidated VLANs, subnets, DHCP scopes, reservations, IP zones, assignments, and mismatch review
 - Documentation for Markdown notes, runbooks, and inline pictures
 - Imports for review-first Hyper-V and Proxmox host, VM, and container onboarding
+- Integrations for Proxmox, UniFi, Omada, OPNsense, and Dockhand previews plus opt-in UTC schedules
 - Reports for printable/PDF, Excel-compatible, and CSV exports
+- Audit Log for accountable inventory, storage, integration, and review history
+- Administration for users, settings, integrity checks, JSON export, and native SQLite snapshots
 - Visualizer for rack, pyramid, diagram, loose-room, port, WiFi, and cable relationship maps
 
 ## What works
@@ -488,7 +524,7 @@ sudo apt-get install -y python3 make g++
 
 ## Reverse proxy / TLS
 
-For any public-facing or VPN-exposed deployment, put Rackpad behind a TLS reverse proxy and set the trusted proxy/origin environment values.
+For any public-facing or VPN-exposed deployment, put Rackpad behind a TLS reverse proxy and set the trusted proxy/origin environment values. `TRUST_PROXY` is the exact number of controlled proxy hops between the client and Rackpad: use `1` for the included single-proxy examples, or `2` through `10` for a controlled multi-proxy chain.
 
 Recommended environment shape:
 
@@ -511,7 +547,7 @@ The app already sets:
 - `X-Content-Type-Options`
 - `Referrer-Policy`
 
-So the main deployment job is to terminate TLS, forward the correct `X-Forwarded-*` headers, and keep Rackpad reachable only through the hostname you trust.
+So the main deployment job is to terminate TLS, overwrite the client-facing `X-Forwarded-*` headers, and keep the Rackpad application port reachable only through exactly the configured proxy chain. Do not enable `TRUST_PROXY` while clients can also connect directly to Rackpad; otherwise forwarded client identity and rate-limit buckets are not trustworthy. Invalid values fail closed to `0` (disabled), while `true`, `yes`, and `on` remain aliases for one hop.
 
 ## Windows note
 

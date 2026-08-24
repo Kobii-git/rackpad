@@ -23,6 +23,12 @@ including `RACKPAD_SECRET_KEY`, SNMP, OIDC, rate limits, queue limits, and
 background intervals, pass through every Compose variant. `npm run check:config`
 derives runtime names from server source and fails on example/manifest drift.
 
+`TRUST_PROXY` is disabled at `0` and otherwise names the exact controlled proxy
+hop count from `1` through `10`; legacy truthy aliases mean one hop. A trusted
+proxy deployment must prevent direct access to the Rackpad port and overwrite
+client-provided forwarding headers at the public edge. Invalid values fail
+closed to disabled.
+
 Secrets belong in `.env` or an external secret manager, never committed docs or
 AI context. Back up `RACKPAD_SECRET_KEY`; changing or losing it invalidates stored
 encrypted integration secrets.

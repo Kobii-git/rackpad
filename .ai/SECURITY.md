@@ -34,6 +34,20 @@ constraints for changes.
 - Discovery subprocesses use validated targets and argument arrays, never shell
   interpolation.
 
+## Rate limits and proxy identity
+
+- `@fastify/rate-limit` is registered once in `server/app.ts` and keys its
+  process-local global limit by Fastify's resulting `request.ip`.
+- `TRUST_PROXY` is disabled by default. Values `1` through `10` trust exactly
+  that many controlled proxy hops; `true`, `yes`, and `on` mean one hop, while
+  invalid values fail closed. Direct application-port access must be blocked
+  whenever proxy trust is enabled, and the public edge must overwrite forwarded
+  client identity.
+- CodeQL does not model the global Fastify plugin, so its per-route
+  `js/missing-rate-limiting` reports are excluded until 2026-11-30. Runtime
+  cross-route/proxy tests and the ESLint single-app-factory rule plus
+  `lint:proof` are mandatory compensating controls.
+
 ## Secrets and key loss
 
 - Never commit or print credentials, `.env`, databases, backups, keys, or local

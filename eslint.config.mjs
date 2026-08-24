@@ -73,4 +73,23 @@ export default defineConfig([
       globals: globals.node,
     },
   },
+  {
+    files: ["server/**/*.ts"],
+    ignores: ["server/app.ts", "server/fastify.d.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "fastify",
+              allowTypeImports: true,
+              message:
+                "Create the Fastify application only in server/app.ts so global security middleware is always registered.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);

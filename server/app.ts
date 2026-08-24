@@ -53,11 +53,33 @@ const DEV_ORIGINS = new Set(["http://localhost:5173", "http://127.0.0.1:5173"]);
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const DEFAULT_RATE_LIMIT_MAX = 600;
 const DEFAULT_RATE_LIMIT_WINDOW = "1 minute";
+const MAX_TRUST_PROXY_HOPS = 10;
 
 function envFlag(name: string, fallback = false) {
   const raw = process.env[name]?.trim().toLowerCase();
   if (!raw) return fallback;
   return ["1", "true", "yes", "on"].includes(raw);
+}
+
+export function parseTrustProxySetting(value: string | undefined): false | number {
+  const normalized = value?.trim().toLowerCase();
+
+  if (!normalized || ["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+
+  if (["true", "yes", "on"].includes(normalized)) {
+    return 1;
+  }
+
+  if (!/^[1-9]\d*$/.test(normalized)) {
+    return false;
+  }
+
+  const hopCount = Number(normalized);
+  return Number.isSafeInteger(hopCount) && hopCount <= MAX_TRUST_PROXY_HOPS
+    ? hopCount
+    : false;
 }
 
 function envInteger(
@@ -153,7 +175,7 @@ export async function createApp() {
 
   const app = Fastify({
     bodyLimit: 20 * 1024 * 1024,
-    trustProxy: envFlag("TRUST_PROXY"),
+    trustProxy: parseTrustProxySetting(process.env.TRUST_PROXY),
     logger:
       process.env.NODE_ENV === "test"
         ? false
@@ -238,6 +260,16 @@ export async function createApp() {
         ...(error.code ? { code: error.code } : {}),
         ...(error.details ?? {}),
       });
+      return;
+    }
+
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "statusCode" in error &&
+      error.statusCode === 429
+    ) {
+      reply.status(429).send({ error: "Too many requests. Try again later." });
       return;
     }
 

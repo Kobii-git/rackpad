@@ -8,7 +8,21 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
-No changes yet.
+### Changed
+
+- Refreshed the opt-in demo inventory for current storage, custom device type,
+  integration, monitoring, and review workflows, and rebuilt the documentation
+  gallery as a deterministic 37-image Playwright suite.
+
+### Fixed
+
+- Controller imports now preserve distinct same-name devices when MAC or guest
+  parent scope identifies them, expose ambiguous records instead of silently
+  dropping them, keep host dependencies selected, and report every apply-time
+  skip to the user.
+- Global API throttling now returns its intended 429 response, and trusted proxy
+  client identity uses bounded hop counts with forwarding-header-safe proxy
+  examples.
 
 ## [1.8.0-beta.2] - 2026-08-21
 
