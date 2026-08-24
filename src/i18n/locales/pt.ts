@@ -2132,4 +2132,7 @@ export const pt = {
   "Open image {name} in a new tab": "Abrir imagem {name} em uma nova guia",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "Herda o comportamento do tipo pai para posicionamento, portas e modelos, Compute, WiFi, Storage e importações.",
   "Cannot delete while in use:": "Não é possível excluir enquanto estiver em uso:",
+  "Some selected records were not imported.": "Alguns registros selecionados não foram importados.",
+  "Pull inventory again after resolving these items.": "Obtenha o inventário novamente após resolver estes itens.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "Os registos que requerem atenção estão bloqueados. Selecionar um convidado ou switch virtual também seleciona o respetivo novo anfitrião; desmarcar o anfitrião desmarca as suas dependências.",
 } satisfies TranslationMap;

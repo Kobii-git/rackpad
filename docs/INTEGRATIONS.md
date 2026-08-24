@@ -7,6 +7,8 @@ review-first: they produce a preview diff against the active lab and nothing is
 written until an administrator applies it. Opt-in schedules write automatically
 without a per-run review.
 
+![Rackpad Integrations workspace with provider tiles, a disabled credential-free UniFi example, sync scope, and an expanded UTC schedule](./screenshots/integrations.png)
+
 The panel lives on the **Integrations** tab of the Imports page (the
 existing collector and Docker imports keep their own **Imports** tab).
 Adding a connection is a three-step flow: enter the URL and credentials,
@@ -229,10 +231,19 @@ just as read-only previews:
   Devices page. VMs and containers are created as virtual devices
   attached under their host, with each virtual NIC landing on its host's
   virtual switch.
-- **Merge-only matching:** existing devices are matched by MAC address
-  first, then hostname/display name, and are never modified. The preview
-  modal's **Import** tab shows exactly what will be created versus what is
-  already tracked before you press **Import devices**.
+- **Merge-only matching:** canonical MAC address is authoritative. Same-name
+  records with different valid MACs remain distinct, while MAC-less guests are
+  scoped by parent host, device type, and name. Hostname/display-name fallback
+  is used only when both source and Rackpad candidates are unambiguous, so a
+  unique manually entered device without a MAC remains protected. Existing
+  devices are never modified.
+- **Conflicts and dependencies:** the **Import** tab keeps every source record
+  visible. Records that lack enough identity, or whose host is missing or
+  ambiguous, are marked **Needs attention** and cannot be selected. Selecting a
+  VM, container, or virtual switch also selects its new host; deselecting a host
+  deselects those dependents. Apply rechecks current inventory, reports every
+  record skipped after preview, and asks the user to pull again after resolving
+  the listed reasons.
 - **IP assignments:** when an imported device reports an IP
   that falls inside a subnet the lab already tracks, the import links it
   as an IP assignment on that subnet — so pulling networks first and
@@ -258,8 +269,10 @@ just as read-only previews:
   preview. Viewers are read-only.
 - Manual previews and device snapshots are represented by short-lived,
   single-use server tokens scoped to the user, connection, lab, and connection
-  configuration. Device imports accept only server-issued provider record IDs;
-  the browser cannot submit an authoritative inventory payload.
+  configuration. Device imports accept only provider record IDs marked for
+  creation in that exact server-issued preview; already tracked and conflicted
+  records cannot be submitted, and the browser cannot supply an authoritative
+  inventory payload.
 - Mutating syncs are serialized per connection. A concurrent manual apply gets
   `409 INTEGRATION_SYNC_BUSY`; a scheduled overlap is skipped without counting
   as a failure.

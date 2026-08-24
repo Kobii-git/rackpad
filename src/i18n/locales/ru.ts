@@ -2132,4 +2132,7 @@ export const ru = {
   "Open image {name} in a new tab": "Открыть изображение {name} в новой вкладке",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "Наследует поведение родителя для размещения, портов и шаблонов, Compute, WiFi, Storage и импорта.",
   "Cannot delete while in use:": "Нельзя удалить, пока используется:",
+  "Some selected records were not imported.": "Некоторые выбранные записи не были импортированы.",
+  "Pull inventory again after resolving these items.": "Повторно получите инвентарь после устранения этих проблем.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "Записи, требующие внимания, заблокированы. При выборе гостя или виртуального коммутатора также выбирается его новый хост; отмена выбора хоста снимает выбор с зависимых записей.",
 } satisfies TranslationMap;

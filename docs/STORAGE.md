@@ -27,6 +27,26 @@ Open **Storage** in the sidebar. The workspace provides four views:
 
 The command palette also searches drive serials, manufacturers, and models.
 
+### Storage workspace
+
+![Rackpad Storage drive inventory showing installed, unassigned, and pulled media across devices](./screenshots/storage.png)
+
+### Installed, unassigned, and pulled drives
+
+![Rackpad drive inventory with an installed drive open for inspection](./screenshots/storage-drives.png)
+
+### Degraded cross-device pool
+
+![Rackpad logical pool editor showing a degraded pool spanning its owner and an external disk shelf](./screenshots/storage-pools.png)
+
+### Custom disk-shelf template
+
+![Rackpad drive-bay template library with the custom twelve-bay external SAS shelf selected](./screenshots/storage-templates.png)
+
+### Device storage topology
+
+![Rackpad TrueNAS device Storage tab showing drive bays, pool relationships, and attached enclosure members](./screenshots/device-storage.png)
+
 ## Applying a bay template
 
 Choose a **Drive-bay template** when creating a Server, Storage device, Storage

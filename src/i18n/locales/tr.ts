@@ -2132,4 +2132,7 @@ export const tr = {
   "Open image {name} in a new tab": "{name} görselini yeni sekmede aç",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "Yerleşim, bağlantı noktaları ve şablonlar, Compute, WiFi, Storage ve içe aktarımlar için üst tür davranışını devralır.",
   "Cannot delete while in use:": "Kullanımdayken silinemez:",
+  "Some selected records were not imported.": "Seçilen bazı kayıtlar içe aktarılmadı.",
+  "Pull inventory again after resolving these items.": "Bu öğeleri çözdükten sonra envanteri yeniden çekin.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "İlgilenilmesi gereken kayıtlar engellenir. Bir konuk veya sanal anahtar seçildiğinde yeni ana bilgisayarı da seçilir; ana bilgisayarın seçimi kaldırıldığında bağımlılarının da seçimi kaldırılır.",
 } satisfies TranslationMap;

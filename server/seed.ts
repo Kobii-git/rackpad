@@ -223,7 +223,7 @@ const devices = [
     rackId: "rack_cmp",
     hostname: "pve-01",
     displayName: "Proxmox Node 1",
-    deviceType: "server",
+    deviceType: "hypervisor_appliance",
     manufacturer: "Supermicro",
     model: "SYS-5019D-FN8TP",
     serial: "SM-19D-A491",
@@ -242,7 +242,7 @@ const devices = [
     rackId: "rack_cmp",
     hostname: "pve-02",
     displayName: "Proxmox Node 2",
-    deviceType: "server",
+    deviceType: "hypervisor_appliance",
     manufacturer: "Supermicro",
     model: "SYS-5019D-FN8TP",
     serial: "SM-19D-A492",
@@ -261,7 +261,7 @@ const devices = [
     rackId: "rack_cmp",
     hostname: "pve-03",
     displayName: "Proxmox Node 3 (GPU)",
-    deviceType: "server",
+    deviceType: "hypervisor_appliance",
     manufacturer: "Supermicro",
     model: "SYS-2029U-TN24R4T",
     serial: "SM-29U-B112",
@@ -311,6 +311,26 @@ const devices = [
     tags: JSON.stringify(["pbs"]),
     notes: null,
     lastSeen: new Date(now - 86_400_000).toISOString(),
+  },
+  {
+    id: "d_disk_shelf",
+    labId: "lab_home",
+    rackId: "rack_cmp",
+    hostname: "shelf-storage-01",
+    displayName: "12-Bay SAS Disk Shelf",
+    deviceType: "disk_shelf",
+    manufacturer: "NetApp",
+    model: "DS212C",
+    serial: "NA-DS212-DEMO",
+    managementIp: null,
+    status: "warning",
+    startU: 22,
+    heightU: 3,
+    face: "front",
+    tags: JSON.stringify(["jbod", "sas", "external-storage"]),
+    notes:
+      "External disk shelf contributing a cross-device member to the TrueNAS tank pool.",
+    lastSeen: null,
   },
   {
     id: "d_ups",
@@ -722,7 +742,7 @@ const devices = [
     rackId: "rack_studio",
     hostname: "studio-pve-01",
     displayName: "Studio Hypervisor",
-    deviceType: "server",
+    deviceType: "hypervisor_appliance",
     manufacturer: "Intel NUC",
     model: "NUC 13 Pro",
     serial: "NUC13-ST-01",
@@ -850,6 +870,48 @@ const devices = [
     lastSeen: new Date(now - 42_000).toISOString(),
   },
   {
+    id: "d_rack_console_bridge",
+    labId: "lab_home",
+    rackId: "rack_net",
+    hostname: "console-bridge-01",
+    displayName: "Console Bridge",
+    deviceType: "other",
+    manufacturer: "PiKVM",
+    model: "V4 Mini",
+    serial: "PIKVM-DEMO-01",
+    managementIp: "10.0.10.8",
+    status: "online",
+    startU: 16,
+    heightU: 1,
+    face: "front",
+    rackSlot: "left",
+    tags: JSON.stringify(["console", "half-width"]),
+    notes:
+      "Half-width remote console appliance mounted beside the automation gateway.",
+    lastSeen: new Date(now - 38_000).toISOString(),
+  },
+  {
+    id: "d_automation_gateway",
+    labId: "lab_home",
+    rackId: "rack_net",
+    hostname: "automation-gw-01",
+    displayName: "Automation Gateway",
+    deviceType: "server",
+    manufacturer: "Intel",
+    model: "NUC 11 Essential",
+    serial: "NUC-AUTO-DEMO",
+    managementIp: "10.0.10.9",
+    status: "online",
+    startU: 16,
+    heightU: 1,
+    face: "front",
+    rackSlot: "right",
+    tags: JSON.stringify(["automation", "half-width"]),
+    notes:
+      "Half-width automation host paired with the console bridge in one rack unit.",
+    lastSeen: new Date(now - 33_000).toISOString(),
+  },
+  {
     id: "d_brush_panel",
     labId: "lab_home",
     rackId: "rack_net",
@@ -939,6 +1001,8 @@ const devices = [
     status: "online",
     placement: "virtual",
     parentDeviceId: "d_srv_pve1",
+    networkMode: "host-shared",
+    ignoreDuplicateMac: 1,
     startU: null,
     heightU: null,
     face: null,
@@ -964,6 +1028,8 @@ const devices = [
     status: "online",
     placement: "virtual",
     parentDeviceId: "d_srv_pve1",
+    networkMode: "host-shared",
+    ignoreDuplicateMac: 1,
     startU: null,
     heightU: null,
     face: null,
@@ -1037,15 +1103,16 @@ const devices = [
     manufacturer: "Shelly",
     model: "Plus H&T",
     serial: "SH-ENV-17201",
-    managementIp: "10.0.10.140",
-    status: "online",
+    managementIp: "10.0.10.141",
+    status: "unmanaged",
     placement: "room",
     parentDeviceId: null,
     startU: null,
     heightU: null,
     face: null,
     tags: JSON.stringify(["environment", "dhcp-reservation"]),
-    notes: "Demonstrates a DHCP reservation and a generic device type.",
+    notes:
+      "Unmanaged sensor with a pending management-IP mismatch after a DHCP lease change.",
     lastSeen: new Date(now - 95_000).toISOString(),
   },
   {
@@ -1084,6 +1151,7 @@ const demoMacAddressByDeviceId: Record<string, string> = {
   d_srv_pve3: "ac:1f:6b:10:10:13",
   d_srv_nas: "d0:50:99:10:10:20",
   d_srv_backup: "9c:dc:71:10:10:21",
+  d_disk_shelf: "02:00:00:10:00:22",
   d_ups: "28:29:86:10:02:51",
   d_pdu_cmp: "00:c0:b7:10:02:52",
   d_ap_lounge: "74:ac:b9:60:01:30",
@@ -1102,6 +1170,12 @@ const demoMacAddressByDeviceId: Record<string, string> = {
   d_studio_tablet: "a4:d1:8c:42:10:60",
   d_studio_printer: "3c:22:fb:42:20:25",
   d_router_lab: "48:a9:8a:10:10:07",
+  d_rack_console_bridge: "b8:27:eb:10:10:08",
+  d_automation_gateway: "1c:69:7a:10:10:09",
+  d_vm_gitea: "02:54:00:aa:00:01",
+  d_vm_next: "02:54:00:aa:00:01",
+  d_ct_pihole: "02:42:ac:11:00:02",
+  d_ct_unbound: "02:42:ac:11:00:02",
   d_room_sensor: "e8:db:84:10:01:40",
   d_laser_cutter: "b8:27:eb:42:20:26",
 };
@@ -1269,6 +1343,14 @@ const demoPortOverrides: Record<string, Partial<DemoSeedPort>> = {
     snmpIfIndex: 6,
     macAddress: "ac:1f:6b:40:10:12",
   },
+  p_d_sw_tor_13: {
+    linkState: "up",
+    description: "Console bridge management",
+  },
+  p_d_sw_tor_14: {
+    linkState: "up",
+    description: "Automation gateway management",
+  },
   p_d_studio_fw_2: {
     mode: "trunk",
     allowedVlanIds: ["v_studio_default", "v_studio_iot"],
@@ -1426,6 +1508,18 @@ const ports: DemoSeedPort[] = [
     id: `p_d_srv_nas_${2 + i + 1}`,
     position: 2 + i + 1,
   })),
+  {
+    id: "p_d_srv_nas_5",
+    deviceId: "d_srv_nas",
+    name: "sas-ext-0",
+    position: 5,
+    kind: "sff",
+    speed: "12G",
+    linkState: "up",
+    mode: "access",
+    description: "External SAS path to shelf-storage-01",
+    face: "rear",
+  },
 
   // Backup: 4 RJ45 (all down — forced offline)
   ...makePorts(
@@ -1841,6 +1935,54 @@ const ports: DemoSeedPort[] = [
     face: "front",
   },
   {
+    id: "p_d_disk_shelf_1",
+    deviceId: "d_disk_shelf",
+    name: "SAS A",
+    position: 1,
+    kind: "sff",
+    speed: "12G",
+    linkState: "up",
+    mode: "access",
+    description: "SFF-8644 external SAS path to truenas-01",
+    face: "rear",
+  },
+  {
+    id: "p_d_disk_shelf_2",
+    deviceId: "d_disk_shelf",
+    name: "Service",
+    position: 2,
+    kind: "other",
+    speed: null,
+    linkState: "unknown",
+    mode: "access",
+    description: "Vendor-specific enclosure service connector",
+    face: "rear",
+  },
+  {
+    id: "p_d_rack_console_bridge_1",
+    deviceId: "d_rack_console_bridge",
+    name: "eth0",
+    position: 1,
+    kind: "rj45",
+    speed: "1G",
+    linkState: "up",
+    mode: "access",
+    vlanId: "v_default",
+    face: "rear",
+  },
+  {
+    id: "p_d_automation_gateway_1",
+    deviceId: "d_automation_gateway",
+    name: "eth0",
+    position: 1,
+    kind: "rj45",
+    speed: "1G",
+    linkState: "up",
+    mode: "access",
+    vlanId: "v_default",
+    face: "rear",
+  },
+  {
     id: "p_d_room_sensor_1",
     deviceId: "d_room_sensor",
     name: "wlan0",
@@ -2032,6 +2174,15 @@ const portLinks = [
     notes: null,
   },
   {
+    id: "l_disk_shelf",
+    fromPortId: "p_d_srv_nas_5",
+    toPortId: "p_d_disk_shelf_1",
+    cableType: "SFF-8644 SAS",
+    cableLength: "1m",
+    color: "black",
+    notes: "External SAS path for the cross-device tank member",
+  },
+  {
     id: "l_19",
     fromPortId: "p_d_srv_pve1_1",
     toPortId: "p_d_sw_tor_25",
@@ -2192,6 +2343,24 @@ const portLinks = [
     cableLength: "1m",
     color: "black",
     notes: "UPS feed to the network-rack PDU",
+  },
+  {
+    id: "l_console_bridge",
+    fromPortId: "p_d_rack_console_bridge_1",
+    toPortId: "p_d_sw_tor_13",
+    cableType: "Cat6",
+    cableLength: "0.5m",
+    color: "purple",
+    notes: "Half-width console bridge management",
+  },
+  {
+    id: "l_automation_gateway",
+    fromPortId: "p_d_automation_gateway_1",
+    toPortId: "p_d_sw_tor_14",
+    cableType: "Cat6",
+    cableLength: "0.5m",
+    color: "green",
+    notes: "Half-width automation gateway management",
   },
 ];
 
@@ -2672,6 +2841,30 @@ const ipAssignments = [
     containerId: null,
     hostname: "unifi-01",
     description: null,
+  },
+  {
+    id: "ip_console_bridge",
+    subnetId: "s_default",
+    ipAddress: "10.0.10.8",
+    assignmentType: "device",
+    deviceId: "d_rack_console_bridge",
+    portId: "p_d_rack_console_bridge_1",
+    vmId: null,
+    containerId: null,
+    hostname: "console-bridge-01",
+    description: "Remote rack console",
+  },
+  {
+    id: "ip_automation_gateway",
+    subnetId: "s_default",
+    ipAddress: "10.0.10.9",
+    assignmentType: "device",
+    deviceId: "d_automation_gateway",
+    portId: "p_d_automation_gateway_1",
+    vmId: null,
+    containerId: null,
+    hostname: "automation-gw-01",
+    description: "Automation services host",
   },
   {
     id: "ip_5",
@@ -3159,7 +3352,7 @@ const ipAssignments = [
     ipAddress: "10.0.10.140",
     assignmentType: "device",
     deviceId: "d_room_sensor",
-    portId: "p_d_room_sensor_1",
+    portId: null,
     vmId: null,
     containerId: null,
     hostname: "environment-01",
@@ -3481,6 +3674,31 @@ const portTemplates = [
   },
 ];
 
+const demoDriveBayTemplates = [
+  {
+    id: "dbt_demo_disk_shelf_12",
+    name: "12-bay external SAS shelf",
+    description:
+      "Three-row external shelf with twelve front-facing 3.5-inch SAS bays.",
+    deviceTypes: JSON.stringify(["disk_shelf"]),
+    sections: JSON.stringify([
+      {
+        name: "Front bays",
+        face: "front",
+        layout: "grid",
+        columns: 4,
+        slots: Array.from({ length: 12 }, (_, index) => ({
+          name: `Shelf Bay ${index + 1}`,
+          position: index + 1,
+          slotType: "3.5",
+        })),
+      },
+    ]),
+    createdAt: new Date(now - 12 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 3 * 24 * 3600_000).toISOString(),
+  },
+];
+
 const demoStorageDrives = Array.from({ length: 7 }, (_, index) => ({
   id: `drv_demo_${index + 1}`,
   labId: "lab_home",
@@ -3493,7 +3711,9 @@ const demoStorageDrives = Array.from({ length: 7 }, (_, index) => ({
   notes:
     index === 5
       ? "Pool member pulled from its bay to demonstrate the physically missing state."
-      : null,
+      : index === 4
+        ? "Installed in the external disk shelf and assigned to the TrueNAS tank pool."
+        : null,
   createdAt: new Date(now - 14 * 24 * 3600_000).toISOString(),
   updatedAt: new Date(now - 15 * 60_000).toISOString(),
 }));
@@ -3519,21 +3739,21 @@ const demoDriveSlots = [
     createdAt: new Date(now - 14 * 24 * 3600_000).toISOString(),
     updatedAt: new Date(now - 15 * 60_000).toISOString(),
   })),
-  {
-    id: "ds_demo_backup_1",
-    deviceId: "d_srv_backup",
-    name: "Bay 1",
+  ...Array.from({ length: 12 }, (_, index) => ({
+    id: `ds_demo_shelf_${index + 1}`,
+    deviceId: "d_disk_shelf",
+    name: `Shelf Bay ${index + 1}`,
     sectionName: "Front bays",
     sectionOrder: 0,
-    position: 1,
+    position: index + 1,
     slotType: "3.5",
     face: "front",
     layout: "grid",
     columns: 4,
-    driveId: demoStorageDrives[4].id,
+    driveId: index === 0 ? demoStorageDrives[4].id : null,
     createdAt: new Date(now - 14 * 24 * 3600_000).toISOString(),
     updatedAt: new Date(now - 15 * 60_000).toISOString(),
-  },
+  })),
 ];
 
 const demoStoragePools = [
@@ -3545,7 +3765,7 @@ const demoStoragePools = [
     usableCapacityGb: 48000,
     status: "degraded",
     notes:
-      "Cross-device demo pool with one backup-server member and one pulled member.",
+      "Cross-device demo pool with one disk-shelf member and one pulled member.",
     createdAt: new Date(now - 14 * 24 * 3600_000).toISOString(),
     updatedAt: new Date(now - 15 * 60_000).toISOString(),
   },
@@ -3659,7 +3879,7 @@ const deviceMonitors = [
     deviceId: "d_fw",
     name: "Management ICMP",
     type: "icmp",
-    target: "10.0.10.1",
+    target: "192.0.2.1",
     port: null,
     path: null,
     intervalMs: 60000,
@@ -3668,14 +3888,14 @@ const deviceMonitors = [
     lastCheckAt: new Date(now - 20_000).toISOString(),
     lastAlertAt: null,
     lastResult: "online",
-    lastMessage: "ICMP 10.0.10.1 reachable.",
+    lastMessage: "Historical TEST-NET sample: ICMP 192.0.2.1 reachable.",
   },
   {
     id: "mon_fw_https",
     deviceId: "d_fw",
     name: "Firewall UI",
     type: "https",
-    target: "10.0.10.1",
+    target: "firewall.example.invalid",
     port: 443,
     path: "/",
     intervalMs: 120000,
@@ -3684,14 +3904,16 @@ const deviceMonitors = [
     lastCheckAt: new Date(now - 24_000).toISOString(),
     lastAlertAt: null,
     lastResult: "online",
-    lastMessage: "https://10.0.10.1:443/ returned 200.",
+    lastMessage:
+      "Historical example.invalid sample: HTTPS returned 200 with its certificate exception.",
+    ignoreTlsErrors: 1,
   },
   {
     id: "mon_pve1_icmp",
     deviceId: "d_srv_pve1",
     name: "Management ICMP",
     type: "icmp",
-    target: "10.0.10.11",
+    target: "192.0.2.11",
     port: null,
     path: null,
     intervalMs: 60000,
@@ -3700,14 +3922,14 @@ const deviceMonitors = [
     lastCheckAt: new Date(now - 18_000).toISOString(),
     lastAlertAt: null,
     lastResult: "online",
-    lastMessage: "ICMP 10.0.10.11 reachable.",
+    lastMessage: "Historical TEST-NET sample: ICMP 192.0.2.11 reachable.",
   },
   {
     id: "mon_pve1_ssh",
     deviceId: "d_srv_pve1",
     name: "SSH",
     type: "tcp",
-    target: "10.0.10.11",
+    target: "192.0.2.11",
     port: 22,
     path: null,
     intervalMs: 120000,
@@ -3716,14 +3938,14 @@ const deviceMonitors = [
     lastCheckAt: new Date(now - 18_000).toISOString(),
     lastAlertAt: null,
     lastResult: "online",
-    lastMessage: "TCP 10.0.10.11:22 reachable.",
+    lastMessage: "Historical TEST-NET sample: TCP 192.0.2.11:22 reachable.",
   },
   {
     id: "mon_pve1_storage",
     deviceId: "d_srv_pve1",
     name: "Storage VLAN",
     type: "icmp",
-    target: "10.0.40.11",
+    target: "198.51.100.11",
     port: null,
     path: null,
     intervalMs: 180000,
@@ -3732,14 +3954,14 @@ const deviceMonitors = [
     lastCheckAt: new Date(now - 32_000).toISOString(),
     lastAlertAt: null,
     lastResult: "online",
-    lastMessage: "ICMP 10.0.40.11 reachable.",
+    lastMessage: "Historical TEST-NET sample: ICMP 198.51.100.11 reachable.",
   },
   {
     id: "mon_backup_icmp",
     deviceId: "d_srv_backup",
     name: "Management ICMP",
     type: "icmp",
-    target: "10.0.10.21",
+    target: "192.0.2.21",
     port: null,
     path: null,
     intervalMs: 60000,
@@ -3748,14 +3970,15 @@ const deviceMonitors = [
     lastCheckAt: new Date(now - 45_000).toISOString(),
     lastAlertAt: new Date(now - 40 * 60_000).toISOString(),
     lastResult: "offline",
-    lastMessage: "ICMP 10.0.10.21 failed: Request timeout.",
+    lastMessage:
+      "Historical TEST-NET sample: ICMP 192.0.2.21 failed with a timeout.",
   },
   {
     id: "mon_ap_lounge_icmp",
     deviceId: "d_ap_lounge",
     name: "AP ICMP",
     type: "icmp",
-    target: "10.0.10.30",
+    target: "192.0.2.30",
     port: null,
     path: null,
     intervalMs: 120000,
@@ -3764,14 +3987,14 @@ const deviceMonitors = [
     lastCheckAt: new Date(now - 16_000).toISOString(),
     lastAlertAt: null,
     lastResult: "online",
-    lastMessage: "ICMP 10.0.10.30 reachable.",
+    lastMessage: "Historical TEST-NET sample: ICMP 192.0.2.30 reachable.",
   },
   {
     id: "mon_studio_fw_icmp",
     deviceId: "d_studio_fw",
     name: "Studio ICMP",
     type: "icmp",
-    target: "10.42.10.1",
+    target: "198.51.100.1",
     port: null,
     path: null,
     intervalMs: 60000,
@@ -3780,14 +4003,14 @@ const deviceMonitors = [
     lastCheckAt: new Date(now - 21_000).toISOString(),
     lastAlertAt: null,
     lastResult: "online",
-    lastMessage: "ICMP 10.42.10.1 reachable.",
+    lastMessage: "Historical TEST-NET sample: ICMP 198.51.100.1 reachable.",
   },
   {
     id: "mon_studio_host_https",
     deviceId: "d_studio_host",
     name: "Hypervisor UI",
     type: "https",
-    target: "10.42.10.10",
+    target: "hypervisor.example.invalid",
     port: 8006,
     path: "/",
     intervalMs: 120000,
@@ -3796,14 +4019,14 @@ const deviceMonitors = [
     lastCheckAt: new Date(now - 26_000).toISOString(),
     lastAlertAt: null,
     lastResult: "online",
-    lastMessage: "https://10.42.10.10:8006/ returned 200.",
+    lastMessage: "Historical example.invalid sample: HTTPS returned 200.",
   },
   {
     id: "mon_studio_ap_icmp",
     deviceId: "d_studio_ap",
     name: "AP ICMP",
     type: "icmp",
-    target: "10.42.10.30",
+    target: "198.51.100.30",
     port: null,
     path: null,
     intervalMs: 120000,
@@ -3812,14 +4035,14 @@ const deviceMonitors = [
     lastCheckAt: new Date(now - 22_000).toISOString(),
     lastAlertAt: null,
     lastResult: "online",
-    lastMessage: "ICMP 10.42.10.30 reachable.",
+    lastMessage: "Historical TEST-NET sample: ICMP 198.51.100.30 reachable.",
   },
   {
     id: "mon_pi_http",
     deviceId: "d_room_pi",
     name: "Dashboard HTTP",
     type: "http",
-    target: "10.0.20.40",
+    target: "dashboard.example.invalid",
     port: 80,
     path: "/health",
     intervalMs: 180000,
@@ -3828,7 +4051,7 @@ const deviceMonitors = [
     lastCheckAt: new Date(now - 35_000).toISOString(),
     lastAlertAt: null,
     lastResult: "online",
-    lastMessage: "http://10.0.20.40:80/health returned 200.",
+    lastMessage: "Historical example.invalid sample: HTTP /health returned 200.",
   },
   {
     id: "mon_router_snmp_v1",
@@ -3857,7 +4080,7 @@ const deviceMonitors = [
   {
     id: "mon_sw_tor_snmp_v2c",
     deviceId: "d_sw_tor",
-    name: "SNMP v2c interface mapping",
+    name: "SNMP v2c interface regex",
     type: "snmp",
     target: "192.0.2.11",
     port: 161,
@@ -3873,8 +4096,8 @@ const deviceMonitors = [
     snmpVersion: "2c",
     snmpCommunity: null,
     snmpOid: "1.3.6.1.2.1.2.2.1.8.1",
-    snmpExpectedValue: "1",
-    snmpMatchMode: "equals",
+    snmpExpectedValue: "^(1|up)$",
+    snmpMatchMode: "regex",
     snmpCredentialId: null,
     portId: "p_d_sw_tor_1",
     snmpIfIndex: 1,
@@ -4002,7 +4225,7 @@ const discoveryScanSchedules = [
     id: "scan_demo_home",
     labId: "lab_home",
     name: "Sample management scan",
-    cidr: "10.0.10.0/24",
+    cidr: "192.0.2.0/28",
     intervalMs: 86400000,
     enabled: 0,
     lastRunAt: new Date(now - 24 * 3600_000).toISOString(),
@@ -4010,6 +4233,77 @@ const discoveryScanSchedules = [
     lastMessage: "Historical sample only; scheduled scanning is disabled.",
     createdAt: new Date(now - 14 * 24 * 3600_000).toISOString(),
     updatedAt: new Date(now - 24 * 3600_000).toISOString(),
+  },
+];
+
+const snmpSyncSchedules = [
+  {
+    id: "snmpsync_demo_firewall",
+    labId: "lab_home",
+    deviceId: "d_fw",
+    profileId: "pfsense-opnsense",
+    policy: "merge",
+    intervalMs: 86400000,
+    enabled: 0,
+    lastRunAt: new Date(now - 3 * 24 * 3600_000).toISOString(),
+    lastResult: "success",
+    lastMessage:
+      "Historical demo only; scheduled inventory sync is disabled and has no credential.",
+    createdAt: new Date(now - 10 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 3 * 24 * 3600_000).toISOString(),
+  },
+];
+
+const integrationConnections = [
+  {
+    id: "intg_demo_unifi",
+    labId: "lab_home",
+    provider: "unifi",
+    name: "UniFi Network (disabled example)",
+    baseUrl: "https://unifi.example.invalid",
+    authKind: "api-key",
+    authId: null,
+    authSecretEnc: null,
+    siteRef: "default",
+    scopeRefs: JSON.stringify(["default"]),
+    verifyTls: 1,
+    enabled: 0,
+    syncVlans: 1,
+    syncSubnets: 1,
+    syncDhcp: 1,
+    syncSwitches: 1,
+    syncGateways: 1,
+    syncAccessPoints: 1,
+    syncHosts: 0,
+    syncGuests: 0,
+    syncWifi: 1,
+    lastStatus: "unknown",
+    lastCheckedAt: null,
+    lastError: null,
+    lastSummary:
+      "Credential-free documentation example; connection remains disabled.",
+    createdAt: new Date(now - 10 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 2 * 24 * 3600_000).toISOString(),
+  },
+];
+
+const integrationSyncSchedules = [
+  {
+    id: "intsch_demo_unifi_nightly",
+    connectionId: "intg_demo_unifi",
+    name: "Nightly review at 02:00 UTC",
+    enabled: 0,
+    mode: "merge",
+    cron: "0 2 * * *",
+    labIds: JSON.stringify(["lab_home"]),
+    failureCount: 0,
+    pausedUntil: null,
+    lastRunAt: new Date(now - 4 * 24 * 3600_000).toISOString(),
+    lastRunStatus: "success",
+    lastRunMessage:
+      "Historical preview completed; recurring sync remains disabled.",
+    createdAt: new Date(now - 10 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 2 * 24 * 3600_000).toISOString(),
   },
 ];
 
@@ -4193,6 +4487,35 @@ const appSettings = [
     }),
     updatedAt: new Date(now - 3 * 24 * 3600_000).toISOString(),
   },
+  {
+    key: "deviceTypes",
+    value: JSON.stringify({
+      custom: [
+        {
+          id: "laser_cutter",
+          label: "Laser cutter",
+          parentType: "other",
+          createdAt: new Date(now - 30 * 24 * 3600_000).toISOString(),
+          updatedAt: new Date(now - 2 * 24 * 3600_000).toISOString(),
+        },
+        {
+          id: "hypervisor_appliance",
+          label: "Hypervisor appliance",
+          parentType: "server",
+          createdAt: new Date(now - 21 * 24 * 3600_000).toISOString(),
+          updatedAt: new Date(now - 2 * 24 * 3600_000).toISOString(),
+        },
+        {
+          id: "disk_shelf",
+          label: "Disk shelf",
+          parentType: "storage_enclosure",
+          createdAt: new Date(now - 14 * 24 * 3600_000).toISOString(),
+          updatedAt: new Date(now - 2 * 24 * 3600_000).toISOString(),
+        },
+      ],
+    }),
+    updatedAt: new Date(now - 2 * 24 * 3600_000).toISOString(),
+  },
 ];
 
 const documentationPages = [
@@ -4271,6 +4594,34 @@ const documentationPages = [
     ].join("\n"),
     createdAt: new Date(now - 3 * 24 * 3600_000).toISOString(),
     updatedAt: new Date(now - 45 * 60_000).toISOString(),
+  },
+  {
+    id: "doc_storage_sync_review",
+    labId: "lab_home",
+    title: "Storage and Sync Review",
+    content: [
+      "# Storage and Sync Review",
+      "",
+      "Use this checklist when reviewing the external shelf, pool health, and disabled inventory examples.",
+      "",
+      "## Storage",
+      "",
+      "- The `tank` pool intentionally spans truenas-01 and shelf-storage-01.",
+      "- Bay 1 contains an installed drive; the pulled spare stays unassigned for inventory review.",
+      "- Confirm the shelf SAS link and its custom 12-bay template before maintenance.",
+      "",
+      "## Network review",
+      "",
+      "- environment-01 is unmanaged and intentionally differs from its recorded IP assignment.",
+      "- The cloned VM MAC group is unresolved; the host-shared container group is explicitly ignored.",
+      "",
+      "## Integrations",
+      "",
+      "- The UniFi connection and its 02:00 UTC schedule are disabled examples with no credential.",
+      "- The pfSense/OPNsense SNMP inventory schedule is also disabled and credential-free.",
+    ].join("\n"),
+    createdAt: new Date(now - 2 * 24 * 3600_000).toISOString(),
+    updatedAt: new Date(now - 30 * 60_000).toISOString(),
   },
 ];
 
@@ -4356,6 +4707,24 @@ const documentationDeviceLinks = [
     documentationPageId: "doc_studio_notes",
     deviceId: "d_laser_cutter",
     createdAt: new Date(now - 2 * 24 * 3600_000).toISOString(),
+  },
+  {
+    id: "doclink_storage_nas",
+    documentationPageId: "doc_storage_sync_review",
+    deviceId: "d_srv_nas",
+    createdAt: new Date(now - 24 * 3600_000).toISOString(),
+  },
+  {
+    id: "doclink_storage_shelf",
+    documentationPageId: "doc_storage_sync_review",
+    deviceId: "d_disk_shelf",
+    createdAt: new Date(now - 24 * 3600_000).toISOString(),
+  },
+  {
+    id: "doclink_storage_firewall",
+    documentationPageId: "doc_storage_sync_review",
+    deviceId: "d_fw",
+    createdAt: new Date(now - 24 * 3600_000).toISOString(),
   },
 ];
 
@@ -4579,6 +4948,42 @@ const auditLog = [
     entityId: "user_demo_viewer",
     summary: "Disabled the sample viewer account.",
   },
+  {
+    id: "a16",
+    ts: new Date(now - 75 * 60_000).toISOString(),
+    user: "editor",
+    action: "storage.pool.update",
+    entityType: "StoragePool",
+    entityId: "sp_demo_tank",
+    summary: "Added shelf-storage-01 membership to the degraded tank pool.",
+  },
+  {
+    id: "a17",
+    ts: new Date(now - 3 * 3600_000).toISOString(),
+    user: "admin",
+    action: "device-type.create",
+    entityType: "DeviceType",
+    entityId: "disk_shelf",
+    summary: "Registered Disk shelf with storage-enclosure behavior.",
+  },
+  {
+    id: "a18",
+    ts: new Date(now - 5 * 3600_000).toISOString(),
+    user: "admin",
+    action: "integration.schedule.disable",
+    entityType: "IntegrationSyncSchedule",
+    entityId: "intsch_demo_unifi_nightly",
+    summary: "Kept the sample UniFi 02:00 UTC schedule disabled.",
+  },
+  {
+    id: "a19",
+    ts: new Date(now - 9 * 3600_000).toISOString(),
+    user: "editor",
+    action: "device.review",
+    entityType: "Device",
+    entityId: "d_room_sensor",
+    summary: "Flagged the unmanaged environment sensor IP mismatch for review.",
+  },
 ];
 
 // ── Insert ─────────────────────────────────────────────────────
@@ -4605,10 +5010,12 @@ export function seedIfEmpty() {
   const insertDevice = db.prepare(`
     INSERT INTO devices
       (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, status,
-       startU, heightU, face, tags, notes, lastSeen, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs)
+       startU, heightU, face, rackSlot, tags, notes, lastSeen, placement, parentDeviceId, networkMode, roomId,
+       cpuCores, memoryGb, storageGb, specs, ignoreDuplicateMac)
     VALUES
       (@id, @labId, @rackId, @hostname, @displayName, @deviceType, @manufacturer, @model, @serial, @managementIp, @macAddress, @status,
-       @startU, @heightU, @face, @tags, @notes, @lastSeen, @placement, @parentDeviceId, @roomId, @cpuCores, @memoryGb, @storageGb, @specs)
+       @startU, @heightU, @face, @rackSlot, @tags, @notes, @lastSeen, @placement, @parentDeviceId, @networkMode, @roomId,
+       @cpuCores, @memoryGb, @storageGb, @specs, @ignoreDuplicateMac)
   `);
   const insertPort = db.prepare(`
     INSERT INTO ports
@@ -4623,6 +5030,9 @@ export function seedIfEmpty() {
   );
   const insertPortTemplate = db.prepare(
     "INSERT INTO portTemplates VALUES (@id, @name, @description, @deviceTypes, @ports, @createdAt, @updatedAt)",
+  );
+  const insertDriveBayTemplate = db.prepare(
+    "INSERT INTO driveBayTemplates (id, name, description, deviceTypes, sections, createdAt, updatedAt) VALUES (@id, @name, @description, @deviceTypes, @sections, @createdAt, @updatedAt)",
   );
   const insertStorageDrive = db.prepare(
     "INSERT INTO storageDrives (id, labId, manufacturer, model, serial, capacityGb, interface, formFactor, notes, createdAt, updatedAt) VALUES (@id, @labId, @manufacturer, @model, @serial, @capacityGb, @interface, @formFactor, @notes, @createdAt, @updatedAt)",
@@ -4724,12 +5134,13 @@ export function seedIfEmpty() {
       portId,
       snmpIfIndex,
       snmpMatchMode,
-      snmpCredentialId
+      snmpCredentialId,
+      ignoreTlsErrors
     )
     VALUES
       (@id, @deviceId, @name, @type, @target, @port, @path, @intervalMs, @enabled, @sortOrder, @lastCheckAt, @lastResult,
        @lastMessage, @lastAlertAt, @snmpVersion, @snmpCommunity, @snmpOid, @snmpExpectedValue, @portId, @snmpIfIndex,
-       @snmpMatchMode, @snmpCredentialId)
+       @snmpMatchMode, @snmpCredentialId, @ignoreTlsErrors)
   `);
   const insertSnmpCredential = db.prepare(
     "INSERT INTO snmpCredentials (id, labId, name, version, communityEnc, v3User, v3AuthProto, v3AuthPassEnc, v3PrivProto, v3PrivPassEnc, v3Context, createdAt, updatedAt) VALUES (@id, @labId, @name, @version, @communityEnc, @v3User, @v3AuthProto, @v3AuthPassEnc, @v3PrivProto, @v3PrivPassEnc, @v3Context, @createdAt, @updatedAt)",
@@ -4743,6 +5154,31 @@ export function seedIfEmpty() {
   const insertDiscoveryScanSchedule = db.prepare(
     "INSERT INTO discoveryScanSchedules (id, labId, name, cidr, intervalMs, enabled, lastRunAt, lastResult, lastMessage, createdAt, updatedAt) VALUES (@id, @labId, @name, @cidr, @intervalMs, @enabled, @lastRunAt, @lastResult, @lastMessage, @createdAt, @updatedAt)",
   );
+  const insertSnmpSyncSchedule = db.prepare(
+    "INSERT INTO snmpSyncSchedules (id, labId, deviceId, profileId, policy, intervalMs, enabled, lastRunAt, lastResult, lastMessage, createdAt, updatedAt) VALUES (@id, @labId, @deviceId, @profileId, @policy, @intervalMs, @enabled, @lastRunAt, @lastResult, @lastMessage, @createdAt, @updatedAt)",
+  );
+  const insertIntegrationConnection = db.prepare(`
+    INSERT INTO integrationConnections (
+      id, labId, provider, name, baseUrl, authKind, authId, authSecretEnc,
+      siteRef, scopeRefs, verifyTls, enabled, syncVlans, syncSubnets, syncDhcp,
+      syncSwitches, syncGateways, syncAccessPoints, syncHosts, syncGuests,
+      syncWifi, lastStatus, lastCheckedAt, lastError, lastSummary, createdAt, updatedAt
+    ) VALUES (
+      @id, @labId, @provider, @name, @baseUrl, @authKind, @authId, @authSecretEnc,
+      @siteRef, @scopeRefs, @verifyTls, @enabled, @syncVlans, @syncSubnets, @syncDhcp,
+      @syncSwitches, @syncGateways, @syncAccessPoints, @syncHosts, @syncGuests,
+      @syncWifi, @lastStatus, @lastCheckedAt, @lastError, @lastSummary, @createdAt, @updatedAt
+    )
+  `);
+  const insertIntegrationSyncSchedule = db.prepare(`
+    INSERT INTO integrationSyncSchedules (
+      id, connectionId, name, enabled, mode, cron, labIds, failureCount,
+      pausedUntil, lastRunAt, lastRunStatus, lastRunMessage, createdAt, updatedAt
+    ) VALUES (
+      @id, @connectionId, @name, @enabled, @mode, @cron, @labIds, @failureCount,
+      @pausedUntil, @lastRunAt, @lastRunStatus, @lastRunMessage, @createdAt, @updatedAt
+    )
+  `);
   const insertDeviceService = db.prepare(
     "INSERT INTO deviceServices (id, deviceId, name, serviceType, ipAssignmentId, portId, vlanId, monitorId, url, notes, createdAt, updatedAt) VALUES (@id, @deviceId, @name, @serviceType, @ipAssignmentId, @portId, @vlanId, @monitorId, @url, @notes, @createdAt, @updatedAt)",
   );
@@ -4824,6 +5260,16 @@ export function seedIfEmpty() {
                 ? "wireless"
                 : "room"),
         parentDeviceId: d.parentDeviceId ?? null,
+        networkMode:
+          "networkMode" in d && typeof d.networkMode === "string"
+            ? d.networkMode
+            : "normal",
+        rackSlot:
+          "rackSlot" in d && typeof d.rackSlot === "string"
+            ? d.rackSlot
+            : "full",
+        ignoreDuplicateMac:
+          "ignoreDuplicateMac" in d ? Number(d.ignoreDuplicateMac) : 0,
         roomId,
         macAddress: macAddress ?? demoMacAddressByDeviceId[d.id] ?? null,
         cpuCores: d.cpuCores ?? capacity.cpuCores ?? null,
@@ -4834,6 +5280,8 @@ export function seedIfEmpty() {
     }
     for (const virtualSwitch of virtualSwitches)
       insertVirtualSwitch.run(virtualSwitch);
+    for (const template of demoDriveBayTemplates)
+      insertDriveBayTemplate.run(template);
     for (const drive of demoStorageDrives) insertStorageDrive.run(drive);
     for (const slot of demoDriveSlots) insertDriveSlot.run(slot);
     for (const pool of demoStoragePools) insertStoragePool.run(pool);
@@ -4900,6 +5348,8 @@ export function seedIfEmpty() {
           "snmpMatchMode" in monitor ? monitor.snmpMatchMode : "equals",
         snmpCredentialId:
           "snmpCredentialId" in monitor ? monitor.snmpCredentialId : null,
+        ignoreTlsErrors:
+          "ignoreTlsErrors" in monitor ? Number(monitor.ignoreTlsErrors) : 0,
       });
     }
     for (const trapSource of snmpTrapSources)
@@ -4907,6 +5357,12 @@ export function seedIfEmpty() {
     for (const trap of snmpTrapLog) insertSnmpTrapLog.run(trap);
     for (const schedule of discoveryScanSchedules)
       insertDiscoveryScanSchedule.run(schedule);
+    for (const schedule of snmpSyncSchedules)
+      insertSnmpSyncSchedule.run(schedule);
+    for (const connection of integrationConnections)
+      insertIntegrationConnection.run(connection);
+    for (const schedule of integrationSyncSchedules)
+      insertIntegrationSyncSchedule.run(schedule);
     for (const service of deviceServices) insertDeviceService.run(service);
     for (const controller of wifiControllers)
       insertWifiController.run(controller);

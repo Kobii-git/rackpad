@@ -2132,4 +2132,7 @@ export const ja = {
   "Open image {name} in a new tab": "画像 {name} を新しいタブで開く",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "配置、ポートとテンプレート、Compute、WiFi、Storage、インポートに関する親の動作を継承します。",
   "Cannot delete while in use:": "使用中のため削除できません:",
+  "Some selected records were not imported.": "選択した一部のレコードはインポートされませんでした。",
+  "Pull inventory again after resolving these items.": "これらの項目を解決した後、インベントリを再取得してください。",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "対応が必要なレコードはブロックされます。ゲストまたは仮想スイッチを選択すると新しいホストも選択され、ホストの選択を解除すると依存する項目も解除されます。",
 } satisfies TranslationMap;

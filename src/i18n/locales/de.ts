@@ -2132,4 +2132,7 @@ export const de = {
   "Open image {name} in a new tab": "Bild {name} in einem neuen Tab öffnen",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "Übernimmt das Verhalten des übergeordneten Typs für Platzierung, Ports und Vorlagen, Compute, WiFi, Storage und Importe.",
   "Cannot delete while in use:": "Kann während der Verwendung nicht gelöscht werden:",
+  "Some selected records were not imported.": "Einige ausgewählte Datensätze wurden nicht importiert.",
+  "Pull inventory again after resolving these items.": "Rufen Sie den Bestand erneut ab, nachdem Sie diese Punkte behoben haben.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "Datensätze mit Handlungsbedarf sind gesperrt. Beim Auswählen eines Gasts oder virtuellen Switches wird auch sein neuer Host ausgewählt; das Abwählen des Hosts wählt seine abhängigen Datensätze ab.",
 } satisfies TranslationMap;

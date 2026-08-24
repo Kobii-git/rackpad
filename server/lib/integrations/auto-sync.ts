@@ -165,7 +165,7 @@ async function runIntegrationSyncScheduleUnlocked(
           );
         }
         if (deviceResult.skipped.length > 0) {
-          parts.push(`${deviceResult.skipped.length} device(s) skipped`);
+          parts.push(`${deviceResult.skipped.length} record(s) skipped`);
         }
       }
       if (sanitizationWarnings.length > 0) {

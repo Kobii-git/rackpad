@@ -2132,4 +2132,7 @@ export const ko = {
   "Open image {name} in a new tab": "새 탭에서 이미지 {name} 열기",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "배치, 포트 및 템플릿, Compute, WiFi, Storage, 가져오기에 대한 상위 동작을 상속합니다.",
   "Cannot delete while in use:": "사용 중에는 삭제할 수 없습니다:",
+  "Some selected records were not imported.": "선택한 일부 레코드를 가져오지 못했습니다.",
+  "Pull inventory again after resolving these items.": "이 항목을 해결한 후 인벤토리를 다시 가져오세요.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "주의가 필요한 레코드는 차단됩니다. 게스트 또는 가상 스위치를 선택하면 새 호스트도 선택되며, 호스트 선택을 해제하면 종속 항목도 선택 해제됩니다.",
 } satisfies TranslationMap;

@@ -638,6 +638,23 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
     assert.ok(seededTypes.has(deviceType), `missing device type ${deviceType}`);
   }
   assert.ok(seededTypes.has("laser_cutter"));
+  assert.ok(seededTypes.has("hypervisor_appliance"));
+  assert.ok(seededTypes.has("disk_shelf"));
+  const customTypeSetting = db
+    .prepare("SELECT value FROM appSettings WHERE key = 'deviceTypes'")
+    .get() as { value: string };
+  assert.deepEqual(
+    (
+      JSON.parse(customTypeSetting.value) as {
+        custom: Array<{ id: string; parentType: string }>;
+      }
+    ).custom.map(({ id, parentType }) => ({ id, parentType })),
+    [
+      { id: "laser_cutter", parentType: "other" },
+      { id: "hypervisor_appliance", parentType: "server" },
+      { id: "disk_shelf", parentType: "storage_enclosure" },
+    ],
+  );
   assert.ok(
     db
       .prepare(
@@ -657,6 +674,8 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
     "usb",
     "virtual",
     "wifi",
+    "sff",
+    "other",
   ];
   const seededPortKinds = new Set(
     (
@@ -718,6 +737,29 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
     ).count,
     0,
   );
+  const demoOutboundTargets = [
+    ...(db.prepare("SELECT target AS value FROM deviceMonitors").all() as Array<{
+      value: string;
+    }>),
+    ...(db
+      .prepare("SELECT cidr AS value FROM discoveryScanSchedules")
+      .all() as Array<{ value: string }>),
+    ...(db
+      .prepare("SELECT baseUrl AS value FROM integrationConnections")
+      .all() as Array<{ value: string }>),
+    ...(db
+      .prepare("SELECT endpoint AS value FROM dockerImportSources")
+      .all() as Array<{ value: string }>),
+  ];
+  for (const { value } of demoOutboundTargets) {
+    assert.ok(
+      value.includes(".example.invalid") ||
+        /^(?:https?:\/\/)?(?:192\.0\.2|198\.51\.100|203\.0\.113)\./.test(
+          value,
+        ),
+      `unsafe demo outbound target ${value}`,
+    );
+  }
   const demoV3Before = db
     .prepare("SELECT * FROM deviceMonitors WHERE id = 'mon_ups_snmp_v3'")
     .get() as Record<string, unknown>;
@@ -769,6 +811,24 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
   );
   assert.ok(db.prepare("SELECT id FROM snmpTrapSources LIMIT 1").get());
   assert.ok(db.prepare("SELECT id FROM snmpTrapLog LIMIT 1").get());
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT snmpMatchMode, snmpExpectedValue FROM deviceMonitors WHERE id = 'mon_sw_tor_snmp_v2c'",
+      )
+      .get(),
+    { snmpMatchMode: "regex", snmpExpectedValue: "^(1|up)$" },
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT ignoreTlsErrors FROM deviceMonitors WHERE id = 'mon_fw_https'",
+        )
+        .get() as { ignoreTlsErrors: number }
+    ).ignoreTlsErrors,
+    1,
+  );
 
   const requiredServiceTypes = [
     "dhcp",
@@ -869,6 +929,98 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
     ).count,
     0,
   );
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT id, rackSlot FROM devices WHERE rackId = 'rack_net' AND startU = 16 ORDER BY rackSlot",
+      )
+      .all(),
+    [
+      { id: "d_rack_console_bridge", rackSlot: "left" },
+      { id: "d_automation_gateway", rackSlot: "right" },
+    ],
+  );
+  assert.equal(
+    (
+      db
+        .prepare("SELECT status FROM devices WHERE id = 'd_room_sensor'")
+        .get() as { status: string }
+    ).status,
+    "unmanaged",
+  );
+  assert.ok(
+    db
+      .prepare(
+        `
+          SELECT d.id
+          FROM devices d
+          JOIN ipAssignments a ON a.deviceId = d.id
+          WHERE d.id = 'd_room_sensor'
+            AND a.assignmentType = 'device'
+            AND a.portId IS NULL
+            AND d.managementIp != a.ipAddress
+        `,
+      )
+      .get(),
+  );
+  assert.deepEqual(
+    db
+      .prepare(
+        `
+          SELECT macAddress, ignoreDuplicateMac, COUNT(*) AS count
+          FROM devices
+          WHERE macAddress IN ('02:54:00:aa:00:01', '02:42:ac:11:00:02')
+          GROUP BY macAddress, ignoreDuplicateMac
+          ORDER BY ignoreDuplicateMac
+        `,
+      )
+      .all(),
+    [
+      { macAddress: "02:54:00:aa:00:01", ignoreDuplicateMac: 0, count: 2 },
+      { macAddress: "02:42:ac:11:00:02", ignoreDuplicateMac: 1, count: 2 },
+    ],
+  );
+  assert.ok(
+    db
+      .prepare(
+        `
+          SELECT p.id
+          FROM storagePools p
+          JOIN storagePoolDrives pd ON pd.poolId = p.id
+          JOIN driveSlots s ON s.driveId = pd.driveId
+          WHERE p.id = 'sp_demo_tank'
+          GROUP BY p.id
+          HAVING COUNT(DISTINCT s.deviceId) > 1
+        `,
+      )
+      .get(),
+  );
+  assert.ok(
+    db
+      .prepare(
+        "SELECT id FROM driveBayTemplates WHERE id = 'dbt_demo_disk_shelf_12' AND deviceTypes LIKE '%disk_shelf%'",
+      )
+      .get(),
+  );
+  assert.ok(
+    db
+      .prepare(
+        "SELECT id FROM driveSlots WHERE deviceId = 'd_disk_shelf' AND driveId IS NOT NULL",
+      )
+      .get(),
+  );
+  assert.ok(
+    db
+      .prepare(
+        `
+          SELECT d.id
+          FROM storageDrives d
+          LEFT JOIN driveSlots s ON s.driveId = d.id
+          WHERE d.notes LIKE '%pulled%' AND s.id IS NULL
+        `,
+      )
+      .get(),
+  );
   assert.equal(
     (
       db
@@ -883,6 +1035,46 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
         .get() as { count: number }
     ).count,
     0,
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM snmpSyncSchedules WHERE enabled != 0",
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.ok(
+    db
+      .prepare(
+        "SELECT id FROM snmpSyncSchedules WHERE profileId = 'pfsense-opnsense' AND enabled = 0",
+      )
+      .get(),
+  );
+  assert.equal(
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM integrationConnections WHERE enabled != 0 OR authSecretEnc IS NOT NULL OR baseUrl NOT LIKE '%.example.invalid%'",
+        )
+        .get() as { count: number }
+    ).count,
+    0,
+  );
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT enabled, cron, mode, labIds FROM integrationSyncSchedules WHERE id = 'intsch_demo_unifi_nightly'",
+      )
+      .get(),
+    {
+      enabled: 0,
+      cron: "0 2 * * *",
+      mode: "merge",
+      labIds: JSON.stringify(["lab_home"]),
+    },
   );
 
   const subnets = db

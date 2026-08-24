@@ -2132,4 +2132,7 @@ export const fr = {
   "Open image {name} in a new tab": "Ouvrir l’image {name} dans un nouvel onglet",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "Hérite du comportement parent pour le placement, les ports et modèles, Compute, WiFi, Storage et les imports.",
   "Cannot delete while in use:": "Suppression impossible pendant l’utilisation :",
+  "Some selected records were not imported.": "Certains enregistrements sélectionnés n’ont pas été importés.",
+  "Pull inventory again after resolving these items.": "Récupérez à nouveau l’inventaire après avoir résolu ces éléments.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "Les enregistrements nécessitant une attention sont bloqués. La sélection d’un invité ou d’un commutateur virtuel sélectionne aussi son nouvel hôte ; désélectionner l’hôte désélectionne ses dépendances.",
 } satisfies TranslationMap;

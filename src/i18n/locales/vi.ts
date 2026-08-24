@@ -2132,4 +2132,7 @@ export const vi = {
   "Open image {name} in a new tab": "Mở hình ảnh {name} trong thẻ mới",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "Kế thừa hành vi của kiểu cha cho vị trí, cổng và mẫu, Compute, WiFi, Storage và nhập dữ liệu.",
   "Cannot delete while in use:": "Không thể xóa khi đang được sử dụng:",
+  "Some selected records were not imported.": "Một số bản ghi đã chọn chưa được nhập.",
+  "Pull inventory again after resolving these items.": "Lấy lại kho dữ liệu sau khi giải quyết các mục này.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "Các bản ghi cần chú ý sẽ bị chặn. Khi chọn máy khách hoặc bộ chuyển mạch ảo, máy chủ mới của nó cũng được chọn; bỏ chọn máy chủ sẽ bỏ chọn các mục phụ thuộc.",
 } satisfies TranslationMap;

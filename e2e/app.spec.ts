@@ -565,7 +565,9 @@ test("custom template drives a cross-device pool through the editor UI", async (
     page.setDefaultTimeout(10_000);
     await authenticate(page);
     await page.goto("/storage?tab=templates");
-    await page.getByRole("button", { name: "Custom template" }).click();
+    await page
+      .getByRole("button", { name: "Custom template", exact: true })
+      .click();
     await page
       .getByRole("textbox", { name: "Name", exact: true })
       .first()
@@ -956,7 +958,7 @@ test("storage inventory is read-only for viewers", async ({
     await expect(
       viewerPage.getByRole("textbox", { name: "Notes", exact: true }),
     ).toHaveValue(
-      "Cross-device demo pool with one backup-server member and one pulled member.",
+      "Cross-device demo pool with one disk-shelf member and one pulled member.",
     );
     await expect(viewerPage.getByText("DEMO-STORE-01")).toBeVisible();
     await expect(viewerPage.getByText("DEMO-STORE-06")).toBeVisible();
@@ -2249,7 +2251,7 @@ test("UI regression surfaces remain reachable and unclipped", async ({
   await expect(monitorEditor).toContainText("Last result");
   await expect(monitorEditor).toContainText("online");
   await expect(monitorEditor).toContainText(
-    "https://10.0.10.1:443/ returned 200.",
+    "Historical example.invalid sample: HTTPS returned 200 with its certificate exception.",
   );
   const monitorUpdateRequest = page.waitForRequest(
     (request) =>
@@ -2260,7 +2262,7 @@ test("UI regression surfaces remain reachable and unclipped", async ({
   expect((await monitorUpdateRequest).postDataJSON()).toMatchObject({
     enabled: false,
     type: "https",
-    target: "10.0.10.1",
+    target: "firewall.example.invalid",
     port: 443,
     path: "/",
   });
@@ -2485,7 +2487,16 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
 
     await page.getByRole("button", { name: /Duplicate MACs/ }).click();
     await expect(page).toHaveURL(/mac=duplicates/);
-    await expect(filterCount).toHaveText(`2 of ${initialTotal} devices`);
+    await expect(filterCount).toHaveText(/\d+ of \d+ devices/);
+    const duplicateCountMatch = (await filterCount.textContent())?.match(
+      /(\d+) of (\d+) devices/,
+    );
+    expect(duplicateCountMatch).toBeTruthy();
+    const baseDuplicateCount = Number(duplicateCountMatch?.[1]) - 2;
+    expect(baseDuplicateCount).toBeGreaterThanOrEqual(2);
+    await expect(filterCount).toHaveText(
+      `${baseDuplicateCount + 2} of ${initialTotal} devices`,
+    );
 
     const summary = page.getByTestId("duplicate-mac-summary");
     await expect(summary).toBeVisible();
@@ -2519,7 +2530,9 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
         .getByTestId("duplicate-mac-group")
         .filter({ hasText: duplicateMac }),
     ).toHaveCount(0);
-    await expect(filterCount).toHaveText(`0 of ${initialTotal} devices`);
+    await expect(filterCount).toHaveText(
+      `${baseDuplicateCount} of ${initialTotal} devices`,
+    );
 
     const thirdDuplicateName = `duplicate-mac-c-${suffix}`;
     const thirdDuplicateRes = await request.post("/api/devices", {
@@ -2540,7 +2553,9 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
 
     await page.reload();
     const expandedTotal = initialTotal + 1;
-    await expect(filterCount).toHaveText(`3 of ${expandedTotal} devices`);
+    await expect(filterCount).toHaveText(
+      `${baseDuplicateCount + 3} of ${expandedTotal} devices`,
+    );
     group = summary
       .getByTestId("duplicate-mac-group")
       .filter({ hasText: duplicateMac });
@@ -2548,7 +2563,9 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
 
     await group.getByRole("button", { name: "Ignore duplicate" }).click();
     await expect(group).toHaveCount(0);
-    await expect(filterCount).toHaveText(`0 of ${expandedTotal} devices`);
+    await expect(filterCount).toHaveText(
+      `${baseDuplicateCount} of ${expandedTotal} devices`,
+    );
 
     await summary.getByRole("checkbox", { name: /Show ignored/ }).check();
     group = summary
@@ -2556,7 +2573,16 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
       .filter({ hasText: duplicateMac });
     await expect(group).toHaveAttribute("data-ignored", "true");
     await expect(group).toContainText("Ignored duplicate");
-    await expect(filterCount).toHaveText(`3 of ${expandedTotal} devices`);
+    const allDuplicateCountMatch = (await filterCount.textContent())?.match(
+      /(\d+) of (\d+) devices/,
+    );
+    expect(Number(allDuplicateCountMatch?.[1])).toBeGreaterThanOrEqual(
+      baseDuplicateCount + 3,
+    );
+    const allDuplicateCount = Number(allDuplicateCountMatch?.[1]);
+    await expect(filterCount).toHaveText(
+      `${allDuplicateCount} of ${expandedTotal} devices`,
+    );
     await expect(
       table.locator('tr[data-ignored-duplicate-mac="true"]').filter({
         hasText: thirdDuplicateName,
@@ -2570,7 +2596,9 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
     await expect(
       group.getByRole("button", { name: "Ignore duplicate" }),
     ).toBeVisible();
-    await expect(filterCount).toHaveText(`3 of ${expandedTotal} devices`);
+    await expect(filterCount).toHaveText(
+      `${allDuplicateCount} of ${expandedTotal} devices`,
+    );
   } finally {
     for (const deviceId of createdDeviceIds.reverse()) {
       await request.delete(`/api/devices/${deviceId}`, { headers });
@@ -3151,8 +3179,8 @@ test("beta feedback relationships and JSON snapshot action are visible", async (
     .first();
   await expect(attachedMember).toContainText("External / attached");
   await expect(
-    attachedMember.getByRole("link", { name: "backup-01" }),
-  ).toHaveAttribute("href", "/devices/d_srv_backup?tab=storage");
+    attachedMember.getByRole("link", { name: "shelf-storage-01" }),
+  ).toHaveAttribute("href", "/devices/d_disk_shelf?tab=storage");
   const unassignedMember = page
     .locator("[data-pool-member-row]")
     .filter({ hasText: "DEMO-STORE-06" })
@@ -3160,7 +3188,7 @@ test("beta feedback relationships and JSON snapshot action are visible", async (
   await expect(unassignedMember).toContainText("Unassigned");
   await expect(unassignedMember).toContainText("Missing");
 
-  await page.goto("/devices/d_srv_backup?tab=storage");
+  await page.goto("/devices/d_disk_shelf?tab=storage");
   const attachedPools = page.getByTestId("attached-storage-pools");
   await expect(attachedPools).toContainText("External / attached");
   await expect(
@@ -3603,6 +3631,8 @@ test("integration previews expose safe modes, UTC schedules, and viewer read-onl
   } & Record<string, unknown>;
   let scheduleId = "";
   let viewerId = "";
+  let deviceApplyCount = 0;
+  const submittedDeviceSelections: string[][] = [];
   let viewerContext: Awaited<ReturnType<typeof browser.newContext>> | null =
     null;
 
@@ -3685,19 +3715,56 @@ test("integration previews expose safe modes, UTC schedules, and viewer read-onl
               labId: "lab_home",
               devices: [
                 {
-                  providerRecordId: "device:e2e-firewall",
+                  providerRecordId: "device:e2e-host",
                   action: "create",
-                  name: "e2e-firewall",
-                  deviceType: "firewall",
-                  model: "OPNsense",
-                  macAddress: "02:00:00:00:03:21",
-                  ipAddress: "10.0.10.254",
+                  name: "e2e-host",
+                  deviceType: "server",
+                  parentName: null,
+                  model: "Proxmox host",
+                  macAddress: "02:00:00:00:03:22",
+                  ipAddress: "10.0.10.22",
                   portCount: 0,
+                  reason: null,
+                  proposedUpdates: [],
+                },
+                {
+                  providerRecordId: "device:e2e-guest",
+                  action: "create",
+                  name: "e2e-guest",
+                  deviceType: "vm",
+                  parentName: "e2e-host",
+                  model: "Virtual machine",
+                  macAddress: "02:00:00:00:03:23",
+                  ipAddress: "10.0.10.23",
+                  portCount: 1,
+                  reason: null,
+                  proposedUpdates: [],
+                },
+                {
+                  providerRecordId: "device:e2e-conflict",
+                  action: "conflict",
+                  name: "e2e-ambiguous",
+                  deviceType: "switch",
+                  parentName: null,
+                  model: null,
+                  macAddress: null,
+                  ipAddress: null,
+                  portCount: 0,
+                  reason:
+                    "Multiple controller records named e2e-ambiguous cannot be distinguished without a MAC address.",
                   proposedUpdates: [],
                 },
               ],
               ssids: [],
-              virtualSwitches: [],
+              virtualSwitches: [
+                {
+                  providerRecordId: "virtual-switch:e2e-vmbr0",
+                  action: "create",
+                  name: "e2e-vmbr0",
+                  hostName: "e2e-host",
+                  reason: null,
+                },
+              ],
               controllerName: null,
             },
             importableDevices: [],
@@ -3708,14 +3775,51 @@ test("integration previews expose safe modes, UTC schedules, and viewer read-onl
         });
       },
     );
+    await page.route(
+      `**/api/integrations/connections/${connection.id}/apply-devices`,
+      async (route) => {
+        const body = route.request().postDataJSON() as {
+          selectedProviderRecordIds: string[];
+        };
+        submittedDeviceSelections.push(body.selectedProviderRecordIds);
+        deviceApplyCount += 1;
+        const skipped =
+          deviceApplyCount === 1
+            ? []
+            : deviceApplyCount === 2
+              ? ["e2e-guest: parent host changed after preview."]
+              : ["e2e-host: controller identity became ambiguous."];
+        const created = deviceApplyCount === 3 ? 0 : 1;
+        await route.fulfill({
+          json: {
+            createdDeviceIds: created
+              ? [`device-created-${deviceApplyCount}`]
+              : [],
+            createdPortCount: created,
+            createdSsidIds: [],
+            createdVirtualSwitchIds: [],
+            createdIpAssignmentIds: [],
+            linkedAccessPoints: 0,
+            skipped,
+          },
+        });
+      },
+    );
     await page.goto("/imports");
     await page.getByRole("tab", { name: "Integrations", exact: true }).click();
     await expect(
       page.getByText(connection.name, { exact: true }),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Pull inventory", exact: true })
-      .click();
+    const connectionPanel = page
+      .getByText(connection.name, { exact: true })
+      .locator(
+        "xpath=ancestor::div[.//button[normalize-space()='Pull inventory']][1]",
+      );
+    const pullInventory = connectionPanel.getByRole("button", {
+      name: "Pull inventory",
+      exact: true,
+    });
+    await pullInventory.click();
     await expect(
       page.getByText("Inventory preview", { exact: true }),
     ).toBeVisible();
@@ -3728,7 +3832,54 @@ test("integration previews expose safe modes, UTC schedules, and viewer read-onl
     await expect(page.locator('option[value="mirror"]')).toHaveCount(0);
     await page.getByLabel("Close", { exact: true }).click();
 
-    await page
+    const openImportPreview = async () => {
+      await pullInventory.click();
+      await page.getByRole("tab", { name: /^Import \(4\)$/ }).click();
+    };
+
+    await openImportPreview();
+    const hostSelection = page.getByLabel("Select e2e-host", { exact: true });
+    const guestSelection = page.getByLabel("Select e2e-guest", { exact: true });
+    const switchSelection = page.getByLabel("Select e2e-vmbr0", {
+      exact: true,
+    });
+    await expect(
+      page.getByLabel("Select e2e-ambiguous", { exact: true }),
+    ).toBeDisabled();
+    await hostSelection.uncheck();
+    await expect(guestSelection).not.toBeChecked();
+    await expect(switchSelection).not.toBeChecked();
+    await guestSelection.check();
+    await expect(hostSelection).toBeChecked();
+    await switchSelection.check();
+    await page.getByRole("button", { name: "Import devices" }).click();
+    await expect(page.getByText(/^Imported 1 device/)).toBeVisible();
+    expect(submittedDeviceSelections[0].sort()).toEqual(
+      [
+        "device:e2e-guest",
+        "device:e2e-host",
+        "virtual-switch:e2e-vmbr0",
+      ].sort(),
+    );
+
+    await openImportPreview();
+    await page.getByRole("button", { name: "Import devices" }).click();
+    await expect(
+      page.getByText("Some selected records were not imported.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/e2e-guest: parent host changed/),
+    ).toBeVisible();
+    await expect(page.getByText(/^Imported 1 device/)).toBeVisible();
+
+    await openImportPreview();
+    await page.getByRole("button", { name: "Import devices" }).click();
+    await expect(page.getByText(/e2e-host: controller identity/)).toBeVisible();
+    await expect(page.getByText(/^Imported \d+ device/)).toHaveCount(0);
+
+    await connectionPanel
       .getByRole("button", { name: /Auto-sync \(1\)/, exact: true })
       .click();
     await expect(
@@ -3769,11 +3920,22 @@ test("integration previews expose safe modes, UTC schedules, and viewer read-onl
     await viewerPage
       .getByRole("tab", { name: "Integrations", exact: true })
       .click();
+    const viewerConnectionPanel = viewerPage
+      .getByText(connection.name, { exact: true })
+      .locator(
+        "xpath=ancestor::div[.//button[normalize-space()='Pull inventory']][1]",
+      );
     await expect(
-      viewerPage.getByRole("button", { name: "Pull inventory", exact: true }),
+      viewerConnectionPanel.getByRole("button", {
+        name: "Pull inventory",
+        exact: true,
+      }),
     ).toBeDisabled();
     await expect(
-      viewerPage.getByRole("button", { name: "Edit", exact: true }),
+      viewerConnectionPanel.getByRole("button", {
+        name: "Edit",
+        exact: true,
+      }),
     ).toBeDisabled();
   } finally {
     await viewerContext?.close();

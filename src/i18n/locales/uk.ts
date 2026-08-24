@@ -2132,4 +2132,7 @@ export const uk = {
   "Open image {name} in a new tab": "Відкрити зображення {name} у новій вкладці",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "Успадковує поведінку батьківського типу для розміщення, портів і шаблонів, Compute, WiFi, Storage та імпорту.",
   "Cannot delete while in use:": "Не можна видалити, поки використовується:",
+  "Some selected records were not imported.": "Деякі вибрані записи не було імпортовано.",
+  "Pull inventory again after resolving these items.": "Повторно отримайте інвентар після вирішення цих проблем.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "Записи, що потребують уваги, заблоковано. Вибір гостя або віртуального комутатора також вибирає його новий хост; скасування вибору хоста скасовує вибір залежних записів.",
 } satisfies TranslationMap;

@@ -2132,4 +2132,7 @@ export const hi = {
   "Open image {name} in a new tab": "छवि {name} को नए टैब में खोलें",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "प्लेसमेंट, पोर्ट और टेम्पलेट, Compute, WiFi, Storage और आयात के लिए पैरेंट व्यवहार इनहेरिट करता है।",
   "Cannot delete while in use:": "उपयोग में होने पर हटाया नहीं जा सकता:",
+  "Some selected records were not imported.": "कुछ चयनित रिकॉर्ड आयात नहीं किए गए।",
+  "Pull inventory again after resolving these items.": "इन समस्याओं को हल करने के बाद इन्वेंट्री फिर से प्राप्त करें।",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "जिन रिकॉर्ड पर ध्यान देना आवश्यक है वे अवरुद्ध हैं। किसी गेस्ट या वर्चुअल स्विच को चुनने पर उसका नया होस्ट भी चुना जाता है; होस्ट को अचयनित करने पर उसके आश्रित भी अचयनित हो जाते हैं।",
 } satisfies TranslationMap;

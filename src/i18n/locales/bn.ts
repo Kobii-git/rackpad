@@ -2132,4 +2132,7 @@ export const bn = {
   "Open image {name} in a new tab": "ছবি {name} একটি নতুন ট্যাবে খুলুন",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "স্থাপন, পোর্ট ও টেমপ্লেট, Compute, WiFi, Storage এবং আমদানির জন্য মূল ধরনটির আচরণ উত্তরাধিকারসূত্রে পায়।",
   "Cannot delete while in use:": "ব্যবহৃত অবস্থায় মুছে ফেলা যাবে না:",
+  "Some selected records were not imported.": "কিছু নির্বাচিত রেকর্ড ইমপোর্ট করা হয়নি।",
+  "Pull inventory again after resolving these items.": "এই বিষয়গুলি সমাধান করার পরে আবার ইনভেন্টরি আনুন।",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "মনোযোগ প্রয়োজন এমন রেকর্ডগুলি অবরুদ্ধ থাকে। কোনো গেস্ট বা ভার্চুয়াল সুইচ নির্বাচন করলে তার নতুন হোস্টও নির্বাচিত হয়; হোস্টের নির্বাচন সরালে তার নির্ভরশীলগুলির নির্বাচনও সরে যায়।",
 } satisfies TranslationMap;

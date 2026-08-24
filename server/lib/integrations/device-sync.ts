@@ -223,15 +223,17 @@ export function sanitizeWifiInventory(
 
 export interface IntegrationDeviceDiff {
   providerRecordId: string;
-  action: "create" | "exists";
+  action: "create" | "exists" | "conflict";
   name: string;
   deviceType: IntegrationImportableDevice["deviceType"];
+  parentName: string | null;
   model: string | null;
   macAddress: string | null;
   ipAddress: string | null;
   portCount: number;
   existingId?: string;
   existingHostname?: string;
+  reason: string | null;
   proposedUpdates: string[];
 }
 
@@ -244,9 +246,10 @@ export interface IntegrationSsidDiff {
 
 export interface IntegrationVirtualSwitchDiff {
   providerRecordId: string;
-  action: "create" | "exists";
+  action: "create" | "exists" | "conflict";
   name: string;
   hostName: string;
+  reason: string | null;
 }
 
 export interface IntegrationDeviceSyncPlan {
@@ -316,32 +319,362 @@ interface ExistingDeviceRow {
   hostname: string;
   displayName: string | null;
   macAddress: string | null;
+  deviceType: string;
+  parentDeviceId: string | null;
 }
 
 function existingLabDevices(labId: string): ExistingDeviceRow[] {
   return db
     .prepare(
-      "SELECT id, hostname, displayName, macAddress FROM devices WHERE labId = ?",
+      "SELECT id, hostname, displayName, macAddress, deviceType, parentDeviceId FROM devices WHERE labId = ?",
     )
     .all(labId) as ExistingDeviceRow[];
 }
 
-function matchDevice(
-  device: IntegrationImportableDevice,
-  existing: ExistingDeviceRow[],
-): ExistingDeviceRow | undefined {
-  const mac = normalizeMac(device.macAddress);
-  if (mac) {
-    const byMac = existing.find((row) => normalizeMac(row.macAddress) === mac);
-    if (byMac) return byMac;
-  }
-  const name = device.name.trim().toLowerCase();
-  if (!name) return undefined;
-  return existing.find(
-    (row) =>
-      row.hostname.trim().toLowerCase() === name ||
-      (row.displayName ?? "").trim().toLowerCase() === name,
+function normalizeName(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function isGuestType(deviceType: string) {
+  return deviceType === "vm" || deviceType === "container";
+}
+
+function matchesDeviceName(row: ExistingDeviceRow, name: string) {
+  return (
+    normalizeName(row.hostname) === name ||
+    normalizeName(row.displayName) === name
   );
+}
+
+function addCount(counts: Map<string, number>, key: string) {
+  counts.set(key, (counts.get(key) ?? 0) + 1);
+}
+
+function deviceScopeKey(device: IntegrationImportableDevice) {
+  const name = normalizeName(device.name);
+  if (isGuestType(device.deviceType)) {
+    return `guest|${device.deviceType}|${normalizeName(device.parentName)}|${name}`;
+  }
+  return `physical|${name}`;
+}
+
+function deviceProviderRecordId(
+  device: IntegrationImportableDevice,
+  index: number,
+) {
+  return (
+    device.providerRecordId ??
+    providerRecordId(
+      "device",
+      [
+        device.deviceType,
+        device.name,
+        device.macAddress,
+        device.serial,
+        device.parentName,
+      ],
+      index,
+    )
+  );
+}
+
+interface ClassifiedDevice {
+  index: number;
+  source: IntegrationImportableDevice;
+  diff: IntegrationDeviceDiff;
+}
+
+interface HostResolution {
+  kind: "existing" | "planned" | "missing" | "ambiguous";
+  id?: string;
+  providerRecordId?: string;
+}
+
+function resolveHost(
+  hostName: string | null | undefined,
+  physicalDevices: ClassifiedDevice[],
+  existing: ExistingDeviceRow[],
+): HostResolution {
+  const name = normalizeName(hostName);
+  if (!name) return { kind: "missing" };
+
+  const sourceMatches = physicalDevices.filter(
+    ({ source }) => normalizeName(source.name) === name,
+  );
+  if (sourceMatches.length > 1) return { kind: "ambiguous" };
+  if (sourceMatches.length === 1) {
+    const sourceMatch = sourceMatches[0];
+    if (sourceMatch.diff.action === "conflict") {
+      return { kind: "ambiguous" };
+    }
+    if (sourceMatch.diff.action === "exists" && sourceMatch.diff.existingId) {
+      return { kind: "existing", id: sourceMatch.diff.existingId };
+    }
+    return {
+      kind: "planned",
+      providerRecordId: sourceMatch.diff.providerRecordId,
+    };
+  }
+
+  const existingMatches = existing.filter(
+    (row) => !isGuestType(row.deviceType) && matchesDeviceName(row, name),
+  );
+  if (existingMatches.length === 1) {
+    return { kind: "existing", id: existingMatches[0].id };
+  }
+  return {
+    kind: existingMatches.length > 1 ? "ambiguous" : "missing",
+  };
+}
+
+function conflictDiff(
+  device: IntegrationImportableDevice,
+  index: number,
+  reason: string,
+): ClassifiedDevice {
+  return {
+    index,
+    source: device,
+    diff: {
+      providerRecordId: deviceProviderRecordId(device, index),
+      action: "conflict",
+      name: device.name.trim(),
+      deviceType: device.deviceType,
+      parentName: device.parentName?.trim() || null,
+      model: device.model,
+      macAddress: device.macAddress,
+      ipAddress: device.ipAddress,
+      portCount: device.ports.length,
+      reason,
+      proposedUpdates: [],
+    },
+  };
+}
+
+function classifyDevice(
+  device: IntegrationImportableDevice,
+  index: number,
+  existing: ExistingDeviceRow[],
+  macCounts: Map<string, number>,
+  scopeCounts: Map<string, number>,
+  physicalDevices: ClassifiedDevice[],
+): ClassifiedDevice {
+  const name = normalizeName(device.name);
+  const providerId = deviceProviderRecordId(device, index);
+  const mac = normalizeMac(device.macAddress);
+  const guest = isGuestType(device.deviceType);
+
+  if (mac && (macCounts.get(mac) ?? 0) > 1) {
+    return conflictDiff(
+      device,
+      index,
+      `Multiple controller records share MAC ${canonicalMacAddress(device.macAddress)}.`,
+    );
+  }
+
+  const macMatches = mac
+    ? existing.filter((row) => normalizeMac(row.macAddress) === mac)
+    : [];
+  if (macMatches.length > 1) {
+    return conflictDiff(
+      device,
+      index,
+      `Multiple existing Rackpad devices share MAC ${canonicalMacAddress(device.macAddress)}.`,
+    );
+  }
+  if (macMatches.length === 1) {
+    const match = macMatches[0];
+    return {
+      index,
+      source: device,
+      diff: {
+        providerRecordId: providerId,
+        action: "exists",
+        name: device.name.trim(),
+        deviceType: device.deviceType,
+        parentName: device.parentName?.trim() || null,
+        model: device.model,
+        macAddress: device.macAddress,
+        ipAddress: device.ipAddress,
+        portCount: device.ports.length,
+        existingId: match.id,
+        existingHostname: match.hostname,
+        reason: null,
+        proposedUpdates: [],
+      },
+    };
+  }
+
+  let parent: HostResolution | null = null;
+  if (guest) {
+    parent = resolveHost(device.parentName, physicalDevices, existing);
+    if (parent.kind === "missing") {
+      return conflictDiff(
+        device,
+        index,
+        `Parent host ${device.parentName || "(missing)"} is unavailable.`,
+      );
+    }
+    if (parent.kind === "ambiguous") {
+      return conflictDiff(
+        device,
+        index,
+        `Parent host ${device.parentName || "(missing)"} is ambiguous.`,
+      );
+    }
+  }
+
+  const nameMatches = existing.filter((row) => {
+    if (!matchesDeviceName(row, name)) return false;
+    if (!guest) return !isGuestType(row.deviceType);
+    return (
+      row.deviceType === device.deviceType &&
+      parent?.kind === "existing" &&
+      row.parentDeviceId === parent.id
+    );
+  });
+  const scopeCount = scopeCounts.get(deviceScopeKey(device)) ?? 0;
+
+  if (!mac && scopeCount > 1) {
+    return conflictDiff(
+      device,
+      index,
+      `Multiple controller records named ${device.name.trim()} cannot be distinguished without a MAC address.`,
+    );
+  }
+
+  if (mac) {
+    const nameOnlyMatches = nameMatches.filter(
+      (row) => !normalizeMac(row.macAddress),
+    );
+    if (
+      nameOnlyMatches.length === 1 &&
+      nameMatches.length === 1 &&
+      scopeCount === 1
+    ) {
+      const match = nameOnlyMatches[0];
+      return {
+        index,
+        source: device,
+        diff: {
+          providerRecordId: providerId,
+          action: "exists",
+          name: device.name.trim(),
+          deviceType: device.deviceType,
+          parentName: device.parentName?.trim() || null,
+          model: device.model,
+          macAddress: device.macAddress,
+          ipAddress: device.ipAddress,
+          portCount: device.ports.length,
+          existingId: match.id,
+          existingHostname: match.hostname,
+          reason: null,
+          proposedUpdates: [],
+        },
+      };
+    }
+    if (nameOnlyMatches.length > 0) {
+      return conflictDiff(
+        device,
+        index,
+        `Name ${device.name.trim()} matches existing Rackpad inventory without a unique MAC identity.`,
+      );
+    }
+  } else if (nameMatches.length > 1) {
+    return conflictDiff(
+      device,
+      index,
+      `Multiple existing Rackpad devices match ${device.name.trim()}.`,
+    );
+  } else if (nameMatches.length === 1) {
+    const match = nameMatches[0];
+    return {
+      index,
+      source: device,
+      diff: {
+        providerRecordId: providerId,
+        action: "exists",
+        name: device.name.trim(),
+        deviceType: device.deviceType,
+        parentName: device.parentName?.trim() || null,
+        model: device.model,
+        macAddress: device.macAddress,
+        ipAddress: device.ipAddress,
+        portCount: device.ports.length,
+        existingId: match.id,
+        existingHostname: match.hostname,
+        reason: null,
+        proposedUpdates: [],
+      },
+    };
+  }
+
+  return {
+    index,
+    source: device,
+    diff: {
+      providerRecordId: providerId,
+      action: "create",
+      name: device.name.trim(),
+      deviceType: device.deviceType,
+      parentName: device.parentName?.trim() || null,
+      model: device.model,
+      macAddress: device.macAddress,
+      ipAddress: device.ipAddress,
+      portCount: device.ports.length,
+      reason: null,
+      proposedUpdates: [],
+    },
+  };
+}
+
+function classifyIntegrationDevices(
+  labId: string,
+  importableDevices: IntegrationImportableDevice[],
+) {
+  const existing = existingLabDevices(labId);
+  const indexed = importableDevices
+    .map((source, index) => ({ source, index }))
+    .filter(({ source }) => Boolean(source.name.trim()));
+  const macCounts = new Map<string, number>();
+  const scopeCounts = new Map<string, number>();
+  for (const { source } of indexed) {
+    const mac = normalizeMac(source.macAddress);
+    if (mac) addCount(macCounts, mac);
+    addCount(scopeCounts, deviceScopeKey(source));
+  }
+
+  const physicalDevices = indexed
+    .filter(({ source }) => !isGuestType(source.deviceType))
+    .map(({ source, index }) =>
+      classifyDevice(
+        source,
+        index,
+        existing,
+        macCounts,
+        scopeCounts,
+        [],
+      ),
+    );
+  const guestDevices = indexed
+    .filter(({ source }) => isGuestType(source.deviceType))
+    .map(({ source, index }) =>
+      classifyDevice(
+        source,
+        index,
+        existing,
+        macCounts,
+        scopeCounts,
+        physicalDevices,
+      ),
+    );
+  return {
+    existing,
+    physicalDevices,
+    devices: [...physicalDevices, ...guestDevices].sort(
+      (a, b) => a.index - b.index,
+    ),
+  };
 }
 
 // Merge semantics only: existing devices and SSIDs are matched (by MAC,
@@ -353,33 +686,11 @@ export function buildIntegrationDeviceSyncPlan(input: {
   wifi: IntegrationWifiInventory | null;
   virtualSwitches?: IntegrationVirtualSwitchSpec[];
 }): IntegrationDeviceSyncPlan {
-  const existing = existingLabDevices(input.labId);
-  const devices: IntegrationDeviceDiff[] = [];
-  const seenNames = new Set<string>();
-
-  for (const device of input.importableDevices) {
-    const name = device.name.trim();
-    if (!name) continue;
-    const nameKey = name.toLowerCase();
-    if (seenNames.has(nameKey)) continue;
-    seenNames.add(nameKey);
-    const match = matchDevice(device, existing);
-    devices.push({
-      providerRecordId:
-        device.providerRecordId ??
-        providerRecordId("device", [device.deviceType, name], devices.length),
-      action: match ? "exists" : "create",
-      name,
-      deviceType: device.deviceType,
-      model: device.model,
-      macAddress: device.macAddress,
-      ipAddress: device.ipAddress,
-      portCount: device.ports.length,
-      existingId: match?.id,
-      existingHostname: match?.hostname,
-      proposedUpdates: [],
-    });
-  }
+  const classified = classifyIntegrationDevices(
+    input.labId,
+    input.importableDevices,
+  );
+  const devices = classified.devices.map(({ diff }) => diff);
 
   const ssids: IntegrationSsidDiff[] = [];
   if (input.wifi) {
@@ -408,34 +719,61 @@ export function buildIntegrationDeviceSyncPlan(input: {
 
   const virtualSwitches: IntegrationVirtualSwitchDiff[] = [];
   if (input.virtualSwitches && input.virtualSwitches.length > 0) {
-    const existingSwitches = new Set(
-      (
-        db
-          .prepare(
-            `SELECT devices.hostname AS host, virtualSwitches.name AS name
-             FROM virtualSwitches
-             JOIN devices ON devices.id = virtualSwitches.hostDeviceId
-             WHERE devices.labId = ?`,
-          )
-          .all(input.labId) as Array<{ host: string; name: string }>
-      ).map(
-        (row) =>
-          `${row.host.trim().toLowerCase()}|${row.name.trim().toLowerCase()}`,
-      ),
-    );
+    const existingSwitches = db
+      .prepare(
+        `SELECT virtualSwitches.hostDeviceId, virtualSwitches.name
+         FROM virtualSwitches
+         JOIN devices ON devices.id = virtualSwitches.hostDeviceId
+         WHERE devices.labId = ?`,
+      )
+      .all(input.labId) as Array<{ hostDeviceId: string; name: string }>;
+    const sourceCounts = new Map<string, number>();
     for (const vswitch of input.virtualSwitches) {
-      const key = `${vswitch.hostName.trim().toLowerCase()}|${vswitch.name.trim().toLowerCase()}`;
+      addCount(
+        sourceCounts,
+        `${normalizeName(vswitch.hostName)}|${normalizeName(vswitch.name)}`,
+      );
+    }
+    for (const [index, vswitch] of input.virtualSwitches.entries()) {
+      const sourceKey = `${normalizeName(vswitch.hostName)}|${normalizeName(vswitch.name)}`;
+      const host = resolveHost(
+        vswitch.hostName,
+        classified.physicalDevices,
+        classified.existing,
+      );
+      let action: IntegrationVirtualSwitchDiff["action"] = "create";
+      let reason: string | null = null;
+      if ((sourceCounts.get(sourceKey) ?? 0) > 1) {
+        action = "conflict";
+        reason = `Multiple controller records describe virtual switch ${vswitch.name} on ${vswitch.hostName}.`;
+      } else if (host.kind === "missing") {
+        action = "conflict";
+        reason = `Host ${vswitch.hostName} is unavailable.`;
+      } else if (host.kind === "ambiguous") {
+        action = "conflict";
+        reason = `Host ${vswitch.hostName} is ambiguous.`;
+      } else if (
+        host.kind === "existing" &&
+        existingSwitches.some(
+          (row) =>
+            row.hostDeviceId === host.id &&
+            normalizeName(row.name) === normalizeName(vswitch.name),
+        )
+      ) {
+        action = "exists";
+      }
       virtualSwitches.push({
         providerRecordId:
           vswitch.providerRecordId ??
           providerRecordId(
             "virtual-switch",
             [vswitch.hostName, vswitch.name],
-            virtualSwitches.length,
+            index,
           ),
-        action: existingSwitches.has(key) ? "exists" : "create",
+        action,
         name: vswitch.name,
         hostName: vswitch.hostName,
+        reason,
       });
     }
   }
@@ -454,6 +792,7 @@ export function applyIntegrationDeviceSync(input: {
   importableDevices: IntegrationImportableDevice[];
   wifi: IntegrationWifiInventory | null;
   virtualSwitches?: IntegrationVirtualSwitchSpec[] | null;
+  selectedProviderRecordIds?: ReadonlySet<string>;
   vendor: string;
   actor: string;
 }): IntegrationDeviceSyncResult {
@@ -467,6 +806,10 @@ export function applyIntegrationDeviceSync(input: {
     skipped: [],
   };
   const now = new Date().toISOString();
+  const selectedProviderRecordIds = input.selectedProviderRecordIds ?? null;
+  const isSelected = (providerRecordId: string) =>
+    !selectedProviderRecordIds ||
+    selectedProviderRecordIds.has(providerRecordId);
 
   const insertDevice = db.prepare(`
     INSERT INTO devices
@@ -489,7 +832,18 @@ export function applyIntegrationDeviceSync(input: {
   `);
 
   const apply = db.transaction(() => {
-    const existing = existingLabDevices(input.labId);
+    const classification = classifyIntegrationDevices(
+      input.labId,
+      input.importableDevices,
+    );
+    const currentPlan = buildIntegrationDeviceSyncPlan({
+      labId: input.labId,
+      importableDevices: input.importableDevices,
+      wifi: input.wifi,
+      virtualSwitches: input.virtualSwitches ?? [],
+    });
+    const existing = classification.existing;
+    const createdDeviceIdByProviderRecordId = new Map<string, string>();
     const apDeviceIds: string[] = [];
     // Interconnect what we can: a device IP that falls inside a subnet the
     // lab already tracks becomes an IP assignment (merge-only — existing
@@ -548,17 +902,6 @@ export function applyIntegrationDeviceSync(input: {
       ).map((row) => [Number(row.vlanId), row.id]),
     );
 
-    const resolveDeviceIdByName = (value: string | null | undefined) => {
-      if (!value) return null;
-      const key = value.trim().toLowerCase();
-      if (!key) return null;
-      const row = existing.find(
-        (entry) =>
-          entry.hostname.trim().toLowerCase() === key ||
-          (entry.displayName ?? "").trim().toLowerCase() === key,
-      );
-      return row?.id ?? null;
-    };
     const vswitchIdByKey = new Map<string, string>();
     for (const row of db
       .prepare(
@@ -578,32 +921,62 @@ export function applyIntegrationDeviceSync(input: {
       );
     }
 
-    const importOne = (device: IntegrationImportableDevice) => {
+    const resolveClassifiedHostId = (
+      value: string | null | undefined,
+    ) => {
+      const resolution = resolveHost(
+        value,
+        classification.physicalDevices,
+        classification.existing,
+      );
+      if (resolution.kind === "existing") return resolution.id ?? null;
+      if (resolution.kind === "planned" && resolution.providerRecordId) {
+        return (
+          createdDeviceIdByProviderRecordId.get(resolution.providerRecordId) ??
+          null
+        );
+      }
+      return null;
+    };
+
+    const importOne = (classifiedDevice: ClassifiedDevice) => {
+      const { source: device, diff } = classifiedDevice;
+      if (!isSelected(diff.providerRecordId)) return;
       const name = device.name.trim();
       if (!name) return;
       const isGuest =
         device.deviceType === "vm" || device.deviceType === "container";
       const parentDeviceId = isGuest
-        ? resolveDeviceIdByName(device.parentName)
+        ? resolveClassifiedHostId(device.parentName)
         : null;
-      const match = matchDevice(device, existing);
-      if (match) {
+      if (diff.action === "exists") {
         // Existing devices are deliberately left untouched. Controller
         // metadata can be reviewed and adopted through a future provenance-
         // aware update flow rather than silently mutating manual inventory.
+        if (selectedProviderRecordIds) {
+          result.skipped.push(
+            `${name}: now matches an existing Rackpad device; pull inventory again.`,
+          );
+        }
         return;
       }
-      if (isGuest && !parentDeviceId) {
+      if (diff.action === "conflict") {
         result.skipped.push(
-          `${name}: parent host ${device.parentName || "(missing)"} is unavailable.`,
+          `${name}: ${diff.reason ?? "the controller record is ambiguous."}`,
         );
         return;
       }
-      const hostnameTaken = existing.some(
-        (row) => row.hostname.trim().toLowerCase() === name.toLowerCase(),
-      );
-      if (hostnameTaken) {
-        result.skipped.push(name);
+      if (isGuest && !parentDeviceId) {
+        const host = resolveHost(
+          device.parentName,
+          classification.physicalDevices,
+          classification.existing,
+        );
+        result.skipped.push(
+          host.kind === "planned"
+            ? `${name}: parent host ${device.parentName || "(missing)"} must be selected and imported with this record.`
+            : `${name}: parent host ${device.parentName || "(missing)"} is unavailable or ambiguous.`,
+        );
         return;
       }
 
@@ -647,7 +1020,10 @@ export function applyIntegrationDeviceSync(input: {
         hostname: name,
         displayName: name,
         macAddress: device.macAddress,
+        deviceType: device.deviceType,
+        parentDeviceId,
       });
+      createdDeviceIdByProviderRecordId.set(diff.providerRecordId, deviceId);
       result.createdDeviceIds.push(deviceId);
       if (device.deviceType === "ap") apDeviceIds.push(deviceId);
 
@@ -709,17 +1085,52 @@ export function applyIntegrationDeviceSync(input: {
 
     // Hosts and physical gear first, then their virtual switches, then
     // guests — so parent and vswitch links resolve in one pass.
-    for (const device of input.importableDevices) {
-      if (device.deviceType === "vm" || device.deviceType === "container") {
+    for (const classifiedDevice of classification.devices) {
+      if (isGuestType(classifiedDevice.source.deviceType)) {
         continue;
       }
-      importOne(device);
+      importOne(classifiedDevice);
     }
-    for (const vswitch of input.virtualSwitches ?? []) {
-      const hostDeviceId = resolveDeviceIdByName(vswitch.hostName);
-      if (!hostDeviceId) continue;
+    for (const [index, vswitch] of (input.virtualSwitches ?? []).entries()) {
+      const diff = currentPlan.virtualSwitches[index];
+      if (!diff || !isSelected(diff.providerRecordId)) continue;
+      if (diff.action === "exists") {
+        if (selectedProviderRecordIds) {
+          result.skipped.push(
+            `${vswitch.name} on ${vswitch.hostName}: now matches an existing virtual switch; pull inventory again.`,
+          );
+        }
+        continue;
+      }
+      if (diff?.action === "conflict") {
+        result.skipped.push(
+          `${vswitch.name} on ${vswitch.hostName}: ${diff.reason ?? "the virtual switch is ambiguous."}`,
+        );
+        continue;
+      }
+      const hostDeviceId = resolveClassifiedHostId(vswitch.hostName);
+      if (!hostDeviceId) {
+        const host = resolveHost(
+          vswitch.hostName,
+          classification.physicalDevices,
+          classification.existing,
+        );
+        result.skipped.push(
+          host.kind === "planned"
+            ? `${vswitch.name} on ${vswitch.hostName}: host must be selected and imported with this virtual switch.`
+            : `${vswitch.name} on ${vswitch.hostName}: host is unavailable or ambiguous.`,
+        );
+        continue;
+      }
       const key = `${hostDeviceId}|${vswitch.name.trim().toLowerCase()}`;
-      if (vswitchIdByKey.has(key)) continue;
+      if (vswitchIdByKey.has(key)) {
+        if (selectedProviderRecordIds) {
+          result.skipped.push(
+            `${vswitch.name} on ${vswitch.hostName}: now matches an existing virtual switch; pull inventory again.`,
+          );
+        }
+        continue;
+      }
       const vswitchId = createId("vsw");
       insertVirtualSwitch.run(
         vswitchId,
@@ -739,11 +1150,11 @@ export function applyIntegrationDeviceSync(input: {
         `Created virtual switch ${vswitch.name} on ${vswitch.hostName}.`,
       );
     }
-    for (const device of input.importableDevices) {
-      if (device.deviceType !== "vm" && device.deviceType !== "container") {
+    for (const classifiedDevice of classification.devices) {
+      if (!isGuestType(classifiedDevice.source.deviceType)) {
         continue;
       }
-      importOne(device);
+      importOne(classifiedDevice);
     }
 
     if (input.wifi) {
@@ -784,7 +1195,14 @@ export function applyIntegrationDeviceSync(input: {
         const existingSsid = db
           .prepare("SELECT id FROM wifiSsids WHERE labId = ? AND name = ?")
           .get(input.labId, name);
-        if (existingSsid) continue;
+        if (existingSsid) {
+          if (selectedProviderRecordIds) {
+            result.skipped.push(
+              `${name}: now matches an existing SSID; pull inventory again.`,
+            );
+          }
+          continue;
+        }
         const ssidId = createId("ssid");
         db.prepare(
           `
@@ -846,7 +1264,7 @@ function matchesApDevice(
 ) {
   const row = db
     .prepare(
-      "SELECT hostname, displayName, macAddress FROM devices WHERE id = ? AND labId = ?",
+      "SELECT hostname, displayName, macAddress, deviceType, parentDeviceId FROM devices WHERE id = ? AND labId = ?",
     )
     .get(deviceId, labId) as ExistingDeviceRow | undefined;
   if (!row) return false;

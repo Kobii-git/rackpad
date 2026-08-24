@@ -2145,6 +2145,9 @@ export const en = {
   "Open image {name} in a new tab": "Open image {name} in a new tab",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.",
   "Cannot delete while in use:": "Cannot delete while in use:",
+  "Some selected records were not imported.": "Some selected records were not imported.",
+  "Pull inventory again after resolving these items.": "Pull inventory again after resolving these items.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

@@ -2132,4 +2132,7 @@ export const he = {
   "Open image {name} in a new tab": "פתיחת התמונה {name} בכרטיסייה חדשה",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "יורש את התנהגות האב עבור מיקום, יציאות ותבניות, Compute, WiFi, Storage וייבוא.",
   "Cannot delete while in use:": "לא ניתן למחוק בזמן שימוש:",
+  "Some selected records were not imported.": "חלק מהרשומות שנבחרו לא יובאו.",
+  "Pull inventory again after resolving these items.": "משוך שוב את המלאי לאחר פתרון פריטים אלה.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "רשומות הדורשות טיפול חסומות. בחירת אורח או מתג וירטואלי בוחרת גם את המארח החדש שלו; ביטול בחירת המארח מבטל את בחירת התלויים בו.",
 } satisfies TranslationMap;

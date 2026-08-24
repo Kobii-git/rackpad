@@ -2132,4 +2132,7 @@ export const af = {
   "Open image {name} in a new tab": "Maak prent {name} in 'n nuwe oortjie oop",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "Erf ouergedrag vir plasing, poorte en sjablone, Compute, WiFi, Storage en invoere.",
   "Cannot delete while in use:": "Kan nie uitvee terwyl dit in gebruik is nie:",
+  "Some selected records were not imported.": "Sommige gekose rekords is nie ingevoer nie.",
+  "Pull inventory again after resolving these items.": "Trek die inventaris weer nadat hierdie items opgelos is.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "Rekords wat aandag verg, word geblokkeer. As jy ’n gas of virtuele skakelaar kies, word sy nuwe gasheer ook gekies; as jy die gasheer ontkies, word sy afhanklikes ontkies.",
 } satisfies TranslationMap;

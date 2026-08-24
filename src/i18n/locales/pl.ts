@@ -2132,4 +2132,7 @@ export const pl = {
   "Open image {name} in a new tab": "Otwórz obraz {name} w nowej karcie",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "Dziedziczy zachowanie elementu nadrzędnego dla rozmieszczenia, portów i szablonów, Compute, WiFi, Storage oraz importów.",
   "Cannot delete while in use:": "Nie można usunąć, gdy jest używane:",
+  "Some selected records were not imported.": "Niektóre wybrane rekordy nie zostały zaimportowane.",
+  "Pull inventory again after resolving these items.": "Pobierz ponownie inwentarz po rozwiązaniu tych problemów.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "Rekordy wymagające uwagi są zablokowane. Wybranie gościa lub przełącznika wirtualnego wybiera także jego nowego hosta; odznaczenie hosta odznacza jego zależności.",
 } satisfies TranslationMap;

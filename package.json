@@ -23,6 +23,7 @@
     "test:server": "node --import tsx --test --test-concurrency=1 server/tests/**/*.test.ts",
     "test:client": "node --import tsx --test src/lib/*.test.ts src/pages/visualizer/*.test.ts",
     "test:e2e": "playwright test",
+    "screenshots:update": "playwright test --config=playwright.screenshots.config.ts",
     "test": "npm run test:server && npm run test:client",
     "test:full": "npm run test && npm run test:e2e",
     "lint": "eslint . --max-warnings=0",

@@ -82,6 +82,7 @@ interface IntegrationDeviceSnapshot {
   importableDevices: IntegrationImportableDevice[];
   wifi: IntegrationWifiInventory | null;
   virtualSwitches: IntegrationVirtualSwitchSpec[];
+  selectableProviderRecordIds: string[];
 }
 
 function validateConnectionAuth(
@@ -516,7 +517,18 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         const deviceToken = issueIntegrationPreviewToken<IntegrationDeviceSnapshot>(
           "device-snapshot",
           tokenScope,
-          { importableDevices, wifi, virtualSwitches },
+          {
+            importableDevices,
+            wifi,
+            virtualSwitches,
+            selectableProviderRecordIds: [
+              ...deviceSync.devices,
+              ...deviceSync.virtualSwitches,
+              ...deviceSync.ssids,
+            ]
+              .filter((entry) => entry.action === "create")
+              .map((entry) => entry.providerRecordId),
+          },
         );
         return {
           connection: updated,
@@ -791,23 +803,11 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
             },
           );
         const selected = new Set(selectedIds ?? []);
-        const available = new Set([
-          ...snapshot.importableDevices.flatMap((device) =>
-            device.providerRecordId ? [device.providerRecordId] : [],
-          ),
-          ...snapshot.virtualSwitches.flatMap((virtualSwitch) =>
-            virtualSwitch.providerRecordId
-              ? [virtualSwitch.providerRecordId]
-              : [],
-          ),
-          ...(snapshot.wifi?.ssids.flatMap((ssid) =>
-            ssid.providerRecordId ? [ssid.providerRecordId] : [],
-          ) ?? []),
-        ]);
+        const available = new Set(snapshot.selectableProviderRecordIds);
         for (const selectedId of selected) {
           if (!available.has(selectedId)) {
             throw new ValidationError(
-              "A selected provider record does not belong to this inventory snapshot.",
+              "A selected provider record is not available for creation in this inventory snapshot.",
             );
           }
         }
@@ -845,9 +845,10 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         const provider = String(existing.provider) as IntegrationProvider;
         return applyIntegrationDeviceSync({
           labId: String(existing.labId),
-          importableDevices,
+          importableDevices: snapshot.importableDevices,
           wifi,
-          virtualSwitches,
+          virtualSwitches: snapshot.virtualSwitches,
+          selectedProviderRecordIds: selected,
           vendor: INTEGRATION_PROVIDER_INFO[provider].vendor,
           actor: req.authUser!.username,
         });

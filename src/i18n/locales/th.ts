@@ -2132,4 +2132,7 @@ export const th = {
   "Open image {name} in a new tab": "เปิดรูปภาพ {name} ในแท็บใหม่",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "สืบทอดลักษณะการทำงานจากแม่แบบหลักสำหรับการจัดวาง พอร์ตและแม่แบบ Compute, WiFi, Storage และการนำเข้า",
   "Cannot delete while in use:": "ไม่สามารถลบขณะมีการใช้งาน:",
+  "Some selected records were not imported.": "ไม่ได้นำเข้าระเบียนที่เลือกบางรายการ",
+  "Pull inventory again after resolving these items.": "ดึงข้อมูลสินค้าคงคลังอีกครั้งหลังจากแก้ไขรายการเหล่านี้แล้ว",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "ระเบียนที่ต้องตรวจสอบจะถูกบล็อก การเลือกเกสต์หรือสวิตช์เสมือนจะเลือกโฮสต์ใหม่ของรายการนั้นด้วย และการยกเลิกเลือกโฮสต์จะยกเลิกเลือกรายการที่ขึ้นต่อกัน",
 } satisfies TranslationMap;

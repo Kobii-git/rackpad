@@ -3,6 +3,7 @@ import { after, afterEach, beforeEach, test } from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { IntegrationImportableDevice } from "../lib/integrations/inventory.js";
 
 const tempDir = mkdtempSync(path.join(os.tmpdir(), "rackpad-autosync-tests-"));
 process.env.DATABASE_PATH = path.join(tempDir, "rackpad-autosync-test.db");
@@ -16,6 +17,8 @@ const { setBootstrapState } = await import("../lib/auth.js");
 const { setIntegrationClientOverrideForTests } =
   await import("../lib/integrations/inventory.js");
 const {
+  applyIntegrationDeviceSync,
+  buildIntegrationDeviceSyncPlan,
   filterImportableDevicesForConnection,
   sanitizeImportableDevices,
 } = await import("../lib/integrations/device-sync.js");
@@ -128,6 +131,364 @@ test("device inventory sanitizes addresses, deduplicates ports, and honors toggl
     ).map((device) => device.name),
     ["host"],
   );
+});
+
+function integrationDevice(
+  input: Pick<
+    IntegrationImportableDevice,
+    "name" | "deviceType" | "macAddress"
+  > &
+    Partial<IntegrationImportableDevice>,
+): IntegrationImportableDevice {
+  return {
+    model: null,
+    ipAddress: null,
+    serial: null,
+    firmware: null,
+    online: true,
+    ports: [],
+    ...input,
+  };
+}
+
+test("same-name controller devices remain distinct when MACs identify them", () => {
+  db.prepare("INSERT INTO labs (id, name) VALUES ('lab_identity', 'Identity')").run();
+  const devices = [
+    integrationDevice({
+      providerRecordId: "device:first",
+      name: "shared-name",
+      deviceType: "switch",
+      macAddress: "AA:BB:CC:DD:EE:01",
+    }),
+    integrationDevice({
+      providerRecordId: "device:second",
+      name: "shared-name",
+      deviceType: "ap",
+      macAddress: "AA:BB:CC:DD:EE:02",
+    }),
+  ];
+
+  const preview = buildIntegrationDeviceSyncPlan({
+    labId: "lab_identity",
+    importableDevices: devices,
+    wifi: null,
+  });
+  assert.deepEqual(
+    preview.devices.map((entry) => [entry.providerRecordId, entry.action]),
+    [
+      ["device:first", "create"],
+      ["device:second", "create"],
+    ],
+  );
+
+  const applied = applyIntegrationDeviceSync({
+    labId: "lab_identity",
+    importableDevices: devices,
+    wifi: null,
+    vendor: "Controller",
+    actor: "test",
+  });
+  assert.equal(applied.createdDeviceIds.length, 2);
+  assert.deepEqual(applied.skipped, []);
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT hostname, macAddress FROM devices WHERE labId = 'lab_identity' ORDER BY macAddress",
+      )
+      .all(),
+    [
+      { hostname: "shared-name", macAddress: "AA:BB:CC:DD:EE:01" },
+      { hostname: "shared-name", macAddress: "AA:BB:CC:DD:EE:02" },
+    ],
+  );
+  assert.ok(
+    buildIntegrationDeviceSyncPlan({
+      labId: "lab_identity",
+      importableDevices: devices,
+      wifi: null,
+    }).devices.every((entry) => entry.action === "exists"),
+  );
+});
+
+test("dependents keep the exact same-name host identity and require its selection", () => {
+  db.prepare("INSERT INTO labs (id, name) VALUES ('lab_dependency', 'Dependency')").run();
+  db.prepare(
+    `INSERT INTO devices
+      (id, labId, hostname, displayName, deviceType, macAddress, status, placement, heightU)
+     VALUES ('existing_host', 'lab_dependency', 'shared-host', 'shared-host', 'server',
+       'AA:BB:CC:DD:EE:31', 'unknown', 'room', 1)`,
+  ).run();
+  const devices = [
+    integrationDevice({
+      providerRecordId: "device:new-host",
+      name: "shared-host",
+      deviceType: "server",
+      macAddress: "AA:BB:CC:DD:EE:32",
+    }),
+    integrationDevice({
+      providerRecordId: "device:new-guest",
+      name: "guest-on-new-host",
+      deviceType: "vm",
+      macAddress: null,
+      parentName: "shared-host",
+    }),
+  ];
+  const virtualSwitches = [
+    {
+      providerRecordId: "virtual-switch:new-host",
+      name: "vmbr0",
+      hostName: "shared-host",
+      kind: "external" as const,
+      notes: null,
+    },
+  ];
+  const preview = buildIntegrationDeviceSyncPlan({
+    labId: "lab_dependency",
+    importableDevices: devices,
+    wifi: null,
+    virtualSwitches,
+  });
+  assert.ok(
+    [...preview.devices, ...preview.virtualSwitches].every(
+      (entry) => entry.action === "create",
+    ),
+  );
+
+  const dependentOnly = applyIntegrationDeviceSync({
+    labId: "lab_dependency",
+    importableDevices: devices,
+    wifi: null,
+    virtualSwitches,
+    selectedProviderRecordIds: new Set(["device:new-guest"]),
+    vendor: "Controller",
+    actor: "test",
+  });
+  assert.equal(dependentOnly.createdDeviceIds.length, 0);
+  assert.match(dependentOnly.skipped.join(" "), /must be selected/i);
+
+  const applied = applyIntegrationDeviceSync({
+    labId: "lab_dependency",
+    importableDevices: devices,
+    wifi: null,
+    virtualSwitches,
+    selectedProviderRecordIds: new Set([
+      "device:new-host",
+      "device:new-guest",
+      "virtual-switch:new-host",
+    ]),
+    vendor: "Controller",
+    actor: "test",
+  });
+  assert.equal(applied.createdDeviceIds.length, 2);
+  assert.equal(applied.createdVirtualSwitchIds.length, 1);
+  assert.deepEqual(applied.skipped, []);
+  assert.deepEqual(
+    db
+      .prepare(
+        `SELECT parent.macAddress AS parentMac
+         FROM devices child
+         JOIN devices parent ON parent.id = child.parentDeviceId
+         WHERE child.labId = 'lab_dependency'
+           AND child.hostname = 'guest-on-new-host'`,
+      )
+      .get(),
+    { parentMac: "AA:BB:CC:DD:EE:32" },
+  );
+  assert.deepEqual(
+    db
+      .prepare(
+        `SELECT host.macAddress AS hostMac
+         FROM virtualSwitches
+         JOIN devices host ON host.id = virtualSwitches.hostDeviceId
+         WHERE virtualSwitches.id = ?`,
+      )
+      .get(applied.createdVirtualSwitchIds[0]),
+    { hostMac: "AA:BB:CC:DD:EE:32" },
+  );
+});
+
+test("apply-time matches are reported as skips for preview selections", () => {
+  db.prepare("INSERT INTO labs (id, name) VALUES ('lab_race', 'Race')").run();
+  const source = integrationDevice({
+    providerRecordId: "device:race",
+    name: "race-host",
+    deviceType: "server",
+    macAddress: "AA:BB:CC:DD:EE:41",
+  });
+  assert.equal(
+    buildIntegrationDeviceSyncPlan({
+      labId: "lab_race",
+      importableDevices: [source],
+      wifi: null,
+    }).devices[0].action,
+    "create",
+  );
+  db.prepare(
+    `INSERT INTO devices
+      (id, labId, hostname, displayName, deviceType, macAddress, status, placement, heightU)
+     VALUES ('raced_host', 'lab_race', 'race-host', 'race-host', 'server',
+       'AA:BB:CC:DD:EE:41', 'unknown', 'room', 1)`,
+  ).run();
+
+  const applied = applyIntegrationDeviceSync({
+    labId: "lab_race",
+    importableDevices: [source],
+    wifi: null,
+    selectedProviderRecordIds: new Set(["device:race"]),
+    vendor: "Controller",
+    actor: "test",
+  });
+  assert.equal(applied.createdDeviceIds.length, 0);
+  assert.match(applied.skipped.join(" "), /now matches.*pull inventory/i);
+});
+
+test("MAC-less guests use parent scope while ambiguous records stay blocked", () => {
+  db.prepare("INSERT INTO labs (id, name) VALUES ('lab_scope', 'Scope')").run();
+  const scopedDevices = [
+    integrationDevice({
+      providerRecordId: "device:host-a",
+      name: "host-a",
+      deviceType: "server",
+      macAddress: "AA:BB:CC:DD:EE:11",
+    }),
+    integrationDevice({
+      providerRecordId: "device:host-b",
+      name: "host-b",
+      deviceType: "server",
+      macAddress: "AA:BB:CC:DD:EE:12",
+    }),
+    integrationDevice({
+      providerRecordId: "device:guest-a",
+      name: "worker",
+      deviceType: "vm",
+      macAddress: null,
+      parentName: "host-a",
+    }),
+    integrationDevice({
+      providerRecordId: "device:guest-b",
+      name: "worker",
+      deviceType: "vm",
+      macAddress: null,
+      parentName: "host-b",
+    }),
+  ];
+  assert.ok(
+    buildIntegrationDeviceSyncPlan({
+      labId: "lab_scope",
+      importableDevices: scopedDevices,
+      wifi: null,
+    }).devices.every((entry) => entry.action === "create"),
+  );
+  const applied = applyIntegrationDeviceSync({
+    labId: "lab_scope",
+    importableDevices: scopedDevices,
+    wifi: null,
+    vendor: "Controller",
+    actor: "test",
+  });
+  assert.equal(applied.createdDeviceIds.length, 4);
+  assert.deepEqual(
+    db
+      .prepare(
+        `SELECT child.hostname, parent.hostname AS parent
+         FROM devices child
+         JOIN devices parent ON parent.id = child.parentDeviceId
+         WHERE child.labId = 'lab_scope'
+         ORDER BY parent.hostname`,
+      )
+      .all(),
+    [
+      { hostname: "worker", parent: "host-a" },
+      { hostname: "worker", parent: "host-b" },
+    ],
+  );
+
+  const ambiguous = [
+    integrationDevice({
+      providerRecordId: "device:ambiguous-a",
+      name: "no-identity",
+      deviceType: "switch",
+      macAddress: null,
+    }),
+    integrationDevice({
+      providerRecordId: "device:ambiguous-b",
+      name: "no-identity",
+      deviceType: "switch",
+      macAddress: null,
+    }),
+  ];
+  const ambiguousPlan = buildIntegrationDeviceSyncPlan({
+    labId: "lab_scope",
+    importableDevices: ambiguous,
+    wifi: null,
+  });
+  assert.equal(ambiguousPlan.devices.length, 2);
+  assert.ok(
+    ambiguousPlan.devices.every(
+      (entry) => entry.action === "conflict" && entry.reason,
+    ),
+  );
+  const ambiguousApply = applyIntegrationDeviceSync({
+    labId: "lab_scope",
+    importableDevices: ambiguous,
+    wifi: null,
+    vendor: "Controller",
+    actor: "test",
+  });
+  assert.equal(ambiguousApply.createdDeviceIds.length, 0);
+  assert.equal(ambiguousApply.skipped.length, 2);
+});
+
+test("manual name-only matches are protected and missing switch hosts are reported", () => {
+  db.prepare("INSERT INTO labs (id, name) VALUES ('lab_manual', 'Manual')").run();
+  db.prepare(
+    `INSERT INTO devices
+      (id, labId, hostname, displayName, deviceType, status, placement, heightU)
+     VALUES ('manual_device', 'lab_manual', 'manual-switch', 'Manual switch', 'switch', 'unknown', 'room', 1)`,
+  ).run();
+  const source = integrationDevice({
+    providerRecordId: "device:manual-match",
+    name: "manual-switch",
+    deviceType: "switch",
+    macAddress: "AA:BB:CC:DD:EE:21",
+  });
+  const preview = buildIntegrationDeviceSyncPlan({
+    labId: "lab_manual",
+    importableDevices: [source],
+    wifi: null,
+    virtualSwitches: [
+      {
+        providerRecordId: "virtual-switch:missing",
+        name: "vmbr0",
+        hostName: "missing-host",
+        kind: "external",
+        notes: null,
+      },
+    ],
+  });
+  assert.equal(preview.devices[0].action, "exists");
+  assert.equal(preview.devices[0].existingId, "manual_device");
+  assert.equal(preview.virtualSwitches[0].action, "conflict");
+  assert.match(preview.virtualSwitches[0].reason ?? "", /host.*unavailable/i);
+
+  const applied = applyIntegrationDeviceSync({
+    labId: "lab_manual",
+    importableDevices: [],
+    wifi: null,
+    virtualSwitches: [
+      {
+        providerRecordId: "virtual-switch:missing",
+        name: "vmbr0",
+        hostName: "missing-host",
+        kind: "external",
+        notes: null,
+      },
+    ],
+    vendor: "Controller",
+    actor: "test",
+  });
+  assert.equal(applied.createdVirtualSwitchIds.length, 0);
+  assert.match(applied.skipped.join(" "), /host.*unavailable/i);
 });
 
 test("multiple schedules per connection are admin-only and validated", async () => {
@@ -339,6 +700,81 @@ test("schedule runs populate their own target labs and honor modes", async () =>
     "skip mode never deletes",
   );
 
+});
+
+test("auto-sync reports ambiguous and missing-dependent records without blocking valid imports", async () => {
+  const adminToken = await bootstrapAdmin();
+  const labId = await firstLabId(adminToken);
+  const connection = await createConnection(adminToken, {
+    labId,
+    provider: "opnsense",
+    name: "Mixed controller",
+    baseUrl: "https://mixed.lab.internal",
+    authKind: "key-secret",
+    authId: "key",
+    authSecret: "secret",
+  });
+  const schedule = await createSchedule(adminToken, {
+    connectionId: connection.id,
+    name: "Mixed import",
+    cron: "0 * * * *",
+    mode: "merge",
+    labIds: [labId],
+  });
+  setIntegrationClientOverrideForTests("opnsense", {
+    provider: "opnsense",
+    test: async () => ({ product: "Controller", version: null, summary: {} }),
+    fetchInventory: async () => ({
+      collection: { vlans: [], subnets: [], dhcpScopes: [] },
+      devices: [],
+      importableDevices: [
+        integrationDevice({
+          name: "valid-firewall",
+          deviceType: "firewall",
+          macAddress: "AA:BB:CC:DD:EE:31",
+        }),
+        integrationDevice({
+          name: "ambiguous-device",
+          deviceType: "switch",
+          macAddress: null,
+        }),
+        integrationDevice({
+          name: "ambiguous-device",
+          deviceType: "switch",
+          macAddress: null,
+        }),
+      ],
+      virtualSwitches: [
+        {
+          name: "vmbr0",
+          hostName: "missing-host",
+          kind: "external",
+          notes: null,
+        },
+      ],
+      warnings: [],
+    }),
+  });
+
+  const result = await runIntegrationSyncSchedule(schedule.id);
+  assert.equal(result.status, "ok");
+  assert.match(result.message, /\+1 device\(s\)/);
+  assert.match(result.message, /3 record\(s\) skipped/);
+  assert.ok(
+    db
+      .prepare(
+        "SELECT id FROM devices WHERE labId = ? AND hostname = 'valid-firewall'",
+      )
+      .get(labId),
+  );
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM devices WHERE labId = ? AND hostname = 'ambiguous-device'",
+      )
+      .get(labId),
+    { n: 0 },
+  );
 });
 
 test("schedule failures back off and the scanner respects pauses", async () => {
@@ -834,11 +1270,21 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
     const refreshed = JSON.parse(refreshSnapshot.body) as {
       deviceSnapshotToken: string;
       deviceSync: {
-        devices: Array<{ providerRecordId: string }>;
-        ssids: Array<{ providerRecordId: string }>;
-        virtualSwitches: Array<{ providerRecordId: string }>;
+        devices: Array<{ providerRecordId: string; action: string }>;
+        ssids: Array<{ providerRecordId: string; action: string }>;
+        virtualSwitches: Array<{
+          providerRecordId: string;
+          action: string;
+        }>;
       };
     };
+    assert.ok(
+      [
+        ...refreshed.deviceSync.devices,
+        ...refreshed.deviceSync.ssids,
+        ...refreshed.deviceSync.virtualSwitches,
+      ].every((entry) => entry.action === "exists"),
+    );
     const reapply = await app.inject({
       method: "POST",
       url: `/api/integrations/connections/${created.id}/apply-devices`,
@@ -852,15 +1298,7 @@ test("device import creates loose gear with ports and WiFi inventory", async () 
         ].map((entry) => entry.providerRecordId),
       },
     });
-    assert.equal(reapply.statusCode, 200);
-    const reapplyBody = JSON.parse(reapply.body) as {
-      createdDeviceIds: string[];
-      createdSsidIds: string[];
-      createdIpAssignmentIds: string[];
-    };
-    assert.equal(reapplyBody.createdDeviceIds.length, 0);
-    assert.equal(reapplyBody.createdSsidIds.length, 0);
-    assert.equal(reapplyBody.createdIpAssignmentIds.length, 0);
+    assert.equal(reapply.statusCode, 400, reapply.body);
     const vswitchCount = db
       .prepare(
         "SELECT COUNT(*) AS n FROM virtualSwitches WHERE hostDeviceId = ?",
@@ -955,6 +1393,29 @@ test("device apply imports only selected records and protects manual devices", a
           parentName: "missing-host",
           ports: [],
         },
+        {
+          name: "pve-create",
+          deviceType: "server",
+          model: null,
+          macAddress: "AA:BB:CC:00:00:04",
+          ipAddress: null,
+          serial: null,
+          firmware: null,
+          online: true,
+          ports: [],
+        },
+        {
+          name: "dependent-guest",
+          deviceType: "vm",
+          model: null,
+          macAddress: "AA:BB:CC:00:00:05",
+          ipAddress: null,
+          serial: null,
+          firmware: null,
+          online: true,
+          parentName: "pve-create",
+          ports: [],
+        },
       ],
       warnings: [],
     }),
@@ -974,6 +1435,7 @@ test("device apply imports only selected records and protects manual devices", a
         providerRecordId: string;
         name: string;
         action: string;
+        reason: string | null;
         proposedUpdates: string[];
       }>;
     };
@@ -983,10 +1445,14 @@ test("device apply imports only selected records and protects manual devices", a
   );
   assert.equal(manualPreview?.action, "exists");
   assert.deepEqual(manualPreview?.proposedUpdates, []);
+  const orphanPreview = inventoryBody.deviceSync.devices.find(
+    (entry) => entry.name === "orphan-guest",
+  );
+  assert.equal(orphanPreview?.action, "conflict");
+  assert.match(orphanPreview?.reason ?? "", /parent host missing-host/i);
   const selectedNames = new Set([
-    "provider-rename",
     "selected-switch",
-    "orphan-guest",
+    "dependent-guest",
   ]);
   const selectedProviderRecordIds = inventoryBody.deviceSync.devices
     .filter((entry) => selectedNames.has(entry.name))
@@ -1015,7 +1481,7 @@ test("device apply imports only selected records and protects manual devices", a
     skipped: string[];
   };
   assert.equal(result.createdDeviceIds.length, 1);
-  assert.match(result.skipped.join(" "), /parent host missing-host/i);
+  assert.match(result.skipped.join(" "), /parent host pve-create/i);
   assert.deepEqual(
     db
       .prepare(
@@ -1054,6 +1520,38 @@ test("device apply imports only selected records and protects manual devices", a
       .get(labId),
     undefined,
   );
+
+  const conflictInventory = await app.inject({
+    method: "POST",
+    url: `/api/integrations/connections/${connection.id}/inventory`,
+    headers: authHeaders(adminToken),
+    payload: {},
+  });
+  assert.equal(conflictInventory.statusCode, 200, conflictInventory.body);
+  const conflictBody = JSON.parse(conflictInventory.body) as {
+    deviceSnapshotToken: string;
+    deviceSync: {
+      devices: Array<{
+        providerRecordId: string;
+        name: string;
+        action: string;
+      }>;
+    };
+  };
+  const orphanConflict = conflictBody.deviceSync.devices.find(
+    (entry) => entry.name === "orphan-guest",
+  );
+  assert.equal(orphanConflict?.action, "conflict");
+  const conflictApply = await app.inject({
+    method: "POST",
+    url: `/api/integrations/connections/${connection.id}/apply-devices`,
+    headers: authHeaders(adminToken),
+    payload: {
+      snapshotToken: conflictBody.deviceSnapshotToken,
+      selectedProviderRecordIds: [orphanConflict?.providerRecordId],
+    },
+  });
+  assert.equal(conflictApply.statusCode, 400, conflictApply.body);
 });
 
 function resetDatabase() {

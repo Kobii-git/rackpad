@@ -2132,4 +2132,7 @@ export const id = {
   "Open image {name} in a new tab": "Buka gambar {name} di tab baru",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "Mewarisi perilaku induk untuk penempatan, port dan templat, Compute, WiFi, Storage, dan impor.",
   "Cannot delete while in use:": "Tidak dapat dihapus saat sedang digunakan:",
+  "Some selected records were not imported.": "Beberapa catatan yang dipilih tidak diimpor.",
+  "Pull inventory again after resolving these items.": "Tarik inventaris lagi setelah menyelesaikan masalah ini.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "Rekaman yang memerlukan perhatian diblokir. Memilih tamu atau switch virtual juga memilih host barunya; membatalkan pilihan host akan membatalkan pilihan dependensinya.",
 } satisfies TranslationMap;

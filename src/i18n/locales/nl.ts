@@ -2132,4 +2132,7 @@ export const nl = {
   "Open image {name} in a new tab": "Afbeelding {name} in een nieuw tabblad openen",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "Neemt bovenliggend gedrag over voor plaatsing, poorten en sjablonen, Compute, WiFi, Storage en imports.",
   "Cannot delete while in use:": "Kan niet worden verwijderd zolang dit type in gebruik is:",
+  "Some selected records were not imported.": "Sommige geselecteerde records zijn niet geïmporteerd.",
+  "Pull inventory again after resolving these items.": "Haal de inventaris opnieuw op nadat u deze punten hebt opgelost.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "Records die aandacht vereisen zijn geblokkeerd. Als u een gast of virtuele switch selecteert, wordt ook de nieuwe host geselecteerd; als u de host deselecteert, worden de afhankelijke records gedeselecteerd.",
 } satisfies TranslationMap;

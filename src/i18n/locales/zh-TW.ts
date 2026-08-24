@@ -2132,4 +2132,7 @@ export const zhTW = {
   "Open image {name} in a new tab": "在新分頁中開啟圖片 {name}",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "繼承父類型在放置、連接埠和範本、Compute、WiFi、Storage 以及匯入方面的行為。",
   "Cannot delete while in use:": "使用中無法刪除：",
+  "Some selected records were not imported.": "部分選取的記錄未匯入。",
+  "Pull inventory again after resolving these items.": "解決這些項目後，請再次擷取清單。",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "需要注意的記錄會被封鎖。選取客體或虛擬交換器時也會選取其新主機；取消選取主機會同時取消選取其相依項目。",
 } satisfies TranslationMap;

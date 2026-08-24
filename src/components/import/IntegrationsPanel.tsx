@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
@@ -35,6 +36,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { Mono } from "@/components/shared/Mono";
 import { IntegrationIcon } from "@/components/import/IntegrationIcons";
 import { api } from "@/lib/api";
+import {
+  initialIntegrationSelection,
+  updateIntegrationSelection,
+} from "@/lib/integration-selection";
 import type {
   IntegrationAuthKind,
   IntegrationAutoSyncMode,
@@ -337,7 +342,7 @@ function statusTone(status: IntegrationConnection["lastStatus"]) {
 function actionTone(action: string) {
   if (action === "create") return "ok" as const;
   if (action === "update") return "info" as const;
-  if (action === "delete") return "warn" as const;
+  if (action === "delete" || action === "conflict") return "warn" as const;
   return "neutral" as const;
 }
 
@@ -347,6 +352,7 @@ const SYNC_ACTION_LABELS: Record<string, TranslationKey> = {
   delete: "Delete",
   unchanged: "Unchanged",
   exists: "Already tracked",
+  conflict: "Needs attention",
 };
 
 // Basic selectors first; cron stays available as the advanced option.
@@ -434,6 +440,7 @@ export function IntegrationsPanel() {
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const [discoveredScopes, setDiscoveredScopes] = useState<
     IntegrationScope[] | null
@@ -509,6 +516,7 @@ export function IntegrationsPanel() {
   function resetMessages() {
     setError("");
     setSuccess("");
+    setImportWarnings([]);
   }
 
   function openCreateForm(provider: IntegrationProvider) {
@@ -746,17 +754,7 @@ export function IntegrationsPanel() {
       });
       setPull({ ...result, connectionId: connection.id });
       setSelectedProviderRecordIds(
-        new Set([
-          ...result.deviceSync.devices
-            .filter((entry) => entry.action === "create")
-            .map((entry) => entry.providerRecordId),
-          ...result.deviceSync.virtualSwitches
-            .filter((entry) => entry.action === "create")
-            .map((entry) => entry.providerRecordId),
-          ...result.deviceSync.ssids
-            .filter((entry) => entry.action === "create")
-            .map((entry) => entry.providerRecordId),
-        ]),
+        initialIntegrationSelection(result.deviceSync),
       );
       const counts = {
         vlans: result.preview.vlans.length,
@@ -818,18 +816,25 @@ export function IntegrationsPanel() {
         snapshotToken: pull.deviceSnapshotToken,
         selectedProviderRecordIds: [...selectedProviderRecordIds],
       });
+      const createdCount =
+        result.createdDeviceIds.length +
+        result.createdVirtualSwitchIds.length +
+        result.createdSsidIds.length;
       setSuccess(
-        t(
-          "Imported {deviceCount} device(s) with {portCount} port(s), {vswitchCount} virtual switch(es), {ssidCount} SSID(s), and {ipCount} IP assignment(s).",
-          {
-            deviceCount: result.createdDeviceIds.length,
-            portCount: result.createdPortCount,
-            vswitchCount: result.createdVirtualSwitchIds.length,
-            ssidCount: result.createdSsidIds.length,
-            ipCount: result.createdIpAssignmentIds.length,
-          },
-        ),
+        createdCount > 0
+          ? t(
+              "Imported {deviceCount} device(s) with {portCount} port(s), {vswitchCount} virtual switch(es), {ssidCount} SSID(s), and {ipCount} IP assignment(s).",
+              {
+                deviceCount: result.createdDeviceIds.length,
+                portCount: result.createdPortCount,
+                vswitchCount: result.createdVirtualSwitchIds.length,
+                ssidCount: result.createdSsidIds.length,
+                ipCount: result.createdIpAssignmentIds.length,
+              },
+            )
+          : "",
       );
+      setImportWarnings(result.skipped);
       setPull(null);
       await loadAll();
     } catch (err) {
@@ -839,6 +844,21 @@ export function IntegrationsPanel() {
     } finally {
       setImportingDevices(false);
     }
+  }
+
+  function handleImportSelectionChange(
+    providerRecordId: string,
+    selected: boolean,
+  ) {
+    if (!pull) return;
+    setSelectedProviderRecordIds((current) =>
+      updateIntegrationSelection(
+        pull.deviceSync,
+        current,
+        providerRecordId,
+        selected,
+      ),
+    );
   }
 
   function updateScheduleDraft(
@@ -1187,6 +1207,25 @@ export function IntegrationsPanel() {
           {success && (
             <div className="rounded-[var(--radius-md)] border border-[var(--success-border)] bg-[var(--success-soft)] px-3 py-2 text-sm text-[var(--success)]">
               {success}
+            </div>
+          )}
+          {importWarnings.length > 0 && (
+            <div
+              role="status"
+              className="rounded-[var(--radius-md)] border border-[var(--warning-border)] bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]"
+            >
+              <div className="flex items-center gap-2 font-medium">
+                <AlertTriangle className="size-4 shrink-0" />
+                {t("Some selected records were not imported.")}
+              </div>
+              <p className="mt-1 text-xs">
+                {t("Pull inventory again after resolving these items.")}
+              </p>
+              <ul className="mt-2 max-h-64 list-disc space-y-1 overflow-y-auto pl-5 text-xs">
+                {importWarnings.map((warning, index) => (
+                  <li key={`${warning}-${index}`}>{warning}</li>
+                ))}
+              </ul>
             </div>
           )}
 
@@ -2070,6 +2109,11 @@ export function IntegrationsPanel() {
                           "Physical gear is created as loose gear (no rack) with its ports; VMs and containers attach under their host with their virtual NICs. Matched records are never modified, and device IPs inside a known subnet are linked as IP assignments.",
                         )}
                       </p>
+                      <p className="text-xs text-[var(--text-tertiary)]">
+                        {t(
+                          "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.",
+                        )}
+                      </p>
                       <IntegrationDiffRows
                         emptyText={t("The controller reported no devices.")}
                         rows={pull.deviceSync.devices.map((entry, index) => ({
@@ -2092,10 +2136,10 @@ export function IntegrationsPanel() {
                             ? t("matches {name}", {
                                 name: entry.existingHostname,
                               })
-                            : undefined,
+                            : (entry.reason ?? undefined),
                         }))}
                         selectedIds={selectedProviderRecordIds}
-                        onSelectionChange={setSelectedProviderRecordIds}
+                        onSelectionChange={handleImportSelectionChange}
                       />
                       {pull.deviceSync.virtualSwitches.length > 0 && (
                         <IntegrationDiffRows
@@ -2109,10 +2153,11 @@ export function IntegrationsPanel() {
                               }),
                               action: entry.action,
                               selectId: entry.providerRecordId,
+                              note: entry.reason ?? undefined,
                             }),
                           )}
                           selectedIds={selectedProviderRecordIds}
-                          onSelectionChange={setSelectedProviderRecordIds}
+                          onSelectionChange={handleImportSelectionChange}
                         />
                       )}
                       {pull.deviceSync.ssids.length > 0 && (
@@ -2130,7 +2175,7 @@ export function IntegrationsPanel() {
                             selectId: entry.providerRecordId,
                           }))}
                           selectedIds={selectedProviderRecordIds}
-                          onSelectionChange={setSelectedProviderRecordIds}
+                          onSelectionChange={handleImportSelectionChange}
                         />
                       )}
                     </>
@@ -2249,7 +2294,7 @@ function IntegrationDiffRows({
   }>;
   emptyText: string;
   selectedIds?: Set<string>;
-  onSelectionChange?: (selected: Set<string>) => void;
+  onSelectionChange?: (providerRecordId: string, selected: boolean) => void;
 }) {
   const { t } = useI18n();
   if (rows.length === 0) {
@@ -2270,10 +2315,7 @@ function IntegrationDiffRows({
               disabled={row.action !== "create"}
               aria-label={t("Select {hostname}", { hostname: row.label })}
               onChange={(event) => {
-                const next = new Set(selectedIds);
-                if (event.target.checked) next.add(row.selectId!);
-                else next.delete(row.selectId!);
-                onSelectionChange(next);
+                onSelectionChange(row.selectId!, event.target.checked);
               }}
             />
           )}

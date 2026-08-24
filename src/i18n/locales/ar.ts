@@ -2132,4 +2132,7 @@ export const ar = {
   "Open image {name} in a new tab": "فتح الصورة {name} في علامة تبويب جديدة",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "يرث سلوك الأصل للموضع والمنافذ والقوالب والحوسبة وWiFi والتخزين والاستيراد.",
   "Cannot delete while in use:": "لا يمكن الحذف أثناء الاستخدام:",
+  "Some selected records were not imported.": "لم يتم استيراد بعض السجلات المحددة.",
+  "Pull inventory again after resolving these items.": "اسحب المخزون مرة أخرى بعد حل هذه العناصر.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "يتم حظر السجلات التي تحتاج إلى اهتمام. يؤدي تحديد ضيف أو محول افتراضي إلى تحديد مضيفه الجديد أيضاً؛ وإلغاء تحديد المضيف يلغي تحديد العناصر التابعة له.",
 } satisfies TranslationMap;

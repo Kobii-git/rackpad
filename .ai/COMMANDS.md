@@ -17,6 +17,7 @@ separately.
 | Server/domain tests | `test:server` | Canonical after server/data/security work |
 | Client unit tests | `test:client` | Canonical after client helper/model work |
 | Browser/accessibility | `test:e2e` | Environment-heavy; required by full CI/release |
+| Documentation screenshots | `screenshots:update` | Isolated deterministic 1920×1200 capture; outside normal E2E discovery |
 | Non-browser tests | `test` | Canonical local aggregation |
 | All tests | `test:full` | Canonical environment-heavy aggregation |
 | Production build | `build` | Canonical client/server build |

@@ -2132,4 +2132,7 @@ export const fa = {
   "Open image {name} in a new tab": "باز کردن تصویر {name} در زبانه جدید",
   "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.": "رفتار والد را برای جای‌گذاری، درگاه‌ها و الگوها، Compute، WiFi، Storage و واردسازی‌ها به ارث می‌برد.",
   "Cannot delete while in use:": "در هنگام استفاده قابل حذف نیست:",
+  "Some selected records were not imported.": "برخی رکوردهای انتخاب‌شده وارد نشدند.",
+  "Pull inventory again after resolving these items.": "پس از رفع این موارد، موجودی را دوباره دریافت کنید.",
+  "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "رکوردهای نیازمند توجه مسدود هستند. با انتخاب مهمان یا سوئیچ مجازی، میزبان جدید آن نیز انتخاب می‌شود؛ با لغو انتخاب میزبان، وابسته‌های آن نیز از انتخاب خارج می‌شوند.",
 } satisfies TranslationMap;

@@ -492,15 +492,17 @@ export interface IntegrationDeviceSyncPlan {
   labId: string;
   devices: Array<{
     providerRecordId: string;
-    action: "create" | "exists";
+    action: "create" | "exists" | "conflict";
     name: string;
     deviceType: IntegrationImportableDevice["deviceType"];
+    parentName: string | null;
     model: string | null;
     macAddress: string | null;
     ipAddress: string | null;
     portCount: number;
     existingId?: string;
     existingHostname?: string;
+    reason: string | null;
     proposedUpdates: string[];
   }>;
   ssids: Array<{
@@ -511,9 +513,10 @@ export interface IntegrationDeviceSyncPlan {
   }>;
   virtualSwitches: Array<{
     providerRecordId: string;
-    action: "create" | "exists";
+    action: "create" | "exists" | "conflict";
     name: string;
     hostName: string;
+    reason: string | null;
   }>;
   controllerName: string | null;
 }

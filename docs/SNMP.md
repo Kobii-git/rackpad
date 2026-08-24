@@ -85,6 +85,8 @@ Receiver status is reported on `/api/health` and `/api/snmp-traps/status`.
 Off by default. Set `SNMP_INVENTORY_SYNC=1` to enable it, then use the **SNMP sync**
 panel on a device's detail page to preview a diff and apply it.
 
+![Rackpad device Monitoring tab showing the pfSense and OPNsense SNMP inventory profile with its disabled schedule](./screenshots/device-snmp-sync.png)
+
 - **Applies:** VLANs and subnets read from the device (Q-BRIDGE VLANs, IP-MIB
   subnets), plus DHCP scopes that belong to a collected subnet and do not
   overlap an existing scope.
