@@ -60,28 +60,57 @@ rp_install_operational_assets() {
   local script_origin="${3:?script origin required}"
   local core_ref="${4:?core ref required}"
   local core_origin="https://raw.githubusercontent.com/community-scripts/core/${core_ref}"
-  local library_directory service_directory
+  local library_directory service_directory share_directory discovery_directory
+  local capability_dropin previous_advanced desired_template desired_scan_mode
 
   rp_validate_release "$release" || return 1
   [[ "$core_ref" =~ ^[0-9a-f]{40}$ ]] || return 1
   library_directory="$(rp_path /usr/local/lib/rackpad)"
   service_directory="$(rp_path /etc/systemd/system)"
+  share_directory="$(rp_path /usr/local/share/rackpad)"
+  discovery_directory="${share_directory}/discovery"
+  capability_dropin="${service_directory}/rackpad.service.d/10-discovery-capabilities.conf"
+  previous_advanced=0
+  if [[ -f "$capability_dropin" &&
+    -f "${discovery_directory}/advanced-capabilities.conf" ]] &&
+    cmp -s "$capability_dropin" "${discovery_directory}/advanced-capabilities.conf"; then
+    previous_advanced=1
+  fi
 
   install -d -m 0755 "$library_directory" \
-    "$(rp_path /usr/local/share/rackpad)" \
+    "$share_directory" \
+    "$discovery_directory" \
+    "$(rp_path /usr/local/sbin)" \
     "${service_directory}/rackpad.service.d" || return 1
   install -m 0755 "${release_directory}/deploy/proxmox/lib/native-common.sh" "$library_directory/native-common.sh" || return 1
   install -m 0755 "${release_directory}/deploy/proxmox/lib/environment-sync.sh" "$library_directory/environment-sync.sh" || return 1
   install -m 0755 "${release_directory}/deploy/proxmox/lib/build-release.sh" "$library_directory/build-release.sh" || return 1
   install -m 0755 "${release_directory}/deploy/proxmox/lib/install-operational-assets.sh" "$library_directory/install-operational-assets.sh" || return 1
   install -m 0755 "${release_directory}/deploy/proxmox/lib/native-update.sh" "$library_directory/native-update.sh" || return 1
-  install -m 0644 "${release_directory}/deploy/proxmox/rackpad.env.example" "$(rp_path /usr/local/share/rackpad/rackpad.env.example)" || return 1
+  install -m 0644 "${release_directory}/deploy/proxmox/rackpad.env.example" "${share_directory}/rackpad.env.example" || return 1
+  install -m 0644 "${release_directory}/deploy/proxmox/discovery/safe-capabilities.conf" "${discovery_directory}/safe-capabilities.conf" || return 1
+  install -m 0644 "${release_directory}/deploy/proxmox/discovery/advanced-capabilities.conf" "${discovery_directory}/advanced-capabilities.conf" || return 1
+  install -m 0700 "${release_directory}/deploy/proxmox/discovery/rackpad-discovery-mode.sh" "$(rp_path /usr/local/sbin/rackpad-discovery-mode)" || return 1
   install -m 0644 "${release_directory}/deploy/proxmox/systemd/rackpad.service" "${service_directory}/rackpad.service" || return 1
-  install -m 0644 "${release_directory}/deploy/proxmox/discovery/safe-capabilities.conf" "${service_directory}/rackpad.service.d/10-safe-capabilities.conf" || return 1
 
   rp_sync_environment \
-    "$(rp_path /usr/local/share/rackpad/rackpad.env.example)" \
+    "${share_directory}/rackpad.env.example" \
     "$(rp_path /etc/rackpad/rackpad.env)" || return 1
+
+  # Preserve only a mode selected through the installed advanced-mode contract.
+  # Unknown or hand-edited capability state falls back to the safer mode.
+  if ((previous_advanced == 1)); then
+    desired_template="${discovery_directory}/advanced-capabilities.conf"
+    desired_scan_mode="auto"
+  else
+    desired_template="${discovery_directory}/safe-capabilities.conf"
+    desired_scan_mode="neighbor"
+  fi
+  # shellcheck source=/dev/null
+  source "${release_directory}/deploy/proxmox/discovery/rackpad-discovery-mode.sh" || return 1
+  rp_set_environment_value DISCOVERY_MAC_SCAN_MODE "$desired_scan_mode" || return 1
+  rp_install_capability_dropin "$desired_template" || return 1
+  rm -f "${service_directory}/rackpad.service.d/10-safe-capabilities.conf" || return 1
 
   rp_write_text "$(rp_path /etc/rackpad/native-lxc)" 0644 "$RACKPAD_NATIVE_MARKER_CONTENT" || return 1
   rp_write_text "$(rp_path /etc/rackpad/version)" 0644 "$release" || return 1
@@ -92,9 +121,10 @@ rp_install_operational_assets() {
   rm -f "$(rp_path /root/.rackpad-candidate)" || return 1
 
   rp_set_rackpad_ownership -R root:root "$library_directory" \
-    "$(rp_path /usr/local/share/rackpad)" \
+    "$share_directory" \
+    "$(rp_path /usr/local/sbin/rackpad-discovery-mode)" \
     "${service_directory}/rackpad.service" \
-    "${service_directory}/rackpad.service.d/10-safe-capabilities.conf" || return 1
+    "$capability_dropin" || return 1
   rp_systemctl daemon-reload || return 1
 }
 

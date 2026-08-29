@@ -94,6 +94,7 @@ rp_backup_update_state() {
   rp_copy_required "$(rp_path /root/.rackpad)" "${rollback}/community-version" || return 1
   rp_copy_required "$(rp_path /usr/local/lib/rackpad)" "${rollback}/operational-library" || return 1
   rp_copy_required "$(rp_path /usr/local/share/rackpad)" "${rollback}/operational-share" || return 1
+  rp_copy_required "$(rp_path /usr/local/sbin/rackpad-discovery-mode)" "${rollback}/discovery-command" || return 1
 }
 
 rp_restore_update_state() {
@@ -110,7 +111,8 @@ rp_restore_update_state() {
     -f "${rollback}/update" &&
     -f "${rollback}/community-version" &&
     -d "${rollback}/operational-library" &&
-    -d "${rollback}/operational-share" ]] || {
+    -d "${rollback}/operational-share" &&
+    -f "${rollback}/discovery-command" ]] || {
     rp_error "The paired rollback point is incomplete."
     return 1
   }
@@ -135,6 +137,7 @@ rp_restore_update_state() {
   rm -rf "$(rp_path /usr/local/lib/rackpad)" "$(rp_path /usr/local/share/rackpad)" || return 1
   cp -a "${rollback}/operational-library" "$(rp_path /usr/local/lib/rackpad)" || return 1
   cp -a "${rollback}/operational-share" "$(rp_path /usr/local/share/rackpad)" || return 1
+  install -m 0700 "${rollback}/discovery-command" "$(rp_path /usr/local/sbin/rackpad-discovery-mode)" || return 1
 
   rp_atomic_symlink "$active_target" "$(rp_path /opt/rackpad)" || return 1
   rp_systemctl daemon-reload || return 1

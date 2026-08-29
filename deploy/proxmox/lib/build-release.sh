@@ -26,6 +26,9 @@ rp_validate_release_assets() {
     scripts/collect-hyperv.ps1 \
     deploy/proxmox/rackpad.env.example \
     deploy/proxmox/systemd/rackpad.service \
+    deploy/proxmox/discovery/safe-capabilities.conf \
+    deploy/proxmox/discovery/advanced-capabilities.conf \
+    deploy/proxmox/discovery/rackpad-discovery-mode.sh \
     deploy/proxmox/lib/native-update.sh; do
     [[ -e "${release_directory}/${required}" ]] || {
       rp_error "Built release is missing required asset ${required}."

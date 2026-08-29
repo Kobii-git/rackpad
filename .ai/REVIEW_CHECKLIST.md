@@ -15,6 +15,7 @@ Review only rows triggered by the diff, then apply the final row to every change
 | UI-visible text | English key, all locales, placeholders, i18n and build results |
 | React hooks/state | Dependency correctness, stable references, cleanup/cancellation, no render-time mutation |
 | Docker/Compose/env | Contract parity, safe defaults, privilege/ports, volume/data path, healthcheck, build context |
+| `scripts/install-proxmox-lxc.sh` or `deploy/proxmox/**` | Tagged asset/core-pin pairing, stable-only defaults, metadata/env parity, root ownership, persistent paths, safe/advanced privilege boundary, transactional rollback, ShellCheck/fixtures |
 | `.github/**` | Least permissions, publish consequence, no broad suppression, justification/review date/expiry |
 | Package/dependency | Intentional manifest/lock diff, runtime/dev classification, audit/scanner implications |
 | Release metadata | Correct dev/beta/stable version, changelog, tag/channel, full gate and smoke plan |

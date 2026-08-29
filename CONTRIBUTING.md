@@ -44,6 +44,19 @@ see [`.ai/COMMANDS.md`](./.ai/COMMANDS.md) for risk-based targeted selection.
 `check:i18n` catches wrong-language values (for example French strings copied
 into non-French locales). Run it after editing translation files.
 
+Changes under `scripts/` or `deploy/proxmox/` must also pass the native helper
+contract and shell checks:
+
+```bash
+npm run check:proxmox
+find scripts deploy/proxmox -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+find scripts deploy/proxmox -type f -name '*.sh' -print0 | xargs -0 shellcheck
+```
+
+Keep public dispatchers, release assets, JSON metadata, systemd hardening,
+persistent paths, and pinned origins aligned. Do not add Docker commands or
+`git pull` to the native helper path.
+
 ## Internationalization (i18n)
 
 Rackpad uses **English source strings as keys**:

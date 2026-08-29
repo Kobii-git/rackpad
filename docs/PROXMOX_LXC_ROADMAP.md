@@ -3,15 +3,16 @@
 ## Purpose and status
 
 This roadmap governs a Community Scripts-compatible, non-Docker Proxmox LXC
-deployment for Rackpad. Native LXC is an optional supported deployment; Docker
-remains the general recommendation. This document does not advertise a working
-installer until the stable-release phase has passed its exit gate.
+deployment for Rackpad. Native LXC is intended to become an optional supported
+deployment after validation and stable release; Docker remains the general
+recommendation. This document does not advertise a working installer until the
+stable-release phase has passed its exit gate.
 
 | Phase | Status |
 | --- | --- |
 | 1. Roadmap, application compatibility, and release contracts | Complete |
 | 2. Native installer and transactional updater | Complete |
-| 3. Discovery controls, operations, documentation, and CI | Planned |
+| 3. Discovery controls, operations, documentation, and CI | Complete |
 | 4. Beta 1 and fresh-install validation | Planned |
 | 5. Beta 2 update/rollback validation and soak | Planned |
 | 6. Stable `v1.8.1` deployment | Planned |
@@ -151,7 +152,7 @@ Phase 3 continuation prompt:
 
 ## Phase 3 - Discovery controls, operations, documentation, and CI
 
-Status: **Planned**
+Status: **Complete**
 
 Deliverables:
 
@@ -181,6 +182,16 @@ Exit gate:
 - The complete diff and guardrails pass review, and documentation describes only
   behavior present in the branch.
 - One local Phase 3 commit exists; nothing is pushed or published.
+
+Validation completed on 2026-08-29: the maintained contract checked 16 paired
+deployment assets; all 12 isolated environment, collision, operational-asset,
+discovery-mode, update-failure, rollback, and retention scenarios passed; Bash
+syntax and ShellCheck passed across `scripts/` and `deploy/proxmox/`; actionlint
+v1.7.12 passed; and `npm run check:full` passed, including 253 server assertions,
+41 client tests, and 29 Playwright tests. The diff, documentation claims,
+privilege boundary, persistent paths, rollback set, and secret/data guardrails
+were reviewed before the local Phase 3 commit. Real Proxmox guest validation
+remains reserved for Phases 4 and 5.
 
 Phase 4 continuation prompt:
 

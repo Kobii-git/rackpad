@@ -36,8 +36,11 @@ jobs:
       - name: Full repository validation
         run: npm run check:full
 
-      - name: Check shell scripts
-        run: find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: Check Bash syntax
+        run: find scripts deploy/proxmox -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+
+      - name: Check shell scripts with ShellCheck
+        run: find scripts deploy/proxmox -type f -name '*.sh' -print0 | xargs -0 shellcheck
 
       - name: Check PowerShell scripts
         shell: pwsh

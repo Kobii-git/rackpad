@@ -11,8 +11,11 @@ const relativeFiles = [
   "deploy/proxmox/ct/rackpad.sh",
   "deploy/proxmox/install/rackpad-install.sh",
   "deploy/proxmox/json/rackpad.json",
+  "deploy/proxmox/rackpad.env.example",
   "deploy/proxmox/systemd/rackpad.service",
   "deploy/proxmox/discovery/safe-capabilities.conf",
+  "deploy/proxmox/discovery/advanced-capabilities.conf",
+  "deploy/proxmox/discovery/rackpad-discovery-mode.sh",
   "deploy/proxmox/lib/native-common.sh",
   "deploy/proxmox/lib/environment-sync.sh",
   "deploy/proxmox/lib/build-release.sh",
@@ -43,6 +46,10 @@ const common = source("deploy/proxmox/lib/native-common.sh");
 const updater = source("deploy/proxmox/lib/native-update.sh");
 const operations = source("deploy/proxmox/lib/install-operational-assets.sh");
 const service = source("deploy/proxmox/systemd/rackpad.service");
+const discovery = source("deploy/proxmox/discovery/rackpad-discovery-mode.sh");
+const safeCapabilities = source("deploy/proxmox/discovery/safe-capabilities.conf");
+const advancedCapabilities = source("deploy/proxmox/discovery/advanced-capabilities.conf");
+const nativeEnvironment = source("deploy/proxmox/rackpad.env.example");
 const metadata = JSON.parse(source("deploy/proxmox/json/rackpad.json"));
 
 if (!dispatcher.includes("/releases/latest") || !dispatcher.includes("deploy/proxmox/run.sh")) {
@@ -88,8 +95,8 @@ if (!common.includes('mv -Tf "$temporary" "$link"')) {
 }
 
 for (const forbidden of [/\bgit\s+pull\b/i, /\bdocker(?:-compose)?\s+(?:run|pull|up|build)\b/i]) {
-  for (const [name, content] of [["CT helper", ct], ["installer", installer]]) {
-    if (forbidden.test(content)) failures.push(`${name} contains forbidden deployment command ${forbidden}`);
+  for (const file of relativeFiles.filter((candidate) => candidate.endsWith(".sh"))) {
+    if (forbidden.test(source(file))) failures.push(`${file} contains forbidden deployment command ${forbidden}`);
   }
 }
 
@@ -147,6 +154,11 @@ if (!methods.some((method) => method.resources?.os === "Debian" && method.resour
 if (metadata.default_credentials?.username !== null || metadata.default_credentials?.password !== null) {
   failures.push("Metadata credentials must remain null");
 }
+if (methods.some((method) => method.script !== "ct/rackpad.sh" ||
+    method.config_path !== "/etc/rackpad/rackpad.env" ||
+    method.resources?.cpu !== 2 || method.resources?.ram !== 4096 || method.resources?.hdd !== 16)) {
+  failures.push("Metadata install methods do not match the CT helper defaults and native config path");
+}
 if (!String(metadata.logo).includes("selfhst/icons") || !String(metadata.logo).includes("rackpad.webp")) {
   failures.push("Metadata does not use the Rackpad selfh.st icon");
 }
@@ -186,6 +198,7 @@ for (const rollbackControl of [
   "PRAGMA integrity_check",
   "operational-library",
   "operational-share",
+  "discovery-command",
   "Rollback validation failed. Rackpad remains stopped.",
   "Database snapshot:",
   "Environment backup:",
@@ -196,6 +209,18 @@ for (const rollbackControl of [
 }
 if (!operations.includes("rackpad-update.lock") || !operations.includes("flock -n 9")) {
   failures.push("Generated update entrypoint does not prevent concurrent transactions");
+}
+for (const asset of [
+  "advanced-capabilities.conf",
+  "safe-capabilities.conf",
+  "rackpad-discovery-mode.sh",
+]) {
+  if (!builder.includes(asset) || !operations.includes(asset)) {
+    failures.push(`Discovery asset is not version-aligned through build and installation: ${asset}`);
+  }
+}
+if (!operations.includes("install -m 0700") || !operations.includes("rackpad-discovery-mode")) {
+  failures.push("Discovery mode command is not installed root-only");
 }
 for (const pathName of [
   "/opt/rackpad_releases",
@@ -208,13 +233,78 @@ for (const pathName of [
   if (!combined.includes(pathName)) failures.push(`Native deployment contract is missing ${pathName}`);
 }
 
-const nativeEnvironment = source("deploy/proxmox/rackpad.env.example");
 if (!/^RACKPAD_SECRET_KEY=$/m.test(nativeEnvironment)) {
   failures.push("A non-empty Rackpad secret appears in a Proxmox asset");
 }
-
-if (failures.length > 0) {
-  throw new Error(`Proxmox Phase 2 contract failed:\n- ${failures.join("\n- ")}`);
+for (const variable of [
+  "NODE_ENV",
+  "HOST",
+  "PORT",
+  "DATABASE_PATH",
+  "RACKPAD_NATIVE_BACKUP_DIR",
+  "DISCOVERY_MAC_SCAN_MODE",
+  "RACKPAD_SECRET_KEY",
+  "SNMP_TRAP_ENABLED",
+]) {
+  if (!new RegExp(`^${variable}=`, "m").test(nativeEnvironment)) {
+    failures.push(`Native environment is missing required variable ${variable}`);
+  }
+}
+for (const fixedValue of [
+  "NODE_ENV=production",
+  "HOST=0.0.0.0",
+  "PORT=3000",
+  "DATABASE_PATH=/opt/rackpad_data/rackpad.db",
+  "RACKPAD_NATIVE_BACKUP_DIR=/opt/rackpad_data/backups",
+  "DISCOVERY_MAC_SCAN_MODE=neighbor",
+  "SNMP_TRAP_ENABLED=0",
+]) {
+  if (!nativeEnvironment.includes(fixedValue)) failures.push(`Native environment is missing ${fixedValue}`);
 }
 
-console.log(`Proxmox Phase 2 contract valid: ${relativeFiles.length} paired deployment assets checked.`);
+if (!/^CapabilityBoundingSet=$/m.test(safeCapabilities) ||
+    !/^AmbientCapabilities=$/m.test(safeCapabilities)) {
+  failures.push("Safe discovery template does not clear service capabilities");
+}
+for (const directive of [
+  "CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN",
+  "AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN",
+  "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_PACKET",
+]) {
+  if (!advancedCapabilities.includes(directive)) {
+    failures.push(`Advanced discovery template is missing ${directive}`);
+  }
+}
+for (const control of [
+  "safe|advanced|status",
+  "DISCOVERY_MAC_SCAN_MODE",
+  'scan_mode="neighbor"',
+  'scan_mode="auto"',
+  "CapBnd",
+  "CapEff",
+  "socket.AF_PACKET",
+  "CAP_NET_ADMIN and CAP_NET_RAW",
+  "Rackpad will not change LXC privilege",
+  "managed independently",
+  "restoring the previous mode",
+]) {
+  if (!discovery.includes(control)) failures.push(`Discovery control is missing ${control}`);
+}
+if (/rp_set_environment_value\s+SNMP_/m.test(discovery)) {
+  failures.push("Discovery mode command must not change SNMP trap configuration");
+}
+for (const forbiddenPrivilegeMutation of [
+  /\bpct\s+set\b/,
+  /\blxc\.apparmor\.profile\b/,
+  /\bunprivileged\s*=\s*0\b/,
+]) {
+  if (forbiddenPrivilegeMutation.test(discovery)) {
+    failures.push(`Discovery mode command mutates outer LXC privilege: ${forbiddenPrivilegeMutation}`);
+  }
+}
+
+if (failures.length > 0) {
+  throw new Error(`Proxmox contract failed:\n- ${failures.join("\n- ")}`);
+}
+
+console.log(`Proxmox contract valid: ${relativeFiles.length} paired deployment assets checked.`);

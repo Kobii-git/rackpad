@@ -37,7 +37,8 @@ Built with:
 - SQLite persistence through `better-sqlite3`
 - session-based authentication with admin/editor/viewer roles
 - per-device health checks with ICMP, TCP, HTTP/HTTPS, and SNMP (v1/v2c/v3) monitor targets; optional trap receiver and VLAN/subnet sync (see [SNMP guide](./docs/SNMP.md))
-- Docker support for a single-container deployment
+- Docker support for a single-container deployment; first-party native Proxmox
+  LXC support is in staged validation
 
 ## Highlights
 
@@ -60,6 +61,7 @@ contains the core material you need:
 
 - [Installation guide](./INSTALL.md)
 - [Proxmox install notes](./docs/PROXMOX.md)
+- [Proxmox native LXC operations (pre-release)](./docs/PROXMOX_NATIVE_LXC.md)
 - [Hyper-V import guide](./docs/HYPERV_IMPORT.md)
 - [Proxmox import guide](./docs/PROXMOX_IMPORT.md)
 - [Networks, VLANs, DHCP, and IPAM guide](./docs/NETWORKS_IPAM.md)

@@ -1,6 +1,6 @@
 # Rackpad Installation Guide
 
-Current stable release: `v1.7.3`
+Current stable release: `v1.8.0`
 
 Rackpad is easiest to run from Docker. You can either pull the published image
 without cloning the repo, or clone the repo and build it yourself.
@@ -8,14 +8,16 @@ without cloning the repo, or clone the repo and build it yourself.
 ## Which Install Should I Use?
 
 - **Linux server or VM:** Use Docker and pull the published image.
-- **Proxmox:** Create a Debian/Ubuntu LXC, enable nesting, then use the Linux Docker steps inside the LXC.
+- **Proxmox:** Use the documented Docker-in-LXC path. A first-party native LXC
+  path is implemented but remains pre-release until its beta and stable gates
+  pass.
 - **Windows:** Use Docker Desktop with the published image.
 - **Development/source build:** Clone `main` and build locally.
 
 ## Main Branch Or Version Tag?
 
 - `main` is the stable source branch and is fine for cloning the latest stable code.
-- `RACKPAD_TAG=1.7.3` pins the Docker image to a known release. Git tags use
+- `RACKPAD_TAG=1.8.0` pins the Docker image to a known release. Git tags use
   the `v` prefix, but Docker image tags do not.
 - `RACKPAD_TAG=latest` follows the newest published stable GHCR image and is
   convenient for quick installs or test labs.
@@ -47,7 +49,7 @@ TRUSTED_ORIGINS=
 Most users only change:
 
 - `RACKPAD_PORT`: host port to expose, default `3000`.
-- `RACKPAD_TAG`: release version to run, for example `1.7.3`, or `latest` for
+- `RACKPAD_TAG`: release version to run, for example `1.8.0`, or `latest` for
   the newest stable GHCR image.
 - `TRUST_PROXY`, `TRUSTED_HOSTS`, `TRUSTED_ORIGINS`: set these when using a reverse proxy.
 
@@ -185,11 +187,17 @@ sudo docker compose up --build -d
 To build an exact release instead of current `main`:
 
 ```bash
-sudo git checkout v1.7.3
+sudo git checkout v1.8.0
 sudo docker compose up --build -d
 ```
 
 ## Proxmox Install
+
+Docker inside an LXC remains the supported general path below. The non-Docker
+helper and operator controls are documented in
+[`docs/PROXMOX_NATIVE_LXC.md`](./docs/PROXMOX_NATIVE_LXC.md), but its public
+installer is not supported until the staged validation and stable-release gates
+are complete.
 
 Recommended layout:
 

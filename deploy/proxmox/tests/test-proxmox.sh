@@ -8,12 +8,12 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 tests_run=0
 
 fail() {
-  echo "Phase 2 fixture failed: $*" >&2
+  echo "Proxmox fixture failed: $*" >&2
   exit 1
 }
 
 new_root() {
-  mktemp -d "${TMPDIR:-/tmp}/rackpad-phase2.XXXXXX"
+  mktemp -d "${TMPDIR:-/tmp}/rackpad-proxmox.XXXXXX"
 }
 
 test_environment_sync() (
@@ -88,8 +88,129 @@ EOF
   grep -q 'rackpad-update.lock' "${fixture}/usr/bin/update" || fail "update entrypoint is not transaction-locked"
   grep -q '^PORT=4321$' "${fixture}/etc/rackpad/rackpad.env" || fail "operational refresh overwrote operator config"
   grep -q '^LEGACY_OPTION=kept$' "${fixture}/etc/rackpad/rackpad.env" || fail "operational refresh removed unknown config"
+  grep -q '^DISCOVERY_MAC_SCAN_MODE=neighbor$' "${fixture}/etc/rackpad/rackpad.env" || fail "fresh operational assets did not enforce safe discovery"
+  cmp -s "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf" \
+    "${fixture}/usr/local/share/rackpad/discovery/safe-capabilities.conf" || fail "fresh operational assets did not install safe capabilities"
+  [[ "$(stat -f '%Lp' "${fixture}/usr/local/sbin/rackpad-discovery-mode" 2>/dev/null || stat -c '%a' "${fixture}/usr/local/sbin/rackpad-discovery-mode")" == "700" ]] || fail "discovery mode command is not root-only"
   [[ "$output" != *"4321"* && "$output" != *"kept"* ]] || fail "operational refresh leaked environment values"
   grep -q '^daemon-reload$' "$systemctl_log" || fail "operational refresh did not reload systemd"
+
+  sed -i.bak 's/^DISCOVERY_MAC_SCAN_MODE=.*/DISCOVERY_MAC_SCAN_MODE=auto/' \
+    "${fixture}/etc/rackpad/rackpad.env"
+  rm -f "${fixture}/etc/rackpad/rackpad.env.bak"
+  cp "${fixture}/usr/local/share/rackpad/discovery/advanced-capabilities.conf" \
+    "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf"
+  rp_install_operational_assets \
+    "$release" \
+    "v1.8.1" \
+    "https://raw.githubusercontent.com/Kobii-git/rackpad/v1.8.1/deploy/proxmox" \
+    "7cea42d8a3f7164d1813906f386c6d690eba7fc5" >/dev/null
+  grep -q '^DISCOVERY_MAC_SCAN_MODE=auto$' "${fixture}/etc/rackpad/rackpad.env" || fail "operational refresh did not preserve advanced discovery"
+  cmp -s "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf" \
+    "${fixture}/usr/local/share/rackpad/discovery/advanced-capabilities.conf" || fail "operational refresh did not preserve advanced capabilities"
+)
+
+make_discovery_fixture() {
+  local fixture="$1" mode="${2:-safe}"
+  mkdir -p \
+    "${fixture}/etc/rackpad" \
+    "${fixture}/etc/systemd/system/rackpad.service.d" \
+    "${fixture}/usr/local/share/rackpad/discovery"
+  printf '%s\n' "rackpad-native-lxc-v1" >"${fixture}/etc/rackpad/native-lxc"
+  cp "${repository_root}/deploy/proxmox/discovery/safe-capabilities.conf" \
+    "${fixture}/usr/local/share/rackpad/discovery/safe-capabilities.conf"
+  cp "${repository_root}/deploy/proxmox/discovery/advanced-capabilities.conf" \
+    "${fixture}/usr/local/share/rackpad/discovery/advanced-capabilities.conf"
+  if [[ "$mode" == "advanced" ]]; then
+    printf '%s\n' "DISCOVERY_MAC_SCAN_MODE=auto" "SNMP_TRAP_ENABLED=0" >"${fixture}/etc/rackpad/rackpad.env"
+    cp "${fixture}/usr/local/share/rackpad/discovery/advanced-capabilities.conf" \
+      "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf"
+  else
+    printf '%s\n' "DISCOVERY_MAC_SCAN_MODE=neighbor" "SNMP_TRAP_ENABLED=0" >"${fixture}/etc/rackpad/rackpad.env"
+    cp "${fixture}/usr/local/share/rackpad/discovery/safe-capabilities.conf" \
+      "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf"
+  fi
+}
+
+test_safe_discovery_mode() (
+  fixture="$(new_root)"
+  trap 'rm -rf "$fixture"' EXIT
+  make_discovery_fixture "$fixture" advanced
+  export RACKPAD_ROOT_PREFIX="$fixture"
+  systemctl_log="${fixture}/systemctl.log"
+  # shellcheck source=../discovery/rackpad-discovery-mode.sh
+  source "${repository_root}/deploy/proxmox/discovery/rackpad-discovery-mode.sh"
+  rp_systemctl() {
+    if [[ "$*" == "is-active --quiet rackpad" ]]; then return 0; fi
+    printf '%s\n' "$*" >>"$systemctl_log"
+  }
+  rp_apply_discovery_mode safe >/dev/null
+  grep -q '^DISCOVERY_MAC_SCAN_MODE=neighbor$' "${fixture}/etc/rackpad/rackpad.env" || fail "safe mode did not enforce neighbor discovery"
+  grep -q '^SNMP_TRAP_ENABLED=0$' "${fixture}/etc/rackpad/rackpad.env" || fail "safe mode changed SNMP trap state"
+  cmp -s "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf" \
+    "${fixture}/usr/local/share/rackpad/discovery/safe-capabilities.conf" || fail "safe mode did not clear capabilities"
+  status="$(rp_discovery_status)"
+  [[ "$status" == *"Discovery mode: safe"* && "$status" == *"SNMP traps: 0 (managed independently)"* ]] || fail "safe status is inaccurate"
+  grep -q '^restart rackpad$' "$systemctl_log" || fail "safe mode did not restart Rackpad"
+)
+
+test_advanced_discovery_refusal() (
+  fixture="$(new_root)"
+  trap 'rm -rf "$fixture"' EXIT
+  make_discovery_fixture "$fixture" safe
+  export RACKPAD_ROOT_PREFIX="$fixture"
+  cp "${fixture}/etc/rackpad/rackpad.env" "${fixture}/before.env"
+  cp "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf" \
+    "${fixture}/before-capabilities.conf"
+  # shellcheck source=../discovery/rackpad-discovery-mode.sh
+  source "${repository_root}/deploy/proxmox/discovery/rackpad-discovery-mode.sh"
+  rp_preflight_advanced_discovery() { return 1; }
+  rp_systemctl() { fail "refused advanced mode touched systemd"; }
+  if rp_apply_discovery_mode advanced >/dev/null 2>&1; then
+    fail "advanced mode ignored a failed outer-LXC preflight"
+  fi
+  cmp -s "${fixture}/before.env" "${fixture}/etc/rackpad/rackpad.env" || fail "advanced refusal changed the environment"
+  cmp -s "${fixture}/before-capabilities.conf" \
+    "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf" || fail "advanced refusal changed capabilities"
+)
+
+test_advanced_discovery_mode_and_rollback() (
+  fixture="$(new_root)"
+  trap 'rm -rf "$fixture"' EXIT
+  make_discovery_fixture "$fixture" safe
+  export RACKPAD_ROOT_PREFIX="$fixture"
+  # shellcheck source=../discovery/rackpad-discovery-mode.sh
+  source "${repository_root}/deploy/proxmox/discovery/rackpad-discovery-mode.sh"
+  rp_preflight_advanced_discovery() { return 0; }
+  rp_systemctl() {
+    if [[ "$*" == "is-active --quiet rackpad" ]]; then return 0; fi
+    return 0
+  }
+  rp_apply_discovery_mode advanced >/dev/null
+  grep -q '^DISCOVERY_MAC_SCAN_MODE=auto$' "${fixture}/etc/rackpad/rackpad.env" || fail "advanced mode did not enable automatic MAC discovery"
+  grep -q '^SNMP_TRAP_ENABLED=0$' "${fixture}/etc/rackpad/rackpad.env" || fail "advanced mode changed SNMP trap state"
+  cmp -s "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf" \
+    "${fixture}/usr/local/share/rackpad/discovery/advanced-capabilities.conf" || fail "advanced mode did not install raw-network capabilities"
+  [[ "$(rp_discovery_status)" == *"Discovery mode: advanced"* ]] || fail "advanced status is inaccurate"
+
+  rp_apply_discovery_mode safe >/dev/null
+  restart_count=0
+  rp_systemctl() {
+    case "$*" in
+      "restart rackpad")
+        restart_count=$((restart_count + 1))
+        ((restart_count > 1))
+        ;;
+      "is-active --quiet rackpad") return 0 ;;
+      *) return 0 ;;
+    esac
+  }
+  if rp_apply_discovery_mode advanced >/dev/null 2>&1; then
+    fail "failed advanced activation reported success"
+  fi
+  grep -q '^DISCOVERY_MAC_SCAN_MODE=neighbor$' "${fixture}/etc/rackpad/rackpad.env" || fail "failed advanced activation did not restore safe environment"
+  cmp -s "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf" \
+    "${fixture}/usr/local/share/rackpad/discovery/safe-capabilities.conf" || fail "failed advanced activation did not restore safe capabilities"
 )
 
 make_update_fixture() {
@@ -103,6 +224,7 @@ make_update_fixture() {
     "${fixture}/usr/bin" \
     "${fixture}/usr/local/lib/rackpad" \
     "${fixture}/usr/local/share/rackpad" \
+    "${fixture}/usr/local/sbin" \
     "${fixture}/root"
   ln -s "${fixture}/opt/rackpad_releases/v1.8.0" "${fixture}/opt/rackpad"
   printf '%s\n' "rackpad-native-lxc-v1" >"${fixture}/etc/rackpad/native-lxc"
@@ -112,10 +234,11 @@ make_update_fixture() {
   printf '%s\n' "PORT=3000" >"${fixture}/etc/rackpad/rackpad.env"
   printf '%s\n' "old-database" >"${fixture}/opt/rackpad_data/rackpad.db"
   printf '%s\n' "old-service" >"${fixture}/etc/systemd/system/rackpad.service"
-  printf '%s\n' "old-dropin" >"${fixture}/etc/systemd/system/rackpad.service.d/10-safe-capabilities.conf"
+  printf '%s\n' "old-dropin" >"${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf"
   printf '%s\n' "old-update" >"${fixture}/usr/bin/update"
   printf '%s\n' "old-library" >"${fixture}/usr/local/lib/rackpad/native-update.sh"
   printf '%s\n' "old-share" >"${fixture}/usr/local/share/rackpad/rackpad.env.example"
+  printf '%s\n' "old-discovery-command" >"${fixture}/usr/local/sbin/rackpad-discovery-mode"
   printf '%s\n' "1.8.0" >"${fixture}/root/.rackpad"
   printf '%s\n' "7cea42d8a3f7164d1813906f386c6d690eba7fc5" >"${fixture}/opt/rackpad_releases/v1.8.1/deploy/proxmox/core-ref"
 }
@@ -205,6 +328,7 @@ test_failed_candidate_rolls_back_everything() (
     printf '%s\n' "new-update" >"${fixture}/usr/bin/update"
     printf '%s\n' "new-library" >"${fixture}/usr/local/lib/rackpad/native-update.sh"
     printf '%s\n' "new-share" >"${fixture}/usr/local/share/rackpad/rackpad.env.example"
+    printf '%s\n' "new-discovery-command" >"${fixture}/usr/local/sbin/rackpad-discovery-mode"
     return 1
   }
   rp_verify_active_release() {
@@ -214,7 +338,8 @@ test_failed_candidate_rolls_back_everything() (
       [[ "$(<"${fixture}/etc/systemd/system/rackpad.service")" == "old-service" ]] &&
       [[ "$(<"${fixture}/usr/bin/update")" == "old-update" ]] &&
       [[ "$(<"${fixture}/usr/local/lib/rackpad/native-update.sh")" == "old-library" ]] &&
-      [[ "$(<"${fixture}/usr/local/share/rackpad/rackpad.env.example")" == "old-share" ]]
+      [[ "$(<"${fixture}/usr/local/share/rackpad/rackpad.env.example")" == "old-share" ]] &&
+      [[ "$(<"${fixture}/usr/local/sbin/rackpad-discovery-mode")" == "old-discovery-command" ]]
   }
   if rackpad_transactional_update "v1.8.1" ignored_fetch >/dev/null 2>&1; then
     fail "failed candidate reported success"
@@ -266,6 +391,9 @@ for fixture_test in \
   test_environment_sync \
   test_collisions \
   test_operational_assets_are_version_aligned \
+  test_safe_discovery_mode \
+  test_advanced_discovery_refusal \
+  test_advanced_discovery_mode_and_rollback \
   test_noop_update \
   test_build_failure_before_downtime \
   test_snapshot_failure_resumes_old_release \
@@ -276,4 +404,4 @@ for fixture_test in \
   tests_run=$((tests_run + 1))
 done
 
-echo "Proxmox Phase 2 fixtures passed: ${tests_run} scenarios."
+echo "Proxmox fixtures passed: ${tests_run} scenarios."
