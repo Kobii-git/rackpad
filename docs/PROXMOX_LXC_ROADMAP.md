@@ -10,7 +10,7 @@ installer until the stable-release phase has passed its exit gate.
 | Phase | Status |
 | --- | --- |
 | 1. Roadmap, application compatibility, and release contracts | Complete |
-| 2. Native installer and transactional updater | Planned |
+| 2. Native installer and transactional updater | Complete |
 | 3. Discovery controls, operations, documentation, and CI | Planned |
 | 4. Beta 1 and fresh-install validation | Planned |
 | 5. Beta 2 update/rollback validation and soak | Planned |
@@ -86,7 +86,7 @@ Phase 2 continuation prompt:
 
 ## Phase 2 - Complete native installer and transactional updater
 
-Status: **Planned**
+Status: **Complete**
 
 Deliverables:
 
@@ -137,6 +137,17 @@ Exit gate:
 - No secret value appears in logs or fixtures.
 - `npm run check` passes.
 - One local Phase 2 commit exists; nothing is pushed or published.
+
+Validation completed on 2026-08-29: Bash syntax and ShellCheck passed across
+`scripts/` and `deploy/proxmox/`; the Phase 2 contract validator checked all 13
+paired deployment assets; all nine isolated configuration, collision, no-op,
+failure, rollback, operational-asset, and retention fixtures passed; and
+`npm run check` passed. The fixture output and task diff were also checked for
+secret values before the local Phase 2 commit.
+
+Phase 3 continuation prompt:
+
+> Continue with Phase 3 of `docs/PROXMOX_LXC_ROADMAP.md`. Verify Phases 1-2 first, implement only discovery controls, operations and migration documentation, repository guidance, and CI validation, create one local commit, and stop without pushing or publishing.
 
 ## Phase 3 - Discovery controls, operations, documentation, and CI
 

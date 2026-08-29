@@ -1,0 +1,39 @@
+[Unit]
+Description=Rackpad infrastructure inventory
+Documentation=https://github.com/Kobii-git/rackpad
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=rackpad
+Group=rackpad
+WorkingDirectory=/opt/rackpad
+EnvironmentFile=/etc/rackpad/rackpad.env
+ExecStart=/usr/bin/node /opt/rackpad/dist-server/index.js
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+UMask=0077
+
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/opt/rackpad_data
+
+[Install]
+WantedBy=multi-user.target

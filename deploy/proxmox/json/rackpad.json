@@ -1,0 +1,51 @@
+{
+  "name": "Rackpad",
+  "slug": "rackpad",
+  "categories": [1, 9, 10],
+  "date_created": "2026-08-29",
+  "type": "ct",
+  "updateable": true,
+  "privileged": false,
+  "interface_port": 3000,
+  "documentation": "https://github.com/Kobii-git/rackpad/blob/main/INSTALL.md",
+  "website": "https://rackpad.net/",
+  "repository": "https://github.com/Kobii-git/rackpad",
+  "architectures": ["amd64"],
+  "platforms": ["pve"],
+  "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/rackpad.webp",
+  "description": "Self-hosted infrastructure inventory and operations workspace for racks, networks, devices, storage, discovery, and monitoring.",
+  "install_methods": [
+    {
+      "type": "default",
+      "script": "ct/rackpad.sh",
+      "config_path": "/etc/rackpad/rackpad.env",
+      "resources": {
+        "cpu": 2,
+        "ram": 4096,
+        "hdd": 16,
+        "os": "Debian",
+        "version": "13"
+      }
+    },
+    {
+      "type": "alternative",
+      "script": "ct/rackpad.sh",
+      "config_path": "/etc/rackpad/rackpad.env",
+      "resources": {
+        "cpu": 2,
+        "ram": 4096,
+        "hdd": 16,
+        "os": "Ubuntu",
+        "version": "24.04"
+      }
+    }
+  ],
+  "default_credentials": {
+    "username": null,
+    "password": null
+  },
+  "notes": [
+    "Creates an unprivileged container with nesting enabled.",
+    "Updates are stable-only and run manually with /usr/bin/update."
+  ]
+}
