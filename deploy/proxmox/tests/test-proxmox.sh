@@ -33,7 +33,7 @@ EOF
   grep -q '^OIDC_LABEL=Private login$' "$environment" || fail "operator value was overwritten"
   grep -q '^LEGACY_OPTION=kept$' "$environment" || fail "unknown key was removed"
   grep -q '^DATABASE_PATH=/opt/rackpad_data/rackpad.db$' "$environment" || fail "new key was not appended"
-  [[ "$(stat -f '%Lp' "$environment" 2>/dev/null || stat -c '%a' "$environment")" == "640" ]] || fail "environment mode is not 0640"
+  [[ "$(stat -c '%a' "$environment" 2>/dev/null || stat -f '%Lp' "$environment")" == "640" ]] || fail "environment mode is not 0640"
   [[ "$output" == *"LEGACY_OPTION"* ]] || fail "unknown key warning is missing"
   [[ "$output" != *"4321"* && "$output" != *"Private login"* && "$output" != *"kept"* ]] || fail "environment values leaked to output"
 )
@@ -91,7 +91,7 @@ EOF
   grep -q '^DISCOVERY_MAC_SCAN_MODE=neighbor$' "${fixture}/etc/rackpad/rackpad.env" || fail "fresh operational assets did not enforce safe discovery"
   cmp -s "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf" \
     "${fixture}/usr/local/share/rackpad/discovery/safe-capabilities.conf" || fail "fresh operational assets did not install safe capabilities"
-  [[ "$(stat -f '%Lp' "${fixture}/usr/local/sbin/rackpad-discovery-mode" 2>/dev/null || stat -c '%a' "${fixture}/usr/local/sbin/rackpad-discovery-mode")" == "700" ]] || fail "discovery mode command is not root-only"
+  [[ "$(stat -c '%a' "${fixture}/usr/local/sbin/rackpad-discovery-mode" 2>/dev/null || stat -f '%Lp' "${fixture}/usr/local/sbin/rackpad-discovery-mode")" == "700" ]] || fail "discovery mode command is not root-only"
   [[ "$output" != *"4321"* && "$output" != *"kept"* ]] || fail "operational refresh leaked environment values"
   grep -q '^daemon-reload$' "$systemctl_log" || fail "operational refresh did not reload systemd"
 
