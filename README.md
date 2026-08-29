@@ -73,6 +73,7 @@ contains the core material you need:
 - [Discovery deployment (Proxmox/LXC/host networking)](./docs/DISCOVERY_DEPLOYMENT.md)
 - [Documentation and images guide](./docs/DOCUMENTATION.md)
 - [Automation roadmap (proposed)](./docs/AUTOMATION_ROADMAP.md)
+- [Proxmox native LXC roadmap (proposed)](./docs/PROXMOX_LXC_ROADMAP.md)
 - [Security policy](./SECURITY.md)
 - [Community Discord](https://discord.gg/g25tEafYDX)
 - [Changelog](./CHANGELOG.md)

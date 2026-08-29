@@ -20,6 +20,8 @@ jobs:
   build:
     needs: quality
     runs-on: ubuntu-latest
+    outputs:
+      prerelease: ${{ steps.release-contract.outputs.prerelease }}
     permissions:
       contents: read
       packages: write
@@ -28,6 +30,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Fetch release branches
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main +refs/heads/beta:refs/remotes/origin/beta
+
+      - name: Validate release contract
+        id: release-contract
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        run: node scripts/check-release-contract.mjs
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -76,3 +89,39 @@ jobs:
           no-cache-filters: runtime
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IS_PRERELEASE: ${{ needs.build.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            existing_prerelease="$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq '.isPrerelease')"
+            if [[ "$existing_prerelease" != "$IS_PRERELEASE" ]]; then
+              echo "Existing release prerelease status does not match the validated tag." >&2
+              exit 1
+            fi
+            echo "GitHub Release $GITHUB_REF_NAME already exists with the expected type."
+            exit 0
+          fi
+
+          release_args=(
+            release create "$GITHUB_REF_NAME"
+            --repo "$GITHUB_REPOSITORY"
+            --verify-tag
+            --title "Rackpad $GITHUB_REF_NAME"
+            --generate-notes
+          )
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            release_args+=(--prerelease)
+          fi
+          gh "${release_args[@]}"
