@@ -36,6 +36,15 @@ Host discovery may run root with host networking and network capabilities. It is
 isolated in an opt-in Compose file and should run only on a trusted host/network.
 Reconsider if discovery can move to a separate least-privilege worker/agent.
 
+## Native LXC requires real-Proxmox validation
+
+The native helper, update transaction, rollback, and discovery modes have
+isolated contract fixtures but have not yet passed the planned fresh-install,
+cross-version rollback, reboot, and soak gates on Proxmox VE 9.x Debian 13 and
+Ubuntu 24.04 guests. Public documentation keeps the installer pre-release until
+that evidence exists. Reconsider support claims only after Phases 4-6 of the
+native LXC roadmap pass.
+
 ## SQLite and embedded images
 
 One SQLite file simplifies install and complete backups; base64 images keep state

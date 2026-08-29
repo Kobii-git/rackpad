@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/Input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { useI18n } from "@/i18n";
 import { localizedDeviceTypeLabel } from "@/lib/device-types";
+import { createEphemeralId } from "@/lib/ephemeral-id";
 import {
   canEditInventory,
   createDriveBayTemplateRecord,
@@ -160,7 +161,7 @@ function newSection(index = 0): TemplateSectionDraft {
   const slotType = index === 0 ? "3.5" : "generic";
   const prefix = index === 0 ? "Bay " : "Slot ";
   return {
-    id: crypto.randomUUID(),
+    id: createEphemeralId(),
     name,
     face: index === 0 ? "front" : "internal",
     layout: "grid",

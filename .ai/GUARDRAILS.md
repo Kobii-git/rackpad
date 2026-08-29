@@ -82,6 +82,23 @@ real check; “manual” is not a gate and must be reviewed honestly.
 - Enforcement: `.dockerignore` safety is automated by `check:config`; effective
   privilege and data behavior require manual review and Compose rendering.
 
+## Proxmox native LXC
+
+- Native helper change ⇒ keep the dispatcher, tagged release assets, Community
+  core pin, CT helper, metadata, environment template, operational assets, and
+  updater paired.
+- Preserve unprivileged defaults, immutable root-owned code, the native marker,
+  `/opt/rackpad_data` as the only service-writable path, manual stable-only
+  updates, pre-downtime builds, integrity-checked snapshots, and complete paired
+  rollback.
+- Discovery safe mode must clear capabilities. Advanced mode may add only
+  `CAP_NET_RAW` and `CAP_NET_ADMIN` after an outer-LXC/raw-socket preflight; it
+  must never convert privilege or edit the Proxmox host. SNMP traps stay
+  independent and disabled by default.
+- Enforcement: `npm run check:proxmox`, fixture tests, Bash syntax, and
+  ShellCheck are automated; disposable real-Proxmox install/update/rollback
+  tests remain mandatory release evidence.
+
 ## Scanner suppressions
 
 - Suppression ⇒ one finding, narrowest supported scope, written justification,

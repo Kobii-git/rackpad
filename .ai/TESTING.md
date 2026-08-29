@@ -18,14 +18,15 @@ work. Never translate an unrun check into a pass.
 | Outbound HTTP/monitoring | net-guard plus integration tests for blocked ranges, DNS/redirects, timeouts |
 | CSP/security headers | server/build checks and Playwright CSP behavior |
 | Env/Compose/Docker | `check:config`, Compose rendering when Docker exists, privilege/data review |
+| Proxmox native LXC | `check:proxmox`, Bash syntax, ShellCheck, metadata/config parity, privilege and rollback review; real PVE guest tests before release |
 | Bundle/lazy loading | `build`, then `check:bundle` |
 | AI docs/commands | `check:docs` and direct path/link review |
 | Beta/main release | `check:full`, shell and PowerShell syntax checks, Compose render, smoke plan |
 
 `npm run check` is standard local pre-completion validation. `npm run check:full`
 adds Playwright and is the full application CI/release gate. Workflow lint and
-shell/PowerShell syntax remain CI steps because tool availability is platform
-specific.
+Bash syntax, ShellCheck, actionlint, and PowerShell syntax remain CI steps
+because tool availability is platform specific.
 
 All destructive restore/migration behavior must use an isolated temporary
 database. The server suite already sets `DATABASE_PATH` under the OS temp

@@ -8,6 +8,42 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.1-beta.1] - 2026-08-29
+
+> First public beta of the optional first-party Proxmox native LXC deployment.
+> Docker remains the recommended general deployment while native validation is
+> in progress.
+
+### Added
+
+- Prepared a first-party, non-Docker Proxmox native LXC deployment with
+  version-aligned release assets, manual transactional stable updates, paired
+  rollback points, and a hardened systemd service. Public support remains
+  gated on the planned beta and stable validation phases.
+- Added a root-only `rackpad-discovery-mode safe|advanced|status` control. Safe
+  mode uses neighbor-cache discovery with no service capabilities; advanced
+  mode preflights the outer LXC and raw networking before granting only
+  `CAP_NET_RAW` and `CAP_NET_ADMIN`.
+
+### Changed
+
+- Native operational-asset refreshes now preserve a previously selected,
+  validated advanced discovery mode and include the discovery command in the
+  transactional update/rollback set. SNMP traps remain independently disabled
+  by default.
+- Extended repository validation with a maintained `check:proxmox` contract,
+  isolated discovery/update fixtures, and Bash/ShellCheck coverage across
+  `scripts/` and `deploy/proxmox/`.
+
+### Test notes
+
+- Verify safe mode, truthful advanced-mode refusal, successful advanced mode,
+  failed-restart restoration, and unchanged SNMP configuration.
+- Recheck native environment merge, Docker collision refusal, stable no-op
+  update, pre-downtime failures, paired rollback, and retention fixtures.
+- Real Proxmox VE 9.x Debian 13 and Ubuntu 24.04 fresh-install testing is
+  required before this beta phase is complete.
+
 ## [1.8.0] - 2026-08-24
 
 ### Changed

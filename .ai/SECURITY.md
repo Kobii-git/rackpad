@@ -33,6 +33,12 @@ constraints for changes.
   Loopback, link-local, metadata, multicast, and reserved access stays blocked.
 - Discovery subprocesses use validated targets and argument arrays, never shell
   interpolation.
+- Native LXC starts with neighbor-cache discovery and no service capabilities.
+  Its root-only advanced control must verify `CAP_NET_RAW`, `CAP_NET_ADMIN`, and
+  raw-socket access before applying the matching systemd drop-in; refusal must
+  leave configuration unchanged and never mutate outer Proxmox privilege.
+- SNMP traps remain independent of discovery mode, disabled by default, and
+  require an explicit UDP 1162 firewall decision when enabled.
 
 ## Rate limits and proxy identity
 

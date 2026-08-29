@@ -5,6 +5,13 @@ path is to enable LXC nesting, install Docker inside the container, and pull the
 published Rackpad container image from GHCR. This avoids cloning the source repo
 onto the server.
 
+A first-party, non-Docker helper is implemented for staged beta validation. Its
+target is Proxmox VE 9.x on `amd64`, using an unprivileged Debian 13 LXC by
+default or Ubuntu 24.04 LTS as the tested alternative. It is not a supported
+public installer until the beta and stable gates are complete. See the
+[native LXC operations guide](./PROXMOX_NATIVE_LXC.md) and
+[roadmap](./PROXMOX_LXC_ROADMAP.md).
+
 If you want to import Proxmox node, VM, container, bridge, MAC, VLAN, IP, CPU,
 RAM, and disk data into Rackpad, see the
 [Proxmox import guide](./PROXMOX_IMPORT.md).
@@ -126,6 +133,6 @@ upgrades or container rebuilds.
 - Keep Rackpad on a private LAN, VPN, or behind a trusted reverse proxy.
 - If exposing it through Cloudflare or another proxy, set `TRUST_PROXY=1`,
   `TRUSTED_HOSTS`, and `TRUSTED_ORIGINS` in `/opt/rackpad/.env`.
-- A full Proxmox host-side helper that creates the LXC automatically can be
-  added later. The LXC-internal installer is intentionally safer and easier to
-  audit for a public patch release.
+- The native host-side helper is pre-release. Keep using this Docker path for
+  supported installations until its roadmap marks the stable deployment phase
+  complete.
