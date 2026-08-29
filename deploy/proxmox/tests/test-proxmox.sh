@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Dynamic function overrides are intentional dependency injection for isolated
 # rollback fixtures; each test runs in its own subshell.
-# shellcheck disable=SC1091,SC2030,SC2031,SC2034,SC2329
+# shellcheck disable=SC1091,SC2030,SC2031,SC2034,SC2317,SC2329
 set -Eeuo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
