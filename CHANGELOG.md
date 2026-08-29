@@ -8,6 +8,12 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.1-beta.1] - 2026-08-29
+
+> First public beta of the optional first-party Proxmox native LXC deployment.
+> Docker remains the recommended general deployment while native validation is
+> in progress.
+
 ### Added
 
 - Prepared a first-party, non-Docker Proxmox native LXC deployment with
@@ -36,7 +42,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Recheck native environment merge, Docker collision refusal, stable no-op
   update, pre-downtime failures, paired rollback, and retention fixtures.
 - Real Proxmox VE 9.x Debian 13 and Ubuntu 24.04 fresh-install testing is
-  intentionally deferred to the beta release phases.
+  required before this beta phase is complete.
 
 ## [1.8.0] - 2026-08-24
 
