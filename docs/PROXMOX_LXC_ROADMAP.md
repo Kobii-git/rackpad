@@ -13,7 +13,7 @@ stable-release phase has passed its exit gate.
 | 1. Roadmap, application compatibility, and release contracts | Complete |
 | 2. Native installer and transactional updater | Complete |
 | 3. Discovery controls, operations, documentation, and CI | Complete |
-| 4. Beta 1 and fresh-install validation | Planned |
+| 4. Beta 1 and fresh-install validation | In progress - publication blocked |
 | 5. Beta 2 update/rollback validation and soak | Planned |
 | 6. Stable `v1.8.1` deployment | Planned |
 | 7. Official Community Scripts submission | Blocked on upstream eligibility |
@@ -199,7 +199,7 @@ Phase 4 continuation prompt:
 
 ## Phase 4 - Beta 1 and fresh-install validation
 
-Status: **Planned**
+Status: **In progress - publication blocked**
 
 Deliverables:
 
@@ -221,6 +221,19 @@ Exit gate:
   update, or release defects.
 - Evidence is recorded in release test notes and the roadmap status is updated.
 - Stop before Beta 2.
+
+Progress recorded on 2026-08-30: the reviewed implementation was merged and
+pushed to `beta`, and the immutable `v1.8.1-beta.1` tag was created at commit
+`1f72800ecb70987c85122f88a37f39e982f1d5b1`. The branch quality, CodeQL, and
+security workflows passed. The tag workflow failed twice at the same stale UI
+count assertion in the duplicate-MAC Playwright scenario, so its image and
+GitHub Release jobs correctly remained skipped. The tag has not been moved or
+replaced, no prerelease has been published, and issue #138 has not been given a
+non-working beta command. Fresh Debian 13 and Ubuntu 24.04 testing also remains
+pending because no disposable Proxmox VE 9.x `amd64` host is connected. See
+`docs/releases/v1.8.1-beta.1-test-notes.md` for the evidence and remaining
+checklist. Phase 4 cannot pass its exit gate until a replacement prerelease
+strategy is authorized, publication succeeds, and both guest tests pass.
 
 Phase 5 continuation prompt:
 
