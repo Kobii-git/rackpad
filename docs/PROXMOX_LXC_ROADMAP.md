@@ -13,7 +13,7 @@ stable-release phase has passed its exit gate.
 | 1. Roadmap, application compatibility, and release contracts | Complete |
 | 2. Native installer and transactional updater | Complete |
 | 3. Discovery controls, operations, documentation, and CI | Complete |
-| 4. Beta 1 and fresh-install validation | In progress - publication blocked |
+| 4. Beta 1 and fresh-install validation | In progress - Beta 1.1 recovery authorized |
 | 5. Beta 2 update/rollback validation and soak | Planned |
 | 6. Stable `v1.8.1` deployment | Planned |
 | 7. Official Community Scripts submission | Blocked on upstream eligibility |
@@ -199,13 +199,14 @@ Phase 4 continuation prompt:
 
 ## Phase 4 - Beta 1 and fresh-install validation
 
-Status: **In progress - publication blocked**
+Status: **In progress - Beta 1.1 recovery authorized**
 
 Deliverables:
 
-- Set package and lockfile to `1.8.1-beta.1`, complete the changelog, rerun the
-  full release gate and an independent security review, then merge to `beta`,
-  push, tag, and publish only `v1.8.1-beta.1`.
+- The immutable `v1.8.1-beta.1` attempt failed before publication. Fix its
+  release-test race, set package and lockfile to `1.8.1-beta.1.1`, rerun the
+  complete release and security gates, then publish the recovery prerelease
+  from `beta` without moving or replacing the failed tag.
 - Confirm matching GHCR images and a formal GitHub prerelease with source
   archives.
 - With explicit beta overrides, test disposable Proxmox VE 9.x `amd64` Debian 13
@@ -232,12 +233,17 @@ replaced, no prerelease has been published, and issue #138 has not been given a
 non-working beta command. Fresh Debian 13 and Ubuntu 24.04 testing also remains
 pending because no disposable Proxmox VE 9.x `amd64` host is connected. See
 `docs/releases/v1.8.1-beta.1-test-notes.md` for the evidence and remaining
-checklist. Phase 4 cannot pass its exit gate until a replacement prerelease
-strategy is authorized, publication succeeds, and both guest tests pass.
+checklist. Phase 4 cannot pass its exit gate until the authorized recovery
+publishes successfully and both guest tests pass.
+
+The authorized recovery uses `v1.8.1-beta.1.1`. Publish experimental tester
+instructions only after its formal prerelease exists and the Debian 13 smoke
+passes. Complete Ubuntu 24.04 validation before marking this phase complete,
+and retain both guests as the Phase 5 update baseline.
 
 Phase 5 continuation prompt:
 
-> Continue with Phase 5 of `docs/PROXMOX_LXC_ROADMAP.md`. Fix any Beta 1 defects, publish only `v1.8.1-beta.2`, test Beta 1-to-Beta 2 update and rollback on both supported guests, complete the soak, and stop without publishing `v1.8.1`.
+> Continue with Phase 5 of `docs/PROXMOX_LXC_ROADMAP.md`. Fix any Beta 1.1 defects, publish only `v1.8.1-beta.2`, test Beta 1.1-to-Beta 2 update and rollback on both supported guests, complete the soak, and stop without publishing `v1.8.1`.
 
 ## Phase 5 - Beta 2 update/rollback validation and soak
 
@@ -245,8 +251,8 @@ Status: **Planned**
 
 Deliverables:
 
-- Apply only Beta 1 defects and publish `v1.8.1-beta.2` through `beta`.
-- On retained Beta 1 LXCs, test successful manual update, non-overwriting
+- Apply only Beta 1.1 defects and publish `v1.8.1-beta.2` through `beta`.
+- On retained Beta 1.1 LXCs, test successful manual update, non-overwriting
   environment merge, helper/core-pin transition, no-op idempotence, pre-downtime
   download/build failure, snapshot failure, post-migration health failure,
   service-unit failure, complete rollback, retention cleanup, and reboot after

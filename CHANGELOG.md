@@ -8,6 +8,25 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.1-beta.1.1] - 2026-08-30
+
+> Recovery candidate for the optional first-party Proxmox native LXC beta. The
+> failed `v1.8.1-beta.1` tag remains immutable; it did not produce a Release.
+
+### Fixed
+
+- Made the duplicate-MAC browser test wait for the observable filtered table
+  state before reading its count, preventing the release gate from comparing a
+  pre-filter count with the asynchronously applied duplicate-only result.
+
+### Test notes
+
+- Re-run the complete release, Proxmox contract, shell, audit, and security
+  gates before publishing the replacement prerelease.
+- Validate the tagged installer first on a disposable Proxmox VE 9.x `amd64`
+  Debian 13 guest. Publish experimental tester instructions only after that
+  smoke passes, then complete the Ubuntu 24.04 Phase 4 matrix.
+
 ## [1.8.1-beta.1] - 2026-08-29
 
 > First public beta of the optional first-party Proxmox native LXC deployment.

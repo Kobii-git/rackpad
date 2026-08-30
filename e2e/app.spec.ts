@@ -2487,28 +2487,10 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
 
     await page.getByRole("button", { name: /Duplicate MACs/ }).click();
     await expect(page).toHaveURL(/mac=duplicates/);
-    await expect(filterCount).toHaveText(/\d+ of \d+ devices/);
-    const duplicateCountMatch = (await filterCount.textContent())?.match(
-      /(\d+) of (\d+) devices/,
-    );
-    expect(duplicateCountMatch).toBeTruthy();
-    const baseDuplicateCount = Number(duplicateCountMatch?.[1]) - 2;
-    expect(baseDuplicateCount).toBeGreaterThanOrEqual(2);
-    await expect(filterCount).toHaveText(
-      `${baseDuplicateCount + 2} of ${initialTotal} devices`,
-    );
 
     const summary = page.getByTestId("duplicate-mac-summary");
-    await expect(summary).toBeVisible();
-    let group = summary
-      .getByTestId("duplicate-mac-group")
-      .filter({ hasText: duplicateMac });
-    await expect(group).toContainText(deviceNames[0]);
-    await expect(group).toContainText(deviceNames[1]);
-    await expect(group).toContainText("10.254.10.10");
-    await expect(group).toContainText("10.254.10.11");
-
     const table = page.locator("table");
+    await expect(summary).toBeVisible();
     await expect(
       table.getByRole("link", { name: deviceNames[0], exact: true }),
     ).toBeVisible();
@@ -2518,6 +2500,24 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
     await expect(
       table.getByRole("link", { name: deviceNames[2], exact: true }),
     ).toHaveCount(0);
+
+    await expect(filterCount).toHaveText(/\d+ of \d+ devices/);
+    const duplicateCountMatch = (await filterCount.textContent())?.match(
+      /(\d+) of (\d+) devices/,
+    );
+    expect(duplicateCountMatch).toBeTruthy();
+    expect(Number(duplicateCountMatch?.[2])).toBe(initialTotal);
+    const baseDuplicateCount = Number(duplicateCountMatch?.[1]) - 2;
+    expect(baseDuplicateCount).toBeGreaterThanOrEqual(2);
+
+    let group = summary
+      .getByTestId("duplicate-mac-group")
+      .filter({ hasText: duplicateMac });
+    await expect(group).toContainText(deviceNames[0]);
+    await expect(group).toContainText(deviceNames[1]);
+    await expect(group).toContainText("10.254.10.10");
+    await expect(group).toContainText("10.254.10.11");
+
     await expect(
       table.locator('tr[data-duplicate-mac="true"]').filter({
         hasText: deviceNames[0],
