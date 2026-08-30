@@ -300,9 +300,29 @@ Phase 7 continuation prompt:
 Status: **Blocked on upstream eligibility**
 
 Do not begin submission work until Rackpad is at least six months old, has at
-least 600 stars, is actively maintained, publishes formal release tarballs, and
-has a proven first-party helper. Recheck the current upstream rules rather than
-relying on these recorded thresholds.
+least 1,000 stars, is actively maintained, publishes formal release tarballs,
+and has a proven first-party helper. Recheck the current upstream rules rather
+than relying on these recorded thresholds.
+
+Eligibility audit completed on 2026-08-30 against the current Community Scripts
+request template and ProxmoxVED contribution guidance:
+
+- Rackpad has 359 GitHub stars, below the current general minimum of 1,000.
+- The public repository was created on 2026-05-01 and reaches six calendar
+  months on 2026-11-01.
+- Maintenance is active; repository activity was current at the audit date.
+- GitHub reports no formal Rackpad Releases. The failed `v1.8.1-beta.1` workflow
+  did not publish its prerelease or semantic GHCR image.
+- The first-party helper has not passed Debian 13 or Ubuntu 24.04 testing on
+  Proxmox VE 9.x, and the Beta 1 update baseline, Beta 2 rollback validation,
+  seven-day soak, and stable release remain incomplete.
+- New scripts must first be submitted to ProxmoxVED and pass its current audit,
+  format, disclosure, and real-Proxmox testing requirements before promotion to
+  ProxmoxVE.
+
+The upstream submission was therefore not prepared or opened. Repeat the full
+eligibility audit when both the age and adoption thresholds are met and Phases
+4-6 have passed; upstream requirements may change again before then.
 
 When eligible, port the tested CT, install helper, and metadata to the current
 ProxmoxVED contribution format; reconcile origins without weakening existing
