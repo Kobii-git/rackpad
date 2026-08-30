@@ -280,10 +280,15 @@ Exit gate:
 - The full release gate and independent review pass.
 - Stop before stable publication.
 
-Progress on 2026-08-30: Beta 2 preparation and public tester instructions were
-authorized. Publication alone does not satisfy this phase. Fresh Debian 13 and
-Ubuntu 24.04 evidence, Beta 1.1-to-Beta 2 update/rollback evidence, failure-path
-coverage on real PVE, and the seven-day soak remain required.
+Progress on 2026-08-30: Beta 2 was published from commit
+`86b7afadd8bb78a1ad11ad22496b20f9e7bdd09f` as the immutable
+`v1.8.1-beta.2` prerelease after its exact-commit and tagged release gates
+passed. Matching source archives, tagged native assets, pinned Community core,
+and GHCR image were verified. The exact experimental procedure and reporting
+template are live in the native guide and issue #138. Publication alone does
+not satisfy this phase. Fresh Debian 13 and Ubuntu 24.04 evidence, Beta
+1.1-to-Beta 2 update/rollback evidence, failure-path coverage on real PVE, and
+the seven-day soak remain required.
 
 Phase 6 continuation prompt:
 
