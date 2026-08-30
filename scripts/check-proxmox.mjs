@@ -71,6 +71,9 @@ if (!runner.includes("Unstable releases require RACKPAD_MAINTAINER_MODE=1") ||
     !runner.includes("script-ref override requires RACKPAD_MAINTAINER_MODE=1")) {
   failures.push("Versioned runner does not guard unstable or script-ref overrides");
 }
+if (!runner.includes("export RACKPAD_ALLOW_PRERELEASE=1")) {
+  failures.push("Versioned runner does not propagate prerelease authorization into the guest installer");
+}
 for (const expected of [
   'var_cpu="${var_cpu:-2}"',
   'var_ram="${var_ram:-4096}"',

@@ -9,8 +9,8 @@ without cloning the repo, or clone the repo and build it yourself.
 
 - **Linux server or VM:** Use Docker and pull the published image.
 - **Proxmox:** Use the documented Docker-in-LXC path. A first-party native LXC
-  path is implemented but remains pre-release until its beta and stable gates
-  pass.
+  Beta 2 is available for disposable testing, but remains pre-release until its
+  real-guest, update/rollback, soak, and stable gates pass.
 - **Windows:** Use Docker Desktop with the published image.
 - **Development/source build:** Clone `main` and build locally.
 
@@ -195,9 +195,9 @@ sudo docker compose up --build -d
 
 Docker inside an LXC remains the supported general path below. The non-Docker
 helper and operator controls are documented in
-[`docs/PROXMOX_NATIVE_LXC.md`](./docs/PROXMOX_NATIVE_LXC.md), but its public
-installer is not supported until the staged validation and stable-release gates
-are complete.
+[`docs/PROXMOX_NATIVE_LXC.md`](./docs/PROXMOX_NATIVE_LXC.md), including the exact
+experimental Beta 2 test procedure. It is not a supported production installer
+until the staged validation and stable-release gates are complete.
 
 Recommended layout:
 

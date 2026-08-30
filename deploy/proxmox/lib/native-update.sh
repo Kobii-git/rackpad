@@ -286,7 +286,7 @@ rackpad_transactional_update() {
     return 1
   }
   current="$(<"$(rp_path /etc/rackpad/version)")"
-  rp_validate_release "$current" || {
+  rp_validate_release_identifier "$current" || {
     rp_error "The installed Rackpad version marker is invalid."
     return 1
   }
@@ -297,6 +297,10 @@ rackpad_transactional_update() {
   if [[ "$current" == "$release" ]]; then
     rp_info "No update available; ${release} is already active."
     return 0
+  fi
+  if ! rp_release_is_newer "$release" "$current"; then
+    rp_error "Refusing non-forward update from ${current} to ${release}."
+    return 1
   fi
 
   if ! rp_prepare_candidate "$release" "$fetch_function"; then

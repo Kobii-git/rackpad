@@ -22,6 +22,10 @@ command -v curl >/dev/null 2>&1 || fail "curl is required."
 if [[ "$RACKPAD_ALLOW_UNSTABLE" == "1" ]]; then
   [[ "$RACKPAD_MAINTAINER_MODE" == "1" ]] ||
     fail "Unstable releases require RACKPAD_MAINTAINER_MODE=1."
+  # The pinned Community runner carries exported host variables into the guest
+  # installer. Keep prerelease validation explicit at that boundary so a
+  # maintainer-selected beta can be built and activated inside the new LXC.
+  export RACKPAD_ALLOW_PRERELEASE=1
 else
   [[ "$RACKPAD_RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] ||
     fail "Production installs require a stable SemVer Rackpad tag."

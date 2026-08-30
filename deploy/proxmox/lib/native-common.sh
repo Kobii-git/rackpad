@@ -16,13 +16,70 @@ rp_error() {
   echo "Rackpad native LXC: $*" >&2
 }
 
+rp_validate_release_identifier() {
+  local release="${1:-}"
+  [[ "$release" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]
+}
+
 rp_validate_release() {
   local release="${1:-}"
   if [[ "${RACKPAD_ALLOW_PRERELEASE:-0}" == "1" ]]; then
-    [[ "$release" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]
+    rp_validate_release_identifier "$release"
   else
     [[ "$release" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
   fi
+}
+
+rp_release_is_newer() {
+  local candidate="${1:?candidate release required}"
+  local current="${2:?current release required}"
+  command -v node >/dev/null 2>&1 || return 1
+  node - "$candidate" "$current" <<'NODE'
+const [candidateRaw, currentRaw] = process.argv.slice(2);
+
+function parse(raw) {
+  const match = /^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(raw);
+  if (!match) process.exit(2);
+  return {
+    core: match.slice(1, 4).map(BigInt),
+    prerelease: match[4]?.split(".") ?? null,
+  };
+}
+
+function compareIdentifier(left, right) {
+  const leftNumeric = /^[0-9]+$/.test(left);
+  const rightNumeric = /^[0-9]+$/.test(right);
+  if (leftNumeric && rightNumeric) {
+    const leftNumber = BigInt(left);
+    const rightNumber = BigInt(right);
+    return leftNumber < rightNumber ? -1 : leftNumber > rightNumber ? 1 : 0;
+  }
+  if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function compare(left, right) {
+  for (let index = 0; index < left.core.length; index += 1) {
+    if (left.core[index] !== right.core[index]) {
+      return left.core[index] < right.core[index] ? -1 : 1;
+    }
+  }
+  if (left.prerelease === null || right.prerelease === null) {
+    if (left.prerelease === right.prerelease) return 0;
+    return left.prerelease === null ? 1 : -1;
+  }
+  const length = Math.max(left.prerelease.length, right.prerelease.length);
+  for (let index = 0; index < length; index += 1) {
+    if (left.prerelease[index] === undefined) return -1;
+    if (right.prerelease[index] === undefined) return 1;
+    const result = compareIdentifier(left.prerelease[index], right.prerelease[index]);
+    if (result !== 0) return result;
+  }
+  return 0;
+}
+
+process.exit(compare(parse(candidateRaw), parse(currentRaw)) > 0 ? 0 : 1);
+NODE
 }
 
 rp_require_root() {

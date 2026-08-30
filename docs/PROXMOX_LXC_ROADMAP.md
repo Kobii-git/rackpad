@@ -13,8 +13,8 @@ stable-release phase has passed its exit gate.
 | 1. Roadmap, application compatibility, and release contracts | Complete |
 | 2. Native installer and transactional updater | Complete |
 | 3. Discovery controls, operations, documentation, and CI | Complete |
-| 4. Beta 1 and fresh-install validation | In progress - Beta 1.1 recovery authorized |
-| 5. Beta 2 update/rollback validation and soak | Planned |
+| 4. Beta 1 and fresh-install validation | In progress - real guest validation pending |
+| 5. Beta 2 update/rollback validation and soak | In progress - tester rollout authorized |
 | 6. Stable `v1.8.1` deployment | Planned |
 | 7. Official Community Scripts submission | Blocked on upstream eligibility |
 
@@ -199,7 +199,7 @@ Phase 4 continuation prompt:
 
 ## Phase 4 - Beta 1 and fresh-install validation
 
-Status: **In progress - Beta 1.1 recovery authorized**
+Status: **In progress - Beta 1.1 published; real guest validation pending**
 
 Deliverables:
 
@@ -236,10 +236,19 @@ pending because no disposable Proxmox VE 9.x `amd64` host is connected. See
 checklist. Phase 4 cannot pass its exit gate until the authorized recovery
 publishes successfully and both guest tests pass.
 
-The authorized recovery uses `v1.8.1-beta.1.1`. Publish experimental tester
-instructions only after its formal prerelease exists and the Debian 13 smoke
-passes. Complete Ubuntu 24.04 validation before marking this phase complete,
-and retain both guests as the Phase 5 update baseline.
+Recovery `v1.8.1-beta.1.1` was published on 2026-08-30 after its exact-commit
+quality, CodeQL, security, image, and Release jobs passed. The formal GitHub
+prerelease, source archives, GHCR tag, tagged helper assets, package identity,
+and pinned Community core were verified. No disposable Proxmox host was
+available, so Debian 13 and Ubuntu 24.04 remain untested and Phase 4 remains
+open.
+
+On 2026-08-30 the owner explicitly authorized a Beta 2 tester rollout before
+those real-guest gates, replacing the earlier instruction to withhold public
+steps until a maintainer-run Debian smoke. This sequencing exception publishes
+the exact experimental procedure so community testers can supply the missing
+evidence; it does not waive either Phase 4 exit gate or convert the beta into a
+supported deployment.
 
 Phase 5 continuation prompt:
 
@@ -247,11 +256,14 @@ Phase 5 continuation prompt:
 
 ## Phase 5 - Beta 2 update/rollback validation and soak
 
-Status: **Planned**
+Status: **In progress - Beta 2 tester rollout authorized**
 
 Deliverables:
 
 - Apply only Beta 1.1 defects and publish `v1.8.1-beta.2` through `beta`.
+  Beta 2 must propagate prerelease authorization into the guest installer and
+  enforce forward-only SemVer updates so a beta guest cannot select an older
+  stable Release.
 - On retained Beta 1.1 LXCs, test successful manual update, non-overwriting
   environment merge, helper/core-pin transition, no-op idempotence, pre-downtime
   download/build failure, snapshot failure, post-migration health failure,
@@ -267,6 +279,11 @@ Exit gate:
 - Update, rollback, and recovery evidence is in Beta 2 test notes.
 - The full release gate and independent review pass.
 - Stop before stable publication.
+
+Progress on 2026-08-30: Beta 2 preparation and public tester instructions were
+authorized. Publication alone does not satisfy this phase. Fresh Debian 13 and
+Ubuntu 24.04 evidence, Beta 1.1-to-Beta 2 update/rollback evidence, failure-path
+coverage on real PVE, and the seven-day soak remain required.
 
 Phase 6 continuation prompt:
 

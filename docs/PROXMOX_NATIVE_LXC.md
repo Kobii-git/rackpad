@@ -1,10 +1,11 @@
 # Proxmox native LXC operations
 
 > [!WARNING]
-> The first-party native LXC helper is implemented for beta validation but is
-> not a supported public installer yet. Do not use the `main` dispatcher for a
-> production install until Phase 6 of the
-> [native LXC roadmap](./PROXMOX_LXC_ROADMAP.md) is complete.
+> `v1.8.1-beta.2` is an experimental tester build, not a supported production
+> installer. Use it only for a fresh disposable LXC and keep Docker as the
+> recommended deployment until Phase 6 of the
+> [native LXC roadmap](./PROXMOX_LXC_ROADMAP.md) is complete. Real Proxmox
+> validation and the seven-day soak are still in progress.
 
 Rackpad's native deployment runs one Node.js process directly in an
 unprivileged LXC. Docker remains the general recommendation. The intended
@@ -12,6 +13,161 @@ production support matrix is Proxmox VE 9.x on `amd64`, with Debian 13 as the
 default guest and Ubuntu 24.04 LTS as the tested alternative. Fresh LXCs are the
 only planned supported installation path; automatic conversion of an existing
 Docker LXC is not provided.
+
+## Experimental Beta 2 test procedure
+
+Run the following only from a root shell on a disposable Proxmox VE 9.x
+`amd64` host. Do not run it inside an LXC, do not point it at an existing
+Rackpad deployment, and do not use it for production data.
+
+Confirm the host first:
+
+```bash
+pveversion | head -n 1
+dpkg --print-architecture
+command -v curl
+command -v jq
+```
+
+The first command must report Proxmox VE 9.x and the second must report
+`amd64`. Install `curl` or `jq` through the host package manager if either of
+the last two commands is empty. Then run the exact tagged installer:
+
+```bash
+RACKPAD_MAINTAINER_MODE=1 \
+RACKPAD_MAINTAINER_REF=v1.8.1-beta.2 \
+RACKPAD_MAINTAINER_RELEASE=v1.8.1-beta.2 \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kobii-git/rackpad/v1.8.1-beta.2/scripts/install-proxmox-lxc.sh)"
+```
+
+Choose the defaults for the first pass: Debian 13, unprivileged, nesting
+enabled, 2 CPU, 4096 MiB RAM, 16 GiB disk, DHCP, and port 3000. Record the new
+container ID shown by the helper, then replace `123` below with that ID:
+
+```bash
+export CTID=123
+pct status "$CTID"
+pct config "$CTID" | grep -E '^(arch|cores|memory|rootfs|unprivileged|features|net0):'
+pct exec "$CTID" -- systemctl is-active rackpad
+pct exec "$CTID" -- cat /etc/rackpad/version
+pct exec "$CTID" -- readlink -f /opt/rackpad
+CT_IP="$(pct exec "$CTID" -- hostname -I | awk '{print $1}')"
+echo "http://${CT_IP}:3000"
+```
+
+The version must be `v1.8.1-beta.2`, the active path must end in
+`/opt/rackpad_releases/v1.8.1-beta.2`, and the service must be active. Check the
+HTTP surfaces from both the guest and a machine that will use Rackpad:
+
+```bash
+pct exec "$CTID" -- curl -fsS http://127.0.0.1:3000/api/health
+pct exec "$CTID" -- curl -fsS http://127.0.0.1:3000/api/auth/status
+pct exec "$CTID" -- bash -lc 'curl -fsS http://127.0.0.1:3000/ | grep -q '\''id="root"'\'''
+pct exec "$CTID" -- bash -lc 'curl -fsS http://127.0.0.1:3000/api/imports/proxmox-collector | head -n 1'
+pct exec "$CTID" -- bash -lc 'curl -fsS http://127.0.0.1:3000/api/imports/hyperv-collector | head -n 1'
+curl -fsS "http://${CT_IP}:3000/api/health"
+```
+
+Open the displayed URL, create the first administrator, sign out, sign back in,
+and confirm `/api/auth/status` changes from requiring bootstrap to not requiring
+it. Create a clearly named disposable device so backup and restore can be
+verified without ambiguity.
+
+Check ownership, permissions, and systemd hardening without displaying the
+environment or secret values:
+
+```bash
+pct exec "$CTID" -- stat -c '%U:%G %a %n' \
+  /etc/rackpad/rackpad.env /opt/rackpad_data /etc/rackpad/native-lxc
+pct exec "$CTID" -- bash -lc 'test -z "$(find /opt/rackpad_releases/v1.8.1-beta.2 -not -user root -print -quit)"'
+pct exec "$CTID" -- runuser -u rackpad -- test ! -w /opt/rackpad/package.json
+pct exec "$CTID" -- runuser -u rackpad -- test -w /opt/rackpad_data
+pct exec "$CTID" -- systemctl show rackpad \
+  -p User -p Group -p NoNewPrivileges -p PrivateTmp -p ProtectSystem \
+  -p ProtectHome -p UMask -p CapabilityBoundingSet -p AmbientCapabilities \
+  -p ReadWritePaths
+```
+
+The environment must be `root:rackpad 640`, data must be `rackpad:rackpad 750`,
+code must be root-owned and not writable by `rackpad`, and the service must show
+the hardened settings documented below. Verify discovery and the closed trap
+listener:
+
+```bash
+pct exec "$CTID" -- /usr/local/sbin/rackpad-discovery-mode status
+if pct exec "$CTID" -- ss -H -lunp | grep -qE '(^|:)1162[[:space:]]'; then
+  echo 'FAIL: UDP 1162 is listening'
+else
+  echo 'PASS: UDP 1162 is closed'
+fi
+pct exec "$CTID" -- /usr/local/sbin/rackpad-discovery-mode advanced
+pct exec "$CTID" -- /usr/local/sbin/rackpad-discovery-mode status
+pct exec "$CTID" -- /usr/local/sbin/rackpad-discovery-mode safe
+```
+
+Advanced mode may either succeed or truthfully refuse because the outer
+unprivileged LXC blocks raw networking. Record which result occurred; do not
+make the LXC privileged merely to force success.
+
+Test a custom port and restore the default:
+
+```bash
+pct exec "$CTID" -- sed -i 's/^PORT=3000$/PORT=3100/' /etc/rackpad/rackpad.env
+pct exec "$CTID" -- systemctl restart rackpad
+pct exec "$CTID" -- curl -fsS http://127.0.0.1:3100/api/health
+pct exec "$CTID" -- sed -i 's/^PORT=3100$/PORT=3000/' /etc/rackpad/rackpad.env
+pct exec "$CTID" -- systemctl restart rackpad
+```
+
+In **Users -> Backup and release state**, create a native SQLite snapshot and
+record its exact filename. Change or remove the disposable device, then restore
+that snapshot while the service is stopped:
+
+```bash
+export SNAPSHOT=/opt/rackpad_data/backups/REPLACE-WITH-EXACT-SNAPSHOT.db
+pct exec "$CTID" -- systemctl stop rackpad
+pct exec "$CTID" -- runuser -u rackpad -- env \
+  DATABASE_PATH=/opt/rackpad_data/rackpad.db \
+  node /opt/rackpad/dist-server/cli/restore-native-backup.js --source "$SNAPSHOT"
+pct exec "$CTID" -- systemctl start rackpad
+pct exec "$CTID" -- systemctl is-active rackpad
+```
+
+Confirm the disposable device returned. Then exercise the interactive password
+reset from `pct enter "$CTID"` using the password-reset procedure below, verify
+the new password, and reboot the guest:
+
+```bash
+pct reboot "$CTID"
+pct exec "$CTID" -- systemctl is-active rackpad
+pct exec "$CTID" -- curl -fsS http://127.0.0.1:3000/api/health
+```
+
+For an existing Beta 1.1 test guest, the exact prerelease update and no-op
+commands are:
+
+```bash
+RACKPAD_MAINTAINER_MODE=1 \
+RACKPAD_MAINTAINER_RELEASE=v1.8.1-beta.2 \
+/usr/bin/update
+
+RACKPAD_MAINTAINER_MODE=1 \
+RACKPAD_MAINTAINER_RELEASE=v1.8.1-beta.2 \
+/usr/bin/update
+```
+
+The first must preserve configuration and data and switch to Beta 2; the second
+must report that no update is available without restarting Rackpad. Bare
+`/usr/bin/update` follows only stable Releases. Beta 2 refuses an older stable
+release before download or downtime and will permit the forward move to stable
+`v1.8.1` after that Release exists.
+
+Repeat the fresh-install critical checks on Ubuntu 24.04 using the helper's
+advanced settings. Keep successful Debian and Ubuntu guests for rollback and
+soak testing. Report results on [issue #138](https://github.com/Kobii-git/rackpad/issues/138)
+with the PVE version, guest OS, CT settings, pass/fail checklist, failing step,
+and sanitized service logs. Never post `/etc/rackpad/rackpad.env`, secret values,
+database files, backups, access tokens, or private network details.
 
 ## Installed layout
 

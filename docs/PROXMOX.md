@@ -8,7 +8,8 @@ onto the server.
 A first-party, non-Docker helper is implemented for staged beta validation. Its
 target is Proxmox VE 9.x on `amd64`, using an unprivileged Debian 13 LXC by
 default or Ubuntu 24.04 LTS as the tested alternative. It is not a supported
-public installer until the beta and stable gates are complete. See the
+production installer until the beta and stable gates are complete. An exact
+Beta 2 procedure is available for disposable community testing. See the
 [native LXC operations guide](./PROXMOX_NATIVE_LXC.md) and
 [roadmap](./PROXMOX_LXC_ROADMAP.md).
 

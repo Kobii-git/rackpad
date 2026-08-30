@@ -8,6 +8,34 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.1-beta.2] - 2026-08-30
+
+> Experimental first-party Proxmox native LXC tester release. Docker remains
+> the recommended deployment, and production support remains gated on real
+> Debian 13 and Ubuntu 24.04 validation, update/rollback evidence, and soak.
+
+### Fixed
+
+- Propagated explicit prerelease authorization from the tagged host runner into
+  the guest installer so a selected beta Release can pass the same version
+  validation used by its build and operational assets.
+- Added forward-only SemVer comparison to native updates. Beta installations
+  now refuse an older stable Release before download or service downtime while
+  retaining the forward path from Beta 2 to stable `v1.8.1`.
+
+### Changed
+
+- Published an exact Beta 2 fresh-install, verification, backup/restore,
+  discovery, custom-port, reboot, Beta 1.1 update, and safe-reporting checklist
+  for community testing on disposable Proxmox VE 9.x `amd64` guests.
+
+### Test notes
+
+- A published prerelease and passing automated gates make this build
+  tester-ready, not production-supported. Record real Debian 13 and Ubuntu
+  24.04 results on issue #138 and retain successful guests for update/rollback
+  and soak testing.
+
 ## [1.8.1-beta.1.1] - 2026-08-30
 
 > Recovery candidate for the optional first-party Proxmox native LXC beta. The

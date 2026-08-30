@@ -255,6 +255,37 @@ test_noop_update() (
   rackpad_transactional_update "v1.8.0" fetch_candidate >/dev/null
 )
 
+test_prerelease_ordering() (
+  # shellcheck source=../lib/native-common.sh
+  source "${repository_root}/deploy/proxmox/lib/native-common.sh"
+  export RACKPAD_ALLOW_PRERELEASE=1
+  rp_validate_release "v1.8.1-beta.2" || fail "valid prerelease was rejected"
+  rp_release_is_newer "v1.8.1-beta.2" "v1.8.1-beta.1.1" || fail "Beta 2 was not newer than Beta 1.1"
+  rp_release_is_newer "v1.8.1" "v1.8.1-beta.2" || fail "stable was not newer than its prerelease"
+  if rp_release_is_newer "v1.8.0" "v1.8.1-beta.2"; then
+    fail "older stable release was considered newer than Beta 2"
+  fi
+)
+
+test_update_refuses_downgrade_before_download() (
+  fixture="$(new_root)"
+  trap 'rm -rf "$fixture"' EXIT
+  make_update_fixture "$fixture"
+  rm "${fixture}/opt/rackpad"
+  mkdir -p "${fixture}/opt/rackpad_releases/v1.8.1-beta.2"
+  ln -s "${fixture}/opt/rackpad_releases/v1.8.1-beta.2" "${fixture}/opt/rackpad"
+  printf '%s\n' "v1.8.1-beta.2" >"${fixture}/etc/rackpad/version"
+  export RACKPAD_ROOT_PREFIX="$fixture"
+  unset RACKPAD_ALLOW_PRERELEASE
+  # shellcheck source=../lib/native-update.sh
+  source "${repository_root}/deploy/proxmox/lib/native-update.sh"
+  fetch_candidate() { fail "downgrade attempted to fetch a release"; }
+  rp_systemctl() { fail "downgrade touched systemd"; }
+  if rackpad_transactional_update "v1.8.0" fetch_candidate >/dev/null 2>&1; then
+    fail "downgrade was accepted"
+  fi
+)
+
 test_build_failure_before_downtime() (
   fixture="$(new_root)"
   trap 'rm -rf "$fixture"' EXIT
@@ -395,6 +426,8 @@ for fixture_test in \
   test_advanced_discovery_refusal \
   test_advanced_discovery_mode_and_rollback \
   test_noop_update \
+  test_prerelease_ordering \
+  test_update_refuses_downgrade_before_download \
   test_build_failure_before_downtime \
   test_snapshot_failure_resumes_old_release \
   test_asset_backup_failure_resumes_old_release \
