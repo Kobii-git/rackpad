@@ -3,15 +3,7 @@ import { CURRENT_SCHEMA_VERSION } from "../schema-version.js";
 
 export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
   appSettings: ["key", "value", "updatedAt"],
-  auditLog: [
-    "id",
-    "ts",
-    "user",
-    "action",
-    "entityType",
-    "entityId",
-    "summary",
-  ],
+  auditLog: ["id", "ts", "user", "action", "entityType", "entityId", "summary"],
   deviceImages: [
     "id",
     "deviceId",
@@ -62,6 +54,16 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "createdAt",
     "updatedAt",
   ],
+  devicePhysicalLayouts: [
+    "deviceId",
+    "sourceTemplateId",
+    "status",
+    "snapshot",
+    "bindings",
+    "portFingerprint",
+    "createdAt",
+    "updatedAt",
+  ],
   devices: [
     "id",
     "labId",
@@ -92,6 +94,15 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "snmpCredentialId",
     "rackSlot",
     "ignoreDuplicateMac",
+    "rackMountKind",
+    "rackColumn",
+    "rackColumnSpan",
+    "shelfX",
+    "shelfY",
+    "shelfWidth",
+    "shelfHeight",
+    "shelfOrientation",
+    "rackSide",
   ],
   dhcpScopes: [
     "id",
@@ -255,6 +266,17 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "createdAt",
     "updatedAt",
   ],
+  hardwareTemplateDefaults: ["deviceType", "templateId", "updatedAt"],
+  hardwareTemplates: [
+    "id",
+    "name",
+    "description",
+    "category",
+    "deviceTypes",
+    "definition",
+    "createdAt",
+    "updatedAt",
+  ],
   ipAssignments: [
     "id",
     "subnetId",
@@ -269,14 +291,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "allocationMode",
     "dhcpScopeId",
   ],
-  ipZones: [
-    "id",
-    "subnetId",
-    "kind",
-    "startIp",
-    "endIp",
-    "description",
-  ],
+  ipZones: ["id", "subnetId", "kind", "startIp", "endIp", "description"],
   labs: ["id", "name", "description", "location"],
   oidcIdentities: [
     "issuer",
@@ -295,6 +310,9 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "cableLength",
     "color",
     "notes",
+    "label",
+    "visible",
+    "routeWaypoints",
   ],
   portTemplates: [
     "id",
@@ -333,6 +351,8 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "location",
     "notes",
     "roomId",
+    "studioX",
+    "studioY",
   ],
   referenceImages: [
     "id",

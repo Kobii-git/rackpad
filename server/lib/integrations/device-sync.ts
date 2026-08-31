@@ -2,6 +2,7 @@ import { db } from "../../db.js";
 import { createHash } from "node:crypto";
 import { cidrContainsHostIp } from "../ip-cidr.js";
 import { createId } from "../ids.js";
+import { initializeDevicePhysicalLayout } from "../device-physical-layout.js";
 import { ensureIpv4 } from "../validation.js";
 import {
   INTEGRATION_PORT_KINDS,
@@ -1070,6 +1071,8 @@ export function applyIntegrationDeviceSync(input: {
           linkDeviceIp(deviceId, name, ipAddress, portId);
         }
       });
+
+      if (!isGuest) initializeDevicePhysicalLayout(deviceId);
 
       linkDeviceIp(deviceId, name, device.ipAddress);
 
