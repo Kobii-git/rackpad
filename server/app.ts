@@ -33,11 +33,20 @@ import { referenceImagesRoutes } from "./routes/reference-images.js";
 import { importsRoutes } from "./routes/imports.js";
 import { integrationsRoutes } from "./routes/integrations.js";
 import { storageRoutes } from "./routes/storage.js";
+import {
+  hardwareTemplatesRoutes,
+  physicalLayoutsRoutes,
+} from "./routes/physical-layouts.js";
+import { rackStudioRoutes } from "./routes/rack-studio.js";
 import { getAuthToken, lookupSession, needsBootstrap } from "./lib/auth.js";
 import { fetchUserLabAccess } from "./lib/lab-access.js";
 import { ValidationError } from "./lib/validation.js";
 import { normalizeSafeSubnetCidrs } from "./lib/subnet-integrity.js";
 import { CONTENT_SECURITY_POLICY } from "./security-headers.js";
+import {
+  configureRouteAuthorization,
+  requestRouteAuthorization,
+} from "./route-authorization.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = path.resolve(__dirname, "../dist");
@@ -196,6 +205,7 @@ export async function createApp() {
   app.decorateRequest("authUser", null);
   app.decorateRequest("sessionId", null);
   app.decorateRequest("labAccess", null);
+  configureRouteAuthorization(app);
 
   if (!envFlag("RACKPAD_RATE_LIMIT_DISABLED")) {
     await app.register(rateLimit, {
@@ -341,18 +351,6 @@ export async function createApp() {
       .send(readFileSync(PROXMOX_COLLECTOR_PATH, "utf8"));
   });
 
-  const publicPaths = new Set([
-    "/api/health",
-    "/api/imports/hyperv-collector",
-    "/api/imports/proxmox-collector",
-    "/api/auth/status",
-    "/api/auth/bootstrap",
-    "/api/auth/login",
-    "/api/auth/oidc/start",
-    "/api/auth/oidc/callback",
-    "/api/auth/oidc/session",
-  ]);
-
   app.addHook("onRequest", async (req, reply) => {
     if (process.env.NODE_ENV === "production" && trustedHosts.size > 0) {
       const requestHost = getRequestHost(
@@ -381,8 +379,10 @@ export async function createApp() {
     }
 
     if (!req.url.startsWith("/api/")) return;
-    const urlPath = req.url.split("?")[0];
-    if (publicPaths.has(urlPath)) return;
+    const authorization = !req.routeOptions.url?.startsWith("/api/")
+      ? ({ kind: "authenticated" } as const)
+      : requestRouteAuthorization(req);
+    if (authorization.kind === "public") return;
 
     if (needsBootstrap()) {
       return reply
@@ -407,6 +407,11 @@ export async function createApp() {
     req.sessionId = session.sessionId;
     req.labAccess =
       session.role === "admin" ? [] : fetchUserLabAccess(session.id);
+    if (authorization.kind === "admin" && session.role !== "admin") {
+      return reply
+        .status(403)
+        .send({ error: authorization.denialMessage });
+    }
   });
 
   await app.register(authRoutes, { prefix: "/api/auth" });
@@ -439,6 +444,13 @@ export async function createApp() {
   await app.register(importsRoutes, { prefix: "/api/imports" });
   await app.register(integrationsRoutes, { prefix: "/api/integrations" });
   await app.register(storageRoutes, { prefix: "/api/storage" });
+  await app.register(hardwareTemplatesRoutes, {
+    prefix: "/api/hardware-templates",
+  });
+  await app.register(physicalLayoutsRoutes, {
+    prefix: "/api/physical-layouts",
+  });
+  await app.register(rackStudioRoutes, { prefix: "/api/rack-studio" });
 
   if (existsSync(DIST_DIR)) {
     await app.register(staticPlugin, {

@@ -20,6 +20,11 @@ Open Rackpad -> `Visualizer`.
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | ![Rackpad multi-hop cable trace preview](./screenshots/visualizer-trace.png) | ![Rackpad visualizer loose-device layout](./screenshots/visualizer-layout.png) |
 
+Physical nodes reuse each device-owned front/rear layout so their visible ports
+and cable endpoints match Rack Studio and Device settings.
+
+![Rackpad Visualizer using physical hardware nodes](./screenshots/visualizer-physical.png)
+
 ## What It Shows
 
 - Rack-mounted equipment grouped in the left rack-elevation zone, with racks

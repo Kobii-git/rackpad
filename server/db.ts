@@ -2,6 +2,17 @@ import Database from "better-sqlite3";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createId } from "./lib/ids.js";
+import {
+  buildAutoPhysicalLayout,
+  portSetFingerprint,
+  reconcilePhysicalLayoutBindings,
+  type PhysicalLayoutDevice,
+  type PhysicalLayoutPort,
+  type PhysicalLayoutStatus,
+  type PortBindingV1,
+  type ResolvedPhysicalLayoutV1,
+} from "./lib/physical-layout.js";
+import { legacyShelfGeometry } from "./lib/legacy-shelf-geometry.js";
 import { CURRENT_SCHEMA_VERSION } from "./schema-version.js";
 
 export { CURRENT_SCHEMA_VERSION } from "./schema-version.js";
@@ -1193,6 +1204,165 @@ const SCHEMA_MIGRATIONS = [
       UPDATE integrationConnections SET autoSyncMode = 'skip' WHERE autoSyncMode = 'mirror';
     `,
   },
+  {
+    version: 46,
+    sql: `
+      CREATE TABLE hardwareTemplates (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL COLLATE NOCASE,
+        description TEXT NOT NULL,
+        category    TEXT NOT NULL,
+        deviceTypes TEXT NOT NULL,
+        definition  TEXT NOT NULL,
+        createdAt   TEXT NOT NULL,
+        updatedAt   TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX idx_hardware_templates_name
+        ON hardwareTemplates (name COLLATE NOCASE);
+
+      CREATE TABLE hardwareTemplateDefaults (
+        deviceType TEXT PRIMARY KEY,
+        templateId TEXT NOT NULL,
+        updatedAt  TEXT NOT NULL
+      );
+
+      CREATE TABLE devicePhysicalLayouts (
+        deviceId        TEXT PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+        sourceTemplateId TEXT,
+        status          TEXT NOT NULL CHECK (
+          status IN ('accurate', 'legacy-default', 'generic-default', 'needs-mapping', 'invalid')
+        ),
+        snapshot        TEXT NOT NULL,
+        bindings        TEXT NOT NULL,
+        portFingerprint TEXT NOT NULL,
+        createdAt       TEXT NOT NULL,
+        updatedAt       TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_device_physical_layouts_template
+        ON devicePhysicalLayouts (sourceTemplateId);
+
+      ALTER TABLE devices ADD COLUMN rackMountKind TEXT NOT NULL DEFAULT 'direct';
+      ALTER TABLE devices ADD COLUMN rackColumn INTEGER;
+      ALTER TABLE devices ADD COLUMN rackColumnSpan INTEGER;
+      ALTER TABLE devices ADD COLUMN shelfX REAL;
+      ALTER TABLE devices ADD COLUMN shelfY REAL;
+      ALTER TABLE devices ADD COLUMN shelfWidth REAL;
+      ALTER TABLE devices ADD COLUMN shelfHeight REAL;
+      ALTER TABLE devices ADD COLUMN shelfOrientation INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE devices ADD COLUMN rackSide TEXT;
+
+      UPDATE devices
+      SET rackColumn = CASE rackSlot WHEN 'right' THEN 6 ELSE 0 END,
+          rackColumnSpan = CASE rackSlot
+            WHEN 'left' THEN 6
+            WHEN 'right' THEN 6
+            ELSE 12
+          END,
+          rackMountKind = CASE placement WHEN 'shelf' THEN 'shelf' ELSE 'direct' END;
+    `,
+    run: () => {
+      const devices = db
+        .prepare(
+          "SELECT id, deviceType, heightU, rackSlot, placement FROM devices ORDER BY id",
+        )
+        .all() as PhysicalLayoutDevice[];
+      const selectPorts = db.prepare(
+        `
+          SELECT id, name, position, kind, face, portRole
+          FROM ports
+          WHERE deviceId = ?
+          ORDER BY position, id
+        `,
+      );
+      const insertLayout = db.prepare(
+        `
+          INSERT INTO devicePhysicalLayouts
+            (deviceId, sourceTemplateId, status, snapshot, bindings, portFingerprint, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      );
+      const now = new Date().toISOString();
+
+      for (const device of devices) {
+        const ports = selectPorts.all(device.id) as PhysicalLayoutPort[];
+        const layout = buildAutoPhysicalLayout(device, ports, "legacy");
+        insertLayout.run(
+          device.id,
+          layout.snapshot.sourceTemplateId,
+          layout.status,
+          JSON.stringify(layout.snapshot),
+          JSON.stringify(layout.bindings),
+          portSetFingerprint(ports),
+          now,
+          now,
+        );
+      }
+    },
+  },
+  {
+    version: 47,
+    sql: `
+      ALTER TABLE racks ADD COLUMN studioX REAL;
+      ALTER TABLE racks ADD COLUMN studioY REAL;
+    `,
+    run: () => {
+      const shelfIndexes = new Map<string, number>();
+      const children = db
+        .prepare(
+          `
+            SELECT id, parentDeviceId
+            FROM devices
+            WHERE placement = 'shelf'
+              AND parentDeviceId IS NOT NULL
+            ORDER BY parentDeviceId, id
+          `,
+        )
+        .all() as Array<{ id: string; parentDeviceId: string }>;
+      const shelfCounts = new Map<string, number>();
+      for (const child of children) {
+        shelfCounts.set(
+          child.parentDeviceId,
+          (shelfCounts.get(child.parentDeviceId) ?? 0) + 1,
+        );
+      }
+      const update = db.prepare(
+        `
+          UPDATE devices
+          SET shelfX = COALESCE(shelfX, ?),
+              shelfY = COALESCE(shelfY, ?),
+              shelfWidth = COALESCE(shelfWidth, ?),
+              shelfHeight = COALESCE(shelfHeight, ?),
+              shelfOrientation = COALESCE(shelfOrientation, 0)
+          WHERE id = ?
+        `,
+      );
+      for (const child of children) {
+        const index = shelfIndexes.get(child.parentDeviceId) ?? 0;
+        shelfIndexes.set(child.parentDeviceId, index + 1);
+        const geometry = legacyShelfGeometry(
+          index,
+          shelfCounts.get(child.parentDeviceId) ?? 1,
+        );
+        update.run(
+          geometry.x,
+          geometry.y,
+          geometry.width,
+          geometry.height,
+          child.id,
+        );
+      }
+    },
+  },
+  {
+    version: 48,
+    sql: `
+      ALTER TABLE portLinks ADD COLUMN label TEXT;
+      ALTER TABLE portLinks ADD COLUMN visible INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE portLinks ADD COLUMN routeWaypoints TEXT NOT NULL DEFAULT '[]';
+    `,
+  },
 ] as const;
 
 const applySchema = db.transaction(() => {
@@ -1206,6 +1376,7 @@ const applySchema = db.transaction(() => {
   for (const migration of SCHEMA_MIGRATIONS) {
     if (currentVersion >= migration.version) continue;
     db.exec(migration.sql);
+    if ("run" in migration) migration.run();
     const updatedAt = new Date().toISOString();
     db.prepare(
       `
@@ -1277,6 +1448,20 @@ export function ensurePatchPanelPassThroughPorts(deviceIds?: string[]) {
     INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId)
     VALUES (@id, @deviceId, @name, @position, @kind, @speed, @linkState, @mode, @vlanId, @allowedVlanIds, @description, @face, @virtualSwitchId)
   `);
+  const selectLayout = db.prepare(
+    "SELECT sourceTemplateId, status, snapshot, bindings, portFingerprint FROM devicePhysicalLayouts WHERE deviceId = ?",
+  );
+  const selectPhysicalPorts = db.prepare(`
+    SELECT id, name, position, kind, face, portRole
+    FROM ports
+    WHERE deviceId = ?
+    ORDER BY position, id
+  `);
+  const updateLayout = db.prepare(`
+    UPDATE devicePhysicalLayouts
+    SET status = ?, bindings = ?, portFingerprint = ?, updatedAt = ?
+    WHERE deviceId = ?
+  `);
 
   const normalize = db.transaction((ids: string[]) => {
     let createdCount = 0;
@@ -1284,6 +1469,7 @@ export function ensurePatchPanelPassThroughPorts(deviceIds?: string[]) {
     for (const deviceId of ids) {
       const ports = selectPorts.all(deviceId) as PatchPanelPortRow[];
       const groups = new Map<string, PatchPanelPortRow[]>();
+      let deviceChanged = false;
 
       for (const port of ports) {
         const key = `${port.kind}|${port.name.trim().toLowerCase()}`;
@@ -1307,6 +1493,7 @@ export function ensurePatchPanelPassThroughPorts(deviceIds?: string[]) {
             linkState: "down",
           });
           createdCount += 1;
+          deviceChanged = true;
         } else if (rear && !front) {
           insertPort.run({
             ...rear,
@@ -1315,6 +1502,38 @@ export function ensurePatchPanelPassThroughPorts(deviceIds?: string[]) {
             linkState: "down",
           });
           createdCount += 1;
+          deviceChanged = true;
+        }
+      }
+
+      if (deviceChanged) {
+        const layout = selectLayout.get(deviceId) as
+          | {
+              sourceTemplateId: string | null;
+              status: PhysicalLayoutStatus;
+              snapshot: string;
+              bindings: string;
+              portFingerprint: string;
+            }
+          | undefined;
+        if (layout) {
+          const currentPorts = selectPhysicalPorts.all(
+            deviceId,
+          ) as PhysicalLayoutPort[];
+          const reconciled = reconcilePhysicalLayoutBindings({
+            snapshot: JSON.parse(layout.snapshot) as ResolvedPhysicalLayoutV1,
+            bindings: JSON.parse(layout.bindings) as PortBindingV1[],
+            status: layout.status,
+            sourceTemplateId: layout.sourceTemplateId,
+            ports: currentPorts,
+          });
+          updateLayout.run(
+            reconciled.status,
+            JSON.stringify(reconciled.bindings),
+            reconciled.portFingerprint,
+            new Date().toISOString(),
+            deviceId,
+          );
         }
       }
     }

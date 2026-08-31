@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   ArrowDown,
   ArrowUp,
@@ -10,12 +11,13 @@ import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
-import { buildVisualizerModel } from "./visualizer/model";
+import { buildVisualizerModel, traceFromPort } from "./visualizer/model";
 import { DiagramCanvas } from "./visualizer/DiagramCanvas";
 import { VisualizerCanvas } from "./visualizer/VisualizerCanvas";
 import type {
   TraceModeState,
   VisualizerCableLayout,
+  VisualizerDiagramNodeStyle,
   VisualizerLayoutMode,
   VisualizerLooseDevicePlacement,
   VisualizerNode,
@@ -31,6 +33,7 @@ const NO_CABLE_BANNER_KEY = "rackpad.visualizer.no-cable-banner.dismissed";
 const LOOSE_PLACEMENT_STORAGE_KEY = "rackpad.visualizer.loose-placement";
 const ROOM_ONLY_SECTIONS_STORAGE_KEY = "rackpad.visualizer.room-only-sections";
 const LAYOUT_MODE_STORAGE_KEY = "rackpad.visualizer.layout-mode";
+const DIAGRAM_NODE_STYLE_STORAGE_KEY = "rackpad.visualizer.diagram-node-style";
 const RACK_FACE_MODE_STORAGE_KEY = "rackpad.visualizer.rack-face-mode";
 const RACK_SCALE_STORAGE_KEY = "rackpad.visualizer.rack-scale";
 const SHELF_LAYOUT_STORAGE_KEY = "rackpad.visualizer.shelf-layout";
@@ -62,6 +65,8 @@ const EMPTY_ORDER_SETTINGS: VisualizerOrderSettings = {
 
 export default function VisualizerView() {
   const { t } = useI18n();
+  const [searchParams] = useSearchParams();
+  const consumedTracePortRef = useRef<string | undefined>(undefined);
   const lab = useStore((s) => s.lab);
   const loading = useStore((s) => s.loading);
   const loaded = useStore((s) => s.loaded);
@@ -71,6 +76,7 @@ export default function VisualizerView() {
   const deviceTypes = useStore((s) => s.deviceTypes);
   const ports = useStore((s) => s.ports);
   const portLinks = useStore((s) => s.portLinks);
+  const physicalLayouts = useStore((s) => s.physicalLayouts);
   const deviceMonitors = useStore((s) => s.deviceMonitors);
   const subnets = useStore((s) => s.subnets);
   const vlans = useStore((s) => s.vlans);
@@ -92,6 +98,10 @@ export default function VisualizerView() {
   const [layoutMode, setLayoutMode] = useState<VisualizerLayoutMode>(() =>
     readLayoutMode(LAYOUT_MODE_STORAGE_KEY),
   );
+  const [diagramNodeStyle, setDiagramNodeStyle] =
+    useState<VisualizerDiagramNodeStyle>(() =>
+      readDiagramNodeStyle(DIAGRAM_NODE_STYLE_STORAGE_KEY),
+    );
   const [rackFaceMode, setRackFaceMode] = useState<VisualizerRackFaceMode>(() =>
     readRackFaceMode(RACK_FACE_MODE_STORAGE_KEY),
   );
@@ -185,6 +195,32 @@ export default function VisualizerView() {
       includeRoomOnlySections,
     ],
   );
+
+  useEffect(() => {
+    const tracePortId = searchParams.get("tracePortId")?.trim();
+    if (
+      !loaded ||
+      !tracePortId ||
+      consumedTracePortRef.current === tracePortId ||
+      !model.portById[tracePortId]
+    ) {
+      return;
+    }
+    consumedTracePortRef.current = tracePortId;
+    const result = traceFromPort(model, tracePortId);
+    setLayoutMode("grouped");
+    writeString(LAYOUT_MODE_STORAGE_KEY, "grouped");
+    setTraceMode({
+      enabled: true,
+      firstPortId: tracePortId,
+      result,
+      message: result
+        ? t("{count} hop path traced from selected port.", {
+            count: result.segments.length,
+          })
+        : t("No onward path found. Select a second port to trace manually."),
+    });
+  }, [loaded, model, searchParams, t]);
 
   const orderSections = useMemo<VisualizerOrderListItem[]>(
     () =>
@@ -405,6 +441,38 @@ export default function VisualizerView() {
               <option value="pyramid">{t("Pyramid")}</option>
               <option value="diagram">{t("Diagram")}</option>
             </select>
+            {layoutMode === "diagram" && (
+              <select
+                value={diagramNodeStyle}
+                onChange={(event) => {
+                  const next = event.target
+                    .value as VisualizerDiagramNodeStyle;
+                  setDiagramNodeStyle(next);
+                  writeString(DIAGRAM_NODE_STYLE_STORAGE_KEY, next);
+                }}
+                className="rk-control h-8 w-36 px-2 text-xs text-[var(--text-primary)]"
+                aria-label={t("Physical layout")}
+              >
+                <option value="compact">{t("Compact")}</option>
+                <option value="physical">{t("Physical layout")}</option>
+              </select>
+            )}
+            {layoutMode === "diagram" && diagramNodeStyle === "physical" && (
+              <select
+                value={rackFaceMode}
+                onChange={(event) => {
+                  const next = event.target.value as VisualizerRackFaceMode;
+                  setRackFaceMode(next);
+                  writeString(RACK_FACE_MODE_STORAGE_KEY, next);
+                }}
+                className="rk-control h-8 w-28 px-2 text-xs text-[var(--text-primary)]"
+                aria-label={t("Face")}
+              >
+                <option value="front">{t("Front")}</option>
+                <option value="rear">{t("Rear")}</option>
+                <option value="both">{t("Both")}</option>
+              </select>
+            )}
             <select
               value={cableType}
               onChange={(event) => setCableType(event.target.value)}
@@ -489,6 +557,9 @@ export default function VisualizerView() {
           wifiAccessPoints={wifiAccessPoints}
           wifiClientAssociations={wifiClientAssociations}
           virtualSwitches={virtualSwitches}
+          nodeStyle={diagramNodeStyle}
+          physicalLayouts={physicalLayouts}
+          physicalFaceMode={rackFaceMode}
         />
       ) : (
         <VisualizerCanvas
@@ -791,6 +862,16 @@ function readLayoutMode(key: string): VisualizerLayoutMode {
     return value === "pyramid" || value === "diagram" ? value : "grouped";
   } catch {
     return "grouped";
+  }
+}
+
+function readDiagramNodeStyle(key: string): VisualizerDiagramNodeStyle {
+  try {
+    return window.localStorage.getItem(key) === "physical"
+      ? "physical"
+      : "compact";
+  } catch {
+    return "compact";
   }
 }
 

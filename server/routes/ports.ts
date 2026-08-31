@@ -9,6 +9,7 @@ import {
   resolveLabIdsForList,
 } from '../lib/lab-access.js'
 import { BUILT_IN_PORT_TEMPLATES, listPortTemplates } from '../lib/port-templates.js'
+import { reconcileDevicePhysicalLayout } from '../lib/device-physical-layout.js'
 import { ensurePortVirtualSwitchMembership } from './virtual-switches.js'
 import { requiredDeviceType } from '../lib/device-types.js'
 import { createId } from '../lib/ids.js'
@@ -108,12 +109,12 @@ function ensureAllowedVlanIdsBelongToLab(labId: string, vlanIds: string[] | null
 
 function getPortLabRow(portId: string) {
   return db.prepare(`
-    SELECT ports.id, devices.labId, ports.portRole, ports.aggregatePortId
+    SELECT ports.id, ports.deviceId, devices.labId, ports.portRole, ports.aggregatePortId
     FROM ports
     JOIN devices ON devices.id = ports.deviceId
     WHERE ports.id = ?
   `).get(portId) as
-    | { id: string; labId: string; portRole: string | null; aggregatePortId: string | null }
+    | { id: string; deviceId: string; labId: string; portRole: string | null; aggregatePortId: string | null }
     | undefined
 }
 
@@ -275,25 +276,28 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     const position = requestedPosition ?? ((row.maxPosition ?? 0) + 1)
     const id = createId('p')
 
-    db.prepare(`
-      INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, macAddress)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      deviceId,
-      name,
-      position,
-      kind,
-      speed ?? null,
-      linkState,
-      mode,
-      normalizedVlanId,
-      mode === 'trunk' && normalizedAllowedVlanIds ? JSON.stringify(normalizedAllowedVlanIds) : null,
-      description ?? null,
-      face,
-      virtualSwitchId ?? null,
-      macAddress,
-    )
+    db.transaction(() => {
+      db.prepare(`
+        INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, macAddress)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        deviceId,
+        name,
+        position,
+        kind,
+        speed ?? null,
+        linkState,
+        mode,
+        normalizedVlanId,
+        mode === 'trunk' && normalizedAllowedVlanIds ? JSON.stringify(normalizedAllowedVlanIds) : null,
+        description ?? null,
+        face,
+        virtualSwitchId ?? null,
+        macAddress,
+      )
+      reconcileDevicePhysicalLayout(deviceId)
+    })()
 
     const created = db.prepare('SELECT * FROM ports WHERE id = ?').get(id) as Record<string, unknown>
     return reply.status(201).send(parsePortRow(created))
@@ -367,7 +371,10 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
     if (updates.length === 0) return reply.status(400).send({ error: 'No valid fields to update' })
 
     values.push(req.params.id)
-    db.prepare(`UPDATE ports SET ${updates.join(', ')} WHERE id = ?`).run(...values)
+    db.transaction(() => {
+      db.prepare(`UPDATE ports SET ${updates.join(', ')} WHERE id = ?`).run(...values)
+      reconcileDevicePhysicalLayout(String(current.deviceId))
+    })()
     const updated = db.prepare('SELECT * FROM ports WHERE id = ?').get(req.params.id) as Record<string, unknown>
     return parsePortRow(updated)
   })
@@ -394,6 +401,7 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
       for (const peer of peers) {
         db.prepare("UPDATE ports SET linkState = 'down' WHERE id = ?").run(peer.peerPortId)
       }
+      reconcileDevicePhysicalLayout(String(port!.deviceId))
     })
 
     removePort()

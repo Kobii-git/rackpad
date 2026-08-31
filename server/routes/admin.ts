@@ -35,10 +35,40 @@ import { cidrContainsHostIp, cidrOverlaps, ipToInt } from "../lib/ip-cidr.js";
 import { getSubnetIntegrity } from "../lib/subnet-integrity.js";
 import { listAssignmentIntegrityIssues } from "../lib/ip-assignment-integrity.js";
 import { getSnmpProfile } from "../lib/snmp-profiles/index.js";
+import {
+  BUILT_IN_DEVICE_TYPES,
+  normalizeDeviceTypeId,
+} from "../lib/device-types.js";
 import { monitoringOperationalStatus } from "../lib/monitoring.js";
 import { dockerSyncOperationalStatus } from "../lib/docker-import.js";
 import { discoveryOperationalStatus } from "./discovery.js";
 import { snmpSyncOperationalStatus } from "./snmp-sync.js";
+import {
+  PHYSICAL_LAYOUT_STATUSES,
+  BUILT_IN_HARDWARE_TEMPLATES,
+  buildAutoPhysicalLayout,
+  isReservedHardwareTemplateId,
+  isPhysicalLayoutPort,
+  portSetFingerprint,
+  reconcilePhysicalLayoutBindings,
+  validateHardwareTemplateV1,
+  validatePortBindingsV1,
+  validateResolvedPhysicalLayoutV1,
+  type PhysicalLayoutDevice,
+  type PhysicalLayoutPort,
+  type PhysicalLayoutStatus,
+} from "../lib/physical-layout.js";
+import { legacyShelfGeometry } from "../lib/legacy-shelf-geometry.js";
+import { parseCableRouteWaypoints } from "../lib/cable-routing.js";
+import {
+  assertRackStudioRackFootprint,
+  calculateRackStudioCanvasBounds,
+} from "../lib/rack-studio-canvas.js";
+import {
+  currentRackStudioPlacement,
+  resolveRackStudioPlacement,
+  type RackStudioDeviceRow,
+} from "../lib/rack-studio-placement.js";
 import {
   createNativeBackup,
   deleteNativeBackup,
@@ -141,14 +171,29 @@ const exportBackupSnapshot = db.transaction(
             .prepare("SELECT * FROM ports ORDER BY deviceId, position, id")
             .all() as Record<string, unknown>[]
         ).map((row) => parseRow(row, ["allowedVlanIds"])),
-        portLinks: db
-          .prepare("SELECT * FROM portLinks ORDER BY fromPortId, toPortId, id")
-          .all(),
+        portLinks: (
+          db
+            .prepare("SELECT * FROM portLinks ORDER BY fromPortId, toPortId, id")
+            .all() as Record<string, unknown>[]
+        ).map((row) => parseRow(row, ["routeWaypoints"])),
         portTemplates: (
           db
             .prepare("SELECT * FROM portTemplates ORDER BY name, id")
             .all() as Record<string, unknown>[]
         ).map((row) => parseRow(row, ["deviceTypes", "ports"])),
+        hardwareTemplates: (
+          db
+            .prepare("SELECT * FROM hardwareTemplates ORDER BY name, id")
+            .all() as Record<string, unknown>[]
+        ).map((row) => parseRow(row, ["deviceTypes", "definition"])),
+        hardwareTemplateDefaults: db
+          .prepare("SELECT * FROM hardwareTemplateDefaults ORDER BY deviceType")
+          .all(),
+        devicePhysicalLayouts: (
+          db
+            .prepare("SELECT * FROM devicePhysicalLayouts ORDER BY deviceId")
+            .all() as Record<string, unknown>[]
+        ).map((row) => parseRow(row, ["snapshot", "bindings"])),
         driveBayTemplates: (
           db
             .prepare("SELECT * FROM driveBayTemplates ORDER BY name, id")
@@ -344,6 +389,19 @@ function normalizeArrayRecordArray(value: unknown, key: string) {
   return value.map((entry) => asObject(entry));
 }
 
+function parseBackupJson(value: unknown, label: string) {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new ValidationError(
+      `${label} contains invalid JSON.`,
+      422,
+      "BACKUP_INTEGRITY_INVALID",
+    );
+  }
+}
+
 function validateBackupAuthorizationIntegrity(input: {
   labs: Record<string, unknown>[];
   users: Record<string, unknown>[];
@@ -417,6 +475,8 @@ function validateBackupAuthorizationIntegrity(input: {
 
 function validateBackupNetworkIntegrity(input: {
   labs: Record<string, unknown>[];
+  rooms: Record<string, unknown>[];
+  racks: Record<string, unknown>[];
   vlans: Record<string, unknown>[];
   vlanRanges: Record<string, unknown>[];
   subnets: Record<string, unknown>[];
@@ -424,6 +484,7 @@ function validateBackupNetworkIntegrity(input: {
   ipZones: Record<string, unknown>[];
   devices: Record<string, unknown>[];
   ports: Record<string, unknown>[];
+  portLinks: Record<string, unknown>[];
   ipAssignments: Record<string, unknown>[];
 }) {
   function invalid(
@@ -695,6 +756,126 @@ function validateBackupNetworkIntegrity(input: {
           "Backup port VLAN must belong to the device lab.",
           "port",
           port.id,
+        );
+      }
+    }
+  }
+
+  const roomsById = new Map(
+    input.rooms.map((row) => [
+      String(row.id ?? ""),
+      { labId: String(row.labId ?? "") },
+    ]),
+  );
+  for (const [roomId, room] of roomsById) {
+    if (!roomId || !labIds.has(room.labId)) {
+      invalid("Backup room references a missing lab.", "room", roomId);
+    }
+  }
+  const roomBounds = new Map(
+    [...roomsById.keys()].map((roomId) => {
+      const roomRacks = input.racks
+        .filter((row) => String(row.roomId ?? "") === roomId)
+        .sort(
+          (left, right) =>
+            String(left.name ?? "").localeCompare(String(right.name ?? "")) ||
+            String(left.id ?? "").localeCompare(String(right.id ?? "")),
+        )
+        .map((row) => ({
+          id: String(row.id ?? ""),
+          studioY:
+            row.studioY === null || row.studioY === undefined
+              ? null
+              : Number(row.studioY),
+        }));
+      const looseDeviceCount = input.devices.filter(
+        (row) =>
+          String(row.roomId ?? "") === roomId &&
+          !row.rackId &&
+          row.placement !== "virtual" &&
+          row.placement !== "wireless",
+      ).length;
+      return [
+        roomId,
+        calculateRackStudioCanvasBounds({
+          racks: roomRacks,
+          looseDeviceCount,
+        }),
+      ];
+    }),
+  );
+
+  const linkedPortIds = new Set<string>();
+  for (const row of input.portLinks) {
+    const id = entityId(row);
+    const fromPortId = String(row.fromPortId ?? "");
+    const toPortId = String(row.toPortId ?? "");
+    const fromPort = portsById.get(fromPortId);
+    const toPort = portsById.get(toPortId);
+    const fromDevice = fromPort
+      ? devicesById.get(fromPort.deviceId)
+      : undefined;
+    const toDevice = toPort ? devicesById.get(toPort.deviceId) : undefined;
+    if (!fromPort || !toPort || !fromDevice || !toDevice) {
+      invalid("Backup cable references a missing port.", "portLink", id);
+    }
+    if (fromPortId === toPortId) {
+      invalid("Backup cable cannot link a port to itself.", "portLink", id);
+    }
+    if (linkedPortIds.has(fromPortId) || linkedPortIds.has(toPortId)) {
+      invalid(
+        "Backup cable endpoints must not be occupied by another cable.",
+        "portLink",
+        id,
+      );
+    }
+    linkedPortIds.add(fromPortId);
+    linkedPortIds.add(toPortId);
+
+    if (
+      row.visible !== undefined &&
+      row.visible !== null &&
+      row.visible !== true &&
+      row.visible !== false &&
+      row.visible !== 0 &&
+      row.visible !== 1
+    ) {
+      invalid("Backup cable visibility is invalid.", "portLink", id);
+    }
+
+    let routeWaypoints;
+    try {
+      routeWaypoints = parseCableRouteWaypoints(
+        parseBackupJson(
+          row.routeWaypoints ?? [],
+          "Backup cable route waypoints",
+        ),
+      );
+    } catch {
+      invalid("Backup cable route waypoints are invalid.", "portLink", id);
+    }
+    for (const waypoint of routeWaypoints) {
+      const room = roomsById.get(waypoint.roomId);
+      if (
+        !room ||
+        (room.labId !== fromDevice.labId && room.labId !== toDevice.labId)
+      ) {
+        invalid(
+          "Backup cable route waypoints must stay within an endpoint lab.",
+          "portLink",
+          id,
+        );
+      }
+      const bounds = roomBounds.get(waypoint.roomId);
+      if (
+        !bounds ||
+        waypoint.x > bounds.width ||
+        waypoint.y > bounds.height
+      ) {
+        invalid(
+          "Backup cable route waypoint falls outside its Rack Studio room canvas.",
+          "portLink",
+          id,
         );
       }
     }
@@ -1061,6 +1242,18 @@ const restoreBackupSnapshot = db.transaction(
       data.portTemplates ?? [],
       "data.portTemplates",
     );
+    const hardwareTemplates = normalizeArrayRecordArray(
+      data.hardwareTemplates ?? [],
+      "data.hardwareTemplates",
+    );
+    const hardwareTemplateDefaults = normalizeArrayRecordArray(
+      data.hardwareTemplateDefaults ?? [],
+      "data.hardwareTemplateDefaults",
+    );
+    const devicePhysicalLayouts = normalizeArrayRecordArray(
+      data.devicePhysicalLayouts ?? [],
+      "data.devicePhysicalLayouts",
+    );
     const driveBayTemplates = normalizeArrayRecordArray(
       data.driveBayTemplates ?? [],
       "data.driveBayTemplates",
@@ -1208,6 +1401,8 @@ const restoreBackupSnapshot = db.transaction(
     validateBackupAuthorizationIntegrity({ labs, users, userLabAccess });
     validateBackupNetworkIntegrity({
       labs,
+      rooms,
+      racks,
       vlans,
       vlanRanges,
       subnets,
@@ -1215,6 +1410,7 @@ const restoreBackupSnapshot = db.transaction(
       ipZones,
       devices,
       ports,
+      portLinks,
       ipAssignments,
     });
     validateBackupStorageIntegrity({
@@ -1235,6 +1431,184 @@ const restoreBackupSnapshot = db.transaction(
       connections: integrationConnections,
       schedules: integrationSyncSchedules,
     });
+
+    const restoredDeviceTypeParents = new Map<string, string | null>(
+      BUILT_IN_DEVICE_TYPES.map((deviceType) => [
+        deviceType.id,
+        "parentType" in deviceType ? (deviceType.parentType ?? null) : null,
+      ]),
+    );
+    const deviceTypeSetting = appSettings.find(
+      (row) => String(row.key ?? "") === "deviceTypes",
+    );
+    if (deviceTypeSetting) {
+      const value = parseBackupJson(
+        deviceTypeSetting.value,
+        "Backup device-type settings",
+      );
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        const custom = (value as { custom?: unknown }).custom;
+        if (Array.isArray(custom)) {
+          for (const entry of custom) {
+            if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+              continue;
+            }
+            const record = entry as Record<string, unknown>;
+            if (typeof record.id !== "string") continue;
+            const id = normalizeDeviceTypeId(record.id);
+            if (!id) continue;
+            const parent =
+              typeof record.parentType === "string"
+                ? normalizeDeviceTypeId(record.parentType)
+                : null;
+            restoredDeviceTypeParents.set(id, parent || null);
+          }
+        }
+      }
+    }
+    for (const device of devices) {
+      const id = normalizeDeviceTypeId(String(device.deviceType ?? ""));
+      if (id && !restoredDeviceTypeParents.has(id)) {
+        restoredDeviceTypeParents.set(id, null);
+      }
+    }
+
+    const restoredTemplates = new Map(
+      BUILT_IN_HARDWARE_TEMPLATES.map((template) => [template.id, template]),
+    );
+    const restoredTemplateNames = new Set<string>();
+    for (const row of hardwareTemplates) {
+      const rawDefinition = parseBackupJson(
+        row.definition,
+        "Backup hardware template definition",
+      );
+      const template = validateHardwareTemplateV1(rawDefinition);
+      if (template.id !== String(row.id ?? "")) {
+        throw new ValidationError(
+          "Backup hardware template ID does not match its definition.",
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+      if (isReservedHardwareTemplateId(template.id)) {
+        throw new ValidationError(
+          "Backup custom hardware template uses a reserved template ID.",
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+      if (restoredTemplates.has(template.id)) {
+        throw new ValidationError(
+          "Backup contains duplicate hardware template IDs.",
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+      const normalizedName = template.name.trim().toLocaleLowerCase();
+      if (restoredTemplateNames.has(normalizedName)) {
+        throw new ValidationError(
+          "Backup contains duplicate hardware template names.",
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+      for (const deviceType of template.deviceTypes) {
+        if (!restoredDeviceTypeParents.has(deviceType)) {
+          throw new ValidationError(
+            "Backup hardware template references an unknown device type.",
+            422,
+            "BACKUP_INTEGRITY_INVALID",
+          );
+        }
+      }
+      restoredTemplateNames.add(normalizedName);
+      restoredTemplates.set(template.id, template);
+    }
+    const restoredDefaultDeviceTypes = new Set<string>();
+    for (const row of hardwareTemplateDefaults) {
+      const deviceType = normalizeDeviceTypeId(String(row.deviceType ?? ""));
+      const templateId = String(row.templateId ?? "");
+      const template = restoredTemplates.get(templateId);
+      if (!template) {
+        throw new ValidationError(
+          "Backup hardware-template default references a missing template.",
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+      if (
+        !deviceType ||
+        !restoredDeviceTypeParents.has(deviceType) ||
+        restoredDefaultDeviceTypes.has(deviceType)
+      ) {
+        throw new ValidationError(
+          "Backup hardware-template default references an invalid or duplicate device type.",
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+      let compatibleType: string | null = deviceType;
+      const seenTypes = new Set<string>();
+      let supported = template.deviceTypes.length === 0;
+      while (compatibleType && !seenTypes.has(compatibleType)) {
+        if (template.deviceTypes.includes(compatibleType)) {
+          supported = true;
+          break;
+        }
+        seenTypes.add(compatibleType);
+        compatibleType = restoredDeviceTypeParents.get(compatibleType) ?? null;
+      }
+      if (!supported) {
+        throw new ValidationError(
+          "Backup hardware-template default is incompatible with its device type.",
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+      restoredDefaultDeviceTypes.add(deviceType);
+    }
+    const backupDeviceIds = new Set(devices.map((row) => String(row.id ?? "")));
+    const backupPortsByDevice = new Map<string, Set<string>>();
+    for (const port of ports) {
+      const deviceId = String(port.deviceId ?? "");
+      const ids = backupPortsByDevice.get(deviceId) ?? new Set<string>();
+      ids.add(String(port.id ?? ""));
+      backupPortsByDevice.set(deviceId, ids);
+    }
+    for (const row of devicePhysicalLayouts) {
+      const deviceId = String(row.deviceId ?? "");
+      if (!backupDeviceIds.has(deviceId)) {
+        throw new ValidationError(
+          "Backup physical layout references a missing device.",
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+      if (
+        !(PHYSICAL_LAYOUT_STATUSES as readonly string[]).includes(
+          String(row.status),
+        )
+      ) {
+        throw new ValidationError(
+          "Backup physical layout has an invalid status.",
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+      const snapshotValue = parseBackupJson(
+        row.snapshot,
+        "Backup physical layout snapshot",
+      );
+      const bindingValue = parseBackupJson(
+        row.bindings,
+        "Backup physical layout bindings",
+      );
+      const layout = validateResolvedPhysicalLayoutV1(snapshotValue);
+      validatePortBindingsV1(bindingValue, {
+        portIds: backupPortsByDevice.get(deviceId) ?? new Set(),
+        slotIds: new Set(layout.portSlots.map((slot) => slot.id)),
+      });
+    }
 
     db.exec(`
     DELETE FROM userLabAccess;
@@ -1266,6 +1640,7 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM discoveryScanSchedules;
     DELETE FROM discoveredDevices;
     DELETE FROM portLinks;
+    DELETE FROM devicePhysicalLayouts;
     DELETE FROM ports;
     DELETE FROM virtualSwitches;
     DELETE FROM storagePoolDrives;
@@ -1278,6 +1653,8 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM vlans;
     DELETE FROM vlanRanges;
     DELETE FROM portTemplates;
+    DELETE FROM hardwareTemplateDefaults;
+    DELETE FROM hardwareTemplates;
     DELETE FROM driveBayTemplates;
     DELETE FROM devices;
     DELETE FROM racks;
@@ -1293,12 +1670,12 @@ const restoreBackupSnapshot = db.transaction(
       "INSERT INTO rooms (id, labId, name, description, location, notes) VALUES (?, ?, ?, ?, ?, ?)",
     );
     const insertRack = db.prepare(
-      "INSERT INTO racks (id, labId, name, totalU, description, location, notes, roomId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO racks (id, labId, name, totalU, description, location, notes, roomId, studioX, studioY) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     );
     const insertDevice = db.prepare(`
     INSERT INTO devices
-      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, ignoreDuplicateMac, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, rackSlot, tags, notes, lastSeen, networkMode, snmpCredentialId)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, ignoreDuplicateMac, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, rackSlot, tags, notes, lastSeen, networkMode, snmpCredentialId, rackMountKind, rackColumn, rackColumnSpan, shelfX, shelfY, shelfWidth, shelfHeight, shelfOrientation, rackSide)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const updateDeviceParent = db.prepare(`
     UPDATE devices
@@ -1319,11 +1696,27 @@ const restoreBackupSnapshot = db.transaction(
     WHERE id = ?
   `);
     const insertPortLink = db.prepare(
-      "INSERT INTO portLinks (id, fromPortId, toPortId, cableType, cableLength, color, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      `INSERT INTO portLinks
+        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const insertPortTemplate = db.prepare(`
     INSERT INTO portTemplates (id, name, description, deviceTypes, ports, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertHardwareTemplate = db.prepare(`
+    INSERT INTO hardwareTemplates
+      (id, name, description, category, deviceTypes, definition, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+    const insertHardwareTemplateDefault = db.prepare(`
+    INSERT INTO hardwareTemplateDefaults (deviceType, templateId, updatedAt)
+    VALUES (?, ?, ?)
+  `);
+    const insertDevicePhysicalLayout = db.prepare(`
+    INSERT INTO devicePhysicalLayouts
+      (deviceId, sourceTemplateId, status, snapshot, bindings, portFingerprint, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDriveBayTemplate = db.prepare(`
     INSERT INTO driveBayTemplates (id, name, description, deviceTypes, sections, createdAt, updatedAt)
@@ -1684,7 +2077,65 @@ const restoreBackupSnapshot = db.transaction(
         row.location ?? null,
         row.notes ?? null,
         row.roomId ?? null,
+        row.studioX ?? null,
+        row.studioY ?? null,
       );
+    }
+    const restoredRackRows = db
+      .prepare(
+        `
+          SELECT racks.id, racks.labId, racks.roomId, racks.studioX, racks.studioY,
+                 rooms.labId AS roomLabId
+          FROM racks
+          LEFT JOIN rooms ON rooms.id = racks.roomId
+          ORDER BY racks.id
+        `,
+      )
+      .all() as Array<{
+      id: string;
+      labId: string;
+      roomId: string | null;
+      studioX: number | null;
+      studioY: number | null;
+      roomLabId: string | null;
+    }>;
+    for (const rack of restoredRackRows) {
+      if (rack.roomId && rack.roomLabId !== rack.labId) {
+        throw new ValidationError(
+          `Backup rack ${rack.id} references a room in another lab.`,
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+      if ((rack.studioX === null) !== (rack.studioY === null)) {
+        throw new ValidationError(
+          `Backup rack ${rack.id} has an incomplete Rack Studio position.`,
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+      if (rack.studioX !== null && !rack.roomId) {
+        throw new ValidationError(
+          `Backup rack ${rack.id} must belong to a room before it can be positioned.`,
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+      try {
+        if (rack.roomId) {
+          assertRackStudioRackFootprint({
+            roomId: rack.roomId,
+            x: rack.studioX,
+            y: rack.studioY,
+          });
+        }
+      } catch (error) {
+        throw new ValidationError(
+          `Backup rack ${rack.id} has an invalid Rack Studio footprint: ${error instanceof Error ? error.message : "invalid coordinates"}`,
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
     }
     for (const row of snmpCredentials) {
       insertSnmpCredential.run(
@@ -1719,7 +2170,37 @@ const restoreBackupSnapshot = db.transaction(
         row.verifyTls == null ? 1 : Number(Boolean(row.verifyTls)),
       );
     }
+    const restoredShelfIndexes = new Map<string, number>();
+    const restoredShelfCounts = new Map<string, number>();
     for (const row of devices) {
+      if (row.placement !== "shelf" || !row.parentDeviceId) continue;
+      const parentDeviceId = String(row.parentDeviceId);
+      restoredShelfCounts.set(
+        parentDeviceId,
+        (restoredShelfCounts.get(parentDeviceId) ?? 0) + 1,
+      );
+    }
+    for (const row of devices) {
+      const restoredShelfParentId = row.parentDeviceId
+        ? String(row.parentDeviceId)
+        : null;
+      const restoredShelfIndex =
+        row.placement === "shelf" && restoredShelfParentId
+          ? (restoredShelfIndexes.get(restoredShelfParentId) ?? 0)
+          : null;
+      if (restoredShelfIndex !== null) {
+        restoredShelfIndexes.set(
+          restoredShelfParentId!,
+          restoredShelfIndex + 1,
+        );
+      }
+      const restoredShelfGeometry =
+        restoredShelfIndex === null || restoredShelfParentId === null
+          ? null
+          : legacyShelfGeometry(
+              restoredShelfIndex,
+              restoredShelfCounts.get(restoredShelfParentId) ?? 1,
+            );
       insertDevice.run(
         row.id,
         row.labId,
@@ -1752,6 +2233,24 @@ const restoreBackupSnapshot = db.transaction(
         row.lastSeen ?? null,
         row.networkMode ?? "normal",
         row.snmpCredentialId ?? null,
+        row.rackMountKind ?? (row.placement === "shelf" ? "shelf" : "direct"),
+        row.rackColumn ?? (row.rackSlot === "right" ? 6 : 0),
+        row.rackColumnSpan ??
+          (row.rackSlot === "full" || row.rackSlot == null ? 12 : 6),
+        row.shelfX ??
+          (restoredShelfIndex === null
+            ? null
+            : restoredShelfGeometry!.x),
+        row.shelfY ??
+          (restoredShelfIndex === null
+            ? null
+            : restoredShelfGeometry!.y),
+        row.shelfWidth ??
+          (restoredShelfIndex === null ? null : restoredShelfGeometry!.width),
+        row.shelfHeight ??
+          (restoredShelfIndex === null ? null : restoredShelfGeometry!.height),
+        row.shelfOrientation ?? 0,
+        row.rackSide ?? null,
       );
     }
     const deviceIds = new Set(devices.map((row) => String(row.id)));
@@ -1767,6 +2266,29 @@ const restoreBackupSnapshot = db.transaction(
         continue;
       }
       updateDeviceParent.run(parentDeviceId, row.id);
+    }
+    const restoredDeviceRows = db
+      .prepare("SELECT * FROM devices ORDER BY id")
+      .all() as RackStudioDeviceRow[];
+    for (const device of restoredDeviceRows) {
+      const current = currentRackStudioPlacement(device);
+      try {
+        const resolved = resolveRackStudioPlacement(device, current);
+        if (
+          current.roomId !== null &&
+          current.roomId !== resolved.roomId
+        ) {
+          throw new ValidationError(
+            "Stored room does not match the resolved physical placement.",
+          );
+        }
+      } catch (error) {
+        throw new ValidationError(
+          `Backup device ${device.id} has invalid Rack Studio placement: ${error instanceof Error ? error.message : "invalid placement"}`,
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
     }
     for (const row of storageDrives) {
       insertStorageDrive.run(
@@ -1938,6 +2460,26 @@ const restoreBackupSnapshot = db.transaction(
       }
     }
     for (const row of portLinks) {
+      const routeWaypoints = parseCableRouteWaypoints(
+        parseBackupJson(
+          row.routeWaypoints ?? [],
+          "Backup cable route waypoints",
+        ),
+      );
+      if (
+        row.visible !== undefined &&
+        row.visible !== null &&
+        row.visible !== true &&
+        row.visible !== false &&
+        row.visible !== 0 &&
+        row.visible !== 1
+      ) {
+        throw new ValidationError(
+          "Backup cable visibility is invalid.",
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
       insertPortLink.run(
         row.id,
         row.fromPortId,
@@ -1946,6 +2488,9 @@ const restoreBackupSnapshot = db.transaction(
         row.cableLength ?? null,
         row.color ?? null,
         row.notes ?? null,
+        row.label ?? null,
+        row.visible === false || row.visible === 0 ? 0 : 1,
+        JSON.stringify(routeWaypoints),
       );
     }
     for (const row of portTemplates) {
@@ -1957,6 +2502,119 @@ const restoreBackupSnapshot = db.transaction(
         JSON.stringify(row.ports ?? []),
         row.createdAt ?? new Date().toISOString(),
         row.updatedAt ?? new Date().toISOString(),
+      );
+    }
+    for (const row of hardwareTemplates) {
+      const rawDefinition = parseBackupJson(
+        row.definition,
+        "Backup hardware template definition",
+      );
+      const template = validateHardwareTemplateV1(rawDefinition);
+      insertHardwareTemplate.run(
+        template.id,
+        template.name,
+        template.description,
+        template.category,
+        JSON.stringify(template.deviceTypes),
+        JSON.stringify(template),
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      );
+    }
+    for (const row of hardwareTemplateDefaults) {
+      insertHardwareTemplateDefault.run(
+        row.deviceType,
+        row.templateId,
+        row.updatedAt ?? new Date().toISOString(),
+      );
+    }
+    const restoredPortsByDevice = new Map<string, PhysicalLayoutPort[]>();
+    const normalizedRestoredPorts = db
+      .prepare(
+        `
+          SELECT id, deviceId, name, position, kind, face, portRole
+          FROM ports
+          ORDER BY deviceId, position, id
+        `,
+      )
+      .all() as Array<PhysicalLayoutPort & { deviceId: string }>;
+    for (const row of normalizedRestoredPorts) {
+      const deviceId = row.deviceId;
+      const list = restoredPortsByDevice.get(deviceId) ?? [];
+      const port = {
+        id: row.id,
+        name: row.name,
+        position: row.position,
+        kind: row.kind,
+        face: row.face,
+        portRole: row.portRole ?? "physical",
+      } satisfies PhysicalLayoutPort;
+      if (isPhysicalLayoutPort(port)) list.push(port);
+      restoredPortsByDevice.set(deviceId, list);
+    }
+    const restoredLayoutDeviceIds = new Set<string>();
+    for (const row of devicePhysicalLayouts) {
+      const deviceId = String(row.deviceId);
+      const snapshot = validateResolvedPhysicalLayoutV1(
+        parseBackupJson(row.snapshot, "Backup physical layout snapshot"),
+      );
+      const bindings = validatePortBindingsV1(
+        parseBackupJson(row.bindings, "Backup physical layout bindings"),
+        {
+          portIds: new Set(
+            (restoredPortsByDevice.get(deviceId) ?? []).map((port) => port.id),
+          ),
+          slotIds: new Set(snapshot.portSlots.map((slot) => slot.id)),
+        },
+      );
+      const layoutPorts = restoredPortsByDevice.get(deviceId) ?? [];
+      const sourceTemplateId = String(
+        row.sourceTemplateId ?? snapshot.sourceTemplateId,
+      );
+      const reconciled = reconcilePhysicalLayoutBindings({
+        snapshot,
+        bindings,
+        status: row.status as PhysicalLayoutStatus,
+        sourceTemplateId,
+        ports: layoutPorts,
+      });
+      insertDevicePhysicalLayout.run(
+        deviceId,
+        sourceTemplateId,
+        reconciled.status,
+        JSON.stringify(snapshot),
+        JSON.stringify(reconciled.bindings),
+        reconciled.portFingerprint,
+        row.createdAt ?? new Date().toISOString(),
+        row.updatedAt ?? row.createdAt ?? new Date().toISOString(),
+      );
+      restoredLayoutDeviceIds.add(deviceId);
+    }
+    for (const row of devices) {
+      const deviceId = String(row.id);
+      if (restoredLayoutDeviceIds.has(deviceId)) continue;
+      const layoutPorts = restoredPortsByDevice.get(deviceId) ?? [];
+      const generated = buildAutoPhysicalLayout(
+        {
+          id: deviceId,
+          deviceType: String(row.deviceType),
+          heightU: row.heightU == null ? null : Number(row.heightU),
+          rackSlot: row.rackSlot == null ? "full" : String(row.rackSlot),
+          placement: row.placement == null ? null : String(row.placement),
+        } satisfies PhysicalLayoutDevice,
+        layoutPorts,
+        "legacy",
+      );
+      const now = new Date().toISOString();
+      insertDevicePhysicalLayout.run(
+        deviceId,
+        generated.snapshot.sourceTemplateId,
+        generated.status,
+        JSON.stringify(generated.snapshot),
+        JSON.stringify(generated.bindings),
+        portSetFingerprint(layoutPorts),
+        now,
+        now,
       );
     }
     for (const row of driveBayTemplates) {
@@ -2270,6 +2928,9 @@ const restoreBackupSnapshot = db.transaction(
         referenceImages: referenceImages.length,
         deviceServices: deviceServices.length,
         portTemplates: portTemplates.length,
+        hardwareTemplates: hardwareTemplates.length,
+        hardwareTemplateDefaults: hardwareTemplateDefaults.length,
+        devicePhysicalLayouts: devices.length,
         driveBayTemplates: driveBayTemplates.length,
         storageDrives: storageDrives.length,
         driveSlots: driveSlots.length,

@@ -61,8 +61,10 @@ require legacy protocols.
 
 ## Remaining validation gaps
 
-Authorization remains per-handler without a robust route-inventory gate and is
-still a manual review obligation. CodeQL's global `js/missing-rate-limiting`
+API routes now require typed public/authenticated/admin/lab/conditional metadata;
+app construction rejects inventory drift and public/admin enforcement is central.
+Lab ID resolution and row-based lab guards remain handler-specific and require
+manual review plus negative tests. CodeQL's global `js/missing-rate-limiting`
 exception exists because the query does not model the Fastify plugin. Runtime
 cross-route and proxy-identity tests plus the ESLint single-app-factory rule and
 its `lint:proof` probe compensate. Owner `@Kobii-git` must review or remove the
