@@ -10,6 +10,8 @@ import {
   ReactFlow,
   useEdgesState,
   useNodesState,
+  useStore as useReactFlowStore,
+  useUpdateNodeInternals,
   type Edge as FlowEdge,
   type Node as FlowNode,
   type NodeMouseHandler,
@@ -19,13 +21,16 @@ import {
   type XYPosition,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ExternalLink, GitBranch, RotateCcw } from "lucide-react";
+import { AlertTriangle, ExternalLink, GitBranch, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { PhysicalFaceplate } from "@/components/rack/PhysicalFaceplate";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { StatusDot } from "@/components/shared/StatusDot";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import type {
   Device,
+  DevicePhysicalLayout,
   Port,
   VirtualSwitch,
   WifiAccessPoint,
@@ -34,15 +39,25 @@ import type {
 } from "@/lib/types";
 import { cn, formatPortLabel, normalizeColorToCss } from "@/lib/utils";
 import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
+import { isRackStudioPhysicalDevice } from "@/lib/rack-studio";
+import { useStore } from "@/lib/store";
 import { nodeStripeColor, typeColor, typeLabel } from "./model";
 import type {
   VisualizerCable,
+  VisualizerDiagramNodeStyle,
   VisualizerHealth,
   VisualizerModel,
   VisualizerNode,
+  VisualizerRackFaceMode,
 } from "./types";
 import { useI18n } from "@/i18n";
 import type { TranslationKey } from "@/i18n/translations";
+import {
+  buildPhysicalNodePresentation,
+  physicalHandlePlacement,
+  physicalPortHandleId,
+  type PhysicalNodePresentation,
+} from "./physical-node";
 
 const DIAGRAM_POSITIONS_STORAGE_KEY = "rackpad.visualizer.diagram-positions";
 const DIAGRAM_SECTION_POSITIONS_STORAGE_KEY =
@@ -71,6 +86,9 @@ interface DiagramCanvasProps {
   wifiAccessPoints: WifiAccessPoint[];
   wifiClientAssociations: WifiClientAssociation[];
   virtualSwitches: VirtualSwitch[];
+  nodeStyle: VisualizerDiagramNodeStyle;
+  physicalLayouts: DevicePhysicalLayout[];
+  physicalFaceMode: VisualizerRackFaceMode;
 }
 
 interface DiagramPortData {
@@ -92,6 +110,11 @@ interface DiagramDeviceData extends Record<string, unknown> {
   stripeColor: string;
   typeColor: string;
   typeLabel: string;
+  nodeStyle: VisualizerDiagramNodeStyle;
+  physicalLayout?: DevicePhysicalLayout;
+  physicalPresentation?: PhysicalNodePresentation;
+  physicalPorts: Port[];
+  linkedPortIds: string[];
 }
 
 interface DiagramSectionData extends Record<string, unknown> {
@@ -130,6 +153,15 @@ interface DiagramSection {
   width: number;
   height: number;
   columns: number;
+  columnWidths: number[];
+  rowHeights: number[];
+}
+
+interface DiagramNodeGeometry {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 interface DiagramLayoutResult {
@@ -171,6 +203,9 @@ export function DiagramCanvas({
   wifiAccessPoints,
   wifiClientAssociations,
   virtualSwitches,
+  nodeStyle,
+  physicalLayouts,
+  physicalFaceMode,
 }: DiagramCanvasProps) {
   const { t } = useI18n();
   const [savedPositions, setSavedPositions] = useState<
@@ -210,6 +245,9 @@ export function DiagramCanvas({
         savedPositions,
         savedSectionPositions,
         wifiContext,
+        nodeStyle,
+        physicalLayouts,
+        physicalFaceMode,
         t,
       ),
     [
@@ -220,6 +258,9 @@ export function DiagramCanvas({
       savedPositions,
       savedSectionPositions,
       wifiContext,
+      nodeStyle,
+      physicalLayouts,
+      physicalFaceMode,
       t,
     ],
   );
@@ -522,7 +563,11 @@ export function DiagramCanvas({
               <GitBranch className="size-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <div className="rk-kicker">{t("Diagram view")}</div>
+              <div className="rk-kicker">
+                {nodeStyle === "physical"
+                  ? t("Physical layout")
+                  : t("Diagram view")}
+              </div>
               <div className="truncate text-[11px] text-[var(--text-secondary)]">
                 {sections.length} {t("sections |")}
                 {visibleDeviceCount} {t("shown")}
@@ -588,7 +633,21 @@ export function DiagramCanvas({
   );
 }
 
-function DiagramDeviceCard({ data, selected }: NodeProps<DiagramDeviceNode>) {
+function DiagramDeviceCard(props: NodeProps<DiagramDeviceNode>) {
+  if (
+    props.data.nodeStyle === "physical" &&
+    props.data.physicalLayout &&
+    props.data.physicalPresentation
+  ) {
+    return <PhysicalDiagramDeviceCard {...props} />;
+  }
+  return <CompactDiagramDeviceCard {...props} />;
+}
+
+function CompactDiagramDeviceCard({
+  data,
+  selected,
+}: NodeProps<DiagramDeviceNode>) {
   const { t } = useI18n();
   const shownPorts = data.ports.slice(0, 24);
   const hiddenPortCount = Math.max(0, data.ports.length - shownPorts.length);
@@ -676,6 +735,203 @@ function DiagramDeviceCard({ data, selected }: NodeProps<DiagramDeviceNode>) {
       </div>
     </div>
   );
+}
+
+function PhysicalDiagramDeviceCard({
+  data,
+  selected,
+}: NodeProps<DiagramDeviceNode>) {
+  const { t } = useI18n();
+  const zoom = useReactFlowStore((state) => state.transform[2]);
+  const updateNodeInternals = useUpdateNodeInternals();
+  const presentation = data.physicalPresentation!;
+  const layout = data.physicalLayout!;
+  const linkedPortIds = useMemo(
+    () => new Set(data.linkedPortIds),
+    [data.linkedPortIds],
+  );
+  const simplified = zoom < 0.68;
+  const showPortLabels = zoom >= 1.02;
+  const showSecondaryLabels = zoom >= 0.58;
+
+  useEffect(() => {
+    updateNodeInternals(data.deviceId);
+  }, [data.deviceId, presentation, updateNodeInternals]);
+
+  return (
+    <div
+      data-testid="visualizer-physical-node"
+      className={cn(
+        "relative overflow-hidden rounded-[var(--radius-md)] border bg-[var(--surface-2)] text-left shadow-[0_16px_34px_rgb(0_0_0_/_0.22)] transition-colors",
+        selected
+          ? "border-[var(--accent-primary-border)] shadow-[var(--shadow-selected)]"
+          : "border-[var(--border-default)]",
+      )}
+      style={{ width: presentation.width, height: presentation.height }}
+      title={t("{hostname}{value2}", {
+        hostname: data.hostname,
+        value2: data.address ? ` | ${data.address}` : "",
+      })}
+    >
+      <span
+        className="absolute inset-x-2 top-0 h-0.5 rounded-full"
+        style={{ background: data.stripeColor }}
+      />
+      <div
+        className="flex items-center gap-2 border-b border-[var(--border-subtle)] px-2.5"
+        style={{ height: 52 }}
+      >
+        <span
+          className="grid size-7 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-1)]"
+          style={{ color: data.typeColor }}
+        >
+          <DeviceTypeIcon type={data.deviceType} className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-[13px] font-semibold text-[var(--text-primary)]">
+              {data.hostname}
+            </span>
+            <StatusDot status={healthToDeviceStatus(data.health)} />
+          </div>
+          <div
+            className={cn(
+              "mt-0.5 truncate font-mono text-[9px] text-[var(--text-tertiary)] transition-opacity",
+              !showSecondaryLabels && "opacity-0",
+            )}
+          >
+            {data.address}
+          </div>
+        </div>
+        <Link
+          to={`/devices/${data.deviceId}`}
+          className="nodrag nopan grid size-7 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--border-subtle)] text-[var(--text-tertiary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+          title={t("Open device")}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <ExternalLink className="size-3.5" />
+        </Link>
+      </div>
+
+      {presentation.faces.map((frame) => (
+        <div
+          key={frame.face}
+          className="absolute"
+          style={{
+            left: 10,
+            right: 10,
+            top: frame.labelTop,
+            height: frame.height + 16,
+          }}
+        >
+          <div
+            className={cn(
+              "flex h-4 items-center justify-between font-mono text-[8px] uppercase tracking-[0.13em] text-[var(--text-muted)] transition-opacity",
+              !showSecondaryLabels && "opacity-0",
+            )}
+          >
+            <span>{frame.face === "front" ? t("Front") : t("Rear")}</span>
+            <span>{data.portSummary}</span>
+          </div>
+          <div style={{ height: frame.height }}>
+            <PhysicalFaceplate
+              layout={layout}
+              face={frame.face}
+              ports={data.physicalPorts}
+              linkedPortIds={linkedPortIds}
+              compact={!showPortLabels}
+              detail={simplified ? "simplified" : "full"}
+              fit="stretch"
+              className="h-full shadow-none"
+              style={{ borderWidth: 0 }}
+            />
+          </div>
+        </div>
+      ))}
+
+      {presentation.anchors.map((anchor) => (
+        <span key={anchor.portId}>
+          <Handle
+            type="target"
+            position={anchor.side === "left" ? Position.Left : Position.Right}
+            id={physicalPortHandleId("target", anchor.portId)}
+            data-port-id={anchor.portId}
+            className="visualizer-physical-port-handle"
+            style={physicalHandleStyle(
+              anchor.x,
+              anchor.y,
+              anchor.side === "left" ? Position.Left : Position.Right,
+            )}
+          />
+          <Handle
+            type="source"
+            position={anchor.side === "left" ? Position.Left : Position.Right}
+            id={physicalPortHandleId("source", anchor.portId)}
+            data-port-id={anchor.portId}
+            className="visualizer-physical-port-handle"
+            style={physicalHandleStyle(
+              anchor.x,
+              anchor.y,
+              anchor.side === "left" ? Position.Left : Position.Right,
+            )}
+          />
+        </span>
+      ))}
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        id="target-unmapped"
+        className="visualizer-physical-port-handle"
+        style={physicalHandleStyle(
+          presentation.fallbackAnchor.x,
+          presentation.fallbackAnchor.y,
+          Position.Bottom,
+        )}
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="source-unmapped"
+        className="visualizer-physical-port-handle"
+        style={physicalHandleStyle(
+          presentation.fallbackAnchor.x,
+          presentation.fallbackAnchor.y,
+          Position.Bottom,
+        )}
+      />
+
+      <div
+        className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] px-2.5 font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
+        style={{ height: 26 }}
+      >
+        <span className="truncate">{data.sectionLabel}</span>
+        <span className="shrink-0">
+          {data.connectionCount} {t("links")}
+          {presentation.unmappedPortIds.length > 0 ? (
+            <>
+              {" · "}
+              {t("Needs attention")}: {presentation.unmappedPortIds.length}
+            </>
+          ) : null}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function physicalHandleStyle(x: number, y: number, position: Position) {
+  const placement = physicalHandlePlacement(x, y, position);
+
+  return {
+    ...placement,
+    right: "auto",
+    bottom: "auto",
+    border: 0,
+    background: "transparent",
+    opacity: 0,
+    pointerEvents: "none" as const,
+    transform: "none",
+  };
 }
 
 function DiagramHandles() {
@@ -773,10 +1029,25 @@ function DiagramDeviceInspector({
   virtualSwitches: VirtualSwitch[];
 }) {
   const { t } = useI18n();
+  const physicalLayout = useStore((state) =>
+    state.physicalLayouts.find(
+      (layout) => layout.deviceId === node.device.id,
+    ),
+  );
   const virtualRows = buildVirtualNetworkRows(node, model, virtualSwitches);
   return (
     <div>
-      <div className="rk-kicker">{t("Device")}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="rk-kicker">{t("Device")}</div>
+        {physicalLayout?.effectiveStatus !== "accurate" && (
+          <Link to={`/devices/${node.device.id}?tab=physical`}>
+            <Badge tone="warn">
+              <AlertTriangle className="size-3" />
+              {t("Physical layout")} · {t("Needs attention")}
+            </Badge>
+          </Link>
+        )}
+      </div>
       <div className="mt-2 flex items-start gap-3">
         <span
           className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-1)]"
@@ -1015,6 +1286,9 @@ function buildDiagramLayout(
   savedPositions: Record<string, XYPosition>,
   savedSectionPositions: Record<string, XYPosition>,
   wifiContext: DiagramWifiContext,
+  nodeStyle: VisualizerDiagramNodeStyle,
+  physicalLayouts: DevicePhysicalLayout[],
+  physicalFaceMode: VisualizerRackFaceMode,
   t: (key: TranslationKey) => string,
 ): DiagramLayoutResult {
   const visibleNodes = model.nodes.filter(
@@ -1027,15 +1301,49 @@ function buildDiagramLayout(
     .filter((cable) => cable.fromDevice && cable.toDevice)
     .filter((cable) => cableHasVisibleEndpoints(cable, visibleDeviceIds));
   const connectionCountByDeviceId = buildConnectionCounts(visibleCables);
+  const visiblePortsByDeviceId = buildVisibleCablePorts(visibleCables, model);
+  const physicalLayoutByDeviceId = new Map(
+    physicalLayouts.map((layout) => [layout.deviceId, layout]),
+  );
+  const physicalPresentationByDeviceId = new Map<
+    string,
+    PhysicalNodePresentation
+  >();
+  const nodeSizeByDeviceId = new Map<
+    string,
+    { width: number; height: number }
+  >();
+  for (const node of visibleNodes) {
+    const physicalLayout = physicalLayoutByDeviceId.get(node.device.id);
+    if (
+      nodeStyle === "physical" &&
+      physicalLayout &&
+      isRackStudioPhysicalDevice(node.device)
+    ) {
+      const presentation = buildPhysicalNodePresentation({
+        layout: physicalLayout,
+        requestedFaceMode: physicalFaceMode,
+        visiblePorts: visiblePortsByDeviceId.get(node.device.id) ?? [],
+      });
+      physicalPresentationByDeviceId.set(node.device.id, presentation);
+      nodeSizeByDeviceId.set(node.device.id, {
+        width: presentation.width,
+        height: presentation.height,
+      });
+    } else {
+      nodeSizeByDeviceId.set(node.device.id, {
+        width: DEVICE_NODE_WIDTH,
+        height: DEVICE_NODE_HEIGHT,
+      });
+    }
+  }
   const sections = positionSections(
     buildSections(model, wifiContext, visibleNodes),
     savedSectionPositions,
+    nodeSizeByDeviceId,
   );
   const flowNodes: DiagramFlowNode[] = [];
-  const nodeGeometryById = new Map<
-    string,
-    { x: number; y: number; width: number; height: number }
-  >();
+  const nodeGeometryById = new Map<string, DiagramNodeGeometry>();
 
   for (const section of sections) {
     flowNodes.push({
@@ -1060,19 +1368,18 @@ function buildDiagramLayout(
     });
 
     section.nodes.forEach((node, index) => {
-      const column = index % section.columns;
-      const row = Math.floor(index / section.columns);
-      const rowGap =
-        section.layout === "stack" ? STACKED_DEVICE_GAP_Y : DEVICE_GAP_Y;
-      const position = savedPositions[node.device.id] ?? {
-        x:
-          section.x +
-          SECTION_PADDING_X +
-          column * (DEVICE_NODE_WIDTH + DEVICE_GAP_X),
-        y:
-          section.y +
-          SECTION_HEADER_HEIGHT +
-          row * (DEVICE_NODE_HEIGHT + rowGap),
+      const position =
+        savedPositions[node.device.id] ?? sectionNodePosition(section, index);
+      const physicalLayout = physicalLayoutByDeviceId.get(node.device.id);
+      const physicalPresentation = physicalPresentationByDeviceId.get(
+        node.device.id,
+      );
+      const effectiveNodeStyle =
+        physicalLayout && physicalPresentation ? "physical" : "compact";
+      const physicalPorts = model.portsByDeviceId[node.device.id] ?? [];
+      const size = nodeSizeByDeviceId.get(node.device.id) ?? {
+        width: DEVICE_NODE_WIDTH,
+        height: DEVICE_NODE_HEIGHT,
       };
 
       flowNodes.push({
@@ -1103,14 +1410,22 @@ function buildDiagramLayout(
               (entry) => entry.type === node.device.deviceType,
             )?.label ?? typeLabel(node.device.deviceType),
           ),
+          nodeStyle: effectiveNodeStyle,
+          physicalLayout:
+            effectiveNodeStyle === "physical" ? physicalLayout : undefined,
+          physicalPresentation,
+          physicalPorts,
+          linkedPortIds: node.ports
+            .filter((port) => port.linked)
+            .map((port) => port.port.id),
         },
         zIndex: 2,
       });
       nodeGeometryById.set(node.device.id, {
         x: position.x,
         y: position.y,
-        width: DEVICE_NODE_WIDTH,
-        height: DEVICE_NODE_HEIGHT,
+        width: size.width,
+        height: size.height,
       });
     });
   }
@@ -1126,12 +1441,24 @@ function buildDiagramLayout(
       ? nodeGeometryById.get(cable.toDevice.id)
       : undefined;
     const handles = chooseEdgeHandles(sourceGeometry, targetGeometry);
+    const sourcePortId = cable.fromPort?.id ?? cable.link.fromPortId;
+    const targetPortId = cable.toPort?.id ?? cable.link.toPortId;
+    const sourcePresentation = cable.fromDevice
+      ? physicalPresentationByDeviceId.get(cable.fromDevice.id)
+      : undefined;
+    const targetPresentation = cable.toDevice
+      ? physicalPresentationByDeviceId.get(cable.toDevice.id)
+      : undefined;
     return {
       id: cable.link.id,
       source: cable.fromDevice?.id ?? "",
-      sourceHandle: `source-${handles.source}`,
+      sourceHandle: sourcePresentation
+        ? physicalEdgeHandle(sourcePresentation, "source", sourcePortId)
+        : `source-${handles.source}`,
       target: cable.toDevice?.id ?? "",
-      targetHandle: `target-${handles.target}`,
+      targetHandle: targetPresentation
+        ? physicalEdgeHandle(targetPresentation, "target", targetPortId)
+        : `target-${handles.target}`,
       type: "smoothstep",
       data: { cableId: cable.link.id },
       label: showLabels ? cable.link.cableType || undefined : undefined,
@@ -1199,6 +1526,8 @@ function buildSections(
       width: 0,
       height: 0,
       columns: 1,
+      columnWidths: [],
+      rowHeights: [],
     });
   }
 
@@ -1300,6 +1629,7 @@ function describeSection(
 function positionSections(
   sections: DiagramSection[],
   savedSectionPositions: Record<string, XYPosition>,
+  nodeSizeByDeviceId: Map<string, { width: number; height: number }>,
 ) {
   let x = SECTION_START_X;
   let y = SECTION_START_Y;
@@ -1310,14 +1640,36 @@ function positionSections(
     const rows = Math.ceil(section.nodes.length / columns);
     const gapY =
       section.layout === "stack" ? STACKED_DEVICE_GAP_Y : DEVICE_GAP_Y;
+    const columnWidths = Array.from({ length: columns }, (_, column) =>
+      Math.max(
+        ...section.nodes
+          .filter((_, index) => index % columns === column)
+          .map(
+            (node) =>
+              nodeSizeByDeviceId.get(node.device.id)?.width ??
+              DEVICE_NODE_WIDTH,
+          ),
+      ),
+    );
+    const rowHeights = Array.from({ length: rows }, (_, row) =>
+      Math.max(
+        ...section.nodes
+          .slice(row * columns, row * columns + columns)
+          .map(
+            (node) =>
+              nodeSizeByDeviceId.get(node.device.id)?.height ??
+              DEVICE_NODE_HEIGHT,
+          ),
+      ),
+    );
     const width =
       SECTION_PADDING_X * 2 +
-      columns * DEVICE_NODE_WIDTH +
+      columnWidths.reduce((total, value) => total + value, 0) +
       Math.max(0, columns - 1) * DEVICE_GAP_X;
     const height =
       SECTION_HEADER_HEIGHT +
       SECTION_PADDING_BOTTOM +
-      rows * DEVICE_NODE_HEIGHT +
+      rowHeights.reduce((total, value) => total + value, 0) +
       Math.max(0, rows - 1) * gapY;
 
     if (x > SECTION_START_X && x + width > ROW_MAX_WIDTH) {
@@ -1334,11 +1686,36 @@ function positionSections(
       width,
       height,
       columns,
+      columnWidths,
+      rowHeights,
     };
     x += width + SECTION_GAP_X;
     rowHeight = Math.max(rowHeight, height);
     return positioned;
   });
+}
+
+function sectionNodePosition(section: DiagramSection, index: number) {
+  const column = index % section.columns;
+  const row = Math.floor(index / section.columns);
+  const gapY =
+    section.layout === "stack" ? STACKED_DEVICE_GAP_Y : DEVICE_GAP_Y;
+  return {
+    x:
+      section.x +
+      SECTION_PADDING_X +
+      section.columnWidths
+        .slice(0, column)
+        .reduce((total, value) => total + value, 0) +
+      column * DEVICE_GAP_X,
+    y:
+      section.y +
+      SECTION_HEADER_HEIGHT +
+      section.rowHeights
+        .slice(0, row)
+        .reduce((total, value) => total + value, 0) +
+      row * gapY,
+  };
 }
 
 function buildDiagramWifiContext(
@@ -1373,6 +1750,47 @@ function buildConnectionCounts(cables: VisualizerCable[]) {
     }
     return acc;
   }, {});
+}
+
+function buildVisibleCablePorts(
+  cables: VisualizerCable[],
+  model: VisualizerModel,
+) {
+  const portsByDeviceId = new Map<string, Map<string, Port>>();
+  const add = (deviceId: string | undefined, port: Port | undefined) => {
+    if (!deviceId || !port) return;
+    const ports = portsByDeviceId.get(deviceId) ?? new Map<string, Port>();
+    ports.set(port.id, port);
+    portsByDeviceId.set(deviceId, ports);
+  };
+
+  for (const cable of cables) {
+    add(
+      cable.fromDevice?.id,
+      cable.fromPort ?? model.portById[cable.link.fromPortId],
+    );
+    add(
+      cable.toDevice?.id,
+      cable.toPort ?? model.portById[cable.link.toPortId],
+    );
+  }
+
+  return new Map(
+    [...portsByDeviceId].map(([deviceId, ports]) => [
+      deviceId,
+      [...ports.values()],
+    ]),
+  );
+}
+
+function physicalEdgeHandle(
+  presentation: PhysicalNodePresentation,
+  direction: "source" | "target",
+  portId: string,
+) {
+  return presentation.anchors.some((anchor) => anchor.portId === portId)
+    ? physicalPortHandleId(direction, portId)
+    : `${direction}-unmapped`;
 }
 
 function buildVirtualNetworkRows(

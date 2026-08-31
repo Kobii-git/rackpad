@@ -30,6 +30,7 @@ import { PortList } from "@/components/ports/PortList";
 import { DevicePortEditor } from "@/components/ports/DevicePortEditor";
 import { StorageTopologyPanel } from "@/components/storage/StorageTopologyPanel";
 import { DeviceComputePanel } from "@/components/compute/DeviceComputePanel";
+import { DevicePhysicalLayoutPanel } from "@/components/rack/DevicePhysicalLayoutPanel";
 import { SnmpCredentialsPanel } from "@/components/shared/SnmpCredentialsPanel";
 import { SnmpSyncPanel } from "@/components/shared/SnmpSyncPanel";
 import { api } from "@/lib/api";
@@ -54,6 +55,7 @@ import {
   updateDevice,
   updateDeviceMonitorConfig,
   updateDeviceServiceRecord,
+  upsertPhysicalLayoutRecord,
   useStore,
 } from "@/lib/store";
 import type {
@@ -75,6 +77,7 @@ import type {
 } from "@/lib/types";
 import {
   ArrowLeft,
+  AlertTriangle,
   Download,
   ExternalLink,
   ImagePlus,
@@ -243,6 +246,7 @@ const NEW_SERVICE_ID = "__new_service__";
 const DEVICE_DETAIL_TABS = new Set([
   "overview",
   "ports",
+  "physical",
   "storage",
   "compute",
   "network",
@@ -263,6 +267,7 @@ export default function DeviceDetail() {
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
   const portLinks = useStore((s) => s.portLinks);
+  const physicalLayouts = useStore((s) => s.physicalLayouts);
   const virtualSwitches = useStore((s) => s.virtualSwitches);
   const vlans = useStore((s) => s.vlans);
   const ipAssignments = useStore((s) => s.ipAssignments);
@@ -338,6 +343,9 @@ export default function DeviceDetail() {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const device = id ? devices.find((entry) => entry.id === id) : undefined;
+  const physicalLayout = id
+    ? physicalLayouts.find((entry) => entry.deviceId === id)
+    : undefined;
   const deviceDriveSlots = id
     ? driveSlots.filter((entry) => entry.deviceId === id)
     : [];
@@ -1355,6 +1363,15 @@ export default function DeviceDetail() {
                 | {hardwareMeta}
               </span>
             )}
+            {physicalLayout?.effectiveStatus !== "accurate" && (
+              <Link
+                to={`/devices/${device.id}?tab=physical`}
+                className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-[var(--color-warning)] hover:underline"
+              >
+                <AlertTriangle className="size-3" />
+                {t("Physical layout")} · {t("Needs attention")}
+              </Link>
+            )}
           </>
         }
         actions={
@@ -1511,6 +1528,7 @@ export default function DeviceDetail() {
             <TabsTrigger value="ports">
               {t("Ports")} | {devicePorts.length}
             </TabsTrigger>
+            <TabsTrigger value="physical">{t("Physical layout")}</TabsTrigger>
             {showStorage && (
               <TabsTrigger value="storage">
                 {t("Storage")} | {deviceDriveSlots.length}
@@ -1986,6 +2004,20 @@ export default function DeviceDetail() {
                 />
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="physical" className="pt-4">
+            <DevicePhysicalLayoutPanel
+              device={device}
+              ports={devicePorts}
+              allPorts={ports}
+              portLinks={portLinks}
+              devices={devices}
+              canEdit={canEdit}
+              initialLayout={physicalLayout}
+              onLayoutChange={upsertPhysicalLayoutRecord}
+              onInventoryReload={() => loadAll(true)}
+            />
           </TabsContent>
 
           {showStorage && (

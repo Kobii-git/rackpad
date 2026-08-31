@@ -2148,6 +2148,19 @@ export const en = {
   "Some selected records were not imported.": "Some selected records were not imported.",
   "Pull inventory again after resolving these items.": "Pull inventory again after resolving these items.",
   "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.": "Needs-attention records are blocked. Selecting a guest or virtual switch also selects its new host; deselecting the host deselects its dependents.",
+  "Studio Beta": "Studio Beta",
+  "Undo": "Undo",
+  "Redo": "Redo",
+  "Zoom out": "Zoom out",
+  "Zoom in": "Zoom in",
+  "Studio editing is available on tablets and larger screens.": "Studio editing is available on tablets and larger screens.",
+  "0U side": "0U side",
+  "Column span": "Column span",
+  "Left side": "Left side",
+  "Right side": "Right side",
+  "Width": "Width",
+  "Height": "Height",
+  "Orientation": "Orientation",
 } as const;
 
 export type TranslationKey = keyof typeof en;
