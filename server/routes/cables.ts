@@ -1,15 +1,24 @@
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
+import { writeAuditLogEntry } from "../lib/audit-log.js";
+import {
+  decodeCableRouteWaypoints,
+  isPhysicalCableEndpoint,
+  parseCableRouteWaypoints,
+  physicalConnectorPairIsUsual,
+  type CableRouteWaypoint,
+} from "../lib/cable-routing.js";
+import { assertRackStudioWaypointBounds } from "../lib/rack-studio-canvas.js";
 import {
   appendLabFilter,
-  assertLabReadFromRow,
+  assertLabRead,
   assertLabWrite,
-  assertLabWriteFromRow,
   resolveLabIdsForList,
 } from "../lib/lab-access.js";
 import { createId } from "../lib/ids.js";
 import {
   asObject,
+  optionalBoolean,
   optionalString,
   optionalStringArray,
   requiredString,
@@ -20,7 +29,8 @@ function getPortLabRow(portId: string) {
   return db
     .prepare(
       `
-    SELECT ports.id, devices.labId, ports.portRole, ports.aggregatePortId
+    SELECT ports.id, ports.name, ports.kind, devices.labId, devices.hostname,
+           ports.portRole, ports.aggregatePortId
     FROM ports
     JOIN devices ON devices.id = ports.deviceId
     WHERE ports.id = ?
@@ -29,25 +39,14 @@ function getPortLabRow(portId: string) {
     .get(portId) as
     | {
         id: string;
+        name: string;
+        kind: string;
         labId: string;
+        hostname: string;
         portRole: string | null;
         aggregatePortId: string | null;
       }
     | undefined;
-}
-
-function getLinkLabRow(linkId: string) {
-  return db
-    .prepare(
-      `
-    SELECT portLinks.id, fromDevice.labId
-    FROM portLinks
-    JOIN ports fromPort ON fromPort.id = portLinks.fromPortId
-    JOIN devices fromDevice ON fromDevice.id = fromPort.deviceId
-    WHERE portLinks.id = ?
-  `,
-    )
-    .get(linkId) as { id: string; labId: string } | undefined;
 }
 
 function getLinkAccessRow(linkId: string) {
@@ -68,6 +67,69 @@ function getLinkAccessRow(linkId: string) {
     )
     .get(linkId) as
     { id: string; fromLabId: string; toLabId: string } | undefined;
+}
+
+function serializeLinkRow(row: Record<string, unknown> | undefined) {
+  if (!row) return row;
+  return {
+    ...row,
+    visible: row.visible !== 0 && row.visible !== false,
+    routeWaypoints: decodeCableRouteWaypoints(row.routeWaypoints),
+  };
+}
+
+function assertWaypointRooms(
+  waypoints: CableRouteWaypoint[],
+  endpointLabIds: string[],
+) {
+  if (waypoints.length === 0) return;
+  const allowedLabIds = new Set(endpointLabIds);
+  const roomIds = [...new Set(waypoints.map((point) => point.roomId))];
+  const placeholders = roomIds.map(() => "?").join(", ");
+  const rooms = db
+    .prepare(`SELECT id, labId FROM rooms WHERE id IN (${placeholders})`)
+    .all(...roomIds) as Array<{ id: string; labId: string }>;
+  const roomsById = new Map(rooms.map((room) => [room.id, room]));
+  for (const roomId of roomIds) {
+    const room = roomsById.get(roomId);
+    if (!room) {
+      throw new ValidationError(`Cable route room ${roomId} does not exist.`);
+    }
+    if (!allowedLabIds.has(room.labId)) {
+      throw new ValidationError(
+        "Cable route waypoints must stay within an endpoint lab.",
+      );
+    }
+  }
+  for (const waypoint of waypoints) {
+    assertRackStudioWaypointBounds(waypoint);
+  }
+}
+
+function assertPhysicalPair(
+  fromPort: NonNullable<ReturnType<typeof getPortLabRow>>,
+  toPort: NonNullable<ReturnType<typeof getPortLabRow>>,
+  confirmUnusual: boolean,
+) {
+  if (
+    !isPhysicalCableEndpoint(fromPort.kind, fromPort.portRole) ||
+    !isPhysicalCableEndpoint(toPort.kind, toPort.portRole)
+  ) {
+    throw new ValidationError(
+      "Physical patching requires two non-aggregate physical ports.",
+    );
+  }
+  if (
+    !physicalConnectorPairIsUsual(fromPort.kind, toPort.kind) &&
+    !confirmUnusual
+  ) {
+    throw new ValidationError(
+      `Connecting ${fromPort.kind} to ${toPort.kind} is unusual and requires confirmation.`,
+      409,
+      "CABLE_CONNECTOR_CONFIRMATION_REQUIRED",
+      { fromKind: fromPort.kind, toKind: toPort.kind },
+    );
+  }
 }
 
 export const cablesRoutes: FastifyPluginAsync = async (app) => {
@@ -107,23 +169,22 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       filter.labIds,
       "toDevice.labId",
     );
-    return db.prepare(filtered.sql).all(...filtered.params);
+    return (
+      db.prepare(filtered.sql).all(...filtered.params) as Array<
+        Record<string, unknown>
+      >
+    ).map((row) => serializeLinkRow(row));
   });
 
   app.get<{ Params: { id: string } }>("/:id", async (req, reply) => {
+    const access = getLinkAccessRow(req.params.id);
+    if (!access) return reply.status(404).send({ error: "Not found." });
+    if (!assertLabRead(req, reply, access.fromLabId)) return;
+    if (!assertLabRead(req, reply, access.toLabId)) return;
     const row = db
-      .prepare(
-        `
-      SELECT portLinks.*, fromDevice.labId
-      FROM portLinks
-      JOIN ports fromPort ON fromPort.id = portLinks.fromPortId
-      JOIN devices fromDevice ON fromDevice.id = fromPort.deviceId
-      WHERE portLinks.id = ?
-    `,
-      )
-      .get(req.params.id) as Record<string, unknown> | undefined;
-    if (!assertLabReadFromRow(req, reply, row)) return;
-    return row;
+      .prepare("SELECT * FROM portLinks WHERE id = ?")
+      .get(req.params.id) as Record<string, unknown>;
+    return serializeLinkRow(row);
   });
 
   app.post("/", async (req, reply) => {
@@ -134,6 +195,12 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     const cableLength = optionalString(body, "cableLength", { maxLength: 40 });
     const color = optionalString(body, "color", { maxLength: 40 });
     const notes = optionalString(body, "notes", { maxLength: 500 });
+    const label = optionalString(body, "label", { maxLength: 120 });
+    const visible = optionalBoolean(body, "visible");
+    const routeWaypoints = parseCableRouteWaypoints(body.routeWaypoints);
+    const physicalMode = optionalBoolean(body, "physicalMode") === true;
+    const confirmUnusual =
+      optionalBoolean(body, "confirmUnusual") === true;
 
     if (fromPortId === toPortId) {
       return reply
@@ -150,6 +217,10 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     }
     if (!assertLabWrite(req, reply, fromPort.labId)) return;
     if (!assertLabWrite(req, reply, toPort.labId)) return;
+    assertWaypointRooms(routeWaypoints, [fromPort.labId, toPort.labId]);
+    if (physicalMode) {
+      assertPhysicalPair(fromPort, toPort, confirmUnusual);
+    }
     const existing = db
       .prepare(
         `
@@ -167,26 +238,40 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const id = createId("l");
-    db.prepare(
-      "INSERT INTO portLinks (id, fromPortId, toPortId, cableType, cableLength, color, notes) VALUES (?,?,?,?,?,?,?)",
-    ).run(
-      id,
-      fromPortId,
-      toPortId,
-      cableType ?? null,
-      cableLength ?? null,
-      color ?? null,
-      notes ?? null,
-    );
+    db.transaction(() => {
+      db.prepare(
+        `INSERT INTO portLinks
+          (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        id,
+        fromPortId,
+        toPortId,
+        cableType ?? null,
+        cableLength ?? null,
+        color ?? null,
+        notes ?? null,
+        label ?? null,
+        visible === false ? 0 : 1,
+        JSON.stringify(routeWaypoints),
+      );
 
-    db.prepare("UPDATE ports SET linkState = 'up' WHERE id = ? OR id = ?").run(
-      fromPortId,
-      toPortId,
-    );
+      db.prepare(
+        "UPDATE ports SET linkState = 'up' WHERE id = ? OR id = ?",
+      ).run(fromPortId, toPortId);
+      writeAuditLogEntry({
+        user: req.authUser!.username,
+        action: physicalMode ? "port.link.physical" : "port.link",
+        entityType: "PortLink",
+        entityId: id,
+        summary: `Linked ${fromPort.hostname}:${fromPort.name} to ${toPort.hostname}:${toPort.name}`,
+      });
+    })();
 
-    return reply
-      .status(201)
-      .send(db.prepare("SELECT * FROM portLinks WHERE id = ?").get(id));
+    const created = db.prepare("SELECT * FROM portLinks WHERE id = ?").get(id) as
+      | Record<string, unknown>
+      | undefined;
+    return reply.status(201).send(serializeLinkRow(created));
   });
 
   app.post("/bulk", async (req, reply) => {
@@ -201,7 +286,15 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const changes = asObject(body.changes ?? {});
-    const allowedFields = new Set(["cableType", "cableLength", "color"]);
+    const allowedFields = new Set([
+      "cableType",
+      "cableLength",
+      "color",
+      "notes",
+      "label",
+      "visible",
+      "routeWaypoints",
+    ]);
     const unknownFields = Object.keys(changes).filter(
       (key) => !allowedFields.has(key),
     );
@@ -216,6 +309,15 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       maxLength: 40,
     });
     const color = optionalString(changes, "color", { maxLength: 40 });
+    const notes = optionalString(changes, "notes", { maxLength: 500 });
+    const label = optionalString(changes, "label", { maxLength: 120 });
+    const visible = optionalBoolean(changes, "visible");
+    const routeWaypoints = Object.prototype.hasOwnProperty.call(
+      changes,
+      "routeWaypoints",
+    )
+      ? parseCableRouteWaypoints(changes.routeWaypoints)
+      : undefined;
     const updates: string[] = [];
     const values: unknown[] = [];
     if (cableType !== undefined) {
@@ -230,6 +332,22 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       updates.push("color = ?");
       values.push(color);
     }
+    if (notes !== undefined) {
+      updates.push("notes = ?");
+      values.push(notes);
+    }
+    if (label !== undefined) {
+      updates.push("label = ?");
+      values.push(label);
+    }
+    if (visible !== undefined) {
+      updates.push("visible = ?");
+      values.push(visible === false ? 0 : 1);
+    }
+    if (routeWaypoints !== undefined) {
+      updates.push("routeWaypoints = ?");
+      values.push(JSON.stringify(routeWaypoints));
+    }
     if (updates.length === 0) {
       throw new ValidationError("No valid cable fields to update.");
     }
@@ -241,6 +359,9 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!assertLabWrite(req, reply, link.fromLabId)) return;
       if (!assertLabWrite(req, reply, link.toLabId)) return;
+      if (routeWaypoints !== undefined) {
+        assertWaypointRooms(routeWaypoints, [link.fromLabId, link.toLabId]);
+      }
     }
 
     const updateLink = db.prepare(
@@ -249,11 +370,22 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     db.transaction(() => {
       for (const linkId of linkIds) {
         updateLink.run(...values, linkId);
+        writeAuditLogEntry({
+          user: req.authUser!.username,
+          action: "port.link.bulk-update",
+          entityType: "PortLink",
+          entityId: linkId,
+          summary: `Updated cable metadata (${updates.join(", ")})`,
+        });
       }
     })();
 
     const links = linkIds.map((linkId) =>
-      db.prepare("SELECT * FROM portLinks WHERE id = ?").get(linkId),
+      serializeLinkRow(
+        db.prepare("SELECT * FROM portLinks WHERE id = ?").get(linkId) as
+          | Record<string, unknown>
+          | undefined,
+      ),
     );
     return { updated: links.length, links };
   });
@@ -262,9 +394,19 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     const existing = db
       .prepare("SELECT * FROM portLinks WHERE id = ?")
       .get(req.params.id) as
-      { id: string; fromPortId: string; toPortId: string } | undefined;
-    const linkLab = getLinkLabRow(req.params.id);
-    if (!existing || !assertLabWriteFromRow(req, reply, linkLab)) return;
+      | {
+          id: string;
+          fromPortId: string;
+          toPortId: string;
+          routeWaypoints: unknown;
+        }
+      | undefined;
+    const access = getLinkAccessRow(req.params.id);
+    if (!existing || !access) {
+      return reply.status(404).send({ error: "Not found." });
+    }
+    if (!assertLabWrite(req, reply, access.fromLabId)) return;
+    if (!assertLabWrite(req, reply, access.toLabId)) return;
 
     const body = asObject(req.body);
     const updates: string[] = [];
@@ -276,6 +418,17 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     const cableLength = optionalString(body, "cableLength", { maxLength: 40 });
     const color = optionalString(body, "color", { maxLength: 40 });
     const notes = optionalString(body, "notes", { maxLength: 500 });
+    const label = optionalString(body, "label", { maxLength: 120 });
+    const visible = optionalBoolean(body, "visible");
+    const routeWaypoints = Object.prototype.hasOwnProperty.call(
+      body,
+      "routeWaypoints",
+    )
+      ? parseCableRouteWaypoints(body.routeWaypoints)
+      : undefined;
+    const physicalMode = optionalBoolean(body, "physicalMode") === true;
+    const confirmUnusual =
+      optionalBoolean(body, "confirmUnusual") === true;
     const nextFromPortId = fromPortId ?? existing.fromPortId;
     const nextToPortId = toPortId ?? existing.toPortId;
 
@@ -295,6 +448,9 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!assertLabWrite(req, reply, fromPort.labId)) return;
       if (!assertLabWrite(req, reply, toPort.labId)) return;
+      if (physicalMode) {
+        assertPhysicalPair(fromPort, toPort, confirmUnusual);
+      }
       const conflicting = db
         .prepare(
           `
@@ -319,6 +475,18 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
+    const nextFromPort = getPortLabRow(nextFromPortId);
+    const nextToPort = getPortLabRow(nextToPortId);
+    if (!nextFromPort || !nextToPort) {
+      return reply
+        .status(400)
+        .send({ error: "Both cable endpoints must exist" });
+    }
+    assertWaypointRooms(
+      routeWaypoints ?? decodeCableRouteWaypoints(existing.routeWaypoints),
+      [nextFromPort.labId, nextToPort.labId],
+    );
+
     if (fromPortId !== undefined) {
       updates.push("fromPortId = ?");
       values.push(nextFromPortId);
@@ -342,6 +510,18 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     if (notes !== undefined) {
       updates.push("notes = ?");
       values.push(notes);
+    }
+    if (label !== undefined) {
+      updates.push("label = ?");
+      values.push(label);
+    }
+    if (visible !== undefined) {
+      updates.push("visible = ?");
+      values.push(visible === false ? 0 : 1);
+    }
+    if (routeWaypoints !== undefined) {
+      updates.push("routeWaypoints = ?");
+      values.push(JSON.stringify(routeWaypoints));
     }
 
     if (updates.length === 0)
@@ -368,12 +548,21 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
           portId,
         );
       }
+      writeAuditLogEntry({
+        user: req.authUser!.username,
+        action: "port.link.update",
+        entityType: "PortLink",
+        entityId: req.params.id,
+        summary: `Updated cable ${nextFromPort.hostname}:${nextFromPort.name} to ${nextToPort.hostname}:${nextToPort.name}`,
+      });
     });
 
     updateLink();
-    return db
-      .prepare("SELECT * FROM portLinks WHERE id = ?")
-      .get(req.params.id);
+    return serializeLinkRow(
+      db.prepare("SELECT * FROM portLinks WHERE id = ?").get(req.params.id) as
+        | Record<string, unknown>
+        | undefined,
+    );
   });
 
   app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
@@ -381,23 +570,36 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       .prepare("SELECT * FROM portLinks WHERE id = ?")
       .get(req.params.id) as
       { fromPortId: string; toPortId: string } | undefined;
-    const linkLab = getLinkLabRow(req.params.id);
-    if (!link || !assertLabWriteFromRow(req, reply, linkLab)) return;
-
-    db.prepare("DELETE FROM portLinks WHERE id = ?").run(req.params.id);
-
-    for (const portId of [link.fromPortId, link.toPortId]) {
-      const stillLinked = db
-        .prepare(
-          "SELECT id FROM portLinks WHERE fromPortId = ? OR toPortId = ?",
-        )
-        .get(portId, portId);
-      if (!stillLinked) {
-        db.prepare("UPDATE ports SET linkState = 'down' WHERE id = ?").run(
-          portId,
-        );
-      }
+    const access = getLinkAccessRow(req.params.id);
+    if (!link || !access) {
+      return reply.status(404).send({ error: "Not found." });
     }
+    if (!assertLabWrite(req, reply, access.fromLabId)) return;
+    if (!assertLabWrite(req, reply, access.toLabId)) return;
+
+    db.transaction(() => {
+      db.prepare("DELETE FROM portLinks WHERE id = ?").run(req.params.id);
+
+      for (const portId of [link.fromPortId, link.toPortId]) {
+        const stillLinked = db
+          .prepare(
+            "SELECT id FROM portLinks WHERE fromPortId = ? OR toPortId = ?",
+          )
+          .get(portId, portId);
+        if (!stillLinked) {
+          db.prepare("UPDATE ports SET linkState = 'down' WHERE id = ?").run(
+            portId,
+          );
+        }
+      }
+      writeAuditLogEntry({
+        user: req.authUser!.username,
+        action: "port.unlink",
+        entityType: "PortLink",
+        entityId: req.params.id,
+        summary: `Removed cable ${link.fromPortId} to ${link.toPortId}`,
+      });
+    })();
 
     return reply.status(204).send();
   });

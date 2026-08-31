@@ -14,12 +14,15 @@ work. Never translate an unrun check into a pass.
 | Schema/migration | server/test types, full server tests, migration compatibility, backup coverage |
 | Backup/restore | schema coverage, scoped-grant round trip, newer-schema guard, atomic rejection tests |
 | IPAM/DHCP/DNS | server tests covering duplicate ownership, scope/zone boundaries, atomic failure |
-| Auth/authz/OIDC | server tests including unauthenticated, wrong-role, and cross-lab negatives |
+| Auth/authz/OIDC | route inventory plus unauthenticated, wrong-role, conditional, and cross-lab negative server tests |
 | Outbound HTTP/monitoring | net-guard plus integration tests for blocked ranges, DNS/redirects, timeouts |
+| Controller integration/sync | provider, connection secret/redaction, lab authorization, preview-token, serialized apply, schedule/backoff, net-guard, and backup tests |
+| Repository script | lint/lint proof plus targeted fixture or syntax tests; verify no secret output or unsafe process interpolation |
 | CSP/security headers | server/build checks and Playwright CSP behavior |
 | Env/Compose/Docker | `check:config`, Compose rendering when Docker exists, privilege/data review |
 | Bundle/lazy loading | `build`, then `check:bundle` |
-| AI docs/commands | `check:docs` and direct path/link review |
+| AI docs/commands | `check:docs` fixture/contract tests and direct semantic review |
+| Documentation screenshot harness | `screenshots:check`; review any intentional documentation asset updates separately |
 | Beta/main release | `check:full`, shell and PowerShell syntax checks, Compose render, smoke plan |
 
 `npm run check` is standard local pre-completion validation. `npm run check:full`

@@ -7,12 +7,15 @@ real check; “manual” is not a gate and must be reviewed honestly.
 
 - New or changed route ⇒ decide public/authenticated/admin/lab-read/lab-write,
   validate input, use parameterized SQL, and add negative authorization tests.
-- Use `requireAdmin`, `assertGlobalAdmin`, `assertLabRead`, `assertLabWrite`, or
-  row-based variants from `server/lib/lab-access.ts`; client checks are UX only.
-- `server/app.ts` `publicPaths` changes are RESTRICTED and need exposure tests.
-- Enforcement: authentication hook and server tests are automated; complete
-  route-to-authorization coverage remains manual because no reliable route
-  inventory gate exists yet.
+- Use `requireAdmin` from `server/lib/auth.ts`; use `assertGlobalAdmin`,
+  `assertLabRead`, `assertLabWrite`, and row-based variants from
+  `server/lib/lab-access.ts`; client checks are UX only.
+- Every API method/path must be declared in `server/route-authorization.ts`;
+  conditional entries require a durable reason. Public classifications are
+  RESTRICTED and need exposure tests.
+- Enforcement: app construction rejects missing/stale inventory entries and the
+  authentication hook centrally enforces public/authenticated/admin metadata.
+  Correct lab ID resolution and handler-level lab guards remain manual review.
 
 ## Schema, migrations, and recovery
 
@@ -48,6 +51,20 @@ real check; “manual” is not a gate and must be reviewed honestly.
   skipped and failed records to the user instead of discarding them.
 - Enforcement: discovery placement and Docker import tests are automated;
   end-to-end importer completeness is manual review.
+
+## Controller integrations
+
+- Connection or provider change ⇒ preserve lab read/write authorization,
+  encrypted-at-rest secrets, response redaction, shared DNS-pinned HTTP bounds,
+  TLS choice, bounded pagination/response sizes, and provider-specific tests.
+- Preview/apply change ⇒ keep snapshots short-lived, scoped, single-use, and
+  revalidated at apply time; serialize writes and never mutate manual records as
+  an undocumented side effect.
+- Scheduled sync change ⇒ retain explicit merge/skip behavior, lab scoping,
+  concurrency exclusion, failure backoff, audit/status reporting, and safe stop
+  behavior. New persistent fields require backup/restore coverage.
+- Enforcement: integration, provider, net-guard, authorization, and backup tests
+  are automated; inventory completeness and provider semantics remain manual.
 
 ## UI and i18n
 
@@ -107,3 +124,13 @@ real check; “manual” is not a gate and must be reviewed honestly.
 - `.ai/local/` is advisory local context, never a secret store.
 - Enforcement: Git/Docker ignores are partial automated controls; final status,
   diff, and secret-sensitive review remain mandatory.
+
+## Repository scripts
+
+- Script change ⇒ classify whether it handles credentials, backups, generated
+  accounts/data, process execution, network input, or release artifacts; avoid
+  printing secrets, shell interpolation, weak randomness, and unbounded parsing.
+- `.claude/`, local reviewer reports, and temporary script inputs must stay out
+  of Git and Docker build context.
+- Enforcement: lint proof covers repository scripts and ignore contracts cover
+  known local paths; semantic safety remains targeted tests and manual review.

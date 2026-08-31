@@ -21,6 +21,7 @@ import type {
   DeviceService,
   DeviceTypeDefinition,
   DeviceMonitor,
+  DevicePhysicalLayout,
   DriveBayTemplate,
   DriveSlot,
   DiscoveredDevice,
@@ -41,6 +42,8 @@ import type {
   PortTemplate,
   Rack,
   RackFace,
+  RackStudioAction,
+  RackStudioActionResult,
   ReferenceImage,
   Room,
   Subnet,
@@ -141,6 +144,7 @@ interface State {
   deviceMonitors: DeviceMonitor[];
   portTemplates: PortTemplate[];
   driveBayTemplates: DriveBayTemplate[];
+  physicalLayouts: DevicePhysicalLayout[];
   driveSlots: DriveSlot[];
   storageDrives: StorageDrive[];
   storagePools: StoragePool[];
@@ -177,6 +181,7 @@ const EMPTY_DATA = {
   deviceMonitors: [] as DeviceMonitor[],
   portTemplates: [] as PortTemplate[],
   driveBayTemplates: [] as DriveBayTemplate[],
+  physicalLayouts: [] as DevicePhysicalLayout[],
   driveSlots: [] as DriveSlot[],
   storageDrives: [] as StorageDrive[],
   storagePools: [] as StoragePool[],
@@ -1191,6 +1196,7 @@ export async function loadAll(
         deviceMonitors: api.getDeviceMonitors(),
         portTemplates: api.getPortTemplates(),
         driveBayTemplates: api.getDriveBayTemplates(),
+        physicalLayouts: api.getPhysicalLayouts(),
         driveSlots: api.getDriveSlots(),
         storageDrives: api.getStorageDrives(),
         storagePools: api.getStoragePools(),
@@ -1289,6 +1295,10 @@ export async function loadAll(
         (link) => portIds.has(link.fromPortId) && portIds.has(link.toPortId),
       );
       const portLinkIds = new Set(allPortLinks.map((link) => link.id));
+      const allPhysicalLayouts = (
+        (resolved.get("physicalLayouts") as DevicePhysicalLayout[] | undefined) ??
+        []
+      ).filter((layout) => deviceIds.has(layout.deviceId));
 
       const allScopes = sortScopes(
         (resolved.get("scopes") as DhcpScope[] | undefined) ?? [],
@@ -1539,6 +1549,7 @@ export async function loadAll(
         deviceMonitors: allMonitors,
         portTemplates: allPortTemplates,
         driveBayTemplates: allDriveBayTemplates,
+        physicalLayouts: allPhysicalLayouts,
         driveSlots: allDriveSlots,
         storageDrives: allStorageDrives,
         storagePools: allStoragePools,
@@ -1595,6 +1606,18 @@ export async function updateUiSettings(input: UiSettings): Promise<UiSettings> {
     uiSettings: saved,
   }));
   return saved;
+}
+
+export function upsertPhysicalLayoutRecord(layout: DevicePhysicalLayout) {
+  setState((prev) => ({
+    ...prev,
+    physicalLayouts: [
+      ...prev.physicalLayouts.filter(
+        (entry) => entry.deviceId !== layout.deviceId,
+      ),
+      layout,
+    ],
+  }));
 }
 
 export async function selectLab(labId: string): Promise<void> {
@@ -1956,6 +1979,27 @@ export async function updateRackRecord(
   }));
   void recordAudit("rack.update", "Rack", id, `Updated rack ${updated.name}`);
   return updated;
+}
+
+export async function applyRackStudioAction(
+  action: RackStudioAction,
+): Promise<RackStudioActionResult> {
+  const result = await api.applyRackStudioAction(action);
+  if (result.kind === "rack.move") {
+    setState((prev) => ({
+      ...prev,
+      racks: replaceById(prev.racks, result.rack, sortByName),
+    }));
+  } else {
+    setState((prev) => ({
+      ...prev,
+      devices: result.devices.reduce(
+        (current, device) => replaceById(current, device, sortDevices),
+        prev.devices,
+      ),
+    }));
+  }
+  return result;
 }
 
 export async function deleteRackRecord(id: string): Promise<void> {
@@ -2617,6 +2661,11 @@ export interface CreateCableInput {
   cableLength?: string;
   color?: string;
   notes?: string;
+  label?: string;
+  visible?: boolean;
+  routeWaypoints?: PortLink["routeWaypoints"];
+  physicalMode?: boolean;
+  confirmUnusual?: boolean;
 }
 
 export async function createCable(input: CreateCableInput): Promise<PortLink> {
@@ -2657,20 +2706,6 @@ export async function createCable(input: CreateCableInput): Promise<PortLink> {
       ),
     ),
   }));
-
-  const fromDevice = state.devices.find(
-    (device) => device.id === fromPort.deviceId,
-  );
-  const toDevice = state.devices.find(
-    (device) => device.id === toPort.deviceId,
-  );
-
-  void recordAudit(
-    "port.link",
-    "PortLink",
-    created.id,
-    `Linked ${fromDevice?.hostname ?? fromPort.deviceId}:${fromPort.name} to ${toDevice?.hostname ?? toPort.deviceId}:${toPort.name}`,
-  );
 
   return created;
 }
@@ -2790,22 +2825,6 @@ export async function deleteCable(id: string): Promise<boolean> {
     ),
   }));
 
-  const fromPort = state.ports.find((port) => port.id === link.fromPortId);
-  const toPort = state.ports.find((port) => port.id === link.toPortId);
-  const fromDevice = fromPort
-    ? state.devices.find((device) => device.id === fromPort.deviceId)
-    : undefined;
-  const toDevice = toPort
-    ? state.devices.find((device) => device.id === toPort.deviceId)
-    : undefined;
-
-  void recordAudit(
-    "port.unlink",
-    "PortLink",
-    id,
-    `Removed cable ${fromDevice?.hostname ?? link.fromPortId}:${fromPort?.name ?? link.fromPortId} to ${toDevice?.hostname ?? link.toPortId}:${toPort?.name ?? link.toPortId}`,
-  );
-
   return true;
 }
 
@@ -2824,6 +2843,9 @@ export async function updateCable(
     "cableLength",
     "color",
     "notes",
+    "label",
+    "visible",
+    "routeWaypoints",
   ] as const;
   for (const key of allowedKeys) {
     if (Object.prototype.hasOwnProperty.call(changes, key)) {
@@ -2855,22 +2877,6 @@ export async function updateCable(
     ),
   }));
 
-  const fromPort = state.ports.find((port) => port.id === updated.fromPortId);
-  const toPort = state.ports.find((port) => port.id === updated.toPortId);
-  const fromDevice = fromPort
-    ? state.devices.find((device) => device.id === fromPort.deviceId)
-    : undefined;
-  const toDevice = toPort
-    ? state.devices.find((device) => device.id === toPort.deviceId)
-    : undefined;
-
-  void recordAudit(
-    "port.link.update",
-    "PortLink",
-    id,
-    `Updated cable ${fromDevice?.hostname ?? updated.fromPortId}:${fromPort?.name ?? updated.fromPortId} to ${toDevice?.hostname ?? updated.toPortId}:${toPort?.name ?? updated.toPortId}`,
-  );
-
   return updated;
 }
 
@@ -2886,14 +2892,6 @@ export async function bulkUpdateCables(input: {
       prev.portLinks,
     ),
   }));
-
-  const fields = Object.keys(input.changes).join(", ");
-  void recordAudit(
-    "port.link.bulk_update",
-    "PortLink",
-    result.links[0]?.id ?? "bulk",
-    `Updated ${result.updated} cable${result.updated === 1 ? "" : "s"} in bulk${fields ? ` (${fields})` : ""}`,
-  );
 
   return result;
 }

@@ -2,6 +2,10 @@ import type { FastifyPluginAsync } from "fastify";
 import { db, parseRow } from "../db.js";
 import { writeAuditLogEntry } from "../lib/audit-log.js";
 import {
+  initializeDevicePhysicalLayout,
+  reconcileDevicePhysicalLayout,
+} from "../lib/device-physical-layout.js";
+import {
   deviceTypeBase,
   requiredDeviceType,
 } from "../lib/device-types.js";
@@ -167,6 +171,17 @@ function normalizePlacement(input: {
     heightU: resolved.heightU,
     face: resolved.face,
     rackSlot: resolved.rackSlot,
+  };
+}
+
+function legacyRackGeometry(
+  placement: (typeof DEVICE_PLACEMENTS)[number],
+  rackSlot: (typeof DEVICE_RACK_SLOTS)[number],
+) {
+  return {
+    rackMountKind: placement === "shelf" ? "shelf" : "direct",
+    rackColumn: rackSlot === "right" ? 6 : 0,
+    rackColumnSpan: rackSlot === "full" ? 12 : 6,
   };
 }
 
@@ -371,12 +386,17 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const id = createId("d");
+    const rackGeometry = legacyRackGeometry(
+      normalizedPlacement.placement,
+      normalizedPlacement.rackSlot,
+    );
     const insertDevice = db.prepare(`
       INSERT INTO devices
         (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model,
          serial, managementIp, macAddress, status, placement, parentDeviceId, networkMode, roomId, cpuCores, memoryGb, storageGb, specs,
-         startU, heightU, face, rackSlot, tags, notes, lastSeen)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         startU, heightU, face, rackSlot, tags, notes, lastSeen,
+         rackMountKind, rackColumn, rackColumnSpan)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `);
     const insertPort = db.prepare(`
       INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, macAddress)
@@ -412,6 +432,9 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         tags ? JSON.stringify(tags) : null,
         notes ?? null,
         lastSeen ?? null,
+        rackGeometry.rackMountKind,
+        rackGeometry.rackColumn,
+        rackGeometry.rackColumnSpan,
       );
 
       for (const port of template
@@ -419,6 +442,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         : []) {
         insertPort.run(port);
       }
+      initializeDevicePhysicalLayout(id);
       if (driveBayTemplate) {
         const slots = createDriveSlotsFromTemplate(id, driveBayTemplate.id);
         insertDriveSlots(slots);
@@ -649,6 +673,13 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
             "heightU = ?",
             "face = ?",
             "rackSlot = ?",
+            "rackMountKind = ?",
+            "rackColumn = ?",
+            "rackColumnSpan = ?",
+          );
+          const rackGeometry = legacyRackGeometry(
+            normalizedPlacement.placement,
+            normalizedPlacement.rackSlot,
           );
           values.push(
             normalizedPlacement.placement,
@@ -658,6 +689,9 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
             normalizedPlacement.heightU,
             normalizedPlacement.face,
             normalizedPlacement.rackSlot,
+            rackGeometry.rackMountKind,
+            rackGeometry.rackColumn,
+            rackGeometry.rackColumnSpan,
           );
 
           if (roomId !== undefined) {
@@ -844,6 +878,13 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         "heightU = ?",
         "face = ?",
         "rackSlot = ?",
+        "rackMountKind = ?",
+        "rackColumn = ?",
+        "rackColumnSpan = ?",
+      );
+      const rackGeometry = legacyRackGeometry(
+        normalizedPlacement.placement,
+        normalizedPlacement.rackSlot,
       );
       values.push(
         normalizedPlacement.placement,
@@ -853,6 +894,9 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         normalizedPlacement.heightU,
         normalizedPlacement.face,
         normalizedPlacement.rackSlot,
+        rackGeometry.rackMountKind,
+        rackGeometry.rackColumn,
+        rackGeometry.rackColumnSpan,
       );
     }
 
@@ -1026,6 +1070,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
           );
         }
         for (const port of ports) insertPort.run(port);
+        reconcileDevicePhysicalLayout(req.params.id);
       }
 
       if (driveBayTemplate) {

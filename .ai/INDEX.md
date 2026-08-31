@@ -8,10 +8,12 @@ below—normally one to three files—and inspect the affected source and tests.
 | API route or server behavior | `ARCHITECTURE.md`, `GUARDRAILS.md`, `SECURITY.md`, `TESTING.md` |
 | Schema or migration | `DATA_MODEL.md`, `GUARDRAILS.md`, `TESTING.md`, `KNOWN_RISKS.md` |
 | Backup or restore | `DATA_MODEL.md`, `GUARDRAILS.md`, `TESTING.md`, `KNOWN_RISKS.md` |
+| Controller integration, preview, or scheduled sync | `ARCHITECTURE.md`, `SECURITY.md`, `GUARDRAILS.md`, `DATA_MODEL.md` |
 | UI, visualizer, or i18n | `ARCHITECTURE.md`, `TESTING.md`; inspect the current components and design patterns |
 | Authentication, authorization, OIDC, CSP, or egress | `SECURITY.md`, `GUARDRAILS.md`, `KNOWN_RISKS.md` |
 | Docker, Compose, environment, or operations | `DEPLOYMENT.md`, `GUARDRAILS.md`, `SECURITY.md` |
 | Validation or CI | `COMMANDS.md`, `TESTING.md`, `REVIEW_CHECKLIST.md` |
+| Repository or operator script | `ARCHITECTURE.md`, `GUARDRAILS.md`, `TESTING.md` |
 | Release preparation | `DEPLOYMENT.md`, `COMMANDS.md`, `REVIEW_CHECKLIST.md` |
 | Diff review | `REVIEW_CHECKLIST.md`, `GUARDRAILS.md` |
 | Architectural decision | `ARCHITECTURE.md`, `DECISIONS.md`, `KNOWN_RISKS.md` |

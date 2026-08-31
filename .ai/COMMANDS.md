@@ -18,6 +18,7 @@ separately.
 | Client unit tests | `test:client` | Canonical after client helper/model work |
 | Browser/accessibility | `test:e2e` | Environment-heavy; required by full CI/release |
 | Documentation screenshots | `screenshots:update` | Isolated deterministic 1920×1200 capture; outside normal E2E discovery |
+| Screenshot determinism | `screenshots:check` | Two isolated captures with manifest and bounded pixel comparison; required for release candidates |
 | Non-browser tests | `test` | Canonical local aggregation |
 | All tests | `test:full` | Canonical environment-heavy aggregation |
 | Production build | `build` | Canonical client/server build |

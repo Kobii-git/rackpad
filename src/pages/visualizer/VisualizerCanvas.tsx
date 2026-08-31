@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
   Cable,
+  AlertTriangle,
   Copy,
   Download,
   ExternalLink,
@@ -57,6 +58,7 @@ import { formatDeviceAddress } from "@/lib/network-labels";
 import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import { formatPortEndpointLabel } from "@/lib/utils";
 import { useI18n } from "@/i18n";
+import { useStore } from "@/lib/store";
 import {
   buildSearchResults,
   nodeStripeColor,
@@ -2313,14 +2315,29 @@ function DeviceInspector({
   onSelectCable: (id: string) => void;
 }) {
   const { t } = useI18n();
+  const physicalLayout = useStore((state) =>
+    state.physicalLayouts.find(
+      (layout) => layout.deviceId === node.device.id,
+    ),
+  );
   return (
     <div className="space-y-3">
-      <Button size="sm" asChild>
-        <Link to={`/devices/${node.device.id}`}>
-          <ExternalLink className="size-3.5" />
-          {t("Open device")}
-        </Link>
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" asChild>
+          <Link to={`/devices/${node.device.id}`}>
+            <ExternalLink className="size-3.5" />
+            {t("Open device")}
+          </Link>
+        </Button>
+        {physicalLayout?.effectiveStatus !== "accurate" && (
+          <Link to={`/devices/${node.device.id}?tab=physical`}>
+            <Badge tone="warn">
+              <AlertTriangle className="size-3" />
+              {t("Physical layout")} · {t("Needs attention")}
+            </Badge>
+          </Link>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <InfoBox label={t("IP")} value={node.device.managementIp} mono />
         <InfoBox label={t("MAC")} value={node.macAddress} mono />
