@@ -58,7 +58,21 @@ Sparse ADR-lite records for choices likely to be re-litigated.
   manual and can drift.
 - Reconsider when: release automation is approved and proven against current flow.
 
-## D7 — Native LXC release alignment and updates
+## D7 — In-process controller integrations
+
+- Context: Rackpad imports and synchronizes infrastructure from trusted operator
+  controllers while remaining a single-instance modular monolith.
+- Decision: keep controller connections lab-scoped and in-process; encrypt stored
+  credentials, use the shared DNS-pinned HTTP layer, bind previews to expiring
+  single-use tokens, serialize apply, and expose only non-destructive merge/skip
+  schedule modes.
+- Consequences: deployment stays simple and controller state survives backup, but
+  provider code, schedules, credentials, authorization, and inventory mutation
+  share the main process and require coordinated review.
+- Reconsider when: connector isolation, independent scaling, stronger credential
+  custody, or a separate execution agent becomes a concrete requirement.
+
+## D8 — Native LXC release alignment and updates
 
 - Context: a first-party Proxmox helper must not mix moving branch scripts,
   application code, operational assets, or Community core revisions.

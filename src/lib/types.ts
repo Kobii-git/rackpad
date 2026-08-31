@@ -167,6 +167,8 @@ export interface Rack {
   location?: string;
   notes?: string;
   roomId?: ID | null;
+  studioX?: number | null;
+  studioY?: number | null;
 }
 
 export interface Device {
@@ -199,6 +201,228 @@ export interface Device {
   notes?: string;
   lastSeen?: string;
   snmpCredentialId?: ID | null;
+  rackMountKind?: "direct" | "shelf" | "side" | "loose";
+  rackColumn?: number | null;
+  rackColumnSpan?: number | null;
+  shelfX?: number | null;
+  shelfY?: number | null;
+  shelfWidth?: number | null;
+  shelfHeight?: number | null;
+  shelfOrientation?: 0 | 90 | 180 | 270;
+  rackSide?: "left" | "right" | null;
+}
+
+export interface RackStudioPlacementState {
+  mountKind: "direct" | "shelf" | "side" | "loose";
+  roomId: ID | null;
+  rackId: ID | null;
+  parentDeviceId: ID | null;
+  startU: number | null;
+  heightU: number | null;
+  face: RackFace | null;
+  column: number | null;
+  columnSpan: number | null;
+  shelfX: number | null;
+  shelfY: number | null;
+  shelfWidth: number | null;
+  shelfHeight: number | null;
+  orientation: 0 | 90 | null;
+  side: "left" | "right" | null;
+}
+
+export interface RackStudioRackCanvasState {
+  roomId: ID | null;
+  x: number | null;
+  y: number | null;
+}
+
+export type RackStudioAction =
+  | {
+      kind: "rack.move";
+      targetId: ID;
+      expected: RackStudioRackCanvasState;
+      next: RackStudioRackCanvasState;
+    }
+  | {
+      kind: "device.place";
+      targetId: ID;
+      expected: RackStudioPlacementState;
+      next: RackStudioPlacementState;
+    };
+
+export type RackStudioActionResult =
+  | {
+      kind: "rack.move";
+      targetId: ID;
+      before: RackStudioRackCanvasState;
+      after: RackStudioRackCanvasState;
+      rack: Rack;
+    }
+  | {
+      kind: "device.place";
+      targetId: ID;
+      before: RackStudioPlacementState;
+      after: RackStudioPlacementState;
+      device: Device;
+      devices: Device[];
+    };
+
+export type PhysicalLayoutStatus =
+  | "accurate"
+  | "legacy-default"
+  | "generic-default"
+  | "needs-mapping"
+  | "invalid";
+
+export type PhysicalFacePrimitiveV1 =
+  | {
+      kind: "panel" | "handle" | "vent" | "bay" | "display" | "outlet";
+      id: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      tone?: "dark" | "mid" | "light" | "accent";
+    }
+  | {
+      kind: "screw" | "indicator";
+      id: string;
+      x: number;
+      y: number;
+      radius: number;
+      tone?: "dark" | "mid" | "light" | "accent";
+    }
+  | {
+      kind: "label";
+      id: string;
+      x: number;
+      y: number;
+      text: string;
+      align?: "start" | "middle" | "end";
+    };
+
+export interface FaceDefinitionV1 {
+  schemaVersion: 1;
+  width: 1000;
+  height: number;
+  elements: PhysicalFacePrimitiveV1[];
+}
+
+export interface PhysicalPortSlotV1 {
+  id: string;
+  face: RackFace;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: 0 | 90 | 180 | 270;
+  connector: string;
+  acceptedPortKinds: string[];
+  groupId?: string;
+  label?: string;
+}
+
+export interface ResolvedPhysicalLayoutV1 {
+  schemaVersion: 1;
+  sourceTemplateId: string;
+  category: string;
+  mount: {
+    kind: "direct" | "shelf" | "side" | "loose";
+    heightU: number;
+    column: number;
+    columnSpan: number;
+  };
+  faces: Record<RackFace, FaceDefinitionV1>;
+  portSlots: PhysicalPortSlotV1[];
+  moduleIds?: string[];
+}
+
+export interface PortBindingV1 {
+  portId: ID;
+  slotId: string;
+}
+
+export interface DevicePhysicalLayout {
+  deviceId: ID;
+  sourceTemplateId: string | null;
+  status: PhysicalLayoutStatus;
+  effectiveStatus: PhysicalLayoutStatus;
+  snapshot: ResolvedPhysicalLayoutV1;
+  bindings: PortBindingV1[];
+  portFingerprint: string;
+  currentPortFingerprint: string;
+  unmappedPortIds: ID[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HardwareTemplateV1 {
+  schemaVersion: 1;
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  deviceTypes: string[];
+  mountDefaults: {
+    kind: "direct" | "shelf" | "side" | "loose";
+    heightU: number;
+    columnSpan: number;
+  };
+  front: FaceDefinitionV1;
+  rear: FaceDefinitionV1;
+  portSlots: PhysicalPortSlotV1[];
+  moduleSlots: Array<{
+    id: string;
+    face: RackFace;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>;
+  modules: HardwareModuleV1[];
+  portBlueprints: Array<Record<string, unknown>>;
+  driveBayBlueprints: Array<Record<string, unknown>>;
+  builtIn?: boolean;
+}
+
+export interface HardwareModuleV1 {
+  id: string;
+  name: string;
+  slotId: string;
+  face: RackFace;
+  elements: PhysicalFacePrimitiveV1[];
+  portSlots: PhysicalPortSlotV1[];
+}
+
+export interface HardwareTemplateDefault {
+  deviceType: string;
+  templateId: string;
+  updatedAt: string;
+}
+
+export interface PhysicalLayoutPreview {
+  deviceId: ID;
+  templateId: string;
+  snapshot: ResolvedPhysicalLayoutV1;
+  bindings: PortBindingV1[];
+  unmappedPortIds: ID[];
+  conflicts: string[];
+  linkedUnmappedPortIds: ID[];
+  portsToCreate: Array<{
+    slotId: string;
+    name: string;
+    position: number;
+    kind: string;
+    face: RackFace;
+  }>;
+  portFingerprint: string;
+  moduleIds: string[];
+  preserveBindings: boolean;
+  comparison: {
+    preservedBindingCount: number;
+    addedSlotIds: string[];
+    removedSlotIds: string[];
+  };
 }
 
 export interface SnmpCredential {
@@ -646,6 +870,17 @@ export interface PortLink {
   cableLength?: string;
   color?: string;
   notes?: string;
+  label?: string;
+  visible?: boolean;
+  routeWaypoints?: CableRouteWaypoint[];
+}
+
+export interface CableRouteWaypoint {
+  id: ID;
+  roomId: ID;
+  face: RackFace;
+  x: number;
+  y: number;
 }
 
 export interface Subnet {

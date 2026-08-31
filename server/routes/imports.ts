@@ -14,6 +14,7 @@ import {
   previewNetboxDeviceTypeImport,
 } from "../lib/netbox-device-type.js";
 import { createId } from "../lib/ids.js";
+import { initializeDevicePhysicalLayout } from "../lib/device-physical-layout.js";
 import { listPortTemplates } from "../lib/port-templates.js";
 import {
   buildDockerContainerNotes,
@@ -236,6 +237,7 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
           macAddress: null,
         });
       }
+      initializeDevicePhysicalLayout(deviceId);
     });
 
     createDevice();

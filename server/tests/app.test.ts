@@ -41,6 +41,8 @@ const {
 } = await import("../lib/native-backup.js");
 const { CURRENT_RACKPAD_SCHEMA_COLUMNS } =
   await import("../lib/native-backup-validation.js");
+const { BUILT_IN_HARDWARE_TEMPLATES } =
+  await import("../lib/physical-layout.js");
 const { cidrOverlaps, ipToInt } = await import("../lib/ip-cidr.js");
 const { resolveSnmpSessionForTarget } = await import("../lib/snmp-session.js");
 const { inferDiscoveryPlacement } =
@@ -124,6 +126,93 @@ test("bootstrap creates the first admin account and session", async () => {
   assert.equal(meRes.statusCode, 200);
   const me = readJson(meRes) as { user: { username: string } };
   assert.equal(me.user.username, "admin");
+});
+
+test("every API route has typed authorization metadata", async () => {
+  await app.ready();
+  const inventory = app.routeAuthorizationInventory;
+  assert.ok(inventory.length > 0);
+  assert.ok(inventory.every((entry) => entry.url.startsWith("/api/")));
+  assert.ok(
+    inventory
+      .filter((entry) => entry.authorization.kind === "conditional")
+      .every(
+        (entry) =>
+          entry.authorization.kind === "conditional" &&
+          entry.authorization.reason.trim().length > 0,
+      ),
+  );
+
+  const publicRoutes = inventory
+    .filter(
+      (entry) =>
+        entry.method !== "HEAD" && entry.authorization.kind === "public",
+    )
+    .map((entry) => `${entry.method} ${entry.url.replace(/\/$/, "")}`)
+    .sort();
+  assert.deepEqual(publicRoutes, [
+    "GET /api/auth/oidc/callback",
+    "GET /api/auth/oidc/start",
+    "GET /api/auth/status",
+    "GET /api/health",
+    "GET /api/imports/hyperv-collector",
+    "GET /api/imports/proxmox-collector",
+    "POST /api/auth/bootstrap",
+    "POST /api/auth/login",
+    "POST /api/auth/oidc/session",
+  ]);
+});
+
+test("route metadata centrally rejects unauthenticated and non-admin access", async () => {
+  const adminToken = await bootstrapAdmin();
+  const unauthenticatedUnknownApiRoute = await app.inject({
+    method: "GET",
+    url: "/api/not-a-real-route",
+  });
+  assert.equal(unauthenticatedUnknownApiRoute.statusCode, 401);
+
+  const unknownApiRoute = await app.inject({
+    method: "GET",
+    url: "/api/not-a-real-route",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(unknownApiRoute.statusCode, 404, unknownApiRoute.body);
+
+  const unauthenticated = await app.inject({
+    method: "GET",
+    url: "/api/labs",
+  });
+  assert.equal(unauthenticated.statusCode, 401);
+  assert.deepEqual(readJson(unauthenticated), {
+    error: "Authentication required.",
+  });
+
+  const viewerToken = await createUserAndLogin(adminToken, {
+    username: "route-inventory-viewer",
+    displayName: "Route Inventory Viewer",
+    password: "route-inventory-viewer-1",
+    role: "viewer",
+  });
+
+  const adminRoute = await app.inject({
+    method: "GET",
+    url: "/api/users",
+    headers: { authorization: `Bearer ${viewerToken}` },
+  });
+  assert.equal(adminRoute.statusCode, 403);
+  assert.deepEqual(readJson(adminRoute), {
+    error: "Administrator access required.",
+  });
+
+  const globalAdminRoute = await app.inject({
+    method: "GET",
+    url: "/api/device-types/usage",
+    headers: { authorization: `Bearer ${viewerToken}` },
+  });
+  assert.equal(globalAdminRoute.statusCode, 403);
+  assert.deepEqual(readJson(globalAdminRoute), {
+    error: "Administrator access is required.",
+  });
 });
 
 test("CLI password reset rotates a local password and invalidates only that user's sessions", async () => {
@@ -738,7 +827,9 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
     0,
   );
   const demoOutboundTargets = [
-    ...(db.prepare("SELECT target AS value FROM deviceMonitors").all() as Array<{
+    ...(db
+      .prepare("SELECT target AS value FROM deviceMonitors")
+      .all() as Array<{
       value: string;
     }>),
     ...(db
@@ -754,9 +845,7 @@ test("bootstrap can start with an empty lab or load demo data on demand", async 
   for (const { value } of demoOutboundTargets) {
     assert.ok(
       value.includes(".example.invalid") ||
-        /^(?:https?:\/\/)?(?:192\.0\.2|198\.51\.100|203\.0\.113)\./.test(
-          value,
-        ),
+        /^(?:https?:\/\/)?(?:192\.0\.2|198\.51\.100|203\.0\.113)\./.test(value),
       `unsafe demo outbound target ${value}`,
     );
   }
@@ -1563,7 +1652,9 @@ test("unmanaged status validates across device mutations, survives monitoring, a
     snapshot.data.devices.find((device) => device.id === primary.id)?.status,
     "unmanaged",
   );
-  db.prepare("UPDATE devices SET status = 'online' WHERE id = ?").run(primary.id);
+  db.prepare("UPDATE devices SET status = 'online' WHERE id = ?").run(
+    primary.id,
+  );
 
   const restoreResponse = await app.inject({
     method: "POST",
@@ -2170,6 +2261,188 @@ test("admin restore rejects snapshots from a newer schema without changing data"
   );
 });
 
+test("admin restore rejects reserved hardware templates and invalid defaults atomically", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers,
+  });
+  assert.equal(exportRes.statusCode, 200, exportRes.body);
+  const snapshot = readJson(exportRes) as {
+    data: {
+      hardwareTemplates: Array<Record<string, unknown>>;
+      hardwareTemplateDefaults: Array<Record<string, unknown>>;
+    };
+  };
+  const sentinelRes = await app.inject({
+    method: "POST",
+    url: "/api/racks",
+    headers,
+    payload: { labId: "lab_home", name: "Template restore sentinel" },
+  });
+  assert.equal(sentinelRes.statusCode, 201, sentinelRes.body);
+
+  const generic = structuredClone(BUILT_IN_HARDWARE_TEMPLATES[0]);
+  const reserved = structuredClone(snapshot);
+  reserved.data.hardwareTemplates.push({
+    id: generic.id,
+    name: generic.name,
+    description: generic.description,
+    category: generic.category,
+    deviceTypes: generic.deviceTypes,
+    definition: generic,
+  });
+  const invalidDefault = structuredClone(snapshot);
+  invalidDefault.data.hardwareTemplateDefaults.push({
+    deviceType: "not_a_restored_device_type",
+    templateId: "generic-auto-v1",
+  });
+
+  for (const invalidSnapshot of [reserved, invalidDefault]) {
+    const restoreRes = await app.inject({
+      method: "POST",
+      url: "/api/admin/restore",
+      headers,
+      payload: invalidSnapshot,
+    });
+    assert.equal(restoreRes.statusCode, 422, restoreRes.body);
+    assert.equal(
+      (readJson(restoreRes) as { code: string }).code,
+      "BACKUP_INTEGRITY_INVALID",
+    );
+    assert.ok(
+      db
+        .prepare("SELECT id FROM racks WHERE name = ?")
+        .get("Template restore sentinel"),
+    );
+  }
+});
+
+test("admin restore rejects invalid Rack Studio rack and cross-lab device placement atomically", async () => {
+  const adminToken = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const otherLabRes = await app.inject({
+    method: "POST",
+    url: "/api/labs",
+    headers,
+    payload: { name: "Restore placement other lab" },
+  });
+  assert.equal(otherLabRes.statusCode, 201, otherLabRes.body);
+  const otherLab = readJson(otherLabRes) as { id: string };
+  const homeRoomRes = await app.inject({
+    method: "POST",
+    url: "/api/rooms",
+    headers,
+    payload: { labId: "lab_home", name: "Restore placement home room" },
+  });
+  const otherRoomRes = await app.inject({
+    method: "POST",
+    url: "/api/rooms",
+    headers,
+    payload: { labId: otherLab.id, name: "Restore placement other room" },
+  });
+  assert.equal(homeRoomRes.statusCode, 201, homeRoomRes.body);
+  assert.equal(otherRoomRes.statusCode, 201, otherRoomRes.body);
+  const homeRoom = readJson(homeRoomRes) as { id: string };
+  const otherRoom = readJson(otherRoomRes) as { id: string };
+  const homeRackRes = await app.inject({
+    method: "POST",
+    url: "/api/racks",
+    headers,
+    payload: {
+      labId: "lab_home",
+      roomId: homeRoom.id,
+      name: "Restore placement home rack",
+      totalU: 42,
+    },
+  });
+  const otherRackRes = await app.inject({
+    method: "POST",
+    url: "/api/racks",
+    headers,
+    payload: {
+      labId: otherLab.id,
+      roomId: otherRoom.id,
+      name: "Restore placement other rack",
+      totalU: 42,
+    },
+  });
+  assert.equal(homeRackRes.statusCode, 201, homeRackRes.body);
+  assert.equal(otherRackRes.statusCode, 201, otherRackRes.body);
+  const homeRack = readJson(homeRackRes) as { id: string };
+  const otherRack = readJson(otherRackRes) as { id: string };
+  const deviceRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers,
+    payload: {
+      labId: "lab_home",
+      roomId: homeRoom.id,
+      rackId: homeRack.id,
+      hostname: "restore-placement-device",
+      deviceType: "server",
+      status: "online",
+      placement: "rack",
+      startU: 1,
+      heightU: 1,
+      face: "front",
+    },
+  });
+  assert.equal(deviceRes.statusCode, 201, deviceRes.body);
+  const device = readJson(deviceRes) as { id: string };
+  const exportRes = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers,
+  });
+  assert.equal(exportRes.statusCode, 200, exportRes.body);
+  const snapshot = readJson(exportRes) as {
+    data: {
+      racks: Array<Record<string, unknown>>;
+      devices: Array<Record<string, unknown>>;
+    };
+  };
+  const sentinelRes = await app.inject({
+    method: "POST",
+    url: "/api/racks",
+    headers,
+    payload: { labId: "lab_home", name: "Placement restore sentinel" },
+  });
+  assert.equal(sentinelRes.statusCode, 201, sentinelRes.body);
+
+  const outsideRack = structuredClone(snapshot);
+  Object.assign(
+    outsideRack.data.racks.find((rack) => rack.id === homeRack.id)!,
+    { studioX: 900, studioY: 0 },
+  );
+  const crossLabDevice = structuredClone(snapshot);
+  Object.assign(
+    crossLabDevice.data.devices.find((entry) => entry.id === device.id)!,
+    { rackId: otherRack.id, roomId: otherRoom.id },
+  );
+
+  for (const invalidSnapshot of [outsideRack, crossLabDevice]) {
+    const restoreRes = await app.inject({
+      method: "POST",
+      url: "/api/admin/restore",
+      headers,
+      payload: invalidSnapshot,
+    });
+    assert.equal(restoreRes.statusCode, 422, restoreRes.body);
+    assert.equal(
+      (readJson(restoreRes) as { code: string }).code,
+      "BACKUP_INTEGRITY_INVALID",
+    );
+    assert.ok(
+      db
+        .prepare("SELECT id FROM racks WHERE name = ?")
+        .get("Placement restore sentinel"),
+    );
+  }
+});
+
 test("native backups are admin-scoped, configured explicitly, retained, and path-safe", async () => {
   const adminToken = await bootstrapAdmin();
   const headers = { authorization: `Bearer ${adminToken}` };
@@ -2282,7 +2555,10 @@ test("native backups are admin-scoped, configured explicitly, retained, and path
     );
     assert.equal(readdirSync(nativeDirectory).length, 1);
 
-    writeFileSync(path.join(nativeDirectory, backup.name), "corrupt after baseline");
+    writeFileSync(
+      path.join(nativeDirectory, backup.name),
+      "corrupt after baseline",
+    );
     assert.equal(
       await runNativeBackupScheduleTick(
         Date.parse(backup.createdAt) + 2 * 60 * 60 * 1000,
@@ -2368,6 +2644,20 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
   });
   assert.equal(templateRes.statusCode, 201);
 
+  const roomRes = await app.inject({
+    method: "POST",
+    url: "/api/rooms",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      labId: "lab_home",
+      name: "Exported room",
+    },
+  });
+  assert.equal(roomRes.statusCode, 201);
+  const exportedRoom = readJson(roomRes) as { id: string };
+
   const rackRes = await app.inject({
     method: "POST",
     url: "/api/racks",
@@ -2378,9 +2668,25 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
       labId: "lab_home",
       name: "Exported Rack",
       totalU: 42,
+      roomId: exportedRoom.id,
     },
   });
   assert.equal(rackRes.statusCode, 201);
+  const exportedRack = readJson(rackRes) as { id: string };
+  const positionRes = await app.inject({
+    method: "POST",
+    url: "/api/rack-studio/actions",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+    },
+    payload: {
+      kind: "rack.move",
+      targetId: exportedRack.id,
+      expected: { roomId: exportedRoom.id, x: null, y: null },
+      next: { roomId: exportedRoom.id, x: 240, y: 330 },
+    },
+  });
+  assert.equal(positionRes.statusCode, 200, positionRes.body);
 
   const subnetRes = await app.inject({
     method: "POST",
@@ -2489,6 +2795,11 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
         id: string;
         ignoreDuplicateMac?: number | boolean;
       }>;
+      racks: Array<{
+        id: string;
+        studioX?: number | null;
+        studioY?: number | null;
+      }>;
     };
   };
   const exportedSubnet = snapshot.data.subnets.find(
@@ -2509,6 +2820,11 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
     (entry) => entry.id === monitorDevice.id,
   );
   assert.equal(exportedIgnoredDevice?.ignoreDuplicateMac, 1);
+  const exportedRackPosition = snapshot.data.racks.find(
+    (entry) => entry.id === exportedRack.id,
+  );
+  assert.equal(exportedRackPosition?.studioX, 240);
+  assert.equal(exportedRackPosition?.studioY, 330);
 
   const postExportRackRes = await app.inject({
     method: "POST",
@@ -2563,7 +2879,10 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
   });
   assert.equal(racksAfterRestoreRes.statusCode, 200);
   const racksAfterRestore = readJson(racksAfterRestoreRes) as Array<{
+    id: string;
     name: string;
+    studioX?: number | null;
+    studioY?: number | null;
   }>;
   assert.equal(
     racksAfterRestore.some((rack) => rack.name === "Exported Rack"),
@@ -2573,6 +2892,11 @@ test("admin restore reloads a backup snapshot and invalidates the previous sessi
     racksAfterRestore.some((rack) => rack.name === "Should disappear"),
     false,
   );
+  const restoredRackPosition = racksAfterRestore.find(
+    (entry) => entry.id === exportedRack.id,
+  );
+  assert.equal(restoredRackPosition?.studioX, 240);
+  assert.equal(restoredRackPosition?.studioY, 330);
 
   const subnetsAfterRestoreRes = await app.inject({
     method: "GET",
@@ -2887,6 +3211,33 @@ test("admin restore accepts older backups without subnet, rack-slot, Docker, mon
   assert.equal(deviceRes.statusCode, 201);
   const legacyDevice = readJson(deviceRes) as { id: string };
 
+  const legacyPatchPanelRes = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      labId: "lab_home",
+      hostname: "legacy-one-sided-patch-panel",
+      deviceType: "patch_panel",
+      status: "unknown",
+      placement: "room",
+    },
+  });
+  assert.equal(legacyPatchPanelRes.statusCode, 201, legacyPatchPanelRes.body);
+  const legacyPatchPanel = readJson(legacyPatchPanelRes) as { id: string };
+  const legacyPatchPortRes = await app.inject({
+    method: "POST",
+    url: "/api/ports",
+    headers: { authorization: `Bearer ${adminToken}` },
+    payload: {
+      deviceId: legacyPatchPanel.id,
+      name: "Panel 1",
+      kind: "rj45",
+      face: "front",
+    },
+  });
+  assert.equal(legacyPatchPortRes.statusCode, 201, legacyPatchPortRes.body);
+
   const documentationMonitorRes = await app.inject({
     method: "POST",
     url: "/api/device-monitors",
@@ -2966,6 +3317,15 @@ test("admin restore accepts older backups without subnet, rack-slot, Docker, mon
         const legacyDevice = { ...device };
         delete legacyDevice.rackSlot;
         delete legacyDevice.ignoreDuplicateMac;
+        delete legacyDevice.rackMountKind;
+        delete legacyDevice.rackColumn;
+        delete legacyDevice.rackColumnSpan;
+        delete legacyDevice.shelfX;
+        delete legacyDevice.shelfY;
+        delete legacyDevice.shelfWidth;
+        delete legacyDevice.shelfHeight;
+        delete legacyDevice.shelfOrientation;
+        delete legacyDevice.rackSide;
         return legacyDevice;
       }),
       subnets: snapshot.data.subnets.map((subnet) => {
@@ -2989,6 +3349,10 @@ test("admin restore accepts older backups without subnet, rack-slot, Docker, mon
       }),
     },
   };
+  delete (legacySnapshot.data as Record<string, unknown>).hardwareTemplates;
+  delete (legacySnapshot.data as Record<string, unknown>)
+    .hardwareTemplateDefaults;
+  delete (legacySnapshot.data as Record<string, unknown>).devicePhysicalLayouts;
 
   const restoreRes = await app.inject({
     method: "POST",
@@ -3050,6 +3414,40 @@ test("admin restore accepts older backups without subnet, rack-slot, Docker, mon
   assert.ok(restoredDevice);
   assert.equal(restoredDevice.rackSlot, "full");
   assert.equal(restoredDevice.ignoreDuplicateMac, false);
+  const restoredPhysicalLayout = db
+    .prepare(
+      "SELECT status, snapshot FROM devicePhysicalLayouts WHERE deviceId = ?",
+    )
+    .get(legacyDevice.id) as { status: string; snapshot: string };
+  assert.equal(restoredPhysicalLayout.status, "legacy-default");
+  assert.equal(
+    JSON.parse(restoredPhysicalLayout.snapshot).sourceTemplateId,
+    "legacy-auto-v1",
+  );
+  const restoredPatchPorts = db
+    .prepare(
+      "SELECT id, face FROM ports WHERE deviceId = ? ORDER BY position, face, id",
+    )
+    .all(legacyPatchPanel.id) as Array<{ id: string; face: string }>;
+  assert.deepEqual(
+    restoredPatchPorts.map((port) => port.face).sort(),
+    ["front", "rear"],
+  );
+  const restoredPatchLayout = db
+    .prepare(
+      "SELECT status, bindings, portFingerprint FROM devicePhysicalLayouts WHERE deviceId = ?",
+    )
+    .get(legacyPatchPanel.id) as {
+    status: string;
+    bindings: string;
+    portFingerprint: string;
+  };
+  assert.equal(restoredPatchLayout.status, "legacy-default");
+  assert.equal(
+    JSON.parse(restoredPatchLayout.bindings).length,
+    restoredPatchPorts.length,
+  );
+  assert.match(restoredPatchLayout.portFingerprint, /^[a-f0-9]{64}$/);
 
   const restoredDockerSource = db
     .prepare("SELECT enabled FROM dockerImportSources WHERE id = ?")
@@ -6909,6 +7307,10 @@ test("bulk cable updates are validated, deduplicated, permission-aware, and atom
         cableType: "Cat6a",
         cableLength: "3m",
         color: "blue",
+        notes: "Bulk reviewed",
+        label: "BULK-QA",
+        visible: false,
+        routeWaypoints: [],
       },
     },
   });
@@ -6921,6 +7323,8 @@ test("bulk cable updates are validated, deduplicated, permission-aware, and atom
       cableLength: string;
       color: string;
       notes: string;
+      label: string;
+      visible: boolean;
     }>;
   };
   assert.equal(updated.updated, 2);
@@ -6933,14 +7337,12 @@ test("bulk cable updates are validated, deduplicated, permission-aware, and atom
       (link) =>
         link.cableType === "Cat6a" &&
         link.cableLength === "3m" &&
-        link.color === "blue",
+        link.color === "blue" &&
+        link.notes === "Bulk reviewed" &&
+        link.label === "BULK-QA" &&
+        link.visible === false,
     ),
   );
-  assert.deepEqual(
-    updated.links.map((link) => link.notes),
-    ["keep first", "keep second"],
-  );
-
   const clearRes = await app.inject({
     method: "POST",
     url: "/api/port-links/bulk",
@@ -6968,7 +7370,7 @@ test("bulk cable updates are validated, deduplicated, permission-aware, and atom
   for (const invalidPayload of [
     { linkIds: [], changes: { color: "red" } },
     { linkIds: [first.id], changes: {} },
-    { linkIds: [first.id], changes: { notes: "not supported" } },
+    { linkIds: [first.id], changes: { unsupported: "not supported" } },
     { linkIds: [first.id], changes: { color: "x".repeat(41) } },
     {
       linkIds: Array.from({ length: 501 }, (_, index) => `link_${index}`),
@@ -9648,6 +10050,23 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
       ON dockerImportSources (labId);
     ALTER TABLE deviceMonitors DROP COLUMN ignoreTlsErrors;
     ALTER TABLE devices DROP COLUMN ignoreDuplicateMac;
+    DROP TABLE devicePhysicalLayouts;
+    DROP TABLE hardwareTemplateDefaults;
+    DROP TABLE hardwareTemplates;
+    ALTER TABLE devices DROP COLUMN rackMountKind;
+    ALTER TABLE devices DROP COLUMN rackColumn;
+    ALTER TABLE devices DROP COLUMN rackColumnSpan;
+    ALTER TABLE devices DROP COLUMN shelfX;
+    ALTER TABLE devices DROP COLUMN shelfY;
+    ALTER TABLE devices DROP COLUMN shelfWidth;
+    ALTER TABLE devices DROP COLUMN shelfHeight;
+    ALTER TABLE devices DROP COLUMN shelfOrientation;
+    ALTER TABLE devices DROP COLUMN rackSide;
+    ALTER TABLE racks DROP COLUMN studioX;
+    ALTER TABLE racks DROP COLUMN studioY;
+    ALTER TABLE portLinks DROP COLUMN label;
+    ALTER TABLE portLinks DROP COLUMN visible;
+    ALTER TABLE portLinks DROP COLUMN routeWaypoints;
     UPDATE schemaVersion
     SET version = 31, updatedAt = '2026-07-20T00:00:00.000Z'
     WHERE id = 1;
@@ -9729,6 +10148,23 @@ test("storage topology migration upgrades a version-34 database without changing
     DROP TABLE snmpSyncSchedules;
     ALTER TABLE dockerImportSources DROP COLUMN verifyTls;
 
+    DROP TABLE devicePhysicalLayouts;
+    DROP TABLE hardwareTemplateDefaults;
+    DROP TABLE hardwareTemplates;
+    ALTER TABLE devices DROP COLUMN rackMountKind;
+    ALTER TABLE devices DROP COLUMN rackColumn;
+    ALTER TABLE devices DROP COLUMN rackColumnSpan;
+    ALTER TABLE devices DROP COLUMN shelfX;
+    ALTER TABLE devices DROP COLUMN shelfY;
+    ALTER TABLE devices DROP COLUMN shelfWidth;
+    ALTER TABLE devices DROP COLUMN shelfHeight;
+    ALTER TABLE devices DROP COLUMN shelfOrientation;
+    ALTER TABLE devices DROP COLUMN rackSide;
+    ALTER TABLE racks DROP COLUMN studioX;
+    ALTER TABLE racks DROP COLUMN studioY;
+    ALTER TABLE portLinks DROP COLUMN label;
+    ALTER TABLE portLinks DROP COLUMN visible;
+    ALTER TABLE portLinks DROP COLUMN routeWaypoints;
     UPDATE schemaVersion
     SET version = 34, updatedAt = '2026-08-01T00:00:00.000Z'
     WHERE id = 1;
@@ -9825,6 +10261,23 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     DROP TABLE integrationConnections;
     DROP TABLE snmpSyncSchedules;
     ALTER TABLE dockerImportSources DROP COLUMN verifyTls;
+    DROP TABLE devicePhysicalLayouts;
+    DROP TABLE hardwareTemplateDefaults;
+    DROP TABLE hardwareTemplates;
+    ALTER TABLE devices DROP COLUMN rackMountKind;
+    ALTER TABLE devices DROP COLUMN rackColumn;
+    ALTER TABLE devices DROP COLUMN rackColumnSpan;
+    ALTER TABLE devices DROP COLUMN shelfX;
+    ALTER TABLE devices DROP COLUMN shelfY;
+    ALTER TABLE devices DROP COLUMN shelfWidth;
+    ALTER TABLE devices DROP COLUMN shelfHeight;
+    ALTER TABLE devices DROP COLUMN shelfOrientation;
+    ALTER TABLE devices DROP COLUMN rackSide;
+    ALTER TABLE racks DROP COLUMN studioX;
+    ALTER TABLE racks DROP COLUMN studioY;
+    ALTER TABLE portLinks DROP COLUMN label;
+    ALTER TABLE portLinks DROP COLUMN visible;
+    ALTER TABLE portLinks DROP COLUMN routeWaypoints;
     UPDATE schemaVersion
     SET version = 35, updatedAt = '2026-08-01T00:00:00.000Z'
     WHERE id = 1;
@@ -9876,6 +10329,23 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
       'intsch_v44', 'intg_v44', 'Legacy mirror', 'mirror', '0 2 * * *',
       '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z'
     );
+    DROP TABLE devicePhysicalLayouts;
+    DROP TABLE hardwareTemplateDefaults;
+    DROP TABLE hardwareTemplates;
+    ALTER TABLE devices DROP COLUMN rackMountKind;
+    ALTER TABLE devices DROP COLUMN rackColumn;
+    ALTER TABLE devices DROP COLUMN rackColumnSpan;
+    ALTER TABLE devices DROP COLUMN shelfX;
+    ALTER TABLE devices DROP COLUMN shelfY;
+    ALTER TABLE devices DROP COLUMN shelfWidth;
+    ALTER TABLE devices DROP COLUMN shelfHeight;
+    ALTER TABLE devices DROP COLUMN shelfOrientation;
+    ALTER TABLE devices DROP COLUMN rackSide;
+    ALTER TABLE racks DROP COLUMN studioX;
+    ALTER TABLE racks DROP COLUMN studioY;
+    ALTER TABLE portLinks DROP COLUMN label;
+    ALTER TABLE portLinks DROP COLUMN visible;
+    ALTER TABLE portLinks DROP COLUMN routeWaypoints;
     UPDATE schemaVersion
     SET version = 44, updatedAt = '2026-08-01T00:00:00.000Z'
     WHERE id = 1;

@@ -8,6 +8,54 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.2-beta.0] - 2026-08-31
+
+> Opt-in Rack Studio tester release. The classic rack elevation and Docker
+> deployment remain the defaults. Experimental native Proxmox LXC support from
+> the 1.8.1 beta line is retained but is not production-supported.
+
+### Added
+
+- Added opt-in Rack Studio room and focused-rack workspaces with exact front and
+  rear hardware layouts, physical port mapping, shelf and side equipment,
+  deterministic loose-device placement, physical patching, cable routing, and
+  SVG/PNG export.
+- Added administrator-managed hardware templates and device-owned physical
+  layout snapshots so existing port and cable identities remain authoritative.
+- Added Physical layout nodes to Visualizer using the same device snapshots and
+  exact cable anchors as Device settings and Rack Studio.
+
+### Changed
+
+- Extended rack placement to a 12-column grid with shelf rectangles, rotation,
+  0U side mounting, shared room coordinates, dynamic dense-room bounds, and
+  conflict-safe Rack Studio actions.
+- Centralized typed API-route authorization metadata while retaining
+  handler-level lab guards for row and lab resolution.
+- Expanded the deterministic documentation gallery to 39 scenes and added a
+  two-pass release checker for manifest, layout, text, and pixel stability.
+
+### Fixed
+
+- Kept physical-layout GET and preview requests read-only and reconciled layout
+  mappings only inside canonical device and port mutation transactions.
+- Hardened logical restore against reserved or invalid hardware-template IDs,
+  invalid device-type defaults, duplicate identities, and partial mutation.
+- Made front, rear, and both-face selection authoritative for Rack Studio
+  interaction, cable handoffs, Visualizer nodes, and exported scenes.
+
+### Test notes
+
+- Upgrade a populated schema-45 database and confirm all existing device, port,
+  link, rack, cable, and waypoint identities and attributes remain unchanged.
+- Configure a six-port 2U server and a 24-port switch with separate uplinks,
+  then verify the same exact port anchors in settings, Rack Studio, Visualizer,
+  patching, tracing, and export.
+- Verify direct, shelf, rotated, side, and loose equipment; front/rear/both
+  filtering; viewer read-only behavior; dense rooms; and atomic backup restore.
+- Re-run the experimental Proxmox contract checks without treating them as
+  evidence of a successful real-Proxmox installation.
+
 ## [1.8.1-beta.2] - 2026-08-30
 
 > Experimental first-party Proxmox native LXC tester release. Docker remains
@@ -90,7 +138,6 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   update, pre-downtime failures, paired rollback, and retention fixtures.
 - Real Proxmox VE 9.x Debian 13 and Ubuntu 24.04 fresh-install testing is
   required before this beta phase is complete.
-
 ## [1.8.0] - 2026-08-24
 
 ### Changed
