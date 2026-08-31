@@ -194,7 +194,7 @@ test("room and focused-rack exports are deterministic, themed, and retain exact 
   assert.match(roomImage.svg, /data-theme="dark"/);
   assert.match(roomImage.svg, /Main room/);
   assert.match(roomImage.svg, /Cable · Type/);
-  assert.doesNotMatch(roomImage.svg, /<script>/);
+  assert.doesNotMatch(roomImage.svg, /<script>/i);
 
   const rackImage = buildRackStudioSvg({ ...input, focusRackId: rackA.id });
   assert.match(rackImage.filename, /rack-a-rack-studio\.svg/);
