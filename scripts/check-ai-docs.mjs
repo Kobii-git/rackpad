@@ -84,6 +84,7 @@ const repositoryRootFiles = new Set([
   "tsconfig.server.json",
   "tsconfig.test.json",
 ]);
+const documentedLocalPaths = new Set([".ai/local/"]);
 
 function resolveDocumentedPath(root, docPath, target) {
   const withoutAnchor = target.split("#", 1)[0];
@@ -96,6 +97,7 @@ function resolveDocumentedPath(root, docPath, target) {
 }
 
 function repositoryReferenceTarget(token) {
+  if (documentedLocalPaths.has(token)) return null;
   if (repositoryRootFiles.has(token)) return token;
   if (!repositoryPathRoots.some((prefix) => token.startsWith(prefix))) {
     return null;

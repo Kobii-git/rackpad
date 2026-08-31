@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -50,6 +56,17 @@ function validate(root) {
 test("accepts valid scripts, links, source paths, and critical symbols", (t) => {
   const root = fixture();
   t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.deepEqual(validate(root), []);
+});
+
+test("accepts explicitly documented local-only paths", (t) => {
+  const root = fixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(
+    path.join(root, "AGENTS.md"),
+    readFileSync(path.join(root, "AGENTS.md"), "utf8") +
+      "\nKeep `.ai/local/` out of repository source.\n",
+  );
   assert.deepEqual(validate(root), []);
 });
 
