@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.8.0",
+  "version": "1.8.2-dev.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -24,6 +24,7 @@
     "test:client": "node --import tsx --test src/lib/*.test.ts src/pages/visualizer/*.test.ts",
     "test:e2e": "playwright test",
     "screenshots:update": "playwright test --config=playwright.screenshots.config.ts",
+    "screenshots:check": "node scripts/check-screenshots.mjs",
     "test": "npm run test:server && npm run test:client",
     "test:full": "npm run test && npm run test:e2e",
     "lint": "eslint . --max-warnings=0",
@@ -31,7 +32,7 @@
     "check:i18n": "node --test scripts/i18n-value-rules.test.mjs && node scripts/check-i18n-values.mjs",
     "check:bundle": "node scripts/check-bundle-size.mjs",
     "check:config": "node scripts/check-env-contract.mjs && node scripts/check-dockerignore.mjs",
-    "check:docs": "node scripts/check-ai-docs.mjs",
+    "check:docs": "node --test scripts/check-ai-docs.test.mjs && node scripts/check-ai-docs.mjs",
     "check": "npm run lint && npm run lint:proof && npm run typecheck && npm run check:i18n && npm run test && npm run check:config && npm run check:docs && npm run build && npm run check:bundle",
     "check:full": "npm run check && npm run test:e2e",
     "preview": "vite preview",
