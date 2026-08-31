@@ -17,11 +17,13 @@ constraints for changes.
 
 - Global roles are admin/editor/viewer; non-admin access is scoped by
   `userLabAccess` editor/viewer grants.
-- Authentication is global in `server/app.ts`; authorization is per handler via
+- Authentication plus public/admin classification is enforced centrally from
+  `server/app.ts`; lab and conditional authorization remains per handler via
   `server/lib/lab-access.ts` and admin helpers.
 - Client permissions are never sufficient. New routes require negative tests.
-- Changes to `publicPaths`, bootstrap, lab guards, user/grant restore, or audit
-  lab resolution are high risk.
+- Changes to public/admin route metadata, bootstrap, lab guards, user/grant
+  restore, or audit lab resolution are high risk. Every API route is inventoried;
+  lab-read/lab-write resolution remains handler-specific.
 
 ## Trust boundaries and egress
 
@@ -62,8 +64,11 @@ constraints for changes.
 
 - `server/app.ts`, `server/lib/auth.ts`, `server/lib/oidc.ts`,
   `server/lib/lab-access.ts`, `server/lib/net-guard.ts`,
-  `server/lib/secret-crypto.ts`, `server/lib/snmp-v3.ts`,
-  `server/routes/admin.ts`, `server/db.ts`, and `server/security-headers.ts`.
+  `server/lib/secret-crypto.ts`, `server/lib/integrations/`,
+  `server/lib/snmp-v3.ts`, `server/routes/admin.ts`,
+  `server/routes/integrations.ts`, `server/db.ts`, and
+  `server/security-headers.ts`. Credential-, backup-, process-, and
+  release-sensitive files under `scripts/` are high risk as well.
 
 ## Control weakening and suppressions
 

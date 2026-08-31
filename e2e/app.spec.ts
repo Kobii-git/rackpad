@@ -1105,6 +1105,125 @@ async function authenticate(page: Page, language = "en") {
   );
 }
 
+test("Rack Studio patches exact ports, saves routes, exports, and traces", async ({
+  page,
+  request,
+}) => {
+  const headers = { Authorization: `Bearer ${token}` };
+  const fromPortId = "p_d_srv_backup_4";
+  const toPortId = "p_d_srv_pve1_4";
+  let linkId = "";
+
+  try {
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/racks");
+    await page.getByRole("button", { name: "Studio Beta", exact: true }).click();
+    await page.getByRole("button", { name: "Cables", exact: true }).click();
+
+    const backupDevice = page.getByRole("button", {
+      name: "backup-01",
+      exact: true,
+    });
+    const pveDevice = page.getByRole("button", {
+      name: "pve-01",
+      exact: true,
+    });
+    await backupDevice
+      .getByRole("button", { name: "eno4 · rj45", exact: true })
+      .click();
+    await pveDevice
+      .getByRole("button", { name: "eno4 · rj45", exact: true })
+      .click();
+
+    const inspector = page.getByTestId("rack-studio-cable-inspector");
+    await expect(inspector).toContainText("From port: backup-01:eno4");
+    await expect(inspector).toContainText("To port: pve-01:eno4");
+
+    const linksResponse = await request.get("/api/port-links", { headers });
+    expect(linksResponse.status(), await linksResponse.text()).toBe(200);
+    const links = (await linksResponse.json()) as Array<{
+      id: string;
+      fromPortId: string;
+      toPortId: string;
+    }>;
+    linkId =
+      links.find(
+        (link) =>
+          link.fromPortId === fromPortId && link.toPortId === toPortId,
+      )?.id ?? "";
+    expect(linkId).not.toBe("");
+
+    await backupDevice
+      .getByRole("button", { name: "eno3 · rj45", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Outlet 1 · power", exact: true })
+      .click();
+    await expect(page.getByText("rj45 → power", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+
+    await backupDevice
+      .getByRole("button", { name: "eno4 · rj45", exact: true })
+      .click();
+    await inspector
+      .getByRole("textbox", { name: "Label", exact: true })
+      .fill("Phase 5 QA cable");
+    await inspector.getByRole("button", { name: "Add", exact: true }).click();
+    await inspector
+      .getByRole("spinbutton", { name: "Position: X", exact: true })
+      .fill("420");
+    await inspector
+      .getByRole("spinbutton", { name: "Position: Y", exact: true })
+      .fill("280");
+    await inspector.getByRole("button", { name: "Save", exact: true }).click();
+
+    await expect
+      .poll(async () => {
+        const response = await request.get(`/api/port-links/${linkId}`, {
+          headers,
+        });
+        if (!response.ok()) return null;
+        const link = (await response.json()) as {
+          label?: string;
+          routeWaypoints?: Array<{ x: number; y: number }>;
+        };
+        return {
+          label: link.label,
+          routeWaypoints: link.routeWaypoints,
+        };
+      })
+      .toEqual({
+        label: "Phase 5 QA cable",
+        routeWaypoints: [expect.objectContaining({ x: 420, y: 280 })],
+      });
+
+    const downloadPromise = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Download SVG", exact: true })
+      .click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe(
+      "lab-server-room-rack-studio.svg",
+    );
+    const downloadPath = await download.path();
+    expect(downloadPath).not.toBeNull();
+    expect(await readFile(downloadPath!, "utf8")).toContain("Phase 5 QA cable");
+
+    await inspector.getByRole("link", { name: "Trace", exact: true }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/visualizer\\?tracePortId=${fromPortId}$`),
+    );
+    await expect(
+      page.getByText("backup-01 / eno4", { exact: true }),
+    ).toBeVisible();
+  } finally {
+    if (linkId) {
+      await request.delete(`/api/port-links/${linkId}`, { headers });
+    }
+  }
+});
+
 async function expectTracePngDownload(
   page: Page,
   expectedFilename: string,
@@ -3491,11 +3610,14 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
     ).toBeVisible();
     await expect(page.getByTestId("device-type-section-built-in")).toBeVisible();
     await expect(page.getByTestId("device-type-section-custom")).toBeVisible();
-    await page
+    const deviceTypeEditor = page.getByTestId("device-type-editor");
+    await deviceTypeEditor
       .getByRole("textbox", { name: "Name", exact: true })
       .fill(`E2E appliance ${suffix}`);
-    await page.getByRole("textbox", { name: "ID", exact: true }).fill(typeId);
-    await page
+    await deviceTypeEditor
+      .getByRole("textbox", { name: "ID", exact: true })
+      .fill(typeId);
+    await deviceTypeEditor
       .getByRole("combobox", { name: "Parent", exact: true })
       .selectOption("server");
     await expect(
@@ -3503,7 +3625,9 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
     ).toContainText(
       "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.",
     );
-    await page.getByRole("button", { name: "Create", exact: true }).click();
+    await deviceTypeEditor
+      .getByRole("button", { name: "Create", exact: true })
+      .click();
     await expect(page.getByTestId("device-type-usage")).toContainText(
       "Devices",
     );
@@ -3511,14 +3635,14 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
       "Port templates",
     );
     await expect(
-      page.getByRole("textbox", { name: "ID", exact: true }),
+      deviceTypeEditor.getByRole("textbox", { name: "ID", exact: true }),
     ).toBeDisabled();
 
     const updatedLabel = `E2E managed appliance ${suffix}`;
-    await page
+    await deviceTypeEditor
       .getByRole("textbox", { name: "Name", exact: true })
       .fill(updatedLabel);
-    await page
+    await deviceTypeEditor
       .getByRole("button", { name: "Save changes", exact: true })
       .click();
     await expect(
@@ -3543,7 +3667,7 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
       "Devices 1",
     );
     await expect(
-      page.getByRole("button", { name: "Delete", exact: true }),
+      deviceTypeEditor.getByRole("button", { name: "Delete", exact: true }),
     ).toBeDisabled();
 
     const viewerResponse = await request.post("/api/users", {
@@ -3590,7 +3714,9 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
     await page.getByText(updatedLabel, { exact: true }).first().click();
 
     page.once("dialog", (dialog) => dialog.accept());
-    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await deviceTypeEditor
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
     await expect(page.getByText(updatedLabel, { exact: true })).toHaveCount(0);
   } finally {
     await viewerContext?.close();
