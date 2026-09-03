@@ -31,13 +31,18 @@ import {
 } from "@/lib/store";
 import { ApiError } from "@/lib/api";
 import {
+  buildRackElevationCableRoutes,
   buildRackStudioCableRoutes,
-  cableCategoryForPorts,
   connectorPairIsUsual,
   defaultCableColor,
   defaultCableMetadata,
   portSupportsPhysicalPatching,
   type PhysicalCableCategory,
+  RACK_STUDIO_ROUTE_STYLE_STORAGE_KEY,
+  RACK_STUDIO_SHOW_LABELS_STORAGE_KEY,
+  rackStudioRouteStylePreference,
+  rackStudioShowLabelsPreference,
+  type RackStudioCableRouteStyle,
 } from "@/lib/rack-studio-cables";
 import {
   buildRackStudioSvg,
@@ -63,7 +68,6 @@ import {
 import {
   buildRackElevationScene,
   buildRackStudioScene,
-  rackFaceForPhysicalFace,
   type RackStudioSceneEquipment,
 } from "@/lib/rack-studio-scene";
 import type {
@@ -208,6 +212,24 @@ function replayAction(result: RackStudioActionResult): RackStudioAction {
   };
 }
 
+function readLocalPreference(key: string) {
+  try {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalPreference(key: string, value: string) {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Rack Studio remains usable when storage is unavailable or disabled.
+  }
+}
+
 export function RackStudioWorkspace({
   room,
   racks,
@@ -229,6 +251,7 @@ export function RackStudioWorkspace({
   );
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>();
   const [selectedCableId, setSelectedCableId] = useState<string>();
+  const [hoveredCableId, setHoveredCableId] = useState<string>();
   const [patchStartPortId, setPatchStartPortId] = useState<string>();
   const [pendingUnusualPair, setPendingUnusualPair] = useState<{
     fromPortId: string;
@@ -237,7 +260,16 @@ export function RackStudioWorkspace({
   const [cableCategory, setCableCategory] = useState<
     PhysicalCableCategory | "all"
   >("all");
-  const [showCableLabels, setShowCableLabels] = useState(true);
+  const [routeStyle, setRouteStyle] = useState<RackStudioCableRouteStyle>(() =>
+    rackStudioRouteStylePreference(
+      readLocalPreference(RACK_STUDIO_ROUTE_STYLE_STORAGE_KEY),
+    ),
+  );
+  const [showCableLabels, setShowCableLabels] = useState(() =>
+    rackStudioShowLabelsPreference(
+      readLocalPreference(RACK_STUDIO_SHOW_LABELS_STORAGE_KEY),
+    ),
+  );
   const [exportScope, setExportScope] = useState<"room" | "rack">("room");
   const [search, setSearch] = useState("");
   const [healthOverlay, setHealthOverlay] = useState(false);
@@ -261,6 +293,17 @@ export function RackStudioWorkspace({
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
+
+  useEffect(() => {
+    writeLocalPreference(RACK_STUDIO_ROUTE_STYLE_STORAGE_KEY, routeStyle);
+  }, [routeStyle]);
+
+  useEffect(() => {
+    writeLocalPreference(
+      RACK_STUDIO_SHOW_LABELS_STORAGE_KEY,
+      String(showCableLabels),
+    );
+  }, [showCableLabels]);
 
   useEffect(() => {
     if (initialRackId && racks.some((rack) => rack.id === initialRackId)) {
@@ -326,6 +369,7 @@ export function RackStudioWorkspace({
         ports,
         links: portLinks,
         category: cableCategory,
+        style: routeStyle,
         scene: roomScene,
       }),
     [
@@ -338,6 +382,7 @@ export function RackStudioWorkspace({
       ports,
       room,
       roomScene,
+      routeStyle,
     ],
   );
 
@@ -693,6 +738,7 @@ export function RackStudioWorkspace({
       face,
       focusRackId: exportScope === "rack" ? focusedRack?.id : undefined,
       showLabels: showCableLabels,
+      routeStyle,
       theme: isLight ? "light" : "dark",
       labels: {
         cable: t("Cable"),
@@ -837,6 +883,18 @@ export function RackStudioWorkspace({
           <option value="usb">{t("USB")}</option>
           <option value="storage">{t("Storage")}</option>
           <option value="other">{t("Other")}</option>
+        </select>
+
+        <select
+          aria-label={t("Cable routing")}
+          value={routeStyle}
+          onChange={(event) =>
+            setRouteStyle(event.target.value as RackStudioCableRouteStyle)
+          }
+          className="h-8 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] px-2 text-[11px] text-[var(--text-secondary)]"
+        >
+          <option value="smooth">{t("Smooth")}</option>
+          <option value="orthogonal">{t("Orthogonal")}</option>
         </select>
 
         <label className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
@@ -996,15 +1054,25 @@ export function RackStudioWorkspace({
               >
                 {roomCableRoutes.map((route) => {
                   const selected = selectedCableId === route.link.id;
+                  const hovered = hoveredCableId === route.link.id;
+                  const activeCableId = hoveredCableId ?? selectedCableId;
                   const labelPoint = route.points.at(-1);
                   return (
                     <g key={route.link.id}>
                       <path
+                        data-testid="rack-studio-cable"
+                        data-link-id={route.link.id}
                         d={route.path}
                         fill="none"
                         stroke="transparent"
                         strokeWidth={14}
                         className="pointer-events-stroke cursor-pointer"
+                        onPointerEnter={() => setHoveredCableId(route.link.id)}
+                        onPointerLeave={() =>
+                          setHoveredCableId((current) =>
+                            current === route.link.id ? undefined : current,
+                          )
+                        }
                         onClick={(event) => {
                           event.stopPropagation();
                           setSelectedCableId(route.link.id);
@@ -1012,6 +1080,8 @@ export function RackStudioWorkspace({
                         }}
                       />
                       <path
+                        data-testid="rack-studio-cable-stroke"
+                        data-link-id={route.link.id}
                         d={route.path}
                         fill="none"
                         stroke={route.color}
@@ -1019,11 +1089,16 @@ export function RackStudioWorkspace({
                         strokeDasharray={route.handoff ? "8 5" : undefined}
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        opacity={selected ? 1 : 0.82}
+                        opacity={
+                          selected || hovered ? 1 : activeCableId ? 0.16 : 0.82
+                        }
                         className="pointer-events-none"
                       />
-                      {showCableLabels && labelPoint ? (
+                      {(showCableLabels || selected || hovered) &&
+                      labelPoint ? (
                         <text
+                          data-testid="rack-studio-cable-label"
+                          data-link-id={route.link.id}
                           x={labelPoint.x + 5}
                           y={labelPoint.y - 6}
                           fill="var(--text-primary)"
@@ -1277,7 +1352,10 @@ export function RackStudioWorkspace({
                         setSelectedDeviceId(undefined);
                       }}
                       cableCategory={cableCategory}
+                      routeStyle={routeStyle}
                       showCableLabels={showCableLabels}
+                      hoveredCableId={hoveredCableId}
+                      onHoverCable={setHoveredCableId}
                       editMode={editMode && canEdit && !phoneView}
                       healthOverlay={healthOverlay}
                       search={normalizedSearch}
@@ -1437,7 +1515,10 @@ interface ElevationProps {
   selectedCableId?: string;
   onSelectCable: (linkId: string) => void;
   cableCategory: PhysicalCableCategory | "all";
+  routeStyle: RackStudioCableRouteStyle;
   showCableLabels: boolean;
+  hoveredCableId?: string;
+  onHoverCable: (linkId: string | undefined) => void;
   editMode: boolean;
   healthOverlay: boolean;
   search: string;
@@ -1469,7 +1550,10 @@ function RackStudioElevation({
   selectedCableId,
   onSelectCable,
   cableCategory,
+  routeStyle,
   showCableLabels,
+  hoveredCableId,
+  onHoverCable,
   editMode,
   healthOverlay,
   search,
@@ -1725,7 +1809,10 @@ function RackStudioElevation({
             links={portLinks}
             selectedCableId={selectedCableId}
             category={cableCategory}
+            routeStyle={routeStyle}
             showLabels={showCableLabels}
+            hoveredCableId={hoveredCableId}
+            onHover={onHoverCable}
             onSelect={onSelectCable}
           />
 
@@ -1976,7 +2063,10 @@ function RackStudioElevationCableLayer({
   links,
   selectedCableId,
   category,
+  routeStyle,
   showLabels,
+  hoveredCableId,
+  onHover,
   onSelect,
 }: {
   rack: Rack;
@@ -1987,102 +2077,72 @@ function RackStudioElevationCableLayer({
   links: PortLink[];
   selectedCableId?: string;
   category: PhysicalCableCategory | "all";
+  routeStyle: RackStudioCableRouteStyle;
   showLabels: boolean;
+  hoveredCableId?: string;
+  onHover: (linkId: string | undefined) => void;
   onSelect: (linkId: string) => void;
 }) {
   const { t } = useI18n();
-  const portById = new Map(ports.map((port) => [port.id, port]));
-  const deviceById = new Map(devices.map((device) => [device.id, device]));
-  const anchors = new Map<string, { x: number; y: number }>();
-  const scene = buildRackElevationScene({
+  const { scene, routes } = buildRackElevationCableRoutes({
     rack,
-    rackFace: face,
+    face,
     devices,
     layouts,
     ports,
+    links,
+    category,
+    style: routeStyle,
     width: 1000,
     unitHeight: RACK_U_HEIGHT,
   });
   const height = scene.height;
-  for (const anchor of scene.portAnchors) {
-    anchors.set(anchor.portId, { x: anchor.x, y: anchor.y });
-  }
+  const activeCableId = hoveredCableId ?? selectedCableId;
 
-  const routeElements = links.flatMap((link) => {
-    if (link.visible === false) return [];
-    const fromPort = portById.get(link.fromPortId);
-    const toPort = portById.get(link.toPortId);
-    const cableCategory = cableCategoryForPorts(fromPort, toPort);
-    if (category !== "all" && category !== cableCategory) return [];
-    const from = anchors.get(link.fromPortId);
-    const to = anchors.get(link.toPortId);
-    if (!from && !to) return [];
-    let points: Array<{ x: number; y: number }>;
-    let handoff = false;
-    let handoffFace: RackFace | undefined;
-    if (from && to) {
-      let hash = 0;
-      for (const character of link.id) {
-        hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-      }
-      const gutter = Math.max(
-        8,
-        Math.min(992, (from.x + to.x) / 2 + ((hash % 11) - 5) * 10),
-      );
-      points = [from, { x: gutter, y: from.y }, { x: gutter, y: to.y }, to];
-    } else {
-      handoff = true;
-      const local = (from ?? to)!;
-      const remotePort = from ? toPort : fromPort;
-      const remoteDevice = remotePort
-        ? deviceById.get(remotePort.deviceId)
-        : undefined;
-      if (remoteDevice?.rackId === rack.id && remotePort) {
-        handoffFace = rackFaceForPhysicalFace(
-          remoteDevice,
-          remotePort.face === "rear" ? "rear" : "front",
-        );
-      }
-      points = [local, { x: local.x < 500 ? 992 : 8, y: local.y }];
-    }
-    const path = points
-      .map(
-        (point, index) =>
-          `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`,
-      )
-      .join(" ");
-    const selected = selectedCableId === link.id;
-    const last = points.at(-1)!;
-    const label = link.label || link.cableType || t("Cable");
+  const routeElements = routes.map((route) => {
+    const selected = selectedCableId === route.link.id;
+    const hovered = hoveredCableId === route.link.id;
+    const last = route.points.at(-1)!;
+    const label = route.link.label || route.link.cableType || t("Cable");
     const color =
-      normalizeColorToCss(link.color) ?? defaultCableColor(cableCategory);
+      normalizeColorToCss(route.link.color) ??
+      defaultCableColor(route.category);
     return [
-      <g key={link.id}>
+      <g key={route.link.id}>
         <path
-          d={path}
+          data-testid="rack-studio-cable"
+          data-link-id={route.link.id}
+          d={route.path}
           fill="none"
           stroke="transparent"
           strokeWidth={18}
           vectorEffect="non-scaling-stroke"
           className="pointer-events-stroke cursor-pointer"
+          onPointerEnter={() => onHover(route.link.id)}
+          onPointerLeave={() => onHover(undefined)}
           onClick={(event) => {
             event.stopPropagation();
-            onSelect(link.id);
+            onSelect(route.link.id);
           }}
         />
         <path
-          d={path}
+          data-testid="rack-studio-cable-stroke"
+          data-link-id={route.link.id}
+          d={route.path}
           fill="none"
           stroke={color}
           strokeWidth={selected ? 5 : 3}
-          strokeDasharray={handoff ? "8 5" : undefined}
+          strokeDasharray={route.handoff ? "8 5" : undefined}
           strokeLinecap="round"
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
+          opacity={selected || hovered ? 1 : activeCableId ? 0.16 : 0.82}
           className="pointer-events-none"
         />
-        {showLabels ? (
+        {showLabels || selected || hovered ? (
           <text
+            data-testid="rack-studio-cable-label"
+            data-link-id={route.link.id}
             x={last.x + (last.x < 500 ? 8 : -8)}
             y={last.y - 7}
             textAnchor={last.x < 500 ? "start" : "end"}
@@ -2094,11 +2154,11 @@ function RackStudioElevationCableLayer({
             fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
             className="pointer-events-none"
           >
-            {handoff
+            {route.handoff
               ? t("{value1}: {name}", {
                   value1: label,
-                  name: handoffFace
-                    ? handoffFace === "front"
+                  name: route.handoffFace
+                    ? route.handoffFace === "front"
                       ? t("Front")
                       : t("Rear")
                     : t("Room"),

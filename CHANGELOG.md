@@ -8,6 +8,55 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.2-beta.2] - 2026-09-03
+
+> Combined tester candidate for Proxmox native startup, inherited hardware
+> templates, dense Rack Studio cabling, and rack-top equipment placement.
+
+### Added
+
+- Added rack-top placement on each rack's 12-column surface, including front or
+  rear orientation, collision validation across both faces, horizontal pointer
+  and keyboard movement, undo/redo, exact ports and cable anchors, Rack Cabling,
+  and screen/SVG/PNG rendering.
+- Added schema 49 and an index on `(rackId, rackMountKind)` to record and support
+  the persisted rack-top enum meaning without rewriting existing device rows.
+
+### Changed
+
+- Hardware templates now follow the complete cycle-safe device-type lineage for
+  listing, preview/apply, bulk selection, defaults, backup validation, and the
+  device Physical Layout picker. Exact child defaults override the nearest
+  inherited parent default and can be removed to restore fallback.
+- Rack Studio room, focused-rack, manual-waypoint, and export rendering now use
+  one deterministic exterior-gutter planner with interval lane reuse. Smooth
+  rounded routes are the default, orthogonal routes remain available, and route
+  style plus all-label visibility persist as namespaced local preferences.
+- Hovered or selected cables keep their label and full emphasis while unrelated
+  cables fade; exports retain the chosen stable geometry and label setting but
+  omit transient interaction emphasis.
+
+### Fixed
+
+- Allowed `AF_NETLINK` in the hardened native systemd service so interface
+  enumeration can start in unprivileged Debian 13 Proxmox LXC guests, while
+  retaining `AF_PACKET` only in the opt-in advanced-discovery drop-in.
+- Parent hardware templates are now discoverable and applicable to custom child
+  types without changing stored layout snapshots, port IDs, bindings, or links.
+- Replaced Rack Studio's modulo cable offsets, which could overlap once a busy
+  corridor exceeded eleven or twelve routes.
+
+### Test notes
+
+- Verify fresh native install and update on disposable Proxmox VE 9.x AMD64
+  Debian 13 and Ubuntu 24.04 guests before publication; automated fixtures do
+  not substitute for that release evidence.
+- Verify child-template discovery/application, more than 13 overlapping cable
+  routes in both styles and themes, manual waypoints, focus/labels, rack-top
+  movement/conflicts/undo, backup/restore, exports, and schema 48 to 49 upgrade.
+- Rollback after using rack-top placement requires the pre-upgrade native backup
+  or volume snapshot because older binaries do not understand schema 49 rows.
+
 ## [1.8.2-beta.1] - 2026-09-03
 
 > Read-only Rack Cabling Visualizer beta. Existing Visualizer layouts and Rack
@@ -180,6 +229,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   update, pre-downtime failures, paired rollback, and retention fixtures.
 - Real Proxmox VE 9.x Debian 13 and Ubuntu 24.04 fresh-install testing is
   required before this beta phase is complete.
+
 ## [1.8.0] - 2026-08-24
 
 ### Changed

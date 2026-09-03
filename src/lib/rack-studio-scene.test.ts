@@ -82,6 +82,7 @@ test("selected rack faces control exact anchors and hidden-face handoffs", () =>
     ports: [frontPort, rearPort],
     links: [link],
     showLabels: true,
+    routeStyle: "smooth",
     theme: "dark",
     labels: exportLabels(),
   });
@@ -156,6 +157,7 @@ test("rack-top equipment follows its rack and keeps physical port anchors", () =
     ports: [port],
     links: [],
     showLabels: false,
+    routeStyle: "smooth",
     theme: "dark",
     labels: exportLabels(),
   });
@@ -265,6 +267,7 @@ test("dense mixed-placement scenes and exports are complete and deterministic", 
     ...sceneInput,
     links,
     showLabels: false,
+    routeStyle: "smooth",
     theme: "dark",
     labels: exportLabels(),
   });

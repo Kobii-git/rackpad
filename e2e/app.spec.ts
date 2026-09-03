@@ -1549,6 +1549,29 @@ test("Rack Studio patches exact ports, saves routes, exports, and traces", async
     await page
       .getByRole("button", { name: "Studio Beta", exact: true })
       .click();
+    await expect(
+      page.getByRole("combobox", { name: "Cable routing" }),
+    ).toHaveValue("smooth");
+    await expect(
+      page.getByRole("checkbox", { name: "Labels" }),
+    ).not.toBeChecked();
+    await page
+      .getByRole("combobox", { name: "Cable routing" })
+      .selectOption("orthogonal");
+    await page.getByRole("checkbox", { name: "Labels" }).check();
+    await expect
+      .poll(() =>
+        page.evaluate(() => ({
+          route: localStorage.getItem("rackpad.rack-studio.route-style"),
+          labels: localStorage.getItem("rackpad.rack-studio.show-all-labels"),
+        })),
+      )
+      .toEqual({ route: "orthogonal", labels: "true" });
+    await page.reload();
+    await expect(
+      page.getByRole("combobox", { name: "Cable routing" }),
+    ).toHaveValue("orthogonal");
+    await expect(page.getByRole("checkbox", { name: "Labels" })).toBeChecked();
     await page.getByRole("button", { name: "Cables", exact: true }).click();
 
     const backupDevice = page.getByTestId("rack-studio-device").filter({
@@ -1625,6 +1648,50 @@ test("Rack Studio patches exact ports, saves routes, exports, and traces", async
         routeWaypoints: [expect.objectContaining({ x: 420, y: 280 })],
       });
 
+    await page.getByRole("checkbox", { name: "Labels" }).uncheck();
+    for (const theme of ["light", "dark"] as const) {
+      await page.evaluate((nextTheme) => {
+        localStorage.setItem("rackpad-theme", nextTheme);
+      }, theme);
+      await page.reload();
+
+      const cableInteractions = page.locator(
+        '[data-testid="rack-studio-cable"]:visible',
+      );
+      await expect
+        .poll(() => cableInteractions.count(), {
+          message: `expected a dense Rack Studio cable fixture in ${theme} theme`,
+        })
+        .toBeGreaterThan(13);
+      const targetInteraction = page.locator(
+        `[data-testid="rack-studio-cable"][data-link-id="${linkId}"]:visible`,
+      );
+      const targetLabel = page.locator(
+        `[data-testid="rack-studio-cable-label"][data-link-id="${linkId}"]:visible`,
+      );
+      await expect.poll(() => targetInteraction.count()).toBeGreaterThan(0);
+      await expect(targetLabel).toHaveCount(0);
+      await targetInteraction.first().dispatchEvent("pointerover");
+      await expect.poll(() => targetLabel.count()).toBeGreaterThan(0);
+      const unrelatedStroke = page
+        .locator(
+          `[data-testid="rack-studio-cable-stroke"]:not([data-link-id="${linkId}"]):visible`,
+        )
+        .first();
+      await expect(unrelatedStroke).toHaveAttribute("opacity", "0.16");
+      await targetInteraction.first().dispatchEvent("pointerout");
+      await expect(targetLabel).toHaveCount(0);
+    }
+
+    await page.getByRole("checkbox", { name: "Labels" }).check();
+    await page
+      .locator(
+        `[data-testid="rack-studio-cable"][data-link-id="${linkId}"]:visible`,
+      )
+      .first()
+      .dispatchEvent("click");
+    await expect(inspector).toBeVisible();
+
     const downloadPromise = page.waitForEvent("download");
     await page
       .getByRole("button", { name: "Download SVG", exact: true })
@@ -1648,6 +1715,159 @@ test("Rack Studio patches exact ports, saves routes, exports, and traces", async
     if (linkId) {
       await request.delete(`/api/port-links/${linkId}`, { headers });
     }
+  }
+});
+
+test("Rack Studio places rack-top equipment and supports keyboard undo and redo", async ({
+  page,
+  request,
+}) => {
+  const headers = { Authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(36);
+  const hostname = `rack-top-switch-${suffix}`;
+  let deviceId = "";
+
+  try {
+    const createResponse = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        roomId: "room_lab",
+        hostname,
+        deviceType: "switch",
+        status: "online",
+        placement: "room",
+        heightU: 1,
+      },
+    });
+    expect(createResponse.status(), await createResponse.text()).toBe(201);
+    deviceId = ((await createResponse.json()) as { id: string }).id;
+
+    const looseState = {
+      mountKind: "loose",
+      roomId: "room_lab",
+      rackId: null,
+      parentDeviceId: null,
+      startU: null,
+      heightU: null,
+      face: null,
+      column: null,
+      columnSpan: null,
+      shelfX: null,
+      shelfY: null,
+      shelfWidth: null,
+      shelfHeight: null,
+      orientation: null,
+      side: null,
+    };
+    const rackTopState = {
+      ...looseState,
+      mountKind: "rack-top",
+      rackId: "rack_cmp",
+      heightU: 1,
+      face: "front",
+      column: 0,
+      columnSpan: 6,
+    };
+    const placementResponse = await request.post("/api/rack-studio/actions", {
+      headers,
+      data: {
+        kind: "device.place",
+        targetId: deviceId,
+        expected: looseState,
+        next: rackTopState,
+      },
+    });
+    expect(placementResponse.status(), await placementResponse.text()).toBe(
+      200,
+    );
+
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/racks");
+    await page
+      .getByRole("button", { name: "Studio Beta", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: /CMP-01/ })
+      .first()
+      .click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    const rackTopDevice = page.locator(
+      `[data-testid="rack-studio-rack-top-device"][aria-label="${hostname}"]`,
+    );
+    await expect(rackTopDevice).toBeVisible();
+    await rackTopDevice.focus();
+    await rackTopDevice.press("ArrowRight");
+    await expect
+      .poll(async () => {
+        const response = await request.get(`/api/devices/${deviceId}`, {
+          headers,
+        });
+        if (!response.ok()) return null;
+        const device = (await response.json()) as {
+          rackColumn?: number;
+          rackMountKind?: string;
+          startU?: number;
+        };
+        return {
+          column: device.rackColumn,
+          mountKind: device.rackMountKind,
+          startU: device.startU ?? null,
+        };
+      })
+      .toEqual({ column: 1, mountKind: "rack-top", startU: null });
+
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect
+      .poll(async () => {
+        const response = await request.get(`/api/devices/${deviceId}`, {
+          headers,
+        });
+        return response.ok()
+          ? ((await response.json()) as { rackColumn?: number }).rackColumn
+          : null;
+      })
+      .toBe(0);
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    await expect
+      .poll(async () => {
+        const response = await request.get(`/api/devices/${deviceId}`, {
+          headers,
+        });
+        return response.ok()
+          ? ((await response.json()) as { rackColumn?: number }).rackColumn
+          : null;
+      })
+      .toBe(1);
+
+    const rackTopBox = await rackTopDevice.boundingBox();
+    expect(rackTopBox).not.toBeNull();
+    await page.mouse.move(
+      rackTopBox!.x + rackTopBox!.width / 2,
+      rackTopBox!.y + rackTopBox!.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      rackTopBox!.x + rackTopBox!.width / 2 + rackTopBox!.width / 6,
+      rackTopBox!.y + rackTopBox!.height / 2 + 24,
+    );
+    await page.mouse.up();
+    await expect
+      .poll(async () => {
+        const response = await request.get(`/api/devices/${deviceId}`, {
+          headers,
+        });
+        if (!response.ok()) return null;
+        const device = (await response.json()) as {
+          rackColumn?: number;
+          startU?: number;
+        };
+        return { column: device.rackColumn, startU: device.startU ?? null };
+      })
+      .toEqual({ column: 2, startU: null });
+  } finally {
+    if (deviceId) await request.delete(`/api/devices/${deviceId}`, { headers });
   }
 });
 
@@ -4013,6 +4233,7 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
   const headers = { Authorization: `Bearer ${token}` };
   let viewerId = "";
   let deviceId = "";
+  let hardwareTemplateId = "";
   let viewerContext: Awaited<ReturnType<typeof browser.newContext>> | null =
     null;
 
@@ -4082,7 +4303,67 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
     });
     expect(deviceResponse.status(), await deviceResponse.text()).toBe(201);
     deviceId = ((await deviceResponse.json()) as { id: string }).id;
-    await page.reload();
+    hardwareTemplateId = `e2e-server-template-${suffix}`;
+    const face = {
+      schemaVersion: 1,
+      width: 1000,
+      height: 300,
+      elements: [
+        {
+          kind: "panel",
+          id: "server-panel",
+          x: 20,
+          y: 20,
+          width: 960,
+          height: 260,
+          tone: "mid",
+        },
+      ],
+    };
+    const templateResponse = await request.post("/api/hardware-templates", {
+      headers,
+      data: {
+        schemaVersion: 1,
+        id: hardwareTemplateId,
+        name: `Inherited server template ${suffix}`,
+        description: "E2E parent template for a custom server child.",
+        category: "server",
+        deviceTypes: ["server"],
+        mountDefaults: { kind: "direct", heightU: 1, columnSpan: 12 },
+        front: face,
+        rear: face,
+        portSlots: [],
+        moduleSlots: [],
+        modules: [],
+        portBlueprints: [],
+        driveBayBlueprints: [],
+      },
+    });
+    expect(templateResponse.status(), await templateResponse.text()).toBe(201);
+
+    await page.goto(`/devices/${deviceId}?tab=physical`);
+    const templateSelect = page.getByRole("combobox", { name: "Templates" });
+    await expect(templateSelect).toContainText(
+      `Inherited server template ${suffix}`,
+    );
+    await templateSelect.selectOption(hardwareTemplateId);
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect
+      .poll(async () => {
+        const response = await request.get(
+          `/api/physical-layouts/${deviceId}`,
+          {
+            headers,
+          },
+        );
+        if (!response.ok()) return null;
+        return ((await response.json()) as { sourceTemplateId?: string })
+          .sourceTemplateId;
+      })
+      .toBe(hardwareTemplateId);
+
+    await page.goto("/admin/device-types");
     await page.getByText(updatedLabel, { exact: true }).first().click();
     await expect(page.getByTestId("device-type-deletion-reason")).toContainText(
       "Devices 1",
@@ -4143,6 +4424,11 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
     await viewerContext?.close();
     if (viewerId) await request.delete(`/api/users/${viewerId}`, { headers });
     if (deviceId) await request.delete(`/api/devices/${deviceId}`, { headers });
+    if (hardwareTemplateId) {
+      await request.delete(`/api/hardware-templates/${hardwareTemplateId}`, {
+        headers,
+      });
+    }
     await request.delete(`/api/device-types/${typeId}`, { headers });
   }
 });

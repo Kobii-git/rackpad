@@ -141,13 +141,17 @@ mode creates canonical `PortLink` records from exact mapped faceplate ports,
 keeps logical and aggregate relationships out of the physical workflow, and
 requires confirmation for unusual connector pairs. Cable inspection now covers
 labels, type, length, color, notes, visibility, deletion, tracing, filters, and
-bounded room/face waypoints. Room and focused-rack views use deterministic
-equipment-aware lanes, preserve manual waypoints while racks move, and terminate
-cross-room links as labeled handoffs. Theme-aware full-room and focused-rack SVG
-and PNG exports include selected faces, physical ports, cable labels, metadata,
-and a legend. Exports use the same scene and face filtering as the interactive
-view, including shelf, side, rack-top, and loose equipment. Studio remains
-opt-in; this phase does not make it the default.
+bounded room/face waypoints. Room and focused-rack views share one deterministic
+exterior-gutter planner. Stable endpoint ordering plus interval-based lane reuse
+avoids fixed modulo collisions, treats unrelated rack/equipment rectangles as
+obstacles, and preserves exact manual waypoints while racks move. Smooth rounded
+and orthogonal renderers consume the same points; namespaced local preferences
+store the chosen style and all-label setting. Cross-room links terminate as
+labeled handoffs. Theme-aware full-room and focused-rack SVG and PNG exports use
+the same planned geometry and include selected faces, physical ports, cable
+labels, metadata, and a legend. Exports use the same scene and face filtering as
+the interactive view, including shelf, side, rack-top, and loose equipment.
+Studio remains opt-in; this phase does not make it the default.
 
 - Add Patch mode for creating real `PortLink` records by selecting or dragging between available physical ports.
 - Support copper, fiber, power, console, USB, and other physical links. Keep virtual, WiFi, VLAN, and aggregate relationships in Diagram mode.
