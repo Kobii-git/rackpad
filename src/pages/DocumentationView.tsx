@@ -499,7 +499,10 @@ export default function DocumentationView() {
                       </CardHeading>
                     </CardTitle>
                   </CardHeader>
-                  <CardBody className="min-h-[36rem] flex-1 overflow-y-auto xl:min-h-0">
+                  <CardBody
+                    tabIndex={0}
+                    className="min-h-[36rem] flex-1 overflow-y-auto xl:min-h-0"
+                  >
                     <div className="docs-print-header print-only">
                       <h1>{draftTitle || selectedPage.title}</h1>
                       <p>

@@ -53,7 +53,7 @@ import {
 } from "@/components/ui/Tooltip";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { Mono } from "@/components/shared/Mono";
-import type { Port } from "@/lib/types";
+import type { Port, Rack, Room } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import { formatPortEndpointLabel } from "@/lib/utils";
@@ -2036,7 +2036,7 @@ function VisualizerSidePanel({
         data-visualizer-scrollable="true"
         className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
       >
-        <Inspector
+        <VisualizerInspector
           model={model}
           selection={selection}
           selectedCable={selectedCable}
@@ -2170,25 +2170,97 @@ function TracePicker({
   );
 }
 
-function Inspector({
+export type VisualizerInspectionSelection =
+  | Exclude<VisualizerSelection, null>
+  | { kind: "port"; id: string }
+  | { kind: "rack"; id: string }
+  | null;
+
+export function VisualizerInspector({
   model,
   selection,
   selectedCable,
   selectedNode,
   onSelectDevice,
   onSelectCable,
+  visibleCables,
+  visibleDeviceIds,
+  racksById,
+  roomsById,
 }: {
   model: VisualizerModel;
-  selection: VisualizerSelection;
+  selection: VisualizerInspectionSelection;
   selectedCable: VisualizerCable | null;
   selectedNode: VisualizerNode | null;
   onSelectDevice: (id: string) => void;
   onSelectCable: (id: string) => void;
+  visibleCables?: VisualizerCable[];
+  visibleDeviceIds?: Set<string>;
+  racksById?: Record<string, Rack>;
+  roomsById?: Record<string, Room>;
 }) {
   const { t } = useI18n();
+  const scopedCables = visibleCables ?? model.cables;
   const neighbors = selectedNode
-    ? (model.directNeighborsByDeviceId[selectedNode.device.id] ?? [])
+    ? scopedCables.flatMap((cable) => {
+        if (
+          cable.fromDevice?.id === selectedNode.device.id &&
+          cable.toDevice &&
+          cable.fromPort &&
+          cable.toPort
+        ) {
+          return [
+            {
+              device: cable.toDevice,
+              port: cable.fromPort,
+              peerPort: cable.toPort,
+              link: cable.link,
+              color: cable.color,
+            },
+          ];
+        }
+        if (
+          cable.toDevice?.id === selectedNode.device.id &&
+          cable.fromDevice &&
+          cable.fromPort &&
+          cable.toPort
+        ) {
+          return [
+            {
+              device: cable.fromDevice,
+              port: cable.toPort,
+              peerPort: cable.fromPort,
+              link: cable.link,
+              color: cable.color,
+            },
+          ];
+        }
+        return [];
+      })
     : [];
+  const selectedPort =
+    selection?.kind === "port" ? model.portById[selection.id] : undefined;
+  const selectedRack =
+    selection?.kind === "rack" ? racksById?.[selection.id] : undefined;
+  const selectedPortCable = selectedPort
+    ? scopedCables.find(
+        (cable) =>
+          cable.link.fromPortId === selectedPort.id ||
+          cable.link.toPortId === selectedPort.id,
+      )
+    : undefined;
+  const selectedRackCableCount = selectedRack
+    ? scopedCables.filter((cable) =>
+        [cable.fromDevice?.rackId, cable.toDevice?.rackId].includes(
+          selectedRack.id,
+        ),
+      ).length
+    : 0;
+  const selectedRackDeviceCount = selectedRack
+    ? [...(visibleDeviceIds ?? new Set(Object.keys(model.deviceById)))].filter(
+        (deviceId) => model.deviceById[deviceId]?.rackId === selectedRack.id,
+      ).length
+    : 0;
   return (
     <>
       <Card className="shrink-0">
@@ -2196,11 +2268,15 @@ function Inspector({
           <CardTitle>
             <CardLabel>{t("Inspector")}</CardLabel>
             <CardHeading>
-              {selectedNode
-                ? selectedNode.device.hostname
-                : selectedCable
-                  ? t("Selected cable")
-                  : t("Select a link")}
+              {selectedRack
+                ? selectedRack.name
+                : selectedPort
+                  ? selectedPort.name
+                  : selectedNode
+                    ? selectedNode.device.hostname
+                    : selectedCable
+                      ? t("Selected cable")
+                      : t("Select a link")}
             </CardHeading>
           </CardTitle>
           {selectedNode && (
@@ -2227,6 +2303,26 @@ function Inspector({
               )}
             />
           )}
+          {selectedPort && (
+            <PortInspector
+              model={model}
+              port={selectedPort}
+              cable={selectedPortCable}
+              onSelectCable={onSelectCable}
+            />
+          )}
+          {selectedRack && (
+            <RackInspector
+              rack={selectedRack}
+              room={
+                selectedRack.roomId
+                  ? roomsById?.[selectedRack.roomId]
+                  : undefined
+              }
+              deviceCount={selectedRackDeviceCount}
+              cableCount={selectedRackCableCount}
+            />
+          )}
           {selectedNode && (
             <DeviceInspector
               model={model}
@@ -2250,7 +2346,7 @@ function Inspector({
           device={selectedNode.device}
           devices={Object.values(model.deviceById)}
           ports={Object.values(model.portById)}
-          portLinks={uniquePortLinks(model)}
+          portLinks={scopedCables.map((cable) => cable.link)}
           effectiveDeviceTypeByDeviceId={model.effectiveDeviceTypeByDeviceId}
         />
       )}
@@ -2260,7 +2356,7 @@ function Inspector({
           <CardTitle>
             <CardLabel>{t("Visible links")}</CardLabel>
             <CardHeading>
-              {model.cables.length} {t("cables")}
+              {scopedCables.length} {t("cables")}
             </CardHeading>
           </CardTitle>
         </CardHeader>
@@ -2268,7 +2364,7 @@ function Inspector({
           data-visualizer-scrollable="true"
           className="max-h-80 min-h-0 space-y-2 overflow-y-auto"
         >
-          {model.cables.map((cable) => (
+          {scopedCables.map((cable) => (
             <button
               key={cable.link.id}
               type="button"
@@ -2297,6 +2393,76 @@ function Inspector({
   );
 }
 
+function PortInspector({
+  model,
+  port,
+  cable,
+  onSelectCable,
+}: {
+  model: VisualizerModel;
+  port: Port;
+  cable?: VisualizerCable;
+  onSelectCable: (id: string) => void;
+}) {
+  const { t } = useI18n();
+  const device = model.deviceById[port.deviceId];
+  return (
+    <div className="space-y-3">
+      {device && (
+        <Button size="sm" asChild>
+          <Link to={`/devices/${device.id}`}>
+            <ExternalLink className="size-3.5" />
+            {t("Open device")}
+          </Link>
+        </Button>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <InfoBox label={t("Device")} value={device?.hostname} />
+        <InfoBox label={t("Port")} value={port.name} mono />
+        <InfoBox label={t("Type")} value={port.kind} />
+        <InfoBox
+          label={t("Face")}
+          value={port.face === "rear" ? t("Rear") : t("Front")}
+        />
+        <InfoBox label={t("Status")} value={port.linkState} />
+        <InfoBox label={t("Mode")} value={port.mode} />
+      </div>
+      {cable && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onSelectCable(cable.link.id)}
+        >
+          <Cable className="size-3.5" />
+          {t("Cable")}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function RackInspector({
+  rack,
+  room,
+  deviceCount,
+  cableCount,
+}: {
+  rack: Rack;
+  room?: Room;
+  deviceCount: number;
+  cableCount: number;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <InfoBox label={t("Room")} value={room?.name} />
+      <InfoBox label={t("Height")} value={`${rack.totalU}${t("U")}`} mono />
+      <InfoBox label={t("Devices")} value={String(deviceCount)} />
+      <InfoBox label={t("Cables")} value={String(cableCount)} />
+    </div>
+  );
+}
+
 function DeviceInspector({
   model,
   node,
@@ -2316,9 +2482,7 @@ function DeviceInspector({
 }) {
   const { t } = useI18n();
   const physicalLayout = useStore((state) =>
-    state.physicalLayouts.find(
-      (layout) => layout.deviceId === node.device.id,
-    ),
+    state.physicalLayouts.find((layout) => layout.deviceId === node.device.id),
   );
   return (
     <div className="space-y-3">
@@ -2754,14 +2918,6 @@ function TraceSummary({
         )}
     </div>
   );
-}
-
-function uniquePortLinks(model: VisualizerModel) {
-  return [
-    ...new Map(
-      model.cables.map((cable) => [cable.link.id, cable.link]),
-    ).values(),
-  ];
 }
 
 function formatTraceText(

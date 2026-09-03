@@ -8,6 +8,48 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.2-beta.1] - 2026-09-03
+
+> Read-only Rack Cabling Visualizer beta. Existing Visualizer layouts and Rack
+> Studio behavior remain unchanged, with no database or API changes.
+
+### Added
+
+- Added a room-scoped Rack Cabling Visualizer layout with bottom-aligned rack
+  elevations, exact physical port anchors, front/rear/both views, deterministic
+  smooth or orthogonal cable routes, loose-equipment tray handoffs, search,
+  trace, inspection, pan, zoom, and keyboard controls.
+- Added explicit cross-room, hidden-face, unavailable-position, and collapsed
+  loose-tray handoffs so the view never implies undocumented physical paths.
+
+### Changed
+
+- Shared the presentation-only rack shell and equipment renderer between Rack
+  Studio and Rack Cabling while keeping placement, patching, undo, and all
+  inventory mutations exclusively in Rack Studio.
+- Packed handoff labels into deterministic scene, rack, fallback-equipment, and
+  tray lanes with leader lines for displaced labels.
+- Refreshed the locked `@fastify/rate-limit`, `fast-uri`, and supporting patch
+  releases within the existing dependency ranges to resolve high-severity
+  advisories.
+
+### Fixed
+
+- Kept devices with missing or invalid physical placement visible as warned
+  fallback equipment, preserving configured faceplates when only placement is
+  unavailable and terminating affected cables at the fallback boundary.
+- Restored narrow-screen inspector focus to the selected rack, device, port, or
+  cable, including loose equipment, and removed duplicate focus identifiers.
+
+### Test notes
+
+- Verify room, face, route, filter, health, label, tray, search, trace,
+  inspection, pan/zoom/fit, responsive focus, accessibility, overflow, and
+  read-only behavior for administrator, editor, and viewer roles.
+- Verify dense handoff labels in light and dark themes, invalid placement and
+  missing-layout fallbacks, exact rack/port geometry, screenshot determinism,
+  Rack Studio regression coverage, and rollback to `v1.8.2-beta.0` by image.
+
 ## [1.8.2-beta.0] - 2026-08-31
 
 > Opt-in Rack Studio tester release. The classic rack elevation and Docker

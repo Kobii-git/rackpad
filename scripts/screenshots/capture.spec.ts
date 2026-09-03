@@ -216,6 +216,23 @@ const visualizerScenes: Scene[] = [
       "rackpad.visualizer.rack-face-mode": "both",
     },
   },
+  {
+    ...scene(
+      "visualizer-rack-cabling.png",
+      "/visualizer",
+      "Visualizer",
+      "dark",
+    ),
+    focal: { kind: "testId", value: "rack-cabling-canvas" },
+    storage: {
+      "rackpad.visualizer.layout-mode": "rack",
+      "rackpad.visualizer.rack-cabling-room": "room_lab",
+      "rackpad.visualizer.rack-cabling-route": "smooth",
+      "rackpad.visualizer.rack-cabling-labels": "false",
+      "rackpad.visualizer.rack-cabling-loose-expanded": "false",
+      "rackpad.visualizer.rack-face-mode": "front",
+    },
+  },
 ];
 
 const darkScenes: Scene[] = [
@@ -243,8 +260,8 @@ test("capture the deterministic Rackpad documentation suite", async ({
   page,
   request,
 }) => {
-  expect(new Set(scenes.map((entry) => entry.filename)).size).toBe(39);
-  expect(scenes).toHaveLength(39);
+  expect(new Set(scenes.map((entry) => entry.filename)).size).toBe(40);
+  expect(scenes).toHaveLength(40);
   expect(page.viewportSize()).toEqual({ width: WIDTH, height: HEIGHT });
 
   const bootstrapResponse = await request.post("/api/auth/bootstrap", {
@@ -383,6 +400,10 @@ async function prepareScene(page: Page, current: Scene) {
         "rackpad.visualizer.loose-placement": "beside-racks",
         "rackpad.visualizer.room-only-sections": "false",
         "rackpad.visualizer.rack-face-mode": "front",
+        "rackpad.visualizer.rack-cabling-room": "",
+        "rackpad.visualizer.rack-cabling-route": "smooth",
+        "rackpad.visualizer.rack-cabling-labels": "false",
+        "rackpad.visualizer.rack-cabling-loose-expanded": "false",
       };
       for (const [key, value] of Object.entries({ ...defaults, ...storage })) {
         localStorage.setItem(key, value);

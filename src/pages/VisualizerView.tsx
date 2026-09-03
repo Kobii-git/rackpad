@@ -13,7 +13,9 @@ import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
 import { buildVisualizerModel, traceFromPort } from "./visualizer/model";
 import { DiagramCanvas } from "./visualizer/DiagramCanvas";
+import { RackCablingCanvas } from "./visualizer/RackCablingCanvas";
 import { VisualizerCanvas } from "./visualizer/VisualizerCanvas";
+import type { RackCablingRouteStyle } from "./visualizer/rack-cabling";
 import type {
   TraceModeState,
   VisualizerCableLayout,
@@ -42,6 +44,12 @@ const CABLE_LAYOUT_STORAGE_KEY = "rackpad.visualizer.cable-layout";
 const CUSTOM_NODE_POSITIONS_STORAGE_KEY =
   "rackpad.visualizer.custom-node-positions";
 const ORDER_STORAGE_KEY = "rackpad.visualizer.order";
+const RACK_CABLING_ROOM_STORAGE_KEY = "rackpad.visualizer.rack-cabling-room";
+const RACK_CABLING_ROUTE_STORAGE_KEY = "rackpad.visualizer.rack-cabling-route";
+const RACK_CABLING_LABELS_STORAGE_KEY =
+  "rackpad.visualizer.rack-cabling-labels";
+const RACK_CABLING_LOOSE_STORAGE_KEY =
+  "rackpad.visualizer.rack-cabling-loose-expanded";
 
 type MoveDirection = "up" | "down";
 
@@ -141,6 +149,35 @@ export default function VisualizerView() {
     result: null,
     message: null,
   });
+  const [rackCablingRoomId, setRackCablingRoomId] = useState(() =>
+    readString(RACK_CABLING_ROOM_STORAGE_KEY),
+  );
+  const [rackCablingRouteStyle, setRackCablingRouteStyle] =
+    useState<RackCablingRouteStyle>(() =>
+      readRackCablingRouteStyle(RACK_CABLING_ROUTE_STORAGE_KEY),
+    );
+  const [rackCablingLabels, setRackCablingLabels] = useState(() =>
+    readBoolean(RACK_CABLING_LABELS_STORAGE_KEY, false),
+  );
+  const [rackCablingLooseExpanded, setRackCablingLooseExpanded] = useState(() =>
+    readBoolean(RACK_CABLING_LOOSE_STORAGE_KEY, false),
+  );
+
+  const rackRooms = useMemo(
+    () => rooms.filter((room) => racks.some((rack) => rack.roomId === room.id)),
+    [racks, rooms],
+  );
+
+  useEffect(() => {
+    if (rooms.length === 0) {
+      if (rackCablingRoomId) setRackCablingRoomId("");
+      return;
+    }
+    if (rooms.some((room) => room.id === rackCablingRoomId)) return;
+    const next = rackRooms[0]?.id ?? rooms[0]!.id;
+    setRackCablingRoomId(next);
+    writeString(RACK_CABLING_ROOM_STORAGE_KEY, next);
+  }, [rackCablingRoomId, rackRooms, rooms]);
 
   const model = useMemo(
     () =>
@@ -440,13 +477,13 @@ export default function VisualizerView() {
               <option value="grouped">{t("Grouped")}</option>
               <option value="pyramid">{t("Pyramid")}</option>
               <option value="diagram">{t("Diagram")}</option>
+              <option value="rack">{t("Rack cabling")}</option>
             </select>
             {layoutMode === "diagram" && (
               <select
                 value={diagramNodeStyle}
                 onChange={(event) => {
-                  const next = event.target
-                    .value as VisualizerDiagramNodeStyle;
+                  const next = event.target.value as VisualizerDiagramNodeStyle;
                   setDiagramNodeStyle(next);
                   writeString(DIAGRAM_NODE_STYLE_STORAGE_KEY, next);
                 }}
@@ -457,7 +494,8 @@ export default function VisualizerView() {
                 <option value="physical">{t("Physical layout")}</option>
               </select>
             )}
-            {layoutMode === "diagram" && diagramNodeStyle === "physical" && (
+            {((layoutMode === "diagram" && diagramNodeStyle === "physical") ||
+              layoutMode === "rack") && (
               <select
                 value={rackFaceMode}
                 onChange={(event) => {
@@ -560,6 +598,43 @@ export default function VisualizerView() {
           nodeStyle={diagramNodeStyle}
           physicalLayouts={physicalLayouts}
           physicalFaceMode={rackFaceMode}
+        />
+      ) : layoutMode === "rack" ? (
+        <RackCablingCanvas
+          rooms={rooms}
+          roomId={rackCablingRoomId}
+          onRoomIdChange={(next) => {
+            setRackCablingRoomId(next);
+            writeString(RACK_CABLING_ROOM_STORAGE_KEY, next);
+          }}
+          racks={racks}
+          devices={devices}
+          layouts={physicalLayouts}
+          ports={ports}
+          portLinks={portLinks}
+          model={model}
+          rackOrder={orderSettings.racks}
+          faceMode={rackFaceMode}
+          cableType={cableType}
+          healthOverlay={healthOverlay}
+          onToggleHealth={toggleHealthOverlay}
+          routeStyle={rackCablingRouteStyle}
+          onRouteStyleChange={(next) => {
+            setRackCablingRouteStyle(next);
+            writeString(RACK_CABLING_ROUTE_STORAGE_KEY, next);
+          }}
+          showLabels={rackCablingLabels}
+          onShowLabelsChange={(next) => {
+            setRackCablingLabels(next);
+            writeBoolean(RACK_CABLING_LABELS_STORAGE_KEY, next);
+          }}
+          looseExpanded={rackCablingLooseExpanded}
+          onLooseExpandedChange={(next) => {
+            setRackCablingLooseExpanded(next);
+            writeBoolean(RACK_CABLING_LOOSE_STORAGE_KEY, next);
+          }}
+          traceMode={traceMode}
+          setTraceMode={setTraceMode}
         />
       ) : (
         <VisualizerCanvas
@@ -859,10 +934,24 @@ function readLooseDevicePlacement(key: string): VisualizerLooseDevicePlacement {
 function readLayoutMode(key: string): VisualizerLayoutMode {
   try {
     const value = window.localStorage.getItem(key);
-    return value === "pyramid" || value === "diagram" ? value : "grouped";
+    return value === "pyramid" || value === "diagram" || value === "rack"
+      ? value
+      : "grouped";
   } catch {
     return "grouped";
   }
+}
+
+function readString(key: string) {
+  try {
+    return window.localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function readRackCablingRouteStyle(key: string): RackCablingRouteStyle {
+  return readString(key) === "orthogonal" ? "orthogonal" : "smooth";
 }
 
 function readDiagramNodeStyle(key: string): VisualizerDiagramNodeStyle {
