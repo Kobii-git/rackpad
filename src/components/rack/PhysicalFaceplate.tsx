@@ -133,6 +133,7 @@ function PortConnector({
     <g
       role={onSelect && port ? "button" : undefined}
       tabIndex={onSelect && port ? 0 : undefined}
+      data-cabling-selection-id={onSelect && port ? `port:${port.id}` : undefined}
       aria-label={title}
       className={cn(onSelect && port && "cursor-pointer outline-none")}
       transform={`rotate(${slot.rotation} ${centerX} ${centerY})`}

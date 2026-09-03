@@ -334,9 +334,7 @@ test("native backup admin controls expose status, create, and delete", async ({
           `/api/admin/native-backups/${encodeURIComponent(created.name)}`,
         ),
   );
-  await backupRow
-    .getByRole("button", { name: "Delete", exact: true })
-    .click();
+  await backupRow.getByRole("button", { name: "Delete", exact: true }).click();
   const deletionResponse = await deletionResponsePromise;
   expect(deletionResponse.status()).toBe(204);
   await expect(panel.getByText(created.name, { exact: true })).toHaveCount(0);
@@ -1105,6 +1103,436 @@ async function authenticate(page: Page, language = "en") {
   );
 }
 
+test("rack cabling visualizer persists controls and stays read-only for every role", async ({
+  browser,
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  const headers = { Authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(36);
+  const createdUserIds: string[] = [];
+  const roleContexts: Array<Awaited<ReturnType<typeof browser.newContext>>> =
+    [];
+
+  try {
+    await authenticate(page);
+    await page.addInitScript(() => {
+      localStorage.setItem("rackpad-theme", "dark");
+      localStorage.setItem("rackpad.visualizer.layout-mode", "rack");
+      localStorage.setItem("rackpad.visualizer.rack-cabling-room", "room_lab");
+    });
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/visualizer");
+
+    await expect(
+      page.getByRole("combobox", { name: "Visualizer layout" }),
+    ).toHaveValue("rack");
+    await expect(page.getByTestId("rack-cabling-rack")).toHaveCount(2);
+    await expect(page.getByTestId("rack-cabling-cable").first()).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Room" })).toHaveValue(
+      "room_lab",
+    );
+
+    await page
+      .getByRole("combobox", { name: "Cable routing" })
+      .selectOption("orthogonal");
+    await page.getByRole("checkbox", { name: "Labels" }).check();
+    await page.getByRole("combobox", { name: "Face" }).selectOption("both");
+    await expect(
+      page
+        .getByTestId("rack-cabling-canvas")
+        .getByText("Rear", { exact: true }),
+    ).toHaveCount(2);
+    const selectionControls = await page
+      .locator("[data-cabling-selection-id]")
+      .evaluateAll((elements) =>
+        elements.map((element) => ({
+          id: element.getAttribute("data-cabling-selection-id"),
+          focusable:
+            element.getAttribute("tabindex") === "0" ||
+            element.tagName === "BUTTON",
+        })),
+      );
+    expect(selectionControls.every((entry) => entry.focusable)).toBeTruthy();
+    expect(new Set(selectionControls.map((entry) => entry.id)).size).toBe(
+      selectionControls.length,
+    );
+
+    const cableFilter = page.getByRole("combobox", {
+      name: "Filter visualized cables by type",
+    });
+    const cableCount = await page.getByTestId("rack-cabling-cable").count();
+    const filteredCableType = await cableFilter
+      .locator("option")
+      .nth(1)
+      .getAttribute("value");
+    expect(filteredCableType).toBeTruthy();
+    await cableFilter.selectOption(filteredCableType!);
+    expect(await page.getByTestId("rack-cabling-cable").count()).toBeLessThan(
+      cableCount,
+    );
+    await cableFilter.selectOption("all");
+
+    await page.getByRole("textbox", { name: "Search" }).fill("pve-01");
+    await expect(page.locator('[data-search-match="false"]')).toHaveCount(1);
+    await page.getByRole("textbox", { name: "Search" }).fill("");
+    await page.getByRole("button", { name: "Health" }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(() => localStorage.getItem("rackpad.visualizer.health")),
+      )
+      .toBe("true");
+
+    const sceneTransformBefore = await page
+      .getByTestId("rack-cabling-scene")
+      .getAttribute("style");
+    const rackCanvas = page.getByTestId("rack-cabling-canvas");
+    const rackCanvasBounds = await rackCanvas.boundingBox();
+    expect(rackCanvasBounds).toBeTruthy();
+    await page.mouse.move(
+      rackCanvasBounds!.x + rackCanvasBounds!.width - 30,
+      rackCanvasBounds!.y + rackCanvasBounds!.height - 30,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      rackCanvasBounds!.x + rackCanvasBounds!.width - 70,
+      rackCanvasBounds!.y + rackCanvasBounds!.height - 60,
+    );
+    await page.mouse.up();
+    await expect
+      .poll(() => page.getByTestId("rack-cabling-scene").getAttribute("style"))
+      .not.toBe(sceneTransformBefore);
+
+    await page.getByTestId("rack-cabling-cable").first().dispatchEvent("click");
+    await expect(
+      page.getByText("Selected cable", { exact: true }).first(),
+    ).toBeVisible();
+    expect(
+      await page
+        .locator('[data-rack-cabling-equipment][data-highlighted="true"]')
+        .count(),
+    ).toBeGreaterThanOrEqual(2);
+    await page.getByTestId("rack-cabling-rack").first().dispatchEvent("click");
+    await expect(page.getByTestId("rack-cabling-rack").first()).toHaveAttribute(
+      "data-selected",
+      "true",
+    );
+
+    await page.getByRole("button", { name: "Zoom in" }).click();
+    await page.getByRole("button", { name: "Zoom out" }).click();
+    await page.getByRole("button", { name: "Fit" }).click();
+    await page.getByRole("button", { name: "Reset" }).click();
+
+    await page.getByRole("button", { name: "Trace mode" }).click();
+    await page
+      .getByRole("button", { name: /eno1 · rj45/, exact: true })
+      .first()
+      .click();
+    await expect(
+      page.getByText(/path traced|No onward path found/, { exact: false }),
+    ).toBeVisible();
+
+    await page
+      .getByRole("combobox", { name: "Room" })
+      .selectOption("room_lounge");
+    await expect(
+      page.getByText("No racks assigned", { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("combobox", { name: "Room" })
+      .selectOption("room_office");
+    await page.getByRole("button", { name: /Loose gear/ }).click();
+    await expect(
+      page.getByText("build-mini-01", { exact: true }),
+    ).toBeVisible();
+    await page.getByRole("combobox", { name: "Room" }).selectOption("room_lab");
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => ({
+          layout: localStorage.getItem("rackpad.visualizer.layout-mode"),
+          room: localStorage.getItem("rackpad.visualizer.rack-cabling-room"),
+          route: localStorage.getItem("rackpad.visualizer.rack-cabling-route"),
+          labels: localStorage.getItem(
+            "rackpad.visualizer.rack-cabling-labels",
+          ),
+          loose: localStorage.getItem(
+            "rackpad.visualizer.rack-cabling-loose-expanded",
+          ),
+        })),
+      )
+      .toEqual({
+        layout: "rack",
+        room: "room_lab",
+        route: "orthogonal",
+        labels: "true",
+        loose: "true",
+      });
+
+    await page.reload();
+    await expect(page.getByTestId("rack-cabling-rack")).toHaveCount(2);
+    await expect(page.getByRole("combobox", { name: "Room" })).toHaveValue(
+      "room_lab",
+    );
+    await expect(
+      page.getByRole("combobox", { name: "Cable routing" }),
+    ).toHaveValue("orthogonal");
+    await expect(page.getByRole("checkbox", { name: "Labels" })).toBeChecked();
+
+    for (const theme of ["light", "dark"] as const) {
+      await page.evaluate((nextTheme) => {
+        localStorage.setItem("rackpad-theme", nextTheme);
+      }, theme);
+      await page.setViewportSize({ width: 720, height: 900 });
+      await page.reload();
+      expect(
+        await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth <=
+            document.documentElement.clientWidth + 1,
+        ),
+        `rack cabling overflowed in ${theme} at 720px`,
+      ).toBeTruthy();
+      const results = await new AxeBuilder({ page }).analyze();
+      expect(
+        results.violations.filter(
+          (violation) =>
+            violation.impact === "critical" || violation.impact === "serious",
+        ),
+        `rack cabling has serious accessibility violations in ${theme}`,
+      ).toEqual([]);
+    }
+
+    const restoreFocus = async (target: Locator) => {
+      await target.focus();
+      await target.press("Enter");
+      await page.getByRole("button", { name: "Close" }).click();
+      await expect(target).toBeFocused();
+    };
+    await page.getByRole("combobox", { name: "Room" }).selectOption("room_lab");
+    await restoreFocus(page.getByRole("button", { name: /Rack: CMP-01/ }));
+    await restoreFocus(
+      page.getByRole("button", { name: /eno1 · rj45/, exact: true }).first(),
+    );
+    await restoreFocus(page.getByTestId("rack-cabling-cable").first());
+    await page
+      .getByRole("combobox", { name: "Room" })
+      .selectOption("room_office");
+    const looseDevice = page.getByRole("button", {
+      name: "build-mini-01",
+      exact: true,
+    });
+    await expect(looseDevice).toBeVisible();
+    await restoreFocus(looseDevice);
+
+    const adminCanvas = page.getByTestId("rack-cabling-canvas");
+    for (const action of ["Delete", "Edit", "Save", "Undo", "Redo"]) {
+      await expect(
+        adminCanvas.getByRole("button", { name: action, exact: true }),
+      ).toHaveCount(0);
+    }
+
+    for (const role of ["editor", "viewer"] as const) {
+      const username = `rack-cabling-${role}-${suffix}`;
+      const password = `rack-cabling-${role}-password`;
+      const response = await request.post("/api/users", {
+        headers,
+        data: {
+          username,
+          displayName: `Rack Cabling ${role}`,
+          password,
+          role,
+        },
+      });
+      expect(response.status()).toBe(201);
+      createdUserIds.push(((await response.json()) as { id: string }).id);
+      const loginResponse = await request.post("/api/auth/login", {
+        data: { username, password },
+      });
+      expect(loginResponse.ok()).toBeTruthy();
+      const roleToken = ((await loginResponse.json()) as { token: string })
+        .token;
+      const context = await browser.newContext({
+        viewport: { width: 1280, height: 900 },
+      });
+      roleContexts.push(context);
+      const rolePage = await context.newPage();
+      await rolePage.addInitScript((authToken) => {
+        localStorage.setItem("rackpad.auth.token", authToken);
+        localStorage.setItem("rackpad.language", "en");
+        localStorage.setItem("rackpad.visualizer.layout-mode", "rack");
+        localStorage.setItem(
+          "rackpad.visualizer.rack-cabling-room",
+          "room_lab",
+        );
+      }, roleToken);
+      await rolePage.goto("http://127.0.0.1:5173/visualizer");
+      const roleCanvas = rolePage.getByTestId("rack-cabling-canvas");
+      await expect(roleCanvas).toBeVisible();
+      for (const action of ["Delete", "Edit", "Save", "Undo", "Redo"]) {
+        await expect(
+          roleCanvas.getByRole("button", { name: action, exact: true }),
+        ).toHaveCount(0);
+      }
+    }
+  } finally {
+    await Promise.all(roleContexts.map((context) => context.close()));
+    for (const userId of createdUserIds) {
+      await request.delete(`/api/users/${userId}`, { headers });
+    }
+  }
+});
+
+test("rack cabling scopes inspection and supports keyboard search and selection", async ({
+  page,
+}) => {
+  await authenticate(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("rackpad.visualizer.layout-mode", "rack");
+    localStorage.setItem("rackpad.visualizer.rack-cabling-room", "room_lab");
+    localStorage.setItem("rackpad.visualizer.rack-cabling-labels", "false");
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/visualizer");
+
+  const scene = page.getByTestId("rack-cabling-scene");
+  const transformBeforeResize = await scene.getAttribute("style");
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await expect
+    .poll(() => scene.getAttribute("style"))
+    .not.toBe(transformBeforeResize);
+  await page.setViewportSize({ width: 1800, height: 900 });
+
+  await page.keyboard.press("r");
+  await expect(scene).toHaveAttribute("style", /scale\(1\)/);
+  const resetTransform = await scene.getAttribute("style");
+  await page.keyboard.press("f");
+  await expect.poll(() => scene.getAttribute("style")).not.toBe(resetTransform);
+  await page.keyboard.press("1");
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("rackpad.visualizer.health")),
+    )
+    .toBe("true");
+  await page.keyboard.press("2");
+  await expect(
+    page.getByText("Click first port...", { exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await expect(page.getByTestId("rack-cabling-cable-label")).toHaveCount(0);
+  expect(
+    await page.getByTestId("rack-cabling-handoff-label").count(),
+  ).toBeGreaterThan(0);
+  const handoffBoxes = await page
+    .getByTestId("rack-cabling-handoff-label")
+    .evaluateAll((labels) =>
+      labels.map((label) => {
+        const bounds = label.getBoundingClientRect();
+        return {
+          left: bounds.left,
+          right: bounds.right,
+          top: bounds.top,
+          bottom: bounds.bottom,
+        };
+      }),
+    );
+  for (let leftIndex = 0; leftIndex < handoffBoxes.length; leftIndex += 1) {
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < handoffBoxes.length;
+      rightIndex += 1
+    ) {
+      const left = handoffBoxes[leftIndex]!;
+      const right = handoffBoxes[rightIndex]!;
+      const overlapsHorizontally =
+        left.left < right.right && left.right > right.left;
+      const overlapsVertically =
+        left.top < right.bottom && left.bottom > right.top;
+      expect(
+        overlapsHorizontally && overlapsVertically,
+        `handoff labels ${leftIndex} and ${rightIndex} overlap`,
+      ).toBeFalsy();
+    }
+  }
+
+  await page.keyboard.press("/");
+  const search = page.getByRole("textbox", { name: "Search" });
+  await expect(search).toBeFocused();
+  await search.fill("pve");
+  const searchOptions = page.getByRole("option");
+  expect(await searchOptions.count()).toBeGreaterThan(1);
+  const selectedSearchOption = page.locator(
+    '[role="option"][aria-selected="true"]',
+  );
+  const firstSelected = await selectedSearchOption.textContent();
+  await search.press("ArrowDown");
+  const nextSelected = await selectedSearchOption.textContent();
+  expect(nextSelected).not.toBe(firstSelected);
+  await search.press("ArrowUp");
+  await expect(selectedSearchOption).toContainText(firstSelected ?? "");
+  await search.fill("10.0.10.11");
+  await expect(
+    page.getByRole("option", { name: /pve-01/ }).first(),
+  ).toBeVisible();
+  await search.press("Enter");
+  await expect(
+    page.getByRole("link", { name: "Open device" }).first(),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(search).toHaveValue("");
+
+  const firstCable = page.getByTestId("rack-cabling-cable").first();
+  await firstCable.focus();
+  await expect(page.getByTestId("rack-cabling-cable-label")).toHaveCount(1);
+  await firstCable.press("Enter");
+  await expect(
+    page.getByText("Selected cable", { exact: true }).first(),
+  ).toBeVisible();
+
+  const visibleLinkPanel = page
+    .locator("section,div")
+    .filter({
+      has: page.getByText("Visible links", { exact: true }),
+    })
+    .last();
+  await expect(visibleLinkPanel).toContainText(
+    `${await page.getByTestId("rack-cabling-cable").count()} cables`,
+  );
+
+  await page
+    .getByRole("combobox", { name: "Filter visualized cables by type" })
+    .selectOption("IEC C19");
+  await page
+    .getByRole("button", { name: /eno1 · rj45/, exact: true })
+    .first()
+    .press("Enter");
+  await expect(page.getByText("eno1", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Selected cable", { exact: true })).toHaveCount(
+    0,
+  );
+
+  await page
+    .getByRole("combobox", { name: "Filter visualized cables by type" })
+    .selectOption("all");
+  const rackButton = page.getByRole("button", { name: /Rack: CMP-01/ });
+  await rackButton.focus();
+  await rackButton.press("Enter");
+  await expect(page.getByTestId("rack-cabling-rack").first()).toHaveAttribute(
+    "data-selected",
+    "true",
+  );
+
+  await page
+    .getByRole("combobox", { name: "Room" })
+    .selectOption("room_lounge");
+  await expect(
+    page.getByText("No item selected", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("0 cables", { exact: true })).toBeVisible();
+});
+
 test("Rack Studio patches exact ports, saves routes, exports, and traces", async ({
   page,
   request,
@@ -1118,16 +1546,16 @@ test("Rack Studio patches exact ports, saves routes, exports, and traces", async
     await authenticate(page);
     await page.setViewportSize({ width: 1600, height: 1000 });
     await page.goto("/racks");
-    await page.getByRole("button", { name: "Studio Beta", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Studio Beta", exact: true })
+      .click();
     await page.getByRole("button", { name: "Cables", exact: true }).click();
 
-    const backupDevice = page.getByRole("button", {
-      name: "backup-01",
-      exact: true,
+    const backupDevice = page.getByTestId("rack-studio-device").filter({
+      has: page.getByRole("button", { name: "backup-01", exact: true }),
     });
-    const pveDevice = page.getByRole("button", {
-      name: "pve-01",
-      exact: true,
+    const pveDevice = page.getByTestId("rack-studio-device").filter({
+      has: page.getByRole("button", { name: "pve-01", exact: true }),
     });
     await backupDevice
       .getByRole("button", { name: "eno4 · rj45", exact: true })
@@ -1149,8 +1577,7 @@ test("Rack Studio patches exact ports, saves routes, exports, and traces", async
     }>;
     linkId =
       links.find(
-        (link) =>
-          link.fromPortId === fromPortId && link.toPortId === toPortId,
+        (link) => link.fromPortId === fromPortId && link.toPortId === toPortId,
       )?.id ?? "";
     expect(linkId).not.toBe("");
 
@@ -3411,11 +3838,7 @@ test("device overview storage follows topology precedence without rewriting manu
       111,
       true,
     );
-    const rawDeviceId = await createDevice(
-      `overview-raw-${suffix}`,
-      222,
-      true,
-    );
+    const rawDeviceId = await createDevice(`overview-raw-${suffix}`, 222, true);
     const manualDeviceId = await createDevice(
       `overview-manual-${suffix}`,
       333,
@@ -3426,11 +3849,7 @@ test("device overview storage follows topology precedence without rewriting manu
       `OVERVIEW-USABLE-${suffix}`,
       600,
     );
-    await createInstalledDrive(
-      rawDeviceId,
-      `OVERVIEW-RAW-${suffix}`,
-      700,
-    );
+    await createInstalledDrive(rawDeviceId, `OVERVIEW-RAW-${suffix}`, 700);
     const poolResponse = await request.post("/api/storage/pools", {
       headers,
       data: {
@@ -3468,12 +3887,13 @@ test("device overview storage follows topology precedence without rewriting manu
         headers,
       });
       expect(response.ok()).toBeTruthy();
-      expect(
-        ((await response.json()) as { storageGb: number }).storageGb,
-      ).toBe(storedStorageGb);
+      expect(((await response.json()) as { storageGb: number }).storageGb).toBe(
+        storedStorageGb,
+      );
     }
   } finally {
-    if (poolId) await request.delete(`/api/storage/pools/${poolId}`, { headers });
+    if (poolId)
+      await request.delete(`/api/storage/pools/${poolId}`, { headers });
     for (const driveId of driveIds) {
       await request.delete(`/api/storage/drives/${driveId}`, { headers });
     }
@@ -3490,10 +3910,7 @@ test("unmanaged status is selectable, bulk editable, filterable, and reported", 
   test.setTimeout(60_000);
   const suffix = Date.now().toString(36);
   const headers = { Authorization: `Bearer ${token}` };
-  const hostnames = [
-    `unmanaged-manual-${suffix}`,
-    `unmanaged-bulk-${suffix}`,
-  ];
+  const hostnames = [`unmanaged-manual-${suffix}`, `unmanaged-bulk-${suffix}`];
   const deviceIds: string[] = [];
 
   try {
@@ -3529,7 +3946,9 @@ test("unmanaged status is selectable, bulk editable, filterable, and reported", 
         response.request().method() === "PATCH" &&
         response.url().endsWith(`/api/devices/${deviceIds[0]}`),
     );
-    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
     const editResponse = await editResponsePromise;
     expect(editResponse.status(), await editResponse.text()).toBe(200);
     expect(((await editResponse.json()) as { status: string }).status).toBe(
@@ -3608,7 +4027,9 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
         exact: true,
       }),
     ).toBeVisible();
-    await expect(page.getByTestId("device-type-section-built-in")).toBeVisible();
+    await expect(
+      page.getByTestId("device-type-section-built-in"),
+    ).toBeVisible();
     await expect(page.getByTestId("device-type-section-custom")).toBeVisible();
     const deviceTypeEditor = page.getByTestId("device-type-editor");
     await deviceTypeEditor

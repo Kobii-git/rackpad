@@ -13,7 +13,7 @@ import type {
 export type VisualizerHealth = "online" | "warning" | "offline" | "unknown";
 export type VisualizerColumnKind = "rack" | "room";
 export type VisualizerLooseDevicePlacement = "beside-racks" | "below-racks";
-export type VisualizerLayoutMode = "grouped" | "pyramid" | "diagram";
+export type VisualizerLayoutMode = "grouped" | "pyramid" | "diagram" | "rack";
 export type VisualizerDiagramNodeStyle = "compact" | "physical";
 export type VisualizerRackFaceMode = "front" | "rear" | "both";
 export type VisualizerRackScale = "compact" | "normal" | "wide" | "xwide";

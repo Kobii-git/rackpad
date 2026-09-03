@@ -80,6 +80,10 @@ import { cn, normalizeColorToCss } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { PhysicalFaceplate } from "./PhysicalFaceplate";
+import {
+  RackElevationEquipmentFrame,
+  RackElevationShell,
+} from "./RackElevationPresentation";
 import { RackStudioCableInspector } from "./RackStudioCableInspector";
 
 const RACK_U_HEIGHT = 42;
@@ -282,9 +286,7 @@ export function RackStudioWorkspace({
   );
   const linkedPortIds = useMemo(
     () =>
-      new Set(
-        portLinks.flatMap((link) => [link.fromPortId, link.toPortId]),
-      ),
+      new Set(portLinks.flatMap((link) => [link.fromPortId, link.toPortId])),
     [portLinks],
   );
   const normalizedSearch = search.trim().toLowerCase();
@@ -295,9 +297,7 @@ export function RackStudioWorkspace({
     () =>
       racks.map((rack) => {
         const draft = draftRackPositions[rack.id];
-        return draft
-          ? { ...rack, studioX: draft.x, studioY: draft.y }
-          : rack;
+        return draft ? { ...rack, studioX: draft.x, studioY: draft.y } : rack;
       }),
     [draftRackPositions, racks],
   );
@@ -644,10 +644,7 @@ export function RackStudioWorkspace({
     void completePhysicalPatch(fromPort.id, port.id, false);
   }
 
-  async function saveCable(
-    id: string,
-    changes: Partial<Omit<PortLink, "id">>,
-  ) {
+  async function saveCable(id: string, changes: Partial<Omit<PortLink, "id">>) {
     setSaving(true);
     setError("");
     try {
@@ -692,8 +689,7 @@ export function RackStudioWorkspace({
       ports,
       links: portLinks,
       face,
-      focusRackId:
-        exportScope === "rack" ? focusedRack?.id : undefined,
+      focusRackId: exportScope === "rack" ? focusedRack?.id : undefined,
       showLabels: showCableLabels,
       theme: isLight ? "light" : "dark",
       labels: {
@@ -1310,9 +1306,8 @@ export function RackStudioWorkspace({
                 }{" "}
                 →{" "}
                 {
-                  ports.find(
-                    (port) => port.id === pendingUnusualPair.toPortId,
-                  )?.kind
+                  ports.find((port) => port.id === pendingUnusualPair.toPortId)
+                    ?.kind
                 }
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -1583,9 +1578,7 @@ function RackStudioElevation({
     const deltaColumns = Math.round(
       ((clientX - active.startClientX) / frameWidth) * 12,
     );
-    const deltaU = Math.round(
-      -(clientY - active.startClientY) / RACK_U_HEIGHT,
-    );
+    const deltaU = Math.round(-(clientY - active.startClientY) / RACK_U_HEIGHT);
     const columnSpan = active.state.columnSpan ?? 12;
     const next = {
       ...active.state,
@@ -1690,35 +1683,11 @@ function RackStudioElevation({
           {t("U")}
         </span>
       </div>
-      <div
-        className="relative mx-7 border-x-[14px] border-y-[8px] border-[var(--border-strong)] bg-[var(--color-bg)] shadow-[inset_0_0_36px_rgb(0_0_0_/_0.35)]"
-        style={{ height: rack.totalU * RACK_U_HEIGHT + 16 }}
+      <RackElevationShell
+        totalU={rack.totalU}
+        unitHeight={RACK_U_HEIGHT}
+        className="mx-7"
       >
-        {Array.from({ length: rack.totalU }, (_, index) => {
-          const u = rack.totalU - index;
-          return (
-            <div
-              key={u}
-              className="absolute inset-x-0 border-b border-[var(--border-muted)]"
-              style={{ top: index * RACK_U_HEIGHT + 8, height: RACK_U_HEIGHT }}
-            >
-              <span className="absolute -left-11 top-1/2 w-8 -translate-y-1/2 text-right font-mono text-[9px] text-[var(--text-muted)]">
-                {u}
-              </span>
-              <span className="absolute -right-11 top-1/2 w-8 -translate-y-1/2 font-mono text-[9px] text-[var(--text-muted)]">
-                {u}
-              </span>
-              {Array.from({ length: 11 }, (_, column) => (
-                <span
-                  key={column}
-                  className="absolute inset-y-0 border-r border-dashed border-[var(--border-muted)] opacity-50"
-                  style={{ left: `${((column + 1) / 12) * 100}%` }}
-                />
-              ))}
-            </div>
-          );
-        })}
-
         <RackStudioElevationCableLayer
           rack={rack}
           face={face}
@@ -1759,28 +1728,35 @@ function RackStudioElevation({
               devicePlacementState(child).mountKind === "shelf",
           );
           return (
-            <div
+            <RackElevationEquipmentFrame
               key={device.id}
-              role="button"
-              tabIndex={0}
-              aria-label={device.hostname}
-              data-testid="rack-studio-device"
-              onClick={() => onSelectDevice(device.id)}
-              onKeyDown={(event) => handleDeviceKeyDown(event, device)}
-              onPointerDown={(event) => beginDeviceDrag(event, device)}
-              className={cn(
-                "absolute overflow-hidden rounded-[2px] border bg-[var(--surface-1)] text-left outline-none transition-[box-shadow,border-color,opacity]",
-                selectedDeviceId === device.id
-                  ? "z-30 border-[var(--accent-primary)] shadow-[0_0_0_2px_var(--accent-primary-border)]"
-                  : "z-10 border-[var(--border-strong)] hover:border-[var(--accent-primary)]",
-                editMode && "cursor-move touch-none",
-                !matches && "opacity-20",
+              device={device}
+              layout={layout}
+              physicalFace={physicalFace}
+              ports={devicePorts}
+              linkedPortIds={linkedPortIds}
+              selectedPortId={selectedPortId}
+              rectWidth={((state.columnSpan ?? 12) / 12) * 1000}
+              rectHeight={heightU * RACK_U_HEIGHT - 2}
+              selected={selectedDeviceId === device.id}
+              matches={Boolean(matches)}
+              healthClassName={cn(
                 healthOverlay && statusClass(device.status),
                 dragDraft?.deviceId === device.id &&
                   (dragDraft.valid
                     ? "border-emerald-400 shadow-[0_0_0_2px_rgb(52_211_153_/_0.35)]"
                     : "border-red-400 shadow-[0_0_0_2px_rgb(248_113_113_/_0.35)]"),
               )}
+              testId="rack-studio-device"
+              onSelectDevice={onSelectDevice}
+              onSelectPort={
+                patchMode
+                  ? (_deviceId, portId) => onSelectPort(portId)
+                  : undefined
+              }
+              onKeyDown={(event) => handleDeviceKeyDown(event, device)}
+              onPointerDown={(event) => beginDeviceDrag(event, device)}
+              className={cn(editMode && "cursor-move touch-none")}
               title={
                 dragDraft?.deviceId === device.id
                   ? (dragDraft.reason ?? device.hostname)
@@ -1793,29 +1769,6 @@ function RackStudioElevation({
                 height: heightU * RACK_U_HEIGHT - 2,
               }}
             >
-              {layout ? (
-                <PhysicalFaceplate
-                  layout={layout}
-                  face={physicalFace}
-                  ports={devicePorts}
-                  linkedPortIds={linkedPortIds}
-                  selectedPortId={selectedPortId}
-                  compact
-                  fit="stretch"
-                  onSelectPort={patchMode ? onSelectPort : undefined}
-                  className={cn(
-                    "h-full rounded-none border-0 shadow-none",
-                    editMode && "pointer-events-none",
-                  )}
-                />
-              ) : (
-                <span className="flex h-full items-center px-3 font-mono text-xs text-[var(--text-primary)]">
-                  {device.hostname}
-                </span>
-              )}
-              <span className="pointer-events-none absolute left-1.5 top-1 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[8px] text-white">
-                {device.hostname}
-              </span>
               {editMode ? (
                 <button
                   type="button"
@@ -1853,7 +1806,7 @@ function RackStudioElevation({
                   onPlace={onPlace}
                 />
               ))}
-            </div>
+            </RackElevationEquipmentFrame>
           );
         })}
 
@@ -1864,35 +1817,53 @@ function RackStudioElevation({
               candidate.device.id === device.id &&
               candidate.mountKind === "side",
           );
+          const rect = item?.rect ?? {
+            x: state.side === "right" ? 1000 - 28 : 0,
+            y: 12,
+            width: 28,
+            height: rack.totalU * RACK_U_HEIGHT - 8,
+          };
           return (
-            <button
+            <RackElevationEquipmentFrame
               key={device.id}
-              type="button"
-              onClick={() => onSelectDevice(device.id)}
-              className={cn(
-                "absolute top-3 z-40 flex h-[calc(100%-24px)] w-7 items-center justify-center overflow-hidden rounded-[2px] border border-[var(--border-strong)] bg-[var(--surface-1)] font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-secondary)]",
-                state.side === "left" ? "left-0" : "right-0",
-                selectedDeviceId === device.id &&
-                  "border-[var(--accent-primary)]",
-                healthOverlay && statusClass(device.status),
+              device={device}
+              layout={item?.layout}
+              physicalFace={
+                item?.physicalFace ?? (state.face === face ? "front" : "rear")
+              }
+              ports={ports.filter(
+                (port) =>
+                  port.deviceId === device.id &&
+                  port.portRole !== "aggregate" &&
+                  port.kind !== "virtual" &&
+                  port.kind !== "wifi",
               )}
-            >
-              {item ? (
-                <SceneFaceplate
-                  item={item}
-                  ports={ports}
-                  linkedPortIds={linkedPortIds}
-                  selectedPortId={selectedPortId}
-                  onSelectPort={patchMode ? onSelectPort : undefined}
-                />
-              ) : null}
-              <span className="pointer-events-none relative z-10 rounded bg-black/65 px-1 py-0.5 text-white [writing-mode:vertical-rl]">
-                {device.hostname}
-              </span>
-            </button>
+              linkedPortIds={linkedPortIds}
+              selectedPortId={selectedPortId}
+              rotation={90}
+              rectWidth={rect.width}
+              rectHeight={rect.height}
+              selected={selectedDeviceId === device.id}
+              healthClassName={
+                healthOverlay ? statusClass(device.status) : undefined
+              }
+              className="z-40"
+              style={{
+                left: rect.x,
+                top: rect.y,
+                width: rect.width,
+                height: rect.height,
+              }}
+              onSelectDevice={onSelectDevice}
+              onSelectPort={
+                patchMode
+                  ? (_deviceId, portId) => onSelectPort(portId)
+                  : undefined
+              }
+            />
           );
         })}
-      </div>
+      </RackElevationShell>
     </div>
   );
 }
@@ -1959,12 +1930,7 @@ function RackStudioElevationCableLayer({
         8,
         Math.min(992, (from.x + to.x) / 2 + ((hash % 11) - 5) * 10),
       );
-      points = [
-        from,
-        { x: gutter, y: from.y },
-        { x: gutter, y: to.y },
-        to,
-      ];
+      points = [from, { x: gutter, y: from.y }, { x: gutter, y: to.y }, to];
     } else {
       handoff = true;
       const local = (from ?? to)!;
@@ -1978,10 +1944,7 @@ function RackStudioElevationCableLayer({
           remotePort.face === "rear" ? "rear" : "front",
         );
       }
-      points = [
-        local,
-        { x: local.x < 500 ? 992 : 8, y: local.y },
-      ];
+      points = [local, { x: local.x < 500 ? 992 : 8, y: local.y }];
     }
     const path = points
       .map(
@@ -2113,7 +2076,7 @@ function ShelfChild({
     );
   });
 
-  function begin(event: ReactPointerEvent<HTMLButtonElement>) {
+  function begin(event: ReactPointerEvent<HTMLDivElement>) {
     event.stopPropagation();
     onSelect(child.id);
     if (!editMode) return;
@@ -2129,7 +2092,7 @@ function ShelfChild({
     };
   }
 
-  function move(event: ReactPointerEvent<HTMLButtonElement>) {
+  function move(event: ReactPointerEvent<HTMLDivElement>) {
     const active = dragRef.current;
     if (!active || active.pointerId !== event.pointerId) return;
     const parent = event.currentTarget.parentElement;
@@ -2158,7 +2121,7 @@ function ShelfChild({
     setDraft(next);
   }
 
-  function end(event: ReactPointerEvent<HTMLButtonElement>) {
+  function end(event: ReactPointerEvent<HTMLDivElement>) {
     const active = dragRef.current;
     if (!active || active.pointerId !== event.pointerId) return;
     dragRef.current = null;
@@ -2172,30 +2135,46 @@ function ShelfChild({
       : undefined;
     const finalOverlaps = Boolean(
       finalBounds &&
-        siblings.some((sibling) => {
-          if (sibling.id === child.id) return false;
-          const other = shelfPlacementBounds(devicePlacementState(sibling));
-          return Boolean(
-            other &&
-              finalBounds.x < other.x + other.width &&
-              finalBounds.x + finalBounds.width > other.x &&
-              finalBounds.y < other.y + other.height &&
-              finalBounds.y + finalBounds.height > other.y,
-          );
-        }),
+      siblings.some((sibling) => {
+        if (sibling.id === child.id) return false;
+        const other = shelfPlacementBounds(devicePlacementState(sibling));
+        return Boolean(
+          other &&
+          finalBounds.x < other.x + other.width &&
+          finalBounds.x + finalBounds.width > other.x &&
+          finalBounds.y < other.y + other.height &&
+          finalBounds.y + finalBounds.height > other.y,
+        );
+      }),
     );
     if (finalDraft && !finalOverlaps) void onPlace(child, finalDraft);
     setDraft(undefined);
   }
 
   return (
-    <button
-      type="button"
+    <RackElevationEquipmentFrame
+      device={child}
+      layout={item?.layout}
+      physicalFace={item?.physicalFace ?? "front"}
+      ports={ports.filter(
+        (port) =>
+          port.deviceId === child.id &&
+          port.portRole !== "aggregate" &&
+          port.kind !== "virtual" &&
+          port.kind !== "wifi",
+      )}
+      linkedPortIds={linkedPortIds}
+      selectedPortId={selectedPortId}
+      rotation={item?.rotation ?? 0}
+      rectWidth={effectiveBounds.width}
+      rectHeight={effectiveBounds.height}
+      selected={selected}
+      onSelectDevice={onSelect}
+      onSelectPort={
+        onSelectPort ? (_deviceId, portId) => onSelectPort(portId) : undefined
+      }
       className={cn(
-        "absolute z-30 overflow-hidden rounded-[2px] border bg-[var(--surface-2)] font-mono text-[7px] text-[var(--text-primary)] shadow-sm",
-        selected
-          ? "border-[var(--accent-primary)]"
-          : "border-[var(--border-strong)]",
+        "z-30 bg-[var(--surface-2)] font-mono text-[7px] shadow-sm",
         editMode && "cursor-move touch-none",
         overlaps && "border-red-400 bg-red-500/20",
       )}
@@ -2209,24 +2188,7 @@ function ShelfChild({
       onPointerMove={move}
       onPointerUp={end}
       onPointerCancel={end}
-      onClick={(event) => {
-        event.stopPropagation();
-        onSelect(child.id);
-      }}
-    >
-      {item ? (
-        <SceneFaceplate
-          item={item}
-          ports={ports}
-          linkedPortIds={linkedPortIds}
-          selectedPortId={selectedPortId}
-          onSelectPort={onSelectPort}
-        />
-      ) : null}
-      <span className="pointer-events-none relative z-10 rounded bg-black/65 px-1 text-white">
-        {child.hostname}
-      </span>
-    </button>
+    />
   );
 }
 
