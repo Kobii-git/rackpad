@@ -1334,6 +1334,7 @@ export const en = {
   "Rack A": "Rack A",
   "Rack elevations": "Rack elevations",
   "Rack face": "Rack face",
+  "Rack top": "Rack top",
   "Rack visual width": "Rack visual width",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Racks",

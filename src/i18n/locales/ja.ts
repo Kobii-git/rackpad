@@ -1336,6 +1336,7 @@ export const ja = {
   "Rack A": "ラックA",
   "Rack elevations": "ラックの高さ",
   "Rack face": "ラックフェイス",
+  "Rack top": "ラック上部",
   "Rack visual width": "ラックの視覚的な幅",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "ラック",

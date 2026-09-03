@@ -1363,6 +1363,13 @@ const SCHEMA_MIGRATIONS = [
       ALTER TABLE portLinks ADD COLUMN routeWaypoints TEXT NOT NULL DEFAULT '[]';
     `,
   },
+  {
+    version: 49,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_devices_rack_mount_kind
+        ON devices (rackId, rackMountKind);
+    `,
+  },
 ] as const;
 
 const applySchema = db.transaction(() => {

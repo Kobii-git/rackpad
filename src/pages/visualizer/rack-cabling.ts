@@ -231,13 +231,24 @@ function compareRacks(order: string[]) {
   };
 }
 
+function rackTopOffset(rack: Rack, devices: Device[]) {
+  const height = devices.reduce((maximum, device) => {
+    const state = devicePlacementState(device);
+    return state.mountKind === "rack-top" && state.rackId === rack.id
+      ? Math.max(maximum, (state.heightU ?? 1) * RACK_CABLING_UNIT_HEIGHT - 2)
+      : maximum;
+  }, 0);
+  return height > 0 ? height + 12 : 0;
+}
+
 function fallbackRect(
   rack: Rack,
   device: Device,
   directRects: Map<string, RackStudioRect>,
+  rackOffsetY: number,
 ): RackStudioRect | null {
   const state = devicePlacementState(device);
-  const rackHeight = rack.totalU * RACK_CABLING_UNIT_HEIGHT + 16;
+  const rackHeight = rackOffsetY + rack.totalU * RACK_CABLING_UNIT_HEIGHT + 16;
   const bound = (rect: RackStudioRect): RackStudioRect => {
     const width = Math.max(
       8,
@@ -277,19 +288,30 @@ function fallbackRect(
     const column = Math.max(0, Math.min(12 - columnSpan, state.column ?? 0));
     const rect = bound({
       x: (column / 12) * RACK_CABLING_BODY_WIDTH,
-      y: (rack.totalU - topU) * RACK_CABLING_UNIT_HEIGHT + 9,
+      y: rackOffsetY + (rack.totalU - topU) * RACK_CABLING_UNIT_HEIGHT + 9,
       width: (columnSpan / 12) * RACK_CABLING_BODY_WIDTH,
       height: heightU * RACK_CABLING_UNIT_HEIGHT - 2,
     });
     directRects.set(device.id, rect);
     return rect;
   }
+  if (state.mountKind === "rack-top") {
+    const height = (state.heightU ?? 1) * RACK_CABLING_UNIT_HEIGHT - 2;
+    const columnSpan = Math.max(1, Math.min(12, state.columnSpan ?? 12));
+    const column = Math.max(0, Math.min(12 - columnSpan, state.column ?? 0));
+    return {
+      x: (column / 12) * RACK_CABLING_BODY_WIDTH,
+      y: Math.max(0, rackOffsetY - height - 4),
+      width: (columnSpan / 12) * RACK_CABLING_BODY_WIDTH,
+      height,
+    };
+  }
   if (state.mountKind === "side") {
     return {
       x: state.side === "right" ? RACK_CABLING_BODY_WIDTH - 24 : 0,
-      y: 12,
+      y: rackOffsetY + 12,
       width: 24,
-      height: rackHeight - 24,
+      height: rack.totalU * RACK_CABLING_UNIT_HEIGHT - 8,
     };
   }
   if (state.mountKind === "shelf" && state.parentDeviceId) {
@@ -309,7 +331,7 @@ function fallbackRect(
   const fallbackU = stableLane(device.id) % Math.max(1, rack.totalU);
   return {
     x: 0,
-    y: fallbackU * RACK_CABLING_UNIT_HEIGHT + 9,
+    y: rackOffsetY + fallbackU * RACK_CABLING_UNIT_HEIGHT + 9,
     width: RACK_CABLING_BODY_WIDTH,
     height: RACK_CABLING_UNIT_HEIGHT - 2,
   };
@@ -338,6 +360,18 @@ function hasUsableRackPlacement(
   }
   if (state.mountKind === "side") {
     return state.rackId === rack.id && state.side != null;
+  }
+  if (state.mountKind === "rack-top") {
+    return Boolean(
+      state.rackId === rack.id &&
+      state.heightU != null &&
+      state.heightU >= 1 &&
+      state.column != null &&
+      state.columnSpan != null &&
+      state.column >= 0 &&
+      state.columnSpan >= 1 &&
+      state.column + state.columnSpan <= 12,
+    );
   }
   if (state.mountKind !== "shelf" || !state.parentDeviceId) return false;
   const parent = rackDevices.find(
@@ -405,7 +439,13 @@ export function buildRackCablingScene(input: {
   );
   const faceList = facesForMode(input.faceMode);
   const rackBodyHeights = roomRacks.map(
-    (rack) => rack.totalU * RACK_CABLING_UNIT_HEIGHT + 16,
+    (rack) =>
+      rackTopOffset(
+        rack,
+        roomDevices.filter((device) => device.rackId === rack.id),
+      ) +
+      rack.totalU * RACK_CABLING_UNIT_HEIGHT +
+      16,
   );
   const tallestBody = Math.max(0, ...rackBodyHeights);
   const rackGroupWidths = roomRacks.map(
@@ -432,15 +472,16 @@ export function buildRackCablingScene(input: {
     const rackDevices = roomDevices.filter(
       (candidate) => candidate.rackId === rack.id,
     );
+    const rackOffsetY = rackTopOffset(rack, rackDevices);
     for (const device of rackDevices.filter(
       (candidate) => devicePlacementState(candidate).mountKind === "direct",
     )) {
-      fallbackRect(rack, device, directRects);
+      fallbackRect(rack, device, directRects, rackOffsetY);
     }
     for (const device of rackDevices.filter(
       (candidate) => devicePlacementState(candidate).mountKind !== "direct",
     )) {
-      fallbackRect(rack, device, directRects);
+      fallbackRect(rack, device, directRects, rackOffsetY);
     }
 
     for (const [faceIndex, face] of faceList.entries()) {
@@ -486,7 +527,7 @@ export function buildRackCablingScene(input: {
       const renderedIds = new Set(frameEquipment.map((item) => item.device.id));
       for (const device of rackDevices) {
         if (renderedIds.has(device.id)) continue;
-        const rect = fallbackRect(rack, device, directRects);
+        const rect = fallbackRect(rack, device, directRects, rackOffsetY);
         if (!rect) continue;
         const layout = layoutByDeviceId.get(device.id);
         frameEquipment.push({

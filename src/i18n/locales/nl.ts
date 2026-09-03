@@ -1336,6 +1336,7 @@ export const nl = {
   "Rack A": "Rek A",
   "Rack elevations": "Rekverhogingen",
   "Rack face": "Rek gezicht",
+  "Rack top": "Bovenop rack",
   "Rack visual width": "Rek visuele breedte",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Rekken",

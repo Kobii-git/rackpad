@@ -1336,6 +1336,7 @@ export const it = {
   "Rack A": "Rastrelliera A",
   "Rack elevations": "Elevazioni dello scaffale",
   "Rack face": "Faccia a cremagliera",
+  "Rack top": "Parte superiore del rack",
   "Rack visual width": "Larghezza visiva del rack",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Rack",

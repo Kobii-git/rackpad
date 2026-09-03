@@ -9,6 +9,8 @@ import type {
   Room,
 } from "@/lib/types";
 import {
+  RACK_CABLING_BODY_WIDTH,
+  RACK_CABLING_UNIT_HEIGHT,
   buildRackCablingRoutes,
   buildRackCablingScene,
   buildRackCablingScope,
@@ -358,6 +360,36 @@ test("rack cabling scene keeps shelf and side-mounted equipment in rack geometry
   assert.ok(sideEquipment.rect.x > scene.racks[0]!.faces[0]!.x);
   assert.ok(scene.anchors.some((anchor) => anchor.portId === shelfPort.id));
   assert.ok(scene.anchors.some((anchor) => anchor.portId === sidePort.id));
+});
+
+test("rack cabling reserves a top band for rack-top equipment and its ports", () => {
+  const rackTop = {
+    ...device("rack-top", rack24.id, 1),
+    rackMountKind: "rack-top" as const,
+    startU: undefined,
+    rackColumn: 2,
+    rackColumnSpan: 8,
+  };
+  const topPort = port("rack-top-port", rackTop.id, "front", 1);
+  const scene = buildRackCablingScene({
+    room,
+    racks: [rack24],
+    devices: [rackTop],
+    layouts: [layout(rackTop.id, [topPort])],
+    ports: [topPort],
+    faceMode: "front",
+  });
+  const frame = scene.racks[0]!.faces[0]!;
+  const equipment = frame.equipment.find(
+    (item) => item.device.id === rackTop.id,
+  );
+
+  assert.ok(equipment);
+  assert.equal(equipment.fallbackReason, null);
+  assert.equal(equipment.rect.width, (8 / 12) * RACK_CABLING_BODY_WIDTH);
+  assert.ok(frame.height > rack24.totalU * RACK_CABLING_UNIT_HEIGHT + 16);
+  assert.ok(equipment.rect.y < frame.y + frame.height);
+  assert.ok(scene.anchors.some((anchor) => anchor.portId === topPort.id));
 });
 
 test("rack cabling scene preserves exact 12-column placement geometry", () => {

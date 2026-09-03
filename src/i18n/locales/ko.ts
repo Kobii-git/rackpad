@@ -1336,6 +1336,7 @@ export const ko = {
   "Rack A": "랙 A",
   "Rack elevations": "랙 높이",
   "Rack face": "랙면",
+  "Rack top": "랙 상단",
   "Rack visual width": "랙 시각적 너비",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "랙",

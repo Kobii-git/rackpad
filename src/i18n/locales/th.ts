@@ -1336,6 +1336,7 @@ export const th = {
   "Rack A": "แร็ค เอ",
   "Rack elevations": "ระดับความสูงของชั้นวาง",
   "Rack face": "หน้าแร็ค",
+  "Rack top": "ด้านบนแร็ก",
   "Rack visual width": "ความกว้างของภาพชั้นวาง",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "ชั้นวางของ",

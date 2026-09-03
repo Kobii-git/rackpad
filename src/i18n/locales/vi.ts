@@ -1336,6 +1336,7 @@ export const vi = {
   "Rack A": "Giá A",
   "Rack elevations": "Độ cao của giá đỡ",
   "Rack face": "Mặt giá đỡ",
+  "Rack top": "Nóc tủ rack",
   "Rack visual width": "Chiều rộng hình ảnh của giá đỡ",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Giá đỡ",

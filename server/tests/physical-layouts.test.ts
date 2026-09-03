@@ -277,11 +277,7 @@ test("physical layout reads and previews never persist compatibility fallbacks",
     headers: authHeaders(adminToken),
     payload: { templateId: "generic-auto-v1" },
   });
-  assert.equal(
-    stalePreviewResponse.statusCode,
-    200,
-    stalePreviewResponse.body,
-  );
+  assert.equal(stalePreviewResponse.statusCode, 200, stalePreviewResponse.body);
   assert.deepEqual(
     {
       layouts: db
@@ -304,7 +300,11 @@ test("approved physical ports follow all existing canonical port positions", asy
     headers: authHeaders(adminToken),
     payload: template,
   });
-  assert.equal(createTemplateResponse.statusCode, 201, createTemplateResponse.body);
+  assert.equal(
+    createTemplateResponse.statusCode,
+    201,
+    createTemplateResponse.body,
+  );
   const device = await createDevice(adminToken, "logical-port-ordering");
   const logicalPort = await createPort(
     adminToken,
@@ -336,7 +336,9 @@ test("approved physical ports follow all existing canonical port positions", asy
   assert.equal(applyResponse.statusCode, 200, applyResponse.body);
   assert.deepEqual(
     db
-      .prepare("SELECT id, position FROM ports WHERE deviceId = ? ORDER BY position")
+      .prepare(
+        "SELECT id, position FROM ports WHERE deviceId = ? ORDER BY position",
+      )
       .all(device.id),
     [
       { id: logicalPort.id, position: 1 },
@@ -1013,6 +1015,7 @@ test("schema 45 migration preserves inventory and cabling while creating legacy 
     DROP TABLE devicePhysicalLayouts;
     DROP TABLE hardwareTemplateDefaults;
     DROP TABLE hardwareTemplates;
+    DROP INDEX IF EXISTS idx_devices_rack_mount_kind;
     ALTER TABLE devices DROP COLUMN rackMountKind;
     ALTER TABLE devices DROP COLUMN rackColumn;
     ALTER TABLE devices DROP COLUMN rackColumnSpan;
@@ -1209,7 +1212,9 @@ test("schema 48 migration adds cable inspection defaults without changing invent
     SET version = 47, updatedAt = '2026-08-31T00:00:00.000Z'
     WHERE id = 1;
   `);
-  const beforeDevices = legacy.prepare("SELECT * FROM devices ORDER BY id").all();
+  const beforeDevices = legacy
+    .prepare("SELECT * FROM devices ORDER BY id")
+    .all();
   const beforePorts = legacy.prepare("SELECT * FROM ports ORDER BY id").all();
   const beforeLink = legacy
     .prepare("SELECT * FROM portLinks WHERE id = 'link_cable_v47'")
@@ -1242,6 +1247,52 @@ test("schema 48 migration adds cable inspection defaults without changing invent
       )
       .get(),
     { label: null, visible: 1, routeWaypoints: "[]" },
+  );
+  assert.equal(
+    (
+      migrated
+        .prepare("SELECT version FROM schemaVersion WHERE id = 1")
+        .get() as { version: number }
+    ).version,
+    CURRENT_SCHEMA_VERSION,
+  );
+  migrated.close();
+});
+
+test("schema 49 migration indexes persisted rack mount kinds without changing devices", () => {
+  const legacyPath = path.join(tempDir, "rack-top-source-v48.db");
+  initializeDatabase(legacyPath);
+  const legacy = new Database(legacyPath);
+  legacy.exec(`
+    INSERT INTO labs (id, name) VALUES ('lab_rack_top_v48', 'Rack top migration');
+    INSERT INTO devices (
+      id, labId, hostname, deviceType, status, placement, rackMountKind
+    ) VALUES (
+      'device_rack_top_v48', 'lab_rack_top_v48', 'rack-top-source',
+      'switch', 'online', 'room', 'loose'
+    );
+    DROP INDEX idx_devices_rack_mount_kind;
+    UPDATE schemaVersion
+    SET version = 48, updatedAt = '2026-09-03T00:00:00.000Z'
+    WHERE id = 1;
+  `);
+  const before = legacy
+    .prepare("SELECT * FROM devices WHERE id = 'device_rack_top_v48'")
+    .get();
+  legacy.close();
+
+  initializeDatabase(legacyPath);
+  const migrated = new Database(legacyPath, { readonly: true });
+  assert.deepEqual(
+    migrated
+      .prepare("SELECT * FROM devices WHERE id = 'device_rack_top_v48'")
+      .get(),
+    before,
+  );
+  assert.ok(
+    (migrated.pragma("index_list(devices)") as Array<{ name: string }>).some(
+      (index) => index.name === "idx_devices_rack_mount_kind",
+    ),
   );
   assert.equal(
     (

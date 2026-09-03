@@ -1336,6 +1336,7 @@ export const zhTW = {
   "Rack A": "機架A",
   "Rack elevations": "機架標高",
   "Rack face": "機架面",
+  "Rack top": "機架頂部",
   "Rack visual width": "機架視覺寬度",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "架子",

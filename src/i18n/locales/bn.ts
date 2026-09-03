@@ -1336,6 +1336,7 @@ export const bn = {
   "Rack A": "রাক এ",
   "Rack elevations": "তাক উচ্চতা",
   "Rack face": "তাক মুখ",
+  "Rack top": "র্যাকের উপরে",
   "Rack visual width": "তাক চাক্ষুষ প্রস্থ",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "রাক",

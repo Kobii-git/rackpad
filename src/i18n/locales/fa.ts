@@ -1336,6 +1336,7 @@ export const fa = {
   "Rack A": "رک A",
   "Rack elevations": "ارتفاعات قفسه",
   "Rack face": "صورت قفسه ای",
+  "Rack top": "بالای رک",
   "Rack visual width": "عرض بصری قفسه",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "قفسه ها",

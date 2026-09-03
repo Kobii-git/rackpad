@@ -3429,10 +3429,10 @@ test("admin restore accepts older backups without subnet, rack-slot, Docker, mon
       "SELECT id, face FROM ports WHERE deviceId = ? ORDER BY position, face, id",
     )
     .all(legacyPatchPanel.id) as Array<{ id: string; face: string }>;
-  assert.deepEqual(
-    restoredPatchPorts.map((port) => port.face).sort(),
-    ["front", "rear"],
-  );
+  assert.deepEqual(restoredPatchPorts.map((port) => port.face).sort(), [
+    "front",
+    "rear",
+  ]);
   const restoredPatchLayout = db
     .prepare(
       "SELECT status, bindings, portFingerprint FROM devicePhysicalLayouts WHERE deviceId = ?",
@@ -10053,6 +10053,7 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
     DROP TABLE devicePhysicalLayouts;
     DROP TABLE hardwareTemplateDefaults;
     DROP TABLE hardwareTemplates;
+    DROP INDEX IF EXISTS idx_devices_rack_mount_kind;
     ALTER TABLE devices DROP COLUMN rackMountKind;
     ALTER TABLE devices DROP COLUMN rackColumn;
     ALTER TABLE devices DROP COLUMN rackColumnSpan;
@@ -10151,6 +10152,7 @@ test("storage topology migration upgrades a version-34 database without changing
     DROP TABLE devicePhysicalLayouts;
     DROP TABLE hardwareTemplateDefaults;
     DROP TABLE hardwareTemplates;
+    DROP INDEX IF EXISTS idx_devices_rack_mount_kind;
     ALTER TABLE devices DROP COLUMN rackMountKind;
     ALTER TABLE devices DROP COLUMN rackColumn;
     ALTER TABLE devices DROP COLUMN rackColumnSpan;
@@ -10264,6 +10266,7 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     DROP TABLE devicePhysicalLayouts;
     DROP TABLE hardwareTemplateDefaults;
     DROP TABLE hardwareTemplates;
+    DROP INDEX IF EXISTS idx_devices_rack_mount_kind;
     ALTER TABLE devices DROP COLUMN rackMountKind;
     ALTER TABLE devices DROP COLUMN rackColumn;
     ALTER TABLE devices DROP COLUMN rackColumnSpan;
@@ -10332,6 +10335,7 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     DROP TABLE devicePhysicalLayouts;
     DROP TABLE hardwareTemplateDefaults;
     DROP TABLE hardwareTemplates;
+    DROP INDEX IF EXISTS idx_devices_rack_mount_kind;
     ALTER TABLE devices DROP COLUMN rackMountKind;
     ALTER TABLE devices DROP COLUMN rackColumn;
     ALTER TABLE devices DROP COLUMN rackColumnSpan;

@@ -1336,6 +1336,7 @@ export const hi = {
   "Rack A": "रैक ए",
   "Rack elevations": "रैक ऊंचाई",
   "Rack face": "रैक चेहरा",
+  "Rack top": "रैक के ऊपर",
   "Rack visual width": "रैक दृश्य चौड़ाई",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "रैक",

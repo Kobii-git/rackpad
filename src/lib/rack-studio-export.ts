@@ -299,11 +299,14 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
   const rackWidth = 440;
   const rackHeight = 620;
   const faceGap = 50;
-  const width = 90 + faces.length * rackWidth + (faces.length - 1) * faceGap + 250;
+  const width =
+    90 + faces.length * rackWidth + (faces.length - 1) * faceGap + 250;
   const height = 760;
   const linked = linkedPortIds(input.links);
   const portById = new Map(input.ports.map((port) => [port.id, port]));
-  const deviceById = new Map(input.devices.map((device) => [device.id, device]));
+  const deviceById = new Map(
+    input.devices.map((device) => [device.id, device]),
+  );
   const anchors = new Map<string, FocusAnchor>();
 
   const rackFaces = faces.map((face, faceIndex) => {
@@ -324,6 +327,8 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
     });
     const scaleX = innerWidth / elevation.width;
     const scaleY = innerHeight / elevation.height;
+    const rackBodyY = innerY + elevation.rackOffsetY * scaleY;
+    const rackBodyHeight = (elevation.height - elevation.rackOffsetY) * scaleY;
     for (const anchor of elevation.portAnchors) {
       const device = deviceById.get(anchor.deviceId);
       if (!device) continue;
@@ -350,13 +355,13 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
       )
       .join("");
     const uLines = Array.from({ length: rack.totalU }, (_, index) => {
-      const rowY = innerY + ((index + 1) / rack.totalU) * innerHeight;
+      const rowY = rackBodyY + ((index + 1) / rack.totalU) * rackBodyHeight;
       return `<line x1="${innerX}" y1="${rowY}" x2="${innerX + innerWidth}" y2="${rowY}" stroke="${palette.border}" stroke-width="0.35"/>`;
     }).join("");
     return [
       `<g><rect x="${x}" y="${y}" width="${rackWidth}" height="${rackHeight}" rx="7" fill="${palette.panel}" stroke="${palette.border}" stroke-width="2"/>`,
       `<text x="${x + 18}" y="${y + 27}" fill="${palette.text}" font-size="13" font-weight="700">${escapeXml(`${rack.name} · ${face === "front" ? input.labels.front : input.labels.rear}`)}</text>`,
-      `<rect x="${innerX - 11}" y="${innerY - 7}" width="${innerWidth + 22}" height="${innerHeight + 14}" fill="${palette.background}" stroke="${palette.rail}" stroke-width="9"/>`,
+      `<rect x="${innerX - 11}" y="${rackBodyY - 7}" width="${innerWidth + 22}" height="${rackBodyHeight + 14}" fill="${palette.background}" stroke="${palette.rail}" stroke-width="9"/>`,
       uLines,
       devices,
       `</g>`,
@@ -410,11 +415,14 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
       ? handoffFace === "front"
         ? input.labels.front
         : input.labels.rear
-      : remoteDevice?.hostname ?? input.labels.crossRoom;
+      : (remoteDevice?.hostname ?? input.labels.crossRoom);
     const targetX = local.x < width / 2 ? width - 236 : 36;
     const targetY = local.y;
     routes.push(
-      `<path d="${cablePath([{ x: local.x, y: local.y }, { x: targetX, y: targetY }])}" fill="none" stroke="${color}" stroke-width="3" stroke-dasharray="8 5"/>`,
+      `<path d="${cablePath([
+        { x: local.x, y: local.y },
+        { x: targetX, y: targetY },
+      ])}" fill="none" stroke="${color}" stroke-width="3" stroke-dasharray="8 5"/>`,
       `<text x="${targetX + (targetX < local.x ? 5 : -5)}" y="${targetY - 6}" text-anchor="${targetX < local.x ? "start" : "end"}" fill="${palette.text}" font-size="9">${escapeXml(`${label} · ${handoffLabel}`)}</text>`,
     );
   }

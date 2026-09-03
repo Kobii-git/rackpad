@@ -1336,6 +1336,7 @@ export const he = {
   "Rack A": "מתלה א",
   "Rack elevations": "הגבהות מתלים",
   "Rack face": "פרצוף מתלה",
+  "Rack top": "ראש הארון",
   "Rack visual width": "רוחב חזותי של מתלה",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "מתלים",

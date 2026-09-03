@@ -1336,6 +1336,7 @@ export const tr = {
   "Rack A": "Raf A",
   "Rack elevations": "Raf yükseklikleri",
   "Rack face": "Raf yüzü",
+  "Rack top": "Raf üstü",
   "Rack visual width": "Raf görsel genişliği",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Raflar",
