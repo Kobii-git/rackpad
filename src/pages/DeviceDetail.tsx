@@ -2013,6 +2013,7 @@ export default function DeviceDetail() {
               allPorts={ports}
               portLinks={portLinks}
               devices={devices}
+              deviceTypes={deviceTypes}
               canEdit={canEdit}
               initialLayout={physicalLayout}
               onLayoutChange={upsertPhysicalLayoutRecord}

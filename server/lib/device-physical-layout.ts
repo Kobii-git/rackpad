@@ -1,5 +1,5 @@
 import { db, parseRow } from "../db.js";
-import { deviceTypeBase } from "./device-types.js";
+import { deviceTypeBase, deviceTypeLineage } from "./device-types.js";
 import {
   BUILT_IN_HARDWARE_TEMPLATES,
   buildAutoPhysicalLayout,
@@ -91,11 +91,16 @@ function resolveInitialLayout(
   ports: PhysicalLayoutPort[],
   fallbackMode: "legacy" | "generic",
 ) {
-  const defaultRow = db
-    .prepare(
-      "SELECT templateId FROM hardwareTemplateDefaults WHERE deviceType = ?",
-    )
-    .get(device.deviceType) as { templateId: string } | undefined;
+  const selectDefault = db.prepare(
+    "SELECT templateId FROM hardwareTemplateDefaults WHERE deviceType = ?",
+  );
+  let defaultRow: { templateId: string } | undefined;
+  for (const deviceType of deviceTypeLineage(device.deviceType)) {
+    defaultRow = selectDefault.get(deviceType) as
+      | { templateId: string }
+      | undefined;
+    if (defaultRow) break;
+  }
   const template = defaultRow
     ? getPhysicalHardwareTemplate(defaultRow.templateId)
     : null;

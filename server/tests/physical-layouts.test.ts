@@ -567,6 +567,148 @@ test("original six-port templates retain exact slots after their source template
   );
 });
 
+test("hardware templates and defaults follow the complete device type lineage", async () => {
+  const adminToken = await bootstrapAdmin();
+  for (const definition of [
+    { id: "mini_server", label: "Mini server", parentType: "server" },
+    {
+      id: "custom_enclosure",
+      label: "Custom enclosure",
+      parentType: "storage_enclosure",
+    },
+  ]) {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/device-types",
+      headers: authHeaders(adminToken),
+      payload: definition,
+    });
+    assert.equal(response.statusCode, 201, response.body);
+  }
+
+  const parentTemplate = sixPortServerTemplate();
+  const childTemplate = {
+    ...sixPortServerTemplate(),
+    id: "mini-server-override-v1",
+    name: "Mini server override",
+  };
+  const enclosureTemplate = {
+    ...sixPortServerTemplate(),
+    id: "storage-enclosure-v1",
+    name: "Storage enclosure",
+    category: "storage",
+    deviceTypes: ["storage_enclosure"],
+  };
+  for (const template of [parentTemplate, childTemplate, enclosureTemplate]) {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/hardware-templates",
+      headers: authHeaders(adminToken),
+      payload: template,
+    });
+    assert.equal(response.statusCode, 201, response.body);
+  }
+
+  const miniServer = await createDevice(
+    adminToken,
+    "inherited-template-server",
+    "mini_server",
+  );
+  const compatiblePreview = await app.inject({
+    method: "POST",
+    url: `/api/physical-layouts/${miniServer.id}/preview`,
+    headers: authHeaders(adminToken),
+    payload: { templateId: parentTemplate.id },
+  });
+  assert.equal(compatiblePreview.statusCode, 200, compatiblePreview.body);
+  const incompatiblePreview = await app.inject({
+    method: "POST",
+    url: `/api/physical-layouts/${miniServer.id}/preview`,
+    headers: authHeaders(adminToken),
+    payload: { templateId: enclosureTemplate.id },
+  });
+  assert.equal(incompatiblePreview.statusCode, 400, incompatiblePreview.body);
+
+  const parentDefault = await app.inject({
+    method: "PUT",
+    url: "/api/hardware-templates/defaults/server",
+    headers: authHeaders(adminToken),
+    payload: { templateId: parentTemplate.id },
+  });
+  assert.equal(parentDefault.statusCode, 200, parentDefault.body);
+  const inheritedDevice = await createDevice(
+    adminToken,
+    "parent-default-server",
+    "mini_server",
+  );
+  const inheritedLayout = await app.inject({
+    method: "GET",
+    url: `/api/physical-layouts/${inheritedDevice.id}`,
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(inheritedLayout.statusCode, 200, inheritedLayout.body);
+  assert.equal(json(inheritedLayout).sourceTemplateId, parentTemplate.id);
+
+  const childDefault = await app.inject({
+    method: "PUT",
+    url: "/api/hardware-templates/defaults/mini_server",
+    headers: authHeaders(adminToken),
+    payload: { templateId: childTemplate.id },
+  });
+  assert.equal(childDefault.statusCode, 200, childDefault.body);
+  const overriddenDevice = await createDevice(
+    adminToken,
+    "child-default-server",
+    "mini_server",
+  );
+  const overriddenLayout = await app.inject({
+    method: "GET",
+    url: `/api/physical-layouts/${overriddenDevice.id}`,
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(overriddenLayout.statusCode, 200, overriddenLayout.body);
+  assert.equal(json(overriddenLayout).sourceTemplateId, childTemplate.id);
+
+  const resetDefault = await app.inject({
+    method: "DELETE",
+    url: "/api/hardware-templates/defaults/mini_server",
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(resetDefault.statusCode, 204, resetDefault.body);
+  const fallbackDevice = await createDevice(
+    adminToken,
+    "fallback-default-server",
+    "mini_server",
+  );
+  const fallbackLayout = await app.inject({
+    method: "GET",
+    url: `/api/physical-layouts/${fallbackDevice.id}`,
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(fallbackLayout.statusCode, 200, fallbackLayout.body);
+  assert.equal(json(fallbackLayout).sourceTemplateId, parentTemplate.id);
+
+  const enclosureDefault = await app.inject({
+    method: "PUT",
+    url: "/api/hardware-templates/defaults/storage_enclosure",
+    headers: authHeaders(adminToken),
+    payload: { templateId: enclosureTemplate.id },
+  });
+  assert.equal(enclosureDefault.statusCode, 200, enclosureDefault.body);
+  const nestedDevice = await createDevice(
+    adminToken,
+    "nested-default-enclosure",
+    "custom_enclosure",
+  );
+  const nestedLayout = await app.inject({
+    method: "GET",
+    url: `/api/physical-layouts/${nestedDevice.id}`,
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(nestedLayout.statusCode, 200, nestedLayout.body);
+  assert.equal(json(nestedLayout).sourceTemplateId, enclosureTemplate.id);
+});
+
 test("module variants and device-owned custom layouts preserve exact linked-port bindings", async () => {
   const adminToken = await bootstrapAdmin();
   const template = moduleServerTemplate();

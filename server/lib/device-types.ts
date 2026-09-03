@@ -175,26 +175,51 @@ export function isKnownDeviceType(id: string) {
 
 export function deviceTypeBase(id: string) {
   const normalized = normalizeDeviceTypeId(id)
-  const byId = new Map(listDeviceTypes().map((entry) => [entry.id, entry]))
+  const parentById = new Map(
+    listDeviceTypes().map((entry) => [entry.id, entry.parentType]),
+  )
+  const lineage = deviceTypeLineageFromParents(normalized, parentById)
+  const last = lineage.at(-1)
+  const next = last ? parentById.get(last) : null
+  return next && lineage.includes(normalizeDeviceTypeId(next))
+    ? normalized
+    : (last ?? normalized)
+}
+
+export function deviceTypeLineageFromParents(
+  id: string,
+  parentById: ReadonlyMap<string, string | null | undefined>,
+) {
+  const normalized = normalizeDeviceTypeId(id)
   const seen = new Set<string>()
+  const lineage: string[] = []
   let current = normalized
   while (current && !seen.has(current)) {
+    lineage.push(current)
     seen.add(current)
-    const parent = byId.get(current)?.parentType
-    if (!parent || parent === current) return current
-    current = parent
+    const parent = parentById.get(current)
+    if (!parent || parent === current) break
+    current = normalizeDeviceTypeId(parent)
   }
-  return normalized
+  return lineage
+}
+
+export function deviceTypeLineage(id: string) {
+  return deviceTypeLineageFromParents(
+    id,
+    new Map(listDeviceTypes().map((entry) => [entry.id, entry.parentType])),
+  )
 }
 
 export function deviceTypeMatches(
   deviceType: string,
   compatibleDeviceTypes: string[],
 ) {
-  const normalized = normalizeDeviceTypeId(deviceType)
-  if (compatibleDeviceTypes.includes(normalized)) return true
-  const base = deviceTypeBase(normalized)
-  return base !== normalized && compatibleDeviceTypes.includes(base)
+  if (compatibleDeviceTypes.length === 0) return true
+  const compatible = new Set(compatibleDeviceTypes.map(normalizeDeviceTypeId))
+  return deviceTypeLineage(deviceType).some((candidate) =>
+    compatible.has(candidate),
+  )
 }
 
 export function requiredDeviceType(body: Record<string, unknown>, key = 'deviceType') {

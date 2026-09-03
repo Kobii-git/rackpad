@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Pencil, RefreshCcw } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
+import { deviceTypeMatchesTemplate } from "@/lib/device-types";
 import type {
   Device,
+  DeviceTypeDefinition,
   DevicePhysicalLayout,
   HardwareTemplateV1,
   PhysicalLayoutPreview,
@@ -30,6 +32,7 @@ interface DevicePhysicalLayoutPanelProps {
   allPorts: Port[];
   portLinks: PortLink[];
   devices: Device[];
+  deviceTypes: DeviceTypeDefinition[];
   canEdit: boolean;
   initialLayout?: DevicePhysicalLayout;
   onLayoutChange?: (layout: DevicePhysicalLayout) => void;
@@ -42,6 +45,7 @@ export function DevicePhysicalLayoutPanel({
   allPorts,
   portLinks,
   devices,
+  deviceTypes,
   canEdit,
   initialLayout,
   onLayoutChange,
@@ -227,8 +231,11 @@ export function DevicePhysicalLayoutPanel({
   const configured = status === "accurate";
   const compatibleTemplates = templates.filter(
     (template) =>
-      template.deviceTypes.length === 0 ||
-      template.deviceTypes.includes(device.deviceType),
+      deviceTypeMatchesTemplate(
+        device.deviceType,
+        template.deviceTypes,
+        deviceTypes,
+      ),
   );
   const selectedTemplate = compatibleTemplates.find(
     (template) => template.id === templateId,

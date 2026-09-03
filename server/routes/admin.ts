@@ -37,6 +37,7 @@ import { listAssignmentIntegrityIssues } from "../lib/ip-assignment-integrity.js
 import { getSnmpProfile } from "../lib/snmp-profiles/index.js";
 import {
   BUILT_IN_DEVICE_TYPES,
+  deviceTypeLineageFromParents,
   normalizeDeviceTypeId,
 } from "../lib/device-types.js";
 import { monitoringOperationalStatus } from "../lib/monitoring.js";
@@ -1547,17 +1548,14 @@ const restoreBackupSnapshot = db.transaction(
           "BACKUP_INTEGRITY_INVALID",
         );
       }
-      let compatibleType: string | null = deviceType;
-      const seenTypes = new Set<string>();
-      let supported = template.deviceTypes.length === 0;
-      while (compatibleType && !seenTypes.has(compatibleType)) {
-        if (template.deviceTypes.includes(compatibleType)) {
-          supported = true;
-          break;
-        }
-        seenTypes.add(compatibleType);
-        compatibleType = restoredDeviceTypeParents.get(compatibleType) ?? null;
-      }
+      const supported =
+        template.deviceTypes.length === 0 ||
+        deviceTypeLineageFromParents(
+          deviceType,
+          restoredDeviceTypeParents,
+        ).some((compatibleType) =>
+          template.deviceTypes.includes(compatibleType),
+        );
       if (!supported) {
         throw new ValidationError(
           "Backup hardware-template default is incompatible with its device type.",
