@@ -91,6 +91,8 @@ EOF
   grep -q '^DISCOVERY_MAC_SCAN_MODE=neighbor$' "${fixture}/etc/rackpad/rackpad.env" || fail "fresh operational assets did not enforce safe discovery"
   cmp -s "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf" \
     "${fixture}/usr/local/share/rackpad/discovery/safe-capabilities.conf" || fail "fresh operational assets did not install safe capabilities"
+  grep -q '^RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK$' \
+    "${fixture}/etc/systemd/system/rackpad.service" || fail "fresh operational assets did not install the AF_NETLINK service allowance"
   [[ "$(stat -c '%a' "${fixture}/usr/local/sbin/rackpad-discovery-mode" 2>/dev/null || stat -f '%Lp' "${fixture}/usr/local/sbin/rackpad-discovery-mode")" == "700" ]] || fail "discovery mode command is not root-only"
   [[ "$output" != *"4321"* && "$output" != *"kept"* ]] || fail "operational refresh leaked environment values"
   grep -q '^daemon-reload$' "$systemctl_log" || fail "operational refresh did not reload systemd"
@@ -108,6 +110,8 @@ EOF
   grep -q '^DISCOVERY_MAC_SCAN_MODE=auto$' "${fixture}/etc/rackpad/rackpad.env" || fail "operational refresh did not preserve advanced discovery"
   cmp -s "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf" \
     "${fixture}/usr/local/share/rackpad/discovery/advanced-capabilities.conf" || fail "operational refresh did not preserve advanced capabilities"
+  grep -q '^RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK AF_PACKET$' \
+    "${fixture}/etc/systemd/system/rackpad.service.d/10-discovery-capabilities.conf" || fail "advanced discovery did not retain AF_NETLINK alongside AF_PACKET"
 )
 
 make_discovery_fixture() {

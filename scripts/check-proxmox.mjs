@@ -269,10 +269,18 @@ if (!/^CapabilityBoundingSet=$/m.test(safeCapabilities) ||
     !/^AmbientCapabilities=$/m.test(safeCapabilities)) {
   failures.push("Safe discovery template does not clear service capabilities");
 }
+if (!service.includes(
+  "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
+)) {
+  failures.push("Native service does not allow the AF_NETLINK family required for interface enumeration");
+}
+if (/^RestrictAddressFamilies=/m.test(safeCapabilities)) {
+  failures.push("Safe discovery template must inherit the native service address-family restriction");
+}
 for (const directive of [
   "CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN",
   "AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN",
-  "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_PACKET",
+  "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK AF_PACKET",
 ]) {
   if (!advancedCapabilities.includes(directive)) {
     failures.push(`Advanced discovery template is missing ${directive}`);

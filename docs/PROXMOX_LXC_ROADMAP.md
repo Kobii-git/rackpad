@@ -335,12 +335,13 @@ than relying on these recorded thresholds.
 Eligibility audit completed on 2026-08-30 against the current Community Scripts
 request template and ProxmoxVED contribution guidance:
 
-- Rackpad has 359 GitHub stars, below the current general minimum of 1,000.
+- Rackpad remains below the current general minimum of 1,000 GitHub stars.
 - The public repository was created on 2026-05-01 and reaches six calendar
   months on 2026-11-01.
 - Maintenance is active; repository activity was current at the audit date.
-- GitHub reports no formal Rackpad Releases. The failed `v1.8.1-beta.1` workflow
-  did not publish its prerelease or semantic GHCR image.
+- Formal Rackpad prereleases are now published, most recently
+  `v1.8.2-beta.1` at the 2026-09-03 follow-up audit. A stable release remains
+  pending the real-Proxmox validation and soak gates below.
 - The first-party helper has not passed Debian 13 or Ubuntu 24.04 testing on
   Proxmox VE 9.x, and the Beta 1 update baseline, Beta 2 rollback validation,
   seven-day soak, and stable release remain incomplete.
