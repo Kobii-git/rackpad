@@ -44,6 +44,7 @@ const { CURRENT_RACKPAD_SCHEMA_COLUMNS } =
 const { BUILT_IN_HARDWARE_TEMPLATES } =
   await import("../lib/physical-layout.js");
 const { cidrOverlaps, ipToInt } = await import("../lib/ip-cidr.js");
+const { setSnmpSocketFactoryForTests } = await import("../lib/snmp-transport.js");
 const { resolveSnmpSessionForTarget } = await import("../lib/snmp-session.js");
 const { inferDiscoveryPlacement } =
   await import("../lib/discovery-placement.js");
@@ -74,6 +75,7 @@ beforeEach(async () => {
 afterEach(async () => {
   resetDiscoveryScanJobsForTests();
   setNetworkHostLookupForTests(null);
+  setSnmpSocketFactoryForTests(null);
   setPinnedRequestTransportForTests(null);
   resetNativeBackupSchedulerStateForTests();
   await app.close();
@@ -5195,7 +5197,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
     payload: {
       deviceId: device.id,
       type: "snmp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       enabled: true,
     },
   });
@@ -5212,7 +5214,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
       deviceId: device.id,
       name: "Interface 1",
       type: "snmp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       snmpVersion: "2c",
       snmpCommunity: "public",
       snmpOid: ".1.3.6.1.2.1.2.2.1.8.1",
@@ -5233,7 +5235,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   assert.equal(snmpMonitor.type, "snmp");
   assert.equal(snmpMonitor.port, 161);
   assert.equal(snmpMonitor.snmpVersion, "2c");
-  assert.equal(snmpMonitor.snmpCommunity, "public");
+  assert.equal(snmpMonitor.snmpCommunity, null);
   assert.equal(snmpMonitor.snmpOid, ".1.3.6.1.2.1.2.2.1.8.1");
   assert.equal(snmpMonitor.snmpExpectedValue, "1");
 
@@ -5330,7 +5332,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
       deviceId: switchDevice.id,
       name: "Uplink",
       type: "snmp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       snmpVersion: "2c",
       snmpCommunity: "public",
       snmpOid: "1.3.6.1.2.1.2.2.1.8.1",
@@ -5371,7 +5373,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
         deviceId: switchDevice.id,
         name: "Gi0/1 index sync",
         type: "snmp",
-        target: "127.0.0.1",
+        target: "10.77.0.1",
         port: indexSyncAddress.port,
         snmpVersion: "2c",
         snmpCommunity: "public",
@@ -5415,7 +5417,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
         deviceId: device.id,
         name: "SNMP poll",
         type: "snmp",
-        target: "127.0.0.1",
+        target: "10.77.0.1",
         port: snmpAddress.port,
         snmpOid: "1.3.6.1.2.1.1.3.0",
         snmpExpectedValue: "1",
@@ -5454,7 +5456,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
       deviceId: device.id,
       name: "SSH",
       type: "tcp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       port: 1,
       intervalMs: 1000,
       enabled: true,
@@ -5539,7 +5541,7 @@ test("SNMP exception responses stay unknown and never satisfy match modes", asyn
           deviceId: device.id,
           name: `Missing OID ${exceptionCase.name}`,
           type: "snmp",
-          target: "127.0.0.1",
+          target: "10.77.0.1",
           port: address.port,
           snmpVersion: "2c",
           snmpCommunity: "public",
@@ -5633,7 +5635,7 @@ test("SNMP walks stop and credential tests fail clearly on exception responses",
       throw new Error("SNMP test server did not expose a UDP port.");
     }
     const session = {
-      host: "127.0.0.1",
+      host: "10.77.0.1",
       port: address.port,
       version: "2c" as const,
       community: "public",
@@ -5648,7 +5650,7 @@ test("SNMP walks stop and credential tests fail clearly on exception responses",
       url: `/api/snmp-credentials/${credential.id}/test`,
       headers,
       payload: {
-        target: "127.0.0.1",
+        target: "10.77.0.1",
         port: address.port,
         timeoutMs: 1000,
       },
@@ -5721,7 +5723,7 @@ test("scheduled monitoring contains rejected checks and continues the cycle", as
           deviceId: device.id,
           name: monitorConfig.name,
           type: "snmp",
-          target: "127.0.0.1",
+          target: "10.77.0.1",
           port: monitorConfig.port,
           snmpVersion: "2c",
           snmpCommunity: "public",
@@ -6039,7 +6041,7 @@ test("disabled monitors preserve configuration and reject manual runs without ch
       deviceId: device.id,
       name: "Disabled uplink",
       type: "snmp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       port: 1161,
       snmpVersion: "2c",
       snmpCommunity: "test-readonly",
@@ -6074,7 +6076,7 @@ test("disabled monitors preserve configuration and reject manual runs without ch
     payload: {
       name: "Disabled uplink example",
       type: "snmp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       port: 1161,
       snmpVersion: "2c",
       snmpCommunity: "test-readonly",
@@ -6114,10 +6116,10 @@ test("disabled monitors preserve configuration and reject manual runs without ch
     {
       name: "Disabled uplink example",
       type: "snmp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       port: 1161,
       snmpVersion: "2c",
-      snmpCommunity: "test-readonly",
+      snmpCommunity: null,
       snmpOid: "1.3.6.1.2.1.2.2.1.8.24",
       snmpExpectedValue: "1",
       snmpMatchMode: "equals",
@@ -6474,7 +6476,7 @@ test("lab-scoped SNMP credentials store encrypted secrets and can be tested", as
         authorization: `Bearer ${adminToken}`,
       },
       payload: {
-        target: "127.0.0.1",
+        target: "10.77.0.1",
         port: snmpAddress.port,
       },
     });
@@ -6493,7 +6495,7 @@ test("lab-scoped SNMP credentials store encrypted secrets and can be tested", as
         deviceId: device.id,
         name: "Uptime",
         type: "snmp",
-        target: "127.0.0.1",
+        target: "10.77.0.1",
         port: snmpAddress.port,
         snmpCredentialId: credential.id,
         snmpOid: "1.3.6.1.2.1.1.3.0",
@@ -10068,6 +10070,8 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
     SET version = 31, updatedAt = '2026-07-20T00:00:00.000Z'
     WHERE id = 1;
@@ -10167,6 +10171,8 @@ test("storage topology migration upgrades a version-34 database without changing
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
     SET version = 34, updatedAt = '2026-08-01T00:00:00.000Z'
     WHERE id = 1;
@@ -10281,6 +10287,8 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
     SET version = 35, updatedAt = '2026-08-01T00:00:00.000Z'
     WHERE id = 1;
@@ -10350,6 +10358,8 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
     SET version = 44, updatedAt = '2026-08-01T00:00:00.000Z'
     WHERE id = 1;
@@ -11358,6 +11368,17 @@ async function createMalformedSnmpResponder() {
 }
 
 async function createSnmpResponder(buildResponse: (request: Buffer) => Buffer) {
+  setSnmpSocketFactoryForTests((type) => {
+    const socket = dgram.createSocket(type);
+    return {
+      once: socket.once.bind(socket),
+      close: socket.close.bind(socket),
+      send: (message: Buffer, port: number, address: string, callback: (error: Error | null) => void) => {
+        assert.equal(address, "10.77.0.1", "the production resolver must pin the allowed LAN target");
+        socket.send(message, port, "127.0.0.1", callback);
+      },
+    } as unknown as dgram.Socket;
+  });
   const server = dgram.createSocket("udp4");
   server.on("message", (packet, remote) => {
     try {

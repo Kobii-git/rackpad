@@ -132,7 +132,7 @@ upgrades or container rebuilds.
 ## Notes
 
 - Keep Rackpad on a private LAN, VPN, or behind a trusted reverse proxy.
-- If exposing it through Cloudflare or another proxy, set `TRUST_PROXY=1`,
+- If exposing it through Cloudflare or another proxy, set `TRUST_PROXY` to the controlled proxy IPs/CIDRs,
   `TRUSTED_HOSTS`, and `TRUSTED_ORIGINS` in `/opt/rackpad/.env`.
 - The native host-side helper is pre-release. Keep using this Docker path for
   supported installations until its roadmap marks the stable deployment phase

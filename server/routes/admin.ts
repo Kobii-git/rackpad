@@ -1,3 +1,4 @@
+import { restoredMonitorCommunity } from "../lib/security-migration.js";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1225,6 +1226,7 @@ const restoreBackupSnapshot = db.transaction(
       }
     }
 
+    const legacySecurity = Number(snapshot.schemaVersion ?? 0) < 50;
     const data = asObject(snapshot.data);
     const labs = normalizeArrayRecordArray(data.labs, "data.labs");
     const rooms = normalizeArrayRecordArray(data.rooms ?? [], "data.rooms");
@@ -1831,8 +1833,8 @@ const restoreBackupSnapshot = db.transaction(
     VALUES (?, ?, ?)
   `);
     const insertOidcIdentity = db.prepare(`
-    INSERT INTO oidcIdentities (issuer, subject, userId, email, displayName, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO oidcIdentities (issuer, subject, userId, email, displayName, createdAt, updatedAt, roleRecheckRequired)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDeviceMonitor = db.prepare(`
     INSERT INTO deviceMonitors (
@@ -1845,7 +1847,7 @@ const restoreBackupSnapshot = db.transaction(
       path,
       ignoreTlsErrors,
       snmpVersion,
-      snmpCommunity,
+      snmpCommunityEnc,
       snmpOid,
       snmpExpectedValue,
       snmpMatchMode,
@@ -2045,6 +2047,10 @@ const restoreBackupSnapshot = db.transaction(
       insertUserLabAccess.run(row.userId, row.labId, row.role);
     }
     for (const row of oidcIdentities) {
+      const roleRecheckRequired = legacySecurity ? 1 : row.roleRecheckRequired ?? 1;
+      if (roleRecheckRequired !== 0 && roleRecheckRequired !== 1) {
+        throw new ValidationError("Invalid OIDC role recheck marker in backup.");
+      }
       insertOidcIdentity.run(
         row.issuer,
         row.subject,
@@ -2053,6 +2059,7 @@ const restoreBackupSnapshot = db.transaction(
         row.displayName ?? null,
         row.createdAt,
         row.updatedAt,
+        roleRecheckRequired,
       );
     }
     for (const row of rooms) {
@@ -2360,8 +2367,8 @@ const restoreBackupSnapshot = db.transaction(
         row.labId,
         row.deviceId ?? null,
         row.sourceIp,
-        row.community ?? null,
-        row.credentialId ?? null,
+        null,
+        legacySecurity ? null : row.credentialId ?? null,
         row.lastTrapAt ?? null,
       );
     }
@@ -2796,7 +2803,7 @@ const restoreBackupSnapshot = db.transaction(
         row.path ?? null,
         Number(row.ignoreTlsErrors ?? 0) === 1 ? 1 : 0,
         row.snmpVersion ?? null,
-        row.snmpCommunity ?? null,
+        restoredMonitorCommunity(row),
         row.snmpOid ?? null,
         row.snmpExpectedValue ?? null,
         row.snmpMatchMode ?? "equals",

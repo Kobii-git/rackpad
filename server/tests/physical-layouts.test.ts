@@ -1153,6 +1153,8 @@ test("schema 45 migration preserves inventory and cabling while creating legacy 
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion SET version = 45, updatedAt = '2026-08-30T00:00:00.000Z' WHERE id = 1;
   `);
   const before = {
@@ -1259,6 +1261,8 @@ test("schema 46 migration adds nullable shared room-canvas coordinates without c
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion SET version = 46, updatedAt = '2026-08-31T00:00:00.000Z' WHERE id = 1;
   `);
   legacy.close();
@@ -1331,6 +1335,8 @@ test("schema 48 migration adds cable inspection defaults without changing invent
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
     SET version = 47, updatedAt = '2026-08-31T00:00:00.000Z'
     WHERE id = 1;
@@ -1398,6 +1404,8 @@ test("schema 49 migration indexes persisted rack mount kinds without changing de
     UPDATE schemaVersion
     SET version = 48, updatedAt = '2026-09-03T00:00:00.000Z'
     WHERE id = 1;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
   `);
   const before = legacy
     .prepare("SELECT * FROM devices WHERE id = 'device_rack_top_v48'")

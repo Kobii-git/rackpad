@@ -14,6 +14,7 @@ import {
 } from "./lib/physical-layout.js";
 import { legacyShelfGeometry } from "./lib/legacy-shelf-geometry.js";
 import { CURRENT_SCHEMA_VERSION } from "./schema-version.js";
+import { upgradeLegacySecurityState } from "./lib/security-migration.js";
 
 export { CURRENT_SCHEMA_VERSION } from "./schema-version.js";
 
@@ -1369,6 +1370,16 @@ const SCHEMA_MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_devices_rack_mount_kind
         ON devices (rackId, rackMountKind);
     `,
+  },
+  {
+    version: 50,
+    sql: `
+      ALTER TABLE deviceMonitors ADD COLUMN snmpCommunityEnc TEXT;
+      ALTER TABLE oidcIdentities ADD COLUMN roleRecheckRequired INTEGER NOT NULL DEFAULT 0 CHECK (roleRecheckRequired IN (0, 1));
+    `,
+    run() {
+      upgradeLegacySecurityState(db);
+    },
   },
 ] as const;
 

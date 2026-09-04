@@ -8,6 +8,48 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.2-beta.4] - 2026-09-05
+
+> Security remediation beta. Read the [upgrade and test notes](docs/releases/v1.8.2-beta.4-test-notes.md)
+> before upgrading. The application remains a single React/Fastify/SQLite service.
+
+### Fixed
+
+- Enforce authentication for encoded API paths and prevent NetBox previews from
+  matching devices outside readable labs or interpreting identifier wildcards.
+- Validate proxy IPs/CIDRs and derive client identity, host, HTTPS, and OIDC
+  callback URLs from Fastify's trusted request properties. Upgrade Fastify to
+  5.12.3 while retaining patched fast-uri 3.1.7 and 4.1.4 dependencies.
+- Require verified email for OIDC email admission and role mapping, preserve
+  case-sensitive subjects, and bind callback and completion to the initiating
+  browser before updating accounts or issuing bearer sessions.
+- Encrypt inline SNMP communities, redact monitor responses, preserve omitted
+  secrets during editing, and avoid copying credential-backed secrets on import.
+- Prevent incoming SNMP traps from changing configured trust or suppressing a
+  subsequent authenticated trap.
+- Validate and pin TCP, ICMP, and every SNMP destination at execution time,
+  including IPv6, with bounded DNS and network execution and transport cleanup.
+
+### Changed
+
+- Append migration 50 after the existing rack-top migration 49. Encrypt legacy
+  communities atomically, revoke OIDC sessions, require a one-time OIDC role
+  check, and clear historical trap-source credentials. Legacy logical restores
+  apply the same security conversion.
+- Disable legacy numeric/truthy proxy settings with a startup warning. The SNMP
+  trap listener now defaults off in runtime and all Compose variants.
+- Run browser tests against disposable databases outside the working tree.
+
+### Test notes
+
+- Retain the encryption key and a pre-upgrade database/configuration backup;
+  configure an OIDC administrator mapping and explicit trusted proxy addresses.
+- Verify administrator access, lab isolation, monitoring, and explicitly enabled
+  traps after upgrade. Rotate previously exposed SNMP communities on both ends.
+- Rollback requires the previous application and matching pre-upgrade snapshot;
+  do not run an older binary against schema 50. Experimental native Proxmox
+  support remains subject to the existing guest-testing and soak requirements.
+
 ## [1.8.2-beta.3] - 2026-09-04
 
 > Patch-panel authoring tester candidate. Existing hardware templates and device

@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto'
-import dgram from 'node:dgram'
+import { resolveRoutableHost } from './net-guard.js'
+import { createSnmpSocket } from './snmp-transport.js'
 import { snmpV3Get, snmpV3GetNext, type SnmpV3Session } from './snmp-v3.js'
 
 export const SNMP_VERSIONS = ['1', '2c', '3'] as const
@@ -97,12 +98,12 @@ export async function snmpWalkColumn(
   return results
 }
 
-function snmpRequest(
+async function snmpRequest(
   session: SnmpV1V2Session,
   oid: string,
   mode: 'get' | 'getNext',
 ): Promise<SnmpResponse> {
-  const socket = dgram.createSocket('udp4')
+  const resolved = await resolveRoutableHost(session.host)
   const requestId = randomInt(1, 0x7fffffff)
   const pduTag = mode === 'get' ? 0xa0 : 0xa1
   const timeoutMs = boundedSnmpTimeoutMs(session.timeoutMs)
@@ -113,6 +114,7 @@ function snmpRequest(
     requestId,
     pduTag,
   )
+  const socket = createSnmpSocket(resolved.family)
 
   return new Promise((resolve, reject) => {
     let settled = false
@@ -148,7 +150,7 @@ function snmpRequest(
       })
     })
 
-    socket.send(message, session.port, session.host, (error) => {
+    socket.send(message, session.port, resolved.address, (error) => {
       if (error) {
         finish(() => reject(error))
       }

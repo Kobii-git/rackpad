@@ -3060,11 +3060,12 @@ test("UI regression surfaces remain reachable and unclipped", async ({
       request.url().endsWith("/api/device-monitors/mon_ups_snmp_v3"),
   );
   await page.getByRole("button", { name: "Save target" }).click();
-  expect((await v3UpdateRequest).postDataJSON()).toMatchObject({
+  const v3Update = (await v3UpdateRequest).postDataJSON();
+  expect(v3Update).not.toHaveProperty("snmpCommunity");
+  expect(v3Update).toMatchObject({
     enabled: false,
     type: "snmp",
     snmpVersion: "3",
-    snmpCommunity: null,
     snmpOid: "1.3.6.1.2.1.33.1.2.4.0",
     snmpMatchMode: "any",
   });

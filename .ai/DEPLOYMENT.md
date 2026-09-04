@@ -16,7 +16,8 @@ Default Compose uses a read-only root filesystem, `/tmp` tmpfs,
 `no-new-privileges`, init, a healthcheck, and the `rackpad_data:/data` volume.
 The internal HTTP port is 3000 and the host mapping uses `RACKPAD_PORT`.
 
-The process enables the SNMP trap listener according to `SNMP_TRAP_*`, but normal
+The process enables the SNMP trap listener only when explicitly configured through
+`SNMP_TRAP_ENABLED=1` (the default is off), but normal
 Compose deliberately does not publish UDP 1162. Operators must add an explicit
 UDP mapping or choose host discovery when external traps are required. Do not
 change that safer default without a product decision.
@@ -28,11 +29,10 @@ including `RACKPAD_SECRET_KEY`, SNMP, OIDC, rate limits, queue limits, and
 background intervals, pass through every Compose variant. `npm run check:config`
 derives runtime names from server source and fails on example/manifest drift.
 
-`TRUST_PROXY` is disabled at `0` and otherwise names the exact controlled proxy
-hop count from `1` through `10`; legacy truthy aliases mean one hop. A trusted
-proxy deployment must prevent direct access to the Rackpad port and overwrite
-client-provided forwarding headers at the public edge. Invalid values fail
-closed to disabled.
+`TRUST_PROXY` is disabled at `0` and otherwise names explicit controlled proxy
+IPs/CIDRs. Legacy hop counts, truthy aliases, and invalid values disable trust with
+a warning. Replace old settings before upgrade. The public edge must overwrite
+forwarding headers, and direct access to the app port should remain restricted.
 
 Secrets belong in `.env` or an external secret manager, never committed docs or
 AI context. Back up `RACKPAD_SECRET_KEY`; changing or losing it invalidates stored
@@ -42,6 +42,14 @@ encrypted integration secrets.
 
 SQLite at `/data/rackpad.db` is the primary durable state. Download a logical
 backup and, for important installations, snapshot the volume before upgrade.
+Schema 50 needs `RACKPAD_SECRET_KEY` to encrypt existing inline SNMP communities;
+a missing key aborts without committing the migration. It revokes OIDC sessions,
+requires a one-time OIDC role check, and clears historical trap-source credential
+links. Configure a trusted OIDC admin mapping and retain existing encryption keys
+before upgrade; reconfigure source-level trap credentials afterward.
+After upgrade, verify administrator access, lab isolation, monitoring, and any
+explicitly enabled traps. Rotate communities previously exposed through API
+responses or backups on both Rackpad and the affected devices.
 Migrations are forward-only: do not attach an older image to a database after a
 schema upgrade. Rollback requires the pre-upgrade database/volume snapshot plus
 the matching older image. A logical backup from a newer schema is rejected by an

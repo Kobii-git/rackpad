@@ -6,7 +6,9 @@ import {
   randomBytes,
   randomInt,
 } from "node:crypto";
-import dgram from "node:dgram";
+import net from "node:net";
+import { resolveRoutableHost } from "./net-guard.js";
+import { createSnmpSocket } from "./snmp-transport.js";
 import {
   berInteger,
   berObjectIdentifier,
@@ -498,7 +500,7 @@ function sendSnmpV3(
   requestId: number,
   engine: SnmpEngineState,
 ): Promise<SnmpResponse> {
-  const socket = dgram.createSocket("udp4");
+  const socket = createSnmpSocket(net.isIP(session.host));
   const timeoutMs = boundedSnmpTimeoutMs(session.timeoutMs);
 
   return new Promise((resolve, reject) => {
@@ -561,7 +563,7 @@ async function discoverEngine(session: SnmpV3Session) {
   );
 
   const packet = await new Promise<Buffer>((resolve, reject) => {
-    const socket = dgram.createSocket("udp4");
+    const socket = createSnmpSocket(net.isIP(session.host));
     const timeoutMs = boundedSnmpTimeoutMs(session.timeoutMs);
     let settled = false;
     const finish = (callback: () => void) => {
@@ -600,6 +602,8 @@ export async function snmpV3Request(
   oid: string,
   mode: "get" | "getNext",
 ): Promise<SnmpResponse> {
+  const resolved = await resolveRoutableHost(session.host);
+  session = { ...session, host: resolved.address };
   const normalizedOid = normalizeOid(oid);
   let engine = engineCache.get(cacheKey(session));
   if (!engine) {

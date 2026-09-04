@@ -8,6 +8,7 @@ import {
   type DeviceMonitor,
 } from "./monitoring.js";
 import { loadSnmpCredentialSecrets } from "./snmp-credentials.js";
+import { loadMonitorCommunity } from "./snmp-session.js";
 import { getSnmpCredentialRow } from "./snmp-credentials.js";
 import {
   extractIfIndex,
@@ -75,7 +76,7 @@ export function getSnmpTrapReceiverStatus() {
 export function startSnmpTrapReceiver() {
   if (socket) return () => stopSnmpTrapReceiver();
 
-  const enabled = envFlag("SNMP_TRAP_ENABLED", true);
+  const enabled = envFlag("SNMP_TRAP_ENABLED", false);
   status.enabled = enabled;
   status.port = resolveTrapPort();
   status.bind = process.env.SNMP_TRAP_BIND?.trim() || "0.0.0.0";
@@ -114,8 +115,8 @@ export function stopSnmpTrapReceiver() {
   status.listening = false;
 }
 
-function shouldDedupe(sourceIp: string, trap: ParsedSnmpTrap) {
-  const key = `${sourceIp}:${trap.trapOid ?? trap.genericTrap ?? "unknown"}:${trap.ifIndex ?? "none"}`;
+function shouldDedupe(sourceIp: string, trap: ParsedSnmpTrap, trustedMonitorIds: string[]) {
+  const key = `${sourceIp}:${trap.trapOid ?? trap.genericTrap ?? "unknown"}:${trap.ifIndex ?? "none"}:${trustedMonitorIds.slice().sort().join(",")}`;
   const now = Date.now();
   const previous = dedupeCache.get(key);
   dedupeCache.set(key, now);
@@ -164,10 +165,6 @@ export async function handleTrapPacket(packet: Buffer, sourceIp: string) {
   const trap = parseSnmpTrapPacket(packet, {
     v3Credentials: collectSnmpV3TrapCredentials(mapping),
   });
-  if (shouldDedupe(sourceIp, trap)) {
-    return { deduped: true };
-  }
-
   const linkResult = trapOidToLinkResult(trap.trapOid, trap.genericTrap);
   const deviceId = mapping.deviceId;
   const labId = mapping.labId;
@@ -179,6 +176,8 @@ export async function handleTrapPacket(packet: Buffer, sourceIp: string) {
   const trustedMonitorIds = affectedMonitors
     .filter((monitor) => isTrapAuthorizedForMonitor(monitor, trap, mapping))
     .map((monitor) => monitor.id);
+  // Unauthenticated observations cannot suppress a subsequently authenticated trap.
+  if (shouldDedupe(sourceIp, trap, trustedMonitorIds)) return { deduped: true };
 
   let action = "logged";
   let message = `Trap from ${sourceIp}${trap.trapOid ? ` (${trap.trapOid})` : ""}`;
@@ -208,8 +207,6 @@ export async function handleTrapPacket(packet: Buffer, sourceIp: string) {
     labId,
     deviceId,
     sourceIp,
-    community: trap.community ?? null,
-    credentialId: trap.credentialId ?? null,
   });
 
   const persisted = consumeTrapLogBudget(sourceIp);
@@ -391,7 +388,7 @@ function isTrapAuthorizedForMonitor(
   const trapCommunity = trap.community?.trim();
   if (!trapCommunity) return false;
 
-  const credentialId = monitor.snmpCredentialId ?? mapping.credentialId;
+  const credentialId = monitor.snmpCredentialId ?? mapping.credentialId ?? mapping.deviceCredentialId;
   if (credentialId) {
     try {
       const credential = loadSnmpCredentialSecrets(credentialId, mapping.labId);
@@ -402,8 +399,11 @@ function isTrapAuthorizedForMonitor(
     }
   }
 
-  if (communityMatches(trapCommunity, monitor.snmpCommunity)) return true;
-  return communityMatches(trapCommunity, mapping.community);
+  try {
+    return communityMatches(trapCommunity, loadMonitorCommunity(monitor.id, monitor.deviceId));
+  } catch {
+    return false;
+  }
 }
 
 function upsertTrapSource(input: {
@@ -411,45 +411,14 @@ function upsertTrapSource(input: {
   labId: string;
   deviceId: string | null;
   sourceIp: string;
-  community: string | null;
-  credentialId: string | null;
 }) {
+  // Packet observations never change a configured device or credential mapping.
   const now = new Date().toISOString();
-  if (input.id) {
-    db.prepare(
-      `
-      UPDATE snmpTrapSources
-      SET
-        deviceId = COALESCE(?, deviceId),
-        community = COALESCE(?, community),
-        credentialId = COALESCE(?, credentialId),
-        lastTrapAt = ?
-      WHERE id = ?
-    `,
-    ).run(input.deviceId, input.community, input.credentialId, now, input.id);
-    return;
-  }
-
-  const id = createId("trapsrc");
-  db.prepare(
-    `
-    INSERT INTO snmpTrapSources (id, labId, deviceId, sourceIp, community, credentialId, lastTrapAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(labId, sourceIp) DO UPDATE SET
-      deviceId = COALESCE(excluded.deviceId, snmpTrapSources.deviceId),
-      community = COALESCE(excluded.community, snmpTrapSources.community),
-      credentialId = COALESCE(excluded.credentialId, snmpTrapSources.credentialId),
-      lastTrapAt = excluded.lastTrapAt
-  `,
-  ).run(
-    id,
-    input.labId,
-    input.deviceId,
-    input.sourceIp,
-    input.community,
-    input.credentialId,
-    now,
-  );
+  db.prepare(`
+    INSERT INTO snmpTrapSources (id, labId, deviceId, sourceIp, lastTrapAt)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(labId, sourceIp) DO UPDATE SET lastTrapAt = excluded.lastTrapAt
+  `).run(input.id ?? createId("trapsrc"), input.labId, input.deviceId, input.sourceIp, now);
 }
 
 function findMonitorsForTrap(deviceId: string, ifIndex?: number) {
@@ -613,7 +582,7 @@ function parseTrapSourceRow(row: Record<string, unknown>) {
     labId: String(row.labId),
     deviceId: row.deviceId ? String(row.deviceId) : null,
     sourceIp: String(row.sourceIp),
-    community: row.community ? String(row.community) : null,
+    community: null,
     credentialId: row.credentialId ? String(row.credentialId) : null,
     lastTrapAt: row.lastTrapAt ? String(row.lastTrapAt) : null,
   };

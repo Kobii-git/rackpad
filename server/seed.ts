@@ -1,3 +1,4 @@
+import { encryptMonitorCommunity } from "./lib/security-migration.js";
 /**
  * Seed the database with the homelab mock dataset.
  * Only runs if the labs table is empty — safe to call on every startup.
@@ -5129,7 +5130,7 @@ export function seedIfEmpty() {
       lastMessage,
       lastAlertAt,
       snmpVersion,
-      snmpCommunity,
+      snmpCommunityEnc,
       snmpOid,
       snmpExpectedValue,
       portId,
@@ -5140,7 +5141,7 @@ export function seedIfEmpty() {
     )
     VALUES
       (@id, @deviceId, @name, @type, @target, @port, @path, @intervalMs, @enabled, @sortOrder, @lastCheckAt, @lastResult,
-       @lastMessage, @lastAlertAt, @snmpVersion, @snmpCommunity, @snmpOid, @snmpExpectedValue, @portId, @snmpIfIndex,
+       @lastMessage, @lastAlertAt, @snmpVersion, @snmpCommunityEnc, @snmpOid, @snmpExpectedValue, @portId, @snmpIfIndex,
        @snmpMatchMode, @snmpCredentialId, @ignoreTlsErrors)
   `);
   const insertSnmpCredential = db.prepare(
@@ -5339,8 +5340,9 @@ export function seedIfEmpty() {
       insertDeviceMonitor.run({
         ...monitor,
         snmpVersion: "snmpVersion" in monitor ? monitor.snmpVersion : null,
-        snmpCommunity:
+        snmpCommunityEnc: encryptMonitorCommunity(
           "snmpCommunity" in monitor ? monitor.snmpCommunity : null,
+        ),
         snmpOid: "snmpOid" in monitor ? monitor.snmpOid : null,
         snmpExpectedValue:
           "snmpExpectedValue" in monitor ? monitor.snmpExpectedValue : null,
