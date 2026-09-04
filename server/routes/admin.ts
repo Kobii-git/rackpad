@@ -2445,7 +2445,12 @@ const restoreBackupSnapshot = db.transaction(
     }
     ensurePatchPanelPassThroughPorts(
       devices
-        .filter((row) => row.deviceType === "patch_panel")
+        .filter((row) =>
+          deviceTypeLineageFromParents(
+            String(row.deviceType ?? ""),
+            restoredDeviceTypeParents,
+          ).includes("patch_panel"),
+        )
         .map((row) => String(row.id)),
     );
     const portIds = new Set(ports.map((row) => String(row.id)));

@@ -349,6 +349,7 @@ export const th = {
   "Template name": "ชื่อเทมเพลต",
   "Applies to": "ใช้กับ",
   "Add port": "เพิ่มพอร์ต",
+  "Add or update port block": "เพิ่มหรืออัปเดตบล็อกพอร์ต",
   "Add jack": "เพิ่มแจ็ค",
   "Create template": "สร้างเทมเพลต",
   "Save template": "บันทึกเทมเพลต",

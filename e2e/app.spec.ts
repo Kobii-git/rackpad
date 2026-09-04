@@ -4231,6 +4231,127 @@ test("unmanaged status is selectable, bulk editable, filterable, and reported", 
   }
 });
 
+test("patch-panel hardware templates author, apply, and render both faces", async ({
+  page,
+  request,
+}) => {
+  const suffix = Date.now().toString(36);
+  const templateId = `e2e-patch-panel-${suffix}`;
+  const hostname = `patch-panel-${suffix}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  let deviceId = "";
+
+  try {
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/admin/device-types");
+    await page
+      .getByTestId("device-type-section-built-in")
+      .getByRole("button")
+      .filter({ hasText: "patch_panel" })
+      .click();
+
+    const builder = page.getByTestId("hardware-template-builder");
+    await builder
+      .getByTestId("hardware-template-starter")
+      .selectOption("patch-panel");
+    const frontPreview = builder.getByTestId("hardware-template-preview-front");
+    const rearPreview = builder.getByTestId("hardware-template-preview-rear");
+    await expect(frontPreview.locator('g[role="button"]')).toHaveCount(24);
+    await expect(rearPreview.locator('g[role="button"]')).toHaveCount(24);
+    await expect(
+      builder.getByRole("button", {
+        name: "Add or update port block",
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    await builder
+      .getByRole("textbox", { name: "ID", exact: true })
+      .first()
+      .fill(templateId);
+    await builder
+      .getByRole("textbox", { name: "Name", exact: true })
+      .fill(`E2E patch panel ${suffix}`);
+    const saveTemplateResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().endsWith("/api/hardware-templates"),
+    );
+    await builder
+      .getByRole("button", { name: "Save template", exact: true })
+      .click();
+    expect((await saveTemplateResponse).status()).toBe(201);
+    await expect(
+      builder.getByRole("combobox", { name: "Templates", exact: true }),
+    ).toHaveValue(templateId);
+
+    const deviceResponse = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        hostname,
+        deviceType: "patch_panel",
+        status: "online",
+        placement: "room",
+        portTemplateId: "patch-panel-24",
+      },
+    });
+    expect(deviceResponse.status(), await deviceResponse.text()).toBe(201);
+    deviceId = ((await deviceResponse.json()) as { id: string }).id;
+
+    await page.goto(`/devices/${deviceId}?tab=physical`);
+    const templateSelect = page.getByRole("combobox", {
+      name: "Templates",
+      exact: true,
+    });
+    await expect(templateSelect).toContainText(`E2E patch panel ${suffix}`);
+    await templateSelect.selectOption(templateId);
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    const frontFace = page.getByRole("img", {
+      name: "Front port layout",
+      exact: true,
+    });
+    const rearFace = page.getByRole("img", {
+      name: "Rear port layout",
+      exact: true,
+    });
+    await expect(frontFace.locator("g[aria-label]")).toHaveCount(24);
+    await expect(rearFace.locator("g[aria-label]")).toHaveCount(24);
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+
+    await expect
+      .poll(async () => {
+        const response = await request.get(
+          `/api/physical-layouts/${deviceId}`,
+          { headers },
+        );
+        if (!response.ok()) return null;
+        const layout = (await response.json()) as {
+          status: string;
+          sourceTemplateId: string;
+          bindings: Array<{ portId: string; slotId: string }>;
+          unmappedPortIds: string[];
+        };
+        return {
+          status: layout.status,
+          sourceTemplateId: layout.sourceTemplateId,
+          bindings: layout.bindings.length,
+          unmapped: layout.unmappedPortIds.length,
+        };
+      })
+      .toEqual({
+        status: "accurate",
+        sourceTemplateId: templateId,
+        bindings: 48,
+        unmapped: 0,
+      });
+  } finally {
+    if (deviceId) await request.delete(`/api/devices/${deviceId}`, { headers });
+    await request.delete(`/api/hardware-templates/${templateId}`, { headers });
+  }
+});
+
 test("Device Types workspace supports CRUD, usage, and admin-only access", async ({
   browser,
   page,

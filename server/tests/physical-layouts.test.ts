@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { after, afterEach, beforeEach, test } from "node:test";
 import Database from "better-sqlite3";
+import { createStarterTemplate } from "../../src/lib/hardware-template-builder.ts";
 
 const tempDir = mkdtempSync(
   path.join(os.tmpdir(), "rackpad-physical-layouts-"),
@@ -15,7 +16,8 @@ process.env.OIDC_ENABLED = "0";
 process.env.RACKPAD_SECRET_KEY = "rackpad-physical-layout-test-secret";
 
 const { createApp } = await import("../app.js");
-const { CURRENT_SCHEMA_VERSION, db } = await import("../db.js");
+const { CURRENT_SCHEMA_VERSION, db, ensurePatchPanelPassThroughPorts } =
+  await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
 
 type AppInstance = Awaited<ReturnType<typeof createApp>>;
@@ -348,6 +350,127 @@ test("approved physical ports follow all existing canonical port positions", asy
       },
     ],
   );
+});
+
+test("24-port patch templates bind both faces without unmapped slots", async () => {
+  const adminToken = await bootstrapAdmin();
+  const customTypeResponse = await app.inject({
+    method: "POST",
+    url: "/api/device-types",
+    headers: authHeaders(adminToken),
+    payload: {
+      id: "keystone_patch",
+      label: "Keystone patch panel",
+      parentType: "patch_panel",
+    },
+  });
+  assert.equal(customTypeResponse.statusCode, 201, customTypeResponse.body);
+
+  const template = createStarterTemplate(
+    "patch-panel",
+    "keystone-patch-24",
+    "Keystone patch 24",
+  );
+  template.deviceTypes = ["keystone_patch"];
+  const createTemplateResponse = await app.inject({
+    method: "POST",
+    url: "/api/hardware-templates",
+    headers: authHeaders(adminToken),
+    payload: template,
+  });
+  assert.equal(
+    createTemplateResponse.statusCode,
+    201,
+    createTemplateResponse.body,
+  );
+
+  const deviceResponse = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: authHeaders(adminToken),
+    payload: {
+      labId: "lab_home",
+      hostname: "keystone-patch-01",
+      deviceType: "keystone_patch",
+      status: "online",
+      placement: "room",
+      portTemplateId: "patch-panel-24",
+    },
+  });
+  assert.equal(deviceResponse.statusCode, 201, deviceResponse.body);
+  const device = json(deviceResponse) as { id: string };
+
+  const previewResponse = await app.inject({
+    method: "POST",
+    url: `/api/physical-layouts/${device.id}/preview`,
+    headers: authHeaders(adminToken),
+    payload: { templateId: template.id },
+  });
+  assert.equal(previewResponse.statusCode, 200, previewResponse.body);
+  const preview = json(previewResponse) as {
+    bindings: Array<{ portId: string; slotId: string }>;
+    unmappedPortIds: string[];
+    portsToCreate: Array<{ slotId: string }>;
+    snapshot: {
+      portSlots: Array<{ id: string; face: "front" | "rear" }>;
+    };
+  };
+  assert.equal(preview.bindings.length, 48);
+  assert.deepEqual(preview.unmappedPortIds, []);
+  assert.deepEqual(preview.portsToCreate, []);
+  assert.equal(
+    preview.snapshot.portSlots.filter((slot) => slot.face === "front").length,
+    24,
+  );
+  assert.equal(
+    preview.snapshot.portSlots.filter((slot) => slot.face === "rear").length,
+    24,
+  );
+
+  const applyResponse = await app.inject({
+    method: "POST",
+    url: `/api/physical-layouts/${device.id}/apply`,
+    headers: authHeaders(adminToken),
+    payload: preview,
+  });
+  assert.equal(applyResponse.statusCode, 200, applyResponse.body);
+  assert.equal(json(applyResponse).status, "accurate");
+  assert.equal(json(applyResponse).bindings.length, 48);
+});
+
+test("pass-through normalization includes custom patch-panel descendants", async () => {
+  const adminToken = await bootstrapAdmin();
+  const customTypeResponse = await app.inject({
+    method: "POST",
+    url: "/api/device-types",
+    headers: authHeaders(adminToken),
+    payload: {
+      id: "fiber_patch",
+      label: "Fiber patch panel",
+      parentType: "patch_panel",
+    },
+  });
+  assert.equal(customTypeResponse.statusCode, 201, customTypeResponse.body);
+  const device = await createDevice(
+    adminToken,
+    "fiber-patch-01",
+    "fiber_patch",
+  );
+  await createPort(adminToken, device.id, " LC 01 ", "front", "fiber");
+
+  assert.equal(ensurePatchPanelPassThroughPorts(), 1);
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT name, kind, face FROM ports WHERE deviceId = ? ORDER BY face",
+      )
+      .all(device.id),
+    [
+      { name: "LC 01", kind: "fiber", face: "front" },
+      { name: "LC 01", kind: "fiber", face: "rear" },
+    ],
+  );
+  assert.equal(ensurePatchPanelPassThroughPorts(), 0);
 });
 
 test("original six-port templates retain exact slots after their source template is deleted", async () => {
@@ -1521,6 +1644,7 @@ function resetDatabase() {
     DELETE FROM racks;
     DELETE FROM rooms;
     DELETE FROM users;
+    DELETE FROM appSettings;
     DELETE FROM labs;
   `);
   setBootstrapState(null);

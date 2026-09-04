@@ -349,6 +349,7 @@ export const zhTW = {
   "Template name": "範本名稱",
   "Applies to": "適用於",
   "Add port": "新增連接埠",
+  "Add or update port block": "新增或更新連接埠區塊",
   "Add jack": "新增接口",
   "Create template": "建立範本",
   "Save template": "儲存範本",

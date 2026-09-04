@@ -349,6 +349,7 @@ export const nl = {
   "Template name": "Sjabloonnaam",
   "Applies to": "Van toepassing op",
   "Add port": "Poort toevoegen",
+  "Add or update port block": "Poortblok toevoegen of bijwerken",
   "Add jack": "Aansluiting toevoegen",
   "Create template": "Sjabloon aanmaken",
   "Save template": "Sjabloon opslaan",

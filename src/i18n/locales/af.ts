@@ -349,6 +349,7 @@ export const af = {
   "Template name": "Sjabloonnaam",
   "Applies to": "Geld vir",
   "Add port": "Voeg poort by",
+  "Add or update port block": "Voeg poortblok by of werk dit op",
   "Add jack": "Voeg kontak by",
   "Create template": "Skep sjabloon",
   "Save template": "Stoor sjabloon",

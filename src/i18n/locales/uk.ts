@@ -349,6 +349,7 @@ export const uk = {
   "Template name": "Назва шаблону",
   "Applies to": "Застосовується до",
   "Add port": "Додати порт",
+  "Add or update port block": "Додати або оновити блок портів",
   "Add jack": "Додати розетку",
   "Create template": "Створити шаблон",
   "Save template": "Зберегти шаблон",

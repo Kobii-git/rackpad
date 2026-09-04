@@ -349,6 +349,7 @@ export const ar = {
   "Template name": "اسم القالب",
   "Applies to": "ينطبق على",
   "Add port": "إضافة منفذ",
+  "Add or update port block": "إضافة كتلة منافذ أو تحديثها",
   "Add jack": "إضافة مقبس",
   "Create template": "إنشاء قالب",
   "Save template": "حفظ القالب",

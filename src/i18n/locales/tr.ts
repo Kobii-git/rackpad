@@ -349,6 +349,7 @@ export const tr = {
   "Template name": "Şablon adı",
   "Applies to": "Uygulandığı",
   "Add port": "Port ekle",
+  "Add or update port block": "Bağlantı noktası bloğu ekle veya güncelle",
   "Add jack": "Jak ekle",
   "Create template": "Şablon oluştur",
   "Save template": "Şablonu kaydet",

@@ -349,6 +349,7 @@ export const ru = {
   "Template name": "Имя шаблона",
   "Applies to": "Применяется к",
   "Add port": "Добавить порт",
+  "Add or update port block": "Добавить или обновить блок портов",
   "Add jack": "Добавить розетку",
   "Create template": "Создать шаблон",
   "Save template": "Сохранить шаблон",

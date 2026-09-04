@@ -349,6 +349,7 @@ export const hi = {
   "Template name": "टेम्पलेट नाम",
   "Applies to": "लागू होता है",
   "Add port": "पोर्ट जोड़ें",
+  "Add or update port block": "पोर्ट ब्लॉक जोड़ें या अपडेट करें",
   "Add jack": "जैक जोड़ें",
   "Create template": "टेम्पलेट बनाएँ",
   "Save template": "टेम्पलेट सहेजें",

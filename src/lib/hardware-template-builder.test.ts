@@ -69,6 +69,107 @@ test("24-port switch starter keeps access ports separate from right-side 10G upl
   );
 });
 
+test("patch-panel starter produces matching face-qualified front and rear blocks", () => {
+  const template = createStarterTemplate(
+    "patch-panel",
+    "lab-patch",
+    "Lab patch panel",
+  );
+  const front = template.portSlots.filter((slot) => slot.face === "front");
+  const rear = template.portSlots.filter((slot) => slot.face === "rear");
+
+  assert.equal(front.length, 24);
+  assert.equal(rear.length, 24);
+  assert.deepEqual(
+    template.portBlueprints.map((block) => [block.id, block.face]),
+    [
+      ["ports:front", "front"],
+      ["ports:rear", "rear"],
+    ],
+  );
+  assert.deepEqual(
+    front.map((slot) => slot.label),
+    rear.map((slot) => slot.label),
+  );
+  assert.equal(new Set(template.portSlots.map((slot) => slot.id)).size, 48);
+  assert.deepEqual(
+    new Set(front.map((slot) => slot.groupId)),
+    new Set(["ports:front"]),
+  );
+  assert.deepEqual(
+    new Set(rear.map((slot) => slot.groupId)),
+    new Set(["ports:rear"]),
+  );
+});
+
+test("port-block replacement is face-aware and upgrades only the selected legacy face", () => {
+  const legacyFront: PortBlockDefinition = {
+    id: "ports",
+    face: "front",
+    connector: "rj45",
+    count: 2,
+    rows: 1,
+    columns: 2,
+    start: 1,
+    direction: "left-to-right",
+    x: 100,
+    y: 100,
+    width: 200,
+    height: 60,
+  };
+  const template = createStarterTemplate("server-1u", "legacy", "Legacy");
+  template.portBlueprints = [{ ...legacyFront }];
+  template.portSlots = generatePortBlock(legacyFront);
+
+  const withRear = replacePortBlock(template, {
+    ...legacyFront,
+    face: "rear",
+  });
+  assert.deepEqual(
+    withRear.portBlueprints.map((block) => [block.id, block.face]),
+    [
+      ["ports", "front"],
+      ["ports:rear", "rear"],
+    ],
+  );
+  assert.equal(
+    withRear.portSlots.filter((slot) => slot.groupId === "ports").length,
+    2,
+  );
+  assert.equal(
+    withRear.portSlots.filter((slot) => slot.groupId === "ports:rear").length,
+    2,
+  );
+
+  const updatedFront = replacePortBlock(withRear, {
+    ...legacyFront,
+    count: 3,
+    columns: 3,
+  });
+  assert.deepEqual(
+    updatedFront.portBlueprints.map((block) => [block.id, block.face]),
+    [
+      ["ports:rear", "rear"],
+      ["ports:front", "front"],
+    ],
+  );
+  assert.equal(
+    updatedFront.portSlots.filter((slot) => slot.groupId === "ports:front")
+      .length,
+    3,
+  );
+  assert.equal(
+    updatedFront.portSlots.filter((slot) => slot.groupId === "ports:rear")
+      .length,
+    2,
+  );
+  assert.equal(
+    updatedFront.portSlots.some((slot) => slot.groupId === "ports"),
+    false,
+  );
+  assert.equal(new Set(updatedFront.portSlots.map((slot) => slot.id)).size, 5);
+});
+
 test("server starters support independent module variants and exact device geometry edits", () => {
   const template = createStarterTemplate(
     "server-2u",
@@ -95,10 +196,13 @@ test("server starters support independent module variants and exact device geome
     width: 760,
     height: 60,
   });
-  const moved = movePhysicalPortSlot(withPorts, "six-nics-1", 90, 130);
-  assert.equal(moved.portSlots.find((slot) => slot.id === "six-nics-1")?.x, 90);
+  const moved = movePhysicalPortSlot(withPorts, "six-nics:rear-1", 90, 130);
   assert.equal(
-    moved.portSlots.find((slot) => slot.id === "six-nics-1")?.y,
+    moved.portSlots.find((slot) => slot.id === "six-nics:rear-1")?.x,
+    90,
+  );
+  assert.equal(
+    moved.portSlots.find((slot) => slot.id === "six-nics:rear-1")?.y,
     130,
   );
   assert.equal(template.portSlots.length, 0);

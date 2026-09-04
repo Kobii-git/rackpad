@@ -349,6 +349,7 @@ export const it = {
   "Template name": "Nome modello",
   "Applies to": "Si applica a",
   "Add port": "Aggiungi porta",
+  "Add or update port block": "Aggiungi o aggiorna blocco porte",
   "Add jack": "Aggiungi presa",
   "Create template": "Crea modello",
   "Save template": "Salva modello",
