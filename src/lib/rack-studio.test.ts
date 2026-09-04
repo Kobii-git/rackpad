@@ -5,8 +5,10 @@ import {
   automaticRackCanvasPosition,
   devicePlacementState,
   directPlacementState,
+  rackTopPlacementState,
   shelfPlacementBounds,
   validateDirectPlacementPreview,
+  validateRackTopPlacementPreview,
 } from "./rack-studio";
 
 const rack: Rack = {
@@ -85,6 +87,58 @@ test("rotated shelf footprints swap their effective dimensions", () => {
     width: 120,
     height: 300,
   });
+});
+
+test("rack-top placement reuses rack columns and rejects occupied surface ranges", () => {
+  const existing = device({
+    id: "top-existing",
+    hostname: "top-existing",
+    rackId: rack.id,
+    roomId: rack.roomId,
+    placement: "rack",
+    heightU: 1,
+    face: "rear",
+    rackMountKind: "rack-top",
+    rackColumn: 0,
+    rackColumnSpan: 6,
+  });
+  assert.deepEqual(
+    devicePlacementState(existing),
+    rackTopPlacementState({
+      roomId: rack.roomId ?? null,
+      rackId: rack.id,
+      heightU: 1,
+      face: "rear",
+      column: 0,
+      columnSpan: 6,
+    }),
+  );
+
+  const adjacent = rackTopPlacementState({
+    roomId: rack.roomId ?? null,
+    rackId: rack.id,
+    heightU: 1,
+    column: 6,
+    columnSpan: 6,
+  });
+  assert.deepEqual(
+    validateRackTopPlacementPreview({
+      targetDeviceId: "top-target",
+      next: adjacent,
+      rack,
+      devices: [existing],
+    }),
+    { valid: true, reason: null },
+  );
+  assert.match(
+    validateRackTopPlacementPreview({
+      targetDeviceId: "top-target",
+      next: { ...adjacent, column: 5 },
+      rack,
+      devices: [existing],
+    }).reason ?? "",
+    /top-existing/,
+  );
 });
 
 function device(overrides: Partial<Device>): Device {

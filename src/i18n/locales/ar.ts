@@ -1336,6 +1336,7 @@ export const ar = {
   "Rack A": "الرف أ",
   "Rack elevations": "ارتفاعات الرف",
   "Rack face": "وجه الرف",
+  "Rack top": "أعلى الرف",
   "Rack visual width": "عرض الرف البصري",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "رفوف",

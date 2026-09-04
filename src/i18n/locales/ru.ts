@@ -1336,6 +1336,7 @@ export const ru = {
   "Rack A": "Стойка А",
   "Rack elevations": "Высота стойки",
   "Rack face": "Лицо стойки",
+  "Rack top": "Верх стойки",
   "Rack visual width": "Визуальная ширина стойки",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Стеллажи",

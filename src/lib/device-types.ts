@@ -141,23 +141,17 @@ export function deviceTypeBase(
       entry,
     ]),
   );
-  const seen = new Set<DeviceType>();
-  let current = type;
-  while (!seen.has(current)) {
-    seen.add(current);
-    const parent = byId.get(current)?.parentType;
-    if (!parent || parent === current) return current;
-    current = parent;
-  }
-  return type;
+  const lineage = deviceTypeLineage(type, definitions);
+  const last = lineage.at(-1);
+  const next = last ? byId.get(last)?.parentType : null;
+  return next && lineage.includes(next) ? type : (last ?? type);
 }
 
-export function deviceTypeChainIncludes(
+export function deviceTypeLineage(
   type: DeviceType | null | undefined,
-  targetType: DeviceType,
   definitions: DeviceTypeDefinition[] = BUILT_IN_DEVICE_TYPES,
-) {
-  if (!type) return false;
+): DeviceType[] {
+  if (!type) return [];
   const byId = new Map(
     [...BUILT_IN_DEVICE_TYPES, ...definitions].map((entry) => [
       entry.id,
@@ -165,15 +159,24 @@ export function deviceTypeChainIncludes(
     ]),
   );
   const seen = new Set<DeviceType>();
+  const lineage: DeviceType[] = [];
   let current = type;
   while (!seen.has(current)) {
-    if (current === targetType) return true;
+    lineage.push(current);
     seen.add(current);
     const parent = byId.get(current)?.parentType;
-    if (!parent || parent === current) return false;
+    if (!parent || parent === current) break;
     current = parent;
   }
-  return false;
+  return lineage;
+}
+
+export function deviceTypeChainIncludes(
+  type: DeviceType | null | undefined,
+  targetType: DeviceType,
+  definitions: DeviceTypeDefinition[] = BUILT_IN_DEVICE_TYPES,
+) {
+  return deviceTypeLineage(type, definitions).includes(targetType);
 }
 
 export function deviceTypeMatchesTemplate(
@@ -181,9 +184,10 @@ export function deviceTypeMatchesTemplate(
   templateDeviceTypes: DeviceType[],
   definitions: DeviceTypeDefinition[] = BUILT_IN_DEVICE_TYPES,
 ) {
-  if (templateDeviceTypes.includes(deviceType)) return true;
-  const baseType = deviceTypeBase(deviceType, definitions);
-  return baseType !== deviceType && templateDeviceTypes.includes(baseType);
+  if (templateDeviceTypes.length === 0) return true;
+  return deviceTypeLineage(deviceType, definitions).some((candidate) =>
+    templateDeviceTypes.includes(candidate),
+  );
 }
 
 export function mergeDeviceTypeDefinitions(

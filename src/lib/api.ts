@@ -901,6 +901,12 @@ export const api = {
     );
   },
 
+  clearHardwareTemplateDefault(deviceType: string) {
+    return request<void>(`/hardware-templates/defaults/${deviceType}`, {
+      method: "DELETE",
+    });
+  },
+
   getPhysicalLayouts(params?: { labId?: string; deviceId?: string }) {
     return request<DevicePhysicalLayout[]>(
       "/physical-layouts",

@@ -11,6 +11,11 @@ import {
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import {
+  deviceTypeChainIncludes,
+  deviceTypeLineage,
+  localizedDeviceTypeIdLabel,
+} from "@/lib/device-types";
+import {
   createHardwareModule,
   createStarterTemplate,
   HARDWARE_TEMPLATE_STARTERS,
@@ -97,13 +102,31 @@ export function HardwareTemplateBuilder({
   const compatibleDevices = useMemo(
     () =>
       selectedDeviceType
-        ? devices.filter((device) => device.deviceType === selectedDeviceType)
+        ? devices.filter((device) =>
+            deviceTypeChainIncludes(
+              device.deviceType,
+              selectedDeviceType,
+              deviceTypes,
+            ),
+          )
         : [],
-    [devices, selectedDeviceType],
+    [deviceTypes, devices, selectedDeviceType],
   );
-  const currentDefault = defaults.find(
+  const exactDefault = defaults.find(
     (entry) => entry.deviceType === selectedDeviceType,
   );
+  const defaultLineage = selectedDeviceType
+    ? deviceTypeLineage(selectedDeviceType, deviceTypes)
+    : [];
+  const currentDefault = defaultLineage
+    .map((deviceType) =>
+      defaults.find((entry) => entry.deviceType === deviceType),
+    )
+    .find((entry): entry is HardwareTemplateDefault => Boolean(entry));
+  const inheritedDefaultSource =
+    currentDefault && currentDefault.deviceType !== selectedDeviceType
+      ? currentDefault.deviceType
+      : undefined;
 
   async function refreshTemplates(preferredId?: string) {
     const response = await api.getHardwareTemplates();
@@ -262,6 +285,26 @@ export function HardwareTemplateBuilder({
         ...current.filter((entry) => entry.deviceType !== selectedDeviceType),
         assigned,
       ]);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : t("Failed to save port template."),
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDefaultReset() {
+    if (!selectedDeviceType || !exactDefault) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api.clearHardwareTemplateDefault(selectedDeviceType);
+      setDefaults((current) =>
+        current.filter((entry) => entry.deviceType !== selectedDeviceType),
+      );
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -473,19 +516,40 @@ export function HardwareTemplateBuilder({
               )}
             </div>
             {selectedDeviceType && selectedId !== NEW_TEMPLATE && (
-              <Button
-                size="sm"
-                variant={
-                  currentDefault?.templateId === selectedId
-                    ? "secondary"
-                    : "outline"
-                }
-                onClick={() => void handleDefault()}
-                disabled={saving}
-              >
-                <Check />
-                {t("Apply template")}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={
+                    currentDefault?.templateId === selectedId
+                      ? "secondary"
+                      : "outline"
+                  }
+                  onClick={() => void handleDefault()}
+                  disabled={saving}
+                >
+                  <Check />
+                  {t("Apply template")}
+                </Button>
+                {exactDefault ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void handleDefaultReset()}
+                    disabled={saving}
+                  >
+                    {t("Reset")}
+                  </Button>
+                ) : null}
+                {inheritedDefaultSource ? (
+                  <Badge tone="neutral">
+                    {t("Parent")}: {localizedDeviceTypeIdLabel(
+                      inheritedDefaultSource,
+                      deviceTypes,
+                      t,
+                    )}
+                  </Badge>
+                ) : null}
+              </div>
             )}
           </div>
 

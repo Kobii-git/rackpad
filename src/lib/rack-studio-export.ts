@@ -13,18 +13,17 @@ import {
   rackCanvasState,
 } from "./rack-studio";
 import {
-  buildRackElevationScene,
   buildRackStudioScene,
-  rackFaceForPhysicalFace,
   type RackStudioSceneEquipment,
   type RackStudioScenePortAnchor,
 } from "./rack-studio-scene";
 import {
+  buildRackElevationCableRoutes,
   buildRackStudioCableRoutes,
-  cableCategoryForPorts,
   cablePath,
   defaultCableColor,
   type PhysicalCableCategory,
+  type RackStudioCableRouteStyle,
 } from "./rack-studio-cables";
 
 export type RackStudioExportTheme = "dark" | "light";
@@ -59,6 +58,7 @@ export interface RackStudioExportInput {
   face: RackFace | "both";
   focusRackId?: string;
   showLabels: boolean;
+  routeStyle: RackStudioCableRouteStyle;
   theme: RackStudioExportTheme;
   labels: RackStudioExportLabels;
 }
@@ -243,6 +243,7 @@ function renderRoomExport(input: RackStudioExportInput) {
     layouts: input.layouts,
     ports: input.ports,
     links: input.links,
+    style: input.routeStyle,
     scene,
   });
   const routeSvg = routes
@@ -260,7 +261,7 @@ function renderRoomExport(input: RackStudioExportInput) {
             ? input.labels.rear
             : "";
       return [
-        `<path d="${cablePath(shifted)}" fill="none" stroke="${safeColor(route.color, defaultCableColor(route.category))}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" ${route.handoff ? 'stroke-dasharray="8 5"' : ""} opacity="0.9"/>`,
+        `<path d="${cablePath(shifted, input.routeStyle, route.manualPointIndexes)}" fill="none" stroke="${safeColor(route.color, defaultCableColor(route.category))}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" ${route.handoff ? 'stroke-dasharray="8 5"' : ""} opacity="0.9"/>`,
         input.showLabels
           ? `<text x="${last.x + 5}" y="${last.y - 5}" fill="${palette.text}" font-size="9">${escapeXml(suffix ? `${route.label} · ${suffix}` : route.label)}</text>`
           : "",
@@ -285,13 +286,6 @@ function renderRoomExport(input: RackStudioExportInput) {
   };
 }
 
-interface FocusAnchor {
-  x: number;
-  y: number;
-  face: RackFace;
-  device: Device;
-}
-
 function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
   const palette = PALETTES[input.theme];
   const faces: RackFace[] =
@@ -299,12 +293,13 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
   const rackWidth = 440;
   const rackHeight = 620;
   const faceGap = 50;
-  const width = 90 + faces.length * rackWidth + (faces.length - 1) * faceGap + 250;
+  const width =
+    90 + faces.length * rackWidth + (faces.length - 1) * faceGap + 250;
   const height = 760;
   const linked = linkedPortIds(input.links);
   const portById = new Map(input.ports.map((port) => [port.id, port]));
-  const deviceById = new Map(input.devices.map((device) => [device.id, device]));
-  const anchors = new Map<string, FocusAnchor>();
+  const routes: string[] = [];
+  const categories = new Set<PhysicalCableCategory>();
 
   const rackFaces = faces.map((face, faceIndex) => {
     const x = 50 + faceIndex * (rackWidth + faceGap);
@@ -313,26 +308,44 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
     const innerY = y + 48;
     const innerWidth = rackWidth - 68;
     const innerHeight = rackHeight - 72;
-    const elevation = buildRackElevationScene({
+    const planned = buildRackElevationCableRoutes({
       rack,
-      rackFace: face,
+      face,
       devices: input.devices,
       layouts: input.layouts,
       ports: input.ports,
+      links: input.links,
+      style: input.routeStyle,
       width: 1000,
       unitHeight: 42,
     });
+    const elevation = planned.scene;
     const scaleX = innerWidth / elevation.width;
     const scaleY = innerHeight / elevation.height;
-    for (const anchor of elevation.portAnchors) {
-      const device = deviceById.get(anchor.deviceId);
-      if (!device) continue;
-      anchors.set(anchor.portId, {
-        x: innerX + anchor.x * scaleX,
-        y: innerY + anchor.y * scaleY,
-        face: anchor.physicalFace,
-        device,
-      });
+    const rackBodyY = innerY + elevation.rackOffsetY * scaleY;
+    const rackBodyHeight = (elevation.height - elevation.rackOffsetY) * scaleY;
+    for (const route of planned.routes) {
+      categories.add(route.category);
+      const shifted = route.points.map((point) => ({
+        x: innerX + point.x * scaleX,
+        y: innerY + point.y * scaleY,
+      }));
+      const last = shifted.at(-1)!;
+      const label =
+        route.link.label || route.link.cableType || input.labels.cable;
+      const handoffLabel = route.handoffFace
+        ? route.handoffFace === "front"
+          ? input.labels.front
+          : input.labels.rear
+        : input.labels.crossRoom;
+      routes.push(
+        `<path d="${cablePath(shifted, input.routeStyle, route.manualPointIndexes)}" fill="none" stroke="${safeColor(route.color, defaultCableColor(route.category))}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" ${route.handoff ? 'stroke-dasharray="8 5"' : ""}/>`,
+      );
+      if (input.showLabels || route.handoff) {
+        routes.push(
+          `<text x="${last.x + (last.x < innerX + innerWidth / 2 ? 5 : -5)}" y="${last.y - 6}" text-anchor="${last.x < innerX + innerWidth / 2 ? "start" : "end"}" fill="${palette.text}" font-size="9">${escapeXml(route.handoff ? `${label} · ${handoffLabel}` : label)}</text>`,
+        );
+      }
     }
     const devices = elevation.equipment
       .map((item) =>
@@ -350,74 +363,18 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
       )
       .join("");
     const uLines = Array.from({ length: rack.totalU }, (_, index) => {
-      const rowY = innerY + ((index + 1) / rack.totalU) * innerHeight;
+      const rowY = rackBodyY + ((index + 1) / rack.totalU) * rackBodyHeight;
       return `<line x1="${innerX}" y1="${rowY}" x2="${innerX + innerWidth}" y2="${rowY}" stroke="${palette.border}" stroke-width="0.35"/>`;
     }).join("");
     return [
       `<g><rect x="${x}" y="${y}" width="${rackWidth}" height="${rackHeight}" rx="7" fill="${palette.panel}" stroke="${palette.border}" stroke-width="2"/>`,
       `<text x="${x + 18}" y="${y + 27}" fill="${palette.text}" font-size="13" font-weight="700">${escapeXml(`${rack.name} · ${face === "front" ? input.labels.front : input.labels.rear}`)}</text>`,
-      `<rect x="${innerX - 11}" y="${innerY - 7}" width="${innerWidth + 22}" height="${innerHeight + 14}" fill="${palette.background}" stroke="${palette.rail}" stroke-width="9"/>`,
+      `<rect x="${innerX - 11}" y="${rackBodyY - 7}" width="${innerWidth + 22}" height="${rackBodyHeight + 14}" fill="${palette.background}" stroke="${palette.rail}" stroke-width="9"/>`,
       uLines,
       devices,
       `</g>`,
     ].join("");
   });
-
-  const routes: string[] = [];
-  const categories = new Set<PhysicalCableCategory>();
-  for (const link of input.links) {
-    if (link.visible === false) continue;
-    const fromPort = portById.get(link.fromPortId);
-    const toPort = portById.get(link.toPortId);
-    const from = anchors.get(link.fromPortId);
-    const to = anchors.get(link.toPortId);
-    if (!from && !to) continue;
-    const category = cableCategoryForPorts(fromPort, toPort);
-    categories.add(category);
-    const color = safeColor(link.color, defaultCableColor(category));
-    const label = link.label || link.cableType || input.labels.cable;
-    if (from && to) {
-      const midpointX = (from.x + to.x) / 2;
-      const points = [
-        { x: from.x, y: from.y },
-        { x: midpointX, y: from.y },
-        { x: midpointX, y: to.y },
-        { x: to.x, y: to.y },
-      ];
-      routes.push(
-        `<path d="${cablePath(points)}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round"/>`,
-      );
-      if (input.showLabels) {
-        routes.push(
-          `<text x="${midpointX + 4}" y="${Math.min(from.y, to.y) - 5}" fill="${palette.text}" font-size="9">${escapeXml(label)}</text>`,
-        );
-      }
-      continue;
-    }
-    const local = (from ?? to)!;
-    const remotePort = from ? toPort : fromPort;
-    const remoteDevice = remotePort
-      ? deviceById.get(remotePort.deviceId)
-      : undefined;
-    const handoffFace =
-      remoteDevice?.rackId === rack.id && remotePort
-        ? rackFaceForPhysicalFace(
-            remoteDevice,
-            remotePort.face === "rear" ? "rear" : "front",
-          )
-        : undefined;
-    const handoffLabel = handoffFace
-      ? handoffFace === "front"
-        ? input.labels.front
-        : input.labels.rear
-      : remoteDevice?.hostname ?? input.labels.crossRoom;
-    const targetX = local.x < width / 2 ? width - 236 : 36;
-    const targetY = local.y;
-    routes.push(
-      `<path d="${cablePath([{ x: local.x, y: local.y }, { x: targetX, y: targetY }])}" fill="none" stroke="${color}" stroke-width="3" stroke-dasharray="8 5"/>`,
-      `<text x="${targetX + (targetX < local.x ? 5 : -5)}" y="${targetY - 6}" text-anchor="${targetX < local.x ? "start" : "end"}" fill="${palette.text}" font-size="9">${escapeXml(`${label} · ${handoffLabel}`)}</text>`,
-    );
-  }
 
   return {
     width,

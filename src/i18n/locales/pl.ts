@@ -1336,6 +1336,7 @@ export const pl = {
   "Rack A": "Stojak A",
   "Rack elevations": "Elewacje regałów",
   "Rack face": "Twarz stojaka",
+  "Rack top": "Góra szafy",
   "Rack visual width": "Szerokość wizualna stojaka",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Stojaki",

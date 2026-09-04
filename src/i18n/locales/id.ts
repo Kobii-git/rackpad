@@ -1336,6 +1336,7 @@ export const id = {
   "Rack A": "Rak A",
   "Rack elevations": "Ketinggian rak",
   "Rack face": "Wajah rak",
+  "Rack top": "Bagian atas rak",
   "Rack visual width": "Lebar visual rak",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Rak",

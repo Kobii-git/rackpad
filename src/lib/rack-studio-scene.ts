@@ -29,7 +29,7 @@ export interface RackStudioSceneEquipment {
   rackId: string | null;
   rackFace: RackFace;
   physicalFace: RackFace;
-  mountKind: "direct" | "shelf" | "side" | "loose";
+  mountKind: "direct" | "shelf" | "side" | "rack-top" | "loose";
   rect: RackStudioRect;
   rotation: 0 | 90;
 }
@@ -88,10 +88,7 @@ export function rackFaceForPhysicalFace(
   return mountedFace === "front" ? "rear" : "front";
 }
 
-export function rackStudioCanvasBounds(
-  racks: Rack[],
-  looseDeviceCount = 0,
-) {
+export function rackStudioCanvasBounds(racks: Rack[], looseDeviceCount = 0) {
   const automaticRows = Math.max(1, Math.ceil(racks.length / RACK_COLUMNS));
   const automaticBottom =
     RACK_MARGIN +
@@ -151,9 +148,7 @@ function directRect(rack: Rack, rackIndex: number, device: Device) {
   const frameHeight = 188;
   const height = Math.max(2, (state.heightU / rack.totalU) * frameHeight);
   const bottom =
-    frameY +
-    frameHeight -
-    ((state.startU - 1) / rack.totalU) * frameHeight;
+    frameY + frameHeight - ((state.startU - 1) / rack.totalU) * frameHeight;
   return {
     x: frameX + ((state.column ?? 0) / 12) * frameWidth,
     y: bottom - height,
@@ -258,7 +253,8 @@ export function buildRackStudioScene(input: {
     })
     .sort(
       (left, right) =>
-        left.hostname.localeCompare(right.hostname) || left.id.localeCompare(right.id),
+        left.hostname.localeCompare(right.hostname) ||
+        left.id.localeCompare(right.id),
     );
   const bounds = rackStudioCanvasBounds(input.racks, looseDevices.length);
   const equipment: RackStudioSceneEquipment[] = [];
@@ -270,7 +266,9 @@ export function buildRackStudioScene(input: {
     if (!layout || state.mountKind !== "direct" || !state.rackId) continue;
     const rack = rackById.get(state.rackId);
     if (!rack) continue;
-    const rackIndex = input.racks.findIndex((candidate) => candidate.id === rack.id);
+    const rackIndex = input.racks.findIndex(
+      (candidate) => candidate.id === rack.id,
+    );
     const rect = directRect(rack, Math.max(0, rackIndex), device);
     if (!rect) continue;
     directByDevice.set(device.id, rect);
@@ -292,9 +290,34 @@ export function buildRackStudioScene(input: {
     if (!layout || !state.rackId) continue;
     const rack = rackById.get(state.rackId);
     if (!rack) continue;
-    const rackIndex = input.racks.findIndex((candidate) => candidate.id === rack.id);
+    const rackIndex = input.racks.findIndex(
+      (candidate) => candidate.id === rack.id,
+    );
     const canvas = rackCanvasState(rack, Math.max(0, rackIndex));
-    if (state.mountKind === "side") {
+    if (state.mountKind === "rack-top") {
+      const frameX = (canvas.x ?? 0) + 20;
+      const frameY = (canvas.y ?? 0) + 53;
+      const frameWidth = RACK_STUDIO_RACK_WIDTH - 40;
+      const height = Math.max(
+        8,
+        Math.min(28, ((state.heightU ?? 1) / rack.totalU) * 188),
+      );
+      addEquipmentFaces({
+        target: equipment,
+        device,
+        layout,
+        rackId: rack.id,
+        mountKind: "rack-top",
+        rect: {
+          x: frameX + ((state.column ?? 0) / 12) * frameWidth,
+          y: frameY - height - 3,
+          width: ((state.columnSpan ?? 12) / 12) * frameWidth,
+          height,
+        },
+        face: input.face,
+        rotation: 0,
+      });
+    } else if (state.mountKind === "side") {
       addEquipmentFaces({
         target: equipment,
         device,
@@ -327,10 +350,8 @@ export function buildRackStudioScene(input: {
         rect: {
           x: parentRect.x + ((state.shelfX ?? 0) / 1000) * parentRect.width,
           y: parentRect.y + ((state.shelfY ?? 0) / 1000) * parentRect.height,
-          width:
-            ((rotated ? rawHeight : rawWidth) / 1000) * parentRect.width,
-          height:
-            ((rotated ? rawWidth : rawHeight) / 1000) * parentRect.height,
+          width: ((rotated ? rawHeight : rawWidth) / 1000) * parentRect.width,
+          height: ((rotated ? rawWidth : rawHeight) / 1000) * parentRect.height,
         },
         face: input.face,
         rotation: rotated ? 90 : 0,
@@ -399,15 +420,44 @@ export function buildRackElevationScene(input: {
 }) {
   const width = input.width ?? 1000;
   const unitHeight = input.unitHeight ?? 42;
-  const height = input.rack.totalU * unitHeight + 16;
+  const rackDevices = input.devices.filter(
+    (device) => device.rackId === input.rack.id,
+  );
+  const rackTopHeight = rackDevices.reduce((maximum, device) => {
+    const state = devicePlacementState(device);
+    return state.mountKind === "rack-top"
+      ? Math.max(maximum, (state.heightU ?? 1) * unitHeight - 2)
+      : maximum;
+  }, 0);
+  const rackOffsetY = rackTopHeight > 0 ? rackTopHeight + 12 : 0;
+  const height = rackOffsetY + input.rack.totalU * unitHeight + 16;
   const layoutByDevice = new Map(
     input.layouts.map((layout) => [layout.deviceId, layout]),
   );
   const equipment: RackStudioSceneEquipment[] = [];
   const directByDevice = new Map<string, RackStudioRect>();
-  const rackDevices = input.devices.filter(
-    (device) => device.rackId === input.rack.id,
-  );
+
+  for (const device of rackDevices) {
+    const state = devicePlacementState(device);
+    const layout = layoutByDevice.get(device.id);
+    if (!layout || state.mountKind !== "rack-top") continue;
+    const equipmentHeight = (state.heightU ?? 1) * unitHeight - 2;
+    addEquipmentFaces({
+      target: equipment,
+      device,
+      layout,
+      rackId: input.rack.id,
+      mountKind: "rack-top",
+      rect: {
+        x: ((state.column ?? 0) / 12) * width,
+        y: rackOffsetY - equipmentHeight - 4,
+        width: ((state.columnSpan ?? 12) / 12) * width,
+        height: equipmentHeight,
+      },
+      face: input.rackFace,
+      rotation: 0,
+    });
+  }
 
   for (const device of rackDevices) {
     const state = devicePlacementState(device);
@@ -420,13 +470,10 @@ export function buildRackElevationScene(input: {
     ) {
       continue;
     }
-    const topU = Math.min(
-      input.rack.totalU,
-      state.startU + state.heightU - 1,
-    );
+    const topU = Math.min(input.rack.totalU, state.startU + state.heightU - 1);
     const rect = {
       x: ((state.column ?? 0) / 12) * width,
-      y: (input.rack.totalU - topU) * unitHeight + 9,
+      y: rackOffsetY + (input.rack.totalU - topU) * unitHeight + 9,
       width: ((state.columnSpan ?? 12) / 12) * width,
       height: state.heightU * unitHeight - 2,
     };
@@ -456,9 +503,9 @@ export function buildRackElevationScene(input: {
         mountKind: "side",
         rect: {
           x: state.side === "right" ? width - 28 : 0,
-          y: 12,
+          y: rackOffsetY + 12,
           width: 28,
-          height: height - 24,
+          height: input.rack.totalU * unitHeight - 8,
         },
         face: input.rackFace,
         rotation: 90,
@@ -478,10 +525,8 @@ export function buildRackElevationScene(input: {
         rect: {
           x: parentRect.x + ((state.shelfX ?? 0) / 1000) * parentRect.width,
           y: parentRect.y + ((state.shelfY ?? 0) / 1000) * parentRect.height,
-          width:
-            ((rotated ? rawHeight : rawWidth) / 1000) * parentRect.width,
-          height:
-            ((rotated ? rawWidth : rawHeight) / 1000) * parentRect.height,
+          width: ((rotated ? rawHeight : rawWidth) / 1000) * parentRect.width,
+          height: ((rotated ? rawWidth : rawHeight) / 1000) * parentRect.height,
         },
         face: input.rackFace,
         rotation: rotated ? 90 : 0,
@@ -492,6 +537,7 @@ export function buildRackElevationScene(input: {
   return {
     width,
     height,
+    rackOffsetY,
     equipment,
     portAnchors: portAnchorsForEquipment(equipment, input.ports),
   };

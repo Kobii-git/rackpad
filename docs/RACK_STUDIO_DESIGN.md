@@ -93,21 +93,25 @@ Add authenticated APIs for listing templates and lab-scoped physical layouts.
 
 Implementation status: completed behind the Studio Beta toggle. The shared room
 canvas, focused rack editor, unmounted equipment tray, 12-column direct mounts,
-shelf footprints and rotation, 0U side mounts, pointer and keyboard editing,
-zoom/pan/fit, search and health overlays, inspectors, responsive view-only mode,
-and conflict-safe session undo/redo are implemented. Studio actions are
+shelf footprints and rotation, 0U side mounts, rack-top surfaces, pointer and
+keyboard editing, zoom/pan/fit, search and health overlays, inspectors,
+responsive view-only mode, and conflict-safe session undo/redo are implemented. Studio actions are
 lab-authorized, transactional, audited, and protected by expected before-state.
 The room and focused views now consume the same `RackStudioScene` geometry as
-cable routing and export. Direct, shelf, rotated shelf, side, and loose devices
-all render device-owned faceplates with exact transformed anchors. Front, rear,
-and both selection is authoritative: fully hidden cables are omitted and a
-single visible endpoint terminates at a labeled hidden-face handoff.
+cable routing and export. Direct, shelf, rotated shelf, side, rack-top, and loose
+devices all render device-owned faceplates with exact transformed anchors.
+Front, rear, and both selection is authoritative: fully hidden cables are
+omitted and a single visible endpoint terminates at a labeled hidden-face
+handoff.
 
 - Replace the beta preview with a room canvas showing all racks in the room, an unmounted equipment tray, and individual-rack focus.
 - Render industrial-technical front/rear faceplates with equipment depth, handles, screws, vents, bays, labels, status LEDs, and exact port geometry.
 - Add explicit View/Edit mode, desktop/tablet pointer support, keyboard controls, zoom/pan/fit, search, health overlay, face selection, and inspector forms.
 - Support integer U height plus a 12-column width grid for direct mounts.
 - Support bounded 2D shelf placement, 90° rotation, vertically installed devices, and left/right 0U side equipment.
+- Support one 12-column rack-top surface per rack, with horizontal pointer and
+  keyboard placement, face selection, overlap rejection across both faces, and
+  vertical position derived from the rack.
 - Preview valid footprints and collisions before drop. Reject rack overflow, overlapping column/U ranges, overlapping shelf rectangles, invalid parent shelves, side conflicts, and cross-lab placement.
 - Save each completed action transactionally and support conflict-safe session undo/redo.
 - Keep phone layouts view-only with a clear editing-size message.
@@ -137,13 +141,17 @@ mode creates canonical `PortLink` records from exact mapped faceplate ports,
 keeps logical and aggregate relationships out of the physical workflow, and
 requires confirmation for unusual connector pairs. Cable inspection now covers
 labels, type, length, color, notes, visibility, deletion, tracing, filters, and
-bounded room/face waypoints. Room and focused-rack views use deterministic
-equipment-aware lanes, preserve manual waypoints while racks move, and terminate
-cross-room links as labeled handoffs. Theme-aware full-room and focused-rack SVG
-and PNG exports include selected faces, physical ports, cable labels, metadata,
-and a legend. Exports use the same scene and face filtering as the interactive
-view, including shelf, side, and loose equipment. Studio remains opt-in; this
-phase does not make it the default.
+bounded room/face waypoints. Room and focused-rack views share one deterministic
+exterior-gutter planner. Stable endpoint ordering plus interval-based lane reuse
+avoids fixed modulo collisions, treats unrelated rack/equipment rectangles as
+obstacles, and preserves exact manual waypoints while racks move. Smooth rounded
+and orthogonal renderers consume the same points; namespaced local preferences
+store the chosen style and all-label setting. Cross-room links terminate as
+labeled handoffs. Theme-aware full-room and focused-rack SVG and PNG exports use
+the same planned geometry and include selected faces, physical ports, cable
+labels, metadata, and a legend. Exports use the same scene and face filtering as
+the interactive view, including shelf, side, rack-top, and loose equipment.
+Studio remains opt-in; this phase does not make it the default.
 
 - Add Patch mode for creating real `PortLink` records by selecting or dragging between available physical ports.
 - Support copper, fiber, power, console, USB, and other physical links. Keep virtual, WiFi, VLAN, and aggregate relationships in Diagram mode.
@@ -160,7 +168,7 @@ phase does not make it the default.
 - Migration tests prove populated legacy databases retain identical device, port, and `PortLink` IDs and metadata.
 - Backup tests cover new tables/fields, old backups without physical layouts, newer-schema rejection, atomic restore, and device snapshots after template deletion.
 - Profile tests cover schema validation, bounds, element limits, module resolution, deterministic expansion, inherited defaults, exact port bindings, unmatched ports, and prohibited arbitrary SVG/URLs/scripts.
-- Placement tests cover full/half/third-width devices, U overlap, shelf bounds and rotation, vertical equipment, side mounting, cross-lab rejection, and safe undo conflicts.
+- Placement tests cover full/half/third-width devices, U overlap, shelf bounds and rotation, vertical equipment, side and rack-top mounting, cross-lab rejection, and safe undo conflicts.
 - Cable tests cover existing linked devices, physical endpoint validation, network/power/console links, cross-rack routes, cross-room handoffs, waypoint validation, trace behavior, and aggregate exclusion.
 - Browser tests cover administrator/editor/viewer permissions, legacy warnings, profile creation, template application, exact manual mapping, bulk assignment, touch editing, phone view-only behavior, front/rear/both rendering, Physical Visualizer nodes, and CSP-safe PNG/SVG export.
 - Required scenarios:

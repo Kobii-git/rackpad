@@ -53,9 +53,11 @@ export function devicePlacementState(device: Device): RackStudioPlacementState {
       ? "shelf"
       : storedMountKind === "side"
         ? "side"
-        : device.rackId
-          ? "direct"
-          : "loose";
+        : storedMountKind === "rack-top" && device.rackId
+          ? "rack-top"
+          : device.rackId
+            ? "direct"
+            : "loose";
   if (mountKind === "direct") {
     return {
       mountKind,
@@ -115,6 +117,27 @@ export function devicePlacementState(device: Device): RackStudioPlacementState {
       side: device.rackSide ?? "left",
     };
   }
+  if (mountKind === "rack-top") {
+    return {
+      mountKind,
+      roomId: device.roomId ?? null,
+      rackId: device.rackId ?? null,
+      parentDeviceId: null,
+      startU: null,
+      heightU: device.heightU ?? 1,
+      face: device.face ?? "front",
+      column: device.rackColumn ?? (device.rackSlot === "right" ? 6 : 0),
+      columnSpan:
+        device.rackColumnSpan ??
+        (device.rackSlot === "left" || device.rackSlot === "right" ? 6 : 12),
+      shelfX: null,
+      shelfY: null,
+      shelfWidth: null,
+      shelfHeight: null,
+      orientation: null,
+      side: null,
+    };
+  }
   return loosePlacementState(device.roomId ?? null);
 }
 
@@ -159,6 +182,73 @@ export function directPlacementState(input: {
     column: input.column,
     columnSpan: input.columnSpan,
   };
+}
+
+export function rackTopPlacementState(input: {
+  roomId: string | null;
+  rackId: string;
+  heightU: number;
+  face?: "front" | "rear";
+  column?: number;
+  columnSpan?: number;
+}): RackStudioPlacementState {
+  return {
+    ...loosePlacementState(input.roomId),
+    mountKind: "rack-top",
+    rackId: input.rackId,
+    heightU: input.heightU,
+    face: input.face ?? "front",
+    column: input.column ?? 0,
+    columnSpan: input.columnSpan ?? 12,
+  };
+}
+
+export function validateRackTopPlacementPreview(input: {
+  targetDeviceId: string;
+  next: RackStudioPlacementState;
+  rack: Rack;
+  devices: Device[];
+}) {
+  const { next, rack } = input;
+  if (
+    next.mountKind !== "rack-top" ||
+    next.rackId !== rack.id ||
+    next.heightU === null ||
+    next.face === null ||
+    next.column === null ||
+    next.columnSpan === null
+  ) {
+    return { valid: false, reason: "Rack-top placement is incomplete." };
+  }
+  if (next.column + next.columnSpan > 12) {
+    return { valid: false, reason: "Placement exceeds rack width." };
+  }
+  for (const device of input.devices) {
+    if (device.id === input.targetDeviceId) continue;
+    const existing = devicePlacementState(device);
+    if (
+      existing.mountKind !== "rack-top" ||
+      existing.rackId !== rack.id ||
+      existing.column === null ||
+      existing.columnSpan === null
+    ) {
+      continue;
+    }
+    if (
+      rangesOverlap(
+        next.column,
+        next.columnSpan,
+        existing.column,
+        existing.columnSpan,
+      )
+    ) {
+      return {
+        valid: false,
+        reason: `Placement overlaps with ${device.hostname}.`,
+      };
+    }
+  }
+  return { valid: true, reason: null };
 }
 
 export function shelfPlacementBounds(state: RackStudioPlacementState) {

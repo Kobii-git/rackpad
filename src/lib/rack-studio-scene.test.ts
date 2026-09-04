@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildRackStudioCableRoutes } from "./rack-studio-cables";
 import { buildRackStudioSvg } from "./rack-studio-export";
-import { buildRackStudioScene, rackStudioCanvasBounds } from "./rack-studio-scene";
+import {
+  buildRackElevationScene,
+  buildRackStudioScene,
+  rackStudioCanvasBounds,
+} from "./rack-studio-scene";
 import type {
   Device,
   DevicePhysicalLayout,
@@ -78,10 +82,86 @@ test("selected rack faces control exact anchors and hidden-face handoffs", () =>
     ports: [frontPort, rearPort],
     links: [link],
     showLabels: true,
+    routeStyle: "smooth",
     theme: "dark",
     labels: exportLabels(),
   });
   assert.match(focusedFrontExport.svg, /Cable · Rear/);
+});
+
+test("rack-top equipment follows its rack and keeps physical port anchors", () => {
+  const rack = { ...rackFixture(0), studioX: 120, studioY: 90 };
+  const topDevice: Device = {
+    ...deviceFixture("rack-top-switch", rack.id, 1),
+    startU: undefined,
+    rackMountKind: "rack-top",
+    rackColumn: 2,
+    rackColumnSpan: 8,
+  };
+  const port = portFixture("rack-top-port", topDevice.id, "front");
+  const layout = layoutFixture(topDevice.id, [port]);
+  const first = buildRackStudioScene({
+    room,
+    face: "front",
+    racks: [rack],
+    devices: [topDevice],
+    layouts: [layout],
+    ports: [port],
+  });
+  const item = first.equipment.find(
+    (candidate) => candidate.mountKind === "rack-top",
+  );
+  assert.ok(item);
+  assert.ok(first.portAnchors.some((anchor) => anchor.portId === port.id));
+
+  const moved = buildRackStudioScene({
+    room,
+    face: "front",
+    racks: [{ ...rack, studioX: 180, studioY: 130 }],
+    devices: [topDevice],
+    layouts: [layout],
+    ports: [port],
+  });
+  const movedItem = moved.equipment.find(
+    (candidate) => candidate.mountKind === "rack-top",
+  );
+  assert.ok(movedItem);
+  assert.equal(movedItem.rect.x - item.rect.x, 60);
+  assert.equal(movedItem.rect.y - item.rect.y, 40);
+
+  const elevation = buildRackElevationScene({
+    rack,
+    rackFace: "front",
+    devices: [topDevice],
+    layouts: [layout],
+    ports: [port],
+    unitHeight: 42,
+  });
+  assert.ok(elevation.rackOffsetY > 0);
+  assert.ok(elevation.height > rack.totalU * 42 + 16);
+  assert.ok(
+    elevation.equipment.some(
+      (candidate) =>
+        candidate.mountKind === "rack-top" &&
+        candidate.rect.y < elevation.rackOffsetY,
+    ),
+  );
+
+  const image = buildRackStudioSvg({
+    room,
+    face: "front",
+    focusRackId: rack.id,
+    racks: [rack],
+    devices: [topDevice],
+    layouts: [layout],
+    ports: [port],
+    links: [],
+    showLabels: false,
+    routeStyle: "smooth",
+    theme: "dark",
+    labels: exportLabels(),
+  });
+  assert.match(image.svg, /data-mount-kind="rack-top"/);
 });
 
 test("dense mixed-placement scenes and exports are complete and deterministic", () => {
@@ -187,6 +267,7 @@ test("dense mixed-placement scenes and exports are complete and deterministic", 
     ...sceneInput,
     links,
     showLabels: false,
+    routeStyle: "smooth",
     theme: "dark",
     labels: exportLabels(),
   });

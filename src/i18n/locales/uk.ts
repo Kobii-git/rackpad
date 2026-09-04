@@ -1336,6 +1336,7 @@ export const uk = {
   "Rack A": "Стійка А",
   "Rack elevations": "Стієчні піднесення",
   "Rack face": "Стійка обличчя",
+  "Rack top": "Верх стійки",
   "Rack visual width": "Візуальна ширина стійки",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Стелажі",

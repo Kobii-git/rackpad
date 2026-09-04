@@ -40,12 +40,7 @@ export type LinkState = "up" | "down" | "disabled" | "unknown";
 export type PortMode = "access" | "trunk";
 export type PortRole = "physical" | "aggregate";
 export type DeviceStatus =
-  | "online"
-  | "offline"
-  | "warning"
-  | "unknown"
-  | "maintenance"
-  | "unmanaged";
+  "online" | "offline" | "warning" | "unknown" | "maintenance" | "unmanaged";
 export type DevicePlacement =
   "rack" | "room" | "wireless" | "virtual" | "shelf";
 export type IpAssignmentType =
@@ -201,7 +196,7 @@ export interface Device {
   notes?: string;
   lastSeen?: string;
   snmpCredentialId?: ID | null;
-  rackMountKind?: "direct" | "shelf" | "side" | "loose";
+  rackMountKind?: "direct" | "shelf" | "side" | "rack-top" | "loose";
   rackColumn?: number | null;
   rackColumnSpan?: number | null;
   shelfX?: number | null;
@@ -213,7 +208,7 @@ export interface Device {
 }
 
 export interface RackStudioPlacementState {
-  mountKind: "direct" | "shelf" | "side" | "loose";
+  mountKind: "direct" | "shelf" | "side" | "rack-top" | "loose";
   roomId: ID | null;
   rackId: ID | null;
   parentDeviceId: ID | null;

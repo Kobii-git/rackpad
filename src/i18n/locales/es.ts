@@ -1336,6 +1336,7 @@ export const es = {
   "Rack A": "Estante A",
   "Rack elevations": "Elevaciones de bastidores",
   "Rack face": "Cara del estante",
+  "Rack top": "Parte superior del rack",
   "Rack visual width": "Ancho visual del bastidor",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Bastidores",

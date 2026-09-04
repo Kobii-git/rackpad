@@ -77,6 +77,13 @@ automatic rack positions without changing restored port or link identities.
 Rack Studio placement writes use a single lab-authorized action endpoint. Each
 action supplies its expected canonical before-state; stale browser-session undo,
 redo, and placement attempts are rejected instead of overwriting newer changes.
+Schema 49 adds `rack-top` to the persisted `devices.rackMountKind` meaning and an
+index on `(rackId, rackMountKind)`. Rack-top rows reuse the existing rack, face,
+height, column, and column-span fields, leave U/shelf/side fields empty, and may
+not overlap another rack-top column range on the same rack regardless of face.
+No row rewrite is required. Because older binaries do not understand this enum
+meaning, rollback after placing rack-top equipment requires the pre-upgrade
+native backup or volume snapshot.
 
 `portLinks` stores optional inspection metadata (`label`, `visible`) plus a
 bounded JSON list of uniquely identified room/face canvas waypoints. Existing

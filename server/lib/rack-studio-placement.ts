@@ -10,7 +10,7 @@ import {
   ValidationError,
 } from "./validation.js";
 
-const MOUNT_KINDS = ["direct", "shelf", "side", "loose"] as const;
+const MOUNT_KINDS = ["direct", "shelf", "side", "rack-top", "loose"] as const;
 const RACK_FACES = ["front", "rear"] as const;
 const RACK_SIDES = ["left", "right"] as const;
 const SHELF_ORIENTATIONS = [0, 90] as const;
@@ -85,9 +85,11 @@ export function currentRackStudioPlacement(
       ? "shelf"
       : storedMountKind === "side"
         ? "side"
-        : row.rackId
-          ? "direct"
-          : "loose";
+        : storedMountKind === "rack-top" && row.rackId
+          ? "rack-top"
+          : row.rackId
+            ? "direct"
+            : "loose";
 
   if (mountKind === "direct") {
     const geometry = rackSlotGeometry(row);
@@ -147,6 +149,27 @@ export function currentRackStudioPlacement(
       shelfHeight: null,
       orientation: null,
       side: row.rackSide === "right" ? "right" : "left",
+    };
+  }
+
+  if (mountKind === "rack-top") {
+    const geometry = rackSlotGeometry(row);
+    return {
+      mountKind,
+      roomId: row.roomId ?? null,
+      rackId: row.rackId,
+      parentDeviceId: null,
+      startU: null,
+      heightU: row.heightU ?? 1,
+      face: row.face === "rear" ? "rear" : "front",
+      column: geometry.column,
+      columnSpan: geometry.columnSpan,
+      shelfX: null,
+      shelfY: null,
+      shelfWidth: null,
+      shelfHeight: null,
+      orientation: null,
+      side: null,
     };
   }
 
@@ -535,6 +558,69 @@ function resolveSidePlacement(
   };
 }
 
+function resolveRackTopPlacement(
+  device: RackStudioDeviceRow,
+  requested: RackStudioPlacementState,
+): RackStudioPlacementState {
+  if (
+    !requested.rackId ||
+    !requested.face ||
+    requested.heightU === null ||
+    requested.column === null ||
+    requested.columnSpan === null
+  ) {
+    throw new ValidationError(
+      "Rack-top placement requires a rack, face, height, column, and column span.",
+    );
+  }
+  if (requested.column + requested.columnSpan > 12) {
+    throw new ValidationError(
+      "Rack-top equipment would exceed the 12-column rack width.",
+    );
+  }
+  const rack = getRack(requested.rackId, device.labId);
+  const occupants = db
+    .prepare(
+      `
+        SELECT *
+        FROM devices
+        WHERE rackId = ?
+          AND rackMountKind = 'rack-top'
+          AND id != ?
+      `,
+    )
+    .all(rack.id, device.id) as RackStudioDeviceRow[];
+  for (const occupant of occupants) {
+    const existing = currentRackStudioPlacement(occupant);
+    if (existing.column === null || existing.columnSpan === null) continue;
+    if (
+      requested.column < existing.column + existing.columnSpan &&
+      requested.column + requested.columnSpan > existing.column
+    ) {
+      throw new ValidationError(
+        `Rack-top position overlaps with ${occupant.hostname}.`,
+      );
+    }
+  }
+  return {
+    mountKind: "rack-top",
+    roomId: rack.roomId,
+    rackId: rack.id,
+    parentDeviceId: null,
+    startU: null,
+    heightU: requested.heightU,
+    face: requested.face,
+    column: requested.column,
+    columnSpan: requested.columnSpan,
+    shelfX: null,
+    shelfY: null,
+    shelfWidth: null,
+    shelfHeight: null,
+    orientation: null,
+    side: null,
+  };
+}
+
 function resolveLoosePlacement(
   device: RackStudioDeviceRow,
   requested: RackStudioPlacementState,
@@ -570,6 +656,9 @@ export function resolveRackStudioPlacement(
   }
   if (requested.mountKind === "side") {
     return resolveSidePlacement(device, requested);
+  }
+  if (requested.mountKind === "rack-top") {
+    return resolveRackTopPlacement(device, requested);
   }
   return resolveLoosePlacement(device, requested);
 }

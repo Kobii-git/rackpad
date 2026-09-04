@@ -14,9 +14,8 @@ process.env.RACKPAD_SECRET_KEY = "rackpad-studio-test-secret";
 const { createApp } = await import("../app.js");
 const { db } = await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
-const { rackStudioRoomCanvasBounds } = await import(
-  "../lib/rack-studio-canvas.js"
-);
+const { rackStudioRoomCanvasBounds } =
+  await import("../lib/rack-studio-canvas.js");
 
 type AppInstance = Awaited<ReturnType<typeof createApp>>;
 let app: AppInstance;
@@ -35,7 +34,11 @@ test("dense legacy shelf geometry remains bounded and non-overlapping", () => {
 
   for (let index = 0; index < geometries.length; index += 1) {
     const current = geometries[index]!;
-    for (let otherIndex = index + 1; otherIndex < geometries.length; otherIndex += 1) {
+    for (
+      let otherIndex = index + 1;
+      otherIndex < geometries.length;
+      otherIndex += 1
+    ) {
       const other = geometries[otherIndex]!;
       const overlaps =
         current.x < other.x + other.width &&
@@ -178,16 +181,8 @@ test("dense room bounds keep the last rack reachable and constrain full footprin
     assert.match(invalid.body, /full rack footprint/i);
   }
 
-  const firstDevice = await createDevice(
-    adminToken,
-    room.id,
-    "dense-route-a",
-  );
-  const secondDevice = await createDevice(
-    adminToken,
-    room.id,
-    "dense-route-b",
-  );
+  const firstDevice = await createDevice(adminToken, room.id, "dense-route-a");
+  const secondDevice = await createDevice(adminToken, room.id, "dense-route-b");
   const firstPort = await createPort(
     adminToken,
     firstDevice.id,
@@ -396,6 +391,57 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
   assert.equal(sideConflict.statusCode, 400, sideConflict.body);
   assert.match(sideConflict.body, /side conflicts/i);
 
+  const rackTopA = await createDevice(adminToken, room.id, "rack-top-a");
+  const rackTopB = await createDevice(adminToken, room.id, "rack-top-b");
+  const firstRackTop = rackTopState(room.id, rack.id, 0, 6);
+  const rackTopPlaced = await applyStudioAction(adminToken, {
+    kind: "device.place",
+    targetId: rackTopA.id,
+    expected: looseState(room.id),
+    next: firstRackTop,
+  });
+  assert.deepEqual(
+    {
+      placement: rackTopPlaced.device.placement,
+      rackMountKind: rackTopPlaced.device.rackMountKind,
+      rackId: rackTopPlaced.device.rackId,
+      roomId: rackTopPlaced.device.roomId,
+      startU: rackTopPlaced.device.startU,
+      heightU: rackTopPlaced.device.heightU,
+      rackColumn: rackTopPlaced.device.rackColumn,
+      rackColumnSpan: rackTopPlaced.device.rackColumnSpan,
+    },
+    {
+      placement: "rack",
+      rackMountKind: "rack-top",
+      rackId: rack.id,
+      roomId: room.id,
+      startU: null,
+      heightU: 1,
+      rackColumn: 0,
+      rackColumnSpan: 6,
+    },
+  );
+  const rackTopOverlap = await app.inject({
+    method: "POST",
+    url: "/api/rack-studio/actions",
+    headers: authHeaders(adminToken),
+    payload: {
+      kind: "device.place",
+      targetId: rackTopB.id,
+      expected: looseState(room.id),
+      next: { ...rackTopState(room.id, rack.id, 4, 4), face: "rear" },
+    },
+  });
+  assert.equal(rackTopOverlap.statusCode, 400, rackTopOverlap.body);
+  assert.match(rackTopOverlap.body, /rack-top position overlaps/i);
+  await applyStudioAction(adminToken, {
+    kind: "device.place",
+    targetId: rackTopB.id,
+    expected: looseState(room.id),
+    next: rackTopState(room.id, rack.id, 6, 6),
+  });
+
   const secondUndone = await applyStudioAction(adminToken, {
     kind: "device.place",
     targetId: second.id,
@@ -427,6 +473,34 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
   });
   assert.equal(crossLab.statusCode, 400, crossLab.body);
   assert.match(crossLab.body, /same lab/i);
+
+  const exported = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(exported.statusCode, 200, exported.body);
+  const restored = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers: authHeaders(adminToken),
+    payload: json(exported),
+  });
+  assert.equal(restored.statusCode, 200, restored.body);
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT rackMountKind, rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?",
+      )
+      .get(rackTopA.id),
+    {
+      rackMountKind: "rack-top",
+      rackId: rack.id,
+      startU: null,
+      rackColumn: 0,
+      rackColumnSpan: 6,
+    },
+  );
 });
 
 test("physical patching validates connectors and persists inspected cable routing atomically", async () => {
@@ -470,15 +544,12 @@ test("physical patching validates connectors and persists inspected cable routin
     },
   });
   assert.equal(unusual.statusCode, 409, unusual.body);
-  assert.equal(
-    json(unusual).code,
-    "CABLE_CONNECTOR_CONFIRMATION_REQUIRED",
-  );
+  assert.equal(json(unusual).code, "CABLE_CONNECTOR_CONFIRMATION_REQUIRED");
   assert.equal(
     (
-      db
-        .prepare("SELECT COUNT(*) AS count FROM portLinks")
-        .get() as { count: number }
+      db.prepare("SELECT COUNT(*) AS count FROM portLinks").get() as {
+        count: number;
+      }
     ).count,
     0,
   );
@@ -734,7 +805,11 @@ test("physical patching excludes logical ports and authorizes both endpoint labs
   assert.match(logicalPatch.body, /physical ports/i);
 
   const otherLab = await createLab(adminToken, "Cable other lab");
-  const otherRoom = await createRoom(adminToken, "Remote cable room", otherLab.id);
+  const otherRoom = await createRoom(
+    adminToken,
+    "Remote cable room",
+    otherLab.id,
+  );
   const otherDevice = await createDevice(
     adminToken,
     otherRoom.id,
@@ -876,6 +951,23 @@ function sideState(roomId: string, rackId: string, side: "left" | "right") {
     heightU: 1,
     face: "front",
     side,
+  };
+}
+
+function rackTopState(
+  roomId: string,
+  rackId: string,
+  column: number,
+  columnSpan: number,
+) {
+  return {
+    ...looseState(roomId),
+    mountKind: "rack-top",
+    rackId,
+    heightU: 1,
+    face: "front",
+    column,
+    columnSpan,
   };
 }
 

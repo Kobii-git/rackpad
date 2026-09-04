@@ -1336,6 +1336,7 @@ export const pt = {
   "Rack A": "Rack A",
   "Rack elevations": "Elevações de rack",
   "Rack face": "Face da cremalheira",
+  "Rack top": "Topo do rack",
   "Rack visual width": "Largura visual do rack",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Prateleiras",

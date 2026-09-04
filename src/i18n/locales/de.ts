@@ -1336,6 +1336,7 @@ export const de = {
   "Rack A": "Rack A",
   "Rack elevations": "Rack-Erhöhungen",
   "Rack face": "Rackfläche",
+  "Rack top": "Rack-Oberseite",
   "Rack visual width": "Sichtbare Breite des Regals",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Gestelle",

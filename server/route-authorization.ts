@@ -95,6 +95,7 @@ define({ kind: "admin", denialMessage: "Administrator access required." }, [
 define({ kind: "admin", denialMessage: "Administrator access is required." }, [
   "DELETE /api/device-types/:id",
   "DELETE /api/hardware-templates/:id",
+  "DELETE /api/hardware-templates/defaults/:deviceType",
   "DELETE /api/ports/templates/:id",
   "DELETE /api/storage/drive-bay-templates/:id",
   "GET /api/device-types/usage",

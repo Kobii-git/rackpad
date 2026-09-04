@@ -1336,6 +1336,7 @@ export const af = {
   "Rack A": "Rak A",
   "Rack elevations": "Rek aansigte",
   "Rack face": "Rak gesig",
+  "Rack top": "Bo-op rak",
   "Rack visual width": "Visuele breedte van die rek",
   "rackpad@example.com": "rackpad@example.com",
   "Racks": "Rakke",
