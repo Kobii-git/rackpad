@@ -349,6 +349,7 @@ export const fr = {
   "Template name": "Nom du modèle",
   "Applies to": "S’applique à",
   "Add port": "Ajouter un port",
+  "Add or update port block": "Ajouter ou mettre à jour le bloc de ports",
   "Add jack": "Ajouter une prise",
   "Create template": "Créer le modèle",
   "Save template": "Enregistrer le modèle",

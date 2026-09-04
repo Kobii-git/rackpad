@@ -349,6 +349,7 @@ export const ko = {
   "Template name": "템플릿 이름",
   "Applies to": "적용 대상",
   "Add port": "포트 추가",
+  "Add or update port block": "포트 블록 추가 또는 업데이트",
   "Add jack": "잭 추가",
   "Create template": "템플릿 만들기",
   "Save template": "템플릿 저장",

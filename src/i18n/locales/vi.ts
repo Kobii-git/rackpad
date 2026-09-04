@@ -349,6 +349,7 @@ export const vi = {
   "Template name": "Tên mẫu",
   "Applies to": "Áp dụng cho",
   "Add port": "Thêm cổng",
+  "Add or update port block": "Thêm hoặc cập nhật khối cổng",
   "Add jack": "Thêm jack",
   "Create template": "Tạo mẫu",
   "Save template": "Lưu mẫu",

@@ -349,6 +349,7 @@ export const es = {
   "Template name": "Nombre de plantilla",
   "Applies to": "Se aplica a",
   "Add port": "Añadir puerto",
+  "Add or update port block": "Añadir o actualizar bloque de puertos",
   "Add jack": "Añadir toma",
   "Create template": "Crear plantilla",
   "Save template": "Guardar plantilla",

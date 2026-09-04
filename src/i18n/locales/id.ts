@@ -349,6 +349,7 @@ export const id = {
   "Template name": "Nama templat",
   "Applies to": "Berlaku untuk",
   "Add port": "Tambah port",
+  "Add or update port block": "Tambah atau perbarui blok port",
   "Add jack": "Tambah jack",
   "Create template": "Buat templat",
   "Save template": "Simpan templat",

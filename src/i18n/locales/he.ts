@@ -349,6 +349,7 @@ export const he = {
   "Template name": "שם תבנית",
   "Applies to": "חל על",
   "Add port": "הוספת יציאה",
+  "Add or update port block": "הוספה או עדכון של בלוק יציאות",
   "Add jack": "הוספת שקע",
   "Create template": "יצירת תבנית",
   "Save template": "שמירת תבנית",

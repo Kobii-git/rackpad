@@ -349,6 +349,7 @@ export const fa = {
   "Template name": "نام قالب",
   "Applies to": "اعمال بر",
   "Add port": "افزودن پورت",
+  "Add or update port block": "افزودن یا به‌روزرسانی بلوک پورت",
   "Add jack": "افزودن جک",
   "Create template": "ایجاد قالب",
   "Save template": "ذخیره قالب",

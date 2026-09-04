@@ -361,6 +361,8 @@ export function HardwareTemplateBuilder({
   const selectedSlot = draft.portSlots.find(
     (slot) => slot.id === selectedSlotId,
   );
+  const previewFaces: RackFace[] =
+    draft.category === "patch_panel" ? ["front", "rear"] : [face];
   const bulkBlocked = bulkPreviews.some(
     (preview) =>
       preview.conflicts.length > 0 || preview.linkedUnmappedPortIds.length > 0,
@@ -406,6 +408,7 @@ export function HardwareTemplateBuilder({
             </Field>
             <Field label={t("Type")}>
               <select
+                data-testid="hardware-template-starter"
                 className="rk-control h-8 w-full px-2.5 text-sm"
                 value={starterId}
                 onChange={(event) => selectStarter(event.target.value)}
@@ -542,7 +545,8 @@ export function HardwareTemplateBuilder({
                 ) : null}
                 {inheritedDefaultSource ? (
                   <Badge tone="neutral">
-                    {t("Parent")}: {localizedDeviceTypeIdLabel(
+                    {t("Parent")}:{" "}
+                    {localizedDeviceTypeIdLabel(
                       inheritedDefaultSource,
                       deviceTypes,
                       t,
@@ -555,35 +559,60 @@ export function HardwareTemplateBuilder({
 
           <div className="min-w-0 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex gap-2">
-                {(["front", "rear"] as const).map((entry) => (
-                  <Button
-                    key={entry}
-                    size="sm"
-                    variant={face === entry ? "secondary" : "outline"}
-                    onClick={() => setFace(entry)}
-                  >
-                    {entry === "front" ? t("Front") : t("Rear")}
-                  </Button>
-                ))}
-              </div>
+              {draft.category === "patch_panel" ? (
+                <span className="text-xs font-medium text-[var(--text-muted)]">
+                  {t("Front")} + {t("Rear")}
+                </span>
+              ) : (
+                <div className="flex gap-2">
+                  {(["front", "rear"] as const).map((entry) => (
+                    <Button
+                      key={entry}
+                      size="sm"
+                      variant={face === entry ? "secondary" : "outline"}
+                      onClick={() => setFace(entry)}
+                    >
+                      {entry === "front" ? t("Front") : t("Rear")}
+                    </Button>
+                  ))}
+                </div>
+              )}
               <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
                 <MousePointer2 className="size-3.5" />
                 {t("Position")}
               </span>
             </div>
-            <PhysicalPortSlotEditor
-              layout={draft}
-              face={face}
-              selectedSlotId={selectedSlotId}
-              onSelectSlot={setSelectedSlotId}
-              onMoveSlot={(slotId, x, y) =>
-                editable &&
-                setDraft((current) =>
-                  movePhysicalPortSlot(current, slotId, x, y),
-                )
+            <div
+              className={
+                previewFaces.length > 1 ? "grid gap-3 lg:grid-cols-2" : ""
               }
-            />
+            >
+              {previewFaces.map((previewFace) => (
+                <div
+                  key={previewFace}
+                  data-testid={`hardware-template-preview-${previewFace}`}
+                  className="min-w-0 space-y-2"
+                >
+                  {previewFaces.length > 1 && (
+                    <div className="rk-kicker">
+                      {previewFace === "front" ? t("Front") : t("Rear")}
+                    </div>
+                  )}
+                  <PhysicalPortSlotEditor
+                    layout={draft}
+                    face={previewFace}
+                    selectedSlotId={selectedSlotId}
+                    onSelectSlot={setSelectedSlotId}
+                    onMoveSlot={(slotId, x, y) =>
+                      editable &&
+                      setDraft((current) =>
+                        movePhysicalPortSlot(current, slotId, x, y),
+                      )
+                    }
+                  />
+                </div>
+              ))}
+            </div>
             {selectedSlot && (
               <div className="grid gap-2 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3 sm:grid-cols-4">
                 <Field label={t("Port")}>
@@ -803,7 +832,7 @@ export function HardwareTemplateBuilder({
                 }}
               >
                 <Plus />
-                {t("Add port")}
+                {t("Add or update port block")}
               </Button>
             </section>
 

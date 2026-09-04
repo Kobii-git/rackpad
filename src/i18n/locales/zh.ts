@@ -349,6 +349,7 @@ export const zh = {
   "Template name": "模板名称",
   "Applies to": "适用于",
   "Add port": "添加端口",
+  "Add or update port block": "添加或更新端口块",
   "Add jack": "添加接口",
   "Create template": "创建模板",
   "Save template": "保存模板",

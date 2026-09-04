@@ -347,6 +347,7 @@ export const en = {
   "Template name": "Template name",
   "Applies to": "Applies to",
   "Add port": "Add port",
+  "Add or update port block": "Add or update port block",
   "Add jack": "Add jack",
   "Create template": "Create template",
   "Save template": "Save template",

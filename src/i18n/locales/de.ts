@@ -349,6 +349,7 @@ export const de = {
   "Template name": "Vorlagenname",
   "Applies to": "Gilt für",
   "Add port": "Port hinzufügen",
+  "Add or update port block": "Portblock hinzufügen oder aktualisieren",
   "Add jack": "Buchse hinzufügen",
   "Create template": "Vorlage erstellen",
   "Save template": "Vorlage speichern",

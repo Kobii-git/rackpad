@@ -107,25 +107,31 @@ function starter(
       : category === "storage"
         ? "sff"
         : "rj45";
-  const face: RackFace = category === "patch_panel" ? "front" : "rear";
+  const faces: RackFace[] =
+    category === "patch_panel" ? ["front", "rear"] : ["rear"];
   const blocks: PortBlockDefinition[] = [];
   if (portCount > 0) {
     const rows = portCount > 24 ? 2 : portCount > 12 ? 2 : 1;
-    blocks.push({
-      id: "ports",
-      face,
-      connector,
-      count: portCount,
-      rows,
-      columns: Math.ceil(portCount / rows),
-      start: 1,
-      direction: "left-to-right",
-      x: 110,
-      y: rows === 1 ? 108 : 80,
-      width: uplinkCount > 0 ? 650 : 780,
-      height: rows === 1 ? 62 : 126,
-      labelPrefix: category === "pdu" || category === "ups" ? "Outlet " : "",
-    });
+    for (const face of faces) {
+      blocks.push({
+        id:
+          category === "patch_panel"
+            ? faceQualifiedPortBlockId("ports", face)
+            : "ports",
+        face,
+        connector,
+        count: portCount,
+        rows,
+        columns: Math.ceil(portCount / rows),
+        start: 1,
+        direction: "left-to-right",
+        x: 110,
+        y: rows === 1 ? 108 : 80,
+        width: uplinkCount > 0 ? 650 : 780,
+        height: rows === 1 ? 62 : 126,
+        labelPrefix: category === "pdu" || category === "ups" ? "Outlet " : "",
+      });
+    }
   }
   if (uplinkCount > 0) {
     blocks.push({
@@ -450,19 +456,66 @@ export function replacePortBlock(
   template: HardwareTemplateV1,
   block: PortBlockDefinition,
 ): HardwareTemplateV1 {
-  const groupId = safeId(block.id);
+  const baseId = portBlockBaseId(block.id);
+  const groupId = faceQualifiedPortBlockId(baseId, block.face);
+  const normalizedBlock = { ...block, id: groupId };
+  const replacedBlueprints = template.portBlueprints.filter(
+    (entry) =>
+      portBlockBlueprintFace(entry) === block.face &&
+      portBlockBlueprintBaseId(entry) === baseId,
+  );
+  const replacedGroupIds = new Set([
+    baseId,
+    groupId,
+    ...replacedBlueprints
+      .map((entry) =>
+        typeof entry.id === "string" ? safeId(entry.id) : undefined,
+      )
+      .filter((id): id is string => Boolean(id)),
+  ]);
   const nextBlocks = [
-    ...template.portBlueprints.filter((entry) => entry.id !== block.id),
-    { ...block },
+    ...template.portBlueprints.filter(
+      (entry) =>
+        !(
+          portBlockBlueprintFace(entry) === block.face &&
+          portBlockBlueprintBaseId(entry) === baseId
+        ),
+    ),
+    normalizedBlock,
   ];
   return {
     ...template,
     portSlots: [
-      ...template.portSlots.filter((slot) => slot.groupId !== groupId),
-      ...generatePortBlock(block),
+      ...template.portSlots.filter(
+        (slot) =>
+          slot.face !== block.face ||
+          !(
+            (slot.groupId && replacedGroupIds.has(safeId(slot.groupId))) ||
+            (!slot.groupId && slot.id.startsWith(`${baseId}-`))
+          ),
+      ),
+      ...generatePortBlock(normalizedBlock),
     ],
     portBlueprints: nextBlocks,
   };
+}
+
+function portBlockBlueprintFace(entry: Record<string, unknown>) {
+  return entry.face === "front" || entry.face === "rear"
+    ? entry.face
+    : undefined;
+}
+
+function portBlockBlueprintBaseId(entry: Record<string, unknown>) {
+  return typeof entry.id === "string" ? portBlockBaseId(entry.id) : undefined;
+}
+
+function portBlockBaseId(id: string) {
+  return safeId(id).replace(/:(front|rear)$/, "");
+}
+
+function faceQualifiedPortBlockId(id: string, face: RackFace) {
+  return `${portBlockBaseId(id)}:${face}`;
 }
 
 export function movePhysicalPortSlot(

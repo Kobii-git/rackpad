@@ -79,7 +79,7 @@ Add authenticated APIs for listing templates and lab-scoped physical layouts.
 ### Phase 2 — Hardware Template Builder and exact device configurations
 
 - Add the visual Hardware Template Builder under Device Types.
-- Provide original parameterized starting families: generic 1U/2U/4U servers, desktop/tower PCs, storage equipment, firewalls, routers, 8/16/24/48-port switches, patch panels, PDUs, UPS units, KVMs, shelves, and blanking panels.
+- Provide original parameterized starting families: generic 1U/2U/4U servers, desktop/tower PCs, storage equipment, firewalls, routers, 8/16/24/48-port switches, patch panels with matching face-qualified front/rear blocks, PDUs, UPS units, KVMs, shelves, and blanking panels.
 - Provide original module primitives for NIC blocks, PCIe adapters, PSUs, fans, drive bays, management ports, console, USB, serial, VGA, SFP/SFP+/QSFP, and other physical connectors.
 - Allow users to generate port blocks by count, rows, columns, starting number, numbering direction, and connector kind, then click or drag ports into exact positions.
 - Support left-to-right, right-to-left, vertical, and serpentine port sequencing plus separate uplink blocks.

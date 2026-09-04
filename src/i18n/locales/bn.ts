@@ -349,6 +349,7 @@ export const bn = {
   "Template name": "টেমপ্লেটের নাম",
   "Applies to": "প্রযোজ্য",
   "Add port": "পোর্ট যোগ করুন",
+  "Add or update port block": "পোর্ট ব্লক যোগ বা আপডেট করুন",
   "Add jack": "জ্যাক যোগ করুন",
   "Create template": "টেমপ্লেট তৈরি করুন",
   "Save template": "টেমপ্লেট সংরক্ষণ করুন",

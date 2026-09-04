@@ -1427,21 +1427,60 @@ type PatchPanelPortRow = {
   macAddress: string | null;
 };
 
+function patchPanelDeviceIdsFromStoredLineage() {
+  const parentById = new Map<string, string | null>();
+  const setting = db
+    .prepare("SELECT value FROM appSettings WHERE key = 'deviceTypes'")
+    .get() as { value?: string } | undefined;
+  if (setting?.value) {
+    try {
+      const custom = (JSON.parse(setting.value) as { custom?: unknown }).custom;
+      if (Array.isArray(custom)) {
+        for (const entry of custom) {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+            continue;
+          }
+          const record = entry as Record<string, unknown>;
+          if (typeof record.id !== "string") continue;
+          const id = record.id.trim().toLowerCase();
+          const parent =
+            typeof record.parentType === "string"
+              ? record.parentType.trim().toLowerCase()
+              : null;
+          if (id) parentById.set(id, parent || null);
+        }
+      }
+    } catch {
+      // Invalid settings are ignored by the device-type loader as well.
+    }
+  }
+
+  const includesPatchPanel = (deviceType: string) => {
+    const seen = new Set<string>();
+    let current = deviceType.trim().toLowerCase();
+    while (current && !seen.has(current)) {
+      if (current === "patch_panel") return true;
+      seen.add(current);
+      current = parentById.get(current) ?? "";
+    }
+    return false;
+  };
+
+  return (
+    db.prepare("SELECT id, deviceType FROM devices").all() as Array<{
+      id: string;
+      deviceType: string;
+    }>
+  )
+    .filter((row) => includesPatchPanel(row.deviceType))
+    .map((row) => row.id);
+}
+
 export function ensurePatchPanelPassThroughPorts(deviceIds?: string[]) {
   const targetDeviceIds =
     deviceIds && deviceIds.length > 0
       ? [...new Set(deviceIds)]
-      : (
-          db
-            .prepare(
-              `
-        SELECT id
-        FROM devices
-        WHERE deviceType = 'patch_panel'
-      `,
-            )
-            .all() as Array<{ id: string }>
-        ).map((row) => row.id);
+      : patchPanelDeviceIdsFromStoredLineage();
 
   if (targetDeviceIds.length === 0) return 0;
 

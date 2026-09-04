@@ -8,6 +8,42 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.2-beta.3] - 2026-09-04
+
+> Patch-panel authoring tester candidate. Existing hardware templates and device
+> layout snapshots remain unchanged until an administrator edits or applies a
+> template.
+
+### Changed
+
+- Patch-panel hardware starters now show matching 24-port front and rear blocks
+  with distinct face-qualified block, group, and slot identities.
+- Port-block editing now targets a block by name and face, so updating a rear
+  block preserves a same-named front block and upgrades only matching legacy
+  slots on the selected face.
+- Patch-panel pass-through discovery now follows cycle-safe custom device-type
+  lineage and pairs matching faces by normalized port name and connector kind.
+- The builder action is labelled **Add or update port block**, and patch-panel
+  starter previews show both faces before the template is saved.
+
+### Fixed
+
+- Applying the built-in 24-port patch-panel port template with its matching
+  hardware starter now maps all 48 front/rear ports without unmapped slots and
+  retains 24 pass-through pairs.
+
+### Test notes
+
+- Verify front and rear blocks can be added or updated independently, including
+  editing a legacy unqualified block without rewriting unrelated saved layouts.
+- Verify a custom descendant of `patch_panel` receives idempotent front/rear
+  pass-through normalization and that tracing matches names case-insensitively
+  with surrounding whitespace ignored.
+- Verify the 24-port starter renders 24 connectors on each face and applies with
+  48 bindings, zero unmapped slots, and 24 pass-through pairs.
+- No database migration is included; the schema remains at version 49. Rollback
+  to `v1.8.2-beta.2` does not require restoring a database backup.
+
 ## [1.8.2-beta.2] - 2026-09-03
 
 > Combined tester candidate for Proxmox native startup, inherited hardware

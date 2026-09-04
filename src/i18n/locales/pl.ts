@@ -349,6 +349,7 @@ export const pl = {
   "Template name": "Nazwa szablonu",
   "Applies to": "Dotyczy",
   "Add port": "Dodaj port",
+  "Add or update port block": "Dodaj lub zaktualizuj blok portów",
   "Add jack": "Dodaj gniazdo",
   "Create template": "Utwórz szablon",
   "Save template": "Zapisz szablon",

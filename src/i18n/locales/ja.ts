@@ -349,6 +349,7 @@ export const ja = {
   "Template name": "テンプレート名",
   "Applies to": "適用対象",
   "Add port": "ポートを追加",
+  "Add or update port block": "ポートブロックを追加または更新",
   "Add jack": "ジャックを追加",
   "Create template": "テンプレートを作成",
   "Save template": "テンプレートを保存",
