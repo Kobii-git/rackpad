@@ -1890,15 +1890,11 @@ async function expectTracePngDownload(
 }
 
 test("responsive and serious accessibility matrix passes for supported modes", async ({
-  page,
+  browser,
+  baseURL,
 }) => {
   test.setTimeout(1_800_000);
   const errors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  await authenticate(page);
-  await page.goto("/");
   for (const mode of [
     {
       name: "light",
@@ -1943,80 +1939,93 @@ test("responsive and serious accessibility matrix passes for supported modes", a
       theme: "dark",
     },
   ]) {
-    await page.evaluate(({ language, theme }) => {
-      localStorage.setItem("rackpad.language", language);
-      localStorage.setItem("rackpad-theme", theme);
-    }, mode);
-    for (const viewport of [
-      { width: 1024, height: 768 },
-      { width: 1280, height: 720 },
-      { width: 1440, height: 900 },
-      { width: 1920, height: 1200 },
-    ]) {
-      await page.setViewportSize(viewport);
-      for (const route of primaryRoutes) {
-        await page.goto(route);
-        await expect(
-          page.locator("h1").first(),
-          `${route} did not finish loading in ${mode.name} at ${viewport.width}px`,
-        ).toBeVisible({ timeout: 15_000 });
-        await expect
-          .poll(() => page.evaluate(() => document.documentElement.lang))
-          .toBe(mode.lang);
-        await expect
-          .poll(() => page.evaluate(() => document.documentElement.dir))
-          .toBe(mode.direction);
-        if (route === "/discovery") {
-          const inbox = page.getByTestId("discovery-inbox");
-          const inspector = page.getByTestId("discovery-inspector");
-          await inbox.scrollIntoViewIfNeeded();
-          await expect(inbox).toBeVisible();
-          await expect(inspector).toBeVisible();
-          const [box, inspectorBox] = await Promise.all([
-            inbox.boundingBox(),
-            inspector.boundingBox(),
-          ]);
-          expect(
-            box?.height ?? 0,
-            `Discovery inbox collapsed in ${mode.name} at ${viewport.width}px`,
-          ).toBeGreaterThanOrEqual(352);
-          if (viewport.width < 1280) {
-            expect(
-              await inbox.evaluate(
-                (element) => getComputedStyle(element).overflowY,
-              ),
-              `Discovery inbox cannot scroll in ${mode.name} at ${viewport.width}px`,
-            ).toBe("auto");
-            expect(
-              inspectorBox?.y ?? 0,
-              `Discovery inspector overlaps the inbox in ${mode.name} at ${viewport.width}px`,
-            ).toBeGreaterThanOrEqual((box?.y ?? 0) + (box?.height ?? 0) + 10);
-          } else {
-            expect(
-              inspectorBox?.height ?? 0,
-              `Discovery inspector stayed too short in ${mode.name} at ${viewport.width}px`,
-            ).toBeGreaterThanOrEqual(600);
-          }
-        }
-        const overflows = await page.evaluate(
-          () =>
-            document.documentElement.scrollWidth >
-            document.documentElement.clientWidth + 1,
-        );
-        expect(
-          overflows,
-          `${route} overflowed in ${mode.name} at ${viewport.width}px`,
-        ).toBeFalsy();
-        const results = await new AxeBuilder({ page }).analyze();
-        const blocking = results.violations.filter(
-          (violation) =>
-            violation.impact === "critical" || violation.impact === "serious",
-        );
-        expect(
-          blocking,
-          `${route} has serious accessibility violations in ${mode.name} at ${viewport.width}px`,
-        ).toEqual([]);
+    const context = await browser.newContext({ baseURL });
+    const page = await context.newPage();
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        errors.push(`${mode.name}: ${message.text()}`);
       }
+    });
+    try {
+      await authenticate(page);
+      await page.goto("/");
+      await page.evaluate(({ language, theme }) => {
+        localStorage.setItem("rackpad.language", language);
+        localStorage.setItem("rackpad-theme", theme);
+      }, mode);
+      for (const viewport of [
+        { width: 1024, height: 768 },
+        { width: 1280, height: 720 },
+        { width: 1440, height: 900 },
+        { width: 1920, height: 1200 },
+      ]) {
+        await page.setViewportSize(viewport);
+        for (const route of primaryRoutes) {
+          await page.goto(route);
+          await expect(
+            page.locator("h1").first(),
+            `${route} did not finish loading in ${mode.name} at ${viewport.width}px`,
+          ).toBeVisible({ timeout: 15_000 });
+          await expect
+            .poll(() => page.evaluate(() => document.documentElement.lang))
+            .toBe(mode.lang);
+          await expect
+            .poll(() => page.evaluate(() => document.documentElement.dir))
+            .toBe(mode.direction);
+          if (route === "/discovery") {
+            const inbox = page.getByTestId("discovery-inbox");
+            const inspector = page.getByTestId("discovery-inspector");
+            await inbox.scrollIntoViewIfNeeded();
+            await expect(inbox).toBeVisible();
+            await expect(inspector).toBeVisible();
+            const [box, inspectorBox] = await Promise.all([
+              inbox.boundingBox(),
+              inspector.boundingBox(),
+            ]);
+            expect(
+              box?.height ?? 0,
+              `Discovery inbox collapsed in ${mode.name} at ${viewport.width}px`,
+            ).toBeGreaterThanOrEqual(352);
+            if (viewport.width < 1280) {
+              expect(
+                await inbox.evaluate(
+                  (element) => getComputedStyle(element).overflowY,
+                ),
+                `Discovery inbox cannot scroll in ${mode.name} at ${viewport.width}px`,
+              ).toBe("auto");
+              expect(
+                inspectorBox?.y ?? 0,
+                `Discovery inspector overlaps the inbox in ${mode.name} at ${viewport.width}px`,
+              ).toBeGreaterThanOrEqual((box?.y ?? 0) + (box?.height ?? 0) + 10);
+            } else {
+              expect(
+                inspectorBox?.height ?? 0,
+                `Discovery inspector stayed too short in ${mode.name} at ${viewport.width}px`,
+              ).toBeGreaterThanOrEqual(600);
+            }
+          }
+          const overflows = await page.evaluate(
+            () =>
+              document.documentElement.scrollWidth >
+              document.documentElement.clientWidth + 1,
+          );
+          expect(
+            overflows,
+            `${route} overflowed in ${mode.name} at ${viewport.width}px`,
+          ).toBeFalsy();
+          const results = await new AxeBuilder({ page }).analyze();
+          const blocking = results.violations.filter(
+            (violation) =>
+              violation.impact === "critical" || violation.impact === "serious",
+          );
+          expect(
+            blocking,
+            `${route} has serious accessibility violations in ${mode.name} at ${viewport.width}px`,
+          ).toEqual([]);
+        }
+      }
+    } finally {
+      await context.close();
     }
   }
   expect(errors).toEqual([]);
