@@ -207,3 +207,30 @@ test("server starters support independent module variants and exact device geome
   );
   assert.equal(template.portSlots.length, 0);
 });
+
+test("one-row 24-column patch blocks preserve their opposite face on repeated updates", () => {
+  let template = createStarterTemplate("patch-panel", "row-panel", "Row panel");
+  for (const face of ["front", "rear", "front", "rear"] as const) {
+    const opposite = template.portSlots.filter((slot) => slot.face !== face);
+    const block = template.portBlueprints.find(
+      (entry) => entry.face === face,
+    ) as unknown as PortBlockDefinition;
+    template = replacePortBlock(template, {
+      ...block,
+      id: "ports",
+      face,
+      count: 24,
+      rows: 1,
+      columns: 24,
+    });
+    assert.deepEqual(
+      template.portSlots.filter((slot) => slot.face !== face),
+      opposite,
+    );
+    const updated = template.portSlots.filter((slot) => slot.face === face);
+    assert.equal(updated.length, 24);
+    assert.equal(new Set(updated.map((slot) => slot.y)).size, 1);
+    assert.equal(new Set(updated.map((slot) => slot.x)).size, 24);
+    assert.equal(new Set(template.portSlots.map((slot) => slot.id)).size, 48);
+  }
+});

@@ -1,3 +1,5 @@
+import { rackCableFixture } from "./fixtures/rack-cables";
+import type { Port } from "../src/lib/types";
 import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
 import {
@@ -1715,6 +1717,190 @@ test("Rack Studio patches exact ports, saves routes, exports, and traces", async
     if (linkId) {
       await request.delete(`/api/port-links/${linkId}`, { headers });
     }
+  }
+});
+
+test("24 short patch cords remain curved, selectable, and exportable across rack views", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const fixture = rackCableFixture(`cords-${Date.now().toString(36)}`);
+  const headers = { Authorization: `Bearer ${token}` };
+  const deviceIds: string[] = [];
+  const linkIds: string[] = [];
+  let roomId = "";
+  let rackId = "";
+  const post = async <T>(url: string, data: unknown): Promise<T> => {
+    const response = await request.post(url, { headers, data });
+    expect(response.ok(), await response.text()).toBeTruthy();
+    return (await response.json()) as T;
+  };
+  try {
+    roomId = (
+      await post<{ id: string }>("/api/rooms", {
+        labId: "lab_home",
+        name: fixture.room.name,
+      })
+    ).id;
+    rackId = (
+      await post<{ id: string }>("/api/racks", {
+        labId: "lab_home",
+        roomId,
+        name: fixture.rack.name,
+        totalU: 12,
+      })
+    ).id;
+    await post("/api/ports/templates", {
+      id: fixture.template.id,
+      name: fixture.template.name,
+      description: "Synthetic 24-cord fixture",
+      deviceTypes: fixture.template.deviceTypes,
+      ports: fixture.ports.filter(
+        (port) => port.deviceId === fixture.devices[0]!.id,
+      ),
+    });
+    await post("/api/hardware-templates", fixture.template);
+    const devicePorts: Port[][] = [];
+    for (const device of fixture.devices) {
+      const created = await post<{ id: string }>("/api/devices", {
+        ...device,
+        roomId,
+        rackId,
+        portTemplateId: fixture.template.id,
+      });
+      deviceIds.push(created.id);
+      const preview = await post(
+        `/api/physical-layouts/${created.id}/preview`,
+        { templateId: fixture.template.id },
+      );
+      await post(`/api/physical-layouts/${created.id}/apply`, preview);
+      const response = await request.get(`/api/ports?deviceId=${created.id}`, {
+        headers,
+      });
+      expect(response.ok()).toBeTruthy();
+      devicePorts.push((await response.json()) as Port[]);
+    }
+    for (let index = 1; index <= 24; index += 1) {
+      const find = (ports: Port[]) =>
+        ports.find(
+          (port) => port.face === "front" && port.name === String(index),
+        )!.id;
+      linkIds.push(
+        (
+          await post<{ id: string }>("/api/port-links", {
+            fromPortId: find(devicePorts[0]!),
+            toPortId: find(devicePorts[1]!),
+            cableType: "Cat6A",
+            color: "#22c55e",
+          })
+        ).id,
+      );
+    }
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/racks");
+    await page
+      .getByRole("button", { name: "Studio Beta", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: new RegExp(`${fixture.room.name} 1R`) })
+      .click();
+    await page
+      .getByRole("combobox", { name: "Cable routing", exact: true })
+      .selectOption("smooth");
+    const strokes = page.getByTestId("rack-studio-cable-stroke");
+    // Room overview and focused rack each render all 24 connections.
+    await expect(strokes).toHaveCount(48);
+    for (const stroke of await strokes.all())
+      await expect(stroke).toHaveAttribute("d", / C /);
+    const hit = page.locator(
+      `[data-testid="rack-studio-cable"][data-link-id="${linkIds[0]}"]`,
+    );
+    const stroke = page.locator(
+      `[data-testid="rack-studio-cable-stroke"][data-link-id="${linkIds[0]}"]`,
+    );
+    expect(await hit.first().getAttribute("d")).toBe(
+      await stroke.first().getAttribute("d"),
+    );
+    await hit.first().dispatchEvent("pointerover");
+    await expect(
+      page
+        .locator(
+          `[data-testid="rack-studio-cable-label"][data-link-id="${linkIds[0]}"]`,
+        )
+        .first(),
+    ).toBeVisible();
+    const downloadPromise = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Download SVG", exact: true })
+      .click();
+    const svg = await readFile((await (await downloadPromise).path())!, "utf8");
+    expect(svg.match(/<path d="M [^"]+ C /g)).toHaveLength(24);
+    await page.goto("/visualizer");
+    await page
+      .getByRole("combobox", { name: "Visualizer layout", exact: true })
+      .selectOption("rack");
+    await page
+      .getByRole("combobox", { name: "Room", exact: true })
+      .selectOption(roomId);
+    await page
+      .getByRole("combobox", { name: "Cable routing", exact: true })
+      .selectOption("smooth");
+    const cords = page.getByTestId("rack-cabling-cable");
+    await expect(cords).toHaveCount(24);
+    for (const cord of await cords.all())
+      await expect(cord).toHaveAttribute("d", / C /);
+    await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    const pathBefore = await cords.first().getAttribute("d");
+    await page.getByRole("button", { name: "Zoom out", exact: true }).click();
+    expect(await cords.first().getAttribute("d")).toBe(pathBefore);
+    await cords.first().focus();
+    await cords.first().press("Enter");
+    await expect(
+      page.getByText("Selected cable", { exact: true }).first(),
+    ).toBeVisible();
+    const coordinates = (await cords.first().getAttribute("d"))!
+      .match(/-?\d+(?:\.\d+)?/g)!
+      .map(Number);
+    const curveLabel = page.getByTestId("rack-cabling-cable-label");
+    await expect(curveLabel).toHaveCount(1);
+    expect(Number(await curveLabel.getAttribute("x"))).toBeCloseTo(
+      (coordinates[0]! +
+        3 * coordinates[2]! +
+        3 * coordinates[4]! +
+        coordinates[6]!) /
+        8,
+      1,
+    );
+    expect(Number(await curveLabel.getAttribute("y"))).toBeCloseTo(
+      (coordinates[1]! +
+        3 * coordinates[3]! +
+        3 * coordinates[5]! +
+        coordinates[7]!) /
+        8 -
+        7,
+      1,
+    );
+    await page.screenshot({
+      path: testInfo.outputPath("short-patch-cords.png"),
+    });
+    await page
+      .getByRole("combobox", { name: "Cable routing", exact: true })
+      .selectOption("orthogonal");
+    for (const cord of await cords.all())
+      await expect(cord).not.toHaveAttribute("d", / C /);
+  } finally {
+    for (const id of deviceIds)
+      await request.delete(`/api/devices/${id}`, { headers });
+    if (rackId) await request.delete(`/api/racks/${rackId}`, { headers });
+    if (roomId) await request.delete(`/api/rooms/${roomId}`, { headers });
+    await request.delete(`/api/hardware-templates/${fixture.template.id}`, {
+      headers,
+    });
+    await request.delete(`/api/ports/templates/${fixture.template.id}`, {
+      headers,
+    });
   }
 });
 
@@ -4266,6 +4452,31 @@ test("patch-panel hardware templates author, apply, and render both faces", asyn
         exact: true,
       }),
     ).toBeVisible();
+
+    for (const face of ["front", "rear", "front", "rear"]) {
+      await builder
+        .getByRole("textbox", { name: "ID", exact: true })
+        .last()
+        .fill("ports");
+      await builder
+        .getByRole("combobox", { name: "Face", exact: true })
+        .selectOption(face);
+      await builder
+        .getByRole("spinbutton", { name: "Ports", exact: true })
+        .fill("24");
+      await builder
+        .getByRole("spinbutton", { name: "Columns", exact: true })
+        .fill("24");
+      await builder
+        .getByRole("spinbutton", { name: "Height (U)", exact: true })
+        .last()
+        .fill("1");
+      await builder
+        .getByRole("button", { name: "Add or update port block", exact: true })
+        .click();
+      await expect(frontPreview.locator('g[role="button"]')).toHaveCount(24);
+      await expect(rearPreview.locator('g[role="button"]')).toHaveCount(24);
+    }
 
     await builder
       .getByRole("textbox", { name: "ID", exact: true })

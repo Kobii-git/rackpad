@@ -20,6 +20,11 @@ import {
 import {
   cableCategoryForPorts,
   defaultCableColor,
+  planPhysicalCableRoutes,
+  cableGeometryLabelPoint,
+  type CablePoint,
+  type CableRouteGeometry,
+  type RackStudioCableAnchor,
 } from "@/lib/rack-studio-cables";
 import { normalizeColorToCss } from "@/lib/utils";
 import type { VisualizerRackFaceMode } from "./types";
@@ -108,6 +113,8 @@ export interface RackCablingScene {
 export interface RackCablingRoute {
   link: PortLink;
   path: string;
+  geometry: CableRouteGeometry;
+  labelPoint: CablePoint;
   color: string;
   label: string;
   from: RackCablingAnchor;
@@ -1035,24 +1042,6 @@ export function layoutRackCablingHandoffLabels(
   return result.sort((left, right) => left.id.localeCompare(right.id));
 }
 
-export function rackCablingPath(
-  from: Pick<RackCablingAnchor, "x" | "y">,
-  to: Pick<RackCablingAnchor, "x" | "y">,
-  linkId: string,
-  style: RackCablingRouteStyle,
-) {
-  const lane = stableLane(linkId) - 6;
-  if (style === "orthogonal") {
-    const midpoint = (from.x + to.x) / 2 + lane * 7;
-    return `M ${from.x.toFixed(2)} ${from.y.toFixed(2)} L ${midpoint.toFixed(2)} ${from.y.toFixed(2)} L ${midpoint.toFixed(2)} ${to.y.toFixed(2)} L ${to.x.toFixed(2)} ${to.y.toFixed(2)}`;
-  }
-  const direction = to.x >= from.x ? 1 : -1;
-  const span = Math.abs(to.x - from.x);
-  const pull = Math.max(54, Math.min(220, span * 0.46));
-  const bend = lane * 8;
-  return `M ${from.x.toFixed(2)} ${from.y.toFixed(2)} C ${(from.x + direction * pull).toFixed(2)} ${(from.y + bend).toFixed(2)}, ${(to.x - direction * pull).toFixed(2)} ${(to.y + bend).toFixed(2)}, ${to.x.toFixed(2)} ${to.y.toFixed(2)}`;
-}
-
 export function buildRackCablingRoutes(input: {
   scene: RackCablingScene;
   rooms?: Room[];
@@ -1074,7 +1063,9 @@ export function buildRackCablingRoutes(input: {
   const roomById = new Map(
     (input.rooms ?? [input.scene.room]).map((room) => [room.id, room]),
   );
-  const routes: RackCablingRoute[] = [];
+  const routes: Array<
+    Omit<RackCablingRoute, "geometry" | "path" | "labelPoint">
+  > = [];
 
   for (const link of [...input.links].sort((left, right) =>
     left.id.localeCompare(right.id),
@@ -1217,11 +1208,55 @@ export function buildRackCablingRoutes(input: {
       link,
       from,
       to,
-      path: rackCablingPath(from, to, link.id, input.style),
       color: normalizeColorToCss(link.color) ?? defaultCableColor(category),
       label: link.label || link.cableType || category,
       handoffs,
     });
   }
-  return routes;
+  const anchor = (value: RackCablingAnchor): RackStudioCableAnchor => ({
+    ...value,
+    roomId: input.scene.room.id,
+    face: value.physicalFace,
+  });
+  const geometryById = new Map(
+    planPhysicalCableRoutes(
+      routes.map((route) => ({
+        id: route.link.id,
+        from: anchor(route.from),
+        to: anchor(route.to),
+        manualPoints: [],
+        allowDirect:
+          route.handoffs.length === 0 && !route.link.routeWaypoints?.length,
+      })),
+      {
+        width: input.scene.width,
+        height: input.scene.height,
+        racks: input.scene.racks.flatMap((rack) =>
+          rack.faces.map((face) => ({
+            id: rack.rack.id,
+            face: face.face,
+            rect: face,
+            unitHeight: RACK_CABLING_UNIT_HEIGHT,
+          })),
+        ),
+        obstacles: input.scene.equipment.map((item) => ({
+          id: item.device.id,
+          rackId: item.rackId,
+          face: item.rackFace,
+          parentDeviceId: item.device.parentDeviceId,
+          rect: item.rect,
+        })),
+      },
+      input.style,
+    ).map((route) => [route.id, route]),
+  );
+  return routes.map((route) => {
+    const planned = geometryById.get(route.link.id)!;
+    return {
+      ...route,
+      path: planned.path,
+      geometry: planned.geometry,
+      labelPoint: cableGeometryLabelPoint(planned.geometry),
+    };
+  });
 }

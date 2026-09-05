@@ -1,11 +1,12 @@
 # Proxmox native LXC operations
 
 > [!WARNING]
-> `v1.8.1-beta.2` is an experimental tester build, not a supported production
-> installer. Use it only for a fresh disposable LXC and keep Docker as the
+> `v1.8.2-beta.5` is an experimental tester beta, not a supported production
+> installer. Use the prerelease and installer files from that exact Git tag.
+> Use it only for a fresh disposable LXC and keep Docker as the
 > recommended deployment until Phase 6 of the
 > [native LXC roadmap](./PROXMOX_LXC_ROADMAP.md) is complete. Real Proxmox
-> validation and the seven-day soak are still in progress.
+> validation and the seven-day soak remain outstanding.
 
 Rackpad's native deployment runs one Node.js process directly in an
 unprivileged LXC. Docker remains the general recommendation. The intended
@@ -14,7 +15,7 @@ default guest and Ubuntu 24.04 LTS as the tested alternative. Fresh LXCs are the
 only planned supported installation path; automatic conversion of an existing
 Docker LXC is not provided.
 
-## Experimental Beta 2 test procedure
+## Experimental Beta 5 test procedure
 
 Run the following only from a root shell on a disposable Proxmox VE 9.x
 `amd64` host. Do not run it inside an LXC, do not point it at an existing
@@ -35,9 +36,9 @@ the last two commands is empty. Then run the exact tagged installer:
 
 ```bash
 RACKPAD_MAINTAINER_MODE=1 \
-RACKPAD_MAINTAINER_REF=v1.8.1-beta.2 \
-RACKPAD_MAINTAINER_RELEASE=v1.8.1-beta.2 \
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kobii-git/rackpad/v1.8.1-beta.2/scripts/install-proxmox-lxc.sh)"
+RACKPAD_MAINTAINER_REF=v1.8.2-beta.5 \
+RACKPAD_MAINTAINER_RELEASE=v1.8.2-beta.5 \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kobii-git/rackpad/v1.8.2-beta.5/scripts/install-proxmox-lxc.sh)"
 ```
 
 Choose the defaults for the first pass: Debian 13, unprivileged, nesting
@@ -55,8 +56,8 @@ CT_IP="$(pct exec "$CTID" -- hostname -I | awk '{print $1}')"
 echo "http://${CT_IP}:3000"
 ```
 
-The version must be `v1.8.1-beta.2`, the active path must end in
-`/opt/rackpad_releases/v1.8.1-beta.2`, and the service must be active. Check the
+The version must be `v1.8.2-beta.5`, the active path must end in
+`/opt/rackpad_releases/v1.8.2-beta.5`, and the service must be active. Check the
 HTTP surfaces from both the guest and a machine that will use Rackpad:
 
 ```bash
@@ -79,13 +80,13 @@ environment or secret values:
 ```bash
 pct exec "$CTID" -- stat -c '%U:%G %a %n' \
   /etc/rackpad/rackpad.env /opt/rackpad_data /etc/rackpad/native-lxc
-pct exec "$CTID" -- bash -lc 'test -z "$(find /opt/rackpad_releases/v1.8.1-beta.2 -not -user root -print -quit)"'
+pct exec "$CTID" -- bash -lc 'test -z "$(find /opt/rackpad_releases/v1.8.2-beta.5 -not -user root -print -quit)"'
 pct exec "$CTID" -- runuser -u rackpad -- test ! -w /opt/rackpad/package.json
 pct exec "$CTID" -- runuser -u rackpad -- test -w /opt/rackpad_data
 pct exec "$CTID" -- systemctl show rackpad \
   -p User -p Group -p NoNewPrivileges -p PrivateTmp -p ProtectSystem \
   -p ProtectHome -p UMask -p CapabilityBoundingSet -p AmbientCapabilities \
-  -p ReadWritePaths
+  -p ReadWritePaths -p RestrictAddressFamilies
 ```
 
 The environment must be `root:rackpad 640`, data must be `rackpad:rackpad 750`,
@@ -143,24 +144,24 @@ pct exec "$CTID" -- systemctl is-active rackpad
 pct exec "$CTID" -- curl -fsS http://127.0.0.1:3000/api/health
 ```
 
-For an existing Beta 1.1 test guest, the exact prerelease update and no-op
-commands are:
+For separate disposable beta.3 and beta.4 test guests, the exact prerelease
+update and no-op commands are:
 
 ```bash
 RACKPAD_MAINTAINER_MODE=1 \
-RACKPAD_MAINTAINER_RELEASE=v1.8.1-beta.2 \
+RACKPAD_MAINTAINER_RELEASE=v1.8.2-beta.5 \
 /usr/bin/update
 
 RACKPAD_MAINTAINER_MODE=1 \
-RACKPAD_MAINTAINER_RELEASE=v1.8.1-beta.2 \
+RACKPAD_MAINTAINER_RELEASE=v1.8.2-beta.5 \
 /usr/bin/update
 ```
 
-The first must preserve configuration and data and switch to Beta 2; the second
+The first must preserve configuration and data and switch to Beta 5; the second
 must report that no update is available without restarting Rackpad. Bare
-`/usr/bin/update` follows only stable Releases. Beta 2 refuses an older stable
+`/usr/bin/update` follows only stable Releases. The updater refuses an older stable
 release before download or downtime and will permit the forward move to stable
-`v1.8.1` after that Release exists.
+`v1.8.2` after that Release exists.
 
 Repeat the fresh-install critical checks on Ubuntu 24.04 using the helper's
 advanced settings. Keep successful Debian and Ubuntu guests for rollback and
@@ -168,6 +169,20 @@ soak testing. Report results on [issue #138](https://github.com/Kobii-git/rackpa
 with the PVE version, guest OS, CT settings, pass/fail checklist, failing step,
 and sanitized service logs. Never post `/etc/rackpad/rackpad.env`, secret values,
 database files, backups, access tokens, or private network details.
+
+## Required candidate evidence
+
+Use the [beta.5 acceptance matrix](releases/v1.8.2-beta.5-test-notes.md) for
+both guest operating systems, the schema-49-to-50 update, paired rollback,
+security checks, and seven-day soak. Retain the original encryption key and a
+matching database/configuration snapshot before upgrading. A failed upgrade
+must restore the previous application together with that snapshot; never start
+an older binary against schema 50.
+
+The base systemd unit permits `AF_UNIX AF_INET AF_INET6 AF_NETLINK`; this fixes
+the reported Node interface-enumeration startup error. `AF_PACKET` remains
+exclusive to explicitly enabled advanced discovery. Check both modes and
+confirm UDP 1162 remains closed unless traps were explicitly enabled.
 
 ## Installed layout
 

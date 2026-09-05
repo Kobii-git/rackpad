@@ -16,7 +16,6 @@ import {
   buildRackCablingScope,
   layoutRackCablingHandoffLabels,
   rackCablingSelectionIsInScope,
-  rackCablingPath,
 } from "./rack-cabling";
 
 const room: Room = { id: "room-a", labId: "lab-a", name: "Server room" };
@@ -522,7 +521,8 @@ test("rack cabling routes are deterministic, filter physical links, and label ha
   const crossRoomRoute = routes.find((route) => route.link.id === "cross-room");
   assert.equal(crossRoomRoute?.handoffs[0]?.roomLabel, remoteRoom.name);
   assert.equal(crossRoomRoute?.to.x, 8);
-  assert.match(routes[0]!.path, / C /);
+  assert.equal(routes[0]!.geometry.kind, "polyline");
+  assert.match(routes[0]!.path, / Q /);
   assert.deepEqual(routes, buildRackCablingRoutes(routeInput));
   assert.deepEqual(
     routes,
@@ -741,26 +741,6 @@ test("routes two unavailable local endpoints and omits links with no visible fac
     routes[0]!.handoffs.map((handoff) => handoff.reason),
     ["unavailable", "unavailable"],
   );
-});
-
-test("smooth and orthogonal cable styles use stable distinct paths", () => {
-  const from = {
-    portId: "a",
-    deviceId: "a",
-    rackId: "a",
-    rackFace: "front" as const,
-    physicalFace: "front" as const,
-    x: 100,
-    y: 200,
-    kind: "physical" as const,
-  };
-  const to = { ...from, portId: "b", x: 500, y: 320 };
-  const smooth = rackCablingPath(from, to, "stable-link", "smooth");
-  const orthogonal = rackCablingPath(from, to, "stable-link", "orthogonal");
-  assert.match(smooth, / C /);
-  assert.match(orthogonal, / L /);
-  assert.equal(smooth, rackCablingPath(from, to, "stable-link", "smooth"));
-  assert.notEqual(smooth, orthogonal);
 });
 
 test("rack cabling scope validates rack, device, port, and cable selections", () => {

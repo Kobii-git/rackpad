@@ -673,10 +673,7 @@ export function RackCablingCanvas({
     }
     const route = routes.find((entry) => entry.link.id === result.id);
     if (route) {
-      focusPoint(
-        (route.from.x + route.to.x) / 2,
-        (route.from.y + route.to.y) / 2,
-      );
+      focusPoint(route.labelPoint.x, route.labelPoint.y);
     }
   }
 
@@ -1180,8 +1177,8 @@ export function RackCablingCanvas({
                     {(showLabels || selected || hovered) && (
                       <text
                         data-testid="rack-cabling-cable-label"
-                        x={(route.from.x + route.to.x) / 2}
-                        y={(route.from.y + route.to.y) / 2 - 7}
+                        x={route.labelPoint.x}
+                        y={route.labelPoint.y - 7}
                         textAnchor="middle"
                         fill="var(--text-primary)"
                         stroke="var(--surface-1)"

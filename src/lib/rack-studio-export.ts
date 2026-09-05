@@ -20,7 +20,7 @@ import {
 import {
   buildRackElevationCableRoutes,
   buildRackStudioCableRoutes,
-  cablePath,
+  renderCableGeometry,
   defaultCableColor,
   type PhysicalCableCategory,
   type RackStudioCableRouteStyle,
@@ -261,7 +261,7 @@ function renderRoomExport(input: RackStudioExportInput) {
             ? input.labels.rear
             : "";
       return [
-        `<path d="${cablePath(shifted, input.routeStyle, route.manualPointIndexes)}" fill="none" stroke="${safeColor(route.color, defaultCableColor(route.category))}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" ${route.handoff ? 'stroke-dasharray="8 5"' : ""} opacity="0.9"/>`,
+        `<path d="${renderCableGeometry(route.geometry, { x: marginX, y: marginY })}" fill="none" stroke="${safeColor(route.color, defaultCableColor(route.category))}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" ${route.handoff ? 'stroke-dasharray="8 5"' : ""} opacity="0.9"/>`,
         input.showLabels
           ? `<text x="${last.x + 5}" y="${last.y - 5}" fill="${palette.text}" font-size="9">${escapeXml(suffix ? `${route.label} · ${suffix}` : route.label)}</text>`
           : "",
@@ -339,7 +339,7 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
           : input.labels.rear
         : input.labels.crossRoom;
       routes.push(
-        `<path d="${cablePath(shifted, input.routeStyle, route.manualPointIndexes)}" fill="none" stroke="${safeColor(route.color, defaultCableColor(route.category))}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" ${route.handoff ? 'stroke-dasharray="8 5"' : ""}/>`,
+        `<path d="${renderCableGeometry(route.geometry, { x: innerX, y: innerY }, { x: scaleX, y: scaleY })}" fill="none" stroke="${safeColor(route.color, defaultCableColor(route.category))}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" ${route.handoff ? 'stroke-dasharray="8 5"' : ""}/>`,
       );
       if (input.showLabels || route.handoff) {
         routes.push(

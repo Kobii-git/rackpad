@@ -56,8 +56,15 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
   and port anchors configured in Rack Studio.
 - The room selector scopes rack cabling to one room. `Front`, `Rear`, and `Both`
   control which physical faces are visible.
-- `Smooth` and `Orthogonal` choose deterministic cable routing. `Labels` keeps
-  every cable label visible; hovered and selected cables are always labeled.
+- `Smooth` automatically uses short curved patch cords between different devices
+  on the same rack face within 4U vertically, when no other equipment obstructs
+  the curve. Longer, obstructed, cross-rack, and handoff connections use gutters.
+  Rack Studio and Rack cabling share the route geometry; SVG/PNG exports retain
+  the same curve controls and exact port endpoints.
+- `Orthogonal` retains right-angle routing. Saved route preferences remain valid.
+  `Labels` keeps every cable label visible; hovered and selected cables are
+  always labeled. Manual room waypoints retain their coordinates and prevent
+  automatic short-cord substitution, including in focused views.
 - The loose-gear tray keeps room equipment outside racks collapsed by default.
   Expanding it shows device faceplates and their physical port anchors.
 - Rack cabling search includes racks, physical ports, loose equipment, device

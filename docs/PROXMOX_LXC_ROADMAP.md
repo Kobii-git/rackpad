@@ -197,6 +197,21 @@ Phase 4 continuation prompt:
 
 > Continue with Phase 4 of `docs/PROXMOX_LXC_ROADMAP.md`. Verify Phases 1-3, merge the reviewed work into `beta`, publish only `v1.8.1-beta.1`, test fresh Proxmox installations, update issue #138 with the beta test request, and stop without publishing a stable release.
 
+## Current acceptance baseline
+
+The current tester beta is `v1.8.2-beta.5`, based on published
+`v1.8.2-beta.4`. It retains the AF_NETLINK startup fix and schema-50 security
+migration. The active [native guide](PROXMOX_NATIVE_LXC.md) and
+[acceptance matrix](releases/v1.8.2-beta.5-test-notes.md) supersede older test
+commands below; historical publication records remain unchanged. Beta.5 remains
+experimental while screenshot determinism and community acceptance are unresolved.
+
+Community testers supply the real Debian 13 and Ubuntu 24.04 PVE 9.x evidence
+and seven-day soak. Stable 1.8.2 remains gated on those results and Rack Studio
+acceptance. The v1.9.0 stacked-switch work starts from that validated stable
+baseline. Its next migration is currently 51; migration 50 is already security
+state and must not be edited or reassigned.
+
 ## Phase 4 - Beta 1 and fresh-install validation
 
 Status: **In progress - Beta 1.1 published; real guest validation pending**

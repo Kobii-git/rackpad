@@ -8,6 +8,25 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 > On the `dev` branch; not yet tagged/released.
 
+## [1.8.2-beta.5] - 2026-09-05
+
+> Experimental Rack Studio tester beta. See the
+> [acceptance matrix](docs/releases/v1.8.2-beta.5-test-notes.md).
+
+### Changed
+
+- Smooth routing uses direct cubic patch cords for unobstructed connections
+  within 4U on the same rack face, with gutter fallback for longer connections.
+- Rack Studio, Rack Cabling, and exports share explicit curve geometry, keeping
+  exact port anchors, saved preferences, and manual waypoint data.
+- Extend regression coverage for one-row 24-column patch panels, independent
+  front/rear edits, and all 24 pass-through pairs on built-in/custom panels.
+- Refresh the Proxmox candidate procedure and community acceptance/soak matrix.
+
+The database remains schema 50. Existing security fixes are retained. Native
+Proxmox support and stable 1.8.2 remain subject to real guest validation;
+stacked-switch implementation stays gated for the subsequent 1.9.0 line.
+
 ## [1.8.2-beta.4] - 2026-09-05
 
 > Security remediation beta. Read the [upgrade and test notes](docs/releases/v1.8.2-beta.4-test-notes.md)

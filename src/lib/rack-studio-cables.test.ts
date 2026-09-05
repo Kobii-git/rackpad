@@ -6,6 +6,7 @@ import {
   buildRackElevationCableRoutes,
   buildRackStudioCableRoutes,
   cablePath,
+  renderCableGeometry,
   connectorPairIsUsual,
   defaultCableMetadata,
   nextManualWaypoint,
@@ -361,13 +362,13 @@ test("room and focused-rack exports are deterministic, themed, and retain exact 
     face: "rear",
     focusRackId: rackA.id,
   });
-  const focusedPath = cablePath(
-    focusedRoute.points.map((point) => ({
-      x: 84 + point.x * (372 / focusedPlanning.scene.width),
-      y: 150 + point.y * (548 / focusedPlanning.scene.height),
-    })),
-    "smooth",
-    focusedRoute.manualPointIndexes,
+  const focusedPath = renderCableGeometry(
+    focusedRoute.geometry,
+    { x: 84, y: 150 },
+    {
+      x: 372 / focusedPlanning.scene.width,
+      y: 548 / focusedPlanning.scene.height,
+    },
   );
   assert.ok(focusedImage.svg.includes(`d="${focusedPath}"`));
 });

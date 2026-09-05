@@ -208,3 +208,13 @@ discarded from scene or export output.
 - Reference photographs remain documentation assets and are not used as hardware faceplates.
 - No new graphics dependency, public unauthenticated route, environment variable, container change, deployment, or release action is required.
 - Existing uncommitted work must be preserved; implementation must recheck Git status and carefully reconcile overlapping server composition, route authorization, tests, and AI guardrail changes.
+
+## Automatic short patch cords
+
+Smooth routing now uses shared cubic geometry for different devices on the same
+rack face within 4U, provided a conservative control-point hull is clear of
+unrelated equipment. Endpoint shelves are excluded from collision checks. Long,
+obstructed, cross-rack, handoff, and explicitly waypointed links retain gutter
+or manual routing. Rack Studio room/elevation views, Rack Cabling, and SVG/PNG
+exports consume the same geometry and stable port identities. The general
+free-position Visualizer graph retains its own layout routing.
