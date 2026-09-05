@@ -2,7 +2,7 @@ import type { TranslationMap } from "../base";
 
 export const es = {
   "Rackpad": "Rackpad",
-  "Homelab inventory": "Inventario homelab",
+  "Self-hosted IT asset inventory": "Inventario de activos de TI autohospedados",
   "Lab": "laboratorio",
   "Dashboard": "Panel",
   "Labs": "laboratorios",

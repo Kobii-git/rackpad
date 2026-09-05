@@ -2,7 +2,7 @@ import type { TranslationMap } from "../base";
 
 export const zhTW = {
   "Rackpad": "Rackpad",
-  "Homelab inventory": "家庭實驗室清單",
+  "Self-hosted IT asset inventory": "自托管 IT 資產清單",
   "Lab": "實驗室",
   "Dashboard": "儀表板",
   "Labs": "實驗室",

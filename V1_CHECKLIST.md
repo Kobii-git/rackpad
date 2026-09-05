@@ -8,7 +8,7 @@ Rackpad `v1.0.0` is now released. Keep this file as a record of the pre-1.0 scop
 
 Rackpad `v1.0.0` should be:
 
-- feature-complete for core homelab inventory and monitoring
+- feature-complete for core self-hosted IT asset inventory and monitoring
 - polished enough that demo data shows the full product clearly
 - safe enough to self-host behind a reverse proxy without "early alpha" caveats
 - validated in Linux and Docker, not just by local Windows build/lint checks

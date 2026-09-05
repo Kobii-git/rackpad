@@ -2,7 +2,7 @@ import type { TranslationMap } from "../base";
 
 export const vi = {
   "Rackpad": "Rackpad",
-  "Homelab inventory": "Kho homelab",
+  "Self-hosted IT asset inventory": "Danh mục tài sản CNTT tự lưu trữ",
   "Lab": "phòng thí nghiệm",
   "Dashboard": "Bảng điều khiển",
   "Labs": "Phòng thí nghiệm",

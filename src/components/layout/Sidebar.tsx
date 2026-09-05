@@ -89,7 +89,7 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
             {t("Rackpad")}
           </div>
           <div className="text-[11px] text-[var(--text-muted)]">
-            {t("Homelab inventory")}
+            {t("Self-hosted IT asset inventory")}
           </div>
         </div>
         <a

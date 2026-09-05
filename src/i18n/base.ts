@@ -1,6 +1,6 @@
 export const en = {
   "Rackpad": "Rackpad",
-  "Homelab inventory": "Homelab inventory",
+  "Self-hosted IT asset inventory": "Self-hosted IT asset inventory",
   "Lab": "Lab",
   "Dashboard": "Dashboard",
   "Labs": "Labs",
