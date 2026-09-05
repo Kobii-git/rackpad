@@ -149,7 +149,7 @@ function RackFaceView({
       <div className="flex flex-col items-stretch overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-strong)] bg-[var(--surface-2)] shadow-[var(--shadow-card)]">
         <div className="flex items-center justify-between border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_46%,transparent)] px-3 py-2">
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-            {rack.name} | {face}
+            {rack.name} | {t(face === "front" ? "Front" : "Rear")}
           </span>
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
             {rack.totalU}

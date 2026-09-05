@@ -2148,9 +2148,7 @@
       "pl",
       "pt",
       "tr",
-      "vi",
-      "zh",
-      "zh-TW"
+      "vi"
     ],
     "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
   },

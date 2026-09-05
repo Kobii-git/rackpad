@@ -651,7 +651,12 @@ export default function RackViewPage() {
                       </Mono>
                     </div>
                     <div className="mt-0.5 truncate text-[11px] text-[var(--color-fg-subtle)]">
-                      {entry.description}
+                      {entry.roomId && roomById[entry.roomId]
+                        ? t("{name}{value2}", {
+                            name: roomById[entry.roomId].name,
+                            value2: entry.location ? ` | ${entry.location}` : "",
+                          })
+                        : entry.location}
                     </div>
                     <div className="mt-1.5 h-1 overflow-hidden rounded-[1px] bg-[var(--color-bg)]">
                       <div
@@ -779,7 +784,7 @@ export default function RackViewPage() {
                         face={face}
                         canEdit={canEdit}
                         compact
-                        emptyText={t("No {face} rack picture yet.", { face })}
+                        emptyText={t(`No ${face} rack picture yet.`)}
                       />
                     </div>
                   )}
