@@ -26,6 +26,7 @@
     "e2e/**/*.ts",
     "scripts/screenshots/**/*.ts",
     "playwright.config.ts",
+    "playwright.security.config.ts",
     "playwright.screenshots.config.ts"
   ],
   "exclude": ["node_modules", "dist", "dist-server", ".cache"]

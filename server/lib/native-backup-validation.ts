@@ -39,6 +39,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "snmpMatchMode",
     "snmpCredentialId",
     "ignoreTlsErrors",
+    "snmpCommunityEnc",
   ],
   deviceServices: [
     "id",
@@ -301,6 +302,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "displayName",
     "createdAt",
     "updatedAt",
+    "roleRecheckRequired",
   ],
   portLinks: [
     "id",

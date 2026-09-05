@@ -122,6 +122,7 @@ type MonitorForm = {
   ignoreTlsErrors: boolean;
   snmpVersion: NonNullable<DeviceMonitor["snmpVersion"]>;
   snmpCommunity: string;
+  clearSnmpCommunity: boolean;
   snmpOid: string;
   snmpExpectedValue: string;
   snmpMatchMode: NonNullable<DeviceMonitor["snmpMatchMode"]>;
@@ -176,6 +177,7 @@ const EMPTY_MONITOR_FORM: MonitorForm = {
   ignoreTlsErrors: false,
   snmpVersion: "2c",
   snmpCommunity: "public",
+  clearSnmpCommunity: false,
   snmpOid: "",
   snmpExpectedValue: "",
   snmpMatchMode: "equals",
@@ -1010,9 +1012,10 @@ export default function DeviceDetail() {
       snmpVersion: monitorForm.snmpCredentialId.trim()
         ? undefined
         : monitorForm.snmpVersion,
+      monitorId: selectedMonitor?.id,
       snmpCommunity: monitorForm.snmpCredentialId.trim()
         ? undefined
-        : monitorForm.snmpCommunity.trim() || "public",
+        : monitorForm.clearSnmpCommunity ? "" : monitorForm.snmpCommunity.trim() || undefined,
     };
   }
 
@@ -1103,7 +1106,7 @@ export default function DeviceDetail() {
           monitorForm.type === "https" && monitorForm.ignoreTlsErrors,
         snmpVersion: usesSnmp ? monitorForm.snmpVersion : null,
         snmpCommunity: usesSnmp
-          ? monitorForm.snmpCommunity.trim() || null
+          ? monitorForm.clearSnmpCommunity ? null : monitorForm.snmpCommunity.trim() || undefined
           : null,
         snmpOid: usesSnmp ? monitorForm.snmpOid.trim() || null : null,
         snmpExpectedValue: usesSnmp
@@ -2880,6 +2883,8 @@ export default function DeviceDetail() {
                         </Field>
                         <Field label={t("Community")}>
                           <Input
+                            type="password"
+                            autoComplete="new-password"
                             value={monitorForm.snmpCommunity}
                             disabled={
                               !canManageMonitoring ||
@@ -2889,10 +2894,17 @@ export default function DeviceDetail() {
                               setMonitorForm((prev) => ({
                                 ...prev,
                                 snmpCommunity: event.target.value,
+                                clearSnmpCommunity: false,
                               }))
                             }
-                            placeholder={t("public")}
+                            placeholder={selectedMonitor?.hasSnmpCommunity ? t("Leave blank to keep the stored secret") : t("public")}
                           />
+                          {selectedMonitor?.hasSnmpCommunity && !monitorForm.clearSnmpCommunity && (
+                            <div className="flex items-center justify-between text-xs text-text-muted">
+                              <span>{t("community stored")}</span>
+                              <button type="button" disabled={!canManageMonitoring} onClick={() => setMonitorForm((prev) => ({ ...prev, snmpCommunity: "", clearSnmpCommunity: true }))}>{t("Clear")}</button>
+                            </div>
+                          )}
                         </Field>
                         <Field label={t("OID")}>
                           <Input
@@ -3696,6 +3708,7 @@ function buildNewMonitorForm(
     ignoreTlsErrors: false,
     snmpVersion: "2c",
     snmpCommunity: "public",
+    clearSnmpCommunity: false,
     snmpOid: "",
     snmpExpectedValue: "",
     snmpMatchMode: "equals",
@@ -3721,7 +3734,8 @@ function monitorToForm(monitor: DeviceMonitor, device: Device): MonitorForm {
       monitor.snmpVersion === "3"
         ? monitor.snmpVersion
         : "2c",
-    snmpCommunity: monitor.snmpCommunity ?? "",
+    snmpCommunity: "",
+    clearSnmpCommunity: false,
     snmpOid: monitor.snmpOid ?? "",
     snmpExpectedValue: monitor.snmpExpectedValue ?? "",
     snmpMatchMode: monitor.snmpMatchMode ?? "equals",

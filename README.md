@@ -558,12 +558,12 @@ sudo apt-get install -y python3 make g++
 
 ## Reverse proxy / TLS
 
-For any public-facing or VPN-exposed deployment, put Rackpad behind a TLS reverse proxy and set the trusted proxy/origin environment values. `TRUST_PROXY` is the exact number of controlled proxy hops between the client and Rackpad: use `1` for the included single-proxy examples, or `2` through `10` for a controlled multi-proxy chain.
+For any public-facing or VPN-exposed deployment, put Rackpad behind a TLS reverse proxy and set the trusted proxy/origin environment values. `TRUST_PROXY` accepts a comma- or space-separated list of trusted proxy IP addresses or CIDRs. Use the actual addresses of your controlled proxies; `0` disables trust.
 
 Recommended environment shape:
 
 ```bash
-TRUST_PROXY=1
+TRUST_PROXY=172.18.0.2
 TRUSTED_HOSTS=rackpad.example.com
 TRUSTED_ORIGINS=https://rackpad.example.com
 ```
@@ -581,7 +581,9 @@ The app already sets:
 - `X-Content-Type-Options`
 - `Referrer-Policy`
 
-So the main deployment job is to terminate TLS, overwrite the client-facing `X-Forwarded-*` headers, and keep the Rackpad application port reachable only through exactly the configured proxy chain. Do not enable `TRUST_PROXY` while clients can also connect directly to Rackpad; otherwise forwarded client identity and rate-limit buckets are not trustworthy. Invalid values fail closed to `0` (disabled), while `true`, `yes`, and `on` remain aliases for one hop.
+Terminate TLS at the proxy, overwrite client-supplied `X-Forwarded-*` headers, and restrict direct access to the Rackpad application port. Forwarded host, scheme, and client identity are honored only for trusted peers. Legacy numeric hop counts, truthy aliases (`true`, `yes`, `on`), and invalid settings now disable proxy trust with a startup warning. Replace them with explicit proxy addresses before upgrading.
+
+Security upgrades to schema 50 encrypt existing inline SNMP communities and require `RACKPAD_SECRET_KEY` when those values exist. Retain your existing key and a pre-upgrade database/configuration snapshot. OIDC sessions are revoked and existing OIDC roles are recomputed once at the next login: configure a trusted administrator subject or group before upgrading. The trap listener now defaults off, and historical source credential links must be explicitly reconfigured. See [OIDC login](docs/OIDC.md) and [SNMP monitoring](docs/SNMP.md).
 
 ## Native development note
 

@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.8.2-beta.3",
+  "version": "1.8.2-beta.4",
   "private": true,
   "type": "module",
   "engines": {
@@ -55,7 +55,7 @@
     "better-sqlite3": "^11.7.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "fastify": "^5.10.0",
+    "fastify": "^5.12.3",
     "ipaddr.js": "^2.4.0",
     "lucide-react": "^0.468.0",
     "motion": "^11.15.0",

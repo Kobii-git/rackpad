@@ -1071,6 +1071,7 @@ export interface DeviceMonitor {
   ignoreTlsErrors: boolean;
   snmpVersion?: "1" | "2c" | "3" | null;
   snmpCommunity?: string | null;
+  hasSnmpCommunity?: boolean;
   snmpOid?: string | null;
   snmpExpectedValue?: string | null;
   snmpMatchMode?: "any" | "equals" | "notEquals" | "in" | "regex" | null;

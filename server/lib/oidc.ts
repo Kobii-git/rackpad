@@ -3,10 +3,11 @@ import {
   createHash,
   createPublicKey,
   randomBytes,
+  timingSafeEqual,
   verify as verifySignature,
   type KeyObject,
 } from 'node:crypto'
-import type { FastifyBaseLogger, FastifyRequest } from 'fastify'
+import type { FastifyBaseLogger, FastifyReply, FastifyRequest } from 'fastify'
 import { db } from '../db.js'
 import { ensureDefaultLab } from '../seed.js'
 import { createId } from './ids.js'
@@ -31,6 +32,7 @@ type OidcJwks = {
 }
 
 type OidcState = {
+  browserHash: string
   codeVerifier: string
   nonce: string
   redirectUri: string
@@ -51,9 +53,9 @@ type ValidOidcCallback = {
 }
 
 type PendingSession = {
-  token: string
-  expiresAt: string
-  user: ReturnType<typeof parsePublicUser>
+  browserHash: string
+  claims: OidcClaims
+  clientId: string
   returnTo: string
   createdAt: number
 }
@@ -77,6 +79,7 @@ type OidcLogger = Pick<FastifyBaseLogger, 'debug' | 'info' | 'warn'>
 const DEFAULT_SCOPES = 'openid profile email'
 const STATE_TTL_MS = 10 * 60 * 1000
 const SESSION_CODE_TTL_MS = 2 * 60 * 1000
+const BROWSER_COOKIE = 'rackpad_oidc_flow'
 const DISCOVERY_TTL_MS = 60 * 60 * 1000
 const JWKS_TTL_MS = 60 * 60 * 1000
 const oidcStates = new Map<string, OidcState>()
@@ -165,9 +168,9 @@ function oidcConfig() {
     roleClaim: process.env.OIDC_ROLE_CLAIM?.trim() || 'groups',
     redirectUri: process.env.OIDC_REDIRECT_URI?.trim() || '',
     allowedDomains: lowerSet(splitEnv('OIDC_ALLOWED_DOMAINS')),
-    adminUsers: lowerSet(splitEnv('OIDC_ADMIN_USERS')),
-    editorUsers: lowerSet(splitEnv('OIDC_EDITOR_USERS')),
-    viewerUsers: lowerSet(splitEnv('OIDC_VIEWER_USERS')),
+    adminUsers: new Set(splitEnv('OIDC_ADMIN_USERS')),
+    editorUsers: new Set(splitEnv('OIDC_EDITOR_USERS')),
+    viewerUsers: new Set(splitEnv('OIDC_VIEWER_USERS')),
     adminGroups: lowerSet(splitEnv('OIDC_ADMIN_GROUPS')),
     editorGroups: lowerSet(splitEnv('OIDC_EDITOR_GROUPS')),
     viewerGroups: lowerSet(splitEnv('OIDC_VIEWER_GROUPS')),
@@ -197,6 +200,7 @@ export function isOidcEnabled() {
 
 export async function createOidcAuthorizationUrl(
   req: FastifyRequest,
+  reply: FastifyReply,
   returnTo: string | undefined,
 ) {
   const config = oidcConfig()
@@ -209,6 +213,18 @@ export async function createOidcAuthorizationUrl(
 
   cleanupExpired()
   const discovery = await loadDiscovery(config.issuer, req.log)
+  const previousBrowser = readBrowserVerifier(req)
+  if (previousBrowser) {
+    const previousHash = hashBrowserVerifier(previousBrowser)
+    for (const [key, flow] of oidcStates) {
+      if (flow.browserHash === previousHash) oidcStates.delete(key)
+    }
+    for (const [key, flow] of pendingSessions) {
+      if (flow.browserHash === previousHash) pendingSessions.delete(key)
+    }
+  }
+  const browserVerifier = randomToken()
+  writeBrowserCookie(req, reply, browserVerifier)
   const state = randomToken()
   const nonce = randomToken()
   const codeVerifier = base64Url(randomBytes(48))
@@ -229,6 +245,7 @@ export async function createOidcAuthorizationUrl(
   )
 
   oidcStates.set(state, {
+    browserHash: hashBrowserVerifier(browserVerifier),
     codeVerifier,
     nonce,
     redirectUri,
@@ -250,6 +267,7 @@ export async function createOidcAuthorizationUrl(
 
 export async function handleOidcCallback(
   input: OidcCallbackInput,
+  req: FastifyRequest,
   log?: OidcLogger,
 ) {
   const config = oidcConfig()
@@ -263,12 +281,13 @@ export async function handleOidcCallback(
 
   cleanupExpired()
   const state = oidcStates.get(callback.state)
-  oidcStates.delete(callback.state)
   if (!state || Date.now() - state.createdAt > STATE_TTL_MS) {
     throw new ValidationError(
       'OIDC sign-in state expired. Start sign-in again.',
     )
   }
+  assertBrowserBinding(req, state.browserHash)
+  oidcStates.delete(callback.state)
 
   const discovery = await loadDiscovery(config.issuer, log)
   const tokenResponse = await exchangeCodeForTokens(
@@ -290,13 +309,11 @@ export async function handleOidcCallback(
     state.nonce,
     log,
   )
-  const user = upsertOidcUser(config, claims)
-  const session = createSession(user.id)
   const sessionCode = randomToken()
   pendingSessions.set(sessionCode, {
-    token: session.token,
-    expiresAt: session.expiresAt,
-    user,
+    browserHash: state.browserHash,
+    claims,
+    clientId: config.clientId,
     returnTo: state.returnTo,
     createdAt: Date.now(),
   })
@@ -307,19 +324,57 @@ export async function handleOidcCallback(
   }
 }
 
-export function consumeOidcSession(sessionCode: string) {
+export function consumeOidcSession(sessionCode: string, req: FastifyRequest, reply: FastifyReply) {
   cleanupExpired()
   const pending = pendingSessions.get(sessionCode)
-  pendingSessions.delete(sessionCode)
   if (!pending || Date.now() - pending.createdAt > SESSION_CODE_TTL_MS) {
     throw new ValidationError('OIDC session expired. Start sign-in again.')
   }
+  assertBrowserBinding(req, pending.browserHash)
+  pendingSessions.delete(sessionCode)
+  const config = oidcConfig()
+  if (!config.enabled || config.issuer !== normalizeIssuer(String(pending.claims.iss)) ||
+      config.clientId !== pending.clientId || Number(pending.claims.exp) * 1000 <= Date.now()) {
+    throw new ValidationError('OIDC session expired. Start sign-in again.')
+  }
+  const { user, session } = db.transaction(() => {
+    const user = upsertOidcUser(config, pending.claims)
+    return { user, session: createSession(user.id) }
+  })()
+  writeBrowserCookie(req, reply, '')
   return {
-    token: pending.token,
-    expiresAt: pending.expiresAt,
-    user: pending.user,
+    token: session.token,
+    expiresAt: session.expiresAt,
+    user,
     returnTo: pending.returnTo,
   }
+}
+
+function readBrowserVerifier(req: FastifyRequest) {
+  const matches = (req.headers.cookie ?? '').split(';')
+    .map((part) => part.trim()).filter((part) => part.startsWith(`${BROWSER_COOKIE}=`))
+  if (matches.length !== 1) return null
+  const value = matches[0]!.slice(BROWSER_COOKIE.length + 1)
+  return /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null
+}
+
+function hashBrowserVerifier(value: string) {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function assertBrowserBinding(req: FastifyRequest, expectedHash: string) {
+  const value = readBrowserVerifier(req)
+  if (!value || !timingSafeEqual(Buffer.from(hashBrowserVerifier(value), 'hex'), Buffer.from(expectedHash, 'hex'))) {
+    throw new ValidationError('OIDC sign-in must finish in the browser that started it.', 403)
+  }
+}
+
+function writeBrowserCookie(req: FastifyRequest, reply: FastifyReply, value: string) {
+  // The cookie carries only the flow verifier, never an authentication session.
+  // Its maximum lifetime covers authorization followed by the completion window.
+  const maxAge = value ? (STATE_TTL_MS + SESSION_CODE_TTL_MS) / 1000 : 0
+  const secure = req.protocol === 'https' || new URL(getRedirectUri(req, oidcConfig().redirectUri)).protocol === 'https:'
+  reply.header('Set-Cookie', `${BROWSER_COOKIE}=${value}; Path=/api/auth/oidc; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? '; Secure' : ''}`)
 }
 
 function getRedirectUri(req: FastifyRequest, configured: string) {
@@ -329,15 +384,7 @@ function getRedirectUri(req: FastifyRequest, configured: string) {
     .replace(/\/+$/, '')
   if (appUrl) return `${appUrl}/api/auth/oidc/callback`
 
-  const forwardedProto = String(req.headers['x-forwarded-proto'] ?? '')
-    .split(',')[0]
-    ?.trim()
-  const protocol = forwardedProto || req.protocol || 'http'
-  const forwardedHost = String(req.headers['x-forwarded-host'] ?? '')
-    .split(',')[0]
-    ?.trim()
-  const host = forwardedHost || req.headers.host || 'localhost:3000'
-  return `${protocol}://${host}/api/auth/oidc/callback`
+  return `${req.protocol}://${req.host}/api/auth/oidc/callback`
 }
 
 function safeReturnTo(value: string | undefined) {
@@ -645,7 +692,7 @@ function upsertOidcUser(
     typeof claims.email === 'string' ? claims.email.trim().toLowerCase() : null
   if (config.allowedDomains.size > 0) {
     const domain = email?.split('@')[1]?.toLowerCase()
-    if (!domain || !config.allowedDomains.has(domain)) {
+    if (claims.email_verified !== true || !email || email.split('@').length !== 2 || !domain || !config.allowedDomains.has(domain)) {
       throw new ValidationError(
         'This OIDC account is not allowed to access Rackpad.',
         403,
@@ -657,7 +704,7 @@ function upsertOidcUser(
   const existing = db
     .prepare(
       `
-    SELECT u.*
+    SELECT u.*, i.roleRecheckRequired
     FROM oidcIdentities i
     JOIN users u ON u.id = i.userId
     WHERE i.issuer = ? AND i.subject = ?
@@ -670,17 +717,18 @@ function upsertOidcUser(
       throw new ValidationError('This Rackpad account is disabled.', 403)
     }
     const displayName = displayNameFromClaims(config, claims)
+    const role = Number(existing.roleRecheckRequired) === 1 ? roleFromClaims(config, claims) : existing.role
     db.prepare(
       `
       UPDATE oidcIdentities
-      SET email = ?, displayName = ?, updatedAt = ?
+      SET email = ?, displayName = ?, updatedAt = ?, roleRecheckRequired = 0
       WHERE issuer = ? AND subject = ?
     `,
     ).run(email, displayName, now, issuer, subject)
     db.prepare(
-      'UPDATE users SET displayName = ?, lastLoginAt = ? WHERE id = ?',
-    ).run(displayName, now, existing.id)
-    return parsePublicUser({ ...existing, displayName, lastLoginAt: now })
+      'UPDATE users SET displayName = ?, lastLoginAt = ?, role = ? WHERE id = ?',
+    ).run(displayName, now, role, existing.id)
+    return parsePublicUser({ ...existing, displayName, role, lastLoginAt: now })
   }
 
   const firstUser = needsFirstUser()
@@ -779,25 +827,34 @@ function roleFromClaims(
   config: ReturnType<typeof oidcConfig>,
   claims: OidcClaims,
 ): UserRole {
-  const identifiers = [
-    claims.sub,
-    claims.email,
+  const usernames = [
     claims.preferred_username,
-    claimAsString(claims, config.usernameClaim),
+    ...(['sub', 'email'].includes(config.usernameClaim) ? [] : [claimAsString(claims, config.usernameClaim)]),
   ]
     .filter(
       (value): value is string =>
-        typeof value === 'string' && Boolean(value.trim()),
+        typeof value === 'string' && Boolean(value.trim()) && !value.includes('@') && value.trim().toLowerCase() !== claims.sub?.toLowerCase(),
     )
-    .map((value) => value.toLowerCase())
+    .map((value) => value.trim().toLowerCase())
 
-  if (identifiers.some((value) => config.adminUsers.has(value))) return 'admin'
-  if (identifiers.some((value) => config.editorUsers.has(value)))
+  const matchesUser = (allowlist: Set<string>) => [...allowlist].some((entry) => {
+    if (entry.includes('@')) {
+      return claims.email_verified === true && typeof claims.email === 'string' &&
+        claims.email.trim().toLowerCase() === entry.toLowerCase()
+    }
+    return entry === claims.sub || usernames.includes(entry.toLowerCase())
+  })
+
+  if (matchesUser(config.adminUsers)) return 'admin'
+  if (matchesUser(config.editorUsers))
     return 'editor'
-  if (identifiers.some((value) => config.viewerUsers.has(value)))
+  if (matchesUser(config.viewerUsers))
     return 'viewer'
 
-  const groups = claimAsStringArray(claims, config.roleClaim)
+  const roleValue = claimAsString(claims, config.roleClaim)
+  const roleUsesEmail = config.roleClaim === 'email' || (roleValue != null &&
+    typeof claims.email === 'string' && roleValue.toLowerCase() === claims.email.trim().toLowerCase())
+  const groups = claimAsStringArray(claims, config.roleClaim, !roleUsesEmail || claims.email_verified === true)
   if (groups.some((value) => config.adminGroups.has(value))) return 'admin'
   if (groups.some((value) => config.editorGroups.has(value))) return 'editor'
   if (groups.some((value) => config.viewerGroups.has(value))) return 'viewer'
@@ -810,10 +867,10 @@ function claimAsString(claims: Record<string, unknown>, path: string) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
-function claimAsStringArray(claims: Record<string, unknown>, path: string) {
+function claimAsStringArray(claims: Record<string, unknown>, path: string, includePrimary = true) {
   const value = claimValue(claims, path)
-  const values = Array.isArray(value)
-    ? value
+  const values = !includePrimary ? [] : Array.isArray(value)
+    ? [...value]
     : typeof value === 'string'
       ? [value]
       : []

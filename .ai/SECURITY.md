@@ -7,6 +7,11 @@ constraints for changes.
 
 - Local users use scrypt password hashes. OIDC uses authorization code, state,
   nonce, and PKCE S256.
+- OIDC domain/email role decisions require boolean `email_verified: true`;
+  subjects are case-sensitive. A short-lived HttpOnly SameSite=Lax browser verifier
+  binds callback and completion. It is Secure for trusted/canonical HTTPS, and
+  application bearer transport remains unchanged. Schema 50 revokes old OIDC
+  sessions and requires a one-time role check on the next login.
 - Sessions are random Bearer tokens, SHA-256 hashed in `userSessions`, with the
   browser token stored in localStorage. This avoids ambient-cookie CSRF but makes
   CSP/XSS controls especially important.
@@ -33,6 +38,8 @@ constraints for changes.
   per-redirect validation, credential rejection, TLS behavior, and timeouts.
 - Private and unique-local network access is deliberate for inventory/monitoring.
   Loopback, link-local, metadata, multicast, and reserved access stays blocked.
+- TCP, ICMP, and all SNMP requests also resolve/validate and pin numeric targets
+  at execution time with bounded DNS and transport timeouts.
 - Discovery subprocesses use validated targets and argument arrays, never shell
   interpolation.
 - Native LXC starts with neighbor-cache discovery and no service capabilities.
@@ -46,11 +53,11 @@ constraints for changes.
 
 - `@fastify/rate-limit` is registered once in `server/app.ts` and keys its
   process-local global limit by Fastify's resulting `request.ip`.
-- `TRUST_PROXY` is disabled by default. Values `1` through `10` trust exactly
-  that many controlled proxy hops; `true`, `yes`, and `on` mean one hop, while
-  invalid values fail closed. Direct application-port access must be blocked
-  whenever proxy trust is enabled, and the public edge must overwrite forwarded
-  client identity.
+- `TRUST_PROXY` defaults off and accepts only explicit proxy IPs/CIDRs. Legacy
+  hop counts, truthy aliases, invalid values, and universal CIDRs disable trust
+  with a startup warning. Use Fastify's trusted request IP/host/protocol; never
+  read forwarded host/protocol directly. The public edge must overwrite forwarded
+  headers, and application-port access should be restricted to controlled proxies.
 - CodeQL does not model the global Fastify plugin, so its per-route
   `js/missing-rate-limiting` reports are excluded until 2026-11-30. Runtime
   cross-route/proxy tests and the ESLint single-app-factory rule plus
@@ -60,7 +67,10 @@ constraints for changes.
 
 - Never commit or print credentials, `.env`, databases, backups, keys, or local
   AI context.
-- `RACKPAD_SECRET_KEY` protects supported stored integration secrets. Losing or
+- Inline SNMP communities and credential records are encrypted. Public monitor
+  responses are redacted; trap observations never change configured trust. Legacy
+  trap-source credentials are cleared on schema 50 migration and old-backup restore.
+- `RACKPAD_SECRET_KEY` protects supported stored integration and SNMP secrets. Losing or
   rotating it makes existing encrypted values unreadable; re-entry is required.
 - Backups remain sensitive because they contain password hashes, infrastructure
   data, and encrypted controller credentials even when selected notification

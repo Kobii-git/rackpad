@@ -94,3 +94,11 @@ the metadata does not create a second cabling model. Link create, edit, bulk
 edit, and delete authorize both endpoint labs, update endpoint state, and write
 their audit entry in the same transaction. Logical backups parse waypoint JSON
 and older backups default missing metadata safely.
+
+Schema 50 adds `deviceMonitors.snmpCommunityEnc` and
+`oidcIdentities.roleRecheckRequired`. Legacy plaintext communities are encrypted
+inside the migration transaction, the plaintext column is cleared, old OIDC
+sessions are revoked, and historical trap-source credentials are discarded.
+Legacy logical restores apply the same conversion atomically; current snapshots
+preserve encrypted values and the role-check marker. Native schema manifests include
+both fields. A missing encryption key prevents a plaintext conversion from committing.

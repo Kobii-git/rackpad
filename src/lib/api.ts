@@ -1634,6 +1634,7 @@ export const api = {
   },
 
   discoverSnmpInterfaces(body: {
+    monitorId?: string;
     deviceId: string;
     target?: string;
     port?: number;
@@ -1653,6 +1654,7 @@ export const api = {
   },
 
   importSnmpInterfaceMonitors(body: {
+    monitorId?: string;
     deviceId: string;
     target?: string;
     port?: number;
