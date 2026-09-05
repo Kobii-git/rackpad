@@ -530,7 +530,7 @@
   },
   {
     "key": "ID",
-    "locales": ["af", "it", "ja", "pt", "uk", "vi"],
+    "locales": ["af", "it", "ja", "pt", "uk", "vi", "zh"],
     "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
   },
   {
@@ -575,8 +575,43 @@
   },
   {
     "key": "Markdown",
-    "locales": ["af", "he"],
+    "locales": ["af", "he", "zh"],
     "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
+  },
+  {
+    "key": "access",
+    "locales": ["zh"],
+    "reason": "Switchport mode label kept as English per product terminology."
+  },
+  {
+    "key": "trunk",
+    "locales": ["zh"],
+    "reason": "Switchport mode label kept as English per product terminology."
+  },
+  {
+    "key": "ifIndex",
+    "locales": ["zh"],
+    "reason": "SNMP technical label kept as English per product terminology."
+  },
+  {
+    "key": "(ifIndex",
+    "locales": ["zh"],
+    "reason": "SNMP technical label kept as English per product terminology."
+  },
+  {
+    "key": "U |",
+    "locales": ["zh"],
+    "reason": "Rack unit abbreviation kept as English per product terminology."
+  },
+  {
+    "key": "Home-Main",
+    "locales": ["zh"],
+    "reason": "Sample/demo identifier kept as English to match seed data."
+  },
+  {
+    "key": "Cloud Key Gen2 Plus",
+    "locales": ["zh"],
+    "reason": "UniFi product name kept as English."
   },
   {
     "key": "Mgmt IP",
@@ -2113,9 +2148,7 @@
       "pl",
       "pt",
       "tr",
-      "vi",
-      "zh",
-      "zh-TW"
+      "vi"
     ],
     "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
   },

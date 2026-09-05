@@ -2,7 +2,7 @@ import type { TranslationMap } from "../base";
 
 export const fa = {
   "Rackpad": "Rackpad",
-  "Homelab inventory": "موجودی آزمایشگاه خانگی",
+  "Self-hosted IT asset inventory": "فهرست دارایی‌های فناوری اطلاعات خودمیزبان",
   "Lab": "آزمایشگاه",
   "Dashboard": "داشبورد",
   "Labs": "آزمایشگاه ها",
