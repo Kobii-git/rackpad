@@ -98,5 +98,8 @@ port, adding privilege, accepting plaintext secrets, disabling a gate, or hiding
 a scanner result. These require explicit authority and independent review.
 
 Suppressions must be finding-specific, narrowly located, justified, and time
-bounded where supported. SNMPv3 MD5/SHA1 interoperability exceptions are inline
-only in `server/lib/snmp-v3.ts`; they do not justify weak hashes elsewhere.
+bounded where supported. SNMPv3 MD5/SHA1 rationale stays inline in
+`server/lib/snmp-v3.ts`. Its two reviewed RFC password-to-key findings also require
+the exact file hash, unchanged server tree and automated expiry; raw CodeQL
+analysis remains available. They do not justify weak hashes elsewhere or automatic
+renewal of the reviewed source/expiry policy.

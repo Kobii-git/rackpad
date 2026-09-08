@@ -49,10 +49,18 @@ GitHub Release creation follows successful image publication.
 
 Scanner exceptions must identify one advisory, explain why Rackpad is not
 affected, and include an expiry date. Trivy expiry is enforced by the scanner.
-CodeQL protocol exceptions are
-inline, owned, and manually reviewed by their stated date; CodeQL does not
-automatically enforce comment dates. No exception permits weak hashes outside
-the identified SNMPv3 interoperability call sites.
+SNMPv3 protocol rationale remains inline. The two reviewed RFC 3414 password-to-key
+findings additionally use an automated policy bound to exact source locations,
+the file hash, the unchanged server tree, and expiry at 2026-11-30 00:00 UTC.
+Missing evidence or changed server content disables those exceptions; renewal
+requires independent review and explicit approval. Other inline CodeQL review
+dates remain manually enforced. No exception permits weak hashes outside the
+identified SNMPv3 interoperability call sites.
+
+CodeQL retains the complete raw analysis and an explicit review summary as CI
+artifacts. Only the two eligible findings may be omitted from a separate upload
+report. Invalid analysis or any other blocking finding fails publication and
+uploads the raw report; report-upload failures also fail the gate.
 
 ## Hardening guidance
 
