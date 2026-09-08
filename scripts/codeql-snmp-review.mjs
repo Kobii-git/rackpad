@@ -49,13 +49,31 @@ export function reviewedSnmpLocation(run, result, rule, context) {
   if (!artifact || artifact.uri !== SNMP_REVIEW.file || !region ||
       ![83, 90].includes(region.startLine) || (region.endLine ?? region.startLine) !== region.startLine ||
       ["charOffset", "charLength", "byteOffset", "byteLength"].some((key) => region[key] !== undefined)) return null;
-  if (artifact.uriBaseId !== undefined && (artifact.uriBaseId !== "%SRCROOT%" ||
-      !context.rootUri || run.originalUriBaseIds?.["%SRCROOT%"]?.uri !== context.rootUri ||
-      run.originalUriBaseIds["%SRCROOT%"].uriBaseId !== undefined)) return null;
   if (artifact.index !== undefined) {
     const indexed = run.artifacts?.[artifact.index]?.location;
     if (!Number.isInteger(artifact.index) || artifact.index < 0 || !indexed ||
-        indexed.uri !== artifact.uri || indexed.uriBaseId !== artifact.uriBaseId) return null;
+        indexed.uri !== artifact.uri || indexed.uriBaseId !== artifact.uriBaseId ||
+        (indexed.index !== undefined && indexed.index !== artifact.index)) return null;
+    const contents = run.artifacts[artifact.index].contents;
+    if (contents !== undefined && (typeof contents.text !== "string" || contents.binary !== undefined ||
+        createHash("sha256").update(contents.text, "utf8").digest("hex") !== SNMP_REVIEW.sourceSha256)) return null;
+  }
+  if (artifact.uriBaseId !== undefined) {
+    if (artifact.uriBaseId !== "%SRCROOT%" || !context.rootUri) return null;
+    const base = run.originalUriBaseIds?.["%SRCROOT%"];
+    if (base !== undefined) {
+      if (base.uri !== context.rootUri || base.uriBaseId !== undefined) return null;
+    } else {
+      // Native CodeQL omits absolute roots. Require the analyzed file itself as
+      // additional evidence, emitted by --sarif-add-file-contents; never infer
+      // approval from the unresolved placeholder or the checkout path alone.
+      const indexed = run.artifacts?.[artifact.index];
+      const matches = run.artifacts?.filter((entry) => entry.location?.uri === artifact.uri &&
+        entry.location.uriBaseId === artifact.uriBaseId);
+      if (!Number.isInteger(artifact.index) || !indexed || matches?.length !== 1 ||
+          typeof indexed.contents?.text !== "string" || indexed.contents.binary !== undefined ||
+          createHash("sha256").update(indexed.contents.text, "utf8").digest("hex") !== SNMP_REVIEW.sourceSha256) return null;
+    }
   }
   return region.startLine;
 }

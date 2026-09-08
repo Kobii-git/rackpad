@@ -172,6 +172,49 @@ test("duplicate reviewed results across runs or files fail closed", () => {
   assert.throws(() => reviewSarif(snmpSarif(), reviewedContext(), seen), /Duplicate/);
 });
 
+test("native rootless reports require the complete analyzed source matching the approved hash", () => {
+  const document = snmpSarif();
+  const run = document.runs[0];
+  for (const result of run.results) result.locations[0].physicalLocation.artifactLocation.uriBaseId = "%SRCROOT%";
+  run.artifacts[0].location.uriBaseId = "%SRCROOT%";
+  assert.equal(inspectSarif(document, reviewedContext()), 2, "the unresolved placeholder alone is insufficient");
+  run.artifacts[0].contents = { text: readFileSync(new URL(`../${SNMP_REVIEW.file}`, import.meta.url), "utf8") };
+  const original = structuredClone(document);
+  const review = reviewSarif(document, reviewedContext());
+  assert.equal(review.failures, 0);
+  assert.deepEqual(review.reviewed.map((item) => item.line), [83, 90]);
+  assert.deepEqual(document, original);
+  const expected = structuredClone(document);
+  expected.runs[0].results = [];
+  assert.deepEqual(review.prepared, expected);
+  for (const mutate of [
+    (r) => { r.artifacts[0].contents.text += "\n"; },
+    (r) => { r.artifacts[0].contents.text = r.artifacts[0].contents.text.slice(0, 100); },
+    (r) => { delete r.artifacts[0].contents; },
+    (r) => { r.artifacts[0].contents.binary = "YQ=="; },
+    (r) => { r.artifacts[0].location.index = 1; },
+    (r) => { r.artifacts.push(structuredClone(r.artifacts[0])); },
+    (r) => { r.originalUriBaseIds = { "%SRCROOT%": { uri: "file:///elsewhere/" } }; },
+    (r) => { r.originalUriBaseIds = { "%SRCROOT%": {} }; },
+    (r) => { for (const result of r.results) delete result.locations[0].physicalLocation.artifactLocation.index; },
+  ]) {
+    const changed = structuredClone(document);
+    mutate(changed.runs[0]);
+    try {
+      assert.equal(inspectSarif(changed, reviewedContext()), 2);
+    } catch (error) {
+      assert.match(error.message, /Invalid CodeQL SARIF schema/);
+    }
+  }
+  assert.equal(inspectSarif(document, { ...reviewedContext(), clean: false }), 2);
+  assert.equal(inspectSarif(document, { ...reviewedContext(), serverTree: "changed" }), 2);
+  assert.equal(inspectSarif(document, { ...reviewedContext(), rootUri: undefined }), 2);
+  assert.equal(inspectSarif(document, { ...reviewedContext(), now: Date.parse(SNMP_REVIEW.expiresAt) }), 2);
+  run.originalUriBaseIds = { "%SRCROOT%": { uri: reviewedContext().rootUri } };
+  run.artifacts[0].contents.text += "changed";
+  assert.equal(inspectSarif(document, reviewedContext()), 2, "a root mapping cannot override contradictory analyzed contents");
+});
+
 test("Git evidence detects staged, unstaged and ignored additions and missing repository state", (t) => {
   const root = mkdtempSync(path.join(tmpdir(), "rackpad-codeql-git-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -246,6 +289,9 @@ test("CodeQL post-processing keeps failures blocking and uploads raw fallback wi
   const upload = steps.find((step) => step.uses?.startsWith("github/codeql-action/upload-sarif@"));
   const artifact = steps.find((step) => step.uses?.startsWith("actions/upload-artifact@"));
   assert.equal(analysis.with.upload, "failure-only");
+  assert.deepEqual(JSON.parse(analysis.env.CODEQL_ACTION_EXTRA_OPTIONS), { database: { "interpret-results": ["--sarif-add-file-contents"] } });
+  assert.equal(steps.find((step) => step.uses?.startsWith("github/codeql-action/init@")).with["source-root"], "${{ github.workspace }}");
+  assert.equal(upload.with.checkout_path, "${{ github.workspace }}");
   assert.equal(policy["continue-on-error"], undefined);
   assert.equal(upload["continue-on-error"], undefined);
   assert.equal(upload.if, "always() && steps.analysis.outcome == 'success'");
