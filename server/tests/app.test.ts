@@ -10070,6 +10070,16 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
     ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
     ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
@@ -10171,6 +10181,16 @@ test("storage topology migration upgrades a version-34 database without changing
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
     ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
     ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
@@ -10287,6 +10307,16 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
     ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
     ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
@@ -10358,6 +10388,16 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
     ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
     ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion

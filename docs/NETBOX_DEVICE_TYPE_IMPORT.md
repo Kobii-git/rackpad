@@ -1,6 +1,6 @@
 # NetBox Device Type Import
 
-Rackpad can ingest YAML files from the [NetBox device-type-library](https://github.com/netbox-community/devicetype-library) as **port templates only**. This is a safe, preview-first workflow that never writes inventory, IPAM, or VLAN data.
+Rackpad can ingest YAML files from the [NetBox device-type-library](https://github.com/netbox-community/devicetype-library) as **port templates or devices with ports**. Both modes use a preview before writing. Device import creates inventory in the selected lab; neither mode writes IPAM or VLAN data.
 
 Open Rackpad → **Imports** → **NetBox device types**.
 
@@ -15,15 +15,15 @@ Open Rackpad → **Imports** → **NetBox device types**.
    - console ports (`console-ports`)
    - power ports (`power-ports`)
 3. The preview maps NetBox interface types to Rackpad port kinds (for example `1000base-t` → RJ45 1G, `10gbase-x-sfpp` → SFP+ 10G).
-4. Before any write, Rackpad checks for an existing template with the same **manufacturer + model** (via a `netbox:` description tag or matching template name).
-5. **Import port template** creates a new custom template through the existing `POST /api/ports/templates` storage path. Built-in templates and unrelated custom templates are never modified.
-6. **Import device** creates a loose device with manufacturer, model, U-height, notes tag, and all parsed interfaces as ports. Dedupe prevents importing the same manufacturer+model twice.
+4. Template mode checks for an existing template with the same **manufacturer + model** (via a `netbox:` description tag or matching template name).
+5. **Import port template** creates a new custom template through `POST /api/imports/netbox-device-type/import` with `mode: "template"`. Built-in templates and unrelated custom templates are never modified.
+6. **Import device** creates a loose device with manufacturer, model, U-height, notes tag, and all parsed interfaces as ports. Dedupe rejects the same manufacturer+model in the selected lab and rejects a hostname already used in that lab.
 
 ## Safety Guarantees
 
-- No devices, racks, cables, subnets, scopes, zones, or VLAN records are created or updated.
+- Template mode creates only a port template. Device mode creates a loose device and its ports in one transaction; it does not modify existing devices, racks, cables, subnets, scopes, zones, or VLAN records.
 - Duplicate NetBox imports are rejected with HTTP 409 when a matching template already exists.
-- Import requires authentication like other template management APIs.
+- Template import requires a global administrator. Device import requires write access to the selected lab. Preview requires authentication and scopes duplicate device matches to readable labs.
 
 ## Deferred Work
 
@@ -36,7 +36,7 @@ The following are intentionally **not** implemented in this foundation pass:
 - Image/front-panel rendering from NetBox layout data.
 - Slug-based update/merge of an existing NetBox template when the library revision changes.
 
-Track follow-up work in issue **#53** before treating NetBox YAML as a full hardware catalog sync.
+Issue [#53](https://github.com/Kobii-git/rackpad/issues/53) records the completed foundation. The limitations above remain outside the current importer; this is not a hardware catalog synchronization service.
 
 ## API Endpoints
 

@@ -86,7 +86,14 @@ test("selected rack faces control exact anchors and hidden-face handoffs", () =>
     theme: "dark",
     labels: exportLabels(),
   });
-  assert.match(focusedFrontExport.svg, /Cable · Rear/);
+  assert.match(
+    focusedFrontExport.svg,
+    /Cable · ↔ Rear · face-device · rear-port/,
+  );
+  assert.match(
+    focusedFrontExport.svg,
+    /data-continuation-port="front-port" data-destination-port="rear-port"/,
+  );
 });
 
 test("rack-top equipment follows its rack and keeps physical port anchors", () => {

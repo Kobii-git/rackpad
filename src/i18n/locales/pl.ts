@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const pl = {
+  "Stacked switches": "Przełączniki w stosie",
+  "Stack Members": "Członkowie stosu",
+  "Add member": "Dodaj członka",
+  "Edit stack member": "Edytuj członka stosu",
+  "Add MAC address": "Dodaj adres MAC",
+  "Member filter": "Filtr członków",
+  "Stack-wide ports": "Porty całego stosu",
+  "Stack member": "Członek stosu",
+  "Stack height is calculated from its members.": "Wysokość stosu jest obliczana na podstawie jego członków.",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "Inwentarz homelab",
   "Lab": "Laboratorium",

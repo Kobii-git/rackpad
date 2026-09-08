@@ -12,6 +12,7 @@ import { usersRoutes } from "./routes/users.js";
 import { labsRoutes } from "./routes/labs.js";
 import { roomsRoutes } from "./routes/rooms.js";
 import { racksRoutes } from "./routes/racks.js";
+import { deviceStacksRoutes } from "./routes/device-stacks.js";
 import { devicesRoutes } from "./routes/devices.js";
 import { deviceTypesRoutes } from "./routes/device-types.js";
 import { portsRoutes } from "./routes/ports.js";
@@ -418,6 +419,7 @@ export async function createApp() {
   await app.register(roomsRoutes, { prefix: "/api/rooms" });
   await app.register(racksRoutes, { prefix: "/api/racks" });
   await app.register(devicesRoutes, { prefix: "/api/devices" });
+  await app.register(deviceStacksRoutes, { prefix: "/api/devices" });
   await app.register(deviceTypesRoutes, { prefix: "/api/device-types" });
   await app.register(portsRoutes, { prefix: "/api/ports" });
   await app.register(portAggregatesRoutes, { prefix: "/api/port-aggregates" });

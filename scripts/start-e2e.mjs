@@ -1,12 +1,21 @@
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 
 // Each browser run owns disposable data outside the working tree.
 const directory = mkdtempSync(path.join(os.tmpdir(), 'rackpad-e2e-'))
 const nativeDirectory = path.join(directory, 'native')
 mkdirSync(nativeDirectory)
+if (process.argv.includes('--storage-upgrade')) {
+  const fixture = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/fixtures/storage-upgrade.ts'], {
+    stdio: 'inherit', env: { ...process.env, DATABASE_PATH: path.join(directory, 'test.db'), RACKPAD_SECRET_KEY: 'synthetic-e2e-integration-key', NODE_ENV: 'test' },
+  })
+  if (fixture.error || fixture.status !== 0) {
+    rmSync(directory, { recursive: true, force: true })
+    process.exit(1)
+  }
+}
 const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'dev:all'], {
   stdio: 'inherit',
   env: {

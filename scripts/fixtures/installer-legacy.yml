@@ -1,0 +1,39 @@
+services:
+  rackpad:
+    image: ${RACKPAD_IMAGE:-ghcr.io/kobii-git/rackpad}:${RACKPAD_TAG:-latest}
+    container_name: rackpad
+    init: true
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_PATH: /data/rackpad.db
+      MONITOR_INTERVAL_MS: ${MONITOR_INTERVAL_MS:-300000}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-}
+      TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+    ports:
+      - "${RACKPAD_PORT:-3000}:3000"
+    volumes:
+      - rackpad_data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  rackpad_data:

@@ -10,7 +10,8 @@ updates:
       timezone: "Etc/UTC"
     open-pull-requests-limit: 5
     groups:
-      npm-dependencies:
+      npm-maintenance:
+        update-types: ["minor", "patch"]
         patterns:
           - "*"
     ignore:

@@ -1,4 +1,14 @@
 export const en = {
+  "Stacked switches": "Stacked switches",
+  "Stack Members": "Stack Members",
+  "Add member": "Add member",
+  "Edit stack member": "Edit stack member",
+  "Add MAC address": "Add MAC address",
+  "Member filter": "Member filter",
+  "Stack-wide ports": "Stack-wide ports",
+  "Stack member": "Stack member",
+  "Stack height is calculated from its members.": "Stack height is calculated from its members.",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "Homelab inventory",
   "Lab": "Lab",

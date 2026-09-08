@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Stacked switches": "スタック型スイッチ",
+  "Stack Members": "スタックメンバー",
+  "Add member": "メンバーを追加",
+  "Edit stack member": "スタックメンバーを編集",
+  "Add MAC address": "MACアドレスを追加",
+  "Member filter": "メンバーフィルター",
+  "Stack-wide ports": "スタック全体のポート",
+  "Stack member": "スタックメンバー",
+  "Stack height is calculated from its members.": "スタックの高さはメンバーから計算されます。",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "ホームラボインベントリ",
   "Lab": "研究室",

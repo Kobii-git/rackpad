@@ -21,6 +21,9 @@ import {
   buildRackElevationCableRoutes,
   buildRackStudioCableRoutes,
   renderCableGeometry,
+  cableContinuationLabel,
+  type RackStudioCableRoute,
+  type CablePoint,
   defaultCableColor,
   type PhysicalCableCategory,
   type RackStudioCableRouteStyle,
@@ -117,7 +120,11 @@ function linkedPortIds(links: PortLink[]) {
   return new Set(links.flatMap((link) => [link.fromPortId, link.toPortId]));
 }
 
-function renderTitleBlock(input: RackStudioExportInput, width: number) {
+function renderTitleBlock(
+  input: RackStudioExportInput,
+  width: number,
+  cableCount: number,
+) {
   const palette = PALETTES[input.theme];
   const rack = input.focusRackId
     ? input.racks.find((candidate) => candidate.id === input.focusRackId)
@@ -128,7 +135,7 @@ function renderTitleBlock(input: RackStudioExportInput, width: number) {
   return [
     `<text x="40" y="38" fill="${palette.text}" font-size="20" font-weight="700">${escapeXml(title)}</text>`,
     `<text x="40" y="59" fill="${palette.subdued}" font-size="11">${escapeXml(
-      `${input.devices.length} ${input.labels.devices} · ${input.links.length} ${input.labels.cables} · ${input.face}`,
+      `${input.devices.length} ${input.labels.devices} · ${cableCount} ${input.labels.cables} · ${input.face}`,
     )}</text>`,
     `<line x1="40" y1="72" x2="${width - 40}" y2="72" stroke="${palette.border}" />`,
   ].join("");
@@ -262,7 +269,8 @@ function renderRoomExport(input: RackStudioExportInput) {
             : "";
       return [
         `<path d="${renderCableGeometry(route.geometry, { x: marginX, y: marginY })}" fill="none" stroke="${safeColor(route.color, defaultCableColor(route.category))}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" ${route.handoff ? 'stroke-dasharray="8 5"' : ""} opacity="0.9"/>`,
-        input.showLabels
+        renderContinuationMarkers(route, input, { x: marginX, y: marginY }),
+        input.showLabels && !route.continuations.length
           ? `<text x="${last.x + 5}" y="${last.y - 5}" fill="${palette.text}" font-size="9">${escapeXml(suffix ? `${route.label} · ${suffix}` : route.label)}</text>`
           : "",
       ].join("");
@@ -275,7 +283,7 @@ function renderRoomExport(input: RackStudioExportInput) {
     height,
     filename: `${slug(input.room.name)}-rack-studio.svg`,
     body: [
-      renderTitleBlock(input, width),
+      renderTitleBlock(input, width, routes.length),
       `<rect x="${marginX}" y="${marginY}" width="${scene.bounds.width}" height="${scene.bounds.height}" rx="8" fill="${palette.panel2}" stroke="${palette.border}" stroke-dasharray="5 5"/>`,
       ...racks,
       tray,
@@ -284,6 +292,36 @@ function renderRoomExport(input: RackStudioExportInput) {
       renderLegend(input, categories, width - 210, 92),
     ].join(""),
   };
+}
+
+function renderContinuationMarkers(
+  route: RackStudioCableRoute,
+  input: RackStudioExportInput,
+  offset: CablePoint,
+  scale: CablePoint = { x: 1, y: 1 },
+) {
+  const palette = PALETTES[input.theme];
+  const color = safeColor(route.color, defaultCableColor(route.category));
+  return route.continuations
+    .map((marker) => {
+      const x = offset.x + marker.x * scale.x;
+      const y = offset.y + marker.y * scale.y;
+      const radius = marker.radius * Math.min(scale.x, scale.y);
+      const fullLabel = cableContinuationLabel(
+        marker,
+        input.ports,
+        input.devices,
+        input.labels,
+      );
+      const cableLabel =
+        route.link.label || route.link.cableType || input.labels.cable;
+      const label = escapeXml(`${cableLabel} · ↔ ${fullLabel}`);
+      const text = input.showLabels
+        ? `<text x="${x + (marker.textAnchor === "start" ? 8 : -8)}" y="${y - 6}" text-anchor="${marker.textAnchor}" fill="${palette.text}" font-size="9">${label}</text>`
+        : "";
+      return `<g data-continuation-port="${escapeXml(marker.portId)}" data-destination-port="${escapeXml(marker.destinationPortId)}"><title>${label}</title><circle cx="${x}" cy="${y}" r="${radius}" fill="${palette.panel}" stroke="${color}" stroke-width="${Math.min(2, radius * 0.65)}"/>${text}</g>`;
+    })
+    .join("");
 }
 
 function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
@@ -299,6 +337,7 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
   const linked = linkedPortIds(input.links);
   const portById = new Map(input.ports.map((port) => [port.id, port]));
   const routes: string[] = [];
+  const renderedCableIds = new Set<string>();
   const categories = new Set<PhysicalCableCategory>();
 
   const rackFaces = faces.map((face, faceIndex) => {
@@ -325,6 +364,7 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
     const rackBodyY = innerY + elevation.rackOffsetY * scaleY;
     const rackBodyHeight = (elevation.height - elevation.rackOffsetY) * scaleY;
     for (const route of planned.routes) {
+      renderedCableIds.add(route.link.id);
       categories.add(route.category);
       const shifted = route.points.map((point) => ({
         x: innerX + point.x * scaleX,
@@ -341,7 +381,15 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
       routes.push(
         `<path d="${renderCableGeometry(route.geometry, { x: innerX, y: innerY }, { x: scaleX, y: scaleY })}" fill="none" stroke="${safeColor(route.color, defaultCableColor(route.category))}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" ${route.handoff ? 'stroke-dasharray="8 5"' : ""}/>`,
       );
-      if (input.showLabels || route.handoff) {
+      routes.push(
+        renderContinuationMarkers(
+          route,
+          input,
+          { x: innerX, y: innerY },
+          { x: scaleX, y: scaleY },
+        ),
+      );
+      if (!route.continuations.length && (input.showLabels || route.handoff)) {
         routes.push(
           `<text x="${last.x + (last.x < innerX + innerWidth / 2 ? 5 : -5)}" y="${last.y - 6}" text-anchor="${last.x < innerX + innerWidth / 2 ? "start" : "end"}" fill="${palette.text}" font-size="9">${escapeXml(route.handoff ? `${label} · ${handoffLabel}` : label)}</text>`,
         );
@@ -381,7 +429,7 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
     height,
     filename: `${slug(rack.name)}-rack-studio.svg`,
     body: [
-      renderTitleBlock(input, width),
+      renderTitleBlock(input, width, renderedCableIds.size),
       ...rackFaces,
       ...routes,
       renderLegend(input, [...categories], width - 210, 102),

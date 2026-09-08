@@ -150,6 +150,10 @@ export function RackElevationEquipmentFrame({
   const heightRatio = rectHeight > 0 ? rectWidth / rectHeight : 1;
   const interactive = Boolean(onSelectDevice);
   const hasPortControls = Boolean(onSelectPort);
+  const hostnameClassName = cn(
+    "absolute top-0.5 z-10 truncate rounded bg-black/70 px-1 py-0.5 font-mono text-[7px] text-white",
+    device.stackMembers ? "right-1 max-w-[45%]" : "left-1 max-w-[80%]",
+  );
 
   return (
     <div
@@ -232,7 +236,7 @@ export function RackElevationEquipmentFrame({
         <button
           type="button"
           data-cabling-selection-id={selectionId}
-          className="absolute left-1 top-0.5 z-10 max-w-[80%] truncate rounded bg-black/70 px-1 py-0.5 font-mono text-[7px] text-white"
+          className={hostnameClassName}
           onClick={(event) => {
             event.stopPropagation();
             onSelectDevice?.(device.id);
@@ -241,7 +245,7 @@ export function RackElevationEquipmentFrame({
           {device.hostname}
         </button>
       ) : (
-        <span className="pointer-events-none absolute left-1 top-0.5 z-10 max-w-[80%] truncate rounded bg-black/70 px-1 py-0.5 font-mono text-[7px] text-white">
+        <span className={cn("pointer-events-none", hostnameClassName)}>
           {device.hostname}
         </span>
       )}

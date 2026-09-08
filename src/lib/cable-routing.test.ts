@@ -98,7 +98,6 @@ test("mixed routing enforces the 4U boundary, rack face, identity, handoff, and 
   for (const input of [
     { ...base, to: { ...base.to!, y: 360.01 } },
     { ...base, to: { ...base.to!, rackId: "other" } },
-    { ...base, to: { ...base.to!, rackFace: "rear" as const } },
     { ...base, to: { ...base.to!, deviceId: "panel" } },
     { ...base, to: undefined },
     { ...base, allowDirect: false },
@@ -387,7 +386,12 @@ test("rear mounting and rack-top placement use rack faces and physical U scale f
     devices: [rearDevices[0]!, fixture.devices[1]!],
   });
   assert.equal(opposite.length, 24);
-  assert.ok(opposite.every((route) => route.geometry.kind === "polyline"));
+  assert.ok(
+    opposite.every(
+      (route) =>
+        route.geometry.kind === "segmented" && route.continuations.length === 2,
+    ),
+  );
   const topDevices = [
     {
       ...fixture.devices[0]!,
@@ -585,4 +589,147 @@ test("label points handle degenerate paths, manual anchors, and endpoint reversa
         control2: curve.control1,
       }),
     );
+});
+
+test("all physical front/rear pairs retain one cable, exact endpoints and matching continuation destinations", () => {
+  for (const fromFace of ["front", "rear"] as const) {
+    for (const toFace of ["front", "rear"] as const) {
+      const fixture = rackCableFixture(
+        `faces-${fromFace}-${toFace}`,
+        fromFace,
+        toFace,
+      );
+      const before = JSON.stringify(fixture);
+      for (const faceMode of ["front", "rear", "both"] as const) {
+        const input = { ...fixture, racks: [fixture.rack], face: faceMode };
+        const roomRoutes = buildRackStudioCableRoutes(input);
+        const cablingScene = buildRackCablingScene({
+          ...input,
+          faceMode,
+          rackOrder: [],
+          looseExpanded: false,
+        });
+        const cablingRoutes = buildRackCablingRoutes({
+          ...input,
+          scene: cablingScene,
+          style: "smooth",
+        });
+        const focused =
+          faceMode === "both"
+            ? []
+            : buildRackElevationCableRoutes({
+                ...input,
+                face: faceMode,
+                rack: fixture.rack,
+              }).routes;
+        const expectedCount =
+          faceMode !== "both" && fromFace !== faceMode && toFace !== faceMode
+            ? 0
+            : 24;
+        for (const routes of [
+          roomRoutes,
+          cablingRoutes,
+          ...(faceMode === "both" ? [] : [focused]),
+        ]) {
+          assert.equal(routes.length, expectedCount);
+          assert.equal(
+            new Set(routes.map((route) => route.link.id)).size,
+            expectedCount,
+          );
+          const markers = routes.flatMap((route) => route.continuations);
+          assert.equal(
+            new Set(
+              markers.map((marker) => `${marker.face}:${marker.x}:${marker.y}`),
+            ).size,
+            markers.length,
+            "dense continuation bundles must keep distinct port-local markers",
+          );
+          for (const route of routes) {
+            assert.equal(route.path, renderCableGeometry(route.geometry));
+            if (fromFace === toFace) {
+              assert.equal(route.geometry.kind, "cubic");
+              assert.equal(route.continuations.length, 0);
+            } else {
+              assert.equal(
+                route.continuations.length,
+                faceMode === "both" ? 2 : 1,
+              );
+              assert.equal(
+                (route.path.match(/M /g) ?? []).length,
+                faceMode === "both" ? 2 : 1,
+              );
+              for (const marker of route.continuations) {
+                assert.equal(
+                  marker.destinationPortId,
+                  marker.portId === route.link.fromPortId
+                    ? route.link.toPortId
+                    : route.link.fromPortId,
+                );
+                assert.notEqual(marker.face, marker.destinationFace);
+                assert.ok(
+                  Number.isFinite(marker.x) && Number.isFinite(marker.y),
+                );
+              }
+              const offset = { x: 14, y: 21 };
+              const scaled = renderCableGeometry(route.geometry, offset, {
+                x: 0.5,
+                y: 0.25,
+              });
+              assert.equal(
+                (scaled.match(/M /g) ?? []).length,
+                faceMode === "both" ? 2 : 1,
+              );
+              assert.doesNotMatch(scaled, /NaN|Infinity/);
+            }
+          }
+        }
+        if (faceMode === "both") {
+          const reverse = buildRackStudioCableRoutes({
+            ...input,
+            links: fixture.links
+              .map((link) => ({
+                ...link,
+                fromPortId: link.toPortId,
+                toPortId: link.fromPortId,
+              }))
+              .reverse(),
+          });
+          for (const route of roomRoutes) {
+            const reversed = reverse.find(
+              (other) => other.link.id === route.link.id,
+            )!;
+            assert.deepEqual(reversed.continuations, route.continuations);
+            assert.deepEqual(reversed.points[0], route.points.at(-1));
+            assert.deepEqual(reversed.points.at(-1), route.points[0]);
+          }
+        }
+      }
+      assert.equal(
+        JSON.stringify(fixture),
+        before,
+        "routing must not mutate inventory or layouts",
+      );
+    }
+  }
+});
+
+test("manual mixed-face routes retain exact waypoints and saved routing authority", () => {
+  const fixture = rackCableFixture("manual-faces", "front", "rear");
+  const waypoint = {
+    id: "manual",
+    roomId: fixture.room.id,
+    face: "front" as const,
+    x: 30,
+    y: 45,
+  };
+  const routes = buildRackStudioCableRoutes({
+    ...fixture,
+    racks: [fixture.rack],
+    face: "both",
+    links: [{ ...fixture.links[0]!, routeWaypoints: [waypoint] }],
+  });
+  assert.equal(routes.length, 1);
+  assert.equal(routes[0]!.geometry.kind, "polyline");
+  assert.deepEqual(routes[0]!.points[1], { x: waypoint.x, y: waypoint.y });
+  assert.match(routes[0]!.path, /L 30\.00 45\.00/);
 });

@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Stacked switches": "스택 스위치",
+  "Stack Members": "스택 구성원",
+  "Add member": "구성원 추가",
+  "Edit stack member": "스택 구성원 편집",
+  "Add MAC address": "MAC 주소 추가",
+  "Member filter": "구성원 필터",
+  "Stack-wide ports": "스택 공용 포트",
+  "Stack member": "스택 구성원",
+  "Stack height is calculated from its members.": "스택 높이는 구성원의 높이로 계산됩니다.",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "홈랩 인벤토리",
   "Lab": "연구실",

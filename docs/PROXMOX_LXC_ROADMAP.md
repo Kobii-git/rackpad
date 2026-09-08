@@ -15,12 +15,12 @@ stable-release phase has passed its exit gate.
 | 3. Discovery controls, operations, documentation, and CI | Complete |
 | 4. Beta 1 and fresh-install validation | In progress - real guest validation pending |
 | 5. Beta 2 update/rollback validation and soak | In progress - tester rollout authorized |
-| 6. Stable `v1.8.1` deployment | Planned |
+| 6. Stable `v1.8.3` deployment | Planned |
 | 7. Official Community Scripts submission | Blocked on upstream eligibility |
 
 ## Fixed decisions
 
-- The first stable native-LXC release is `v1.8.1`.
+- The planned first stable native-LXC release is `v1.8.3`, after combined-candidate acceptance.
 - Production support targets Proxmox VE 9.x on `amd64`.
 - Debian 13 is the default guest; Ubuntu 24.04 LTS is also tested.
 - The default is an unprivileged LXC with nesting, 2 vCPU, 4 GB RAM, 16 GB
@@ -33,11 +33,14 @@ stable-release phase has passed its exit gate.
 - The initial Community Scripts core pin is
   `7cea42d8a3f7164d1813906f386c6d690eba7fc5`.
 - Issue #138 stays open until the official Community Scripts submission is
-  accepted. The automation roadmap and Discussion #132 remain unchanged.
+  accepted. The external listing does not block main after Rackpad acceptance and soak.
+  The automation roadmap and Discussion #132 remain unchanged.
 
 ## Execution contract
 
-Each implementation prompt completes exactly one phase. Before starting a
+The current combined 1.8.3 release plan supersedes the historical phase prompts
+below; those prompts do not grant new publication authority. Each original
+implementation prompt completed exactly one phase. Before starting a
 phase, verify the previous phase's exit gate. Work begins from a clean, current
 base, preserves unrelated changes, and uses `codex/proxmox-native-lxc` for the
 first-party implementation.
@@ -206,11 +209,18 @@ migration. The active [native guide](PROXMOX_NATIVE_LXC.md) and
 commands below; historical publication records remain unchanged. Beta.5 remains
 experimental while screenshot determinism and community acceptance are unresolved.
 
-Community testers supply the real Debian 13 and Ubuntu 24.04 PVE 9.x evidence
-and seven-day soak. Stable 1.8.2 remains gated on those results and Rack Studio
-acceptance. The v1.9.0 stacked-switch work starts from that validated stable
-baseline. Its next migration is currently 51; migration 50 is already security
-state and must not be edited or reassigned.
+The combined [v1.8.3-beta.0 candidate](releases/v1.8.3-beta.0.md) starts from
+published beta.5 and includes native startup readiness, mixed-face cable
+continuations, stacked switches, and SNMPv3 interoperability repairs. Schema 51 adds stack state; published
+migrations 49 and 50 remain unchanged. This candidate replaces the separate
+unpublished beta.6 and stack-development release plans.
+
+Community testers supply real Debian 13 and Ubuntu 24.04 PVE 9.x evidence,
+Rack Studio/patch-panel/stack acceptance, and a seven-day soak on the combined
+candidate. Cisco IOS-XE and Firefox LAN-HTTP acceptance are also required.
+Stable 1.8.3 remains gated on those results. Targeting the stack
+feature at 1.8.3 is the requested exception to the usual minor-version feature
+convention. Automated checks cannot substitute for guest acceptance or soak.
 
 ## Phase 4 - Beta 1 and fresh-install validation
 
@@ -307,30 +317,30 @@ the seven-day soak remain required.
 
 Phase 6 continuation prompt:
 
-> Continue with Phase 6 of `docs/PROXMOX_LXC_ROADMAP.md`. You are authorized to promote the validated Beta 2 work to `main`, publish stable `v1.8.1`, verify the public installer and matching GHCR/source releases, update GitHub issue #138 and deployment labels, and stop without submitting an upstream Community Scripts PR.
+> Continue with Phase 6 of `docs/PROXMOX_LXC_ROADMAP.md`. You are authorized to promote the accepted combined 1.8.3 beta to `main`, publish stable `v1.8.3`, verify the public installer and matching GHCR/source releases, update GitHub issue #138 and deployment labels, and stop without submitting an upstream Community Scripts PR.
 
-## Phase 6 - Stable `v1.8.1` deployment
+## Phase 6 - Stable `v1.8.3` deployment
 
 Status: **Planned**
 
 Deliverables:
 
-- Set package and lockfile to `1.8.1`, finalize changelog/release notes, promote
-  validated beta to `main`, rerun the release gate, tag, and publish `v1.8.1`.
-- Verify the tag's formal source Release, GHCR `1.8.1` and `latest`, versioned
+- Set package and lockfile to `1.8.3`, finalize changelog/release notes, promote
+  validated beta to `main`, rerun the release gate, tag, and publish `v1.8.3`.
+- Verify the tag's formal source Release, GHCR `1.8.3` and `latest`, versioned
   helper/core-pin assets, and public `main` dispatcher.
 - On fresh Debian 13, run the production one-line installer without overrides
-  and prove it resolves `v1.8.1`; prove `/usr/bin/update` reports no update
+  and prove it resolves `v1.8.3`; prove `/usr/bin/update` reports no update
   without changing state.
 - Change public documentation from planned to supported. Create and apply the
   `deployment` and `upstream-pending` labels to issue #138, post the stable
   command/support matrix, and keep the issue open.
-- Mark first-party phases shipped. Never move `v1.8.1`; fix forward as `v1.8.2`.
+- Mark first-party phases shipped. Never move `v1.8.3`; fix forward in a new release.
 
 Exit gate:
 
 - Public commands and URLs work without the development checkout.
-- Source Release, container image, and displayed app version all report `1.8.1`.
+- Source Release, container image, and displayed app version all report `1.8.3`.
 - Issue #138 states first-party support is shipped and upstream listing remains
   pending.
 
@@ -389,7 +399,7 @@ The shipped operator interfaces will be the stable one-line installer,
 No public API, database schema, authentication, or stored-data contract change
 is planned. Docker and existing GHCR deployments remain compatible.
 
-First-party native LXC is fully deployed only after stable `v1.8.1` exists on
+First-party native LXC is fully deployed only after stable `v1.8.3` exists on
 `main`; GitHub Release and GHCR artifacts agree; versioned helper assets resolve;
 fresh installs pass on both supported guests; beta update, rollback, and the
 seven-day soak pass; configuration and secrets survive; the unprivileged and

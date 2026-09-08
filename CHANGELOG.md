@@ -6,7 +6,55 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
-> On the `dev` branch; not yet tagged/released.
+## [1.8.3-beta.0] - 2026-09-08
+
+> Combined experimental candidate for stable `1.8.3` acceptance.
+> See the [candidate acceptance and upgrade notes](docs/releases/v1.8.3-beta.0.md).
+
+### Added
+
+- Stacked switches with ordered member metadata, labelled MAC addresses,
+  canonical port assignments, derived height, and generic physical faces.
+- Lab-scoped member APIs and a keyboard-accessible Stack Members workspace.
+- Migration 51 and atomic logical/native backup validation for stack ownership,
+  ordering, rack geometry, and height. Published migrations 49 and 50 are unchanged.
+
+### Fixed
+
+- Repair SNMPv3 key localization, AES privacy keys and eight-byte salts for
+  interoperable SHA/MD5 polling, including authenticated engine-time Reports.
+- Authenticate SNMPv3 responses before decryption or trusted engine updates;
+  enforce correlation, bounded time synchronization, concurrent engine clocks,
+  and authenticated trap security levels and timeliness.
+
+- Preserve supplied Docker encryption keys exactly through Compose parsing and
+  retain existing configuration while upgrading recognized installer manifests.
+- Bound native install, update, and recovery readiness to 60 seconds across
+  systemd and HTTP calls; require valid health JSON before endpoint verification.
+- Return canonical Rack Studio placement history so stacks can be unmounted,
+  moved between rooms, and undone/redone without false stale-state conflicts.
+- Apply resolved-face obstacle and gutter rules consistently to rear cables.
+- Preserve release symlink replacement on BSD and GNU systems.
+- Keep Linux screenshot animation frames running while stabilizing raster edges;
+  avoid the inherited manual-frame mode that stalls capture readiness.
+
+### Changed
+
+- Mixed-face cables retain one logical cable with continuation stubs, destination
+  labels, selection/tracing, and matching SVG/PNG presentation.
+- Preserve member configuration during controller refreshes; reject populated
+  stack ancestry changes and invalid rack resizing.
+- Add Chromium/Firefox Storage compatibility coverage for missing or throwing
+  UUID APIs and schema-50 upgrades, plus a real Net-SNMP interoperability CI gate.
+- Gate image publication on quality, CodeQL findings, and Trivy, with reviewed
+  release notes and deterministic documentation screenshots required by quality.
+- Retain screenshot tolerances, use deterministic Chromium raster settings, and
+  preserve failed captures for diagnosis.
+- Separate dependency maintenance from major upgrades, update operator guides,
+  and archive historical planning documents with pointers at their original paths.
+
+Stable 1.8.3 requires combined feature acceptance, real Proxmox guest validation,
+seven-day soak, and final release gates. Native LXC remains experimental.
 
 ## [1.8.2-beta.5] - 2026-09-05
 

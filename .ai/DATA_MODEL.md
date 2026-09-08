@@ -102,3 +102,16 @@ sessions are revoked, and historical trap-source credentials are discarded.
 Legacy logical restores apply the same conversion atomically; current snapshots
 preserve encrypted values and the role-check marker. Native schema manifests include
 both fields. A missing encryption key prevents a plaintext conversion from committing.
+
+Schema 51 adds ordered `deviceStackMembers`, labelled `deviceStackMemberMacs`,
+and `ports.stackMemberId`. Members belong to a logical `switch_stack` device or
+its descendant type. Ports may reference only members of their own device.
+Heights are member sums (empty stacks use 1U), with transactional placement and
+reorder validation. Populated stack type/ancestry changes and referenced member
+deletion are rejected. Generic stack layouts are derived from members and
+canonical ports; there are no independent member templates or monitoring IDs.
+Logical/native restores validate all stack metadata and geometry atomically.
+The native validator accepts genuine schema-50 snapshots for startup migration,
+rejects inconsistent version markers, and retains the security cutoff at 50.
+The geometry core accepts an explicit SQLite connection so snapshot validation
+never reads the running database.

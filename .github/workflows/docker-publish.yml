@@ -17,8 +17,23 @@ jobs:
     permissions:
       contents: read
 
+  codeql:
+    uses: ./.github/workflows/codeql.yml
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+  security:
+    uses: ./.github/workflows/security-scan.yml
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
+
   build:
-    needs: quality
+    needs: [quality, codeql, security]
     runs-on: ubuntu-latest
     outputs:
       prerelease: ${{ steps.release-contract.outputs.prerelease }}
@@ -98,6 +113,9 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout release notes
+        uses: actions/checkout@v7
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -119,7 +137,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY"
             --verify-tag
             --title "Rackpad $GITHUB_REF_NAME"
-            --generate-notes
+            --notes-file "docs/releases/${GITHUB_REF_NAME}.md"
           )
           if [[ "$IS_PRERELEASE" == "true" ]]; then
             release_args+=(--prerelease)

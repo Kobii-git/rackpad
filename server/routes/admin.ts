@@ -1,3 +1,4 @@
+import { validateStackIntegrity } from "../lib/stack-integrity.js";
 import { restoredMonitorCommunity } from "../lib/security-migration.js";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -191,6 +192,8 @@ const exportBackupSnapshot = db.transaction(
         hardwareTemplateDefaults: db
           .prepare("SELECT * FROM hardwareTemplateDefaults ORDER BY deviceType")
           .all(),
+        deviceStackMembers: db.prepare("SELECT * FROM deviceStackMembers ORDER BY deviceId, position").all(),
+        deviceStackMemberMacs: db.prepare("SELECT * FROM deviceStackMemberMacs ORDER BY memberId, macAddress").all(),
         devicePhysicalLayouts: (
           db
             .prepare("SELECT * FROM devicePhysicalLayouts ORDER BY deviceId")
@@ -1237,6 +1240,8 @@ const restoreBackupSnapshot = db.transaction(
       "data.virtualSwitches",
     );
     const ports = normalizeArrayRecordArray(data.ports, "data.ports");
+    const stackMembers = normalizeArrayRecordArray(data.deviceStackMembers ?? [], "data.deviceStackMembers");
+    const stackMacs = normalizeArrayRecordArray(data.deviceStackMemberMacs ?? [], "data.deviceStackMemberMacs");
     const portLinks = normalizeArrayRecordArray(
       data.portLinks,
       "data.portLinks",
@@ -1642,6 +1647,8 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM portLinks;
     DELETE FROM devicePhysicalLayouts;
     DELETE FROM ports;
+    DELETE FROM deviceStackMemberMacs;
+    DELETE FROM deviceStackMembers;
     DELETE FROM virtualSwitches;
     DELETE FROM storagePoolDrives;
     DELETE FROM storagePools;
@@ -2258,6 +2265,10 @@ const restoreBackupSnapshot = db.transaction(
         row.rackSide ?? null,
       );
     }
+    for (const row of stackMembers) {
+      db.prepare(`INSERT INTO deviceStackMembers (id, deviceId, position, name, manufacturer, model, serial, heightU, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(row.id, row.deviceId, row.position, row.name, row.manufacturer ?? null, row.model ?? null, row.serial ?? null, row.heightU, row.status, row.notes ?? null);
+    }
+    for (const row of stackMacs) db.prepare('INSERT INTO deviceStackMemberMacs (memberId, label, macAddress) VALUES (?, ?, ?)').run(row.memberId, row.label, row.macAddress);
     const deviceIds = new Set(devices.map((row) => String(row.id)));
     for (const row of devices) {
       const parentDeviceId = row.parentDeviceId
@@ -2271,29 +2282,6 @@ const restoreBackupSnapshot = db.transaction(
         continue;
       }
       updateDeviceParent.run(parentDeviceId, row.id);
-    }
-    const restoredDeviceRows = db
-      .prepare("SELECT * FROM devices ORDER BY id")
-      .all() as RackStudioDeviceRow[];
-    for (const device of restoredDeviceRows) {
-      const current = currentRackStudioPlacement(device);
-      try {
-        const resolved = resolveRackStudioPlacement(device, current);
-        if (
-          current.roomId !== null &&
-          current.roomId !== resolved.roomId
-        ) {
-          throw new ValidationError(
-            "Stored room does not match the resolved physical placement.",
-          );
-        }
-      } catch (error) {
-        throw new ValidationError(
-          `Backup device ${device.id} has invalid Rack Studio placement: ${error instanceof Error ? error.message : "invalid placement"}`,
-          422,
-          "BACKUP_INTEGRITY_INVALID",
-        );
-      }
     }
     for (const row of storageDrives) {
       insertStorageDrive.run(
@@ -2906,6 +2894,33 @@ const restoreBackupSnapshot = db.transaction(
       );
     }
 
+    for (const row of ports) {
+      if (row.stackMemberId != null) db.prepare('UPDATE ports SET stackMemberId = ? WHERE id = ?').run(row.stackMemberId, row.id);
+    }
+    const restoredDeviceRows = db
+      .prepare("SELECT * FROM devices ORDER BY id")
+      .all() as RackStudioDeviceRow[];
+    for (const device of restoredDeviceRows) {
+      const current = currentRackStudioPlacement(device);
+      try {
+        const resolved = resolveRackStudioPlacement(device, current);
+        if (
+          current.roomId !== null &&
+          current.roomId !== resolved.roomId
+        ) {
+          throw new ValidationError(
+            "Stored room does not match the resolved physical placement.",
+          );
+        }
+      } catch (error) {
+        throw new ValidationError(
+          `Backup device ${device.id} has invalid Rack Studio placement: ${error instanceof Error ? error.message : "invalid placement"}`,
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+    }
+    validateStackIntegrity(db);
     const restoredAt = new Date().toISOString();
     const restoreAuditId = createId("a");
     insertAudit.run(

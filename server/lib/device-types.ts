@@ -1,9 +1,11 @@
+import { isStackType, listStackMembers, syncStackHeight, validateStackChildren } from './device-stacks.js'
 import { db } from '../db.js'
 import { getJsonSetting, putJsonSetting } from './app-settings.js'
 import { ValidationError } from './validation.js'
 
 export const BUILT_IN_DEVICE_TYPES = [
   { id: 'switch', label: 'Switch' },
+  { id: 'switch_stack', label: 'Stacked switches', parentType: 'switch' },
   { id: 'router', label: 'Router' },
   { id: 'firewall', label: 'Firewall' },
   { id: 'server', label: 'Server' },
@@ -278,9 +280,14 @@ export function createDeviceType(input: {
     createdAt: now,
     updatedAt: now,
   }
-  saveDeviceTypeSettings({
-    custom: [...settings.custom, created],
-  })
+  db.transaction(() => {
+    saveDeviceTypeSettings({ custom: [...settings.custom, created] })
+    const observed = db.prepare('SELECT id FROM devices WHERE deviceType = ?').all(id) as Array<{ id: string }>
+    for (const device of observed) {
+      if (created.parentType === 'switch_stack') syncStackHeight(device.id)
+      validateStackChildren(device.id)
+    }
+  })()
 
   return {
     ...created,
@@ -334,7 +341,15 @@ export function updateDeviceType(
     existingIndex >= 0
       ? settings.custom.map((entry, index) => (index === existingIndex ? updated : entry))
       : [...settings.custom, updated]
-  saveDeviceTypeSettings({ custom })
+  db.transaction(() => {
+    const affected = db.prepare('SELECT id FROM devices WHERE deviceType = ?').all(normalizedId) as Array<{ id: string }>;
+    const wasStack = isStackType(normalizedId);
+    const becomesStack = updated.parentType === 'switch_stack';
+    if (wasStack && !becomesStack && affected.some(device => listStackMembers(device.id).length > 0)) throw new ValidationError('Remove stack members before changing type ancestry.', 409);
+    saveDeviceTypeSettings({ custom });
+    if (!wasStack && becomesStack) for (const device of affected) syncStackHeight(device.id);
+    for (const device of affected) validateStackChildren(device.id);
+  })()
 
   return {
     ...updated,

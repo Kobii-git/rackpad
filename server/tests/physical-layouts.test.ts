@@ -1153,6 +1153,16 @@ test("schema 45 migration preserves inventory and cabling while creating legacy 
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
     ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
     ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion SET version = 45, updatedAt = '2026-08-30T00:00:00.000Z' WHERE id = 1;
@@ -1184,7 +1194,7 @@ test("schema 45 migration preserves inventory and cabling while creating legacy 
   );
   assert.deepEqual(
     migrated.prepare("SELECT * FROM ports ORDER BY id").all(),
-    before.ports,
+    before.ports.map((row) => ({ ...(row as Record<string, unknown>), stackMemberId: null })),
   );
   assert.deepEqual(
     migrated
@@ -1261,6 +1271,16 @@ test("schema 46 migration adds nullable shared room-canvas coordinates without c
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
     ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
     ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion SET version = 46, updatedAt = '2026-08-31T00:00:00.000Z' WHERE id = 1;
@@ -1335,6 +1355,16 @@ test("schema 48 migration adds cable inspection defaults without changing invent
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
     ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
     ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
@@ -1358,7 +1388,7 @@ test("schema 48 migration adds cable inspection defaults without changing invent
   );
   assert.deepEqual(
     migrated.prepare("SELECT * FROM ports ORDER BY id").all(),
-    beforePorts,
+    beforePorts.map((row) => ({ ...(row as Record<string, unknown>), stackMemberId: null })),
   );
   assert.deepEqual(
     migrated
@@ -1404,6 +1434,16 @@ test("schema 49 migration indexes persisted rack mount kinds without changing de
     UPDATE schemaVersion
     SET version = 48, updatedAt = '2026-09-03T00:00:00.000Z'
     WHERE id = 1;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
     ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
     ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
   `);

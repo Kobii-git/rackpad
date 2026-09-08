@@ -28,6 +28,9 @@ change that safer default without a product decision.
 including `RACKPAD_SECRET_KEY`, SNMP, OIDC, rate limits, queue limits, and
 background intervals, pass through every Compose variant. `npm run check:config`
 derives runtime names from server source and fails on example/manifest drift.
+It also runs the installer against isolated download/daemon stubs with real
+Compose rendering. The installer preserves operator configuration and keys,
+recognizes generated manifests, and proposes custom-manifest updates for review.
 
 `TRUST_PROXY` is disabled at `0` and otherwise names explicit controlled proxy
 IPs/CIDRs. Legacy hop counts, truthy aliases, and invalid values disable trust with
@@ -59,9 +62,17 @@ Native LXC uses immutable `/opt/rackpad_releases/<tag>` directories, the atomic
 `/opt/rackpad` symlink, `/opt/rackpad_data` for the database/backups/recovery
 points, and `/etc/rackpad/rackpad.env` for configuration. `/usr/bin/update` is a
 manual stable-only transaction: build before downtime, snapshot and validate
-SQLite, back up code/config/systemd/origins, activate and health-check, then
-restore the paired state on failure. The current release plus three paired
-rollback points are retained.
+SQLite, back up code/config/systemd/origins, activate and wait up to 60 seconds
+for valid health, complete endpoint verification, then restore the paired state
+on failure. The current release plus three paired rollback points are retained.
+
+Native activation waits up to 60 seconds for systemd and HTTP health readiness,
+retrying at one-second intervals. HTTP requests are capped at 15 seconds and
+connects at 5 seconds, both bounded by positive remaining time. Systemd queries
+share that deadline and are killed when it expires. Health must parse as JSON
+with top-level boolean `ok: true`. Terminal service failure aborts early. Install,
+update, rollback, and snapshot-failure recovery share this verifier. Authentication,
+SPA, and collector checks still run after health succeeds.
 
 Native discovery defaults to neighbor-only safe mode and empty service
 capabilities. Root-only `rackpad-discovery-mode advanced` must prove the outer

@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Stacked switches": "مبدلات مكدسة",
+  "Stack Members": "أعضاء المكدس",
+  "Add member": "إضافة عضو",
+  "Edit stack member": "تحرير عضو المكدس",
+  "Add MAC address": "إضافة عنوان MAC",
+  "Member filter": "تصفية الأعضاء",
+  "Stack-wide ports": "منافذ المكدس العامة",
+  "Stack member": "عضو المكدس",
+  "Stack height is calculated from its members.": "يُحسب ارتفاع المكدس من أعضائه.",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "مخزون المختبر المنزلي",
   "Lab": "مختبر",

@@ -24,10 +24,17 @@ work. Never translate an unrun check into a pass.
 | Bundle/lazy loading | `build`, then `check:bundle` |
 | AI docs/commands | `check:docs` fixture/contract tests and direct semantic review |
 | Documentation screenshot harness | `screenshots:check`; review any intentional documentation asset updates separately |
-| Beta/main release | `check:full`, shell and PowerShell syntax checks, Compose render, smoke plan |
+| Beta/main release | `check:full`, `screenshots:check`, shell and PowerShell syntax checks, Compose render, container smoke |
 
 `npm run check` is standard local pre-completion validation. `npm run check:full`
-adds Playwright and is the full application CI/release gate. Workflow lint and
+adds Playwright and is the full application CI/release gate. The reusable quality
+workflow also requires `test:e2e:storage`, `test:snmp:interop`, and then
+`screenshots:check` with its existing pixel thresholds. The SNMP gate builds
+a disposable Net-SNMP fixture and runs both peers on an internal Docker bridge;
+it publishes no host ports. Storage compatibility installs Chromium and Firefox
+and tests both fresh data and a temporary schema-50 upgrade.
+Run the bundled-font browser preflight before the long browser matrix; install
+dependencies within the worktree so Vite can serve font assets. Workflow lint and
 Bash syntax, ShellCheck, actionlint, and PowerShell syntax remain CI steps
 because tool availability is platform specific.
 

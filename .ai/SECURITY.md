@@ -46,6 +46,10 @@ constraints for changes.
   Its root-only advanced control must verify `CAP_NET_RAW`, `CAP_NET_ADMIN`, and
   raw-socket access before applying the matching systemd drop-in; refusal must
   leave configuration unchanged and never mutate outer Proxmox privilege.
+- SNMPv3 authenticates original packet bytes before decrypting responses or
+  updating trusted engine clocks. Discovery is provisional; peer/message/PDU
+  correlation, credential security levels, bounded retries, and USM timeliness
+  apply. Configured v3 trap credentials cannot be acquired by unsigned packets.
 - SNMP traps remain independent of discovery mode, disabled by default, and
   require an explicit UDP 1162 firewall decision when enabled.
 

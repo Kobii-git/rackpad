@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Stacked switches": "سوئیچ‌های پشته‌ای",
+  "Stack Members": "اعضای پشته",
+  "Add member": "افزودن عضو",
+  "Edit stack member": "ویرایش عضو پشته",
+  "Add MAC address": "افزودن نشانی MAC",
+  "Member filter": "فیلتر اعضا",
+  "Stack-wide ports": "درگاه‌های سراسری پشته",
+  "Stack member": "عضو پشته",
+  "Stack height is calculated from its members.": "ارتفاع پشته از اعضای آن محاسبه می‌شود.",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "موجودی آزمایشگاه خانگی",
   "Lab": "آزمایشگاه",

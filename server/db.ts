@@ -1381,6 +1381,51 @@ const SCHEMA_MIGRATIONS = [
       upgradeLegacySecurityState(db);
     },
   },
+  {
+    version: 51,
+    sql: `
+      CREATE TABLE deviceStackMembers (
+        id TEXT PRIMARY KEY,
+        deviceId TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL CHECK (position >= 0),
+        name TEXT NOT NULL,
+        manufacturer TEXT, model TEXT, serial TEXT,
+        heightU INTEGER NOT NULL CHECK (heightU BETWEEN 1 AND 20),
+        status TEXT NOT NULL CHECK (status IN ('online','offline','warning','unknown','maintenance','unmanaged')),
+        notes TEXT,
+        UNIQUE (deviceId, position)
+      );
+      CREATE TABLE deviceStackMemberMacs (
+        memberId TEXT NOT NULL REFERENCES deviceStackMembers(id) ON DELETE CASCADE,
+        label TEXT NOT NULL,
+        macAddress TEXT NOT NULL,
+        PRIMARY KEY (memberId, macAddress)
+      );
+      ALTER TABLE ports ADD COLUMN stackMemberId TEXT REFERENCES deviceStackMembers(id) ON DELETE RESTRICT;
+      CREATE INDEX idx_ports_stack_member ON ports(stackMemberId);
+      CREATE TRIGGER ports_stack_owner_insert BEFORE INSERT ON ports
+      WHEN NEW.stackMemberId IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM deviceStackMembers WHERE id = NEW.stackMemberId AND deviceId = NEW.deviceId
+      ) BEGIN SELECT RAISE(ABORT, 'Stack member must belong to the port device.'); END;
+      CREATE TRIGGER ports_stack_owner_update BEFORE UPDATE OF stackMemberId, deviceId ON ports
+      WHEN NEW.stackMemberId IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM deviceStackMembers WHERE id = NEW.stackMemberId AND deviceId = NEW.deviceId
+      ) BEGIN SELECT RAISE(ABORT, 'Stack member must belong to the port device.'); END;
+      CREATE TRIGGER stack_member_device_immutable BEFORE UPDATE OF deviceId ON deviceStackMembers
+      WHEN NEW.deviceId != OLD.deviceId
+      BEGIN SELECT RAISE(ABORT, 'Stack member ownership is immutable.'); END;
+      CREATE TRIGGER stack_device_delete BEFORE DELETE ON devices
+      WHEN EXISTS (SELECT 1 FROM deviceStackMembers WHERE deviceId = OLD.id)
+      BEGIN DELETE FROM ports WHERE deviceId = OLD.id; END;
+      CREATE TRIGGER stack_type_guard BEFORE UPDATE OF deviceType ON devices
+      WHEN NEW.deviceType != OLD.deviceType AND EXISTS (SELECT 1 FROM deviceStackMembers WHERE deviceId = OLD.id)
+      BEGIN SELECT RAISE(ABORT, 'A populated stack cannot change type.'); END;
+      CREATE TRIGGER stack_height_guard BEFORE UPDATE OF heightU ON devices
+      WHEN EXISTS (SELECT 1 FROM deviceStackMembers WHERE deviceId = OLD.id)
+        AND NEW.heightU IS NOT (SELECT SUM(heightU) FROM deviceStackMembers WHERE deviceId = OLD.id)
+      BEGIN SELECT RAISE(ABORT, 'Stack height is derived from its members.'); END;
+    `,
+  },
 ] as const;
 
 const applySchema = db.transaction(() => {

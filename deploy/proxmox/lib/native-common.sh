@@ -171,7 +171,8 @@ rp_atomic_symlink() {
       return 1
     }
   else
-    mv -f "$temporary" "$link" || {
+    # BSD mv otherwise follows a destination symlink into its directory.
+    mv -fh "$temporary" "$link" || {
       rm -f "$temporary"
       return 1
     }

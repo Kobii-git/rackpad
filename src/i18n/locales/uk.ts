@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const uk = {
+  "Stacked switches": "Комутатори у стеку",
+  "Stack Members": "Учасники стеку",
+  "Add member": "Додати учасника",
+  "Edit stack member": "Редагувати учасника стеку",
+  "Add MAC address": "Додати MAC-адресу",
+  "Member filter": "Фільтр учасників",
+  "Stack-wide ports": "Спільні порти стеку",
+  "Stack member": "Учасник стеку",
+  "Stack height is calculated from its members.": "Висота стеку обчислюється за висотою його учасників.",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "Інвентар homelab",
   "Lab": "Лабораторія",
