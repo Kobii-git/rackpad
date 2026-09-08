@@ -138,7 +138,7 @@ test('SNMP, TCP and ICMP timeouts close or terminate the transport', async () =>
 })
 
 test('SNMPv3 keeps the pinned address through engine discovery and the authenticated request', async () => {
-  const { buildSnmpV3TrapPacket } = await import('../lib/snmp-trap-build.js')
+  const { discoveryPacket, inspectRequest } = await import('./fixtures/snmp-v3-wire.js')
   let lookups = 0
   let sends = 0
   let closed = 0
@@ -150,7 +150,7 @@ test('SNMPv3 keeps the pinned address through engine discovery and the authentic
       send: (_message: Buffer, _port: number, address: string, callback: (error: Error) => void) => {
         assert.equal(address, '10.10.0.6')
         sends++
-        if (sends === 1) queueMicrotask(() => socket.emit('message', buildSnmpV3TrapPacket({ user: 'synthetic', authPassword: 'synthetic-password' })))
+        if (sends === 1) queueMicrotask(() => socket.emit('message', discoveryPacket(inspectRequest(_message).msgId), { address, port: 161, family: 'IPv4', size: 0 }))
         else queueMicrotask(() => callback(new Error('Synthetic authenticated request failure')))
       },
     }) as unknown as dgram.Socket

@@ -2,6 +2,10 @@
 
 Current stable release: `v1.8.0`
 
+Combined experimental beta candidate: `v1.8.3-beta.0`.
+Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm
+the immutable tag and published artifacts before installation.
+
 Rackpad is easiest to run from Docker. You can either pull the published image
 without cloning the repo, or clone the repo and build it yourself.
 
@@ -9,7 +13,7 @@ without cloning the repo, or clone the repo and build it yourself.
 
 - **Linux server or VM:** Use Docker and pull the published image.
 - **Proxmox:** Use the documented Docker-in-LXC path. A first-party native LXC
-  Beta 2 is available for disposable testing, but remains pre-release until its
+  candidate is intended for disposable testing, and remains pre-release until its
   real-guest, update/rollback, soak, and stable gates pass.
 - **Windows:** Use Docker Desktop with the published image.
 - **Development/source build:** Clone `main` and build locally.
@@ -28,9 +32,53 @@ GHCR can show `unknown/unknown` entries beside the linux/amd64 and linux/arm64
 images. Those entries are non-runnable SLSA provenance and SPDX SBOM
 attestations, not additional Rackpad runtime architectures.
 
-The install files are downloaded from `main` because they should always point at
-the current stable install method. The running app image is controlled by
-`RACKPAD_TAG`.
+Manual examples below download stable manifests from `main`. For beta, download
+from `beta`; for a pinned version, use its matching `v`-prefixed Git tag. Keep the
+manifest and image version paired. The maintenance installer resolves `latest`
+to `main`, `beta` to `beta`, `dev` to `dev`, and complete version tags to matching
+Git tags; custom images use the stable manifest. This repair is only available
+once the maintenance installer is published.
+
+## Before upgrading to 1.8.3 beta
+
+- Back up the database/volume and configuration together. Retain the original
+  `RACKPAD_SECRET_KEY`. Migration 50 needs a key to encrypt existing inline SNMP
+  communities and aborts atomically if it is missing. A lost key requires secret
+  re-entry; generating a replacement cannot recover old encrypted values.
+- Replace hop-count proxy settings with controlled IPs/CIDRs.
+- Configure a trusted OIDC administrator subject/group and verify local recovery
+  access. Old OIDC sessions are revoked and roles are recalculated on next login;
+  email-based rules require boolean `email_verified: true`.
+- Traps default off in this beta. Enable them explicitly if needed and reconfigure
+  historical source credential links. Never expose UDP 1162 by accident.
+- Schema 51 adds stack members and nullable port assignments. Published migrations
+  49 and 50 remain unchanged, with security conversion at 50. Existing ordinary
+  switches stay ordinary; do not run older binaries on schema-51 data.
+- Migrations are forward-only. Roll back using the old image **and** its paired
+  pre-upgrade database/configuration snapshot, never an older image alone.
+
+See the [security upgrade notes](docs/releases/v1.8.2-beta.4-test-notes.md) and
+[combined schema-51 candidate notes](docs/releases/v1.8.3-beta.0.md).
+
+### Maintenance installer preservation
+
+The candidate installer validates the selected canonical manifest before
+changing deployment files. It preserves an existing `.env` byte-for-byte and
+reuses the existing Compose project directory and `rackpad_data` volume. The
+legacy generated manifest is recognized by its exact checksum; a protected
+`compose.yml.backup.*` copy is retained before atomic replacement. Subsequent
+installer-managed files are tracked by `compose.yml.installer.sha256`.
+
+A customized manifest is never overwritten or started automatically: merge the
+adjacent `compose.yml.proposed.*` environment entries while retaining your mounts,
+ports, project name, and hardening. Unknown existing state without `.env` is
+refused. Only a verified empty deployment gets a generated key. Restore existing
+configuration and keys before retrying an upgrade. Do not post environment files
+or rendered Compose configuration in support reports. Supplied keys are written
+in single quotes and verified against Compose after inherited overrides are
+cleared; mismatches abort before pull or replacement. Accepted leading/trailing
+spaces and ` #` sequences are preserved exactly. Unsupported characters require
+manual `.env` configuration; parser failures never print secret-bearing lines.
 
 ## Common Settings
 
@@ -53,7 +101,8 @@ Most users only change:
   the newest stable GHCR image.
 - `TRUST_PROXY`, `TRUSTED_HOSTS`, `TRUSTED_ORIGINS`: set these when using a reverse proxy.
 
-Set `RACKPAD_SECRET_KEY` before saving shared SNMP credentials. All supported
+Set and retain `RACKPAD_SECRET_KEY` before saving encrypted integration or SNMP
+credentials. In 1.8.2 beta it is also required for inline SNMP communities. All supported
 environment variables are listed in [`.env.example`](./.env.example) and reach
 the process through each shipped Compose file. The normal Compose profiles do
 not publish UDP 1162; add an explicit `1162:1162/udp` mapping only when external
@@ -103,13 +152,20 @@ same retention and disposal controls as other sensitive backups.
 
 ### 1. Install Docker
 
-Ubuntu/Debian:
+Ubuntu/Debian with distribution packages (`docker-compose-v2` availability depends
+on the OS release):
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl git docker.io docker-compose-plugin
+sudo apt-get install -y ca-certificates curl git docker.io docker-compose-v2
 sudo systemctl enable --now docker
 ```
+
+If your distribution does not provide Compose v2, follow the official
+[Docker Engine installation](https://docs.docker.com/engine/install/) and
+[Compose plugin installation](https://docs.docker.com/compose/install/linux/).
+`docker-compose-plugin` requires Docker’s package repository to be configured;
+do not mix Docker CE and distribution Engine packages. Verify `docker compose version`.
 
 Optional: allow your user to run Docker without `sudo`.
 
@@ -196,7 +252,7 @@ sudo docker compose up --build -d
 Docker inside an LXC remains the supported general path below. The non-Docker
 helper and operator controls are documented in
 [`docs/PROXMOX_NATIVE_LXC.md`](./docs/PROXMOX_NATIVE_LXC.md), including the exact
-experimental Beta 2 test procedure. It is not a supported production installer
+experimental beta.5 test procedure. It is not a supported production installer
 until the staged validation and stable-release gates are complete.
 
 Recommended layout:
@@ -246,7 +302,7 @@ Manual path:
 
 ```bash
 apt-get update
-apt-get install -y ca-certificates curl docker.io docker-compose-plugin
+apt-get install -y ca-certificates curl docker.io docker-compose-v2
 systemctl enable --now docker
 mkdir -p /opt/rackpad
 cd /opt/rackpad
@@ -535,27 +591,28 @@ Only use `down -v` if you are okay deleting Rackpad's stored data.
 
 Keep Rackpad private, behind a VPN, or behind a TLS reverse proxy.
 
-If you expose Rackpad through Caddy, Nginx, Cloudflare, Traefik, IIS, or another
-proxy, set the exact number of controlled proxy hops between the client and
-Rackpad. The included examples use one hop:
+**Stable v1.8.0:** `TRUST_PROXY=1` trusts one controlled proxy hop; `2` trusts two
+(up to 10). Truthy aliases mean one hop. Restrict direct access to the app.
+
+**1.8.2 beta.4 and later:** use the explicit IPs/CIDRs of controlled proxies.
+Numeric hop counts and truthy aliases disable trust with a startup warning.
+Replace old values before upgrading. For example, if the final proxy really
+connects from `172.18.0.2`:
 
 ```bash
-TRUST_PROXY=1
+TRUST_PROXY=172.18.0.2
 TRUSTED_HOSTS=rackpad.example.com
 TRUSTED_ORIGINS=https://rackpad.example.com
 ```
+
+Use `TRUST_PROXY=0` when no proxy is trusted. Permit application-port traffic only
+from controlled proxies and overwrite client-supplied forwarding headers at the
+public edge. Do not substitute universal CIDRs for an explicit trust boundary.
 
 Included examples:
 
 - [deploy/Caddyfile.example](./deploy/Caddyfile.example)
 - [deploy/nginx-rackpad.conf](./deploy/nginx-rackpad.conf)
-
-For a controlled chain of two proxies, use `TRUST_PROXY=2`; values from `1` to
-`10` are supported, and invalid values fail closed to `0` (disabled). The
-compatibility values `true`, `yes`, and `on` mean one hop. Rackpad must not be
-directly reachable while proxy trust is enabled: permit traffic to the
-application port only from the configured chain, and have its public-facing
-proxy overwrite client-supplied forwarding headers.
 
 Your final proxy hop should pass:
 
@@ -605,6 +662,17 @@ npm install
 
 On Windows, use Docker Desktop unless you are comfortable installing native
 build tools.
+
+## Native Node deploy
+
+For manually managed deployments, install Node 22 and native build prerequisites,
+run `npm ci`, `npm run build`, then `npm start`. Configure `HOST`, `PORT`,
+`DATABASE_PATH`, and the existing encryption key through a protected environment
+file. Create the data directory with ownership for the service user.
+
+The root [rackpad.service](rackpad.service) is a generic systemd example to adapt
+for a manual installation. The managed native Proxmox helper installs its own
+version-aligned unit; do not replace it with this example.
 
 ## Release Channels
 

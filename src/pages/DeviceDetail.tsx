@@ -1,3 +1,5 @@
+import { StackMembersPanel } from "@/components/devices/StackMembersPanel";
+import { deviceTypeLineage } from "@/lib/device-types";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Link,
@@ -249,6 +251,7 @@ const DEVICE_DETAIL_TABS = new Set([
   "overview",
   "ports",
   "physical",
+  "stack-members",
   "storage",
   "compute",
   "network",
@@ -365,6 +368,7 @@ export default function DeviceDetail() {
   const baseDeviceType = device
     ? deviceTypeBase(device.deviceType, deviceTypes)
     : null;
+  const isStack = !!device && deviceTypeLineage(device.deviceType, deviceTypes).includes("switch_stack");
   const showStorage =
     baseDeviceType === "server" ||
     baseDeviceType === "storage" ||
@@ -684,7 +688,7 @@ export default function DeviceDetail() {
     (port) => port.linkState === "up",
   ).length;
   const isVisualGrid =
-    device?.deviceType === "switch" || device?.deviceType === "router";
+    baseDeviceType === "switch" || baseDeviceType === "router";
   const compatiblePortTemplates = useMemo(
     () =>
       device
@@ -1532,6 +1536,7 @@ export default function DeviceDetail() {
               {t("Ports")} | {devicePorts.length}
             </TabsTrigger>
             <TabsTrigger value="physical">{t("Physical layout")}</TabsTrigger>
+            {isStack && <TabsTrigger value="stack-members">{t("Stack Members")}</TabsTrigger>}
             {showStorage && (
               <TabsTrigger value="storage">
                 {t("Storage")} | {deviceDriveSlots.length}
@@ -1559,6 +1564,7 @@ export default function DeviceDetail() {
             <TabsTrigger value="activity">{t("Activity")}</TabsTrigger>
           </TabsList>
 
+          {isStack && <TabsContent value="stack-members" className="pt-4"><StackMembersPanel device={device} ports={devicePorts} canEdit={canEdit} /></TabsContent>}
           <TabsContent value="overview" className="pt-4">
             <div className="grid grid-cols-12 gap-3">
               <Card className="col-span-12 md:col-span-6">
@@ -2017,7 +2023,7 @@ export default function DeviceDetail() {
               portLinks={portLinks}
               devices={devices}
               deviceTypes={deviceTypes}
-              canEdit={canEdit}
+              canEdit={canEdit && !isStack}
               initialLayout={physicalLayout}
               onLayoutChange={upsertPhysicalLayoutRecord}
               onInventoryReload={() => loadAll(true)}

@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Stacked switches": "Switch bertumpuk",
+  "Stack Members": "Anggota tumpukan",
+  "Add member": "Tambah anggota",
+  "Edit stack member": "Edit anggota tumpukan",
+  "Add MAC address": "Tambah alamat MAC",
+  "Member filter": "Filter anggota",
+  "Stack-wide ports": "Port seluruh tumpukan",
+  "Stack member": "Anggota tumpukan",
+  "Stack height is calculated from its members.": "Tinggi tumpukan dihitung dari anggotanya.",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "Inventaris homelab",
   "Lab": "laboratorium",

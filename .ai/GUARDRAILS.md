@@ -120,10 +120,12 @@ real check; “manual” is not a gate and must be reviewed honestly.
 
 - Suppression ⇒ one finding, narrowest supported scope, written justification,
   owner/review date or expiry, and no unrelated blind spot.
-- SNMPv3 legacy hash exceptions belong inline in `server/lib/snmp-v3.ts`; do not
-  suppress weak hashing repository-wide.
-- Enforcement: Trivy expiry is automated; CodeQL inline scope and review dates
-  require manual review because CodeQL config has no enforced expiry field.
+- Keep SNMPv3 protocol rationale inline in `server/lib/snmp-v3.ts`; do not
+  suppress weak hashing repository-wide. The two RFC 3414 password-to-key findings
+  have an exact-location/file-hash/server-tree policy with automated expiry.
+- Enforcement: Trivy expiry and the two reviewed SNMP findings are automated.
+  Other CodeQL inline scope/review dates remain manual. Preserve raw SARIF and
+  the exception summary; source changes or expiry disable the reviewed exceptions.
 
 ## Releases
 

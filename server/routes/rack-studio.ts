@@ -1,3 +1,4 @@
+import { isStackType, listStackMembers } from "../lib/device-stacks.js";
 import type { FastifyPluginAsync } from "fastify";
 import { db, parseRow } from "../db.js";
 import { writeAuditLogEntry } from "../lib/audit-log.js";
@@ -96,6 +97,7 @@ function validateRackRoom(row: RackCanvasRow, roomId: string | null) {
 function parseDeviceRow(row: RackStudioDeviceRow) {
   return {
     ...parseRow(row, ["tags"]),
+    stackMembers: isStackType(String(row.deviceType)) ? listStackMembers(String(row.id)) : undefined,
     ignoreDuplicateMac: Number(row.ignoreDuplicateMac ?? 0) === 1,
   };
 }
@@ -270,7 +272,10 @@ export const rackStudioRoutes: FastifyPluginAsync = async (app) => {
         entityId: current.id,
         summary: `Placed ${current.hostname} as ${after.mountKind} equipment in Rack Studio`,
       });
-      return { before, after };
+      const updatedRow = db
+        .prepare("SELECT * FROM devices WHERE id = ?")
+        .get(current.id) as RackStudioDeviceRow;
+      return { before, after: currentRackStudioPlacement(updatedRow) };
     });
 
     const result = placeDevice();

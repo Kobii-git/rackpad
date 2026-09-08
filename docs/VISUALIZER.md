@@ -61,6 +61,13 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
   the curve. Longer, obstructed, cross-rack, and handoff connections use gutters.
   Rack Studio and Rack cabling share the route geometry; SVG/PNG exports retain
   the same curve controls and exact port endpoints.
+- Automatic front-to-rear cables use short continuation stubs at their visible
+  ports. Selecting or hovering either segment labels both destinations with the
+  device, port, and resolved rack face; `Labels` keeps these labels visible.
+  Single-face views show the local stub and identify the hidden destination.
+  Both-face views show both segments of the same cable. Markers also appear in
+  SVG/PNG exports and do not create inventory records. Saved manual routes retain
+  their existing presentation; brush-panel routing is not implemented.
 - `Orthogonal` retains right-angle routing. Saved route preferences remain valid.
   `Labels` keeps every cable label visible; hovered and selected cables are
   always labeled. Manual room waypoints retain their coordinates and prevent

@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "Stacked switches": "מתגים בערימה",
+  "Stack Members": "חברי הערימה",
+  "Add member": "הוספת חבר",
+  "Edit stack member": "עריכת חבר בערימה",
+  "Add MAC address": "הוספת כתובת MAC",
+  "Member filter": "סינון חברים",
+  "Stack-wide ports": "יציאות כלליות של הערימה",
+  "Stack member": "חבר בערימה",
+  "Stack height is calculated from its members.": "גובה הערימה מחושב לפי חבריה.",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "מלאי מעבדה ביתית",
   "Lab": "מעבדה",

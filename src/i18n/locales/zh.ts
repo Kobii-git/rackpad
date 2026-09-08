@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Stacked switches": "堆叠交换机",
+  "Stack Members": "堆叠成员",
+  "Add member": "添加成员",
+  "Edit stack member": "编辑堆叠成员",
+  "Add MAC address": "添加 MAC 地址",
+  "Member filter": "成员筛选",
+  "Stack-wide ports": "堆叠共用端口",
+  "Stack member": "堆叠成员",
+  "Stack height is calculated from its members.": "堆叠高度根据成员高度计算。",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "家庭实验室清单",
   "Lab": "实验室",

@@ -166,7 +166,22 @@ export interface Rack {
   studioY?: number | null;
 }
 
+export interface DeviceStackMember {
+  id: ID;
+  deviceId: ID;
+  position: number;
+  name: string;
+  manufacturer: string | null;
+  model: string | null;
+  serial: string | null;
+  heightU: number;
+  status: DeviceStatus;
+  notes: string | null;
+  macs: Array<{ label: string; macAddress: string }>;
+}
+
 export interface Device {
+  stackMembers?: DeviceStackMember[];
   id: ID;
   labId: ID;
   rackId?: ID;
@@ -829,6 +844,7 @@ export interface DocumentationDeviceLink {
 }
 
 export interface Port {
+  stackMemberId?: ID | null;
   id: ID;
   deviceId: ID;
   name: string;

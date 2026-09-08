@@ -1,3 +1,4 @@
+import { CableContinuationMarkers } from "@/components/rack/CableContinuationMarkers";
 import {
   type Dispatch,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -712,7 +713,7 @@ export function RackCablingCanvas({
     }
     if (handoff.reason === "hidden-face") {
       return t("{value1}: {name}", {
-        value1: handoff.physicalFace === "rear" ? t("Rear") : t("Front"),
+        value1: handoff.rackFace === "rear" ? t("Rear") : t("Front"),
         name: endpoint,
       });
     }
@@ -1174,60 +1175,85 @@ export function RackCablingCanvas({
                               : 0.9
                       }
                     />
-                    {(showLabels || selected || hovered) && (
-                      <text
-                        data-testid="rack-cabling-cable-label"
-                        x={route.labelPoint.x}
-                        y={route.labelPoint.y - 7}
-                        textAnchor="middle"
-                        fill="var(--text-primary)"
-                        stroke="var(--surface-1)"
-                        strokeWidth={4}
-                        paintOrder="stroke"
-                        fontSize={9}
-                        fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-                        className="pointer-events-none"
-                      >
-                        {route.label}
-                      </text>
-                    )}
-                    {route.handoffs.map((handoff) => {
-                      const geometry = handoffLabelGeometryById.get(
-                        `${route.link.id}:${handoff.endpoint}`,
-                      );
-                      if (!geometry) return null;
-                      return (
-                        <g key={handoff.anchorPortId}>
-                          {geometry.leaderPath ? (
-                            <path
-                              d={geometry.leaderPath}
-                              fill="none"
-                              stroke="var(--text-tertiary)"
-                              strokeWidth={0.75}
-                              strokeDasharray="2 2"
+                    <CableContinuationMarkers
+                      markers={route.continuations}
+                      linkId={route.link.id}
+                      cableLabel={route.label}
+                      color={route.color}
+                      ports={ports}
+                      devices={devices}
+                      showLabels={showLabels || selected || hovered}
+                      opacity={
+                        !searchMatches
+                          ? 0.08
+                          : anyFocus && !emphasized
+                            ? 0.14
+                            : 0.9
+                      }
+                    />
+                    {!route.continuations.length &&
+                      (showLabels || selected || hovered) && (
+                        <text
+                          data-testid="rack-cabling-cable-label"
+                          x={route.labelPoint.x}
+                          y={route.labelPoint.y - 7}
+                          textAnchor="middle"
+                          fill="var(--text-primary)"
+                          stroke="var(--surface-1)"
+                          strokeWidth={4}
+                          paintOrder="stroke"
+                          fontSize={9}
+                          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+                          className="pointer-events-none"
+                        >
+                          {route.label}
+                        </text>
+                      )}
+                    {route.handoffs
+                      .filter(
+                        (handoff) =>
+                          !route.continuations.length ||
+                          handoff.reason !== "hidden-face",
+                      )
+                      .map((handoff) => {
+                        const geometry = handoffLabelGeometryById.get(
+                          `${route.link.id}:${handoff.endpoint}`,
+                        );
+                        if (!geometry) return null;
+                        return (
+                          <g key={handoff.anchorPortId}>
+                            {geometry.leaderPath ? (
+                              <path
+                                d={geometry.leaderPath}
+                                fill="none"
+                                stroke="var(--text-tertiary)"
+                                strokeWidth={0.75}
+                                strokeDasharray="2 2"
+                                className="pointer-events-none"
+                              />
+                            ) : null}
+                            <text
+                              data-testid="rack-cabling-handoff-label"
+                              data-handoff-lane={geometry.lane}
+                              data-handoff-packing-column={
+                                geometry.packingColumn
+                              }
+                              x={geometry.x}
+                              y={geometry.y}
+                              textAnchor={geometry.textAnchor}
+                              fill="var(--text-primary)"
+                              stroke="var(--surface-1)"
+                              strokeWidth={4}
+                              paintOrder="stroke"
+                              fontSize={9}
+                              fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
                               className="pointer-events-none"
-                            />
-                          ) : null}
-                          <text
-                            data-testid="rack-cabling-handoff-label"
-                            data-handoff-lane={geometry.lane}
-                            data-handoff-packing-column={geometry.packingColumn}
-                            x={geometry.x}
-                            y={geometry.y}
-                            textAnchor={geometry.textAnchor}
-                            fill="var(--text-primary)"
-                            stroke="var(--surface-1)"
-                            strokeWidth={4}
-                            paintOrder="stroke"
-                            fontSize={9}
-                            fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-                            className="pointer-events-none"
-                          >
-                            {handoffLabel(handoff)}
-                          </text>
-                        </g>
-                      );
-                    })}
+                            >
+                              {handoffLabel(handoff)}
+                            </text>
+                          </g>
+                        );
+                      })}
                   </g>
                 );
               })}

@@ -9,6 +9,7 @@ import type { TranslationKey } from "@/i18n/translations";
 
 export const BUILT_IN_DEVICE_TYPES: DeviceTypeDefinition[] = [
   { id: "switch", label: "Switch", builtIn: true },
+  { id: "switch_stack", label: "Stacked switches", parentType: "switch", builtIn: true },
   { id: "router", label: "Router", builtIn: true },
   { id: "firewall", label: "Firewall", builtIn: true },
   { id: "server", label: "Server", builtIn: true },
@@ -36,6 +37,7 @@ export const BUILT_IN_DEVICE_TYPES: DeviceTypeDefinition[] = [
 const BUILT_IN_IDS = new Set(BUILT_IN_DEVICE_TYPES.map((type) => type.id));
 const LOCALIZED_BUILT_IN_LABELS = new Set<TranslationKey>([
   "Switch",
+  "Stacked switches",
   "Router",
   "Firewall",
   "Server",

@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "Stacked switches": "สวิตช์แบบสแต็ก",
+  "Stack Members": "สมาชิกสแต็ก",
+  "Add member": "เพิ่มสมาชิก",
+  "Edit stack member": "แก้ไขสมาชิกสแต็ก",
+  "Add MAC address": "เพิ่มที่อยู่ MAC",
+  "Member filter": "ตัวกรองสมาชิก",
+  "Stack-wide ports": "พอร์ตส่วนกลางของสแต็ก",
+  "Stack member": "สมาชิกสแต็ก",
+  "Stack height is calculated from its members.": "ความสูงของสแต็กคำนวณจากสมาชิกของสแต็ก",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "คลังสินค้า Homelab",
   "Lab": "แล็บ",

@@ -1,3 +1,4 @@
+import { CableContinuationMarkers } from "./CableContinuationMarkers";
 import {
   useCallback,
   useEffect,
@@ -1094,7 +1095,20 @@ export function RackStudioWorkspace({
                         }
                         className="pointer-events-none"
                       />
-                      {(showCableLabels || selected || hovered) &&
+                      <CableContinuationMarkers
+                        markers={route.continuations}
+                        linkId={route.link.id}
+                        cableLabel={route.label}
+                        color={route.color}
+                        ports={ports}
+                        devices={devices}
+                        showLabels={showCableLabels || selected || hovered}
+                        opacity={
+                          selected || hovered ? 1 : activeCableId ? 0.16 : 0.82
+                        }
+                      />
+                      {!route.continuations.length &&
+                      (showCableLabels || selected || hovered) &&
                       labelPoint ? (
                         <text
                           data-testid="rack-studio-cable-label"
@@ -2139,7 +2153,17 @@ function RackStudioElevationCableLayer({
           opacity={selected || hovered ? 1 : activeCableId ? 0.16 : 0.82}
           className="pointer-events-none"
         />
-        {showLabels || selected || hovered ? (
+        <CableContinuationMarkers
+          markers={route.continuations}
+          linkId={route.link.id}
+          cableLabel={route.label}
+          color={color}
+          ports={ports}
+          devices={devices}
+          showLabels={showLabels || selected || hovered}
+          opacity={selected || hovered ? 1 : activeCableId ? 0.16 : 0.82}
+        />
+        {!route.continuations.length && (showLabels || selected || hovered) ? (
           <text
             data-testid="rack-studio-cable-label"
             data-link-id={route.link.id}
@@ -2433,9 +2457,9 @@ function PlacementInspector({
       <Input
         type="number"
         min={minimum}
-        max={maximum}
+        max={key === "heightU" && inspectedDevice.stackMembers ? inspectedDevice.heightU : maximum}
         value={value ?? ""}
-        disabled={!editMode}
+        disabled={!editMode || (key === "heightU" && !!inspectedDevice.stackMembers)}
         onChange={(event) =>
           setDraft((current) =>
             current

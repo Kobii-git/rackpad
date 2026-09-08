@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.8.2-beta.5",
+  "version": "1.8.3-beta.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -31,13 +31,15 @@
     "lint:proof": "node scripts/check-lint-gate.mjs",
     "check:i18n": "node --test scripts/i18n-value-rules.test.mjs && node scripts/check-i18n-values.mjs",
     "check:bundle": "node scripts/check-bundle-size.mjs",
-    "check:config": "node --test scripts/check-env-contract.test.mjs scripts/check-release-contract.test.mjs && node scripts/check-env-contract.mjs && node scripts/check-dockerignore.mjs",
+    "check:config": "node --test scripts/check-env-contract.test.mjs scripts/check-release-contract.test.mjs scripts/check-publication.test.mjs scripts/install-docker.test.mjs && node scripts/check-env-contract.mjs && node scripts/check-dockerignore.mjs",
     "check:proxmox": "node scripts/check-proxmox.mjs && bash deploy/proxmox/tests/test-proxmox.sh",
-    "check:docs": "node --test scripts/check-ai-docs.test.mjs && node scripts/check-ai-docs.mjs",
+    "check:docs": "node --test scripts/check-ai-docs.test.mjs scripts/check-operator-docs.test.mjs && node scripts/check-ai-docs.mjs && node scripts/check-operator-docs.mjs",
     "check": "npm run lint && npm run lint:proof && npm run typecheck && npm run check:i18n && npm run test && npm run check:config && npm run check:proxmox && npm run check:docs && npm run build && npm run check:bundle",
     "check:full": "npm run check && npm run test:e2e",
     "preview": "vite preview",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "test:snmp:interop": "node scripts/check-snmp-interop.mjs",
+    "test:e2e:storage": "node scripts/check-storage-compat.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
@@ -80,6 +82,9 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^6.0.2",
+    "ajv": "8.20.0",
+    "ajv-draft-04": "1.0.0",
+    "ajv-formats": "3.0.1",
     "concurrently": "^9.2.4",
     "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",

@@ -1,3 +1,4 @@
+import { CURRENT_SCHEMA_VERSION } from "../schema-version.js";
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -17,6 +18,16 @@ function legacyFixture(file: string) {
   assert.equal(initialize(file).status, 0)
   const db = new Database(file)
   db.exec(`
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
     ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
     ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion SET version = 49;
@@ -44,7 +55,7 @@ test('migration 50 encrypts legacy communities, revokes only OIDC sessions, and 
     assert.equal(result.status, 0, result.stderr)
     const db = new Database(file, { readonly: true })
     try {
-      assert.equal((db.prepare('SELECT version FROM schemaVersion').get() as { version: number }).version, 50)
+      assert.equal((db.prepare('SELECT version FROM schemaVersion').get() as { version: number }).version, CURRENT_SCHEMA_VERSION)
       const monitor = db.prepare('SELECT snmpCommunity, snmpCommunityEnc FROM deviceMonitors').get() as { snmpCommunity: null; snmpCommunityEnc: string }
       assert.equal(monitor.snmpCommunity, null)
       process.env.RACKPAD_SECRET_KEY = testKey

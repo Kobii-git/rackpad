@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const es = {
+  "Stacked switches": "Conmutadores apilados",
+  "Stack Members": "Miembros de la pila",
+  "Add member": "Añadir miembro",
+  "Edit stack member": "Editar miembro de la pila",
+  "Add MAC address": "Añadir dirección MAC",
+  "Member filter": "Filtro de miembros",
+  "Stack-wide ports": "Puertos de toda la pila",
+  "Stack member": "Miembro de la pila",
+  "Stack height is calculated from its members.": "La altura de la pila se calcula a partir de sus miembros.",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "Inventario homelab",
   "Lab": "laboratorio",

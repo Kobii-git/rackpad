@@ -13,7 +13,7 @@ only as historical design evidence and must not be used as a feature-status list
 - **IF-MIB interface monitoring** — per-port link state, with `ifHighSpeed` used to
   fill in a port's speed when it's blank
 - **SNMP-verified badges** in Ports, the Dashboard, and the Visualizer
-- **Trap receiver** (v1 / v2c) for `linkUp` / `linkDown` with device auto-learn
+- **Trap receiver** (v1 / v2c / authenticated v3) for `linkUp` / `linkDown` with device auto-learn
 - **Inventory sync** (opt-in) — preview/apply VLANs, subnets, and conflict-free
   DHCP scopes from a device into IPAM, manually or on a per-device schedule
 
@@ -61,6 +61,17 @@ SNMPv3 adds auth + privacy. Credentials are stored **per lab, encrypted at rest*
 Rotating `RACKPAD_SECRET_KEY` invalidates stored SNMP and integration secrets — re-enter them after a
 key change.
 
+The supported v3 combinations are MD5 or SHA (USM SHA-1) authentication,
+with no privacy (`authNoPriv`) or AES128 (`authPriv`). Select the same protocols
+and passwords as the device. The 1.8.3 candidate corrects key localization and
+AES wire encoding; existing stored credentials and `RACKPAD_SECRET_KEY` remain
+unchanged. Cisco IOS-XE hardware acceptance is tracked separately in #152.
+
+Responses must authenticate and match the requested peer, engine, username,
+context and request. Engine discovery alone never establishes trust. A verified
+engine-time report can trigger one retry within the original request deadline;
+invalid authentication never triggers a downgrade to v2c or unsigned v3.
+
 ## Interface monitoring & port link-state
 
 An SNMP monitor can be linked to a specific port via its `ifIndex`. When linked,
@@ -81,10 +92,13 @@ The UDP trap receiver is disabled by default. Set `SNMP_TRAP_ENABLED=1` to start
 - Incoming v1/v2c `linkUp`/`linkDown` traps update the matching monitor/port; an
   unknown source IP may be associated with an existing device, but observed
   communities and incoming credential IDs never establish trust. Duplicate traps are
-  de-duplicated within ~30s.
+  de-duplicated within 30 seconds.
 - SNMPv3 `linkUp`/`linkDown` traps are supported for authenticated and encrypted
   USM credentials. Map the trap source, device, or SNMP monitor to the matching
-  lab credential so Rackpad can validate and decrypt the packet.
+  lab credential so Rackpad can validate and decrypt the packet. The configured
+  authentication/privacy level is required; unsigned or downgraded packets cannot
+  update monitors. Verified engine clocks reject older boot counts and stale
+  messages outside the USM time window during the running process.
 
 Configure with `SNMP_TRAP_ENABLED`, `SNMP_TRAP_PORT`, `SNMP_TRAP_BIND` (see table).
 Receiver status is reported on `/api/health` and `/api/snmp-traps/status`.

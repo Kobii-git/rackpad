@@ -13,6 +13,39 @@ import packageJson from "../package.json" with { type: "json" };
 
 let token = "";
 
+test("bundled fonts load successfully without fallback", async ({ page }) => {
+  const failures: string[] = [];
+  page.on("response", (response) => {
+    if (response.request().resourceType() === "font" && !response.ok()) {
+      failures.push(`${response.status()} ${response.url()}`);
+    }
+  });
+  page.on("requestfailed", (request) => {
+    if (request.resourceType() === "font") failures.push(request.url());
+  });
+  await page.goto("/");
+  const statuses = await page.evaluate(async () => {
+    const faces = [
+      ...[400, 500, 600, 700].map((weight) => `${weight} 16px "IBM Plex Sans"`),
+      ...[400, 500, 600].map((weight) => `${weight} 16px "IBM Plex Mono"`),
+    ];
+    return Promise.all(
+      faces.map(async (face) => {
+        const loaded = await document.fonts.load(face, "Rackpad 123");
+        return {
+          face,
+          loaded:
+            loaded.length > 0 &&
+            loaded.every((font) => font.status === "loaded"),
+        };
+      }),
+    );
+  });
+  expect(failures).toEqual([]);
+  expect(statuses).toHaveLength(7);
+  for (const status of statuses) expect(status.loaded, status.face).toBe(true);
+});
+
 const primaryRoutes = [
   "/",
   "/labs",
@@ -1724,7 +1757,7 @@ test("24 short patch cords remain curved, selectable, and exportable across rack
   page,
   request,
 }, testInfo) => {
-  test.setTimeout(90_000);
+  test.setTimeout(180_000);
   const fixture = rackCableFixture(`cords-${Date.now().toString(36)}`);
   const headers = { Authorization: `Bearer ${token}` };
   const deviceIds: string[] = [];
@@ -1890,6 +1923,119 @@ test("24 short patch cords remain curved, selectable, and exportable across rack
       .selectOption("orthogonal");
     for (const cord of await cords.all())
       await expect(cord).not.toHaveAttribute("d", / C /);
+
+    // Exercise actual rear ports as well as both directions of a mixed-face cable.
+    for (const [fromFace, toFace] of [
+      ["rear", "rear"],
+      ["front", "rear"],
+      ["rear", "front"],
+    ] as const) {
+      for (const id of linkIds.splice(0)) {
+        const removed = await request.delete(`/api/port-links/${id}`, {
+          headers,
+        });
+        expect(removed.ok()).toBeTruthy();
+      }
+      for (let index = 1; index <= 24; index += 1) {
+        const endpoint = (deviceIndex: number, face: string) =>
+          devicePorts[deviceIndex]!.find(
+            (port) => port.face === face && port.name === String(index),
+          )!.id;
+        linkIds.push(
+          (
+            await post<{ id: string }>("/api/port-links", {
+              fromPortId: endpoint(0, fromFace),
+              toPortId: endpoint(1, toFace),
+              cableType: "Cat6A",
+              color: "#22c55e",
+            })
+          ).id,
+        );
+      }
+      await page.goto("/visualizer");
+      await page.reload();
+      await page
+        .getByRole("combobox", { name: "Visualizer layout", exact: true })
+        .selectOption("rack");
+      await page
+        .getByRole("combobox", { name: "Room", exact: true })
+        .selectOption(roomId);
+      await page
+        .getByRole("combobox", { name: "Cable routing", exact: true })
+        .selectOption("smooth");
+      await page
+        .getByRole("combobox", { name: "Face", exact: true })
+        .selectOption("both");
+      await expect(cords).toHaveCount(24);
+      if (fromFace === toFace) {
+        for (const cord of await cords.all())
+          await expect(cord).toHaveAttribute("d", / C /);
+        await expect(page.getByTestId("cable-continuation")).toHaveCount(0);
+        continue;
+      }
+      await expect(page.getByTestId("cable-continuation")).toHaveCount(48);
+      for (const path of await cords.all())
+        expect(
+          ((await path.getAttribute("d"))!.match(/M /g) ?? []).length,
+        ).toBe(2);
+      await cords.first().focus();
+      await cords.first().press("Enter");
+      await expect(
+        page.getByText("Selected cable", { exact: true }).first(),
+      ).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath(`continuations-${fromFace}-${toFace}.png`),
+      });
+      for (const face of ["front", "rear"]) {
+        await page
+          .getByRole("combobox", { name: "Face", exact: true })
+          .selectOption(face);
+        await expect(cords).toHaveCount(24);
+        const markers = page.getByTestId("cable-continuation");
+        await expect(markers).toHaveCount(24);
+        for (const marker of await markers.all())
+          await expect(marker).toHaveAttribute(
+            "data-destination-face",
+            face === "front" ? "rear" : "front",
+          );
+      }
+      await page.goto("/racks");
+      await page
+        .getByRole("button", { name: new RegExp(`${fixture.room.name} 1R`) })
+        .click();
+      const studioToggle = page.getByRole("button", {
+        name: "Studio Beta",
+        exact: true,
+      });
+      await expect(studioToggle).toBeVisible();
+      if ((await studioToggle.getAttribute("aria-pressed")) === "false")
+        await studioToggle.click();
+      await page.getByRole("button", { name: "Both", exact: true }).click();
+      await expect(page.getByTestId("cable-continuation")).toHaveCount(96);
+      const mixedDownload = page.waitForEvent("download");
+      await page
+        .getByRole("button", { name: "Download SVG", exact: true })
+        .click();
+      const mixedSvg = await readFile(
+        (await (await mixedDownload).path())!,
+        "utf8",
+      );
+      expect(mixedSvg.match(/data-continuation-port=/g)).toHaveLength(48);
+      expect(mixedSvg).toContain("24 Cables · both");
+      expect(mixedSvg).toContain("↔ Front");
+      expect(mixedSvg).toContain("↔ Rear");
+      const pngDownload = page.waitForEvent("download");
+      await page
+        .getByRole("button", { name: "Download PNG", exact: true })
+        .click();
+      const png = await pngDownload;
+      await png.saveAs(
+        testInfo.outputPath(`continuations-${fromFace}-${toFace}-export.png`),
+      );
+      expect((await readFile((await png.path())!)).subarray(0, 8)).toEqual(
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+      );
+    }
   } finally {
     for (const id of deviceIds)
       await request.delete(`/api/devices/${id}`, { headers });
@@ -5123,5 +5269,238 @@ test("integration previews expose safe modes, UTC schedules, and viewer read-onl
     await request.delete(`/api/integrations/connections/${connection.id}`, {
       headers,
     });
+  }
+});
+
+test("stack members support editing, keyboard ordering, assignment and shared rack geometry", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const headers = { Authorization: `Bearer ${token}` };
+  const roomResponse = await request.post("/api/rooms", {
+    headers,
+    data: { labId: "lab_home", name: "Stack acceptance room" },
+  });
+  expect(roomResponse.status()).toBe(201);
+  const roomId = ((await roomResponse.json()) as { id: string }).id;
+  const rackResponse = await request.post("/api/racks", {
+    headers,
+    data: {
+      labId: "lab_home",
+      roomId,
+      name: "Stack acceptance rack",
+      totalU: 12,
+    },
+  });
+  expect(rackResponse.status()).toBe(201);
+  const rackId = ((await rackResponse.json()) as { id: string }).id;
+  const created = await request.post("/api/devices", {
+    headers,
+    data: {
+      labId: "lab_home",
+      hostname: "acceptance-switch-stack",
+      deviceType: "switch_stack",
+      placement: "rack",
+      roomId,
+      rackId,
+      startU: 1,
+      heightU: 1,
+    },
+  });
+  expect(created.status()).toBe(201);
+  const stack = (await created.json()) as { id: string };
+  try {
+    const port = await request.post("/api/ports", {
+      headers,
+      data: { deviceId: stack.id, name: "1/1", kind: "rj45" },
+    });
+    expect(port.status()).toBe(201);
+    const portId = ((await port.json()) as { id: string }).id;
+    await authenticate(page);
+    await page.goto(`/devices/${stack.id}?tab=stack-members`);
+    const workspace = page.getByRole("region", {
+      name: "Stack Members",
+      exact: true,
+    });
+    await expect(workspace).toBeVisible();
+    for (const [name, height] of [
+      ["Core A", "2"],
+      ["Core B", "1"],
+    ]) {
+      await workspace
+        .getByRole("button", { name: "Add member", exact: true })
+        .click();
+      const form = workspace.getByRole("form", { name: "Edit stack member" });
+      await form.getByRole("textbox", { name: "Name", exact: true }).fill(name);
+      await form
+        .getByRole("textbox", { name: "Manufacturer", exact: true })
+        .fill("Synthetic");
+      await form
+        .getByRole("textbox", { name: "Model", exact: true })
+        .fill("Acceptance switch");
+      await form
+        .getByRole("textbox", { name: "Serial number", exact: true })
+        .fill(`TEST-${name}`);
+      await form
+        .getByRole("spinbutton", { name: "Height (U)", exact: true })
+        .fill(height);
+      if (name === "Core A") {
+        await form
+          .getByRole("button", { name: "Add MAC address", exact: true })
+          .click();
+        await form
+          .getByRole("textbox", { name: "Label", exact: true })
+          .fill("Base");
+        await form
+          .getByRole("textbox", { name: "MAC address", exact: true })
+          .fill("AABB.CCDD.0011");
+      }
+      await form.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(form).toHaveCount(0);
+    }
+    await expect(workspace.getByTestId("stack-member")).toHaveCount(2);
+    await expect(workspace).toContainText("aa:bb:cc:dd:00:11");
+    const up = workspace.getByRole("button", {
+      name: "Move Core B up",
+      exact: true,
+    });
+    await up.focus();
+    await page.keyboard.press("Enter");
+    await expect(workspace.getByTestId("stack-member").first()).toContainText(
+      "Core B",
+    );
+    const assignment = workspace.getByRole("combobox", {
+      name: "Stack member: 1/1",
+      exact: true,
+    });
+    await assignment.selectOption({ label: "Core A" });
+    await expect
+      .poll(
+        async () =>
+          (
+            (await (
+              await request.get(`/api/ports/${portId}`, { headers })
+            ).json()) as { stackMemberId?: string }
+          ).stackMemberId,
+      )
+      .toBeTruthy();
+    await expect(
+      workspace
+        .getByTestId("stack-member")
+        .filter({ hasText: "Core A" })
+        .getByRole("button", { name: "Delete", exact: true }),
+    ).toBeDisabled();
+    await workspace
+      .getByRole("combobox", { name: "Member filter" })
+      .selectOption("");
+    await expect(assignment).toHaveCount(0);
+    await workspace
+      .getByRole("combobox", { name: "Member filter" })
+      .selectOption("all");
+    const layout = (await (
+      await request.get(`/api/physical-layouts/${stack.id}`, { headers })
+    ).json()) as {
+      bindings: Array<{ portId: string; slotId: string }>;
+      snapshot: { portSlots: Array<{ id: string; x: number; y: number }> };
+      unmappedPortIds: string[];
+    };
+    expect(layout.unmappedPortIds).toEqual([]);
+    expect(layout.bindings).toContainEqual({
+      portId,
+      slotId: `slot:${portId}`,
+    });
+    expect(
+      layout.snapshot.portSlots.some((slot) => slot.id === `slot:${portId}`),
+    ).toBe(true);
+    const firstCapture = await workspace.screenshot({
+      path: testInfo.outputPath("stack-members.png"),
+      animations: "disabled",
+    });
+    const secondCapture = await workspace.screenshot({
+      path: testInfo.outputPath("stack-members-repeat.png"),
+      animations: "disabled",
+    });
+    expect(firstCapture.equals(secondCapture)).toBe(true);
+    const axe = await new AxeBuilder({ page })
+      .include('section[aria-label="Stack Members"]')
+      .analyze();
+    expect(
+      axe.violations.filter(
+        (row) => row.impact === "critical" || row.impact === "serious",
+      ),
+    ).toEqual([]);
+    await page.goto("/racks");
+    await page
+      .getByRole("button", { name: "Studio Beta", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: /Stack acceptance room 1R/ })
+      .click();
+    await page.getByRole("button", { name: "Cables", exact: true }).click();
+    const rackFace = page
+      .getByTestId("rack-studio-device")
+      .filter({
+        has: page.getByRole("button", {
+          name: "acceptance-switch-stack",
+          exact: true,
+        }),
+      })
+      .first();
+    await expect(rackFace).toContainText("Core B");
+    await expect(rackFace).toContainText("Core A");
+    const memberLabel = await rackFace
+      .getByText("Core B · unknown", { exact: true })
+      .boundingBox();
+    const hostnameLabel = await rackFace
+      .getByRole("button", { name: "acceptance-switch-stack", exact: true })
+      .boundingBox();
+    expect(memberLabel).not.toBeNull();
+    expect(hostnameLabel).not.toBeNull();
+    expect(memberLabel!.x + memberLabel!.width).toBeLessThanOrEqual(
+      hostnameLabel!.x,
+    );
+    const portTarget = rackFace.locator(
+      `[data-cabling-selection-id="port:${portId}"]`,
+    );
+    await expect(portTarget).toBeVisible();
+    const slot = layout.snapshot.portSlots.find(
+      (row) => row.id === `slot:${portId}`,
+    )!;
+    await expect(portTarget.locator("rect").first()).toHaveAttribute(
+      "x",
+      String(slot.x),
+    );
+    await expect(portTarget.locator("rect").first()).toHaveAttribute(
+      "y",
+      String(slot.y),
+    );
+    await portTarget.click();
+    await expect(portTarget.locator("rect").first()).toHaveAttribute(
+      "stroke-width",
+      "5",
+    );
+    await rackFace.screenshot({
+      path: testInfo.outputPath("stack-rack.png"),
+      animations: "disabled",
+    });
+    await page.goto(`/devices/${stack.id}?tab=stack-members`);
+    await assignment.selectOption("");
+    await expect(
+      workspace
+        .getByTestId("stack-member")
+        .filter({ hasText: "Core A" })
+        .getByRole("button", { name: "Delete", exact: true }),
+    ).toBeEnabled();
+    await workspace
+      .getByTestId("stack-member")
+      .filter({ hasText: "Core A" })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await expect(workspace.getByTestId("stack-member")).toHaveCount(1);
+  } finally {
+    await request.delete(`/api/devices/${stack.id}`, { headers });
+    await request.delete(`/api/racks/${rackId}`, { headers });
+    await request.delete(`/api/rooms/${roomId}`, { headers });
   }
 });

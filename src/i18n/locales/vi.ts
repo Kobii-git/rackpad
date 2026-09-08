@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Stacked switches": "Bộ chuyển mạch xếp chồng",
+  "Stack Members": "Thành viên ngăn xếp",
+  "Add member": "Thêm thành viên",
+  "Edit stack member": "Sửa thành viên ngăn xếp",
+  "Add MAC address": "Thêm địa chỉ MAC",
+  "Member filter": "Bộ lọc thành viên",
+  "Stack-wide ports": "Cổng dùng chung của ngăn xếp",
+  "Stack member": "Thành viên ngăn xếp",
+  "Stack height is calculated from its members.": "Chiều cao ngăn xếp được tính từ các thành viên.",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "Kho homelab",
   "Lab": "phòng thí nghiệm",

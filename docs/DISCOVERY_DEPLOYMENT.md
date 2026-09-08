@@ -22,7 +22,7 @@ Set `network_mode: host` (Compose) so Rackpad shares the host network namespace.
 
 | Capability | Typical need |
 |------------|----------------|
-| `NET_RAW` | ICMP ping, raw ARP/neighbor reads |
+| `NET_RAW` | ICMP ping and raw ARP probes; ordinary neighbor-cache reads need no raw capability |
 | `NET_ADMIN` | Some ARP-scan / interface operations |
 
 UDP 1162 is not a privileged port, so the native Rackpad service does not need
@@ -75,5 +75,5 @@ networking, Docker Desktop, VPNs, and missing capabilities.
 
 - [Discovery guide](./DISCOVERY.md) — manual and scheduled scans
 - [Docker network discovery](./DOCKER_DISCOVERY.md) — host networking compose
-- [SNMP implementation plan](./SNMP_IMPLEMENTATION_PLAN.md) — polling/traps scope
+- [SNMP guide](./SNMP.md) — current polling, encryption, and trap configuration
 - Main [README](../README.md) — general install

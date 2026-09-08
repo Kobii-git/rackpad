@@ -28,7 +28,11 @@ devices, ports, cables, Networks/IPAM, storage, Wi-Fi, compute, discovery,
 monitoring, documentation, images, integrations, reports, labs, and
 administration into one clean app.
 
-See the [changelog](./CHANGELOG.md) for release history; the badge above tracks the latest tag.
+Stable: **v1.8.0**.
+This branch prepares **v1.8.3-beta.0** for experimental testing.
+Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm published artifacts.
+See the [combined candidate notes and acceptance checklist](docs/releases/v1.8.3-beta.0.md).
+See the [changelog](./CHANGELOG.md); the latest-tag badge may show a prerelease.
 
 Built with:
 
@@ -39,6 +43,8 @@ Built with:
 - per-device health checks with ICMP, TCP, HTTP/HTTPS, and SNMP (v1/v2c/v3) monitor targets; optional trap receiver and VLAN/subnet sync (see [SNMP guide](./docs/SNMP.md))
 - Docker support for a single-container deployment; first-party native Proxmox
   LXC support is in staged validation
+
+> **Development:** [Stacked switches](docs/STACKED_SWITCHES.md) add ordered members, labelled MACs, and member port assignments in the combined schema-51 candidate.
 
 ## Highlights
 
@@ -220,63 +226,6 @@ From the GitHub repo alone, you can already preview the major Rackpad workspaces
 - Administration for users, settings, integrity checks, JSON export, and native SQLite snapshots
 - Visualizer for rack, pyramid, diagram, loose-room, port, WiFi, and cable relationship maps
 
-## What works
-
-- Rack inventory and physical placement
-- Add, edit, and delete racks
-- Add, edit, and delete devices
-- Custom device types for inventory, discovery, icons, filters, and port templates
-- MAC address fields, search, sort, import, and display beside IP context
-- Device placement modes for rack, room, wireless, and virtual inventory
-- Parent-child device relationships for hosted VMs and AP-linked wireless clients
-- Host-shared networking for VMs and containers that intentionally reuse a parent host IP
-- Multiple IP assignments per device, with device-level and port/interface-level context
-- Compute workspace for virtualization hosts and VMs
-- Capacity tracking for hosts and VMs with CPU, memory, storage, and specs fields
-- Port templates for new devices
-- Manual port create, edit, and delete
-- WiFi port kind across device types, templates, selectors, labels, visualizer views, and reports
-- Create, edit, and delete cables
-- VLAN allocation and VLAN deletion
-- VLAN range create, edit, and delete
-- IPAM subnet, DHCP scope, DHCP reservation, and IP zone CRUD
-- Gateway, DNS, reserved, infrastructure, and technical IP protection during allocation, discovery, and reconcile
-- Controller-aware WiFi workspace for controllers, SSIDs, AP radios, and wireless clients
-- Wireless client telemetry with AP, SSID, band, channel, signal, last-seen, and roam context
-- WiFi client grouping by AP/SSID in visualizer views when association or VLAN/IPAM context is available
-- Discovery inbox with subnet scan, duplicate awareness, review, and import into inventory
-- Discovery enrichment with MAC/vendor capture, technical IP preservation, natural IP sorting, and direct linking to existing inventory
-- Management IP synchronization between device records and IPAM
-- Next-free IP allocation and IP release
-- DHCP reservation allocation from IP zones instead of treating the whole DHCP scope as assignable
-- Direct links between devices, ports, IPAM assignments, racks, rooms, dashboard cards, reports, and visualizer inspector entries
-- Bulk device status edits and bulk delete with dependency cleanup
-- Unmanaged device status across inventory, filters, reports, backups,
-  and monitoring; health checks continue but do not overwrite that manual state
-- Atomic bulk cable type, length, and color edits across selected inventory rows
-- Audit log writes for the main workflows
-- User bootstrap, login, logout, and user management
-- Optional OIDC login with PKCE, role mapping, and Authentik-style issuer/debug guidance
-- Admin-only portable JSON backup/restore plus optional scheduled native SQLite
-  snapshots and an offline restore CLI
-- Backup exports preserve password hashes, documentation pages, device images, MACs, and parent-linked devices for restore, but redact stored alert-delivery secrets before download
-- Device health-check configuration, alert destinations, repeat-alert controls, and on-demand monitor runs
-- Multiple monitor targets per device so servers, firewalls, and multi-NIC systems can track separate management, service, storage, or VIP endpoints
-- Bulk ICMP, TCP, HTTP, and HTTPS monitor creation from selected devices
-- Device service inventory for DHCP, DNS, VPN, NTP, SNMP, Syslog, HTTP/S, databases, apps, and custom services
-- SMTP/email alert delivery beside Discord and Telegram, plus recent alert activity in the admin area
-- Reports workspace with printable/PDF-friendly inventory summaries plus Excel-compatible and CSV exports
-- Visualizer workspace for grouped rack layout, pyramid view, and React Flow diagram mapping, with Health mode, Trace mode, multi-select filters, loose-device layout toggles, room-only rack-zone toggles, and saved diagram positions
-- Rack shelves with proportional child-device footprints for multi-device and multi-U shelf documentation
-- Markdown Documentation workspace for runbooks and notes, including inline image insertion
-- Device image attachments with labels and notes on device detail pages
-- Hyper-V import wizard for staging hosts, VMs, power state, guest OS, virtual switches, virtual NICs, VLANs, IPs, CPU, memory, and disk data from a local PowerShell export, with editable host mapping before import
-- Proxmox import wizard for staging nodes, Linux bridges, QEMU VMs, LXC containers, MACs, VLAN tags/trunks, guest IPs, CPU, RAM, disks, boot flags, and Proxmox metadata from a local node export
-- Controller API integrations for Proxmox VE, UniFi Network, TP-Link Omada, OPNsense, and Dockhand with encrypted stored credentials, background connection-status refresh, token-bound manual previews, non-destructive scheduled sync, DHCP range previews, and selectable device/guest imports
-- Expanded demo data with multiple labs, MAC addresses, discovery states, custom templates/device types, multi-target monitors, room tech, documentation pages, device image examples, compute, and WiFi examples
-- Production build of the frontend and backend
-- Docker packaging for the frontend + API together
-
 ## Feature guides
 
 Use these when you want the workflow steps rather than just the overview:
@@ -395,43 +344,8 @@ is represented there and passed through all intended Compose manifests. See
 [INSTALL.md](./INSTALL.md) for deployment, secret, OIDC, discovery, and
 reverse-proxy configuration.
 
-OIDC uses the authorization-code flow with PKCE. Configure the provider
-redirect URI as `APP_URL/api/auth/oidc/callback`, or set `OIDC_REDIRECT_URI`
-explicitly when Rackpad is behind a proxy with a non-standard public URL.
-`OIDC_ISSUER_URL` must be the provider issuer, not the authorize URL or client
-settings page. Rackpad fetches
-`OIDC_ISSUER_URL/.well-known/openid-configuration`; if login returns a 502 with
-HTTP 404, test that exact discovery URL in a browser or with `curl`. For
-providers with per-application issuers, such as authentik, this usually means
-using the application/provider issuer path rather than the IdP root domain.
-Set `OIDC_DEBUG=1` temporarily to log the discovery URL, redirect URI, token
-endpoint status, and JWKS URL used during sign-in.
-
-Example Authentik configuration:
-
-```bash
-OIDC_ENABLED=1
-OIDC_ISSUER_URL=https://authentik.example.com/application/o/rackpad
-OIDC_CLIENT_ID=<client-id>
-OIDC_CLIENT_SECRET=<client-secret>
-OIDC_REDIRECT_URI=https://rackpad.example.com/api/auth/oidc/callback
-OIDC_LABEL=Authentik
-OIDC_DEFAULT_ROLE=viewer
-OIDC_ADMIN_GROUPS=admin
-```
-
-In Authentik, set the redirect URI to
-`https://rackpad.example.com/api/auth/oidc/callback` and assign a signing key to
-the provider/application. For a single-admin private deployment you can set
-`OIDC_DEFAULT_ROLE=admin`; for shared installs, keep the default role at
-`viewer` and map admin/editor groups explicitly.
-
-Discovery MAC/vendor enrichment needs layer-2 visibility from the Rackpad
-runtime. `DISCOVERY_MAC_SCAN_MODE=auto` tries `arp-scan` and `nmap` when the
-runtime can use them, then falls back to the OS neighbor/ARP cache. In Docker,
-MACs may remain unavailable on bridge networking, Docker Desktop, routed VLANs,
-VPNs, or containers without raw-socket capability; Rackpad will show scan
-diagnostics when that happens.
+For provider setup, use the [OIDC guide](./docs/OIDC.md). For layer-2 visibility,
+permissions, and optional host discovery, use the [discovery deployment guide](./docs/DISCOVERY_DEPLOYMENT.md).
 
 ## First run
 
@@ -449,141 +363,23 @@ OIDC users must reset passwords in the identity provider.
 
 ## Install With Docker
 
-Recommended no-clone install from the published GHCR image:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y curl ca-certificates
-curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh | bash
-```
-
-Use `RACKPAD_TAG=latest` if you want the newest stable GHCR image,
-`RACKPAD_TAG=1.7.3` if you want a specific release, or `RACKPAD_TAG=beta` if
-you want the newest testing image:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh -o /tmp/install-rackpad.sh
-RACKPAD_TAG=1.7.3 bash /tmp/install-rackpad.sh
-```
-
-Open:
-
-```text
-http://SERVER_IP:3000
-```
-
-Manual no-clone compose install:
-
-```bash
-sudo mkdir -p /opt/rackpad
-cd /opt/rackpad
-sudo curl -fsSLo compose.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.release.yml
-sudo tee .env >/dev/null <<'EOF'
-RACKPAD_IMAGE=ghcr.io/kobii-git/rackpad
-RACKPAD_TAG=latest
-RACKPAD_PORT=3000
-MONITOR_INTERVAL_MS=300000
-TRUST_PROXY=0
-TRUSTED_HOSTS=
-TRUSTED_ORIGINS=
-EOF
-sudo docker compose pull
-sudo docker compose up -d
-```
-
-If Rackpad runs in Docker on Linux or inside a Proxmox LXC and **Discovery**
-cannot see the local subnet, use the host-network discovery compose variant:
-
-```bash
-sudo curl -fsSLo compose.host-discovery.yml https://raw.githubusercontent.com/Kobii-git/Rackpad/main/docker-compose.host-discovery.yml
-sudo docker compose -f compose.host-discovery.yml pull
-sudo docker compose -f compose.host-discovery.yml up -d
-```
-
-That variant runs with host networking plus the raw-network capabilities needed
-by ICMP/ARP-style scans. See [Docker network discovery](./docs/DOCKER_DISCOVERY.md)
-for the security trade-offs and manual compose snippet.
-
-Build locally from a cloned repo only if you want to build from source:
-
-```bash
-docker compose up --build -d
-```
-
-The compose stack:
-
-- exposes Rackpad on `${RACKPAD_PORT:-3000}`
-- stores SQLite data in the named volume `rackpad_data`
-- serves the compiled frontend and API from the same container
-- runs with a read-only root filesystem except for `/data` and `/tmp`
-- uses `/api/health` for the container health check
-
-To stop it:
-
-```bash
-docker compose down
-```
-
-> [!CAUTION]
-> `docker compose down -v` permanently removes the `rackpad_data` volume and
-> its Rackpad database. Export a backup first and use this only when you intend
-> to delete the installation's stored data.
-
-To stop it and permanently remove the database volume:
-
-```bash
-docker compose down -v
-```
-
-Full Linux, Proxmox, and Windows install details, plus update steps, backups,
-git-clone/source-build options, and reverse-proxy settings live in
-[INSTALL.md](./INSTALL.md).
+Use the [installation guide](./INSTALL.md) for the canonical Linux, Windows,
+Proxmox, source-build, backup, update, and recovery procedures. Stable installations
+can pin `RACKPAD_TAG=1.8.0`; `latest` follows stable and `beta` follows testing.
+The normal deployment uses one hardened container and a persistent SQLite volume.
 
 ## Linux test deploy
 
-For a simple non-Docker Linux test deploy:
-
-```bash
-npm install
-npm run build
-PORT=3000 HOST=0.0.0.0 DATABASE_PATH=./rackpad.db npm start
-```
-
-If `better-sqlite3` needs to compile during `npm install`, install build tools first:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y python3 make g++
-```
+See [native Node deployment](./INSTALL.md#native-node-deploy) for source-build
+requirements and the generic service example. Docker remains the recommended path.
 
 ## Reverse proxy / TLS
 
-For any public-facing or VPN-exposed deployment, put Rackpad behind a TLS reverse proxy and set the trusted proxy/origin environment values. `TRUST_PROXY` accepts a comma- or space-separated list of trusted proxy IP addresses or CIDRs. Use the actual addresses of your controlled proxies; `0` disables trust.
-
-Recommended environment shape:
-
-```bash
-TRUST_PROXY=172.18.0.2
-TRUSTED_HOSTS=rackpad.example.com
-TRUSTED_ORIGINS=https://rackpad.example.com
-```
-
-Example proxy files are included in:
-
-- [deploy/Caddyfile.example](./deploy/Caddyfile.example)
-- [deploy/nginx-rackpad.conf](./deploy/nginx-rackpad.conf)
-
-The app already sets:
-
-- `Content-Security-Policy`
-- `Strict-Transport-Security` when the request arrives over HTTPS
-- `X-Frame-Options`
-- `X-Content-Type-Options`
-- `Referrer-Policy`
-
-Terminate TLS at the proxy, overwrite client-supplied `X-Forwarded-*` headers, and restrict direct access to the Rackpad application port. Forwarded host, scheme, and client identity are honored only for trusted peers. Legacy numeric hop counts, truthy aliases (`true`, `yes`, `on`), and invalid settings now disable proxy trust with a startup warning. Replace them with explicit proxy addresses before upgrading.
-
-Security upgrades to schema 50 encrypt existing inline SNMP communities and require `RACKPAD_SECRET_KEY` when those values exist. Retain your existing key and a pre-upgrade database/configuration snapshot. OIDC sessions are revoked and existing OIDC roles are recomputed once at the next login: configure a trusted administrator subject or group before upgrading. The trap listener now defaults off, and historical source credential links must be explicitly reconfigured. See [OIDC login](docs/OIDC.md) and [SNMP monitoring](docs/SNMP.md).
+Follow the [version-specific proxy instructions](./INSTALL.md#reverse-proxy-and-tls).
+Stable 1.8.0 uses controlled hop counts; 1.8.2 beta.4 and later require explicit
+proxy IPs/CIDRs. Terminate TLS at the proxy and restrict direct application access.
+Before upgrading, read the [1.8.3 upgrade precautions](./INSTALL.md#before-upgrading-to-183-beta)
+for encryption-key retention, OIDC re-login, trap opt-in, and paired rollback.
 
 ## Native development note
 

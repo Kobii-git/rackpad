@@ -125,6 +125,7 @@ export interface PhysicalLayoutPort {
   kind: string;
   face: string | null;
   portRole?: string | null;
+  stackMemberId?: string | null;
 }
 
 export interface PhysicalLayoutDevice {

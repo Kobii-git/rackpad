@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "Stacked switches": "堆疊交換器",
+  "Stack Members": "堆疊成員",
+  "Add member": "新增成員",
+  "Edit stack member": "編輯堆疊成員",
+  "Add MAC address": "新增 MAC 位址",
+  "Member filter": "成員篩選",
+  "Stack-wide ports": "堆疊共用連接埠",
+  "Stack member": "堆疊成員",
+  "Stack height is calculated from its members.": "堆疊高度依成員高度計算。",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "家庭實驗室清單",
   "Lab": "實驗室",

@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "Stacked switches": "স্ট্যাক করা সুইচ",
+  "Stack Members": "স্ট্যাকের সদস্য",
+  "Add member": "সদস্য যোগ করুন",
+  "Edit stack member": "স্ট্যাকের সদস্য সম্পাদনা করুন",
+  "Add MAC address": "MAC ঠিকানা যোগ করুন",
+  "Member filter": "সদস্য ফিল্টার",
+  "Stack-wide ports": "পুরো স্ট্যাকের পোর্ট",
+  "Stack member": "স্ট্যাকের সদস্য",
+  "Stack height is calculated from its members.": "সদস্যদের উচ্চতা থেকে স্ট্যাকের উচ্চতা গণনা করা হয়।",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "হোমল্যাব ইনভেন্টরি",
   "Lab": "ল্যাব",

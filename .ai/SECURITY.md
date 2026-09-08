@@ -46,6 +46,10 @@ constraints for changes.
   Its root-only advanced control must verify `CAP_NET_RAW`, `CAP_NET_ADMIN`, and
   raw-socket access before applying the matching systemd drop-in; refusal must
   leave configuration unchanged and never mutate outer Proxmox privilege.
+- SNMPv3 authenticates original packet bytes before decrypting responses or
+  updating trusted engine clocks. Discovery is provisional; peer/message/PDU
+  correlation, credential security levels, bounded retries, and USM timeliness
+  apply. Configured v3 trap credentials cannot be acquired by unsigned packets.
 - SNMP traps remain independent of discovery mode, disabled by default, and
   require an explicit UDP 1162 firewall decision when enabled.
 
@@ -94,5 +98,8 @@ port, adding privilege, accepting plaintext secrets, disabling a gate, or hiding
 a scanner result. These require explicit authority and independent review.
 
 Suppressions must be finding-specific, narrowly located, justified, and time
-bounded where supported. SNMPv3 MD5/SHA1 interoperability exceptions are inline
-only in `server/lib/snmp-v3.ts`; they do not justify weak hashes elsewhere.
+bounded where supported. SNMPv3 MD5/SHA1 rationale stays inline in
+`server/lib/snmp-v3.ts`. Its two reviewed RFC password-to-key findings also require
+the exact file hash, unchanged server tree and automated expiry; raw CodeQL
+analysis remains available. They do not justify weak hashes elsewhere or automatic
+renewal of the reviewed source/expiry policy.

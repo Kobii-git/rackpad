@@ -9,10 +9,67 @@ rp_http_get() {
   curl -fsS --connect-timeout 5 --max-time 15 "$@"
 }
 
+rp_readiness_seconds() { printf '%s\n' "$SECONDS"; }
+rp_readiness_pause() { sleep 1; }
+
+# Bound systemd IO too: a stalled manager must not outlive the startup budget.
+rp_readiness_systemctl() {
+  local remaining=$(( ${1:?deadline required} - $(rp_readiness_seconds) ))
+  shift
+  ((remaining > 0)) || return 124
+  node --input-type=module - "$remaining" "${RACKPAD_SYSTEMCTL_COMMAND:-systemctl}" "$@" <<'NODE'
+import { spawnSync } from 'node:child_process';
+const [seconds, command, ...args] = process.argv.slice(2);
+const result = spawnSync(command, args, {
+  timeout: Number(seconds) * 1000,
+  killSignal: 'SIGKILL',
+  maxBuffer: 8192,
+  stdio: ['ignore', 'pipe', 'ignore'],
+});
+if (result.stdout) process.stdout.write(result.stdout);
+process.exit(result.error?.code === 'ETIMEDOUT' ? 124 : (result.status ?? 1));
+NODE
+}
+
+rp_wait_for_health() {
+  local base="${1:?base URL required}" output="${2:?health output required}"
+  shift 2
+  local deadline remaining state request_timeout connect_timeout
+  deadline=$(( $(rp_readiness_seconds) + 60 ))
+  while (( (remaining = deadline - $(rp_readiness_seconds)) > 0 )); do
+    state="$(rp_readiness_systemctl "$deadline" show rackpad --property=ActiveState --value)" || {
+      rp_error "Unable to read Rackpad service state during startup."
+      return 1
+    }
+    case "$state" in
+      active|activating|reloading) ;;
+      *)
+        rp_error "Rackpad service stopped or failed before becoming healthy. Inspect systemctl status rackpad."
+        return 1
+        ;;
+    esac
+    remaining=$((deadline - $(rp_readiness_seconds)))
+    ((remaining > 0)) || break
+    request_timeout=$((remaining < 15 ? remaining : 15))
+    connect_timeout=$((remaining < 5 ? remaining : 5))
+    if [[ "$state" == "active" ]] &&
+      rp_http_get --connect-timeout "$connect_timeout" --max-time "$request_timeout" \
+        "$@" "${base}/api/health" -o "$output" 2>/dev/null &&
+      node -e 'try { process.exit(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).ok === true ? 0 : 1) } catch { process.exit(1) }' "$output" &&
+      rp_readiness_systemctl "$deadline" is-active --quiet rackpad &&
+      (( $(rp_readiness_seconds) < deadline )); then
+      return 0
+    fi
+    (( $(rp_readiness_seconds) < deadline )) || break
+    rp_readiness_pause
+  done
+  rp_error "Rackpad did not become healthy within 60 seconds. Inspect systemctl status rackpad and the service journal."
+  return 1
+}
+
 rp_verify_active_release() {
   local port base temporary trusted_host
   local request_arguments=()
-  rp_systemctl is-active --quiet rackpad || return 1
   port="$(rp_read_env PORT)"
   [[ "$port" =~ ^[0-9]+$ ]] || return 1
   base="http://127.0.0.1:${port}"
@@ -25,15 +82,14 @@ rp_verify_active_release() {
   fi
   temporary="$(mktemp -d "${TMPDIR:-/tmp}/rackpad-verify.XXXXXX")" || return
 
-  if ! rp_http_get "${request_arguments[@]}" "${base}/api/health" -o "${temporary}/health" ||
-    ! grep -q '"ok"[[:space:]]*:[[:space:]]*true' "${temporary}/health" ||
-    ! rp_http_get "${request_arguments[@]}" "${base}/api/auth/status" -o "${temporary}/auth" ||
+  if ! rp_wait_for_health "$base" "${temporary}/health" ${request_arguments[@]+"${request_arguments[@]}"} ||
+    ! rp_http_get ${request_arguments[@]+"${request_arguments[@]}"} "${base}/api/auth/status" -o "${temporary}/auth" ||
     ! grep -q '"needsBootstrap"' "${temporary}/auth" ||
-    ! rp_http_get "${request_arguments[@]}" "${base}/" -o "${temporary}/index" ||
+    ! rp_http_get ${request_arguments[@]+"${request_arguments[@]}"} "${base}/" -o "${temporary}/index" ||
     ! grep -q 'id="root"' "${temporary}/index" ||
-    ! rp_http_get "${request_arguments[@]}" "${base}/api/imports/proxmox-collector" -o "${temporary}/collect-proxmox.sh" ||
+    ! rp_http_get ${request_arguments[@]+"${request_arguments[@]}"} "${base}/api/imports/proxmox-collector" -o "${temporary}/collect-proxmox.sh" ||
     ! grep -q '^#!/usr/bin/env bash' "${temporary}/collect-proxmox.sh" ||
-    ! rp_http_get "${request_arguments[@]}" "${base}/api/imports/hyperv-collector" -o "${temporary}/collect-hyperv.ps1" ||
+    ! rp_http_get ${request_arguments[@]+"${request_arguments[@]}"} "${base}/api/imports/hyperv-collector" -o "${temporary}/collect-hyperv.ps1" ||
     ! grep -q '^param(' "${temporary}/collect-hyperv.ps1"; then
     rm -rf "$temporary"
     return 1

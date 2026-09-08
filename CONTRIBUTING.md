@@ -69,12 +69,13 @@ All locale files use `satisfies TranslationMap`, so **key parity is enforced at 
 
 | Location | Locales |
 |----------|---------|
-| `src/i18n/translations.ts` | `en`, `fr`, `zh`, `es`, `hi`, `ar`, `ja` (inline) |
-| `src/i18n/locales/*.ts` | All other locales |
+| `src/i18n/base.ts` | English source strings and `TranslationMap` |
+| `src/i18n/locales/*.ts` | All 23 non-English locales |
+| `src/i18n/translations.ts` | Compatibility re-exports |
 
 **Rules:**
 
-1. Add new UI strings to `export const en` in `translations.ts` first.
+1. Add new UI strings to `export const en` in `src/i18n/base.ts` first.
 2. Run `node scripts/sync-i18n-keys.mjs` to back-fill missing keys in file locales (English fallback).
 3. Translate values in each target locale — do not copy another locale's translations wholesale.
 4. Run `npm run check:i18n` to detect value contamination before committing.
@@ -90,4 +91,4 @@ Helper scripts live in `scripts/` (`sync-i18n-keys.mjs`, `check-i18n-values.mjs`
 - **No drive-by refactors** unrelated to the task.
 - **Do not commit** `.env`, credentials, or local-only scripts unless explicitly requested.
 
-Questions? Open a [discussion](https://github.com/your-org/rackpad/discussions) or an issue — we're happy to help you get unblocked.
+Questions? Open a [discussion](https://github.com/Kobii-git/rackpad/discussions) or an issue — we're happy to help you get unblocked.

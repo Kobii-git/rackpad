@@ -10,11 +10,16 @@ import type {
   Port,
   PortLink,
   Rack,
+  RackFace,
   Room,
 } from "../../src/lib/types";
 
 /** Synthetic two-device, 24-cord acceptance fixture; contains no operator data. */
-export function rackCableFixture(prefix = "routing") {
+export function rackCableFixture(
+  prefix = "routing",
+  fromFace: RackFace = "front",
+  toFace: RackFace = fromFace,
+) {
   const room: Room = {
     id: `${prefix}-room`,
     labId: "lab_home",
@@ -90,8 +95,8 @@ export function rackCableFixture(prefix = "routing") {
   }));
   const links: PortLink[] = Array.from({ length: 24 }, (_, index) => ({
     id: `${prefix}-cord-${index + 1}`,
-    fromPortId: `${devices[0]!.id}-ports:front-${index + 1}`,
-    toPortId: `${devices[1]!.id}-ports:front-${index + 1}`,
+    fromPortId: `${devices[0]!.id}-ports:${fromFace}-${index + 1}`,
+    toPortId: `${devices[1]!.id}-ports:${toFace}-${index + 1}`,
     cableType: "Cat6A",
     color: "#22c55e",
     visible: true,

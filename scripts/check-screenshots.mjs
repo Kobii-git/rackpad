@@ -17,12 +17,15 @@ const playwrightCli = resolve(
   "node_modules/@playwright/test/cli.js",
 );
 
+let succeeded = false;
 try {
   capture(firstDir);
   capture(secondDir);
   await compareSuites(firstDir, secondDir);
+  succeeded = true;
 } finally {
-  await rm(scratchRoot, { force: true, recursive: true });
+  if (succeeded) await rm(scratchRoot, { force: true, recursive: true });
+  else console.error(`Screenshot diagnostics retained at ${scratchRoot}`);
 }
 
 function capture(outputDir) {
@@ -40,7 +43,9 @@ function capture(outputDir) {
   );
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(`Screenshot capture failed with exit code ${result.status}.`);
+    throw new Error(
+      `Screenshot capture failed with exit code ${result.status}.`,
+    );
   }
 }
 

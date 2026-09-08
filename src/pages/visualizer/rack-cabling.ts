@@ -15,6 +15,7 @@ import {
 import {
   buildRackElevationScene,
   physicalFaceForRackFace,
+  rackFaceForPhysicalFace,
   type RackStudioRect,
 } from "@/lib/rack-studio-scene";
 import {
@@ -23,6 +24,7 @@ import {
   planPhysicalCableRoutes,
   cableGeometryLabelPoint,
   type CablePoint,
+  type CableContinuationMarker,
   type CableRouteGeometry,
   type RackStudioCableAnchor,
 } from "@/lib/rack-studio-cables";
@@ -115,6 +117,7 @@ export interface RackCablingRoute {
   path: string;
   geometry: CableRouteGeometry;
   labelPoint: CablePoint;
+  continuations: CableContinuationMarker[];
   color: string;
   label: string;
   from: RackCablingAnchor;
@@ -133,6 +136,7 @@ export interface RackCablingHandoff {
   roomId: string | null;
   roomLabel: string | null;
   physicalFace: RackFace;
+  rackFace: RackFace;
   fallbackReason?: RackCablingFallbackReason;
 }
 
@@ -1064,7 +1068,7 @@ export function buildRackCablingRoutes(input: {
     (input.rooms ?? [input.scene.room]).map((room) => [room.id, room]),
   );
   const routes: Array<
-    Omit<RackCablingRoute, "geometry" | "path" | "labelPoint">
+    Omit<RackCablingRoute, "geometry" | "path" | "labelPoint" | "continuations">
   > = [];
 
   for (const link of [...input.links].sort((left, right) =>
@@ -1117,6 +1121,14 @@ export function buildRackCablingRoutes(input: {
         roomId,
         roomLabel: roomId ? (roomById.get(roomId)?.name ?? null) : null,
         physicalFace: port.face === "rear" ? "rear" : "front",
+        rackFace: device
+          ? rackFaceForPhysicalFace(
+              device,
+              port.face === "rear" ? "rear" : "front",
+            )
+          : port.face === "rear"
+            ? "rear"
+            : "front",
         fallbackReason:
           reason === "unavailable"
             ? fallbackReasonForEndpoint(
@@ -1220,14 +1232,31 @@ export function buildRackCablingRoutes(input: {
   });
   const geometryById = new Map(
     planPhysicalCableRoutes(
-      routes.map((route) => ({
-        id: route.link.id,
-        from: anchor(route.from),
-        to: anchor(route.to),
-        manualPoints: [],
-        allowDirect:
-          route.handoffs.length === 0 && !route.link.routeWaypoints?.length,
-      })),
+      routes.map((route) => {
+        const hidden = route.handoffs.find(
+          (handoff) => handoff.reason === "hidden-face",
+        );
+        const local = hidden?.endpoint === "from" ? route.to : route.from;
+        const continuation =
+          hidden &&
+          hidden.rackFace !== local.rackFace &&
+          !route.link.routeWaypoints?.length &&
+          route.handoffs.every((handoff) => handoff.reason === "hidden-face");
+        return {
+          id: route.link.id,
+          from: anchor(continuation ? local : route.from),
+          to: continuation ? undefined : anchor(route.to),
+          hiddenEndpoint: continuation
+            ? { portId: hidden.portId, rackFace: hidden.rackFace }
+            : undefined,
+          manualPoints: [],
+          allowContinuation:
+            !route.link.routeWaypoints?.length &&
+            route.handoffs.every((handoff) => handoff.reason === "hidden-face"),
+          allowDirect:
+            route.handoffs.length === 0 && !route.link.routeWaypoints?.length,
+        };
+      }),
       {
         width: input.scene.width,
         height: input.scene.height,
@@ -1252,10 +1281,24 @@ export function buildRackCablingRoutes(input: {
   );
   return routes.map((route) => {
     const planned = geometryById.get(route.link.id)!;
+    const hidden = route.handoffs.find(
+      (handoff) => handoff.reason === "hidden-face",
+    );
+    const marker = planned.continuations[0];
     return {
       ...route,
+      ...(hidden && marker
+        ? {
+            [hidden.endpoint]: {
+              ...route[hidden.endpoint],
+              x: marker.x,
+              y: marker.y,
+            },
+          }
+        : {}),
       path: planned.path,
       geometry: planned.geometry,
+      continuations: planned.continuations,
       labelPoint: cableGeometryLabelPoint(planned.geometry),
     };
   });

@@ -25,8 +25,10 @@
     "src/**/*.test.tsx",
     "e2e/**/*.ts",
     "scripts/screenshots/**/*.ts",
+    "scripts/fixtures/**/*.ts",
     "playwright.config.ts",
     "playwright.security.config.ts",
+    "playwright.storage.config.ts",
     "playwright.screenshots.config.ts"
   ],
   "exclude": ["node_modules", "dist", "dist-server", ".cache"]

@@ -1,3 +1,4 @@
+import { isStackType } from "../lib/device-stacks.js";
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import { writeAuditLogEntry } from "../lib/audit-log.js";
@@ -129,6 +130,7 @@ function parseRequestedBindings(value: unknown): PortBindingV1[] | undefined {
 }
 
 function buildPreview(device: DeviceRow, body: Record<string, unknown>) {
+  if (isStackType(device.deviceType)) throw new ValidationError("Stack member faces are generated from their members and port assignments.", 409);
   const ports = getDevicePorts(device.id);
   const customSnapshot = body.customSnapshot;
   const moduleIds =

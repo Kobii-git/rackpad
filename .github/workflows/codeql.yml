@@ -1,6 +1,7 @@
 name: codeql
 
 on:
+  workflow_call:
   push:
     branches: [main, beta, dev]
   pull_request:
@@ -23,12 +24,51 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install schema validation dependencies
+        run: npm ci --ignore-scripts
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           config-file: ./.github/codeql/codeql-config.yml
           languages: javascript-typescript
           queries: +security-extended,security-and-quality
+          source-root: ${{ github.workspace }}
 
       - name: Perform CodeQL analysis
+        id: analysis
         uses: github/codeql-action/analyze@v4
+        env:
+          # Public committed source provides hash-verifiable evidence in native SARIF.
+          CODEQL_ACTION_EXTRA_OPTIONS: '{"database":{"interpret-results":["--sarif-add-file-contents"]}}'
+        with:
+          output: ${{ runner.temp }}/rackpad-codeql-raw
+          upload: failure-only
+
+      - name: Block high and critical CodeQL findings
+        id: policy
+        run: node scripts/check-codeql-results.mjs "$RUNNER_TEMP/rackpad-codeql-raw" "$RUNNER_TEMP/rackpad-codeql-review"
+
+      - name: Upload reviewed analysis or raw failure evidence
+        if: always() && steps.analysis.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ steps.policy.outcome == 'success' && format('{0}/prepared', steps.policy.outputs.review_directory) || format('{0}/rackpad-codeql-raw', runner.temp) }}
+          wait-for-processing: true
+          checkout_path: ${{ github.workspace }}
+
+      - name: Preserve complete CodeQL analysis and review summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-evidence-${{ github.job }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/rackpad-codeql-raw
+            ${{ steps.policy.outputs.review_directory && format('{0}/review-summary.json', steps.policy.outputs.review_directory) || '' }}
+          if-no-files-found: error

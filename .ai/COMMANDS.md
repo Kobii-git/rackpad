@@ -16,9 +16,11 @@ separately.
 | Translation integrity | `check:i18n` | Canonical after visible strings/locales |
 | Server/domain tests | `test:server` | Canonical after server/data/security work |
 | Client unit tests | `test:client` | Canonical after client helper/model work |
+| SNMP wire interoperability | `test:snmp:interop` | Isolated Docker bridge with Net-SNMP; credential API, monitoring, IF-MIB and authenticated traps; required by reusable quality |
+| Storage browser compatibility | `test:e2e:storage` | Chromium/Firefox with native, missing and throwing UUID APIs; fresh and schema-50 upgrade fixtures |
 | Browser/accessibility | `test:e2e` | Environment-heavy; required by full CI/release |
 | Documentation screenshots | `screenshots:update` | Isolated deterministic 1920×1200 capture; outside normal E2E discovery |
-| Screenshot determinism | `screenshots:check` | Two isolated captures with manifest and bounded pixel comparison; required for release candidates |
+| Screenshot determinism | `screenshots:check` | Two isolated captures with manifest and bounded pixel comparison; failures retain temporary captures for diagnosis; required after application checks in the reusable quality workflow |
 | Non-browser tests | `test` | Canonical local aggregation |
 | All tests | `test:full` | Canonical environment-heavy aggregation |
 | Production build | `build` | Canonical client/server build |

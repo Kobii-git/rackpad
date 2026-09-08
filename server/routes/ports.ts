@@ -1,3 +1,4 @@
+import { assertPortStackMember } from '../lib/device-stacks.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { db, parseRow } from '../db.js'
 import {
@@ -296,6 +297,9 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
         virtualSwitchId ?? null,
         macAddress,
       )
+      const stackMemberId = optionalString(body, 'stackMemberId', { maxLength: 80 }) ?? null
+      assertPortStackMember(deviceId, stackMemberId)
+      db.prepare('UPDATE ports SET stackMemberId = ? WHERE id = ?').run(stackMemberId, id)
       reconcileDevicePhysicalLayout(deviceId)
     })()
 
@@ -368,6 +372,11 @@ export const portsRoutes: FastifyPluginAsync = async (app) => {
       values.push(persistedAllowed)
     }
 
+    if ('stackMemberId' in body) {
+      const memberId = optionalString(body, 'stackMemberId', { maxLength: 80 }) ?? null
+      assertPortStackMember(String(current.deviceId), memberId)
+      updates.push('stackMemberId = ?'); values.push(memberId)
+    }
     if (updates.length === 0) return reply.status(400).send({ error: 'No valid fields to update' })
 
     values.push(req.params.id)

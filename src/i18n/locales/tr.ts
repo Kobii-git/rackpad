@@ -1,6 +1,16 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Stacked switches": "Yığın anahtarları",
+  "Stack Members": "Yığın üyeleri",
+  "Add member": "Üye ekle",
+  "Edit stack member": "Yığın üyesini düzenle",
+  "Add MAC address": "MAC adresi ekle",
+  "Member filter": "Üye filtresi",
+  "Stack-wide ports": "Yığın genelindeki portlar",
+  "Stack member": "Yığın üyesi",
+  "Stack height is calculated from its members.": "Yığın yüksekliği üyelerinden hesaplanır.",
+
   "Rackpad": "Rackpad",
   "Homelab inventory": "Homelab envanteri",
   "Lab": "Laboratuvar",

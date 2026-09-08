@@ -5,6 +5,7 @@ import type {
   AuditEntry,
   AuthSession,
   Device,
+  DeviceStackMember,
   DeviceImage,
   DevicePlacement,
   DeviceService,
@@ -442,8 +443,7 @@ async function request<T>(
   if (!res.ok) {
     let message = `Request failed: ${res.status}`;
     let errorBody:
-      | { error?: string; code?: string; [key: string]: unknown }
-      | undefined;
+      { error?: string; code?: string; [key: string]: unknown } | undefined;
     try {
       errorBody = (await res.json()) as {
         error?: string;
@@ -1043,6 +1043,39 @@ export const api = {
     });
   },
 
+  getStackMembers(id: string) {
+    return request<DeviceStackMember[]>(`/devices/${id}/stack-members`);
+  },
+  createStackMember(
+    id: string,
+    body: Omit<DeviceStackMember, "id" | "deviceId" | "position">,
+  ) {
+    return request<DeviceStackMember>(`/devices/${id}/stack-members`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  updateStackMember(
+    id: string,
+    memberId: string,
+    body: Partial<DeviceStackMember>,
+  ) {
+    return request<DeviceStackMember>(
+      `/devices/${id}/stack-members/${memberId}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    );
+  },
+  deleteStackMember(id: string, memberId: string) {
+    return request<void>(`/devices/${id}/stack-members/${memberId}`, {
+      method: "DELETE",
+    });
+  },
+  reorderStackMembers(id: string, memberIds: string[]) {
+    return request<DeviceStackMember[]>(`/devices/${id}/stack-members/order`, {
+      method: "PUT",
+      body: JSON.stringify({ memberIds }),
+    });
+  },
   getDevice(id: string) {
     return request<Device>(`/devices/${id}`);
   },
