@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.8.3-beta.0",
+  "version": "1.8.3-beta.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -61,7 +61,7 @@
     "ipaddr.js": "^2.4.0",
     "lucide-react": "^0.468.0",
     "motion": "^11.15.0",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^9.1.1",
     "pino-pretty": "^13.1.1",
     "re2-wasm": "^1.0.2",
     "react": "^19.0.0",

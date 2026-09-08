@@ -29,9 +29,9 @@ monitoring, documentation, images, integrations, reports, labs, and
 administration into one clean app.
 
 Stable: **v1.8.0**.
-This branch prepares **v1.8.3-beta.0** for experimental testing.
+This branch prepares **v1.8.3-beta.1** for experimental testing.
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm published artifacts.
-See the [combined candidate notes and acceptance checklist](docs/releases/v1.8.3-beta.0.md).
+See the [combined candidate notes and acceptance checklist](docs/releases/v1.8.3-beta.1.md).
 See the [changelog](./CHANGELOG.md); the latest-tag badge may show a prerelease.
 
 Built with:

@@ -236,13 +236,13 @@ current installation exits without restarting the service. Failed activation
 restores the paired code, database, configuration, systemd assets, script
 origin, and Community core pin.
 
-The combined 1.8.3-beta.0 verifier allows up to 60 seconds for service/HTTP startup,
+The combined 1.8.3-beta.1 verifier allows up to 60 seconds for service/HTTP startup,
 with one-second retries and deadline-bounded HTTP/systemd calls. A failed or
 stopped service aborts early. Authentication, SPA, and collector checks run only
 after health succeeds. Fresh installation, candidate activation, rollback, and
 snapshot-failure recovery use the same wait; persistent failure retains the
 existing stop or paired-rollback behavior. See the
-[combined candidate acceptance checklist](releases/v1.8.3-beta.0.md).
+[combined candidate acceptance checklist](releases/v1.8.3-beta.1.md).
 
 ## Discovery privilege modes
 
