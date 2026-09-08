@@ -3,13 +3,20 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const root = path.resolve(import.meta.dirname, "..");
+function headingText(heading) {
+  let value = heading.toLowerCase().replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  // Strip complete inline tags repeatedly so nested angle brackets cannot
+  // reconstruct a tag after the first replacement.
+  while (/<[^>]*>/.test(value)) value = value.replace(/<[^>]*>/g, "");
+  return value.replace(/[^\p{L}\p{N}_\-\s]/gu, "").replace(/ /g, "-");
+}
 export function headingAnchors(markdown) {
   const anchors = new Set();
   const counts = new Map();
   for (const line of markdown.replace(/```[\s\S]*?```/g, "").split("\n")) {
     const heading = line.match(/^#{1,6}\s+(.+?)\s*#*$/)?.[1];
     if (!heading) continue;
-    const slug = heading.toLowerCase().replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/<[^>]*>/g, "").replace(/[^\p{L}\p{N}_\-\s]/gu, "").replace(/ /g, "-");
+    const slug = headingText(heading);
     const count = counts.get(slug) ?? 0;
     anchors.add(count ? `${slug}-${count}` : slug);
     counts.set(slug, count + 1);
@@ -28,7 +35,7 @@ export function inspectOperatorDocs(repository = root) {
   for (const file of docs) {
     const original = readFileSync(path.join(repository, file), "utf8");
     const text = original.replace(/```[\s\S]*?```/g, "");
-    if (/github\.com\/(?:your-org|your-user|username)\//i.test(original)) failures.push(`${file}: placeholder GitHub URL`);
+    if (["your-org", "your-user", "username"].some((owner) => original.toLowerCase().includes(`github.com/${owner}/`))) failures.push(`${file}: placeholder GitHub URL`);
     for (const match of original.matchAll(/\bnpm run ([\w:-]+)/g)) {
       if (!scripts[match[1]]) failures.push(`${file}: unknown package command ${match[1]}`);
     }

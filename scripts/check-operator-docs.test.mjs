@@ -7,6 +7,7 @@ import { headingAnchors, inspectOperatorDocs } from "./check-operator-docs.mjs";
 
 test("GitHub heading punctuation and duplicate anchors", () => {
   assert.deepEqual([...headingAnchors("## Before upgrading to 1.8.2 beta\n## Test\n## Test\n")], ["before-upgrading-to-182-beta", "test", "test-1"]);
+  assert.deepEqual([...headingAnchors("## <span>Storage</span>\n## <scr<script>ipt>\n")], ["storage", "ipt"]);
 });
 test("operator checks detect broken examples and links while retaining release history", () => {
   const root = mkdtempSync(path.join(tmpdir(), "rackpad-docs-test-"));

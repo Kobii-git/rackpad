@@ -19,6 +19,30 @@ test("CodeQL blocks high/critical findings and fails closed on missing analysis"
   assert.throws(() => inspectSarif(sarif("9.8", [{ ruleId: "unknown" }])));
 });
 
+test("CodeQL resolves extension-local rule metadata and rejects ambiguous references", () => {
+  // Matches CodeQL 4.37.9's hosted SARIF shape: metadata lives in an extension.
+  const document = sarif("1.0", [{ ruleId: "test-rule", rule: { id: "test-rule", index: 0, toolComponent: { index: 1 } } }]);
+  const run = document.runs[0];
+  run.tool.extensions = [{ name: "pr-diff-range", rules: [] }, {
+    name: "codeql/javascript-queries", rules: [{ id: "test-rule", properties: { "security-severity": "8.1" } }],
+  }];
+  assert.equal(inspectSarif(document), 1, "must use extension severity instead of a same-named driver rule");
+  run.results[0].rule.toolComponent.index = 9;
+  assert.throws(() => inspectSarif(document), /tool component/);
+  run.results[0].rule.toolComponent.index = 1;
+  run.results[0].rule.index = 9;
+  assert.throws(() => inspectSarif(document), /rule metadata/);
+  run.results[0].rule.index = 0;
+  run.results[0].rule.id = "different-rule";
+  assert.throws(() => inspectSarif(document), /identifiers/);
+  run.results[0].rule.id = "test-rule";
+  run.results[0].ruleIndex = 1;
+  assert.throws(() => inspectSarif(document), /indices/);
+  delete run.results[0].ruleIndex;
+  run.results[0].suppressions = [{ kind: "inSource" }];
+  assert.equal(inspectSarif(document), 1, "an unaccepted suppression must still block publication");
+});
+
 test("each required check blocks image and release jobs on failure", () => {
   const { jobs } = workflow("docker-publish");
   assert.deepEqual(jobs.build.needs, ["quality", "codeql", "security"]);

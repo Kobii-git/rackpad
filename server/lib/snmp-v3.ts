@@ -75,16 +75,18 @@ export function passwordToKey(
 
   let hash: Buffer;
   if (protocol === "MD5") {
-    // SNMPv3 USM password-to-key localization is defined by the configured
-    // device auth protocol; MD5 remains here only for legacy device support.
+    // RFC 3414 A.2.1 requires this hash for wire interoperability, not password
+    // storage. Credential storage remains separately encrypted. The configured
+    // device auth protocol requires MD5 for legacy device support.
     // Owner: @Kobii-git; review legacy interoperability by 2026-11-30.
-    // codeql[js/weak-cryptographic-algorithm]
+    // codeql[js/weak-cryptographic-algorithm,js/insufficient-password-hash]
     hash = createHash("md5").update(digestInput).digest();
   } else {
-    // SNMPv3 USM password-to-key localization is defined by the configured
-    // device auth protocol; SHA1 remains here only for legacy device support.
+    // RFC 3414 A.2.2 requires this hash for wire interoperability, not password
+    // storage. Credential storage remains separately encrypted. The configured
+    // device auth protocol requires SHA1 for legacy device support.
     // Owner: @Kobii-git; review legacy interoperability by 2026-11-30.
-    // codeql[js/weak-cryptographic-algorithm]
+    // codeql[js/weak-cryptographic-algorithm,js/insufficient-password-hash]
     hash = createHash("sha1").update(digestInput).digest();
   }
 

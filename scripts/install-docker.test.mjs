@@ -55,7 +55,9 @@ exit 1
   if (options.env !== undefined) writeFileSync(path.join(install, ".env"), options.env);
   if (options.compose) writeFileSync(path.join(install, "compose.yml"), options.compose);
   if (options.managed) writeFileSync(path.join(install, "compose.yml.installer.sha256"), createHash("sha256").update(options.compose).digest("hex") + "\n");
-  const result = spawnSync("bash", ["-c", 'source "$1"; run() { "$@"; }; install_rackpad', "fixture", path.join(root, "scripts/install-docker.sh")], {
+  const runner = path.join(directory, "run-fixture.sh");
+  writeFileSync(runner, 'source "$1"; run() { "$@"; }; install_rackpad\n', { mode: 0o700 });
+  const result = spawnSync("bash", [runner, path.join(root, "scripts/install-docker.sh")], {
     encoding: "utf8",
     env: { ...process.env, PATH: `${directory}/bin:${process.env.PATH}`, FIXTURE: directory, INSTALL_DIR: install,
       RACKPAD_IMAGE: "ghcr.io/kobii-git/rackpad", RACKPAD_TAG: "latest", RACKPAD_SECRET_KEY: "", ...options.variables },
