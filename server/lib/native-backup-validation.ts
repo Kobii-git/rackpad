@@ -1,17 +1,10 @@
+import { validateStackIntegrity } from "./stack-integrity.js";
 import type Database from "better-sqlite3";
 import { CURRENT_SCHEMA_VERSION } from "../schema-version.js";
 
 export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
   appSettings: ["key", "value", "updatedAt"],
-  auditLog: [
-    "id",
-    "ts",
-    "user",
-    "action",
-    "entityType",
-    "entityId",
-    "summary",
-  ],
+  auditLog: ["id", "ts", "user", "action", "entityType", "entityId", "summary"],
   deviceImages: [
     "id",
     "deviceId",
@@ -47,6 +40,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "snmpMatchMode",
     "snmpCredentialId",
     "ignoreTlsErrors",
+    "snmpCommunityEnc",
   ],
   deviceServices: [
     "id",
@@ -62,6 +56,18 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "createdAt",
     "updatedAt",
   ],
+  devicePhysicalLayouts: [
+    "deviceId",
+    "sourceTemplateId",
+    "status",
+    "snapshot",
+    "bindings",
+    "portFingerprint",
+    "createdAt",
+    "updatedAt",
+  ],
+  deviceStackMembers: ["id", "deviceId", "position", "name", "manufacturer", "model", "serial", "heightU", "status", "notes"],
+  deviceStackMemberMacs: ["memberId", "label", "macAddress"],
   devices: [
     "id",
     "labId",
@@ -92,6 +98,15 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "snmpCredentialId",
     "rackSlot",
     "ignoreDuplicateMac",
+    "rackMountKind",
+    "rackColumn",
+    "rackColumnSpan",
+    "shelfX",
+    "shelfY",
+    "shelfWidth",
+    "shelfHeight",
+    "shelfOrientation",
+    "rackSide",
   ],
   dhcpScopes: [
     "id",
@@ -255,6 +270,17 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "createdAt",
     "updatedAt",
   ],
+  hardwareTemplateDefaults: ["deviceType", "templateId", "updatedAt"],
+  hardwareTemplates: [
+    "id",
+    "name",
+    "description",
+    "category",
+    "deviceTypes",
+    "definition",
+    "createdAt",
+    "updatedAt",
+  ],
   ipAssignments: [
     "id",
     "subnetId",
@@ -269,14 +295,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "allocationMode",
     "dhcpScopeId",
   ],
-  ipZones: [
-    "id",
-    "subnetId",
-    "kind",
-    "startIp",
-    "endIp",
-    "description",
-  ],
+  ipZones: ["id", "subnetId", "kind", "startIp", "endIp", "description"],
   labs: ["id", "name", "description", "location"],
   oidcIdentities: [
     "issuer",
@@ -286,6 +305,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "displayName",
     "createdAt",
     "updatedAt",
+    "roleRecheckRequired",
   ],
   portLinks: [
     "id",
@@ -295,6 +315,9 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "cableLength",
     "color",
     "notes",
+    "label",
+    "visible",
+    "routeWaypoints",
   ],
   portTemplates: [
     "id",
@@ -323,6 +346,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "macAddress",
     "portRole",
     "aggregatePortId",
+    "stackMemberId",
   ],
   racks: [
     "id",
@@ -333,6 +357,8 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "location",
     "notes",
     "roomId",
+    "studioX",
+    "studioY",
   ],
   referenceImages: [
     "id",
@@ -543,17 +569,23 @@ export function validateRackpadSqliteDatabase(
   if (
     !schema ||
     !Number.isInteger(schema.version) ||
-    schema.version !== CURRENT_SCHEMA_VERSION
+    (schema.version < 50 || schema.version > CURRENT_SCHEMA_VERSION)
   ) {
     throw new RackpadSqliteValidationError(
       `${label} schema is not supported by this Rackpad version.`,
     );
   }
 
+  if (schema.version === 50) {
+    const stackObjects = database.prepare("SELECT name FROM sqlite_master WHERE name IN ('deviceStackMembers', 'deviceStackMemberMacs', 'ports_stack_owner_insert', 'ports_stack_owner_update', 'stack_member_device_immutable', 'stack_type_guard', 'stack_height_guard', 'stack_device_delete', 'idx_ports_stack_member')").all();
+    const stackColumn = (database.prepare('PRAGMA table_info(ports)').all() as Array<{ name: string }>).some(row => row.name === 'stackMemberId');
+    if (stackObjects.length || stackColumn) throw new RackpadSqliteValidationError(`${label} has inconsistent schema 50 stack objects.`);
+  }
   const missingSchema: string[] = [];
   for (const [table, requiredColumns] of Object.entries(
     CURRENT_RACKPAD_SCHEMA_COLUMNS,
   )) {
+    if (schema.version === 50 && (table === "deviceStackMembers" || table === "deviceStackMemberMacs")) continue;
     const columns = new Set(
       (
         database.prepare(`PRAGMA table_info(${table})`).all() as Array<{
@@ -566,6 +598,7 @@ export function validateRackpadSqliteDatabase(
       continue;
     }
     for (const column of requiredColumns) {
+      if (schema.version === 50 && table === "ports" && column === "stackMemberId") continue;
       if (!columns.has(column)) missingSchema.push(`${table}.${column}`);
     }
   }
@@ -582,5 +615,8 @@ export function validateRackpadSqliteDatabase(
     );
   }
 
+  try { if (schema.version >= 51) validateStackIntegrity(database); } catch (error) {
+    throw new RackpadSqliteValidationError(`${label} failed stack integrity validation: ${error instanceof Error ? error.message : "invalid stack"}`);
+  }
   return schema.version;
 }

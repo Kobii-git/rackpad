@@ -27,6 +27,7 @@ import {
 } from "@/lib/store";
 import type { DeviceTypeUsage } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { HardwareTemplateBuilder } from "@/components/rack/HardwareTemplateBuilder";
 
 const NEW_TYPE_ID = "__new_device_type__";
 
@@ -285,7 +286,8 @@ export default function DeviceTypesPage() {
                             </span>
                             {!type.builtIn && parent && (
                               <span className="block truncate text-[10px] text-[var(--text-muted)]">
-                                {t("Parent")}: {localizedDeviceTypeLabel(parent, t)}
+                                {t("Parent")}:{" "}
+                                {localizedDeviceTypeLabel(parent, t)}
                               </span>
                             )}
                           </span>
@@ -304,7 +306,7 @@ export default function DeviceTypesPage() {
           </Card>
 
           <div className="space-y-4">
-            <Card>
+            <Card data-testid="device-type-editor">
               <CardHeader>
                 <CardTitle>
                   <CardLabel>{t("Device type")}</CardLabel>
@@ -392,7 +394,8 @@ export default function DeviceTypesPage() {
                     className="rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] px-3 py-3"
                   >
                     <div className="text-xs font-medium text-[var(--text-primary)]">
-                      {t("Parent")}: {localizedDeviceTypeLabel(inheritedParent, t)}
+                      {t("Parent")}:{" "}
+                      {localizedDeviceTypeLabel(inheritedParent, t)}
                     </div>
                     <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
                       {t(
@@ -439,7 +442,8 @@ export default function DeviceTypesPage() {
                     data-testid="device-type-deletion-reason"
                     className="text-xs text-[var(--text-muted)]"
                   >
-                    {t("Cannot delete while in use:")} {deletionUsage
+                    {t("Cannot delete while in use:")}{" "}
+                    {deletionUsage
                       .map(([label, count]) => `${label} ${count}`)
                       .join(" · ")}
                   </p>
@@ -482,6 +486,12 @@ export default function DeviceTypesPage() {
               </Card>
             )}
           </div>
+        </div>
+        <div className="mt-4">
+          <HardwareTemplateBuilder
+            selectedDeviceType={selectedType?.id}
+            deviceTypes={deviceTypes}
+          />
         </div>
       </div>
     </>

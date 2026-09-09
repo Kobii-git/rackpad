@@ -6,7 +6,420 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
-> On the `dev` branch; not yet tagged/released.
+## [1.8.3] - 2026-09-09
+
+### Added
+
+- Stacked switches with ordered members, labelled MACs, port assignments and
+  derived rack height, including schema-51 backup and restore support.
+
+### Fixed
+
+- Restore Storage editing in browsers where `crypto.randomUUID` is unavailable
+  or throws, including Firefox over ordinary LAN HTTP.
+- Repair SNMPv3 key localization, privacy and authenticated engine-time recovery.
+- Correct Rack Studio rear/mixed-face routing, patch-panel bindings and stack
+  placement undo/redo while preserving port and cable identities.
+- Retain the beta security fixes for authorization, OIDC, credential storage,
+  outbound requests and dependencies, including Fastify and Nodemailer updates.
+- Preserve Docker installer configuration and encryption keys; bound native LXC
+  readiness and recovery checks.
+
+### Changed
+
+- Promote the tested beta to stable early to address the Storage regression.
+  Reporter acceptance and the planned seven-day soak remain incomplete; all six
+  issues remain open and native Proxmox LXC stays experimental.
+- Refresh stable installation guidance and documentation screenshots.
+
+Read the [upgrade and recovery notes](docs/releases/v1.8.3.md) before updating.
+
+## [1.8.3-beta.1] - 2026-09-09
+
+> Combined experimental candidate for stable `1.8.3` acceptance.
+> See the [candidate acceptance and upgrade notes](docs/releases/v1.8.3-beta.1.md).
+
+### Fixed
+
+- Reject malformed CodeQL severity values and missing scores on security-tagged
+  rules before applying reviewed exceptions. Preserve raw analysis on failure.
+- Update Nodemailer to 9.1.1 for its address-parser denial-of-service and related
+  security repairs, retaining the existing SMTP integration.
+
+### Changed
+
+- Retain the immutable beta.0 tag after canceling its publication before build
+  or release steps. Beta.1 carries the combined changes below; acceptance and soak
+  must use its exact published artifacts. All six tracked issues remain open.
+
+## [1.8.3-beta.0] - 2026-09-08
+
+> Combined experimental candidate for stable `1.8.3` acceptance.
+> See the [candidate acceptance and upgrade notes](docs/releases/v1.8.3-beta.0.md).
+
+### Added
+
+- Stacked switches with ordered member metadata, labelled MAC addresses,
+  canonical port assignments, derived height, and generic physical faces.
+- Lab-scoped member APIs and a keyboard-accessible Stack Members workspace.
+- Migration 51 and atomic logical/native backup validation for stack ownership,
+  ordering, rack geometry, and height. Published migrations 49 and 50 are unchanged.
+
+### Fixed
+
+- Repair SNMPv3 key localization, AES privacy keys and eight-byte salts for
+  interoperable SHA/MD5 polling, including authenticated engine-time Reports.
+- Authenticate SNMPv3 responses before decryption or trusted engine updates;
+  enforce correlation, bounded time synchronization, concurrent engine clocks,
+  and authenticated trap security levels and timeliness.
+
+- Preserve supplied Docker encryption keys exactly through Compose parsing and
+  retain existing configuration while upgrading recognized installer manifests.
+- Bound native install, update, and recovery readiness to 60 seconds across
+  systemd and HTTP calls; require valid health JSON before endpoint verification.
+- Return canonical Rack Studio placement history so stacks can be unmounted,
+  moved between rooms, and undone/redone without false stale-state conflicts.
+- Apply resolved-face obstacle and gutter rules consistently to rear cables.
+- Preserve release symlink replacement on BSD and GNU systems.
+- Keep Linux screenshot animation frames running while stabilizing raster edges;
+  avoid the inherited manual-frame mode that stalls capture readiness.
+
+### Changed
+
+- Mixed-face cables retain one logical cable with continuation stubs, destination
+  labels, selection/tracing, and matching SVG/PNG presentation.
+- Preserve member configuration during controller refreshes; reject populated
+  stack ancestry changes and invalid rack resizing.
+- Add Chromium/Firefox Storage compatibility coverage for missing or throwing
+  UUID APIs and schema-50 upgrades, plus a real Net-SNMP interoperability CI gate.
+- Gate image publication on quality, CodeQL findings, and Trivy, with reviewed
+  release notes and deterministic documentation screenshots required by quality.
+- Retain screenshot tolerances, use deterministic Chromium raster settings, and
+  preserve failed captures for diagnosis.
+- Separate dependency maintenance from major upgrades, update operator guides,
+  and archive historical planning documents with pointers at their original paths.
+
+Stable 1.8.3 requires combined feature acceptance, real Proxmox guest validation,
+seven-day soak, and final release gates. Native LXC remains experimental.
+
+## [1.8.2-beta.5] - 2026-09-05
+
+> Experimental Rack Studio tester beta. See the
+> [acceptance matrix](docs/releases/v1.8.2-beta.5-test-notes.md).
+
+### Changed
+
+- Smooth routing uses direct cubic patch cords for unobstructed connections
+  within 4U on the same rack face, with gutter fallback for longer connections.
+- Rack Studio, Rack Cabling, and exports share explicit curve geometry, keeping
+  exact port anchors, saved preferences, and manual waypoint data.
+- Extend regression coverage for one-row 24-column patch panels, independent
+  front/rear edits, and all 24 pass-through pairs on built-in/custom panels.
+- Refresh the Proxmox candidate procedure and community acceptance/soak matrix.
+
+The database remains schema 50. Existing security fixes are retained. Native
+Proxmox support and stable 1.8.2 remain subject to real guest validation;
+stacked-switch implementation stays gated for the subsequent 1.9.0 line.
+
+## [1.8.2-beta.4] - 2026-09-05
+
+> Security remediation beta. Read the [upgrade and test notes](docs/releases/v1.8.2-beta.4-test-notes.md)
+> before upgrading. The application remains a single React/Fastify/SQLite service.
+
+### Fixed
+
+- Enforce authentication for encoded API paths and prevent NetBox previews from
+  matching devices outside readable labs or interpreting identifier wildcards.
+- Validate proxy IPs/CIDRs and derive client identity, host, HTTPS, and OIDC
+  callback URLs from Fastify's trusted request properties. Upgrade Fastify to
+  5.12.3 while retaining patched fast-uri 3.1.7 and 4.1.4 dependencies.
+- Require verified email for OIDC email admission and role mapping, preserve
+  case-sensitive subjects, and bind callback and completion to the initiating
+  browser before updating accounts or issuing bearer sessions.
+- Encrypt inline SNMP communities, redact monitor responses, preserve omitted
+  secrets during editing, and avoid copying credential-backed secrets on import.
+- Prevent incoming SNMP traps from changing configured trust or suppressing a
+  subsequent authenticated trap.
+- Validate and pin TCP, ICMP, and every SNMP destination at execution time,
+  including IPv6, with bounded DNS and network execution and transport cleanup.
+
+### Changed
+
+- Append migration 50 after the existing rack-top migration 49. Encrypt legacy
+  communities atomically, revoke OIDC sessions, require a one-time OIDC role
+  check, and clear historical trap-source credentials. Legacy logical restores
+  apply the same security conversion.
+- Disable legacy numeric/truthy proxy settings with a startup warning. The SNMP
+  trap listener now defaults off in runtime and all Compose variants.
+- Run browser tests against disposable databases outside the working tree.
+
+### Test notes
+
+- Retain the encryption key and a pre-upgrade database/configuration backup;
+  configure an OIDC administrator mapping and explicit trusted proxy addresses.
+- Verify administrator access, lab isolation, monitoring, and explicitly enabled
+  traps after upgrade. Rotate previously exposed SNMP communities on both ends.
+- Rollback requires the previous application and matching pre-upgrade snapshot;
+  do not run an older binary against schema 50. Experimental native Proxmox
+  support remains subject to the existing guest-testing and soak requirements.
+
+## [1.8.2-beta.3] - 2026-09-04
+
+> Patch-panel authoring tester candidate. Existing hardware templates and device
+> layout snapshots remain unchanged until an administrator edits or applies a
+> template.
+
+### Changed
+
+- Patch-panel hardware starters now show matching 24-port front and rear blocks
+  with distinct face-qualified block, group, and slot identities.
+- Port-block editing now targets a block by name and face, so updating a rear
+  block preserves a same-named front block and upgrades only matching legacy
+  slots on the selected face.
+- Patch-panel pass-through discovery now follows cycle-safe custom device-type
+  lineage and pairs matching faces by normalized port name and connector kind.
+- The builder action is labelled **Add or update port block**, and patch-panel
+  starter previews show both faces before the template is saved.
+
+### Fixed
+
+- Applying the built-in 24-port patch-panel port template with its matching
+  hardware starter now maps all 48 front/rear ports without unmapped slots and
+  retains 24 pass-through pairs.
+
+### Test notes
+
+- Verify front and rear blocks can be added or updated independently, including
+  editing a legacy unqualified block without rewriting unrelated saved layouts.
+- Verify a custom descendant of `patch_panel` receives idempotent front/rear
+  pass-through normalization and that tracing matches names case-insensitively
+  with surrounding whitespace ignored.
+- Verify the 24-port starter renders 24 connectors on each face and applies with
+  48 bindings, zero unmapped slots, and 24 pass-through pairs.
+- No database migration is included; the schema remains at version 49. Rollback
+  to `v1.8.2-beta.2` does not require restoring a database backup.
+
+## [1.8.2-beta.2] - 2026-09-03
+
+> Combined tester candidate for Proxmox native startup, inherited hardware
+> templates, dense Rack Studio cabling, and rack-top equipment placement.
+
+### Added
+
+- Added rack-top placement on each rack's 12-column surface, including front or
+  rear orientation, collision validation across both faces, horizontal pointer
+  and keyboard movement, undo/redo, exact ports and cable anchors, Rack Cabling,
+  and screen/SVG/PNG rendering.
+- Added schema 49 and an index on `(rackId, rackMountKind)` to record and support
+  the persisted rack-top enum meaning without rewriting existing device rows.
+
+### Changed
+
+- Hardware templates now follow the complete cycle-safe device-type lineage for
+  listing, preview/apply, bulk selection, defaults, backup validation, and the
+  device Physical Layout picker. Exact child defaults override the nearest
+  inherited parent default and can be removed to restore fallback.
+- Rack Studio room, focused-rack, manual-waypoint, and export rendering now use
+  one deterministic exterior-gutter planner with interval lane reuse. Smooth
+  rounded routes are the default, orthogonal routes remain available, and route
+  style plus all-label visibility persist as namespaced local preferences.
+- Hovered or selected cables keep their label and full emphasis while unrelated
+  cables fade; exports retain the chosen stable geometry and label setting but
+  omit transient interaction emphasis.
+
+### Fixed
+
+- Allowed `AF_NETLINK` in the hardened native systemd service so interface
+  enumeration can start in unprivileged Debian 13 Proxmox LXC guests, while
+  retaining `AF_PACKET` only in the opt-in advanced-discovery drop-in.
+- Parent hardware templates are now discoverable and applicable to custom child
+  types without changing stored layout snapshots, port IDs, bindings, or links.
+- Replaced Rack Studio's modulo cable offsets, which could overlap once a busy
+  corridor exceeded eleven or twelve routes.
+
+### Test notes
+
+- Verify fresh native install and update on disposable Proxmox VE 9.x AMD64
+  Debian 13 and Ubuntu 24.04 guests before publication; automated fixtures do
+  not substitute for that release evidence.
+- Verify child-template discovery/application, more than 13 overlapping cable
+  routes in both styles and themes, manual waypoints, focus/labels, rack-top
+  movement/conflicts/undo, backup/restore, exports, and schema 48 to 49 upgrade.
+- Rollback after using rack-top placement requires the pre-upgrade native backup
+  or volume snapshot because older binaries do not understand schema 49 rows.
+
+## [1.8.2-beta.1] - 2026-09-03
+
+> Read-only Rack Cabling Visualizer beta. Existing Visualizer layouts and Rack
+> Studio behavior remain unchanged, with no database or API changes.
+
+### Added
+
+- Added a room-scoped Rack Cabling Visualizer layout with bottom-aligned rack
+  elevations, exact physical port anchors, front/rear/both views, deterministic
+  smooth or orthogonal cable routes, loose-equipment tray handoffs, search,
+  trace, inspection, pan, zoom, and keyboard controls.
+- Added explicit cross-room, hidden-face, unavailable-position, and collapsed
+  loose-tray handoffs so the view never implies undocumented physical paths.
+
+### Changed
+
+- Shared the presentation-only rack shell and equipment renderer between Rack
+  Studio and Rack Cabling while keeping placement, patching, undo, and all
+  inventory mutations exclusively in Rack Studio.
+- Packed handoff labels into deterministic scene, rack, fallback-equipment, and
+  tray lanes with leader lines for displaced labels.
+- Refreshed the locked `@fastify/rate-limit`, `fast-uri`, and supporting patch
+  releases within the existing dependency ranges to resolve high-severity
+  advisories.
+
+### Fixed
+
+- Kept devices with missing or invalid physical placement visible as warned
+  fallback equipment, preserving configured faceplates when only placement is
+  unavailable and terminating affected cables at the fallback boundary.
+- Restored narrow-screen inspector focus to the selected rack, device, port, or
+  cable, including loose equipment, and removed duplicate focus identifiers.
+
+### Test notes
+
+- Verify room, face, route, filter, health, label, tray, search, trace,
+  inspection, pan/zoom/fit, responsive focus, accessibility, overflow, and
+  read-only behavior for administrator, editor, and viewer roles.
+- Verify dense handoff labels in light and dark themes, invalid placement and
+  missing-layout fallbacks, exact rack/port geometry, screenshot determinism,
+  Rack Studio regression coverage, and rollback to `v1.8.2-beta.0` by image.
+
+## [1.8.2-beta.0] - 2026-08-31
+
+> Opt-in Rack Studio tester release. The classic rack elevation and Docker
+> deployment remain the defaults. Experimental native Proxmox LXC support from
+> the 1.8.1 beta line is retained but is not production-supported.
+
+### Added
+
+- Added opt-in Rack Studio room and focused-rack workspaces with exact front and
+  rear hardware layouts, physical port mapping, shelf and side equipment,
+  deterministic loose-device placement, physical patching, cable routing, and
+  SVG/PNG export.
+- Added administrator-managed hardware templates and device-owned physical
+  layout snapshots so existing port and cable identities remain authoritative.
+- Added Physical layout nodes to Visualizer using the same device snapshots and
+  exact cable anchors as Device settings and Rack Studio.
+
+### Changed
+
+- Extended rack placement to a 12-column grid with shelf rectangles, rotation,
+  0U side mounting, shared room coordinates, dynamic dense-room bounds, and
+  conflict-safe Rack Studio actions.
+- Centralized typed API-route authorization metadata while retaining
+  handler-level lab guards for row and lab resolution.
+- Expanded the deterministic documentation gallery to 39 scenes and added a
+  two-pass release checker for manifest, layout, text, and pixel stability.
+
+### Fixed
+
+- Kept physical-layout GET and preview requests read-only and reconciled layout
+  mappings only inside canonical device and port mutation transactions.
+- Hardened logical restore against reserved or invalid hardware-template IDs,
+  invalid device-type defaults, duplicate identities, and partial mutation.
+- Made front, rear, and both-face selection authoritative for Rack Studio
+  interaction, cable handoffs, Visualizer nodes, and exported scenes.
+
+### Test notes
+
+- Upgrade a populated schema-45 database and confirm all existing device, port,
+  link, rack, cable, and waypoint identities and attributes remain unchanged.
+- Configure a six-port 2U server and a 24-port switch with separate uplinks,
+  then verify the same exact port anchors in settings, Rack Studio, Visualizer,
+  patching, tracing, and export.
+- Verify direct, shelf, rotated, side, and loose equipment; front/rear/both
+  filtering; viewer read-only behavior; dense rooms; and atomic backup restore.
+- Re-run the experimental Proxmox contract checks without treating them as
+  evidence of a successful real-Proxmox installation.
+
+## [1.8.1-beta.2] - 2026-08-30
+
+> Experimental first-party Proxmox native LXC tester release. Docker remains
+> the recommended deployment, and production support remains gated on real
+> Debian 13 and Ubuntu 24.04 validation, update/rollback evidence, and soak.
+
+### Fixed
+
+- Propagated explicit prerelease authorization from the tagged host runner into
+  the guest installer so a selected beta Release can pass the same version
+  validation used by its build and operational assets.
+- Added forward-only SemVer comparison to native updates. Beta installations
+  now refuse an older stable Release before download or service downtime while
+  retaining the forward path from Beta 2 to stable `v1.8.1`.
+
+### Changed
+
+- Published an exact Beta 2 fresh-install, verification, backup/restore,
+  discovery, custom-port, reboot, Beta 1.1 update, and safe-reporting checklist
+  for community testing on disposable Proxmox VE 9.x `amd64` guests.
+
+### Test notes
+
+- A published prerelease and passing automated gates make this build
+  tester-ready, not production-supported. Record real Debian 13 and Ubuntu
+  24.04 results on issue #138 and retain successful guests for update/rollback
+  and soak testing.
+
+## [1.8.1-beta.1.1] - 2026-08-30
+
+> Recovery candidate for the optional first-party Proxmox native LXC beta. The
+> failed `v1.8.1-beta.1` tag remains immutable; it did not produce a Release.
+
+### Fixed
+
+- Made the duplicate-MAC browser test wait for the observable filtered table
+  state before reading its count, preventing the release gate from comparing a
+  pre-filter count with the asynchronously applied duplicate-only result.
+
+### Test notes
+
+- Re-run the complete release, Proxmox contract, shell, audit, and security
+  gates before publishing the replacement prerelease.
+- Validate the tagged installer first on a disposable Proxmox VE 9.x `amd64`
+  Debian 13 guest. Publish experimental tester instructions only after that
+  smoke passes, then complete the Ubuntu 24.04 Phase 4 matrix.
+
+## [1.8.1-beta.1] - 2026-08-29
+
+> First public beta of the optional first-party Proxmox native LXC deployment.
+> Docker remains the recommended general deployment while native validation is
+> in progress.
+
+### Added
+
+- Prepared a first-party, non-Docker Proxmox native LXC deployment with
+  version-aligned release assets, manual transactional stable updates, paired
+  rollback points, and a hardened systemd service. Public support remains
+  gated on the planned beta and stable validation phases.
+- Added a root-only `rackpad-discovery-mode safe|advanced|status` control. Safe
+  mode uses neighbor-cache discovery with no service capabilities; advanced
+  mode preflights the outer LXC and raw networking before granting only
+  `CAP_NET_RAW` and `CAP_NET_ADMIN`.
+
+### Changed
+
+- Native operational-asset refreshes now preserve a previously selected,
+  validated advanced discovery mode and include the discovery command in the
+  transactional update/rollback set. SNMP traps remain independently disabled
+  by default.
+- Extended repository validation with a maintained `check:proxmox` contract,
+  isolated discovery/update fixtures, and Bash/ShellCheck coverage across
+  `scripts/` and `deploy/proxmox/`.
+
+### Test notes
+
+- Verify safe mode, truthful advanced-mode refusal, successful advanced mode,
+  failed-restart restoration, and unchanged SNMP configuration.
+- Recheck native environment merge, Docker collision refusal, stable no-op
+  update, pre-downtime failures, paired rollback, and retention fixtures.
+- Real Proxmox VE 9.x Debian 13 and Ubuntu 24.04 fresh-install testing is
+  required before this beta phase is complete.
 
 ## [1.8.0] - 2026-08-24
 

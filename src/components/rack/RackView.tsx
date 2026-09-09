@@ -13,6 +13,7 @@ import {
 import { useI18n } from "@/i18n";
 import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import { useStore } from "@/lib/store";
+import { AlertTriangle } from "lucide-react";
 
 interface RackViewProps {
   rack: Rack;
@@ -270,6 +271,9 @@ function DeviceTile({
 }) {
   const { t } = useI18n();
   const deviceTypes = useStore((state) => state.deviceTypes);
+  const physicalLayout = useStore((state) =>
+    state.physicalLayouts.find((layout) => layout.deviceId === device.id),
+  );
   const tone = statusColor[device.status];
   const glow = statusGlow[device.status];
   const deviceAccent =
@@ -393,6 +397,15 @@ function DeviceTile({
             </span>
           )}
 
+          {physicalLayout?.effectiveStatus !== "accurate" && (
+            <span
+              className="relative z-10 text-[var(--color-warning)]"
+              title={t("Needs attention")}
+            >
+              <AlertTriangle className="size-3.5" />
+            </span>
+          )}
+
           <span className="relative z-10">
             <StatusDot status={device.status} />
           </span>
@@ -422,6 +435,11 @@ function DeviceTile({
             <span className="text-[var(--text-tertiary)]">
               {t("shelf:")}
               {childDevices.map((child) => child.hostname).join(", ")}
+            </span>
+          )}
+          {physicalLayout?.effectiveStatus !== "accurate" && (
+            <span className="text-[var(--color-warning)]">
+              {t("Physical layout")} · {t("Needs attention")}
             </span>
           )}
         </div>

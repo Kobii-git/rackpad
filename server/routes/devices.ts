@@ -1,6 +1,11 @@
+import { isStackType, listStackMembers, stackHeight, assertStackDeviceEdit, syncStackHeight, unmountStack, stackChildren, validateStackChildren } from "../lib/device-stacks.js";
 import type { FastifyPluginAsync } from "fastify";
 import { db, parseRow } from "../db.js";
 import { writeAuditLogEntry } from "../lib/audit-log.js";
+import {
+  initializeDevicePhysicalLayout,
+  reconcileDevicePhysicalLayout,
+} from "../lib/device-physical-layout.js";
 import {
   deviceTypeBase,
   requiredDeviceType,
@@ -69,6 +74,7 @@ function parseDevice(row: Record<string, unknown>) {
   return {
     ...parseRow(row, [...JSON_COLS]),
     ignoreDuplicateMac: Number(row.ignoreDuplicateMac ?? 0) === 1,
+    stackMembers: isStackType(String(row.deviceType)) ? listStackMembers(String(row.id)) : undefined,
   };
 }
 
@@ -99,7 +105,13 @@ type ParentDeviceRow = {
   face: (typeof DEVICE_FACES)[number] | null;
 };
 
-function normalizePlacement(input: {
+function normalizePlacement(input: Parameters<typeof normalizeOrdinaryPlacement>[0]) {
+  if (!isStackType(input.deviceType)) return normalizeOrdinaryPlacement(input);
+  const heightU = input.deviceId ? stackHeight(input.deviceId) : 1;
+  return { ...normalizeOrdinaryPlacement({ ...input, heightU }), heightU };
+}
+
+function normalizeOrdinaryPlacement(input: {
   deviceId?: string;
   deviceType: string;
   placement?: (typeof DEVICE_PLACEMENTS)[number] | null;
@@ -167,6 +179,17 @@ function normalizePlacement(input: {
     heightU: resolved.heightU,
     face: resolved.face,
     rackSlot: resolved.rackSlot,
+  };
+}
+
+function legacyRackGeometry(
+  placement: (typeof DEVICE_PLACEMENTS)[number],
+  rackSlot: (typeof DEVICE_RACK_SLOTS)[number],
+) {
+  return {
+    rackMountKind: placement === "shelf" ? "shelf" : "direct",
+    rackColumn: rackSlot === "right" ? 6 : 0,
+    rackColumnSpan: rackSlot === "full" ? 12 : 6,
   };
 }
 
@@ -322,7 +345,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const specs = optionalString(body, "specs", { maxLength: 4000 });
     const rackId = optionalString(body, "rackId", { maxLength: 80 });
     const startU = optionalInteger(body, "startU", { min: 1, max: 100 });
-    const heightU = optionalInteger(body, "heightU", { min: 1, max: 20 });
+    const heightU = optionalInteger(body, "heightU", { min: 1, max: isStackType(deviceType) ? Number.MAX_SAFE_INTEGER : 20 });
+    assertStackDeviceEdit("", deviceType, heightU);
     const face = optionalEnum(body, "face", DEVICE_FACES);
     const rackSlot = optionalEnum(body, "rackSlot", DEVICE_RACK_SLOTS);
     const tags = optionalStringArray(body, "tags", { maxItems: 30 });
@@ -371,12 +395,17 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const id = createId("d");
+    const rackGeometry = legacyRackGeometry(
+      normalizedPlacement.placement,
+      normalizedPlacement.rackSlot,
+    );
     const insertDevice = db.prepare(`
       INSERT INTO devices
         (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model,
          serial, managementIp, macAddress, status, placement, parentDeviceId, networkMode, roomId, cpuCores, memoryGb, storageGb, specs,
-         startU, heightU, face, rackSlot, tags, notes, lastSeen)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         startU, heightU, face, rackSlot, tags, notes, lastSeen,
+         rackMountKind, rackColumn, rackColumnSpan)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `);
     const insertPort = db.prepare(`
       INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, macAddress)
@@ -412,6 +441,9 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         tags ? JSON.stringify(tags) : null,
         notes ?? null,
         lastSeen ?? null,
+        rackGeometry.rackMountKind,
+        rackGeometry.rackColumn,
+        rackGeometry.rackColumnSpan,
       );
 
       for (const port of template
@@ -419,6 +451,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         : []) {
         insertPort.run(port);
       }
+      if (isStackType(deviceType)) syncStackHeight(id);
+      initializeDevicePhysicalLayout(id);
       if (driveBayTemplate) {
         const slots = createDriveSlotsFromTemplate(id, driveBayTemplate.id);
         insertDriveSlots(slots);
@@ -529,6 +563,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     const applyBulkChanges = db.transaction(() => {
       for (const deviceId of deviceIds) {
         const existing = existingById.get(deviceId)!;
+        assertStackDeviceEdit(deviceId, nextDeviceType ?? String(existing.deviceType), optionalInteger(changes, "heightU", { min: 1, max: Number.MAX_SAFE_INTEGER }));
 
         const labId = String(existing.labId);
         const updates: string[] = [];
@@ -649,6 +684,13 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
             "heightU = ?",
             "face = ?",
             "rackSlot = ?",
+            "rackMountKind = ?",
+            "rackColumn = ?",
+            "rackColumnSpan = ?",
+          );
+          const rackGeometry = legacyRackGeometry(
+            normalizedPlacement.placement,
+            normalizedPlacement.rackSlot,
           );
           values.push(
             normalizedPlacement.placement,
@@ -658,6 +700,9 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
             normalizedPlacement.heightU,
             normalizedPlacement.face,
             normalizedPlacement.rackSlot,
+            rackGeometry.rackMountKind,
+            rackGeometry.rackColumn,
+            rackGeometry.rackColumnSpan,
           );
 
           if (roomId !== undefined) {
@@ -731,6 +776,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         const row = db
           .prepare("SELECT * FROM devices WHERE id = ?")
           .get(deviceId) as Record<string, unknown>;
+        if (isStackType(String(row.deviceType))) { syncStackHeight(deviceId); row.heightU = stackHeight(deviceId); }
+        validateStackChildren(deviceId);
         updatedDevices.push(parseDevice(row));
       }
     });
@@ -760,7 +807,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         : String(device.deviceType);
     const rackId = optionalString(body, "rackId", { maxLength: 80 });
     const startU = optionalInteger(body, "startU", { min: 1, max: 100 });
-    const heightU = optionalInteger(body, "heightU", { min: 1, max: 20 });
+    const heightU = optionalInteger(body, "heightU", { min: 1, max: isStackType(nextDeviceType) ? Number.MAX_SAFE_INTEGER : 20 });
+    assertStackDeviceEdit(req.params.id, nextDeviceType, heightU);
     const face = optionalEnum(body, "face", DEVICE_FACES);
     const rackSlot = optionalEnum(body, "rackSlot", DEVICE_RACK_SLOTS);
     const placement = optionalEnum(body, "placement", DEVICE_PLACEMENTS);
@@ -774,15 +822,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
       ? String(device.parentDeviceId)
       : null;
 
-    if (
-      rackId !== undefined ||
-      startU !== undefined ||
-      heightU !== undefined ||
-      face !== undefined ||
-      rackSlot !== undefined ||
-      placement !== undefined ||
-      parentDeviceId !== undefined
-    ) {
+    const placementChanged = Object.entries({ rackId, startU, heightU, face, rackSlot, placement, parentDeviceId }).some(([key, value]) => value !== undefined && value !== device[key]);
+    if (placementChanged) {
       const parentDevice = resolveParentDevice(
         parentDeviceId === undefined
           ? device.parentDeviceId
@@ -844,6 +885,13 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         "heightU = ?",
         "face = ?",
         "rackSlot = ?",
+        "rackMountKind = ?",
+        "rackColumn = ?",
+        "rackColumnSpan = ?",
+      );
+      const rackGeometry = legacyRackGeometry(
+        normalizedPlacement.placement,
+        normalizedPlacement.rackSlot,
       );
       values.push(
         normalizedPlacement.placement,
@@ -853,6 +901,9 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         normalizedPlacement.heightU,
         normalizedPlacement.face,
         normalizedPlacement.rackSlot,
+        rackGeometry.rackMountKind,
+        rackGeometry.rackColumn,
+        rackGeometry.rackColumnSpan,
       );
     }
 
@@ -1026,6 +1077,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
           );
         }
         for (const port of ports) insertPort.run(port);
+        reconcileDevicePhysicalLayout(req.params.id);
       }
 
       if (driveBayTemplate) {
@@ -1050,6 +1102,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         );
       }
 
+      if (isStackType(nextDeviceType)) syncStackHeight(req.params.id);
+      validateStackChildren(req.params.id);
       if (driveBayTemplate) {
         const updatedDevice = db
           .prepare("SELECT hostname FROM devices WHERE id = ?")
@@ -1131,6 +1185,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         `,
         ).run(deviceId);
 
+        for (const child of stackChildren(deviceId)) unmountStack(child.id);
+        db.prepare("DELETE FROM ports WHERE deviceId = ?").run(deviceId);
         db.prepare("DELETE FROM devices WHERE id = ?").run(deviceId);
       },
     );

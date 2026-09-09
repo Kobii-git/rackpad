@@ -1,7 +1,9 @@
+import { deviceTypeBase } from "../device-types.js";
 import { db } from "../../db.js";
 import { createHash } from "node:crypto";
 import { cidrContainsHostIp } from "../ip-cidr.js";
 import { createId } from "../ids.js";
+import { initializeDevicePhysicalLayout } from "../device-physical-layout.js";
 import { ensureIpv4 } from "../validation.js";
 import {
   INTEGRATION_PORT_KINDS,
@@ -1071,6 +1073,8 @@ export function applyIntegrationDeviceSync(input: {
         }
       });
 
+      if (!isGuest) initializeDevicePhysicalLayout(deviceId);
+
       linkDeviceIp(deviceId, name, device.ipAddress);
 
       writeAudit.run(
@@ -1290,7 +1294,7 @@ export function filterImportableDevicesForConnection(
   devices: IntegrationImportableDevice[],
 ): IntegrationImportableDevice[] {
   return devices.filter((device) => {
-    if (device.deviceType === "switch") return connection.syncSwitches;
+    if (deviceTypeBase(device.deviceType) === "switch") return connection.syncSwitches;
     if (device.deviceType === "router" || device.deviceType === "firewall") {
       return connection.syncGateways;
     }

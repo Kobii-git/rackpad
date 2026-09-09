@@ -245,25 +245,26 @@ function buildAdjacency(
   for (const device of input.devices) {
     if (!isPassiveDevice({ ...input, deviceById }, device.id)) continue;
     const ports = input.ports.filter((port) => port.deviceId === device.id);
-    const byPosition = new Map<number, Port[]>();
+    const byTermination = new Map<string, Port[]>();
     for (const port of ports) {
-      byPosition.set(port.position, [
-        ...(byPosition.get(port.position) ?? []),
+      const termination = `${port.kind}|${port.name.trim().toLowerCase()}`;
+      byTermination.set(termination, [
+        ...(byTermination.get(termination) ?? []),
         port,
       ]);
     }
-    for (const [position, pairPorts] of byPosition) {
+    for (const [termination, pairPorts] of byTermination) {
       const front = pairPorts.find((port) => port.face === "front");
       const rear = pairPorts.find((port) => port.face === "rear");
       if (!front || !rear) continue;
       add({
-        id: `passive:${device.id}:${position}:front`,
+        id: `passive:${device.id}:${termination}:front`,
         kind: "passive",
         fromPort: front,
         toPort: rear,
       });
       add({
-        id: `passive:${device.id}:${position}:rear`,
+        id: `passive:${device.id}:${termination}:rear`,
         kind: "passive",
         fromPort: rear,
         toPort: front,

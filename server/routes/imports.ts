@@ -4,6 +4,7 @@ import {
   assertGlobalAdmin,
   assertLabRead,
   assertLabWrite,
+  getAccessibleLabIds,
 } from "../lib/lab-access.js";
 import {
   buildNetboxDeviceDraft,
@@ -14,6 +15,7 @@ import {
   previewNetboxDeviceTypeImport,
 } from "../lib/netbox-device-type.js";
 import { createId } from "../lib/ids.js";
+import { initializeDevicePhysicalLayout } from "../lib/device-physical-layout.js";
 import { listPortTemplates } from "../lib/port-templates.js";
 import {
   buildDockerContainerNotes,
@@ -93,7 +95,7 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
 
     const body = asObject(req.body);
     const yaml = requiredString(body, "yaml", { maxLength: 512_000 });
-    return previewNetboxDeviceTypeImport(yaml);
+    return previewNetboxDeviceTypeImport(yaml, getAccessibleLabIds(req.authUser, req.labAccess ?? []));
   });
 
   app.post("/netbox-device-type/import", async (req, reply) => {
@@ -156,6 +158,7 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
     const existingDevice = findExistingNetboxDevice(
       parsed.manufacturer,
       parsed.model,
+      [labId],
     );
     if (existingDevice) {
       return reply.status(409).send({
@@ -236,6 +239,7 @@ export const importsRoutes: FastifyPluginAsync = async (app) => {
           macAddress: null,
         });
       }
+      initializeDevicePhysicalLayout(deviceId);
     });
 
     createDevice();

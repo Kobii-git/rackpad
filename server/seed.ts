@@ -1,8 +1,10 @@
+import { encryptMonitorCommunity } from "./lib/security-migration.js";
 /**
  * Seed the database with the homelab mock dataset.
  * Only runs if the labs table is empty — safe to call on every startup.
  */
 import { db, ensurePatchPanelPassThroughPorts } from "./db.js";
+import { initializeDevicePhysicalLayout } from "./lib/device-physical-layout.js";
 
 // ── Server-owned demo data used only by the opt-in bootstrap ──
 
@@ -5053,7 +5055,7 @@ export function seedIfEmpty() {
     "INSERT INTO vlanRanges VALUES (@id, @labId, @name, @startVlan, @endVlan, @purpose, @color)",
   );
   const insertPortLink = db.prepare(
-    "INSERT INTO portLinks VALUES (@id, @fromPortId, @toPortId, @cableType, @cableLength, @color, @notes)",
+    "INSERT INTO portLinks (id, fromPortId, toPortId, cableType, cableLength, color, notes) VALUES (@id, @fromPortId, @toPortId, @cableType, @cableLength, @color, @notes)",
   );
   const insertSubnet = db.prepare(
     "INSERT INTO subnets (id, labId, cidr, name, description, gateway, dnsServers, vlanId) VALUES (@id, @labId, @cidr, @name, @description, @gateway, @dnsServers, @vlanId)",
@@ -5128,7 +5130,7 @@ export function seedIfEmpty() {
       lastMessage,
       lastAlertAt,
       snmpVersion,
-      snmpCommunity,
+      snmpCommunityEnc,
       snmpOid,
       snmpExpectedValue,
       portId,
@@ -5139,7 +5141,7 @@ export function seedIfEmpty() {
     )
     VALUES
       (@id, @deviceId, @name, @type, @target, @port, @path, @intervalMs, @enabled, @sortOrder, @lastCheckAt, @lastResult,
-       @lastMessage, @lastAlertAt, @snmpVersion, @snmpCommunity, @snmpOid, @snmpExpectedValue, @portId, @snmpIfIndex,
+       @lastMessage, @lastAlertAt, @snmpVersion, @snmpCommunityEnc, @snmpOid, @snmpExpectedValue, @portId, @snmpIfIndex,
        @snmpMatchMode, @snmpCredentialId, @ignoreTlsErrors)
   `);
   const insertSnmpCredential = db.prepare(
@@ -5307,6 +5309,7 @@ export function seedIfEmpty() {
         aggregatePortId: p.aggregatePortId ?? null,
       });
     }
+    for (const device of devices) initializeDevicePhysicalLayout(device.id);
     for (const template of portTemplates) insertPortTemplate.run(template);
     for (const l of portLinks) insertPortLink.run(l);
 
@@ -5337,8 +5340,9 @@ export function seedIfEmpty() {
       insertDeviceMonitor.run({
         ...monitor,
         snmpVersion: "snmpVersion" in monitor ? monitor.snmpVersion : null,
-        snmpCommunity:
+        snmpCommunityEnc: encryptMonitorCommunity(
           "snmpCommunity" in monitor ? monitor.snmpCommunity : null,
+        ),
         snmpOid: "snmpOid" in monitor ? monitor.snmpOid : null,
         snmpExpectedValue:
           "snmpExpectedValue" in monitor ? monitor.snmpExpectedValue : null,

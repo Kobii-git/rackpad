@@ -2059,7 +2059,7 @@ function buildTraceAdjacency(model: VisualizerModel) {
       continue;
     const grouped = groupBy(
       model.portsByDeviceId[device.id] ?? [],
-      (port) => `${port.kind}:${port.name}`,
+      (port) => `${port.kind}:${port.name.trim().toLowerCase()}`,
     );
     for (const pair of Object.values(grouped)) {
       const front = pair.find((port) => port.face === "front");

@@ -5,6 +5,14 @@ path is to enable LXC nesting, install Docker inside the container, and pull the
 published Rackpad container image from GHCR. This avoids cloning the source repo
 onto the server.
 
+A first-party, non-Docker helper is implemented for staged beta validation. Its
+target is Proxmox VE 9.x on `amd64`, using an unprivileged Debian 13 LXC by
+default or Ubuntu 24.04 LTS as an alternative requiring guest validation. It is not a supported
+production installer until the beta and stable gates are complete. An exact
+published beta.5 procedure is available for disposable community testing. See the
+[native LXC operations guide](./PROXMOX_NATIVE_LXC.md) and
+[roadmap](./PROXMOX_LXC_ROADMAP.md).
+
 If you want to import Proxmox node, VM, container, bridge, MAC, VLAN, IP, CPU,
 RAM, and disk data into Rackpad, see the
 [Proxmox import guide](./PROXMOX_IMPORT.md).
@@ -48,7 +56,7 @@ apt-get install -y curl ca-certificates
 curl -fsSL https://raw.githubusercontent.com/Kobii-git/Rackpad/main/scripts/install-docker.sh | bash
 ```
 
-The script writes a small compose project to `/opt/rackpad`, pulls the release
+The stable installer writes a Compose project to `/opt/rackpad`, pulls the release
 image, starts the container, and stores data in the Docker volume
 `rackpad_data`.
 
@@ -74,8 +82,8 @@ docker compose -f compose.host-discovery.yml up -d
 ```
 
 That variant keeps the same `rackpad_data` volume but runs Rackpad with host
-networking, root inside the container, and the `NET_RAW`, `NET_ADMIN`, and
-`NET_BIND_SERVICE` capabilities needed by ICMP/ARP-style discovery tools. See
+networking, root inside the container, and the `NET_RAW` and `NET_ADMIN` capabilities for ICMP/ARP-style discovery tools.
+The manifest also includes `NET_BIND_SERVICE`; UDP 1162 does not require that capability. See
 the full [Docker network discovery guide](./DOCKER_DISCOVERY.md) before exposing
 this outside a trusted LAN or VPN.
 
@@ -119,13 +127,15 @@ running the pull.
 
 Rackpad stores its SQLite database in the `rackpad_data` Docker volume. For app
 level backups, use the admin backup export from the Rackpad Users screen before
-upgrades or container rebuilds.
+upgrades or container rebuilds. Preserve `/opt/rackpad/.env` and the original
+`RACKPAD_SECRET_KEY` with protected backups; encrypted credentials cannot be
+recovered from the database alone.
 
 ## Notes
 
 - Keep Rackpad on a private LAN, VPN, or behind a trusted reverse proxy.
-- If exposing it through Cloudflare or another proxy, set `TRUST_PROXY=1`,
-  `TRUSTED_HOSTS`, and `TRUSTED_ORIGINS` in `/opt/rackpad/.env`.
-- A full Proxmox host-side helper that creates the LXC automatically can be
-  added later. The LXC-internal installer is intentionally safer and easier to
-  audit for a public patch release.
+- For 1.8.2 beta behind Cloudflare or another proxy, set `TRUST_PROXY` to controlled proxy IPs/CIDRs,
+  `TRUSTED_HOSTS`, and `TRUSTED_ORIGINS` in `/opt/rackpad/.env`. Stable 1.8.0 uses hop counts; see the version-specific [proxy guide](../INSTALL.md#reverse-proxy-and-tls).
+- The native host-side helper is pre-release. Keep using this Docker path for
+  supported installations until its roadmap marks the stable deployment phase
+  complete.

@@ -1,9 +1,11 @@
+import { isStackType, listStackMembers, syncStackHeight, validateStackChildren } from './device-stacks.js'
 import { db } from '../db.js'
 import { getJsonSetting, putJsonSetting } from './app-settings.js'
 import { ValidationError } from './validation.js'
 
 export const BUILT_IN_DEVICE_TYPES = [
   { id: 'switch', label: 'Switch' },
+  { id: 'switch_stack', label: 'Stacked switches', parentType: 'switch' },
   { id: 'router', label: 'Router' },
   { id: 'firewall', label: 'Firewall' },
   { id: 'server', label: 'Server' },
@@ -175,26 +177,51 @@ export function isKnownDeviceType(id: string) {
 
 export function deviceTypeBase(id: string) {
   const normalized = normalizeDeviceTypeId(id)
-  const byId = new Map(listDeviceTypes().map((entry) => [entry.id, entry]))
+  const parentById = new Map(
+    listDeviceTypes().map((entry) => [entry.id, entry.parentType]),
+  )
+  const lineage = deviceTypeLineageFromParents(normalized, parentById)
+  const last = lineage.at(-1)
+  const next = last ? parentById.get(last) : null
+  return next && lineage.includes(normalizeDeviceTypeId(next))
+    ? normalized
+    : (last ?? normalized)
+}
+
+export function deviceTypeLineageFromParents(
+  id: string,
+  parentById: ReadonlyMap<string, string | null | undefined>,
+) {
+  const normalized = normalizeDeviceTypeId(id)
   const seen = new Set<string>()
+  const lineage: string[] = []
   let current = normalized
   while (current && !seen.has(current)) {
+    lineage.push(current)
     seen.add(current)
-    const parent = byId.get(current)?.parentType
-    if (!parent || parent === current) return current
-    current = parent
+    const parent = parentById.get(current)
+    if (!parent || parent === current) break
+    current = normalizeDeviceTypeId(parent)
   }
-  return normalized
+  return lineage
+}
+
+export function deviceTypeLineage(id: string) {
+  return deviceTypeLineageFromParents(
+    id,
+    new Map(listDeviceTypes().map((entry) => [entry.id, entry.parentType])),
+  )
 }
 
 export function deviceTypeMatches(
   deviceType: string,
   compatibleDeviceTypes: string[],
 ) {
-  const normalized = normalizeDeviceTypeId(deviceType)
-  if (compatibleDeviceTypes.includes(normalized)) return true
-  const base = deviceTypeBase(normalized)
-  return base !== normalized && compatibleDeviceTypes.includes(base)
+  if (compatibleDeviceTypes.length === 0) return true
+  const compatible = new Set(compatibleDeviceTypes.map(normalizeDeviceTypeId))
+  return deviceTypeLineage(deviceType).some((candidate) =>
+    compatible.has(candidate),
+  )
 }
 
 export function requiredDeviceType(body: Record<string, unknown>, key = 'deviceType') {
@@ -253,9 +280,14 @@ export function createDeviceType(input: {
     createdAt: now,
     updatedAt: now,
   }
-  saveDeviceTypeSettings({
-    custom: [...settings.custom, created],
-  })
+  db.transaction(() => {
+    saveDeviceTypeSettings({ custom: [...settings.custom, created] })
+    const observed = db.prepare('SELECT id FROM devices WHERE deviceType = ?').all(id) as Array<{ id: string }>
+    for (const device of observed) {
+      if (created.parentType === 'switch_stack') syncStackHeight(device.id)
+      validateStackChildren(device.id)
+    }
+  })()
 
   return {
     ...created,
@@ -309,7 +341,15 @@ export function updateDeviceType(
     existingIndex >= 0
       ? settings.custom.map((entry, index) => (index === existingIndex ? updated : entry))
       : [...settings.custom, updated]
-  saveDeviceTypeSettings({ custom })
+  db.transaction(() => {
+    const affected = db.prepare('SELECT id FROM devices WHERE deviceType = ?').all(normalizedId) as Array<{ id: string }>;
+    const wasStack = isStackType(normalizedId);
+    const becomesStack = updated.parentType === 'switch_stack';
+    if (wasStack && !becomesStack && affected.some(device => listStackMembers(device.id).length > 0)) throw new ValidationError('Remove stack members before changing type ancestry.', 409);
+    saveDeviceTypeSettings({ custom });
+    if (!wasStack && becomesStack) for (const device of affected) syncStackHeight(device.id);
+    for (const device of affected) validateStackChildren(device.id);
+  })()
 
   return {
     ...updated,

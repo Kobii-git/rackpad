@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
 import { db } from '../db.js'
 import { requireAuth } from '../lib/auth.js'
 import {
@@ -12,12 +12,13 @@ import { createId } from '../lib/ids.js'
 import { listMonitors, MONITOR_TYPES, parseMonitor, reconcileDeviceMonitorRollup, runDeviceChecks, runMonitorCheck, SNMP_MATCH_MODES, SNMP_VERSIONS } from '../lib/monitoring.js'
 import { discoverIfMibInterfaces, formatSnmpHighSpeedMbps, interfaceMonitorName } from '../lib/snmp-if-mib.js'
 import { isValidSnmpRegex, matchPortForInterface } from '../lib/snmp-match.js'
-import { resolveSnmpSessionForTarget } from '../lib/snmp-session.js'
+import { resolveSnmpSessionForTarget, loadMonitorCommunity } from '../lib/snmp-session.js'
 import {
   buildSnmpSessionFromCredential,
   loadSnmpCredentialSecrets,
 } from '../lib/snmp-credentials.js'
 import { validateSnmpOid } from '../lib/snmp.js'
+import { encryptMonitorCommunity } from '../lib/security-migration.js'
 import {
   asObject,
   optionalBoolean,
@@ -49,8 +50,9 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     if (!requireAuth(req, reply)) return
 
     const body = asObject(req.body)
-    const { device, session: snmpSession } = resolveSnmpSession(body)
-    if (!assertLabWrite(req, reply, device.labId)) return
+    const resolved = resolveSnmpSession(body, req, reply)
+    if (!resolved) return
+    const { device, session: snmpSession } = resolved
 
     const interfaces = await discoverIfMibInterfaces(snmpSession)
     const devicePorts = db
@@ -84,8 +86,9 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     if (!requireAuth(req, reply)) return
 
     const body = asObject(req.body)
-    const { device, session: snmpSession } = resolveSnmpSession(body)
-    if (!assertLabWrite(req, reply, device.labId)) return
+    const resolved = resolveSnmpSession(body, req, reply)
+    if (!resolved) return
+    const { device, session: snmpSession } = resolved
 
     const ifIndexes = parseIfIndexes(body)
     const skipExisting = optionalBoolean(body, 'skipExisting') ?? true
@@ -146,7 +149,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
         db.prepare(`
           INSERT INTO deviceMonitors (
             id, deviceId, name, type, target, port, path,
-            snmpVersion, snmpCommunity, snmpOid, snmpExpectedValue, snmpMatchMode,
+            snmpVersion, snmpCommunityEnc, snmpOid, snmpExpectedValue, snmpMatchMode,
             portId, snmpIfIndex, snmpCredentialId,
             intervalMs, enabled, sortOrder
           ) VALUES (?, ?, ?, 'snmp', ?, ?, NULL, ?, ?, ?, ?, 'equals', ?, ?, ?, ?, 1, ?)
@@ -157,7 +160,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
           snmpSession.host,
           snmpSession.port,
           snmpSession.version === '3' ? '3' : snmpSession.version,
-          snmpSession.version === '3' ? null : snmpSession.community,
+          snmpSession.version === '3' || snmpCredentialId ? null : encryptMonitorCommunity(snmpSession.community),
           entry.operStatusOid,
           expectedOperStatus,
           matchedPortId,
@@ -295,7 +298,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
         path,
         ignoreTlsErrors,
         snmpVersion,
-        snmpCommunity,
+        snmpCommunityEnc,
         snmpOid,
         snmpExpectedValue,
         snmpMatchMode,
@@ -320,7 +323,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
       type === 'snmp' ? null : path ?? null,
       type === 'https' && ignoreTlsErrors ? 1 : 0,
       type === 'snmp' ? snmpVersion : null,
-      type === 'snmp' ? snmpCommunity : null,
+      type === 'snmp' ? encryptMonitorCommunity(snmpCommunity) : null,
       type === 'snmp' ? snmpOid : null,
       type === 'snmp' ? snmpExpectedValue ?? null : null,
       type === 'snmp' ? snmpMatchMode : 'equals',
@@ -386,8 +389,8 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
       : null
     const nextSnmpCommunity = nextType === 'snmp'
       ? snmpCommunity === undefined
-        ? (current.snmpCommunity == null ? null : String(current.snmpCommunity))
-        : snmpCommunity
+        ? (current.snmpCommunityEnc == null ? null : String(current.snmpCommunityEnc))
+        : encryptMonitorCommunity(snmpCommunity)
       : null
     const nextSnmpOid = nextType === 'snmp'
       ? snmpOid === undefined
@@ -459,7 +462,8 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
         path = ?,
         ignoreTlsErrors = ?,
         snmpVersion = ?,
-        snmpCommunity = ?,
+        snmpCommunity = NULL,
+        snmpCommunityEnc = ?,
         snmpOid = ?,
         snmpExpectedValue = ?,
         snmpMatchMode = ?,
@@ -575,11 +579,17 @@ function parseIfIndexes(body: Record<string, unknown>) {
   })
 }
 
-function resolveSnmpSession(body: Record<string, unknown>) {
+function resolveSnmpSession(body: Record<string, unknown>, req: FastifyRequest, reply: FastifyReply) {
   const deviceId = requiredString(body, 'deviceId', { maxLength: 80 })
   const device = getDeviceLabRow(deviceId)
   if (!device) {
     throw new ValidationError('Device not found.')
+  }
+
+  if (!assertLabWrite(req, reply, device.labId)) return null
+  const monitorId = optionalString(body, 'monitorId', { maxLength: 80 })
+  if (monitorId && !db.prepare('SELECT id FROM deviceMonitors WHERE id = ? AND deviceId = ?').get(monitorId, deviceId)) {
+    throw new ValidationError('Monitor must belong to the selected device.')
   }
 
   const target =
@@ -595,6 +605,7 @@ function resolveSnmpSession(body: Record<string, unknown>) {
     optionalString(body, 'snmpCredentialId', { maxLength: 80 }) ?? device.snmpCredentialId ?? null
   validateMonitorCredentialId(device.labId, snmpCredentialId)
 
+  const communityInput = optionalString(body, 'snmpCommunity', { maxLength: 120 })
   const session = resolveSnmpSessionForTarget({
     deviceId: device.id,
     labId: device.labId,
@@ -603,7 +614,7 @@ function resolveSnmpSession(body: Record<string, unknown>) {
     timeoutMs,
     snmpCredentialId,
     snmpVersion: optionalEnum(body, 'snmpVersion', SNMP_VERSIONS),
-    snmpCommunity: optionalString(body, 'snmpCommunity', { maxLength: 120 }),
+    snmpCommunity: communityInput === undefined && monitorId && !snmpCredentialId ? loadMonitorCommunity(monitorId, deviceId) : communityInput,
   })
 
   return { device, session }

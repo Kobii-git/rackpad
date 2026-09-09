@@ -13,6 +13,7 @@ const patterns = new Set(
 
 const requiredPatterns = [
   ".ai/local/",
+  ".claude/",
   ".cache",
   ".env",
   ".env.*",

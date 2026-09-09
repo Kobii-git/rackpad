@@ -42,8 +42,10 @@ Sparse ADR-lite records for choices likely to be re-litigated.
 ## D5 — Privileged discovery mode
 
 - Context: full subnet/MAC discovery may require host network and raw capabilities.
-- Decision: keep privilege in a separate opt-in Compose artefact; default remains
-  non-root and unprivileged.
+- Decision: keep Docker privilege in a separate opt-in Compose artefact. Native
+  LXC defaults to neighbor-only discovery with no service capabilities and uses
+  a root-only, preflighted advanced-mode control for `CAP_NET_RAW` and
+  `CAP_NET_ADMIN`; both defaults remain non-root and unprivileged.
 - Consequences: capable discovery for trusted operators without normalizing risk.
 - Reconsider when: a separate discovery agent can provide least privilege.
 
@@ -55,3 +57,29 @@ Sparse ADR-lite records for choices likely to be re-litigated.
 - Consequences: clear consumer choice; version/changelog/tag promotion is partly
   manual and can drift.
 - Reconsider when: release automation is approved and proven against current flow.
+
+## D7 — In-process controller integrations
+
+- Context: Rackpad imports and synchronizes infrastructure from trusted operator
+  controllers while remaining a single-instance modular monolith.
+- Decision: keep controller connections lab-scoped and in-process; encrypt stored
+  credentials, use the shared DNS-pinned HTTP layer, bind previews to expiring
+  single-use tokens, serialize apply, and expose only non-destructive merge/skip
+  schedule modes.
+- Consequences: deployment stays simple and controller state survives backup, but
+  provider code, schedules, credentials, authorization, and inventory mutation
+  share the main process and require coordinated review.
+- Reconsider when: connector isolation, independent scaling, stronger credential
+  custody, or a separate execution agent becomes a concrete requirement.
+
+## D8 — Native LXC release alignment and updates
+
+- Context: a first-party Proxmox helper must not mix moving branch scripts,
+  application code, operational assets, or Community core revisions.
+- Decision: production dispatch resolves the latest stable formal Release and
+  executes all native assets from that exact tag; installed instances update
+  manually and stable-only through a transactional paired rollback path.
+- Consequences: code and deployment behavior remain version-aligned, while
+  operators choose update timing and retain recovery state.
+- Reconsider when: official Community Scripts acceptance requires a compatible
+  origin transition or a proven update contract changes the operator model.

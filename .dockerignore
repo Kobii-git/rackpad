@@ -23,6 +23,7 @@ rackpad-backup-*.json
 *.pem
 *.key
 .ai/local/
+.claude/
 docs/reference-standard-analysis/
 README.md
 LICENSE

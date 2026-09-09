@@ -16,6 +16,7 @@ import { ReferenceImageGallery } from "@/components/shared/ReferenceImageGallery
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
 import { RackView } from "@/components/rack/RackView";
+import { RackStudioWorkspace } from "@/components/rack/RackStudioWorkspace";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
@@ -104,11 +105,20 @@ export default function RackViewPage() {
   const devices = useStore((s) => s.devices);
   const deviceTypes = useStore((s) => s.deviceTypes);
   const ports = useStore((s) => s.ports);
+  const portLinks = useStore((s) => s.portLinks);
+  const physicalLayouts = useStore((s) => s.physicalLayouts);
   const deviceImages = useStore((s) => s.deviceImages);
   const referenceImages = useStore((s) => s.referenceImages);
   const canEdit = canEditInventory(currentUser);
   const [selectedViewId, setSelectedViewId] = useState("");
   const [face, setFace] = useState<RackDisplayFace>("front");
+  const [studioBeta, setStudioBeta] = useState(() => {
+    try {
+      return window.localStorage.getItem("rackpad.rack-studio.beta") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [selectedDeviceId, setSelectedDeviceId] = useState<
     string | undefined
   >();
@@ -285,6 +295,16 @@ export default function RackViewPage() {
     : [];
   const selectedRoomDevices = viewingRoom
     ? allLooseDevices.filter((device) => device.roomId === viewingRoom.id)
+    : [];
+  const selectedRoomRackIds = new Set(
+    selectedRoomRacks.map((entry) => entry.id),
+  );
+  const selectedRoomStudioDevices = viewingRoom
+    ? devices.filter(
+        (device) =>
+          device.roomId === viewingRoom.id ||
+          (device.rackId ? selectedRoomRackIds.has(device.rackId) : false),
+      )
     : [];
   const selectedRoomImages = viewingRoom
     ? referenceImages.filter(
@@ -675,14 +695,52 @@ export default function RackViewPage() {
                 portsByDeviceId={portsByDeviceId}
               />
             ) : viewingRoom ? (
-              <RoomPanel
-                room={viewingRoom}
-                racks={selectedRoomRacks}
-                devices={selectedRoomDevices}
-                images={selectedRoomImages}
-                canEdit={canEdit}
-                portsByDeviceId={portsByDeviceId}
-              />
+              <div className="space-y-3">
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={studioBeta ? "default" : "outline"}
+                    aria-pressed={studioBeta}
+                    onClick={() => {
+                      const next = !studioBeta;
+                      setStudioBeta(next);
+                      try {
+                        window.localStorage.setItem(
+                          "rackpad.rack-studio.beta",
+                          String(next),
+                        );
+                      } catch {
+                        // The in-memory beta choice still works.
+                      }
+                    }}
+                  >
+                    {t("Studio Beta")}
+                  </Button>
+                </div>
+                {studioBeta ? (
+                  <RackStudioWorkspace
+                    room={viewingRoom}
+                    racks={selectedRoomRacks}
+                    devices={selectedRoomStudioDevices}
+                    layouts={physicalLayouts}
+                    ports={ports}
+                    portLinks={portLinks}
+                    canEdit={canEdit}
+                    face={face}
+                    onFaceChange={setFace}
+                  />
+                ) : (
+                  <RoomPanel
+                    room={viewingRoom}
+                    racks={selectedRoomRacks}
+                    devices={selectedRoomDevices}
+                    images={selectedRoomImages}
+                    canEdit={canEdit}
+                    portsByDeviceId={portsByDeviceId}
+                  />
+                )}
+              </div>
             ) : rack ? (
               <>
                 <div className="mb-4 flex items-center justify-between gap-4">
@@ -703,89 +761,145 @@ export default function RackViewPage() {
                     </div>
                   </div>
 
-                  <div
-                    role="group"
-                    aria-label={t("Rack face")}
-                    className="flex items-center gap-1 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_42%,transparent)] p-1"
-                  >
-                    {(["front", "rear", "both"] as const).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        aria-pressed={face === option}
-                        onClick={() => setFace(option)}
-                        className={cn(
-                          "relative rounded-[var(--radius-sm)] px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.13em] text-[var(--text-tertiary)] transition-[background-color,color,box-shadow] duration-150 hover:bg-[rgb(255_255_255_/_0.035)] hover:text-[var(--text-primary)] focus-visible:outline-none",
-                          face === option &&
-                            "bg-[var(--accent-primary-soft)] text-[var(--accent-primary-hover)] shadow-[0_0_0_1px_var(--accent-primary-border)_inset]",
-                        )}
-                      >
-                        {option === "front"
-                          ? t("Front")
-                          : option === "rear"
-                            ? t("Rear")
-                            : t("Both")}
-                      </button>
-                    ))}
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={studioBeta ? "default" : "outline"}
+                      aria-pressed={studioBeta}
+                      onClick={() => {
+                        const next = !studioBeta;
+                        setStudioBeta(next);
+                        try {
+                          window.localStorage.setItem(
+                            "rackpad.rack-studio.beta",
+                            String(next),
+                          );
+                        } catch {
+                          // The in-memory beta choice still works.
+                        }
+                      }}
+                    >
+                      {t("Studio Beta")}
+                    </Button>
+                    <div
+                      role="group"
+                      aria-label={t("Rack face")}
+                      className="flex items-center gap-1 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_42%,transparent)] p-1"
+                    >
+                      {(["front", "rear", "both"] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          aria-pressed={face === option}
+                          onClick={() => setFace(option)}
+                          className={cn(
+                            "relative rounded-[var(--radius-sm)] px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.13em] text-[var(--text-tertiary)] transition-[background-color,color,box-shadow] duration-150 hover:bg-[rgb(255_255_255_/_0.035)] hover:text-[var(--text-primary)] focus-visible:outline-none",
+                            face === option &&
+                              "bg-[var(--accent-primary-soft)] text-[var(--accent-primary-hover)] shadow-[0_0_0_1px_var(--accent-primary-border)_inset]",
+                          )}
+                        >
+                          {option === "front"
+                            ? t("Front")
+                            : option === "rear"
+                              ? t("Rear")
+                              : t("Both")}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
                 <div
                   className={cn(
-                    "flex items-start gap-6",
-                    face === "both" && "flex-col",
+                    studioBeta ? "block" : "flex items-start gap-6",
+                    !studioBeta && face === "both" && "flex-col",
                   )}
                 >
-                  <RackView
-                    rack={rack}
-                    devices={rackDevices}
-                    deviceImages={deviceImagesByDeviceId}
-                    face={face}
-                    selectedDeviceId={selectedDeviceId}
-                    onSelectDevice={(id) =>
-                      setSelectedDeviceId(
-                        id === selectedDeviceId ? undefined : id,
-                      )
-                    }
-                  />
-
-                  {face === "both" ? (
-                    <div className="grid w-full max-w-3xl gap-4 sm:grid-cols-2">
-                      <ReferenceImageGallery
-                        entityType="rack"
-                        entityId={rack.id}
-                        images={rackImages}
-                        face="front"
-                        canEdit={canEdit}
-                        compact
-                        emptyText={t("No front rack picture yet.")}
-                      />
-                      <ReferenceImageGallery
-                        entityType="rack"
-                        entityId={rack.id}
-                        images={rackImages}
-                        face="rear"
-                        canEdit={canEdit}
-                        compact
-                        emptyText={t("No rear rack picture yet.")}
-                      />
-                    </div>
+                  {studioBeta ? (
+                    <RackStudioWorkspace
+                      room={rack.roomId ? roomById[rack.roomId] : undefined}
+                      racks={
+                        rack.roomId
+                          ? racks.filter(
+                              (entry) => entry.roomId === rack.roomId,
+                            )
+                          : [rack]
+                      }
+                      devices={
+                        rack.roomId
+                          ? devices.filter(
+                              (device) =>
+                                device.roomId === rack.roomId ||
+                                racks.some(
+                                  (entry) =>
+                                    entry.roomId === rack.roomId &&
+                                    entry.id === device.rackId,
+                                ),
+                            )
+                          : rackDevices
+                      }
+                      layouts={physicalLayouts}
+                      ports={ports}
+                      portLinks={portLinks}
+                      canEdit={canEdit}
+                      initialRackId={rack.id}
+                      face={face}
+                      onFaceChange={setFace}
+                    />
                   ) : (
-                    <div className="w-96 shrink-0">
-                      <ReferenceImageGallery
-                        entityType="rack"
-                        entityId={rack.id}
-                        images={rackImages}
-                        face={face}
-                        canEdit={canEdit}
-                        compact
-                        emptyText={t("No {face} rack picture yet.", { face })}
-                      />
-                    </div>
+                    <RackView
+                      rack={rack}
+                      devices={rackDevices}
+                      deviceImages={deviceImagesByDeviceId}
+                      face={face}
+                      selectedDeviceId={selectedDeviceId}
+                      onSelectDevice={(id) =>
+                        setSelectedDeviceId(
+                          id === selectedDeviceId ? undefined : id,
+                        )
+                      }
+                    />
                   )}
 
+                  {!studioBeta &&
+                    (face === "both" ? (
+                      <div className="grid w-full max-w-3xl gap-4 sm:grid-cols-2">
+                        <ReferenceImageGallery
+                          entityType="rack"
+                          entityId={rack.id}
+                          images={rackImages}
+                          face="front"
+                          canEdit={canEdit}
+                          compact
+                          emptyText={t("No front rack picture yet.")}
+                        />
+                        <ReferenceImageGallery
+                          entityType="rack"
+                          entityId={rack.id}
+                          images={rackImages}
+                          face="rear"
+                          canEdit={canEdit}
+                          compact
+                          emptyText={t("No rear rack picture yet.")}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-96 shrink-0">
+                        <ReferenceImageGallery
+                          entityType="rack"
+                          entityId={rack.id}
+                          images={rackImages}
+                          face={face}
+                          canEdit={canEdit}
+                          compact
+                          emptyText={t("No {face} rack picture yet.", { face })}
+                        />
+                      </div>
+                    ))}
+
                   <AnimatePresence>
-                    {selectedDevice && (
+                    {!studioBeta && selectedDevice && (
                       <motion.div
                         key={selectedDevice.id}
                         initial={{ opacity: 0, x: 8 }}

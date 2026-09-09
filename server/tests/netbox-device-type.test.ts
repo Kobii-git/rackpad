@@ -121,7 +121,7 @@ test("previewNetboxDeviceTypeImport dedupes by manufacturer and model", () => {
     },
   ];
 
-  const preview = previewNetboxDeviceTypeImport(SAMPLE_YAML, templates);
+  const preview = previewNetboxDeviceTypeImport(SAMPLE_YAML, [], templates);
   assert.equal(
     preview.dedupeKey,
     netboxDedupeKey("Cisco", "Catalyst 9300-24T"),

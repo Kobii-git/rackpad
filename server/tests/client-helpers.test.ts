@@ -358,15 +358,15 @@ test("cabling map follows passive patch panel pairs to active endpoints", () => 
     makePort({
       id: "patch_front",
       deviceId: "patch_1",
-      name: "F1",
+      name: "Jack 1",
       position: 1,
       face: "front",
     }),
     makePort({
       id: "patch_rear",
       deviceId: "patch_1",
-      name: "R1",
-      position: 1,
+      name: "  jack 1  ",
+      position: 99,
       face: "rear",
     }),
     makePort({ id: "access_gi1", deviceId: "access_1", name: "Gi1" }),
@@ -402,14 +402,14 @@ test("cabling map full path includes passive hops", () => {
     makePort({
       id: "patch_2_front",
       deviceId: "patch_2",
-      name: "F1",
+      name: "1",
       position: 1,
       face: "front",
     }),
     makePort({
       id: "patch_2_rear",
       deviceId: "patch_2",
-      name: "R1",
+      name: "1",
       position: 1,
       face: "rear",
     }),
@@ -434,7 +434,7 @@ test("cabling map full path includes passive hops", () => {
 
   assert.match(
     text,
-    /server-2 eth1 --cable--> patch-2 F1 --passive--> patch-2 R1 --cable--> access-2 Gi1/,
+    /server-2 eth1 --cable--> patch-2 1 --passive--> patch-2 1 --cable--> access-2 Gi1/,
   );
 });
 
@@ -561,14 +561,14 @@ test("cabling map follows a bonded member through its physical patch path", () =
     makePort({
       id: "patch_front",
       deviceId: "lag_patch",
-      name: "F1",
+      name: "1",
       position: 1,
       face: "front",
     }),
     makePort({
       id: "patch_rear",
       deviceId: "lag_patch",
-      name: "R1",
+      name: "1",
       position: 1,
       face: "rear",
     }),
@@ -598,19 +598,21 @@ test("cabling map follows a bonded member through its physical patch path", () =
   };
 
   assert.equal(
-    buildCablingMapLines(input, "direct").find((line) => line.portId === "eth_1")
-      ?.text,
-    "lag-server eth1 -> lag-patch F1 (member of Bond1)",
+    buildCablingMapLines(input, "direct").find(
+      (line) => line.portId === "eth_1",
+    )?.text,
+    "lag-server eth1 -> lag-patch 1 (member of Bond1)",
   );
   assert.equal(
-    buildCablingMapLines(input, "active").find((line) => line.portId === "eth_1")
-      ?.text,
+    buildCablingMapLines(input, "active").find(
+      (line) => line.portId === "eth_1",
+    )?.text,
     "lag-server eth1 -> lag-switch Gi1 (member of Bond1)",
   );
   assert.equal(
     buildCablingMapLines(input, "full").find((line) => line.portId === "eth_1")
       ?.text,
-    "lag-server eth1 --cable--> lag-patch F1 --passive--> lag-patch R1 --cable--> lag-switch Gi1 (member of Bond1)",
+    "lag-server eth1 --cable--> lag-patch 1 --passive--> lag-patch 1 --cable--> lag-switch Gi1 (member of Bond1)",
   );
 });
 
@@ -634,14 +636,14 @@ test("cabling map stops loops instead of walking forever", () => {
     makePort({
       id: "loop_front",
       deviceId: "loop_patch",
-      name: "F1",
+      name: "1",
       position: 1,
       face: "front",
     }),
     makePort({
       id: "loop_rear",
       deviceId: "loop_patch",
-      name: "R1",
+      name: "1",
       position: 1,
       face: "rear",
     }),

@@ -3,6 +3,8 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import staticPlugin from "@fastify/static";
 import path from "node:path";
+import net from "node:net";
+import ipaddr from "ipaddr.js";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { authRoutes } from "./routes/auth.js";
@@ -10,6 +12,7 @@ import { usersRoutes } from "./routes/users.js";
 import { labsRoutes } from "./routes/labs.js";
 import { roomsRoutes } from "./routes/rooms.js";
 import { racksRoutes } from "./routes/racks.js";
+import { deviceStacksRoutes } from "./routes/device-stacks.js";
 import { devicesRoutes } from "./routes/devices.js";
 import { deviceTypesRoutes } from "./routes/device-types.js";
 import { portsRoutes } from "./routes/ports.js";
@@ -33,11 +36,20 @@ import { referenceImagesRoutes } from "./routes/reference-images.js";
 import { importsRoutes } from "./routes/imports.js";
 import { integrationsRoutes } from "./routes/integrations.js";
 import { storageRoutes } from "./routes/storage.js";
+import {
+  hardwareTemplatesRoutes,
+  physicalLayoutsRoutes,
+} from "./routes/physical-layouts.js";
+import { rackStudioRoutes } from "./routes/rack-studio.js";
 import { getAuthToken, lookupSession, needsBootstrap } from "./lib/auth.js";
 import { fetchUserLabAccess } from "./lib/lab-access.js";
 import { ValidationError } from "./lib/validation.js";
 import { normalizeSafeSubnetCidrs } from "./lib/subnet-integrity.js";
 import { CONTENT_SECURITY_POLICY } from "./security-headers.js";
+import {
+  configureRouteAuthorization,
+  requestRouteAuthorization,
+} from "./route-authorization.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = path.resolve(__dirname, "../dist");
@@ -53,7 +65,6 @@ const DEV_ORIGINS = new Set(["http://localhost:5173", "http://127.0.0.1:5173"]);
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const DEFAULT_RATE_LIMIT_MAX = 600;
 const DEFAULT_RATE_LIMIT_WINDOW = "1 minute";
-const MAX_TRUST_PROXY_HOPS = 10;
 
 function envFlag(name: string, fallback = false) {
   const raw = process.env[name]?.trim().toLowerCase();
@@ -61,25 +72,28 @@ function envFlag(name: string, fallback = false) {
   return ["1", "true", "yes", "on"].includes(raw);
 }
 
-export function parseTrustProxySetting(value: string | undefined): false | number {
+export function parseTrustProxySetting(value: string | undefined): false | string[] {
   const normalized = value?.trim().toLowerCase();
 
   if (!normalized || ["0", "false", "no", "off"].includes(normalized)) {
     return false;
   }
 
-  if (["true", "yes", "on"].includes(normalized)) {
-    return 1;
-  }
-
-  if (!/^[1-9]\d*$/.test(normalized)) {
+  const addresses = normalized.split(/[\s,]+/).filter(Boolean);
+  if (!addresses.length || !addresses.every((address) => {
+    if (net.isIP(address)) return true;
+    const [ip, prefix, extra] = address.split("/");
+    if (extra !== undefined || !ip || !net.isIP(ip) || !prefix || !/^\d+$/.test(prefix)) return false;
+    try {
+      ipaddr.parseCIDR(address);
+      return Number(prefix) > 0;
+    } catch {
+      return false;
+    }
+  })) {
     return false;
   }
-
-  const hopCount = Number(normalized);
-  return Number.isSafeInteger(hopCount) && hopCount <= MAX_TRUST_PROXY_HOPS
-    ? hopCount
-    : false;
+  return addresses;
 }
 
 function envInteger(
@@ -135,14 +149,6 @@ function stripHostPort(host: string) {
   return host.split(":")[0].toLowerCase();
 }
 
-function getRequestHost(headers: Record<string, unknown>) {
-  const forwarded = headers["x-forwarded-host"];
-  const hostHeader = forwarded ?? headers.host;
-  if (!hostHeader) return null;
-  const firstValue = String(hostHeader).split(",")[0]?.trim();
-  return firstValue ? normalizeHost(firstValue) : null;
-}
-
 function hostAllowed(host: string | null, trustedHosts: Set<string>) {
   if (!host) return false;
   const hostOnly = stripHostPort(host);
@@ -173,9 +179,10 @@ export async function createApp() {
       .filter((value): value is string => Boolean(value)),
   );
 
+  const trustProxy = parseTrustProxySetting(process.env.TRUST_PROXY);
   const app = Fastify({
     bodyLimit: 20 * 1024 * 1024,
-    trustProxy: parseTrustProxySetting(process.env.TRUST_PROXY),
+    trustProxy,
     logger:
       process.env.NODE_ENV === "test"
         ? false
@@ -193,9 +200,15 @@ export async function createApp() {
           },
   });
 
+  if (trustProxy === false && process.env.TRUST_PROXY?.trim() &&
+      !["0", "false", "no", "off"].includes(process.env.TRUST_PROXY.trim().toLowerCase())) {
+    app.log.warn("TRUST_PROXY is disabled: configure explicit trusted proxy IPs/CIDRs; hop counts and truthy aliases are no longer supported.");
+  }
+
   app.decorateRequest("authUser", null);
   app.decorateRequest("sessionId", null);
   app.decorateRequest("labAccess", null);
+  configureRouteAuthorization(app);
 
   if (!envFlag("RACKPAD_RATE_LIMIT_DISABLED")) {
     await app.register(rateLimit, {
@@ -238,13 +251,10 @@ export async function createApp() {
       "Content-Security-Policy",
       CONTENT_SECURITY_POLICY,
     );
-    if (req.url.startsWith("/api/")) {
+    if (req.routeOptions.url?.startsWith("/api/") || req.url.startsWith("/api/")) {
       reply.header("Cache-Control", "no-store");
     }
-    if (
-      req.protocol === "https" ||
-      (req.headers["x-forwarded-proto"] ?? "").toString().includes("https")
-    ) {
+    if (req.protocol === "https") {
       reply.header(
         "Strict-Transport-Security",
         "max-age=31536000; includeSubDomains",
@@ -341,23 +351,9 @@ export async function createApp() {
       .send(readFileSync(PROXMOX_COLLECTOR_PATH, "utf8"));
   });
 
-  const publicPaths = new Set([
-    "/api/health",
-    "/api/imports/hyperv-collector",
-    "/api/imports/proxmox-collector",
-    "/api/auth/status",
-    "/api/auth/bootstrap",
-    "/api/auth/login",
-    "/api/auth/oidc/start",
-    "/api/auth/oidc/callback",
-    "/api/auth/oidc/session",
-  ]);
-
   app.addHook("onRequest", async (req, reply) => {
     if (process.env.NODE_ENV === "production" && trustedHosts.size > 0) {
-      const requestHost = getRequestHost(
-        req.headers as Record<string, unknown>,
-      );
+      const requestHost = normalizeHost(req.host);
       if (!hostAllowed(requestHost, trustedHosts)) {
         return reply
           .status(400)
@@ -380,9 +376,12 @@ export async function createApp() {
       }
     }
 
-    if (!req.url.startsWith("/api/")) return;
-    const urlPath = req.url.split("?")[0];
-    if (publicPaths.has(urlPath)) return;
+    // Matched route metadata is authoritative even when the URL is encoded.
+    if (!req.routeOptions.url?.startsWith("/api/") && !req.url.startsWith("/api/")) return;
+    const authorization = !req.routeOptions.url?.startsWith("/api/")
+      ? ({ kind: "authenticated" } as const)
+      : requestRouteAuthorization(req);
+    if (authorization.kind === "public") return;
 
     if (needsBootstrap()) {
       return reply
@@ -407,6 +406,11 @@ export async function createApp() {
     req.sessionId = session.sessionId;
     req.labAccess =
       session.role === "admin" ? [] : fetchUserLabAccess(session.id);
+    if (authorization.kind === "admin" && session.role !== "admin") {
+      return reply
+        .status(403)
+        .send({ error: authorization.denialMessage });
+    }
   });
 
   await app.register(authRoutes, { prefix: "/api/auth" });
@@ -415,6 +419,7 @@ export async function createApp() {
   await app.register(roomsRoutes, { prefix: "/api/rooms" });
   await app.register(racksRoutes, { prefix: "/api/racks" });
   await app.register(devicesRoutes, { prefix: "/api/devices" });
+  await app.register(deviceStacksRoutes, { prefix: "/api/devices" });
   await app.register(deviceTypesRoutes, { prefix: "/api/device-types" });
   await app.register(portsRoutes, { prefix: "/api/ports" });
   await app.register(portAggregatesRoutes, { prefix: "/api/port-aggregates" });
@@ -439,6 +444,13 @@ export async function createApp() {
   await app.register(importsRoutes, { prefix: "/api/imports" });
   await app.register(integrationsRoutes, { prefix: "/api/integrations" });
   await app.register(storageRoutes, { prefix: "/api/storage" });
+  await app.register(hardwareTemplatesRoutes, {
+    prefix: "/api/hardware-templates",
+  });
+  await app.register(physicalLayoutsRoutes, {
+    prefix: "/api/physical-layouts",
+  });
+  await app.register(rackStudioRoutes, { prefix: "/api/rack-studio" });
 
   if (existsSync(DIST_DIR)) {
     await app.register(staticPlugin, {

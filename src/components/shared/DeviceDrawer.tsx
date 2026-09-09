@@ -27,6 +27,7 @@ import type { TranslationKey } from "@/i18n/translations";
 import {
   BUILT_IN_DEVICE_TYPES,
   deviceTypeBase,
+  deviceTypeLineage,
   deviceTypeLabel,
   deviceTypeMatchesTemplate,
   localizedDeviceTypeLabel,
@@ -318,6 +319,7 @@ export function DeviceDrawer({
   );
   const isRackMounted = form.placement === "rack";
   const isShelfMounted = form.placement === "shelf";
+  const formIsStack = deviceTypeLineage(form.deviceType, deviceTypes).includes("switch_stack");
   const formBaseType = deviceTypeBase(form.deviceType, deviceTypes);
   const parentCandidates = useMemo(() => {
     return devices
@@ -738,6 +740,12 @@ export function DeviceDrawer({
         .filter(Boolean);
       const nextNetworkMode: NonNullable<Device["networkMode"]> =
         usesHostSharedNetworking ? "host-shared" : "normal";
+      const preserveRackTopPlacement = Boolean(
+        isEdit &&
+        device?.rackMountKind === "rack-top" &&
+        form.placement === "rack" &&
+        form.rackId === device.rackId,
+      );
 
       const basePayload = {
         hostname: form.hostname.trim(),
@@ -752,7 +760,7 @@ export function DeviceDrawer({
         macAddress: form.macAddress.trim() || undefined,
         networkMode: nextNetworkMode,
         status: form.status,
-        placement: form.placement,
+        placement: preserveRackTopPlacement ? undefined : form.placement,
         parentDeviceId:
           showParentSelector && form.parentDeviceId
             ? form.parentDeviceId
@@ -767,20 +775,25 @@ export function DeviceDrawer({
           ? Number.parseFloat(form.storageGb)
           : undefined,
         specs: form.specs.trim() || undefined,
-        rackId: isRackMounted ? form.rackId : undefined,
+        rackId:
+          isRackMounted && !preserveRackTopPlacement ? form.rackId : undefined,
         roomId: !isRackMounted && form.roomId ? form.roomId : undefined,
         startU:
-          isRackMounted && form.startU
+          isRackMounted && !preserveRackTopPlacement && form.startU
             ? Number.parseInt(form.startU, 10)
             : undefined,
-        heightU:
-          isRackMounted || isShelfMounted
+        heightU: formIsStack ? (device?.stackMembers?.reduce((sum, member) => sum + member.heightU, 0) || 1) :
+          (isRackMounted && !preserveRackTopPlacement) || isShelfMounted
             ? form.heightU
               ? Number.parseInt(form.heightU, 10)
               : 1
             : undefined,
-        face: isRackMounted ? form.face : undefined,
-        rackSlot: isRackMounted ? form.rackSlot : undefined,
+        face:
+          isRackMounted && !preserveRackTopPlacement ? form.face : undefined,
+        rackSlot:
+          isRackMounted && !preserveRackTopPlacement
+            ? form.rackSlot
+            : undefined,
         portTemplateId:
           canApplyTemplate && form.portTemplateId
             ? form.portTemplateId
@@ -1636,7 +1649,8 @@ export function DeviceDrawer({
                           type="number"
                           min={1}
                           max={12}
-                          value={form.heightU}
+                          disabled={formIsStack}
+                          value={formIsStack ? (device?.stackMembers?.reduce((sum, member) => sum + member.heightU, 0) || 1) : form.heightU}
                           onChange={(event) =>
                             set("heightU", event.target.value)
                           }
@@ -1673,7 +1687,8 @@ export function DeviceDrawer({
                         type="number"
                         min={1}
                         max={20}
-                        value={form.heightU}
+                        disabled={formIsStack}
+                          value={formIsStack ? (device?.stackMembers?.reduce((sum, member) => sum + member.heightU, 0) || 1) : form.heightU}
                         onChange={(event) => set("heightU", event.target.value)}
                         placeholder="1"
                       />

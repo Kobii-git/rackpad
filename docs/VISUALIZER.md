@@ -20,6 +20,16 @@ Open Rackpad -> `Visualizer`.
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | ![Rackpad multi-hop cable trace preview](./screenshots/visualizer-trace.png) | ![Rackpad visualizer loose-device layout](./screenshots/visualizer-layout.png) |
 
+Physical nodes reuse each device-owned front/rear layout so their visible ports
+and cable endpoints match Rack Studio and Device settings.
+
+![Rackpad Visualizer using physical hardware nodes](./screenshots/visualizer-physical.png)
+
+The `Rack cabling` layout shows one room as bottom-aligned, full-height rack
+elevations with cables attached to their exact physical ports.
+
+![Rackpad rack cabling visualizer](./screenshots/visualizer-rack-cabling.png)
+
 ## What It Shows
 
 - Rack-mounted equipment grouped in the left rack-elevation zone, with racks
@@ -42,6 +52,31 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
 
 - `Health` recolors device stripes by monitor rollup: green online, amber warning, red down, neutral unknown.
 - `Trace mode` lets you click two ports and highlights the documented L1 path between them.
+- `Rack cabling` switches to a read-only room view using the physical elevations
+  and port anchors configured in Rack Studio.
+- The room selector scopes rack cabling to one room. `Front`, `Rear`, and `Both`
+  control which physical faces are visible.
+- `Smooth` automatically uses short curved patch cords between different devices
+  on the same rack face within 4U vertically, when no other equipment obstructs
+  the curve. Longer, obstructed, cross-rack, and handoff connections use gutters.
+  Rack Studio and Rack cabling share the route geometry; SVG/PNG exports retain
+  the same curve controls and exact port endpoints.
+- Automatic front-to-rear cables use short continuation stubs at their visible
+  ports. Selecting or hovering either segment labels both destinations with the
+  device, port, and resolved rack face; `Labels` keeps these labels visible.
+  Single-face views show the local stub and identify the hidden destination.
+  Both-face views show both segments of the same cable. Markers also appear in
+  SVG/PNG exports and do not create inventory records. Saved manual routes retain
+  their existing presentation; brush-panel routing is not implemented.
+- `Orthogonal` retains right-angle routing. Saved route preferences remain valid.
+  `Labels` keeps every cable label visible; hovered and selected cables are
+  always labeled. Manual room waypoints retain their coordinates and prevent
+  automatic short-cord substitution, including in focused views.
+- The loose-gear tray keeps room equipment outside racks collapsed by default.
+  Expanding it shows device faceplates and their physical port anchors.
+- Rack cabling search includes racks, physical ports, loose equipment, device
+  addresses, MACs, and the visible room's cable metadata. Search results can be
+  focused with the arrow keys and opened with `Enter`.
 - `Loose below` places room loose-device groups below racks instead of beside
   them, which can reduce cable paths crossing through other devices.
 - `No rack required` keeps rooms with only loose devices in the rack-elevation
@@ -52,6 +87,9 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
 - Search matches hostnames, IPs, MACs from discovery, cable color, cable notes, and cable endpoints.
 - Click a device to isolate its direct neighborhood.
 - Click a cable to highlight both endpoints and inspect metadata.
+- Click a physical port to inspect its face, state, mode, and visible cable.
+- Rack cabling inspection and the Visible links list remain scoped to the
+  selected room, face, and cable-type filter.
 - Click an empty area to clear the current selection.
 
 ## Keyboard Shortcuts
@@ -87,6 +125,13 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
 - Unknown, down, or disabled links render as thinner dashed paths.
 - Cables between two online devices get a subtle low-contrast dash pulse.
 - Hovering or selecting a cable fades unrelated cables and highlights endpoint devices.
+- Rack cabling excludes invisible, virtual, WiFi, and aggregate relationships.
+  Links whose other endpoint is in another room, on a hidden face, or lacks an
+  available physical position end at a labeled handoff instead of implying a
+  physical route.
+  Cross-room handoffs use the nearest canvas edge, hidden-face handoffs use the
+  rack edge, and unavailable port positions attach to the affected fallback
+  equipment.
 
 ## Link Aggregation
 

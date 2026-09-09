@@ -6,7 +6,10 @@ const WIDTH = 1920;
 const HEIGHT = 1200;
 // Keep this synchronized with fixed-time.mjs, which freezes the server clock.
 const SCREENSHOT_TIME_MS = Date.parse("2026-08-24T18:00:00.000Z");
-const OUTPUT_DIR = resolve(process.cwd(), "docs/screenshots");
+const OUTPUT_DIR = resolve(
+  process.cwd(),
+  process.env.RACKPAD_SCREENSHOT_OUTPUT_DIR ?? "docs/screenshots",
+);
 const LEGACY_ASSETS = ["ipam.png"] as const;
 
 type Theme = "light" | "dark";
@@ -19,6 +22,7 @@ type SetupName =
   | "integrations-schedule"
   | "device-type-usage"
   | "duplicate-macs"
+  | "rack-studio-power"
   | "visualizer-fit"
   | "visualizer-cable"
   | "visualizer-trace";
@@ -86,6 +90,16 @@ const workspaceScenes: Scene[] = [
 ];
 
 const detailScenes: Scene[] = [
+  {
+    ...scene(
+      "rack-studio.png",
+      "/racks?rackId=rack_net",
+      "Racks / Rooms",
+    ),
+    setup: "rack-studio-power",
+    focal: { kind: "testId", value: "rack-studio-workspace" },
+    storage: { "rackpad.rack-studio.beta": "true" },
+  },
   {
     ...scene(
       "storage-drives.png",
@@ -160,6 +174,15 @@ const operationalScenes: Scene[] = [
 
 const visualizerScenes: Scene[] = [
   {
+    ...scene("visualizer-physical.png", "/visualizer", "Visualizer"),
+    focal: { kind: "testId", value: "visualizer-physical-node" },
+    storage: {
+      "rackpad.visualizer.layout-mode": "diagram",
+      "rackpad.visualizer.diagram-node-style": "physical",
+      "rackpad.visualizer.rack-face-mode": "both",
+    },
+  },
+  {
     ...scene("visualizer-cables.png", "/visualizer", "Visualizer"),
     setup: "visualizer-cable",
     focal: { kind: "text", value: "Selected cable", exact: true },
@@ -193,6 +216,23 @@ const visualizerScenes: Scene[] = [
       "rackpad.visualizer.rack-face-mode": "both",
     },
   },
+  {
+    ...scene(
+      "visualizer-rack-cabling.png",
+      "/visualizer",
+      "Visualizer",
+      "dark",
+    ),
+    focal: { kind: "testId", value: "rack-cabling-canvas" },
+    storage: {
+      "rackpad.visualizer.layout-mode": "rack",
+      "rackpad.visualizer.rack-cabling-room": "room_lab",
+      "rackpad.visualizer.rack-cabling-route": "smooth",
+      "rackpad.visualizer.rack-cabling-labels": "false",
+      "rackpad.visualizer.rack-cabling-loose-expanded": "false",
+      "rackpad.visualizer.rack-face-mode": "front",
+    },
+  },
 ];
 
 const darkScenes: Scene[] = [
@@ -220,8 +260,8 @@ test("capture the deterministic Rackpad documentation suite", async ({
   page,
   request,
 }) => {
-  expect(new Set(scenes.map((entry) => entry.filename)).size).toBe(37);
-  expect(scenes).toHaveLength(37);
+  expect(new Set(scenes.map((entry) => entry.filename)).size).toBe(40);
+  expect(scenes).toHaveLength(40);
   expect(page.viewportSize()).toEqual({ width: WIDTH, height: HEIGHT });
 
   const bootstrapResponse = await request.post("/api/auth/bootstrap", {
@@ -239,6 +279,27 @@ test("capture the deterministic Rackpad documentation suite", async ({
     headers: { authorization: `Bearer ${token}` },
   });
   expect(backupResponse.status(), await backupResponse.text()).toBe(201);
+
+  await page.route("**/api/admin/native-backups", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    const payload = (await response.json()) as {
+      backups?: Array<{ createdAt?: string }>;
+    };
+    await route.fulfill({
+      response,
+      json: {
+        ...payload,
+        backups: (payload.backups ?? []).map((backup) => ({
+          ...backup,
+          createdAt: new Date(SCREENSHOT_TIME_MS).toISOString(),
+        })),
+      },
+    });
+  });
 
   await page.addInitScript(
     ({ authToken, referenceTimeMs }) => {
@@ -335,9 +396,14 @@ async function prepareScene(page: Page, current: Scene) {
         "rackpad.language": "en",
         "rackpad.visualizer.health": "false",
         "rackpad.visualizer.layout-mode": "grouped",
+        "rackpad.visualizer.diagram-node-style": "compact",
         "rackpad.visualizer.loose-placement": "beside-racks",
         "rackpad.visualizer.room-only-sections": "false",
         "rackpad.visualizer.rack-face-mode": "front",
+        "rackpad.visualizer.rack-cabling-room": "",
+        "rackpad.visualizer.rack-cabling-route": "smooth",
+        "rackpad.visualizer.rack-cabling-labels": "false",
+        "rackpad.visualizer.rack-cabling-loose-expanded": "false",
       };
       for (const [key, value] of Object.entries({ ...defaults, ...storage })) {
         localStorage.setItem(key, value);
@@ -419,6 +485,9 @@ async function runSetup(page: Page, setup: SetupName) {
     case "duplicate-macs":
       await page.getByLabel(/Show ignored/).check();
       await expect(page.getByTestId("duplicate-mac-group")).toHaveCount(2);
+      return;
+    case "rack-studio-power":
+      await page.getByLabel("All cable types").selectOption("power");
       return;
     case "visualizer-fit":
       await page.getByRole("button", { name: "Fit", exact: true }).click();

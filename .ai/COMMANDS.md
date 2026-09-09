@@ -16,21 +16,26 @@ separately.
 | Translation integrity | `check:i18n` | Canonical after visible strings/locales |
 | Server/domain tests | `test:server` | Canonical after server/data/security work |
 | Client unit tests | `test:client` | Canonical after client helper/model work |
+| SNMP wire interoperability | `test:snmp:interop` | Isolated Docker bridge with Net-SNMP; credential API, monitoring, IF-MIB and authenticated traps; required by reusable quality |
+| Storage browser compatibility | `test:e2e:storage` | Chromium/Firefox with native, missing and throwing UUID APIs; fresh and schema-50 upgrade fixtures |
 | Browser/accessibility | `test:e2e` | Environment-heavy; required by full CI/release |
 | Documentation screenshots | `screenshots:update` | Isolated deterministic 1920×1200 capture; outside normal E2E discovery |
+| Screenshot determinism | `screenshots:check` | Two isolated captures with manifest and bounded pixel comparison; failures retain temporary captures for diagnosis; required after application checks in the reusable quality workflow |
 | Non-browser tests | `test` | Canonical local aggregation |
 | All tests | `test:full` | Canonical environment-heavy aggregation |
 | Production build | `build` | Canonical client/server build |
 | Bundle/lazy locales | `check:bundle` | Run after `build` |
 | Env and Docker ignores | `check:config` | Canonical deployment/config gate |
+| Proxmox native LXC | `check:proxmox` | Canonical helper/metadata/privilege/rollback fixture gate |
 | AI-doc consistency | `check:docs` | Canonical durable-context gate |
 | Standard completion | `check` | Local pre-completion source of truth |
 | Full CI/release | `check:full` | Standard check plus Playwright |
 
 For a small change, run the directly mapped targeted scripts plus the affected
 type check. For CAUTION work, run `check`; add `test:e2e` when user-visible,
-security-header, routing, or release risk requires it. CI also runs actionlint and
-shell/PowerShell syntax checks because those depend on platform tools.
+security-header, routing, or release risk requires it. CI also runs actionlint,
+Bash syntax, ShellCheck, and PowerShell syntax checks because those depend on
+platform tools.
 
 Long-running servers, package installation, Git mutation, Docker build/run,
 restore, password reset, push/tag/publish, and deployment are not validation

@@ -55,6 +55,7 @@ export async function ensureRoutableHost(
 export async function resolveRoutableHost(
   target: string | URL,
   message = DEFAULT_RESERVED_HOST_MESSAGE,
+  timeoutMs = 5_000,
 ) {
   const host = normalizeLookupHost(
     typeof target === "string" ? target : target.hostname,
@@ -64,10 +65,18 @@ export async function resolveRoutableHost(
   }
 
   let addresses: LookupAddress[];
+  let timeout: NodeJS.Timeout | undefined;
   try {
-    addresses = await hostLookup(host);
+    addresses = await Promise.race([
+      hostLookup(host),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error("DNS lookup timed out")), timeoutMs);
+      }),
+    ]);
   } catch {
-    throw new ValidationError("Target host could not be resolved.");
+    throw new ValidationError("Target host could not be resolved within the DNS timeout.");
+  } finally {
+    clearTimeout(timeout);
   }
 
   if (

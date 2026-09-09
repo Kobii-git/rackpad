@@ -36,6 +36,15 @@ Host discovery may run root with host networking and network capabilities. It is
 isolated in an opt-in Compose file and should run only on a trusted host/network.
 Reconsider if discovery can move to a separate least-privilege worker/agent.
 
+## Native LXC requires real-Proxmox validation
+
+The native helper, update transaction, rollback, and discovery modes have
+isolated contract fixtures but have not yet passed the planned fresh-install,
+cross-version rollback, reboot, and soak gates on Proxmox VE 9.x Debian 13 and
+Ubuntu 24.04 guests. Public documentation keeps the installer pre-release until
+that evidence exists. Reconsider support claims only after Phases 4-6 of the
+native LXC roadmap pass.
+
 ## SQLite and embedded images
 
 One SQLite file simplifies install and complete backups; base64 images keep state
@@ -52,8 +61,10 @@ require legacy protocols.
 
 ## Remaining validation gaps
 
-Authorization remains per-handler without a robust route-inventory gate and is
-still a manual review obligation. CodeQL's global `js/missing-rate-limiting`
+API routes now require typed public/authenticated/admin/lab/conditional metadata;
+app construction rejects inventory drift and public/admin enforcement is central.
+Lab ID resolution and row-based lab guards remain handler-specific and require
+manual review plus negative tests. CodeQL's global `js/missing-rate-limiting`
 exception exists because the query does not model the Fastify plugin. Runtime
 cross-route and proxy-identity tests plus the ESLint single-app-factory rule and
 its `lint:proof` probe compensate. Owner `@Kobii-git` must review or remove the

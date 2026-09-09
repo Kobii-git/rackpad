@@ -31,13 +31,25 @@ jobs:
           ./actionlint
 
       - name: Install browser test runtime
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox
 
       - name: Full repository validation
         run: npm run check:full
 
-      - name: Check shell scripts
-        run: find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: Storage browser compatibility
+        run: npm run test:e2e:storage
+
+      - name: Net-SNMP interoperability
+        run: npm run test:snmp:interop
+
+      - name: Verify documentation screenshot determinism
+        run: npm run screenshots:check
+
+      - name: Check Bash syntax
+        run: find scripts deploy/proxmox -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+
+      - name: Check shell scripts with ShellCheck
+        run: find scripts deploy/proxmox -type f -name '*.sh' -print0 | xargs -0 shellcheck
 
       - name: Check PowerShell scripts
         shell: pwsh

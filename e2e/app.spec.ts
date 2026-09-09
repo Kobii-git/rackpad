@@ -1,3 +1,5 @@
+import { rackCableFixture } from "./fixtures/rack-cables";
+import type { Port } from "../src/lib/types";
 import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
 import {
@@ -10,6 +12,39 @@ import {
 import packageJson from "../package.json" with { type: "json" };
 
 let token = "";
+
+test("bundled fonts load successfully without fallback", async ({ page }) => {
+  const failures: string[] = [];
+  page.on("response", (response) => {
+    if (response.request().resourceType() === "font" && !response.ok()) {
+      failures.push(`${response.status()} ${response.url()}`);
+    }
+  });
+  page.on("requestfailed", (request) => {
+    if (request.resourceType() === "font") failures.push(request.url());
+  });
+  await page.goto("/");
+  const statuses = await page.evaluate(async () => {
+    const faces = [
+      ...[400, 500, 600, 700].map((weight) => `${weight} 16px "IBM Plex Sans"`),
+      ...[400, 500, 600].map((weight) => `${weight} 16px "IBM Plex Mono"`),
+    ];
+    return Promise.all(
+      faces.map(async (face) => {
+        const loaded = await document.fonts.load(face, "Rackpad 123");
+        return {
+          face,
+          loaded:
+            loaded.length > 0 &&
+            loaded.every((font) => font.status === "loaded"),
+        };
+      }),
+    );
+  });
+  expect(failures).toEqual([]);
+  expect(statuses).toHaveLength(7);
+  for (const status of statuses) expect(status.loaded, status.face).toBe(true);
+});
 
 const primaryRoutes = [
   "/",
@@ -334,9 +369,7 @@ test("native backup admin controls expose status, create, and delete", async ({
           `/api/admin/native-backups/${encodeURIComponent(created.name)}`,
         ),
   );
-  await backupRow
-    .getByRole("button", { name: "Delete", exact: true })
-    .click();
+  await backupRow.getByRole("button", { name: "Delete", exact: true }).click();
   const deletionResponse = await deletionResponsePromise;
   expect(deletionResponse.status()).toBe(204);
   await expect(panel.getByText(created.name, { exact: true })).toHaveCount(0);
@@ -1105,6 +1138,1071 @@ async function authenticate(page: Page, language = "en") {
   );
 }
 
+test("rack cabling visualizer persists controls and stays read-only for every role", async ({
+  browser,
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  const headers = { Authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(36);
+  const createdUserIds: string[] = [];
+  const roleContexts: Array<Awaited<ReturnType<typeof browser.newContext>>> =
+    [];
+
+  try {
+    await authenticate(page);
+    await page.addInitScript(() => {
+      localStorage.setItem("rackpad-theme", "dark");
+      localStorage.setItem("rackpad.visualizer.layout-mode", "rack");
+      localStorage.setItem("rackpad.visualizer.rack-cabling-room", "room_lab");
+    });
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/visualizer");
+
+    await expect(
+      page.getByRole("combobox", { name: "Visualizer layout" }),
+    ).toHaveValue("rack");
+    await expect(page.getByTestId("rack-cabling-rack")).toHaveCount(2);
+    await expect(page.getByTestId("rack-cabling-cable").first()).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Room" })).toHaveValue(
+      "room_lab",
+    );
+
+    await page
+      .getByRole("combobox", { name: "Cable routing" })
+      .selectOption("orthogonal");
+    await page.getByRole("checkbox", { name: "Labels" }).check();
+    await page.getByRole("combobox", { name: "Face" }).selectOption("both");
+    await expect(
+      page
+        .getByTestId("rack-cabling-canvas")
+        .getByText("Rear", { exact: true }),
+    ).toHaveCount(2);
+    const selectionControls = await page
+      .locator("[data-cabling-selection-id]")
+      .evaluateAll((elements) =>
+        elements.map((element) => ({
+          id: element.getAttribute("data-cabling-selection-id"),
+          focusable:
+            element.getAttribute("tabindex") === "0" ||
+            element.tagName === "BUTTON",
+        })),
+      );
+    expect(selectionControls.every((entry) => entry.focusable)).toBeTruthy();
+    expect(new Set(selectionControls.map((entry) => entry.id)).size).toBe(
+      selectionControls.length,
+    );
+
+    const cableFilter = page.getByRole("combobox", {
+      name: "Filter visualized cables by type",
+    });
+    const cableCount = await page.getByTestId("rack-cabling-cable").count();
+    const filteredCableType = await cableFilter
+      .locator("option")
+      .nth(1)
+      .getAttribute("value");
+    expect(filteredCableType).toBeTruthy();
+    await cableFilter.selectOption(filteredCableType!);
+    expect(await page.getByTestId("rack-cabling-cable").count()).toBeLessThan(
+      cableCount,
+    );
+    await cableFilter.selectOption("all");
+
+    await page.getByRole("textbox", { name: "Search" }).fill("pve-01");
+    await expect(page.locator('[data-search-match="false"]')).toHaveCount(1);
+    await page.getByRole("textbox", { name: "Search" }).fill("");
+    await page.getByRole("button", { name: "Health" }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(() => localStorage.getItem("rackpad.visualizer.health")),
+      )
+      .toBe("true");
+
+    const sceneTransformBefore = await page
+      .getByTestId("rack-cabling-scene")
+      .getAttribute("style");
+    const rackCanvas = page.getByTestId("rack-cabling-canvas");
+    const rackCanvasBounds = await rackCanvas.boundingBox();
+    expect(rackCanvasBounds).toBeTruthy();
+    await page.mouse.move(
+      rackCanvasBounds!.x + rackCanvasBounds!.width - 30,
+      rackCanvasBounds!.y + rackCanvasBounds!.height - 30,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      rackCanvasBounds!.x + rackCanvasBounds!.width - 70,
+      rackCanvasBounds!.y + rackCanvasBounds!.height - 60,
+    );
+    await page.mouse.up();
+    await expect
+      .poll(() => page.getByTestId("rack-cabling-scene").getAttribute("style"))
+      .not.toBe(sceneTransformBefore);
+
+    await page.getByTestId("rack-cabling-cable").first().dispatchEvent("click");
+    await expect(
+      page.getByText("Selected cable", { exact: true }).first(),
+    ).toBeVisible();
+    expect(
+      await page
+        .locator('[data-rack-cabling-equipment][data-highlighted="true"]')
+        .count(),
+    ).toBeGreaterThanOrEqual(2);
+    await page.getByTestId("rack-cabling-rack").first().dispatchEvent("click");
+    await expect(page.getByTestId("rack-cabling-rack").first()).toHaveAttribute(
+      "data-selected",
+      "true",
+    );
+
+    await page.getByRole("button", { name: "Zoom in" }).click();
+    await page.getByRole("button", { name: "Zoom out" }).click();
+    await page.getByRole("button", { name: "Fit" }).click();
+    await page.getByRole("button", { name: "Reset" }).click();
+
+    await page.getByRole("button", { name: "Trace mode" }).click();
+    await page
+      .getByRole("button", { name: /eno1 · rj45/, exact: true })
+      .first()
+      .click();
+    await expect(
+      page.getByText(/path traced|No onward path found/, { exact: false }),
+    ).toBeVisible();
+
+    await page
+      .getByRole("combobox", { name: "Room" })
+      .selectOption("room_lounge");
+    await expect(
+      page.getByText("No racks assigned", { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("combobox", { name: "Room" })
+      .selectOption("room_office");
+    await page.getByRole("button", { name: /Loose gear/ }).click();
+    await expect(
+      page.getByText("build-mini-01", { exact: true }),
+    ).toBeVisible();
+    await page.getByRole("combobox", { name: "Room" }).selectOption("room_lab");
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => ({
+          layout: localStorage.getItem("rackpad.visualizer.layout-mode"),
+          room: localStorage.getItem("rackpad.visualizer.rack-cabling-room"),
+          route: localStorage.getItem("rackpad.visualizer.rack-cabling-route"),
+          labels: localStorage.getItem(
+            "rackpad.visualizer.rack-cabling-labels",
+          ),
+          loose: localStorage.getItem(
+            "rackpad.visualizer.rack-cabling-loose-expanded",
+          ),
+        })),
+      )
+      .toEqual({
+        layout: "rack",
+        room: "room_lab",
+        route: "orthogonal",
+        labels: "true",
+        loose: "true",
+      });
+
+    await page.reload();
+    await expect(page.getByTestId("rack-cabling-rack")).toHaveCount(2);
+    await expect(page.getByRole("combobox", { name: "Room" })).toHaveValue(
+      "room_lab",
+    );
+    await expect(
+      page.getByRole("combobox", { name: "Cable routing" }),
+    ).toHaveValue("orthogonal");
+    await expect(page.getByRole("checkbox", { name: "Labels" })).toBeChecked();
+
+    for (const theme of ["light", "dark"] as const) {
+      await page.evaluate((nextTheme) => {
+        localStorage.setItem("rackpad-theme", nextTheme);
+      }, theme);
+      await page.setViewportSize({ width: 720, height: 900 });
+      await page.reload();
+      expect(
+        await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth <=
+            document.documentElement.clientWidth + 1,
+        ),
+        `rack cabling overflowed in ${theme} at 720px`,
+      ).toBeTruthy();
+      const results = await new AxeBuilder({ page }).analyze();
+      expect(
+        results.violations.filter(
+          (violation) =>
+            violation.impact === "critical" || violation.impact === "serious",
+        ),
+        `rack cabling has serious accessibility violations in ${theme}`,
+      ).toEqual([]);
+    }
+
+    const restoreFocus = async (target: Locator) => {
+      await target.focus();
+      await target.press("Enter");
+      await page.getByRole("button", { name: "Close" }).click();
+      await expect(target).toBeFocused();
+    };
+    await page.getByRole("combobox", { name: "Room" }).selectOption("room_lab");
+    await restoreFocus(page.getByRole("button", { name: /Rack: CMP-01/ }));
+    await restoreFocus(
+      page.getByRole("button", { name: /eno1 · rj45/, exact: true }).first(),
+    );
+    await restoreFocus(page.getByTestId("rack-cabling-cable").first());
+    await page
+      .getByRole("combobox", { name: "Room" })
+      .selectOption("room_office");
+    const looseDevice = page.getByRole("button", {
+      name: "build-mini-01",
+      exact: true,
+    });
+    await expect(looseDevice).toBeVisible();
+    await restoreFocus(looseDevice);
+
+    const adminCanvas = page.getByTestId("rack-cabling-canvas");
+    for (const action of ["Delete", "Edit", "Save", "Undo", "Redo"]) {
+      await expect(
+        adminCanvas.getByRole("button", { name: action, exact: true }),
+      ).toHaveCount(0);
+    }
+
+    for (const role of ["editor", "viewer"] as const) {
+      const username = `rack-cabling-${role}-${suffix}`;
+      const password = `rack-cabling-${role}-password`;
+      const response = await request.post("/api/users", {
+        headers,
+        data: {
+          username,
+          displayName: `Rack Cabling ${role}`,
+          password,
+          role,
+        },
+      });
+      expect(response.status()).toBe(201);
+      createdUserIds.push(((await response.json()) as { id: string }).id);
+      const loginResponse = await request.post("/api/auth/login", {
+        data: { username, password },
+      });
+      expect(loginResponse.ok()).toBeTruthy();
+      const roleToken = ((await loginResponse.json()) as { token: string })
+        .token;
+      const context = await browser.newContext({
+        viewport: { width: 1280, height: 900 },
+      });
+      roleContexts.push(context);
+      const rolePage = await context.newPage();
+      await rolePage.addInitScript((authToken) => {
+        localStorage.setItem("rackpad.auth.token", authToken);
+        localStorage.setItem("rackpad.language", "en");
+        localStorage.setItem("rackpad.visualizer.layout-mode", "rack");
+        localStorage.setItem(
+          "rackpad.visualizer.rack-cabling-room",
+          "room_lab",
+        );
+      }, roleToken);
+      await rolePage.goto("http://127.0.0.1:5173/visualizer");
+      const roleCanvas = rolePage.getByTestId("rack-cabling-canvas");
+      await expect(roleCanvas).toBeVisible();
+      for (const action of ["Delete", "Edit", "Save", "Undo", "Redo"]) {
+        await expect(
+          roleCanvas.getByRole("button", { name: action, exact: true }),
+        ).toHaveCount(0);
+      }
+    }
+  } finally {
+    await Promise.all(roleContexts.map((context) => context.close()));
+    for (const userId of createdUserIds) {
+      await request.delete(`/api/users/${userId}`, { headers });
+    }
+  }
+});
+
+test("rack cabling scopes inspection and supports keyboard search and selection", async ({
+  page,
+}) => {
+  await authenticate(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("rackpad.visualizer.layout-mode", "rack");
+    localStorage.setItem("rackpad.visualizer.rack-cabling-room", "room_lab");
+    localStorage.setItem("rackpad.visualizer.rack-cabling-labels", "false");
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/visualizer");
+
+  const scene = page.getByTestId("rack-cabling-scene");
+  const transformBeforeResize = await scene.getAttribute("style");
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await expect
+    .poll(() => scene.getAttribute("style"))
+    .not.toBe(transformBeforeResize);
+  await page.setViewportSize({ width: 1800, height: 900 });
+
+  await page.keyboard.press("r");
+  await expect(scene).toHaveAttribute("style", /scale\(1\)/);
+  const resetTransform = await scene.getAttribute("style");
+  await page.keyboard.press("f");
+  await expect.poll(() => scene.getAttribute("style")).not.toBe(resetTransform);
+  await page.keyboard.press("1");
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("rackpad.visualizer.health")),
+    )
+    .toBe("true");
+  await page.keyboard.press("2");
+  await expect(
+    page.getByText("Click first port...", { exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await expect(page.getByTestId("rack-cabling-cable-label")).toHaveCount(0);
+  expect(
+    await page.getByTestId("rack-cabling-handoff-label").count(),
+  ).toBeGreaterThan(0);
+  const handoffBoxes = await page
+    .getByTestId("rack-cabling-handoff-label")
+    .evaluateAll((labels) =>
+      labels.map((label) => {
+        const bounds = label.getBoundingClientRect();
+        return {
+          left: bounds.left,
+          right: bounds.right,
+          top: bounds.top,
+          bottom: bounds.bottom,
+        };
+      }),
+    );
+  for (let leftIndex = 0; leftIndex < handoffBoxes.length; leftIndex += 1) {
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < handoffBoxes.length;
+      rightIndex += 1
+    ) {
+      const left = handoffBoxes[leftIndex]!;
+      const right = handoffBoxes[rightIndex]!;
+      const overlapsHorizontally =
+        left.left < right.right && left.right > right.left;
+      const overlapsVertically =
+        left.top < right.bottom && left.bottom > right.top;
+      expect(
+        overlapsHorizontally && overlapsVertically,
+        `handoff labels ${leftIndex} and ${rightIndex} overlap`,
+      ).toBeFalsy();
+    }
+  }
+
+  await page.keyboard.press("/");
+  const search = page.getByRole("textbox", { name: "Search" });
+  await expect(search).toBeFocused();
+  await search.fill("pve");
+  const searchOptions = page.getByRole("option");
+  expect(await searchOptions.count()).toBeGreaterThan(1);
+  const selectedSearchOption = page.locator(
+    '[role="option"][aria-selected="true"]',
+  );
+  const firstSelected = await selectedSearchOption.textContent();
+  await search.press("ArrowDown");
+  const nextSelected = await selectedSearchOption.textContent();
+  expect(nextSelected).not.toBe(firstSelected);
+  await search.press("ArrowUp");
+  await expect(selectedSearchOption).toContainText(firstSelected ?? "");
+  await search.fill("10.0.10.11");
+  await expect(
+    page.getByRole("option", { name: /pve-01/ }).first(),
+  ).toBeVisible();
+  await search.press("Enter");
+  await expect(
+    page.getByRole("link", { name: "Open device" }).first(),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(search).toHaveValue("");
+
+  const firstCable = page.getByTestId("rack-cabling-cable").first();
+  await firstCable.focus();
+  await expect(page.getByTestId("rack-cabling-cable-label")).toHaveCount(1);
+  await firstCable.press("Enter");
+  await expect(
+    page.getByText("Selected cable", { exact: true }).first(),
+  ).toBeVisible();
+
+  const visibleLinkPanel = page
+    .locator("section,div")
+    .filter({
+      has: page.getByText("Visible links", { exact: true }),
+    })
+    .last();
+  await expect(visibleLinkPanel).toContainText(
+    `${await page.getByTestId("rack-cabling-cable").count()} cables`,
+  );
+
+  await page
+    .getByRole("combobox", { name: "Filter visualized cables by type" })
+    .selectOption("IEC C19");
+  await page
+    .getByRole("button", { name: /eno1 · rj45/, exact: true })
+    .first()
+    .press("Enter");
+  await expect(page.getByText("eno1", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Selected cable", { exact: true })).toHaveCount(
+    0,
+  );
+
+  await page
+    .getByRole("combobox", { name: "Filter visualized cables by type" })
+    .selectOption("all");
+  const rackButton = page.getByRole("button", { name: /Rack: CMP-01/ });
+  await rackButton.focus();
+  await rackButton.press("Enter");
+  await expect(page.getByTestId("rack-cabling-rack").first()).toHaveAttribute(
+    "data-selected",
+    "true",
+  );
+
+  await page
+    .getByRole("combobox", { name: "Room" })
+    .selectOption("room_lounge");
+  await expect(
+    page.getByText("No item selected", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("0 cables", { exact: true })).toBeVisible();
+});
+
+test("Rack Studio patches exact ports, saves routes, exports, and traces", async ({
+  page,
+  request,
+}) => {
+  const headers = { Authorization: `Bearer ${token}` };
+  const fromPortId = "p_d_srv_backup_4";
+  const toPortId = "p_d_srv_pve1_4";
+  let linkId = "";
+
+  try {
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/racks");
+    await page
+      .getByRole("button", { name: "Studio Beta", exact: true })
+      .click();
+    await expect(
+      page.getByRole("combobox", { name: "Cable routing" }),
+    ).toHaveValue("smooth");
+    await expect(
+      page.getByRole("checkbox", { name: "Labels" }),
+    ).not.toBeChecked();
+    await page
+      .getByRole("combobox", { name: "Cable routing" })
+      .selectOption("orthogonal");
+    await page.getByRole("checkbox", { name: "Labels" }).check();
+    await expect
+      .poll(() =>
+        page.evaluate(() => ({
+          route: localStorage.getItem("rackpad.rack-studio.route-style"),
+          labels: localStorage.getItem("rackpad.rack-studio.show-all-labels"),
+        })),
+      )
+      .toEqual({ route: "orthogonal", labels: "true" });
+    await page.reload();
+    await expect(
+      page.getByRole("combobox", { name: "Cable routing" }),
+    ).toHaveValue("orthogonal");
+    await expect(page.getByRole("checkbox", { name: "Labels" })).toBeChecked();
+    await page.getByRole("button", { name: "Cables", exact: true }).click();
+
+    const backupDevice = page.getByTestId("rack-studio-device").filter({
+      has: page.getByRole("button", { name: "backup-01", exact: true }),
+    });
+    const pveDevice = page.getByTestId("rack-studio-device").filter({
+      has: page.getByRole("button", { name: "pve-01", exact: true }),
+    });
+    await backupDevice
+      .getByRole("button", { name: "eno4 · rj45", exact: true })
+      .click();
+    await pveDevice
+      .getByRole("button", { name: "eno4 · rj45", exact: true })
+      .click();
+
+    const inspector = page.getByTestId("rack-studio-cable-inspector");
+    await expect(inspector).toContainText("From port: backup-01:eno4");
+    await expect(inspector).toContainText("To port: pve-01:eno4");
+
+    const linksResponse = await request.get("/api/port-links", { headers });
+    expect(linksResponse.status(), await linksResponse.text()).toBe(200);
+    const links = (await linksResponse.json()) as Array<{
+      id: string;
+      fromPortId: string;
+      toPortId: string;
+    }>;
+    linkId =
+      links.find(
+        (link) => link.fromPortId === fromPortId && link.toPortId === toPortId,
+      )?.id ?? "";
+    expect(linkId).not.toBe("");
+
+    await backupDevice
+      .getByRole("button", { name: "eno3 · rj45", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Outlet 1 · power", exact: true })
+      .click();
+    await expect(page.getByText("rj45 → power", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+
+    await backupDevice
+      .getByRole("button", { name: "eno4 · rj45", exact: true })
+      .click();
+    await inspector
+      .getByRole("textbox", { name: "Label", exact: true })
+      .fill("Phase 5 QA cable");
+    await inspector.getByRole("button", { name: "Add", exact: true }).click();
+    await inspector
+      .getByRole("spinbutton", { name: "Position: X", exact: true })
+      .fill("420");
+    await inspector
+      .getByRole("spinbutton", { name: "Position: Y", exact: true })
+      .fill("280");
+    await inspector.getByRole("button", { name: "Save", exact: true }).click();
+
+    await expect
+      .poll(async () => {
+        const response = await request.get(`/api/port-links/${linkId}`, {
+          headers,
+        });
+        if (!response.ok()) return null;
+        const link = (await response.json()) as {
+          label?: string;
+          routeWaypoints?: Array<{ x: number; y: number }>;
+        };
+        return {
+          label: link.label,
+          routeWaypoints: link.routeWaypoints,
+        };
+      })
+      .toEqual({
+        label: "Phase 5 QA cable",
+        routeWaypoints: [expect.objectContaining({ x: 420, y: 280 })],
+      });
+
+    await page.getByRole("checkbox", { name: "Labels" }).uncheck();
+    for (const theme of ["light", "dark"] as const) {
+      await page.evaluate((nextTheme) => {
+        localStorage.setItem("rackpad-theme", nextTheme);
+      }, theme);
+      await page.reload();
+
+      const cableInteractions = page.locator(
+        '[data-testid="rack-studio-cable"]:visible',
+      );
+      await expect
+        .poll(() => cableInteractions.count(), {
+          message: `expected a dense Rack Studio cable fixture in ${theme} theme`,
+        })
+        .toBeGreaterThan(13);
+      const targetInteraction = page.locator(
+        `[data-testid="rack-studio-cable"][data-link-id="${linkId}"]:visible`,
+      );
+      const targetLabel = page.locator(
+        `[data-testid="rack-studio-cable-label"][data-link-id="${linkId}"]:visible`,
+      );
+      await expect.poll(() => targetInteraction.count()).toBeGreaterThan(0);
+      await expect(targetLabel).toHaveCount(0);
+      await targetInteraction.first().dispatchEvent("pointerover");
+      await expect.poll(() => targetLabel.count()).toBeGreaterThan(0);
+      const unrelatedStroke = page
+        .locator(
+          `[data-testid="rack-studio-cable-stroke"]:not([data-link-id="${linkId}"]):visible`,
+        )
+        .first();
+      await expect(unrelatedStroke).toHaveAttribute("opacity", "0.16");
+      await targetInteraction.first().dispatchEvent("pointerout");
+      await expect(targetLabel).toHaveCount(0);
+    }
+
+    await page.getByRole("checkbox", { name: "Labels" }).check();
+    await page
+      .locator(
+        `[data-testid="rack-studio-cable"][data-link-id="${linkId}"]:visible`,
+      )
+      .first()
+      .dispatchEvent("click");
+    await expect(inspector).toBeVisible();
+
+    const downloadPromise = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Download SVG", exact: true })
+      .click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe(
+      "lab-server-room-rack-studio.svg",
+    );
+    const downloadPath = await download.path();
+    expect(downloadPath).not.toBeNull();
+    expect(await readFile(downloadPath!, "utf8")).toContain("Phase 5 QA cable");
+
+    await inspector.getByRole("link", { name: "Trace", exact: true }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/visualizer\\?tracePortId=${fromPortId}$`),
+    );
+    await expect(
+      page.getByText("backup-01 / eno4", { exact: true }),
+    ).toBeVisible();
+  } finally {
+    if (linkId) {
+      await request.delete(`/api/port-links/${linkId}`, { headers });
+    }
+  }
+});
+
+test("24 short patch cords remain curved, selectable, and exportable across rack views", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(180_000);
+  const fixture = rackCableFixture(`cords-${Date.now().toString(36)}`);
+  const headers = { Authorization: `Bearer ${token}` };
+  const deviceIds: string[] = [];
+  const linkIds: string[] = [];
+  let roomId = "";
+  let rackId = "";
+  const post = async <T>(url: string, data: unknown): Promise<T> => {
+    const response = await request.post(url, { headers, data });
+    expect(response.ok(), await response.text()).toBeTruthy();
+    return (await response.json()) as T;
+  };
+  try {
+    roomId = (
+      await post<{ id: string }>("/api/rooms", {
+        labId: "lab_home",
+        name: fixture.room.name,
+      })
+    ).id;
+    rackId = (
+      await post<{ id: string }>("/api/racks", {
+        labId: "lab_home",
+        roomId,
+        name: fixture.rack.name,
+        totalU: 12,
+      })
+    ).id;
+    await post("/api/ports/templates", {
+      id: fixture.template.id,
+      name: fixture.template.name,
+      description: "Synthetic 24-cord fixture",
+      deviceTypes: fixture.template.deviceTypes,
+      ports: fixture.ports.filter(
+        (port) => port.deviceId === fixture.devices[0]!.id,
+      ),
+    });
+    await post("/api/hardware-templates", fixture.template);
+    const devicePorts: Port[][] = [];
+    for (const device of fixture.devices) {
+      const created = await post<{ id: string }>("/api/devices", {
+        ...device,
+        roomId,
+        rackId,
+        portTemplateId: fixture.template.id,
+      });
+      deviceIds.push(created.id);
+      const preview = await post(
+        `/api/physical-layouts/${created.id}/preview`,
+        { templateId: fixture.template.id },
+      );
+      await post(`/api/physical-layouts/${created.id}/apply`, preview);
+      const response = await request.get(`/api/ports?deviceId=${created.id}`, {
+        headers,
+      });
+      expect(response.ok()).toBeTruthy();
+      devicePorts.push((await response.json()) as Port[]);
+    }
+    for (let index = 1; index <= 24; index += 1) {
+      const find = (ports: Port[]) =>
+        ports.find(
+          (port) => port.face === "front" && port.name === String(index),
+        )!.id;
+      linkIds.push(
+        (
+          await post<{ id: string }>("/api/port-links", {
+            fromPortId: find(devicePorts[0]!),
+            toPortId: find(devicePorts[1]!),
+            cableType: "Cat6A",
+            color: "#22c55e",
+          })
+        ).id,
+      );
+    }
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/racks");
+    await page
+      .getByRole("button", { name: "Studio Beta", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: new RegExp(`${fixture.room.name} 1R`) })
+      .click();
+    await page
+      .getByRole("combobox", { name: "Cable routing", exact: true })
+      .selectOption("smooth");
+    const strokes = page.getByTestId("rack-studio-cable-stroke");
+    // Room overview and focused rack each render all 24 connections.
+    await expect(strokes).toHaveCount(48);
+    for (const stroke of await strokes.all())
+      await expect(stroke).toHaveAttribute("d", / C /);
+    const hit = page.locator(
+      `[data-testid="rack-studio-cable"][data-link-id="${linkIds[0]}"]`,
+    );
+    const stroke = page.locator(
+      `[data-testid="rack-studio-cable-stroke"][data-link-id="${linkIds[0]}"]`,
+    );
+    expect(await hit.first().getAttribute("d")).toBe(
+      await stroke.first().getAttribute("d"),
+    );
+    await hit.first().dispatchEvent("pointerover");
+    await expect(
+      page
+        .locator(
+          `[data-testid="rack-studio-cable-label"][data-link-id="${linkIds[0]}"]`,
+        )
+        .first(),
+    ).toBeVisible();
+    const downloadPromise = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Download SVG", exact: true })
+      .click();
+    const svg = await readFile((await (await downloadPromise).path())!, "utf8");
+    expect(svg.match(/<path d="M [^"]+ C /g)).toHaveLength(24);
+    await page.goto("/visualizer");
+    await page
+      .getByRole("combobox", { name: "Visualizer layout", exact: true })
+      .selectOption("rack");
+    await page
+      .getByRole("combobox", { name: "Room", exact: true })
+      .selectOption(roomId);
+    await page
+      .getByRole("combobox", { name: "Cable routing", exact: true })
+      .selectOption("smooth");
+    const cords = page.getByTestId("rack-cabling-cable");
+    await expect(cords).toHaveCount(24);
+    for (const cord of await cords.all())
+      await expect(cord).toHaveAttribute("d", / C /);
+    await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    const pathBefore = await cords.first().getAttribute("d");
+    await page.getByRole("button", { name: "Zoom out", exact: true }).click();
+    expect(await cords.first().getAttribute("d")).toBe(pathBefore);
+    await cords.first().focus();
+    await cords.first().press("Enter");
+    await expect(
+      page.getByText("Selected cable", { exact: true }).first(),
+    ).toBeVisible();
+    const coordinates = (await cords.first().getAttribute("d"))!
+      .match(/-?\d+(?:\.\d+)?/g)!
+      .map(Number);
+    const curveLabel = page.getByTestId("rack-cabling-cable-label");
+    await expect(curveLabel).toHaveCount(1);
+    expect(Number(await curveLabel.getAttribute("x"))).toBeCloseTo(
+      (coordinates[0]! +
+        3 * coordinates[2]! +
+        3 * coordinates[4]! +
+        coordinates[6]!) /
+        8,
+      1,
+    );
+    expect(Number(await curveLabel.getAttribute("y"))).toBeCloseTo(
+      (coordinates[1]! +
+        3 * coordinates[3]! +
+        3 * coordinates[5]! +
+        coordinates[7]!) /
+        8 -
+        7,
+      1,
+    );
+    await page.screenshot({
+      path: testInfo.outputPath("short-patch-cords.png"),
+    });
+    await page
+      .getByRole("combobox", { name: "Cable routing", exact: true })
+      .selectOption("orthogonal");
+    for (const cord of await cords.all())
+      await expect(cord).not.toHaveAttribute("d", / C /);
+
+    // Exercise actual rear ports as well as both directions of a mixed-face cable.
+    for (const [fromFace, toFace] of [
+      ["rear", "rear"],
+      ["front", "rear"],
+      ["rear", "front"],
+    ] as const) {
+      for (const id of linkIds.splice(0)) {
+        const removed = await request.delete(`/api/port-links/${id}`, {
+          headers,
+        });
+        expect(removed.ok()).toBeTruthy();
+      }
+      for (let index = 1; index <= 24; index += 1) {
+        const endpoint = (deviceIndex: number, face: string) =>
+          devicePorts[deviceIndex]!.find(
+            (port) => port.face === face && port.name === String(index),
+          )!.id;
+        linkIds.push(
+          (
+            await post<{ id: string }>("/api/port-links", {
+              fromPortId: endpoint(0, fromFace),
+              toPortId: endpoint(1, toFace),
+              cableType: "Cat6A",
+              color: "#22c55e",
+            })
+          ).id,
+        );
+      }
+      await page.goto("/visualizer");
+      await page.reload();
+      await page
+        .getByRole("combobox", { name: "Visualizer layout", exact: true })
+        .selectOption("rack");
+      await page
+        .getByRole("combobox", { name: "Room", exact: true })
+        .selectOption(roomId);
+      await page
+        .getByRole("combobox", { name: "Cable routing", exact: true })
+        .selectOption("smooth");
+      await page
+        .getByRole("combobox", { name: "Face", exact: true })
+        .selectOption("both");
+      await expect(cords).toHaveCount(24);
+      if (fromFace === toFace) {
+        for (const cord of await cords.all())
+          await expect(cord).toHaveAttribute("d", / C /);
+        await expect(page.getByTestId("cable-continuation")).toHaveCount(0);
+        continue;
+      }
+      await expect(page.getByTestId("cable-continuation")).toHaveCount(48);
+      for (const path of await cords.all())
+        expect(
+          ((await path.getAttribute("d"))!.match(/M /g) ?? []).length,
+        ).toBe(2);
+      await cords.first().focus();
+      await cords.first().press("Enter");
+      await expect(
+        page.getByText("Selected cable", { exact: true }).first(),
+      ).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath(`continuations-${fromFace}-${toFace}.png`),
+      });
+      for (const face of ["front", "rear"]) {
+        await page
+          .getByRole("combobox", { name: "Face", exact: true })
+          .selectOption(face);
+        await expect(cords).toHaveCount(24);
+        const markers = page.getByTestId("cable-continuation");
+        await expect(markers).toHaveCount(24);
+        for (const marker of await markers.all())
+          await expect(marker).toHaveAttribute(
+            "data-destination-face",
+            face === "front" ? "rear" : "front",
+          );
+      }
+      await page.goto("/racks");
+      await page
+        .getByRole("button", { name: new RegExp(`${fixture.room.name} 1R`) })
+        .click();
+      const studioToggle = page.getByRole("button", {
+        name: "Studio Beta",
+        exact: true,
+      });
+      await expect(studioToggle).toBeVisible();
+      if ((await studioToggle.getAttribute("aria-pressed")) === "false")
+        await studioToggle.click();
+      await page.getByRole("button", { name: "Both", exact: true }).click();
+      await expect(page.getByTestId("cable-continuation")).toHaveCount(96);
+      const mixedDownload = page.waitForEvent("download");
+      await page
+        .getByRole("button", { name: "Download SVG", exact: true })
+        .click();
+      const mixedSvg = await readFile(
+        (await (await mixedDownload).path())!,
+        "utf8",
+      );
+      expect(mixedSvg.match(/data-continuation-port=/g)).toHaveLength(48);
+      expect(mixedSvg).toContain("24 Cables · both");
+      expect(mixedSvg).toContain("↔ Front");
+      expect(mixedSvg).toContain("↔ Rear");
+      const pngDownload = page.waitForEvent("download");
+      await page
+        .getByRole("button", { name: "Download PNG", exact: true })
+        .click();
+      const png = await pngDownload;
+      await png.saveAs(
+        testInfo.outputPath(`continuations-${fromFace}-${toFace}-export.png`),
+      );
+      expect((await readFile((await png.path())!)).subarray(0, 8)).toEqual(
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+      );
+    }
+  } finally {
+    for (const id of deviceIds)
+      await request.delete(`/api/devices/${id}`, { headers });
+    if (rackId) await request.delete(`/api/racks/${rackId}`, { headers });
+    if (roomId) await request.delete(`/api/rooms/${roomId}`, { headers });
+    await request.delete(`/api/hardware-templates/${fixture.template.id}`, {
+      headers,
+    });
+    await request.delete(`/api/ports/templates/${fixture.template.id}`, {
+      headers,
+    });
+  }
+});
+
+test("Rack Studio places rack-top equipment and supports keyboard undo and redo", async ({
+  page,
+  request,
+}) => {
+  const headers = { Authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(36);
+  const hostname = `rack-top-switch-${suffix}`;
+  let deviceId = "";
+
+  try {
+    const createResponse = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        roomId: "room_lab",
+        hostname,
+        deviceType: "switch",
+        status: "online",
+        placement: "room",
+        heightU: 1,
+      },
+    });
+    expect(createResponse.status(), await createResponse.text()).toBe(201);
+    deviceId = ((await createResponse.json()) as { id: string }).id;
+
+    const looseState = {
+      mountKind: "loose",
+      roomId: "room_lab",
+      rackId: null,
+      parentDeviceId: null,
+      startU: null,
+      heightU: null,
+      face: null,
+      column: null,
+      columnSpan: null,
+      shelfX: null,
+      shelfY: null,
+      shelfWidth: null,
+      shelfHeight: null,
+      orientation: null,
+      side: null,
+    };
+    const rackTopState = {
+      ...looseState,
+      mountKind: "rack-top",
+      rackId: "rack_cmp",
+      heightU: 1,
+      face: "front",
+      column: 0,
+      columnSpan: 6,
+    };
+    const placementResponse = await request.post("/api/rack-studio/actions", {
+      headers,
+      data: {
+        kind: "device.place",
+        targetId: deviceId,
+        expected: looseState,
+        next: rackTopState,
+      },
+    });
+    expect(placementResponse.status(), await placementResponse.text()).toBe(
+      200,
+    );
+
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/racks");
+    await page
+      .getByRole("button", { name: "Studio Beta", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: /CMP-01/ })
+      .first()
+      .click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    const rackTopDevice = page.locator(
+      `[data-testid="rack-studio-rack-top-device"][aria-label="${hostname}"]`,
+    );
+    await expect(rackTopDevice).toBeVisible();
+    await rackTopDevice.focus();
+    await rackTopDevice.press("ArrowRight");
+    await expect
+      .poll(async () => {
+        const response = await request.get(`/api/devices/${deviceId}`, {
+          headers,
+        });
+        if (!response.ok()) return null;
+        const device = (await response.json()) as {
+          rackColumn?: number;
+          rackMountKind?: string;
+          startU?: number;
+        };
+        return {
+          column: device.rackColumn,
+          mountKind: device.rackMountKind,
+          startU: device.startU ?? null,
+        };
+      })
+      .toEqual({ column: 1, mountKind: "rack-top", startU: null });
+
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect
+      .poll(async () => {
+        const response = await request.get(`/api/devices/${deviceId}`, {
+          headers,
+        });
+        return response.ok()
+          ? ((await response.json()) as { rackColumn?: number }).rackColumn
+          : null;
+      })
+      .toBe(0);
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    await expect
+      .poll(async () => {
+        const response = await request.get(`/api/devices/${deviceId}`, {
+          headers,
+        });
+        return response.ok()
+          ? ((await response.json()) as { rackColumn?: number }).rackColumn
+          : null;
+      })
+      .toBe(1);
+
+    const rackTopBox = await rackTopDevice.boundingBox();
+    expect(rackTopBox).not.toBeNull();
+    await page.mouse.move(
+      rackTopBox!.x + rackTopBox!.width / 2,
+      rackTopBox!.y + rackTopBox!.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      rackTopBox!.x + rackTopBox!.width / 2 + rackTopBox!.width / 6,
+      rackTopBox!.y + rackTopBox!.height / 2 + 24,
+    );
+    await page.mouse.up();
+    await expect
+      .poll(async () => {
+        const response = await request.get(`/api/devices/${deviceId}`, {
+          headers,
+        });
+        if (!response.ok()) return null;
+        const device = (await response.json()) as {
+          rackColumn?: number;
+          startU?: number;
+        };
+        return { column: device.rackColumn, startU: device.startU ?? null };
+      })
+      .toEqual({ column: 2, startU: null });
+  } finally {
+    if (deviceId) await request.delete(`/api/devices/${deviceId}`, { headers });
+  }
+});
+
 async function expectTracePngDownload(
   page: Page,
   expectedFilename: string,
@@ -1124,15 +2222,11 @@ async function expectTracePngDownload(
 }
 
 test("responsive and serious accessibility matrix passes for supported modes", async ({
-  page,
+  browser,
+  baseURL,
 }) => {
   test.setTimeout(1_800_000);
   const errors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  await authenticate(page);
-  await page.goto("/");
   for (const mode of [
     {
       name: "light",
@@ -1177,80 +2271,93 @@ test("responsive and serious accessibility matrix passes for supported modes", a
       theme: "dark",
     },
   ]) {
-    await page.evaluate(({ language, theme }) => {
-      localStorage.setItem("rackpad.language", language);
-      localStorage.setItem("rackpad-theme", theme);
-    }, mode);
-    for (const viewport of [
-      { width: 1024, height: 768 },
-      { width: 1280, height: 720 },
-      { width: 1440, height: 900 },
-      { width: 1920, height: 1200 },
-    ]) {
-      await page.setViewportSize(viewport);
-      for (const route of primaryRoutes) {
-        await page.goto(route);
-        await expect(
-          page.locator("h1").first(),
-          `${route} did not finish loading in ${mode.name} at ${viewport.width}px`,
-        ).toBeVisible({ timeout: 15_000 });
-        await expect
-          .poll(() => page.evaluate(() => document.documentElement.lang))
-          .toBe(mode.lang);
-        await expect
-          .poll(() => page.evaluate(() => document.documentElement.dir))
-          .toBe(mode.direction);
-        if (route === "/discovery") {
-          const inbox = page.getByTestId("discovery-inbox");
-          const inspector = page.getByTestId("discovery-inspector");
-          await inbox.scrollIntoViewIfNeeded();
-          await expect(inbox).toBeVisible();
-          await expect(inspector).toBeVisible();
-          const [box, inspectorBox] = await Promise.all([
-            inbox.boundingBox(),
-            inspector.boundingBox(),
-          ]);
-          expect(
-            box?.height ?? 0,
-            `Discovery inbox collapsed in ${mode.name} at ${viewport.width}px`,
-          ).toBeGreaterThanOrEqual(352);
-          if (viewport.width < 1280) {
-            expect(
-              await inbox.evaluate(
-                (element) => getComputedStyle(element).overflowY,
-              ),
-              `Discovery inbox cannot scroll in ${mode.name} at ${viewport.width}px`,
-            ).toBe("auto");
-            expect(
-              inspectorBox?.y ?? 0,
-              `Discovery inspector overlaps the inbox in ${mode.name} at ${viewport.width}px`,
-            ).toBeGreaterThanOrEqual((box?.y ?? 0) + (box?.height ?? 0) + 10);
-          } else {
-            expect(
-              inspectorBox?.height ?? 0,
-              `Discovery inspector stayed too short in ${mode.name} at ${viewport.width}px`,
-            ).toBeGreaterThanOrEqual(600);
-          }
-        }
-        const overflows = await page.evaluate(
-          () =>
-            document.documentElement.scrollWidth >
-            document.documentElement.clientWidth + 1,
-        );
-        expect(
-          overflows,
-          `${route} overflowed in ${mode.name} at ${viewport.width}px`,
-        ).toBeFalsy();
-        const results = await new AxeBuilder({ page }).analyze();
-        const blocking = results.violations.filter(
-          (violation) =>
-            violation.impact === "critical" || violation.impact === "serious",
-        );
-        expect(
-          blocking,
-          `${route} has serious accessibility violations in ${mode.name} at ${viewport.width}px`,
-        ).toEqual([]);
+    const context = await browser.newContext({ baseURL });
+    const page = await context.newPage();
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        errors.push(`${mode.name}: ${message.text()}`);
       }
+    });
+    try {
+      await authenticate(page);
+      await page.goto("/");
+      await page.evaluate(({ language, theme }) => {
+        localStorage.setItem("rackpad.language", language);
+        localStorage.setItem("rackpad-theme", theme);
+      }, mode);
+      for (const viewport of [
+        { width: 1024, height: 768 },
+        { width: 1280, height: 720 },
+        { width: 1440, height: 900 },
+        { width: 1920, height: 1200 },
+      ]) {
+        await page.setViewportSize(viewport);
+        for (const route of primaryRoutes) {
+          await page.goto(route);
+          await expect(
+            page.locator("h1").first(),
+            `${route} did not finish loading in ${mode.name} at ${viewport.width}px`,
+          ).toBeVisible({ timeout: 15_000 });
+          await expect
+            .poll(() => page.evaluate(() => document.documentElement.lang))
+            .toBe(mode.lang);
+          await expect
+            .poll(() => page.evaluate(() => document.documentElement.dir))
+            .toBe(mode.direction);
+          if (route === "/discovery") {
+            const inbox = page.getByTestId("discovery-inbox");
+            const inspector = page.getByTestId("discovery-inspector");
+            await inbox.scrollIntoViewIfNeeded();
+            await expect(inbox).toBeVisible();
+            await expect(inspector).toBeVisible();
+            const [box, inspectorBox] = await Promise.all([
+              inbox.boundingBox(),
+              inspector.boundingBox(),
+            ]);
+            expect(
+              box?.height ?? 0,
+              `Discovery inbox collapsed in ${mode.name} at ${viewport.width}px`,
+            ).toBeGreaterThanOrEqual(352);
+            if (viewport.width < 1280) {
+              expect(
+                await inbox.evaluate(
+                  (element) => getComputedStyle(element).overflowY,
+                ),
+                `Discovery inbox cannot scroll in ${mode.name} at ${viewport.width}px`,
+              ).toBe("auto");
+              expect(
+                inspectorBox?.y ?? 0,
+                `Discovery inspector overlaps the inbox in ${mode.name} at ${viewport.width}px`,
+              ).toBeGreaterThanOrEqual((box?.y ?? 0) + (box?.height ?? 0) + 10);
+            } else {
+              expect(
+                inspectorBox?.height ?? 0,
+                `Discovery inspector stayed too short in ${mode.name} at ${viewport.width}px`,
+              ).toBeGreaterThanOrEqual(600);
+            }
+          }
+          const overflows = await page.evaluate(
+            () =>
+              document.documentElement.scrollWidth >
+              document.documentElement.clientWidth + 1,
+          );
+          expect(
+            overflows,
+            `${route} overflowed in ${mode.name} at ${viewport.width}px`,
+          ).toBeFalsy();
+          const results = await new AxeBuilder({ page }).analyze();
+          const blocking = results.violations.filter(
+            (violation) =>
+              violation.impact === "critical" || violation.impact === "serious",
+          );
+          expect(
+            blocking,
+            `${route} has serious accessibility violations in ${mode.name} at ${viewport.width}px`,
+          ).toEqual([]);
+        }
+      }
+    } finally {
+      await context.close();
     }
   }
   expect(errors).toEqual([]);
@@ -2285,11 +3392,12 @@ test("UI regression surfaces remain reachable and unclipped", async ({
       request.url().endsWith("/api/device-monitors/mon_ups_snmp_v3"),
   );
   await page.getByRole("button", { name: "Save target" }).click();
-  expect((await v3UpdateRequest).postDataJSON()).toMatchObject({
+  const v3Update = (await v3UpdateRequest).postDataJSON();
+  expect(v3Update).not.toHaveProperty("snmpCommunity");
+  expect(v3Update).toMatchObject({
     enabled: false,
     type: "snmp",
     snmpVersion: "3",
-    snmpCommunity: null,
     snmpOid: "1.3.6.1.2.1.33.1.2.4.0",
     snmpMatchMode: "any",
   });
@@ -2487,28 +3595,10 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
 
     await page.getByRole("button", { name: /Duplicate MACs/ }).click();
     await expect(page).toHaveURL(/mac=duplicates/);
-    await expect(filterCount).toHaveText(/\d+ of \d+ devices/);
-    const duplicateCountMatch = (await filterCount.textContent())?.match(
-      /(\d+) of (\d+) devices/,
-    );
-    expect(duplicateCountMatch).toBeTruthy();
-    const baseDuplicateCount = Number(duplicateCountMatch?.[1]) - 2;
-    expect(baseDuplicateCount).toBeGreaterThanOrEqual(2);
-    await expect(filterCount).toHaveText(
-      `${baseDuplicateCount + 2} of ${initialTotal} devices`,
-    );
 
     const summary = page.getByTestId("duplicate-mac-summary");
-    await expect(summary).toBeVisible();
-    let group = summary
-      .getByTestId("duplicate-mac-group")
-      .filter({ hasText: duplicateMac });
-    await expect(group).toContainText(deviceNames[0]);
-    await expect(group).toContainText(deviceNames[1]);
-    await expect(group).toContainText("10.254.10.10");
-    await expect(group).toContainText("10.254.10.11");
-
     const table = page.locator("table");
+    await expect(summary).toBeVisible();
     await expect(
       table.getByRole("link", { name: deviceNames[0], exact: true }),
     ).toBeVisible();
@@ -2518,6 +3608,24 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
     await expect(
       table.getByRole("link", { name: deviceNames[2], exact: true }),
     ).toHaveCount(0);
+
+    await expect(filterCount).toHaveText(/\d+ of \d+ devices/);
+    const duplicateCountMatch = (await filterCount.textContent())?.match(
+      /(\d+) of (\d+) devices/,
+    );
+    expect(duplicateCountMatch).toBeTruthy();
+    expect(Number(duplicateCountMatch?.[2])).toBe(initialTotal);
+    const baseDuplicateCount = Number(duplicateCountMatch?.[1]) - 2;
+    expect(baseDuplicateCount).toBeGreaterThanOrEqual(2);
+
+    let group = summary
+      .getByTestId("duplicate-mac-group")
+      .filter({ hasText: duplicateMac });
+    await expect(group).toContainText(deviceNames[0]);
+    await expect(group).toContainText(deviceNames[1]);
+    await expect(group).toContainText("10.254.10.10");
+    await expect(group).toContainText("10.254.10.11");
+
     await expect(
       table.locator('tr[data-duplicate-mac="true"]').filter({
         hasText: deviceNames[0],
@@ -3292,11 +4400,7 @@ test("device overview storage follows topology precedence without rewriting manu
       111,
       true,
     );
-    const rawDeviceId = await createDevice(
-      `overview-raw-${suffix}`,
-      222,
-      true,
-    );
+    const rawDeviceId = await createDevice(`overview-raw-${suffix}`, 222, true);
     const manualDeviceId = await createDevice(
       `overview-manual-${suffix}`,
       333,
@@ -3307,11 +4411,7 @@ test("device overview storage follows topology precedence without rewriting manu
       `OVERVIEW-USABLE-${suffix}`,
       600,
     );
-    await createInstalledDrive(
-      rawDeviceId,
-      `OVERVIEW-RAW-${suffix}`,
-      700,
-    );
+    await createInstalledDrive(rawDeviceId, `OVERVIEW-RAW-${suffix}`, 700);
     const poolResponse = await request.post("/api/storage/pools", {
       headers,
       data: {
@@ -3349,12 +4449,13 @@ test("device overview storage follows topology precedence without rewriting manu
         headers,
       });
       expect(response.ok()).toBeTruthy();
-      expect(
-        ((await response.json()) as { storageGb: number }).storageGb,
-      ).toBe(storedStorageGb);
+      expect(((await response.json()) as { storageGb: number }).storageGb).toBe(
+        storedStorageGb,
+      );
     }
   } finally {
-    if (poolId) await request.delete(`/api/storage/pools/${poolId}`, { headers });
+    if (poolId)
+      await request.delete(`/api/storage/pools/${poolId}`, { headers });
     for (const driveId of driveIds) {
       await request.delete(`/api/storage/drives/${driveId}`, { headers });
     }
@@ -3371,10 +4472,7 @@ test("unmanaged status is selectable, bulk editable, filterable, and reported", 
   test.setTimeout(60_000);
   const suffix = Date.now().toString(36);
   const headers = { Authorization: `Bearer ${token}` };
-  const hostnames = [
-    `unmanaged-manual-${suffix}`,
-    `unmanaged-bulk-${suffix}`,
-  ];
+  const hostnames = [`unmanaged-manual-${suffix}`, `unmanaged-bulk-${suffix}`];
   const deviceIds: string[] = [];
 
   try {
@@ -3410,7 +4508,9 @@ test("unmanaged status is selectable, bulk editable, filterable, and reported", 
         response.request().method() === "PATCH" &&
         response.url().endsWith(`/api/devices/${deviceIds[0]}`),
     );
-    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
     const editResponse = await editResponsePromise;
     expect(editResponse.status(), await editResponse.text()).toBe(200);
     expect(((await editResponse.json()) as { status: string }).status).toBe(
@@ -3464,6 +4564,152 @@ test("unmanaged status is selectable, bulk editable, filterable, and reported", 
   }
 });
 
+test("patch-panel hardware templates author, apply, and render both faces", async ({
+  page,
+  request,
+}) => {
+  const suffix = Date.now().toString(36);
+  const templateId = `e2e-patch-panel-${suffix}`;
+  const hostname = `patch-panel-${suffix}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  let deviceId = "";
+
+  try {
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/admin/device-types");
+    await page
+      .getByTestId("device-type-section-built-in")
+      .getByRole("button")
+      .filter({ hasText: "patch_panel" })
+      .click();
+
+    const builder = page.getByTestId("hardware-template-builder");
+    await builder
+      .getByTestId("hardware-template-starter")
+      .selectOption("patch-panel");
+    const frontPreview = builder.getByTestId("hardware-template-preview-front");
+    const rearPreview = builder.getByTestId("hardware-template-preview-rear");
+    await expect(frontPreview.locator('g[role="button"]')).toHaveCount(24);
+    await expect(rearPreview.locator('g[role="button"]')).toHaveCount(24);
+    await expect(
+      builder.getByRole("button", {
+        name: "Add or update port block",
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    for (const face of ["front", "rear", "front", "rear"]) {
+      await builder
+        .getByRole("textbox", { name: "ID", exact: true })
+        .last()
+        .fill("ports");
+      await builder
+        .getByRole("combobox", { name: "Face", exact: true })
+        .selectOption(face);
+      await builder
+        .getByRole("spinbutton", { name: "Ports", exact: true })
+        .fill("24");
+      await builder
+        .getByRole("spinbutton", { name: "Columns", exact: true })
+        .fill("24");
+      await builder
+        .getByRole("spinbutton", { name: "Height (U)", exact: true })
+        .last()
+        .fill("1");
+      await builder
+        .getByRole("button", { name: "Add or update port block", exact: true })
+        .click();
+      await expect(frontPreview.locator('g[role="button"]')).toHaveCount(24);
+      await expect(rearPreview.locator('g[role="button"]')).toHaveCount(24);
+    }
+
+    await builder
+      .getByRole("textbox", { name: "ID", exact: true })
+      .first()
+      .fill(templateId);
+    await builder
+      .getByRole("textbox", { name: "Name", exact: true })
+      .fill(`E2E patch panel ${suffix}`);
+    const saveTemplateResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().endsWith("/api/hardware-templates"),
+    );
+    await builder
+      .getByRole("button", { name: "Save template", exact: true })
+      .click();
+    expect((await saveTemplateResponse).status()).toBe(201);
+    await expect(
+      builder.getByRole("combobox", { name: "Templates", exact: true }),
+    ).toHaveValue(templateId);
+
+    const deviceResponse = await request.post("/api/devices", {
+      headers,
+      data: {
+        labId: "lab_home",
+        hostname,
+        deviceType: "patch_panel",
+        status: "online",
+        placement: "room",
+        portTemplateId: "patch-panel-24",
+      },
+    });
+    expect(deviceResponse.status(), await deviceResponse.text()).toBe(201);
+    deviceId = ((await deviceResponse.json()) as { id: string }).id;
+
+    await page.goto(`/devices/${deviceId}?tab=physical`);
+    const templateSelect = page.getByRole("combobox", {
+      name: "Templates",
+      exact: true,
+    });
+    await expect(templateSelect).toContainText(`E2E patch panel ${suffix}`);
+    await templateSelect.selectOption(templateId);
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    const frontFace = page.getByRole("img", {
+      name: "Front port layout",
+      exact: true,
+    });
+    const rearFace = page.getByRole("img", {
+      name: "Rear port layout",
+      exact: true,
+    });
+    await expect(frontFace.locator("g[aria-label]")).toHaveCount(24);
+    await expect(rearFace.locator("g[aria-label]")).toHaveCount(24);
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+
+    await expect
+      .poll(async () => {
+        const response = await request.get(
+          `/api/physical-layouts/${deviceId}`,
+          { headers },
+        );
+        if (!response.ok()) return null;
+        const layout = (await response.json()) as {
+          status: string;
+          sourceTemplateId: string;
+          bindings: Array<{ portId: string; slotId: string }>;
+          unmappedPortIds: string[];
+        };
+        return {
+          status: layout.status,
+          sourceTemplateId: layout.sourceTemplateId,
+          bindings: layout.bindings.length,
+          unmapped: layout.unmappedPortIds.length,
+        };
+      })
+      .toEqual({
+        status: "accurate",
+        sourceTemplateId: templateId,
+        bindings: 48,
+        unmapped: 0,
+      });
+  } finally {
+    if (deviceId) await request.delete(`/api/devices/${deviceId}`, { headers });
+    await request.delete(`/api/hardware-templates/${templateId}`, { headers });
+  }
+});
+
 test("Device Types workspace supports CRUD, usage, and admin-only access", async ({
   browser,
   page,
@@ -3475,6 +4721,7 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
   const headers = { Authorization: `Bearer ${token}` };
   let viewerId = "";
   let deviceId = "";
+  let hardwareTemplateId = "";
   let viewerContext: Awaited<ReturnType<typeof browser.newContext>> | null =
     null;
 
@@ -3489,13 +4736,18 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
         exact: true,
       }),
     ).toBeVisible();
-    await expect(page.getByTestId("device-type-section-built-in")).toBeVisible();
+    await expect(
+      page.getByTestId("device-type-section-built-in"),
+    ).toBeVisible();
     await expect(page.getByTestId("device-type-section-custom")).toBeVisible();
-    await page
+    const deviceTypeEditor = page.getByTestId("device-type-editor");
+    await deviceTypeEditor
       .getByRole("textbox", { name: "Name", exact: true })
       .fill(`E2E appliance ${suffix}`);
-    await page.getByRole("textbox", { name: "ID", exact: true }).fill(typeId);
-    await page
+    await deviceTypeEditor
+      .getByRole("textbox", { name: "ID", exact: true })
+      .fill(typeId);
+    await deviceTypeEditor
       .getByRole("combobox", { name: "Parent", exact: true })
       .selectOption("server");
     await expect(
@@ -3503,7 +4755,9 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
     ).toContainText(
       "Inherits parent behavior for placement, ports and templates, Compute, WiFi, Storage, and imports.",
     );
-    await page.getByRole("button", { name: "Create", exact: true }).click();
+    await deviceTypeEditor
+      .getByRole("button", { name: "Create", exact: true })
+      .click();
     await expect(page.getByTestId("device-type-usage")).toContainText(
       "Devices",
     );
@@ -3511,14 +4765,14 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
       "Port templates",
     );
     await expect(
-      page.getByRole("textbox", { name: "ID", exact: true }),
+      deviceTypeEditor.getByRole("textbox", { name: "ID", exact: true }),
     ).toBeDisabled();
 
     const updatedLabel = `E2E managed appliance ${suffix}`;
-    await page
+    await deviceTypeEditor
       .getByRole("textbox", { name: "Name", exact: true })
       .fill(updatedLabel);
-    await page
+    await deviceTypeEditor
       .getByRole("button", { name: "Save changes", exact: true })
       .click();
     await expect(
@@ -3537,13 +4791,73 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
     });
     expect(deviceResponse.status(), await deviceResponse.text()).toBe(201);
     deviceId = ((await deviceResponse.json()) as { id: string }).id;
-    await page.reload();
+    hardwareTemplateId = `e2e-server-template-${suffix}`;
+    const face = {
+      schemaVersion: 1,
+      width: 1000,
+      height: 300,
+      elements: [
+        {
+          kind: "panel",
+          id: "server-panel",
+          x: 20,
+          y: 20,
+          width: 960,
+          height: 260,
+          tone: "mid",
+        },
+      ],
+    };
+    const templateResponse = await request.post("/api/hardware-templates", {
+      headers,
+      data: {
+        schemaVersion: 1,
+        id: hardwareTemplateId,
+        name: `Inherited server template ${suffix}`,
+        description: "E2E parent template for a custom server child.",
+        category: "server",
+        deviceTypes: ["server"],
+        mountDefaults: { kind: "direct", heightU: 1, columnSpan: 12 },
+        front: face,
+        rear: face,
+        portSlots: [],
+        moduleSlots: [],
+        modules: [],
+        portBlueprints: [],
+        driveBayBlueprints: [],
+      },
+    });
+    expect(templateResponse.status(), await templateResponse.text()).toBe(201);
+
+    await page.goto(`/devices/${deviceId}?tab=physical`);
+    const templateSelect = page.getByRole("combobox", { name: "Templates" });
+    await expect(templateSelect).toContainText(
+      `Inherited server template ${suffix}`,
+    );
+    await templateSelect.selectOption(hardwareTemplateId);
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect
+      .poll(async () => {
+        const response = await request.get(
+          `/api/physical-layouts/${deviceId}`,
+          {
+            headers,
+          },
+        );
+        if (!response.ok()) return null;
+        return ((await response.json()) as { sourceTemplateId?: string })
+          .sourceTemplateId;
+      })
+      .toBe(hardwareTemplateId);
+
+    await page.goto("/admin/device-types");
     await page.getByText(updatedLabel, { exact: true }).first().click();
     await expect(page.getByTestId("device-type-deletion-reason")).toContainText(
       "Devices 1",
     );
     await expect(
-      page.getByRole("button", { name: "Delete", exact: true }),
+      deviceTypeEditor.getByRole("button", { name: "Delete", exact: true }),
     ).toBeDisabled();
 
     const viewerResponse = await request.post("/api/users", {
@@ -3590,12 +4904,19 @@ test("Device Types workspace supports CRUD, usage, and admin-only access", async
     await page.getByText(updatedLabel, { exact: true }).first().click();
 
     page.once("dialog", (dialog) => dialog.accept());
-    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await deviceTypeEditor
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
     await expect(page.getByText(updatedLabel, { exact: true })).toHaveCount(0);
   } finally {
     await viewerContext?.close();
     if (viewerId) await request.delete(`/api/users/${viewerId}`, { headers });
     if (deviceId) await request.delete(`/api/devices/${deviceId}`, { headers });
+    if (hardwareTemplateId) {
+      await request.delete(`/api/hardware-templates/${hardwareTemplateId}`, {
+        headers,
+      });
+    }
     await request.delete(`/api/device-types/${typeId}`, { headers });
   }
 });
@@ -3948,5 +5269,238 @@ test("integration previews expose safe modes, UTC schedules, and viewer read-onl
     await request.delete(`/api/integrations/connections/${connection.id}`, {
       headers,
     });
+  }
+});
+
+test("stack members support editing, keyboard ordering, assignment and shared rack geometry", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const headers = { Authorization: `Bearer ${token}` };
+  const roomResponse = await request.post("/api/rooms", {
+    headers,
+    data: { labId: "lab_home", name: "Stack acceptance room" },
+  });
+  expect(roomResponse.status()).toBe(201);
+  const roomId = ((await roomResponse.json()) as { id: string }).id;
+  const rackResponse = await request.post("/api/racks", {
+    headers,
+    data: {
+      labId: "lab_home",
+      roomId,
+      name: "Stack acceptance rack",
+      totalU: 12,
+    },
+  });
+  expect(rackResponse.status()).toBe(201);
+  const rackId = ((await rackResponse.json()) as { id: string }).id;
+  const created = await request.post("/api/devices", {
+    headers,
+    data: {
+      labId: "lab_home",
+      hostname: "acceptance-switch-stack",
+      deviceType: "switch_stack",
+      placement: "rack",
+      roomId,
+      rackId,
+      startU: 1,
+      heightU: 1,
+    },
+  });
+  expect(created.status()).toBe(201);
+  const stack = (await created.json()) as { id: string };
+  try {
+    const port = await request.post("/api/ports", {
+      headers,
+      data: { deviceId: stack.id, name: "1/1", kind: "rj45" },
+    });
+    expect(port.status()).toBe(201);
+    const portId = ((await port.json()) as { id: string }).id;
+    await authenticate(page);
+    await page.goto(`/devices/${stack.id}?tab=stack-members`);
+    const workspace = page.getByRole("region", {
+      name: "Stack Members",
+      exact: true,
+    });
+    await expect(workspace).toBeVisible();
+    for (const [name, height] of [
+      ["Core A", "2"],
+      ["Core B", "1"],
+    ]) {
+      await workspace
+        .getByRole("button", { name: "Add member", exact: true })
+        .click();
+      const form = workspace.getByRole("form", { name: "Edit stack member" });
+      await form.getByRole("textbox", { name: "Name", exact: true }).fill(name);
+      await form
+        .getByRole("textbox", { name: "Manufacturer", exact: true })
+        .fill("Synthetic");
+      await form
+        .getByRole("textbox", { name: "Model", exact: true })
+        .fill("Acceptance switch");
+      await form
+        .getByRole("textbox", { name: "Serial number", exact: true })
+        .fill(`TEST-${name}`);
+      await form
+        .getByRole("spinbutton", { name: "Height (U)", exact: true })
+        .fill(height);
+      if (name === "Core A") {
+        await form
+          .getByRole("button", { name: "Add MAC address", exact: true })
+          .click();
+        await form
+          .getByRole("textbox", { name: "Label", exact: true })
+          .fill("Base");
+        await form
+          .getByRole("textbox", { name: "MAC address", exact: true })
+          .fill("AABB.CCDD.0011");
+      }
+      await form.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(form).toHaveCount(0);
+    }
+    await expect(workspace.getByTestId("stack-member")).toHaveCount(2);
+    await expect(workspace).toContainText("aa:bb:cc:dd:00:11");
+    const up = workspace.getByRole("button", {
+      name: "Move Core B up",
+      exact: true,
+    });
+    await up.focus();
+    await page.keyboard.press("Enter");
+    await expect(workspace.getByTestId("stack-member").first()).toContainText(
+      "Core B",
+    );
+    const assignment = workspace.getByRole("combobox", {
+      name: "Stack member: 1/1",
+      exact: true,
+    });
+    await assignment.selectOption({ label: "Core A" });
+    await expect
+      .poll(
+        async () =>
+          (
+            (await (
+              await request.get(`/api/ports/${portId}`, { headers })
+            ).json()) as { stackMemberId?: string }
+          ).stackMemberId,
+      )
+      .toBeTruthy();
+    await expect(
+      workspace
+        .getByTestId("stack-member")
+        .filter({ hasText: "Core A" })
+        .getByRole("button", { name: "Delete", exact: true }),
+    ).toBeDisabled();
+    await workspace
+      .getByRole("combobox", { name: "Member filter" })
+      .selectOption("");
+    await expect(assignment).toHaveCount(0);
+    await workspace
+      .getByRole("combobox", { name: "Member filter" })
+      .selectOption("all");
+    const layout = (await (
+      await request.get(`/api/physical-layouts/${stack.id}`, { headers })
+    ).json()) as {
+      bindings: Array<{ portId: string; slotId: string }>;
+      snapshot: { portSlots: Array<{ id: string; x: number; y: number }> };
+      unmappedPortIds: string[];
+    };
+    expect(layout.unmappedPortIds).toEqual([]);
+    expect(layout.bindings).toContainEqual({
+      portId,
+      slotId: `slot:${portId}`,
+    });
+    expect(
+      layout.snapshot.portSlots.some((slot) => slot.id === `slot:${portId}`),
+    ).toBe(true);
+    const firstCapture = await workspace.screenshot({
+      path: testInfo.outputPath("stack-members.png"),
+      animations: "disabled",
+    });
+    const secondCapture = await workspace.screenshot({
+      path: testInfo.outputPath("stack-members-repeat.png"),
+      animations: "disabled",
+    });
+    expect(firstCapture.equals(secondCapture)).toBe(true);
+    const axe = await new AxeBuilder({ page })
+      .include('section[aria-label="Stack Members"]')
+      .analyze();
+    expect(
+      axe.violations.filter(
+        (row) => row.impact === "critical" || row.impact === "serious",
+      ),
+    ).toEqual([]);
+    await page.goto("/racks");
+    await page
+      .getByRole("button", { name: "Studio Beta", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: /Stack acceptance room 1R/ })
+      .click();
+    await page.getByRole("button", { name: "Cables", exact: true }).click();
+    const rackFace = page
+      .getByTestId("rack-studio-device")
+      .filter({
+        has: page.getByRole("button", {
+          name: "acceptance-switch-stack",
+          exact: true,
+        }),
+      })
+      .first();
+    await expect(rackFace).toContainText("Core B");
+    await expect(rackFace).toContainText("Core A");
+    const memberLabel = await rackFace
+      .getByText("Core B · unknown", { exact: true })
+      .boundingBox();
+    const hostnameLabel = await rackFace
+      .getByRole("button", { name: "acceptance-switch-stack", exact: true })
+      .boundingBox();
+    expect(memberLabel).not.toBeNull();
+    expect(hostnameLabel).not.toBeNull();
+    expect(memberLabel!.x + memberLabel!.width).toBeLessThanOrEqual(
+      hostnameLabel!.x,
+    );
+    const portTarget = rackFace.locator(
+      `[data-cabling-selection-id="port:${portId}"]`,
+    );
+    await expect(portTarget).toBeVisible();
+    const slot = layout.snapshot.portSlots.find(
+      (row) => row.id === `slot:${portId}`,
+    )!;
+    await expect(portTarget.locator("rect").first()).toHaveAttribute(
+      "x",
+      String(slot.x),
+    );
+    await expect(portTarget.locator("rect").first()).toHaveAttribute(
+      "y",
+      String(slot.y),
+    );
+    await portTarget.click();
+    await expect(portTarget.locator("rect").first()).toHaveAttribute(
+      "stroke-width",
+      "5",
+    );
+    await rackFace.screenshot({
+      path: testInfo.outputPath("stack-rack.png"),
+      animations: "disabled",
+    });
+    await page.goto(`/devices/${stack.id}?tab=stack-members`);
+    await assignment.selectOption("");
+    await expect(
+      workspace
+        .getByTestId("stack-member")
+        .filter({ hasText: "Core A" })
+        .getByRole("button", { name: "Delete", exact: true }),
+    ).toBeEnabled();
+    await workspace
+      .getByTestId("stack-member")
+      .filter({ hasText: "Core A" })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await expect(workspace.getByTestId("stack-member")).toHaveCount(1);
+  } finally {
+    await request.delete(`/api/devices/${stack.id}`, { headers });
+    await request.delete(`/api/racks/${rackId}`, { headers });
+    await request.delete(`/api/rooms/${roomId}`, { headers });
   }
 });

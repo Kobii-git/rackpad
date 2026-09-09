@@ -4,6 +4,13 @@ import {
   loadSnmpCredentialSecrets,
 } from './snmp-credentials.js'
 import type { SnmpSession } from './snmp.js'
+import { decryptSecret } from './secret-crypto.js'
+
+export function loadMonitorCommunity(id: string, deviceId: string) {
+  const row = db.prepare('SELECT snmpCommunityEnc FROM deviceMonitors WHERE id = ? AND deviceId = ?')
+    .get(id, deviceId) as { snmpCommunityEnc: string | null } | undefined
+  return row?.snmpCommunityEnc ? decryptSecret(row.snmpCommunityEnc) : null
+}
 
 export function resolveSnmpSessionForTarget(input: {
   deviceId: string
@@ -52,6 +59,7 @@ export function resolveSnmpSessionForTarget(input: {
 
 export function resolveMonitorSnmpSession(
   monitor: {
+    id?: string
     deviceId: string
     target?: string | null
     port?: number | null
@@ -73,6 +81,8 @@ export function resolveMonitorSnmpSession(
     timeoutMs: 5000,
     snmpCredentialId: monitor.snmpCredentialId ?? device.snmpCredentialId ?? null,
     snmpVersion: monitor.snmpVersion ?? null,
-    snmpCommunity: monitor.snmpCommunity ?? null,
+    snmpCommunity: monitor.snmpCredentialId || device.snmpCredentialId
+      ? null
+      : monitor.id ? loadMonitorCommunity(monitor.id, monitor.deviceId) : monitor.snmpCommunity ?? null,
   })
 }

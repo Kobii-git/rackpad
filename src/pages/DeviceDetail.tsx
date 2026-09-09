@@ -1,3 +1,5 @@
+import { StackMembersPanel } from "@/components/devices/StackMembersPanel";
+import { deviceTypeLineage } from "@/lib/device-types";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Link,
@@ -30,6 +32,7 @@ import { PortList } from "@/components/ports/PortList";
 import { DevicePortEditor } from "@/components/ports/DevicePortEditor";
 import { StorageTopologyPanel } from "@/components/storage/StorageTopologyPanel";
 import { DeviceComputePanel } from "@/components/compute/DeviceComputePanel";
+import { DevicePhysicalLayoutPanel } from "@/components/rack/DevicePhysicalLayoutPanel";
 import { SnmpCredentialsPanel } from "@/components/shared/SnmpCredentialsPanel";
 import { SnmpSyncPanel } from "@/components/shared/SnmpSyncPanel";
 import { api } from "@/lib/api";
@@ -54,6 +57,7 @@ import {
   updateDevice,
   updateDeviceMonitorConfig,
   updateDeviceServiceRecord,
+  upsertPhysicalLayoutRecord,
   useStore,
 } from "@/lib/store";
 import type {
@@ -75,6 +79,7 @@ import type {
 } from "@/lib/types";
 import {
   ArrowLeft,
+  AlertTriangle,
   Download,
   ExternalLink,
   ImagePlus,
@@ -119,6 +124,7 @@ type MonitorForm = {
   ignoreTlsErrors: boolean;
   snmpVersion: NonNullable<DeviceMonitor["snmpVersion"]>;
   snmpCommunity: string;
+  clearSnmpCommunity: boolean;
   snmpOid: string;
   snmpExpectedValue: string;
   snmpMatchMode: NonNullable<DeviceMonitor["snmpMatchMode"]>;
@@ -173,6 +179,7 @@ const EMPTY_MONITOR_FORM: MonitorForm = {
   ignoreTlsErrors: false,
   snmpVersion: "2c",
   snmpCommunity: "public",
+  clearSnmpCommunity: false,
   snmpOid: "",
   snmpExpectedValue: "",
   snmpMatchMode: "equals",
@@ -243,6 +250,8 @@ const NEW_SERVICE_ID = "__new_service__";
 const DEVICE_DETAIL_TABS = new Set([
   "overview",
   "ports",
+  "physical",
+  "stack-members",
   "storage",
   "compute",
   "network",
@@ -263,6 +272,7 @@ export default function DeviceDetail() {
   const devices = useStore((s) => s.devices);
   const ports = useStore((s) => s.ports);
   const portLinks = useStore((s) => s.portLinks);
+  const physicalLayouts = useStore((s) => s.physicalLayouts);
   const virtualSwitches = useStore((s) => s.virtualSwitches);
   const vlans = useStore((s) => s.vlans);
   const ipAssignments = useStore((s) => s.ipAssignments);
@@ -338,6 +348,9 @@ export default function DeviceDetail() {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const device = id ? devices.find((entry) => entry.id === id) : undefined;
+  const physicalLayout = id
+    ? physicalLayouts.find((entry) => entry.deviceId === id)
+    : undefined;
   const deviceDriveSlots = id
     ? driveSlots.filter((entry) => entry.deviceId === id)
     : [];
@@ -355,6 +368,7 @@ export default function DeviceDetail() {
   const baseDeviceType = device
     ? deviceTypeBase(device.deviceType, deviceTypes)
     : null;
+  const isStack = !!device && deviceTypeLineage(device.deviceType, deviceTypes).includes("switch_stack");
   const showStorage =
     baseDeviceType === "server" ||
     baseDeviceType === "storage" ||
@@ -674,7 +688,7 @@ export default function DeviceDetail() {
     (port) => port.linkState === "up",
   ).length;
   const isVisualGrid =
-    device?.deviceType === "switch" || device?.deviceType === "router";
+    baseDeviceType === "switch" || baseDeviceType === "router";
   const compatiblePortTemplates = useMemo(
     () =>
       device
@@ -1002,9 +1016,10 @@ export default function DeviceDetail() {
       snmpVersion: monitorForm.snmpCredentialId.trim()
         ? undefined
         : monitorForm.snmpVersion,
+      monitorId: selectedMonitor?.id,
       snmpCommunity: monitorForm.snmpCredentialId.trim()
         ? undefined
-        : monitorForm.snmpCommunity.trim() || "public",
+        : monitorForm.clearSnmpCommunity ? "" : monitorForm.snmpCommunity.trim() || undefined,
     };
   }
 
@@ -1095,7 +1110,7 @@ export default function DeviceDetail() {
           monitorForm.type === "https" && monitorForm.ignoreTlsErrors,
         snmpVersion: usesSnmp ? monitorForm.snmpVersion : null,
         snmpCommunity: usesSnmp
-          ? monitorForm.snmpCommunity.trim() || null
+          ? monitorForm.clearSnmpCommunity ? null : monitorForm.snmpCommunity.trim() || undefined
           : null,
         snmpOid: usesSnmp ? monitorForm.snmpOid.trim() || null : null,
         snmpExpectedValue: usesSnmp
@@ -1355,6 +1370,15 @@ export default function DeviceDetail() {
                 | {hardwareMeta}
               </span>
             )}
+            {physicalLayout?.effectiveStatus !== "accurate" && (
+              <Link
+                to={`/devices/${device.id}?tab=physical`}
+                className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-[var(--color-warning)] hover:underline"
+              >
+                <AlertTriangle className="size-3" />
+                {t("Physical layout")} · {t("Needs attention")}
+              </Link>
+            )}
           </>
         }
         actions={
@@ -1511,6 +1535,8 @@ export default function DeviceDetail() {
             <TabsTrigger value="ports">
               {t("Ports")} | {devicePorts.length}
             </TabsTrigger>
+            <TabsTrigger value="physical">{t("Physical layout")}</TabsTrigger>
+            {isStack && <TabsTrigger value="stack-members">{t("Stack Members")}</TabsTrigger>}
             {showStorage && (
               <TabsTrigger value="storage">
                 {t("Storage")} | {deviceDriveSlots.length}
@@ -1538,6 +1564,7 @@ export default function DeviceDetail() {
             <TabsTrigger value="activity">{t("Activity")}</TabsTrigger>
           </TabsList>
 
+          {isStack && <TabsContent value="stack-members" className="pt-4"><StackMembersPanel device={device} ports={devicePorts} canEdit={canEdit} /></TabsContent>}
           <TabsContent value="overview" className="pt-4">
             <div className="grid grid-cols-12 gap-3">
               <Card className="col-span-12 md:col-span-6">
@@ -1986,6 +2013,21 @@ export default function DeviceDetail() {
                 />
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="physical" className="pt-4">
+            <DevicePhysicalLayoutPanel
+              device={device}
+              ports={devicePorts}
+              allPorts={ports}
+              portLinks={portLinks}
+              devices={devices}
+              deviceTypes={deviceTypes}
+              canEdit={canEdit && !isStack}
+              initialLayout={physicalLayout}
+              onLayoutChange={upsertPhysicalLayoutRecord}
+              onInventoryReload={() => loadAll(true)}
+            />
           </TabsContent>
 
           {showStorage && (
@@ -2847,6 +2889,8 @@ export default function DeviceDetail() {
                         </Field>
                         <Field label={t("Community")}>
                           <Input
+                            type="password"
+                            autoComplete="new-password"
                             value={monitorForm.snmpCommunity}
                             disabled={
                               !canManageMonitoring ||
@@ -2856,10 +2900,17 @@ export default function DeviceDetail() {
                               setMonitorForm((prev) => ({
                                 ...prev,
                                 snmpCommunity: event.target.value,
+                                clearSnmpCommunity: false,
                               }))
                             }
-                            placeholder={t("public")}
+                            placeholder={selectedMonitor?.hasSnmpCommunity ? t("Leave blank to keep the stored secret") : t("public")}
                           />
+                          {selectedMonitor?.hasSnmpCommunity && !monitorForm.clearSnmpCommunity && (
+                            <div className="flex items-center justify-between text-xs text-text-muted">
+                              <span>{t("community stored")}</span>
+                              <button type="button" disabled={!canManageMonitoring} onClick={() => setMonitorForm((prev) => ({ ...prev, snmpCommunity: "", clearSnmpCommunity: true }))}>{t("Clear")}</button>
+                            </div>
+                          )}
                         </Field>
                         <Field label={t("OID")}>
                           <Input
@@ -3663,6 +3714,7 @@ function buildNewMonitorForm(
     ignoreTlsErrors: false,
     snmpVersion: "2c",
     snmpCommunity: "public",
+    clearSnmpCommunity: false,
     snmpOid: "",
     snmpExpectedValue: "",
     snmpMatchMode: "equals",
@@ -3688,7 +3740,8 @@ function monitorToForm(monitor: DeviceMonitor, device: Device): MonitorForm {
       monitor.snmpVersion === "3"
         ? monitor.snmpVersion
         : "2c",
-    snmpCommunity: monitor.snmpCommunity ?? "",
+    snmpCommunity: "",
+    clearSnmpCommunity: false,
     snmpOid: monitor.snmpOid ?? "",
     snmpExpectedValue: monitor.snmpExpectedValue ?? "",
     snmpMatchMode: monitor.snmpMatchMode ?? "equals",

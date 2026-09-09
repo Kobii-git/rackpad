@@ -5,12 +5,14 @@ import type {
   AuditEntry,
   AuthSession,
   Device,
+  DeviceStackMember,
   DeviceImage,
   DevicePlacement,
   DeviceService,
   DeviceTypeDefinition,
   DeviceTypeUsage,
   DeviceMonitor,
+  DevicePhysicalLayout,
   DriveBayTemplate,
   DriveSlot,
   DiscoveredSnmpInterface,
@@ -29,6 +31,8 @@ import type {
   IntegrationScopeKind,
   IntegrationSyncSchedule,
   IntegrationTestResult,
+  HardwareTemplateDefault,
+  HardwareTemplateV1,
   IpAssignment,
   IpZone,
   ID,
@@ -40,8 +44,13 @@ import type {
   Port,
   PortLink,
   PortTemplate,
+  PortBindingV1,
+  PhysicalLayoutPreview,
+  ResolvedPhysicalLayoutV1,
   OidcPublicConfig,
   Rack,
+  RackStudioAction,
+  RackStudioActionResult,
   ReferenceImage,
   ReferenceImageEntityType,
   Room,
@@ -77,11 +86,20 @@ type Nullable<T> = {
 
 export class ApiError extends Error {
   status: number;
+  code?: string;
+  details?: Record<string, unknown>;
 
-  constructor(message: string, status: number) {
+  constructor(
+    message: string,
+    status: number,
+    code?: string,
+    details?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
+    this.details = details;
   }
 }
 
@@ -200,8 +218,22 @@ export type VirtualSwitchPatch = Nullable<
 >;
 export type PortLinkPatch = Nullable<Omit<PortLink, "id">>;
 export type PortLinkBulkPatch = Nullable<
-  Pick<PortLink, "cableType" | "cableLength" | "color">
+  Pick<
+    PortLink,
+    | "cableType"
+    | "cableLength"
+    | "color"
+    | "notes"
+    | "label"
+    | "visible"
+    | "routeWaypoints"
+  >
 >;
+export type PortLinkCreate = Omit<PortLink, "id"> & {
+  id?: string;
+  physicalMode?: boolean;
+  confirmUnusual?: boolean;
+};
 export type PortTemplatePatch = Nullable<
   Pick<PortTemplate, "name" | "description" | "deviceTypes" | "ports">
 >;
@@ -410,11 +442,23 @@ async function request<T>(
 
   if (!res.ok) {
     let message = `Request failed: ${res.status}`;
+    let errorBody:
+      { error?: string; code?: string; [key: string]: unknown } | undefined;
     try {
-      const body = (await res.json()) as { error?: string };
-      if (body.error) message = body.error;
+      errorBody = (await res.json()) as {
+        error?: string;
+        code?: string;
+        [key: string]: unknown;
+      };
     } catch {
       // Keep the fallback message.
+    }
+    if (errorBody) {
+      if (errorBody.error) message = errorBody.error;
+      const details = { ...errorBody };
+      delete details.error;
+      delete details.code;
+      throw new ApiError(message, res.status, errorBody.code, details);
     }
     throw new ApiError(message, res.status);
   }
@@ -678,6 +722,13 @@ export const api = {
     });
   },
 
+  applyRackStudioAction(body: RackStudioAction) {
+    return request<RackStudioActionResult>("/rack-studio/actions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
   deleteRack(id: string) {
     return request<void>(`/racks/${id}`, {
       method: "DELETE",
@@ -808,6 +859,139 @@ export const api = {
     return request<DeviceTypeDefinition[]>("/device-types");
   },
 
+  getHardwareTemplates() {
+    return request<{
+      templates: HardwareTemplateV1[];
+      defaults: HardwareTemplateDefault[];
+    }>("/hardware-templates");
+  },
+
+  createHardwareTemplate(body: HardwareTemplateV1) {
+    return request<HardwareTemplateV1>("/hardware-templates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateHardwareTemplate(id: string, body: HardwareTemplateV1) {
+    return request<HardwareTemplateV1>(`/hardware-templates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  duplicateHardwareTemplate(id: string, body: { id: string; name: string }) {
+    return request<HardwareTemplateV1>(`/hardware-templates/${id}/duplicate`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteHardwareTemplate(id: string) {
+    return request<void>(`/hardware-templates/${id}`, { method: "DELETE" });
+  },
+
+  setHardwareTemplateDefault(deviceType: string, templateId: string) {
+    return request<HardwareTemplateDefault>(
+      `/hardware-templates/defaults/${deviceType}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ templateId }),
+      },
+    );
+  },
+
+  clearHardwareTemplateDefault(deviceType: string) {
+    return request<void>(`/hardware-templates/defaults/${deviceType}`, {
+      method: "DELETE",
+    });
+  },
+
+  getPhysicalLayouts(params?: { labId?: string; deviceId?: string }) {
+    return request<DevicePhysicalLayout[]>(
+      "/physical-layouts",
+      undefined,
+      params,
+    );
+  },
+
+  getPhysicalLayout(deviceId: string) {
+    return request<DevicePhysicalLayout>(`/physical-layouts/${deviceId}`);
+  },
+
+  previewPhysicalLayout(
+    deviceId: string,
+    body: {
+      templateId?: string;
+      moduleIds?: string[];
+      bindings?: PortBindingV1[];
+      preserveBindings?: boolean;
+      customSnapshot?: ResolvedPhysicalLayoutV1;
+    },
+  ) {
+    return request<PhysicalLayoutPreview>(
+      `/physical-layouts/${deviceId}/preview`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+  },
+
+  applyPhysicalLayout(
+    deviceId: string,
+    body: {
+      templateId?: string;
+      portFingerprint: string;
+      moduleIds?: string[];
+      bindings?: PortBindingV1[];
+      approvedPortSlotIds?: string[];
+      preserveBindings?: boolean;
+      customSnapshot?: ResolvedPhysicalLayoutV1;
+    },
+  ) {
+    return request<DevicePhysicalLayout & { createdPortIds: string[] }>(
+      `/physical-layouts/${deviceId}/apply`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+  },
+
+  bulkPreviewPhysicalLayouts(body: {
+    deviceIds: string[];
+    templateId: string;
+    moduleIds?: string[];
+  }) {
+    return request<{ previews: PhysicalLayoutPreview[] }>(
+      "/physical-layouts/bulk-preview",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+  },
+
+  bulkApplyPhysicalLayouts(previews: PhysicalLayoutPreview[]) {
+    return request<{ updated: number; layouts: DevicePhysicalLayout[] }>(
+      "/physical-layouts/bulk-apply",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          previews: previews.map((preview) => ({
+            deviceId: preview.deviceId,
+            templateId: preview.templateId,
+            moduleIds: preview.moduleIds,
+            portFingerprint: preview.portFingerprint,
+            bindings: preview.bindings,
+            preserveBindings: preview.preserveBindings,
+          })),
+        }),
+      },
+    );
+  },
+
   getDeviceTypeUsage() {
     return request<DeviceTypeUsage[]>("/device-types/usage");
   },
@@ -859,6 +1043,39 @@ export const api = {
     });
   },
 
+  getStackMembers(id: string) {
+    return request<DeviceStackMember[]>(`/devices/${id}/stack-members`);
+  },
+  createStackMember(
+    id: string,
+    body: Omit<DeviceStackMember, "id" | "deviceId" | "position">,
+  ) {
+    return request<DeviceStackMember>(`/devices/${id}/stack-members`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  updateStackMember(
+    id: string,
+    memberId: string,
+    body: Partial<DeviceStackMember>,
+  ) {
+    return request<DeviceStackMember>(
+      `/devices/${id}/stack-members/${memberId}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    );
+  },
+  deleteStackMember(id: string, memberId: string) {
+    return request<void>(`/devices/${id}/stack-members/${memberId}`, {
+      method: "DELETE",
+    });
+  },
+  reorderStackMembers(id: string, memberIds: string[]) {
+    return request<DeviceStackMember[]>(`/devices/${id}/stack-members/order`, {
+      method: "PUT",
+      body: JSON.stringify({ memberIds }),
+    });
+  },
   getDevice(id: string) {
     return request<Device>(`/devices/${id}`);
   },
@@ -1226,7 +1443,7 @@ export const api = {
     return request<PortLink[]>("/port-links");
   },
 
-  createPortLink(body: Omit<PortLink, "id"> & { id?: string }) {
+  createPortLink(body: PortLinkCreate) {
     return request<PortLink>("/port-links", {
       method: "POST",
       body: JSON.stringify(body),
@@ -1450,6 +1667,7 @@ export const api = {
   },
 
   discoverSnmpInterfaces(body: {
+    monitorId?: string;
     deviceId: string;
     target?: string;
     port?: number;
@@ -1469,6 +1687,7 @@ export const api = {
   },
 
   importSnmpInterfaceMonitors(body: {
+    monitorId?: string;
     deviceId: string;
     target?: string;
     port?: number;

@@ -8,7 +8,7 @@ Rackpad now leans into a premium infra-control look inspired by modern operator 
 
 ### Background and surface scale
 
-- `--bg-page`: darkest page background
+- `--bg-page`: theme-specific page background
 - `--bg-shell`: app shell and chrome background
 - `--surface-1`: inset panels, tables, grids
 - `--surface-2`: standard cards
@@ -86,10 +86,10 @@ Rackpad uses cyan/teal as the secondary accent because it reads as network, tele
 
 ## Surface Hierarchy Rules
 
-- Page background is always the darkest layer.
+- Use the theme tokens for page and card separation. The dark theme uses a darker page; the light theme uses its own surface scale.
 - Cards sit one step above the page.
 - Inspectors, tables, range bars, and embedded panels sit one step above or inset within cards.
-- Inputs are clearly interactive and slightly brighter than the panel they sit in.
+- Inputs are clearly interactive and distinct from their surrounding panel in both themes.
 - Selected surfaces use a dedicated selected background and edge treatment instead of louder borders everywhere.
 - Cards can use a subtle top-edge highlight to simulate overhead lighting.
 
@@ -99,7 +99,7 @@ Rackpad uses cyan/teal as the secondary accent because it reads as network, tele
 - Section labels use small uppercase monospace with tracking.
 - Important values use tabular numerals and stronger weight.
 - Technical identifiers like IPs, CIDRs, MACs, ports, VLAN IDs, and speeds should stay monospace.
-- Muted text should remain readable in dark mode; avoid dropping too close to the background.
+- Muted text should remain readable in light and dark modes; avoid dropping too close to the background.
 
 ## Do and Don't
 
@@ -134,4 +134,4 @@ The polish pass deliberately keeps compact controls, tight tables, and dense das
 
 - A full shared table component was not introduced to avoid unnecessary refactors; shared table styling is applied through CSS utilities and lightweight page updates.
 - Existing route structure, data layout, and business behavior were preserved even where some page markup is still locally structured.
-- The system font stack was preferred over introducing a new font-loading dependency.
+- IBM Plex Sans and IBM Plex Mono are bundled through `@fontsource` imports in `src/main.tsx`. Fonts are self-hosted; retain system fallbacks and test both themes.
