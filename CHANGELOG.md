@@ -6,6 +6,24 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.3-beta.1] - 2026-09-09
+
+> Combined experimental candidate for stable `1.8.3` acceptance.
+> See the [candidate acceptance and upgrade notes](docs/releases/v1.8.3-beta.1.md).
+
+### Fixed
+
+- Reject malformed CodeQL severity values and missing scores on security-tagged
+  rules before applying reviewed exceptions. Preserve raw analysis on failure.
+- Update Nodemailer to 9.1.1 for its address-parser denial-of-service and related
+  security repairs, retaining the existing SMTP integration.
+
+### Changed
+
+- Retain the immutable beta.0 tag after canceling its publication before build
+  or release steps. Beta.1 carries the combined changes below; acceptance and soak
+  must use its exact published artifacts. All six tracked issues remain open.
+
 ## [1.8.3-beta.0] - 2026-09-08
 
 > Combined experimental candidate for stable `1.8.3` acceptance.

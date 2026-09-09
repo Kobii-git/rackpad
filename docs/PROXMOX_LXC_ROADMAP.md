@@ -209,11 +209,13 @@ migration. The active [native guide](PROXMOX_NATIVE_LXC.md) and
 commands below; historical publication records remain unchanged. Beta.5 remains
 experimental while screenshot determinism and community acceptance are unresolved.
 
-The combined [v1.8.3-beta.0 candidate](releases/v1.8.3-beta.0.md) starts from
+The combined [v1.8.3-beta.1 candidate](releases/v1.8.3-beta.1.md) starts from
 published beta.5 and includes native startup readiness, mixed-face cable
 continuations, stacked switches, and SNMPv3 interoperability repairs. Schema 51 adds stack state; published
 migrations 49 and 50 remain unchanged. This candidate replaces the separate
-unpublished beta.6 and stack-development release plans.
+unpublished beta.6 and stack-development release plans. The beta.0 tag is retained;
+its publication was canceled before image/release steps after a malformed CodeQL
+severity check was found. Beta.1 repairs that gate and updates Nodemailer to 9.1.1.
 
 Community testers supply real Debian 13 and Ubuntu 24.04 PVE 9.x evidence,
 Rack Studio/patch-panel/stack acceptance, and a seven-day soak on the combined

@@ -44,6 +44,22 @@ function resultRule(run, result) {
   return matches[0];
 }
 
+function securitySeverity(rule) {
+  const properties = rule.properties ?? {};
+  if (!Object.hasOwn(properties, "security-severity")) {
+    if (rule.id === SNMP_REVIEW.ruleId || properties.tags?.includes("security")) {
+      throw new Error("Missing CodeQL security severity");
+    }
+    return 0;
+  }
+  // CodeQL scores are decimal strings in [0, 10], not coercible SARIF property values.
+  const value = properties["security-severity"];
+  if (typeof value !== "string" || value.trim() !== value || !/^(?:[0-9](?:\.\d+)?|10(?:\.0+)?)$/.test(value)) {
+    throw new Error("Invalid CodeQL severity");
+  }
+  return Number(value);
+}
+
 export function reviewSarif(document, context, seen = new Set()) {
   if (document?.version !== "2.1.0" || !Array.isArray(document.runs) || !document.runs.length) {
     throw new Error("Missing or invalid CodeQL SARIF runs");
@@ -57,10 +73,12 @@ export function reviewSarif(document, context, seen = new Set()) {
     if (!Array.isArray(run.results) || run.invocations?.some((item) => item.executionSuccessful === false)) {
       throw new Error("Incomplete CodeQL analysis");
     }
+    for (const component of [run.tool.driver, ...(run.tool.extensions ?? [])]) {
+      for (const rule of component.rules ?? []) securitySeverity(rule);
+    }
     run.results = run.results.filter((result) => {
       const rule = resultRule(run, result);
-      const severity = Number(rule.properties?.["security-severity"] ?? 0);
-      if (!Number.isFinite(severity)) throw new Error("Invalid CodeQL severity");
+      const severity = securitySeverity(rule);
       const line = reviewedSnmpLocation(run, result, rule, context);
       if (line !== null) {
         const key = `${SNMP_REVIEW.file}:${line}`;

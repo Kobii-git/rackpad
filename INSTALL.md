@@ -2,7 +2,7 @@
 
 Current stable release: `v1.8.0`
 
-Combined experimental beta candidate: `v1.8.3-beta.0`.
+Combined experimental beta candidate: `v1.8.3-beta.1`.
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm
 the immutable tag and published artifacts before installation.
 
@@ -58,7 +58,7 @@ once the maintenance installer is published.
   pre-upgrade database/configuration snapshot, never an older image alone.
 
 See the [security upgrade notes](docs/releases/v1.8.2-beta.4-test-notes.md) and
-[combined schema-51 candidate notes](docs/releases/v1.8.3-beta.0.md).
+[combined schema-51 candidate notes](docs/releases/v1.8.3-beta.1.md).
 
 ### Maintenance installer preservation
 

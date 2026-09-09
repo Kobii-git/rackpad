@@ -23,6 +23,73 @@ test("CodeQL blocks high/critical findings and fails closed on missing analysis"
   assert.throws(() => inspectSarif(sarif("9.8", [{ ruleId: "unknown" }])));
 });
 
+test("CodeQL rejects malformed severity before suppressions or reviewed exceptions", () => {
+  for (const severity of [[], [8.1], {}, true, false, null, undefined, 0, 8.1, -1,
+    "", " ", " 8.1", "8.1 ", "8.1\n", "8.1\r", "8.1\u2028", "-1", "10.1", "10.0000000000000001", "Infinity", "NaN", "1e1", "0x8", "+8", ".8", "8.", "08"]) {
+    assert.throws(() => inspectSarif(sarif(severity)), /CodeQL severity/);
+    assert.throws(() => inspectSarif(sarif(severity, [
+      { ruleId: "test-rule", suppressions: [{ kind: "external", status: "accepted" }] },
+    ])), /CodeQL severity/);
+    const document = snmpSarif();
+    document.runs[0].tool.extensions[1].rules[0].properties["security-severity"] = severity;
+    assert.throws(() => reviewSarif(document, reviewedContext()), /CodeQL severity/);
+  }
+  for (const [severity, failures] of [["0", 0], ["0.0", 0], ["5", 0], ["6.9", 0], ["7", 1], ["8.1", 1], ["10", 1], ["10.0", 1]]) {
+    assert.equal(inspectSarif(sarif(severity)), failures);
+  }
+});
+
+test("only non-security rules may omit severity metadata", () => {
+  const document = sarif("5");
+  const rule = document.runs[0].tool.driver.rules[0];
+  delete rule.properties["security-severity"];
+  assert.equal(inspectSarif(document), 0);
+  rule.properties.tags = ["maintainability"];
+  assert.equal(inspectSarif(document), 0);
+  rule.properties.tags.push("security");
+  assert.throws(() => inspectSarif(document), /Missing CodeQL security severity/);
+  delete rule.properties;
+  assert.equal(inspectSarif(document), 0);
+  const snmp = snmpSarif();
+  snmp.runs[0].tool.extensions[1].rules[0].properties = { tags: ["security"] };
+  assert.throws(() => reviewSarif(snmp, reviewedContext()), /Missing CodeQL security severity/);
+  delete snmp.runs[0].tool.extensions[1].rules[0].properties;
+  for (const context of [reviewedContext(), { ...reviewedContext(), clean: false },
+    { ...reviewedContext(), now: Date.parse(SNMP_REVIEW.expiresAt) }]) {
+    assert.throws(() => reviewSarif(snmp, context), /Missing CodeQL security severity/);
+  }
+});
+
+test("unused driver and extension descriptors also require valid security metadata", () => {
+  for (const location of ["driver", "extension"]) {
+    for (const properties of [{ "security-severity": [] }, { tags: ["security"] }]) {
+      const document = snmpSarif();
+      const component = location === "driver" ? document.runs[0].tool.driver : document.runs[0].tool.extensions[0];
+      component.rules = [{ id: "unreferenced-rule", properties }];
+      assert.throws(() => reviewSarif(document, reviewedContext()), /CodeQL (?:security )?severity/);
+      component.rules[0].properties = { tags: ["maintainability"] };
+      assert.equal(reviewSarif(document, reviewedContext()).reviewed.length, 2);
+    }
+  }
+});
+
+test("malformed severity leaves raw evidence intact and preparation blocked", (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), "rackpad-codeql-severity-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const input = path.join(root, "raw");
+  mkdirSync(input);
+  const file = path.join(input, "report.sarif");
+  const original = JSON.stringify(sarif([]), null, 2);
+  writeFileSync(file, original);
+  let output;
+  assert.throws(() => prepareCodeqlReports(input, path.join(root, "review"), {
+    root, onDirectory(directory) { output = directory; },
+  }), /Invalid CodeQL severity/);
+  assert.equal(readFileSync(file, "utf8"), original);
+  assert.equal(JSON.parse(readFileSync(path.join(output, "review-summary.json"))).status, "blocked");
+  assert.equal(existsSync(path.join(output, "prepared")), false);
+});
+
 test("CodeQL resolves extension-local rule metadata and rejects ambiguous references", () => {
   // Matches CodeQL 4.37.9's hosted SARIF shape: metadata lives in an extension.
   const document = sarif("1.0", [{ ruleId: "test-rule", rule: { id: "test-rule", index: 0, toolComponent: { index: 1 } } }]);
