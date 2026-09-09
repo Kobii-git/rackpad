@@ -6,6 +6,34 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.3] - 2026-09-09
+
+### Added
+
+- Stacked switches with ordered members, labelled MACs, port assignments and
+  derived rack height, including schema-51 backup and restore support.
+
+### Fixed
+
+- Restore Storage editing in browsers where `crypto.randomUUID` is unavailable
+  or throws, including Firefox over ordinary LAN HTTP.
+- Repair SNMPv3 key localization, privacy and authenticated engine-time recovery.
+- Correct Rack Studio rear/mixed-face routing, patch-panel bindings and stack
+  placement undo/redo while preserving port and cable identities.
+- Retain the beta security fixes for authorization, OIDC, credential storage,
+  outbound requests and dependencies, including Fastify and Nodemailer updates.
+- Preserve Docker installer configuration and encryption keys; bound native LXC
+  readiness and recovery checks.
+
+### Changed
+
+- Promote the tested beta to stable early to address the Storage regression.
+  Reporter acceptance and the planned seven-day soak remain incomplete; all six
+  issues remain open and native Proxmox LXC stays experimental.
+- Refresh stable installation guidance and documentation screenshots.
+
+Read the [upgrade and recovery notes](docs/releases/v1.8.3.md) before updating.
+
 ## [1.8.3-beta.1] - 2026-09-09
 
 > Combined experimental candidate for stable `1.8.3` acceptance.

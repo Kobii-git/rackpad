@@ -1,8 +1,6 @@
 # Rackpad Installation Guide
 
-Current stable release: `v1.8.0`
-
-Combined experimental beta candidate: `v1.8.3-beta.1`.
+Current stable release: `v1.8.3`
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm
 the immutable tag and published artifacts before installation.
 
@@ -21,7 +19,7 @@ without cloning the repo, or clone the repo and build it yourself.
 ## Main Branch Or Version Tag?
 
 - `main` is the stable source branch and is fine for cloning the latest stable code.
-- `RACKPAD_TAG=1.8.0` pins the Docker image to a known release. Git tags use
+- `RACKPAD_TAG=1.8.3` pins the Docker image to a known release. Git tags use
   the `v` prefix, but Docker image tags do not.
 - `RACKPAD_TAG=latest` follows the newest published stable GHCR image and is
   convenient for quick installs or test labs.
@@ -36,10 +34,9 @@ Manual examples below download stable manifests from `main`. For beta, download
 from `beta`; for a pinned version, use its matching `v`-prefixed Git tag. Keep the
 manifest and image version paired. The maintenance installer resolves `latest`
 to `main`, `beta` to `beta`, `dev` to `dev`, and complete version tags to matching
-Git tags; custom images use the stable manifest. This repair is only available
-once the maintenance installer is published.
+Git tags; custom images use the stable manifest.
 
-## Before upgrading to 1.8.3 beta
+## Before upgrading to 1.8.3
 
 - Back up the database/volume and configuration together. Retain the original
   `RACKPAD_SECRET_KEY`. Migration 50 needs a key to encrypt existing inline SNMP
@@ -49,7 +46,7 @@ once the maintenance installer is published.
 - Configure a trusted OIDC administrator subject/group and verify local recovery
   access. Old OIDC sessions are revoked and roles are recalculated on next login;
   email-based rules require boolean `email_verified: true`.
-- Traps default off in this beta. Enable them explicitly if needed and reconfigure
+- Traps default off. Enable them explicitly if needed and reconfigure
   historical source credential links. Never expose UDP 1162 by accident.
 - Schema 51 adds stack members and nullable port assignments. Published migrations
   49 and 50 remain unchanged, with security conversion at 50. Existing ordinary
@@ -58,11 +55,11 @@ once the maintenance installer is published.
   pre-upgrade database/configuration snapshot, never an older image alone.
 
 See the [security upgrade notes](docs/releases/v1.8.2-beta.4-test-notes.md) and
-[combined schema-51 candidate notes](docs/releases/v1.8.3-beta.1.md).
+[1.8.3 release notes](docs/releases/v1.8.3.md).
 
 ### Maintenance installer preservation
 
-The candidate installer validates the selected canonical manifest before
+The installer validates the selected canonical manifest before
 changing deployment files. It preserves an existing `.env` byte-for-byte and
 reuses the existing Compose project directory and `rackpad_data` volume. The
 legacy generated manifest is recognized by its exact checksum; a protected
@@ -97,12 +94,12 @@ TRUSTED_ORIGINS=
 Most users only change:
 
 - `RACKPAD_PORT`: host port to expose, default `3000`.
-- `RACKPAD_TAG`: release version to run, for example `1.8.0`, or `latest` for
+- `RACKPAD_TAG`: release version to run, for example `1.8.3`, or `latest` for
   the newest stable GHCR image.
 - `TRUST_PROXY`, `TRUSTED_HOSTS`, `TRUSTED_ORIGINS`: set these when using a reverse proxy.
 
 Set and retain `RACKPAD_SECRET_KEY` before saving encrypted integration or SNMP
-credentials. In 1.8.2 beta it is also required for inline SNMP communities. All supported
+credentials. It is also required for inline SNMP communities. All supported
 environment variables are listed in [`.env.example`](./.env.example) and reach
 the process through each shipped Compose file. The normal Compose profiles do
 not publish UDP 1162; add an explicit `1162:1162/udp` mapping only when external
@@ -243,7 +240,7 @@ sudo docker compose up --build -d
 To build an exact release instead of current `main`:
 
 ```bash
-sudo git checkout v1.8.0
+sudo git checkout v1.8.3
 sudo docker compose up --build -d
 ```
 
@@ -591,10 +588,10 @@ Only use `down -v` if you are okay deleting Rackpad's stored data.
 
 Keep Rackpad private, behind a VPN, or behind a TLS reverse proxy.
 
-**Stable v1.8.0:** `TRUST_PROXY=1` trusts one controlled proxy hop; `2` trusts two
+**Older v1.8.0:** `TRUST_PROXY=1` trusts one controlled proxy hop; `2` trusts two
 (up to 10). Truthy aliases mean one hop. Restrict direct access to the app.
 
-**1.8.2 beta.4 and later:** use the explicit IPs/CIDRs of controlled proxies.
+**Stable v1.8.3 (and 1.8.2 beta.4 onward):** use the explicit IPs/CIDRs of controlled proxies.
 Numeric hop counts and truthy aliases disable trust with a startup warning.
 Replace old values before upgrading. For example, if the final proxy really
 connects from `172.18.0.2`:
