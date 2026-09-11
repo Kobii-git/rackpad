@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const ru = {
+  "Routing mode": "Режим трассы",
+  "Automatic": "Автоматически",
+  "Managed": "По направляющим",
+  "Manual": "Вручную",
+  "Route guides": "Направляющие трассы",
+  "Entry face": "Сторона входа",
+  "Exit face": "Сторона выхода",
+  "Add guide": "Добавить направляющую",
+  "Incomplete route": "Неполная трасса",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "Выберите установленную щёточную панель или кабельный органайзер и разместите направляющую на его поверхности.",
+  "Detailed": "Подробно",
   "Stacked switches": "Коммутаторы в стеке",
   "Stack Members": "Участники стека",
   "Add member": "Добавить участника",

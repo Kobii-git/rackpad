@@ -88,7 +88,7 @@ test("selected rack faces control exact anchors and hidden-face handoffs", () =>
   });
   assert.match(
     focusedFrontExport.svg,
-    /Cable · ↔ Rear · face-device · rear-port/,
+    /Cable \[face-link\] · ↔ Rear · face-device · rear-port/,
   );
   assert.match(
     focusedFrontExport.svg,

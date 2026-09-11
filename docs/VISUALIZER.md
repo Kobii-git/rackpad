@@ -56,12 +56,26 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
   and port anchors configured in Rack Studio.
 - The room selector scopes rack cabling to one room. `Front`, `Rear`, and `Both`
   control which physical faces are visible.
-- `Smooth` automatically uses short curved patch cords between different devices
-  on the same rack face within 4U vertically, when no other equipment obstructs
-  the curve. Longer, obstructed, cross-rack, and handoff connections use gutters.
-  Rack Studio and Rack cabling share the route geometry; SVG/PNG exports retain
-  the same curve controls and exact port endpoints.
-- Automatic front-to-rear cables use short continuation stubs at their visible
+- `Smooth` draws readable curves across the available rack height. Cables may
+  cross shelves and equipment artwork. `Orthogonal` changes the drawing style
+  independently of the saved routing mode.
+- Cable routing modes are **Automatic** (direct on one rack face, managed between
+  racks), **Direct** (short visible same-face paths, including between racks),
+  **Managed** (ordered device guides and rack gutters), and **Manual** (saved
+  room-coordinate waypoints). Changing modes retains inactive guides and points.
+- In Studio's cable inspector, select **Managed**, add an installed brush panel
+  or cable manager, choose entry/exit faces, and place the guide on its preview.
+  Numeric X/Y controls use 0–1000 relative to that device face. Guides follow
+  device movement and rotation. A front/rear passage is one cable and adds no
+  ports, links, or trace hops. Missing geometry displays **Incomplete route**.
+- Click the inspector's endpoint buttons or Rack Cabling's continuation markers
+  to reveal the opposite endpoint while keeping its cable selected. Matching
+  cable identifiers connect continuation markers in Both view.
+- **Compact** in Studio shows room racks side by side, quiets placement grids,
+  and uses thin cables. Editing reveals placement guides. Compact, cable style,
+  and label preferences are personal to this browser; SVG/PNG exports reproduce
+  the selected presentation, artwork and routing.
+- Front-to-rear cables without a documented guide passage use short continuation stubs at their visible
   ports. Selecting or hovering either segment labels both destinations with the
   device, port, and resolved rack face; `Labels` keeps these labels visible.
   Single-face views show the local stub and identify the hidden destination.

@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Routing mode": "وضع المسار",
+  "Automatic": "تلقائي",
+  "Managed": "مُدار",
+  "Manual": "يدوي",
+  "Route guides": "أدلة المسار",
+  "Entry face": "جهة الدخول",
+  "Exit face": "جهة الخروج",
+  "Add guide": "إضافة دليل",
+  "Incomplete route": "مسار غير مكتمل",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "اختر لوحة فرشاة أو منظم كابلات مثبتًا، ثم ضع دليلًا على وجهه.",
+  "Detailed": "مفصل",
   "Stacked switches": "مبدلات مكدسة",
   "Stack Members": "أعضاء المكدس",
   "Add member": "إضافة عضو",

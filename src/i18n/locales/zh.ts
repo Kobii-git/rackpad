@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Routing mode": "路径模式",
+  "Automatic": "自动",
+  "Managed": "引导",
+  "Manual": "手动",
+  "Route guides": "路径引导点",
+  "Entry face": "入口面",
+  "Exit face": "出口面",
+  "Add guide": "添加引导点",
+  "Incomplete route": "不完整的路径",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "选择已安装的毛刷面板或理线器，然后在其表面放置引导点。",
+  "Detailed": "详细",
   "Stacked switches": "堆叠交换机",
   "Stack Members": "堆叠成员",
   "Add member": "添加成员",

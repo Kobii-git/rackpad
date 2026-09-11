@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Routing mode": "경로 모드",
+  "Automatic": "자동",
+  "Managed": "가이드 경로",
+  "Manual": "수동",
+  "Route guides": "경로 가이드",
+  "Entry face": "진입 면",
+  "Exit face": "진출 면",
+  "Add guide": "가이드 추가",
+  "Incomplete route": "불완전한 경로",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "설치된 브러시 패널 또는 케이블 정리 장치를 선택한 다음 해당 면에 가이드를 배치하세요.",
+  "Detailed": "상세",
   "Stacked switches": "스택 스위치",
   "Stack Members": "스택 구성원",
   "Add member": "구성원 추가",

@@ -15,6 +15,11 @@ try {
   // Reconstruct schema 50 exactly as the migration suite does, before creating
   // any stack data. The application under test must actually run migration 51.
   db.exec(`
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
     DROP TRIGGER ports_stack_owner_insert;
     DROP TRIGGER ports_stack_owner_update;
     DROP TRIGGER stack_member_device_immutable;

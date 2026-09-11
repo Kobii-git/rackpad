@@ -22,6 +22,9 @@ import {
   cableCategoryForPorts,
   defaultCableColor,
   planPhysicalCableRoutes,
+  cableRouteMode,
+  resolveCableGuidePoints,
+  projectCableWaypoints,
   cableGeometryLabelPoint,
   type CablePoint,
   type CableContinuationMarker,
@@ -1240,21 +1243,27 @@ export function buildRackCablingRoutes(input: {
         const continuation =
           hidden &&
           hidden.rackFace !== local.rackFace &&
-          !route.link.routeWaypoints?.length &&
+          (cableRouteMode(route.link) !== "manual" || !route.link.routeWaypoints?.length) &&
           route.handoffs.every((handoff) => handoff.reason === "hidden-face");
         return {
           id: route.link.id,
+          routeMode: cableRouteMode(route.link),
+          ...resolveCableGuidePoints({ link: route.link, equipment: input.scene.equipment, devices: input.devices,
+            roomId: input.scene.room.id, faces: input.scene.racks.flatMap(rack => rack.faces.map(face => face.face)),
+            reverse: continuation && local.portId !== route.link.fromPortId }),
           from: anchor(continuation ? local : route.from),
           to: continuation ? undefined : anchor(route.to),
           hiddenEndpoint: continuation
             ? { portId: hidden.portId, rackFace: hidden.rackFace }
             : undefined,
-          manualPoints: [],
+          manualPoints: projectCableWaypoints(route.link, input.racks,
+            input.scene.racks.flatMap(rack => rack.faces.map(face => ({ rackId: rack.rack.id, face: face.face,
+              rect: { x: face.x, y: face.y + 8, width: face.width, height: rack.rack.totalU * RACK_CABLING_UNIT_HEIGHT } }))), input.scene.room.id),
           allowContinuation:
-            !route.link.routeWaypoints?.length &&
+            (cableRouteMode(route.link) !== "manual" || !route.link.routeWaypoints?.length) &&
             route.handoffs.every((handoff) => handoff.reason === "hidden-face"),
           allowDirect:
-            route.handoffs.length === 0 && !route.link.routeWaypoints?.length,
+            route.handoffs.length === 0 && (cableRouteMode(route.link) !== "manual" || !route.link.routeWaypoints?.length),
         };
       }),
       {
@@ -1284,7 +1293,7 @@ export function buildRackCablingRoutes(input: {
     const hidden = route.handoffs.find(
       (handoff) => handoff.reason === "hidden-face",
     );
-    const marker = planned.continuations[0];
+    const marker = planned.continuations.find(marker => marker.destinationPortId === hidden?.portId);
     return {
       ...route,
       ...(hidden && marker

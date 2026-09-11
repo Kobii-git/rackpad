@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Routing mode": "Mode rute",
+  "Automatic": "Otomatis",
+  "Managed": "Terarah",
+  "Manual": "Rute manual",
+  "Route guides": "Pemandu rute",
+  "Entry face": "Sisi masuk",
+  "Exit face": "Sisi keluar",
+  "Add guide": "Tambah pemandu",
+  "Incomplete route": "Rute tidak lengkap",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "Pilih panel sikat atau pengatur kabel yang terpasang, lalu tempatkan pemandu pada permukaannya.",
+  "Detailed": "Terperinci",
   "Stacked switches": "Switch bertumpuk",
   "Stack Members": "Anggota tumpukan",
   "Add member": "Tambah anggota",

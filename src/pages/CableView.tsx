@@ -1,3 +1,5 @@
+import type { CableRouteMode } from "@/lib/types";
+import { cableRouteMode } from "@/lib/rack-studio-cables";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Cable } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
@@ -49,6 +51,7 @@ import {
 import { useI18n } from "@/i18n";
 
 interface CableFormState {
+  routeMode: CableRouteMode;
   fromPortId: string;
   toPortId: string;
   cableType: string;
@@ -58,6 +61,7 @@ interface CableFormState {
 }
 
 interface BulkCableForm {
+  routeMode: CableRouteMode;
   cableType: string;
   cableLength: string;
   color: string;
@@ -66,6 +70,7 @@ interface BulkCableForm {
 type CableSortKey = "from" | "to" | "type" | "length" | "color";
 
 const EMPTY_FORM: CableFormState = {
+  routeMode: "auto",
   fromPortId: "",
   toPortId: "",
   cableType: "",
@@ -75,6 +80,7 @@ const EMPTY_FORM: CableFormState = {
 };
 
 const EMPTY_BULK_FORM: BulkCableForm = {
+  routeMode: "auto",
   cableType: "",
   cableLength: "",
   color: "",
@@ -102,7 +108,8 @@ export default function CableView() {
     new Set(),
   );
   const [bulkForm, setBulkForm] = useState<BulkCableForm>(EMPTY_BULK_FORM);
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<CableFormState>({
+    routeMode: "auto",
     fromPortId: "",
     toPortId: "",
     cableType: "",
@@ -242,7 +249,8 @@ export default function CableView() {
   useEffect(() => {
     if (!selectedLink) {
       setEditForm({
-        fromPortId: "",
+        routeMode: "auto",
+    fromPortId: "",
         toPortId: "",
         cableType: "",
         cableLength: "",
@@ -254,6 +262,7 @@ export default function CableView() {
     }
 
     setEditForm({
+      routeMode: cableRouteMode(selectedLink),
       fromPortId: selectedLink.fromPortId,
       toPortId: selectedLink.toPortId,
       cableType: selectedLink.cableType ?? "",
@@ -273,6 +282,7 @@ export default function CableView() {
         toPortId: createForm.toPortId,
         cableType: createForm.cableType.trim() || undefined,
         cableLength: createForm.cableLength.trim() || undefined,
+        routeMode: createForm.routeMode,
         color: createForm.color.trim() || undefined,
         notes: createForm.notes.trim() || undefined,
       });
@@ -298,6 +308,7 @@ export default function CableView() {
         toPortId: editForm.toPortId,
         cableType: editForm.cableType.trim() || undefined,
         cableLength: editForm.cableLength.trim() || undefined,
+        routeMode: editForm.routeMode,
         color: editForm.color.trim() || undefined,
         notes: editForm.notes.trim() || undefined,
       });
@@ -358,10 +369,12 @@ export default function CableView() {
   async function handleBulkSave() {
     if (selectedLinkIds.size === 0 || bulkFields.size === 0) return;
     const changes: {
+      routeMode?: CableRouteMode;
       cableType?: string | null;
       cableLength?: string | null;
       color?: string | null;
     } = {};
+    if (bulkFields.has("routeMode")) changes.routeMode = bulkForm.routeMode;
     if (bulkFields.has("cableType")) {
       changes.cableType = bulkForm.cableType.trim() || null;
     }
@@ -494,7 +507,10 @@ export default function CableView() {
                 </Field>
               </div>
 
-              <Field label={t("Notes")}>
+              <Field label={t("Routing mode")}>
+                    <RoutingModeSelect value={createForm.routeMode} onChange={routeMode => setCreateForm(current => ({ ...current, routeMode }))} />
+                  </Field>
+                  <Field label={t("Notes")}>
                 <textarea
                   value={createForm.notes}
                   onChange={(e) =>
@@ -648,6 +664,9 @@ export default function CableView() {
                     </Field>
                   </div>
 
+                  <Field label={t("Routing mode")}>
+                    <RoutingModeSelect value={editForm.routeMode} onChange={routeMode => setEditForm(current => ({ ...current, routeMode }))} />
+                  </Field>
                   <Field label={t("Notes")}>
                     <textarea
                       value={editForm.notes}
@@ -780,6 +799,9 @@ export default function CableView() {
                       placeholder={t("#4a78c4 or blue")}
                     />
                   </div>
+                </BulkCableField>
+                <BulkCableField label={t("Routing mode")} checked={bulkFields.has("routeMode")} disabled={bulkSaving} checkboxTestId="bulk-cable-route-enabled" onChecked={() => toggleBulkField("routeMode")}>
+                  <RoutingModeSelect value={bulkForm.routeMode} disabled={!bulkFields.has("routeMode") || bulkSaving} onChange={routeMode => setBulkForm(current => ({ ...current, routeMode }))} />
                 </BulkCableField>
               </div>
 
@@ -1193,4 +1215,11 @@ function cableEndpointLabel(
   const port = portById[portId];
   const device = port ? deviceById[port.deviceId] : undefined;
   return `${device?.hostname ?? ""}:${port?.name ?? ""}`;
+}
+
+function RoutingModeSelect({ value, disabled, onChange }: { value: CableRouteMode; disabled?: boolean; onChange: (value: CableRouteMode) => void }) {
+  const { t } = useI18n();
+  return <select aria-label={t("Routing mode")} className="rk-control w-full" value={value} disabled={disabled} onChange={event => onChange(event.target.value as CableRouteMode)}>
+    <option value="auto">{t("Automatic")}</option><option value="direct">{t("Direct")}</option><option value="managed">{t("Managed")}</option><option value="manual">{t("Manual")}</option>
+  </select>;
 }

@@ -615,6 +615,7 @@ export default function VisualizerView() {
           model={model}
           rackOrder={orderSettings.racks}
           faceMode={rackFaceMode}
+          onFaceModeChange={setRackFaceMode}
           cableType={cableType}
           healthOverlay={healthOverlay}
           onToggleHealth={toggleHealthOverlay}

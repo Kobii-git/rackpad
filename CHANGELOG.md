@@ -6,6 +6,35 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.4-beta.0] - 2026-09-11
+
+### Added
+
+- Saved Automatic, Direct, Managed and Manual cable routing modes, with ordered
+  device-relative brush-panel guides and opposite-endpoint focus.
+- Compact rack presentation and category-specific hardware starter artwork.
+- Schema 52 routing metadata, authorized guide validation and logical/native
+  backup support. Existing waypoint routes migrate to Manual.
+
+### Fixed
+
+- Keep rear-to-rear cables inside the rack across long spans and intervening
+  shelves, using the same direct curves as front-to-front patch cords.
+- Keep cable artwork above equipment while preserving usable port hit targets,
+  stable bindings, selection and tracing.
+- Remove guide references transactionally when their equipment is deleted or
+  leaves its declared room, while preserving the cable itself.
+
+### Changed
+
+- Share routing geometry and faceplate details across Studio, Rack Cabling and
+  SVG/PNG exports. Routing modes preserve inactive guides and manual waypoints.
+- Keep Studio opt-in and the classic view available. Revised template geometry
+  is adopted through preview/apply; existing device snapshots are preserved.
+
+See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.0.md).
+Issue #139 remains open pending tester confirmation on the published beta.
+
 ## [1.8.3] - 2026-09-09
 
 ### Added

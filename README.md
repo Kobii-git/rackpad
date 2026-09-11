@@ -31,6 +31,9 @@ administration into one clean app.
 Stable: **v1.8.3**.
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm published artifacts.
 See the [release and upgrade notes](docs/releases/v1.8.3.md).
+
+This branch prepares **v1.8.4-beta.0** for Rack Studio testing. See the
+[beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.0.md).
 Docker is the supported deployment; native Proxmox LXC remains experimental.
 See the [changelog](./CHANGELOG.md); the latest-tag badge may show a prerelease.
 

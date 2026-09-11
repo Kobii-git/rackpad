@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const pl = {
+  "Routing mode": "Tryb trasy",
+  "Automatic": "Automatyczny",
+  "Managed": "Prowadzony",
+  "Manual": "Ręczny",
+  "Route guides": "Prowadnice trasy",
+  "Entry face": "Strona wejścia",
+  "Exit face": "Strona wyjścia",
+  "Add guide": "Dodaj prowadnicę",
+  "Incomplete route": "Niepełna trasa",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "Wybierz zainstalowany panel szczotkowy lub organizer kabli, a następnie umieść prowadnicę na jego powierzchni.",
+  "Detailed": "Szczegółowy",
   "Stacked switches": "Przełączniki w stosie",
   "Stack Members": "Członkowie stosu",
   "Add member": "Dodaj członka",

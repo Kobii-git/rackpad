@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Routing mode": "حالت مسیر",
+  "Automatic": "خودکار",
+  "Managed": "مدیریت‌شده",
+  "Manual": "دستی",
+  "Route guides": "راهنماهای مسیر",
+  "Entry face": "سمت ورود",
+  "Exit face": "سمت خروج",
+  "Add guide": "افزودن راهنما",
+  "Incomplete route": "مسیر ناقص",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "یک پنل برسی یا نگهدارنده کابل نصب‌شده را انتخاب کنید، سپس یک راهنما روی سطح آن قرار دهید.",
+  "Detailed": "با جزئیات",
   "Stacked switches": "سوئیچ‌های پشته‌ای",
   "Stack Members": "اعضای پشته",
   "Add member": "افزودن عضو",

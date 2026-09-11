@@ -209,12 +209,47 @@ discarded from scene or export output.
 - No new graphics dependency, public unauthenticated route, environment variable, container change, deployment, or release action is required.
 - Existing uncommitted work must be preserved; implementation must recheck Git status and carefully reconcile overlapping server composition, route authorization, tests, and AI guardrail changes.
 
-## Automatic short patch cords
+## Routing and compact presentation
 
-Smooth routing now uses shared cubic geometry for different devices on the same
-rack face within 4U, provided a conservative control-point hull is clear of
-unrelated equipment. Endpoint shelves are excluded from collision checks. Long,
-obstructed, cross-rack, handoff, and explicitly waypointed links retain gutter
-or manual routing. Rack Studio room/elevation views, Rack Cabling, and SVG/PNG
-exports consume the same geometry and stable port identities. The general
-free-position Visualizer graph retains its own layout routing.
+The shared physical planner uses direct curves across the available rack height.
+Faceplates, shelves and intermediate equipment are drawing surfaces; they do not
+force cables outside a rack. Endpoint transformations, canonical ordering, curve
+reversal, parallel cord spacing and continuation identifiers remain shared by
+Studio, Rack Cabling and SVG/PNG output.
+
+`PortLink.routeMode` stores `auto`, `direct`, `managed` or `manual`. The Smooth /
+Orthogonal preference is independent. Automatic selects direct paths within one
+rack face and managed paths between racks; explicit Direct also permits same-face
+cross-rack curves. Manual retains the existing exact room waypoints, projected
+through rack canvas frames in elevations. Switching modes does not discard the
+inactive route arrays.
+
+`routeGuides` is an ordered list of at most 32 positions. Each contains a unique
+ID, device ID, declared room ID, entry and exit physical faces, and normalized
+0–1000 X/Y coordinates. Its geometry uses the same transform as device ports,
+including rotated shelf equipment. A front/rear brush passage renders matching
+continuations as part of the original link. Missing layout geometry is labeled
+incomplete. Routing never creates inventory ports, extra links or trace hops.
+
+Schema 52 adds routing metadata. Existing links with waypoints become Manual;
+others become Automatic. Guide validation uses the rack room for mounted devices
+and the device room otherwise; it requires that room to belong to an authorized
+endpoint lab. Device deletion or movement out of a declared room removes guide
+references transactionally while preserving the cable. The client refreshes
+canonical guide metadata after placement and room mutations. Both logical and
+native backup validation cover modes and guides, and old backups default safely.
+
+Compact viewing shows room racks side by side with smaller consistent labels,
+subdued rails/grids and thin cables. Editing exposes placement guides, while
+invisible hit regions and keyboard selection remain available. Generic starter
+artwork distinguishes servers, storage, mini PCs, networking, power equipment,
+shelves, blanking panels and brush panels. Existing snapshots receive shared
+renderer improvements without rewriting their geometry. Revised starter geometry
+uses the established preview/apply workflow and stable port bindings.
+
+Studio remains opt-in and the classic view remains available. Free loose-device
+placement, breakout modeling, 3D and changing the default viewer remain deferred.
+Do not run an older binary against schema 52: rollback requires a compatible
+pre-upgrade native backup or volume snapshot. Publication and deployment are
+separate actions. Keep issue #139 open after a release until the tester confirms
+the reported rear routes and mixed-face behavior on their actual rack.

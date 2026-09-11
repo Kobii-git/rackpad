@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "Routing mode": "路徑模式",
+  "Automatic": "自動",
+  "Managed": "導引",
+  "Manual": "手動",
+  "Route guides": "路徑導引點",
+  "Entry face": "入口面",
+  "Exit face": "出口面",
+  "Add guide": "新增導引點",
+  "Incomplete route": "不完整的路徑",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "選取已安裝的毛刷面板或理線器，然後在其表面放置導引點。",
+  "Detailed": "詳細",
   "Stacked switches": "堆疊交換器",
   "Stack Members": "堆疊成員",
   "Add member": "新增成員",

@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const uk = {
+  "Routing mode": "Режим траси",
+  "Automatic": "Автоматично",
+  "Managed": "За напрямними",
+  "Manual": "Вручну",
+  "Route guides": "Напрямні траси",
+  "Entry face": "Сторона входу",
+  "Exit face": "Сторона виходу",
+  "Add guide": "Додати напрямну",
+  "Incomplete route": "Неповна траса",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "Виберіть установлену щіткову панель або кабельний органайзер і розмістіть напрямну на його поверхні.",
+  "Detailed": "Докладно",
   "Stacked switches": "Комутатори у стеку",
   "Stack Members": "Учасники стеку",
   "Add member": "Додати учасника",

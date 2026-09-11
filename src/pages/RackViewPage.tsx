@@ -1,3 +1,4 @@
+import { rackFaceForPhysicalFace } from "@/lib/rack-studio-scene";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
@@ -213,6 +214,21 @@ export default function RackViewPage() {
     unrackedDevices.length,
     viewParam,
   ]);
+
+  function revealCableEndpoint(portId: string, cableId: string) {
+    const port = ports.find(port => port.id === portId);
+    const device = devices.find(device => device.id === port?.deviceId);
+    if (!port || !device) return;
+    const roomId = racks.find(rack => rack.id === device.rackId)?.roomId ?? device.roomId;
+    setFace(rackFaceForPhysicalFace(device, port.face === "rear" ? "rear" : "front"));
+    if (device.rackId) {
+      setSelectedViewId(device.rackId);
+      setSearchParams({ rackId: device.rackId, cableId, portId });
+    } else if (roomId) {
+      setSelectedViewId(`${ROOM_VIEW_PREFIX}${roomId}`);
+      setSearchParams({ roomId, cableId, portId });
+    }
+  }
 
   function selectLooseView() {
     setSelectedViewId(UNRACKED_VIEW_ID);
@@ -720,6 +736,10 @@ export default function RackViewPage() {
                 </div>
                 {studioBeta ? (
                   <RackStudioWorkspace
+                      endpointDevices={devices}
+                      initialCableId={searchParams.get("cableId") ?? undefined}
+                      initialPortId={searchParams.get("portId") ?? undefined}
+                      onRevealCableEndpoint={revealCableEndpoint}
                     room={viewingRoom}
                     racks={selectedRoomRacks}
                     devices={selectedRoomStudioDevices}
@@ -818,6 +838,10 @@ export default function RackViewPage() {
                 >
                   {studioBeta ? (
                     <RackStudioWorkspace
+                      endpointDevices={devices}
+                      initialCableId={searchParams.get("cableId") ?? undefined}
+                      initialPortId={searchParams.get("portId") ?? undefined}
+                      onRevealCableEndpoint={revealCableEndpoint}
                       room={rack.roomId ? roomById[rack.roomId] : undefined}
                       racks={
                         rack.roomId

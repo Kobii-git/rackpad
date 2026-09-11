@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const de = {
+  "Routing mode": "Routenmodus",
+  "Automatic": "Automatisch",
+  "Managed": "Geführt",
+  "Manual": "Manuell",
+  "Route guides": "Routenführungen",
+  "Entry face": "Eintrittsseite",
+  "Exit face": "Austrittsseite",
+  "Add guide": "Führung hinzufügen",
+  "Incomplete route": "Unvollständige Route",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "Wählen Sie eine installierte Bürstenleiste oder Kabelführung und platzieren Sie einen Führungspunkt auf ihrer Fläche.",
+  "Detailed": "Detailliert",
   "Stacked switches": "Gestapelte Switches",
   "Stack Members": "Stack-Mitglieder",
   "Add member": "Mitglied hinzufügen",

@@ -476,7 +476,7 @@ test("logical and native integrity round trips reject malformed stacks atomicall
     stackMemberId: m.id,
   });
   assert.equal(p.statusCode, 201);
-  assert.equal(validateRackpadSqliteDatabase(db, "Test"), 51);
+  assert.equal(validateRackpadSqliteDatabase(db, "Test"), 52);
   const backup = (await call("GET", "/api/admin/export")).json();
   for (const corrupt of ["height", "order", "owner", "mac"]) {
     const invalid = structuredClone(backup);
@@ -509,7 +509,7 @@ test("logical and native integrity round trips reject malformed stacks atomicall
   }
   const success = await call("POST", "/api/admin/restore", backup);
   assert.equal(success.statusCode, 200, success.body);
-  assert.equal(validateRackpadSqliteDatabase(db, "Restored"), 51);
+  assert.equal(validateRackpadSqliteDatabase(db, "Restored"), 52);
   assert.equal(
     (
       db
@@ -702,7 +702,7 @@ test("native semantic validation rejects invalid geometry and version markers us
   snapshot.close();
   await assert.rejects(restoreNativeBackup({ source, active: destination }));
   const intact = new Database(destination, { readonly: true });
-  assert.equal(validateRackpadSqliteDatabase(intact, "Intact destination"), 51);
+  assert.equal(validateRackpadSqliteDatabase(intact, "Intact destination"), 52);
   intact.close();
   const marker = new Database(source);
   marker.prepare("UPDATE schemaVersion SET version=50").run();
@@ -729,7 +729,12 @@ test("schema50 upgrades without changing existing ports and old logical backups 
   );
   const database = new Database(legacy);
   database.exec(
-    `DROP TRIGGER ports_stack_owner_insert; DROP TRIGGER ports_stack_owner_update; DROP TRIGGER stack_member_device_immutable; DROP TRIGGER stack_device_delete; DROP TRIGGER stack_type_guard; DROP TRIGGER stack_height_guard; DROP INDEX idx_ports_stack_member; ALTER TABLE ports DROP COLUMN stackMemberId; DROP TABLE deviceStackMemberMacs; DROP TABLE deviceStackMembers; UPDATE schemaVersion SET version=50; INSERT INTO labs (id,name) VALUES ('legacy','Legacy'); INSERT INTO devices (id,labId,hostname,deviceType) VALUES ('legacy-switch','legacy','old-switch','switch'); INSERT INTO ports (id,deviceId,name,position,kind) VALUES ('legacy-port','legacy-switch','Port1',1,'rj45');`,
+    `DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
+    DROP TRIGGER ports_stack_owner_insert; DROP TRIGGER ports_stack_owner_update; DROP TRIGGER stack_member_device_immutable; DROP TRIGGER stack_device_delete; DROP TRIGGER stack_type_guard; DROP TRIGGER stack_height_guard; DROP INDEX idx_ports_stack_member; ALTER TABLE ports DROP COLUMN stackMemberId; DROP TABLE deviceStackMemberMacs; DROP TABLE deviceStackMembers; UPDATE schemaVersion SET version=50; INSERT INTO labs (id,name) VALUES ('legacy','Legacy'); INSERT INTO devices (id,labId,hostname,deviceType) VALUES ('legacy-switch','legacy','old-switch','switch'); INSERT INTO ports (id,deviceId,name,position,kind) VALUES ('legacy-port','legacy-switch','Port1',1,'rj45');`,
   );
   assert.equal(validateRackpadSqliteDatabase(database, "Legacy"), 50);
   database.exec("CREATE INDEX idx_ports_stack_member ON ports(name)");
@@ -784,7 +789,7 @@ test("schema50 upgrades without changing existing ports and old logical backups 
     { env: { ...process.env, DATABASE_PATH: legacy } },
   );
   const upgraded = new Database(legacy, { readonly: true });
-  assert.equal(validateRackpadSqliteDatabase(upgraded, "Upgraded"), 51);
+  assert.equal(validateRackpadSqliteDatabase(upgraded, "Upgraded"), 52);
   assert.deepEqual(
     upgraded.prepare("SELECT id, name, stackMemberId FROM ports").all(),
     [{ id: "legacy-port", name: "Port1", stackMemberId: null }],
@@ -906,5 +911,5 @@ test("rack and shelf removal preserve stacks as loose devices, and parent edits 
     (await call("GET", `/api/ports/${port.json().id}`)).json().stackMemberId,
     m.id,
   );
-  assert.equal(validateRackpadSqliteDatabase(db, "After parent removal"), 51);
+  assert.equal(validateRackpadSqliteDatabase(db, "After parent removal"), 52);
 });

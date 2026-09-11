@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Cable, Plus, Route, Save, Trash2 } from "lucide-react";
 import { useI18n } from "@/i18n";
-import { nextManualWaypoint } from "@/lib/rack-studio-cables";
+import { cableRouteMode, nextManualWaypoint } from "@/lib/rack-studio-cables";
 import type {
   CableRouteWaypoint,
+  CableRouteMode,
+  DevicePhysicalLayout,
+  Rack,
   Device,
   Port,
   PortLink,
@@ -14,6 +17,8 @@ import type {
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
+import { CableGuideEditor } from "./CableGuideEditor";
+
 const SELECT_CLASS =
   "h-8 w-full rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] px-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]";
 
@@ -21,6 +26,9 @@ interface RackStudioCableInspectorProps {
   link?: PortLink;
   ports: Port[];
   devices: Device[];
+  racks: Rack[];
+  layouts: DevicePhysicalLayout[];
+  onRevealEndpoint: (portId: string) => void;
   room?: Room;
   face: RackFace | "both";
   canEdit: boolean;
@@ -42,6 +50,9 @@ export function RackStudioCableInspector({
   link,
   ports,
   devices,
+  racks,
+  layouts,
+  onRevealEndpoint,
   room,
   face,
   canEdit,
@@ -54,7 +65,7 @@ export function RackStudioCableInspector({
   const [deleteArmed, setDeleteArmed] = useState(false);
 
   useEffect(() => {
-    setDraft(link ? { ...link, routeWaypoints: [...(link.routeWaypoints ?? [])] } : undefined);
+    setDraft(link ? { ...link, routeMode: cableRouteMode(link), routeGuides: [...(link.routeGuides ?? [])], routeWaypoints: [...(link.routeWaypoints ?? [])] } : undefined);
     setDeleteArmed(false);
   }, [link]);
 
@@ -122,10 +133,10 @@ export function RackStudioCableInspector({
         </div>
         <div className="mt-2 space-y-1 text-[11px] text-[var(--text-secondary)]">
           <div>
-            {t("From port")}: {endpointLabel(fromPort, devices)}
+            <button type="button" className="underline underline-offset-2" onClick={() => onRevealEndpoint(link.fromPortId)}>{t("From port")}: {endpointLabel(fromPort, devices)}</button>
           </div>
           <div>
-            {t("To port")}: {endpointLabel(toPort, devices)}
+            <button type="button" className="underline underline-offset-2" onClick={() => onRevealEndpoint(link.toPortId)}>{t("To port")}: {endpointLabel(toPort, devices)}</button>
           </div>
         </div>
       </div>
@@ -214,7 +225,16 @@ export function RackStudioCableInspector({
         {t("Hidden")}
       </label>
 
-      {room && (
+      <InspectorField label={t("Routing mode")}>
+        <select className={SELECT_CLASS} value={cableRouteMode(draft)} disabled={!canEdit} onChange={event => setDraft(current => current ? { ...current, routeMode: event.target.value as CableRouteMode } : current)}>
+          <option value="auto">{t("Automatic")}</option>
+          <option value="direct">{t("Direct")}</option>
+          <option value="managed">{t("Managed")}</option>
+          <option value="manual">{t("Manual")}</option>
+        </select>
+      </InspectorField>
+      {room && cableRouteMode(draft) === "managed" && <CableGuideEditor guides={draft.routeGuides ?? []} devices={devices} racks={racks} layouts={layouts} ports={ports} room={room} disabled={!canEdit} onChange={routeGuides => setDraft(current => current ? { ...current, routeGuides } : current)} />}
+      {room && cableRouteMode(draft) === "manual" && (
         <div className="space-y-2 border-t border-[var(--border-default)] pt-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
@@ -324,6 +344,8 @@ export function RackStudioCableInspector({
               notes: draft.notes,
               visible: draft.visible !== false,
               routeWaypoints: draft.routeWaypoints ?? [],
+              routeMode: cableRouteMode(draft),
+              routeGuides: draft.routeGuides ?? [],
             })
           }
         >

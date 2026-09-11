@@ -151,6 +151,7 @@ test("overlapping corridors receive unbounded stable lanes independent of input 
     );
     links.push({
       id: `lane-link-${String(index).padStart(2, "0")}`,
+      routeMode: "managed",
       fromPortId: fromPort.id,
       toPortId: toPort.id,
       visible: true,
@@ -254,7 +255,9 @@ test("cross-room endpoints become labeled canvas handoffs and hidden links stay 
   })[0]!;
   assert.equal(crossRoom.crossRoom, true);
   assert.equal(crossRoom.remoteRoomId, remoteRoom.id);
-  assert.equal(crossRoom.points.length, 3);
+  assert.equal(crossRoom.continuations.length, 1);
+  assert.equal(crossRoom.continuations[0]!.destinationPortId, portB.id);
+  assert.equal(crossRoom.continuations[0]!.destinationFace, "rear");
 
   const hidden = buildRackStudioCableRoutes({
     room,

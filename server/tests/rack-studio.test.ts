@@ -1127,3 +1127,125 @@ function authHeaders(token: string) {
 function json(response: { body: string }) {
   return JSON.parse(response.body);
 }
+
+test("saved routing modes and guides round-trip without changing connectivity", async () => {
+  const token = await bootstrapAdmin();
+  const room = await createRoom(token, "Routing room");
+  const rack = await createRack(token, room.id, "Guide rack", 12);
+  const a = await createDevice(token, room.id, "route-a");
+  const b = await createDevice(token, room.id, "route-b");
+  const guideDevice = await createDevice(token, room.id, "brush-panel", "blanking_panel");
+  const from = await createPort(token, a.id, "NIC", "front");
+  const to = await createPort(token, b.id, "NIC", "rear");
+  const guide = { id: "passage", deviceId: guideDevice.id, roomId: room.id, entryFace: "front", exitFace: "rear", x: 450, y: 600 };
+  const waypoints = [{ id: "old-point", roomId: room.id, face: "front", x: 40, y: 100 }];
+  const response = await app.inject({ method: "POST", url: "/api/port-links", headers: authHeaders(token), payload: { fromPortId: from.id, toPortId: to.id, routeMode: "managed", routeGuides: [guide], routeWaypoints: waypoints } });
+  assert.equal(response.statusCode, 201, response.body);
+  const link = json(response);
+  for (const routeMode of ["auto", "direct", "manual", "managed"]) {
+    const updated = await app.inject({ method: "PATCH", url: `/api/port-links/${link.id}`, headers: authHeaders(token), payload: { routeMode } });
+    assert.equal(updated.statusCode, 200, updated.body);
+    const read = await app.inject({ method: "GET", url: `/api/port-links/${link.id}`, headers: authHeaders(token) });
+    assert.equal(json(read).routeMode, routeMode);
+    assert.deepEqual(json(read).routeGuides, [guide]);
+    assert.deepEqual(json(read).routeWaypoints, waypoints);
+  }
+  const backup = await app.inject({ method: "GET", url: "/api/admin/export", headers: authHeaders(token) });
+  const snapshot = json(backup);
+  assert.equal(snapshot.schemaVersion, 52);
+  assert.deepEqual(snapshot.data.portLinks[0].routeGuides, [guide]);
+  const bad = structuredClone(snapshot);
+  bad.data.portLinks[0].routeGuides[0].deviceId = "missing";
+  const rejected = await app.inject({ method: "POST", url: "/api/admin/restore", headers: authHeaders(token), payload: bad });
+  assert.equal(rejected.statusCode, 422, rejected.body);
+  assert.equal((db.prepare("SELECT COUNT(*) AS count FROM portLinks").get() as {count:number}).count, 1);
+  const restored = await app.inject({ method: "POST", url: "/api/admin/restore", headers: authHeaders(token), payload: snapshot });
+  assert.equal(restored.statusCode, 200, restored.body);
+  assert.deepEqual(JSON.parse((db.prepare("SELECT routeGuides FROM portLinks WHERE id=?").get(link.id) as {routeGuides:string}).routeGuides), [guide]);
+  // The inherited-room form must clean up when FK SET NULL runs after rack deletion.
+  db.prepare("UPDATE devices SET rackId=?, roomId=NULL WHERE id=?").run(rack.id, guideDevice.id);
+  assert.deepEqual(JSON.parse((db.prepare("SELECT routeGuides FROM portLinks").get() as {routeGuides:string}).routeGuides), [guide]);
+  assert.throws(() => db.transaction(() => { db.prepare("DELETE FROM devices WHERE id=?").run(guideDevice.id); throw new Error("rollback"); })(), /rollback/);
+  assert.deepEqual(JSON.parse((db.prepare("SELECT routeGuides FROM portLinks").get() as {routeGuides:string}).routeGuides), [guide]);
+  db.prepare("DELETE FROM racks WHERE id=?").run(rack.id);
+  assert.deepEqual(JSON.parse((db.prepare("SELECT routeGuides FROM portLinks").get() as {routeGuides:string}).routeGuides), []);
+  assert.deepEqual(db.prepare("SELECT fromPortId, toPortId FROM portLinks").get(), { fromPortId: from.id, toPortId: to.id });
+});
+
+test("routing metadata rejects invalid and unauthorized references atomically", async () => {
+  const token = await bootstrapAdmin();
+  const room = await createRoom(token, "Allowed room");
+  const otherRoom = await createRoom(token, "Wrong room");
+  const lab = await createLab(token, "Private lab");
+  const privateRoom = await createRoom(token, "Private room", lab.id);
+  const editor = await createUserAndLogin(token, { username: "guide-editor", password: "guide-editor-password", role: "editor" });
+  const viewer = await createUserAndLogin(token, { username: "guide-viewer", password: "guide-viewer-password", role: "viewer" });
+  const a = await createDevice(token, room.id, "guide-a");
+  const b = await createDevice(token, room.id, "guide-b");
+  const privateDevice = await createDevice(token, privateRoom.id, "private", "server", lab.id);
+  const from = await createPort(token, a.id, "NIC", "front");
+  const to = await createPort(token, b.id, "NIC", "rear");
+  const privatePort = await createPort(token, privateDevice.id, "NIC", "rear");
+  const payload = { fromPortId: from.id, toPortId: to.id };
+  const guide = { id: "guide", roomId: room.id, deviceId: a.id, entryFace: "front", exitFace: "rear", x: 500, y: 500 };
+  const created = await app.inject({ method: "POST", url: "/api/port-links", headers: authHeaders(editor), payload });
+  assert.equal(created.statusCode, 201, created.body);
+  const id = json(created).id;
+  assert.equal(json(created).routeMode, "auto");
+  for (const changes of [
+    { routeMode: "invalid" }, { routeMode: null }, { routeGuides: null },
+    { routeGuides: [{ ...guide, x: -1 }] }, { routeGuides: [{ ...guide, y: 1001 }] },
+    { routeGuides: [{ ...guide, exitFace: "side" }] }, { routeGuides: [{ ...guide, roomId: otherRoom.id }] },
+    { routeGuides: [{ ...guide, deviceId: "missing" }] },
+    { routeGuides: [{ ...guide, deviceId: privateDevice.id, roomId: privateRoom.id }] },
+    { routeGuides: [guide, guide] }, { routeGuides: Array.from({ length: 33 }, (_, i) => ({ ...guide, id: `g-${i}` })) },
+  ]) {
+    const result = await app.inject({ method: "PATCH", url: `/api/port-links/${id}`, headers: authHeaders(editor), payload: changes });
+    assert.equal(result.statusCode, 400, result.body);
+  }
+  const denied = await app.inject({ method: "PATCH", url: `/api/port-links/${id}`, headers: authHeaders(viewer), payload: { routeGuides: [guide] } });
+  assert.equal(denied.statusCode, 403, denied.body);
+  const spare = await createPort(token, b.id, "Spare", "rear");
+  const cross = await app.inject({ method: "POST", url: "/api/port-links", headers: authHeaders(token), payload: { fromPortId: spare.id, toPortId: privatePort.id } });
+  assert.equal(cross.statusCode, 201, cross.body);
+  const bulk = await app.inject({ method: "POST", url: "/api/port-links/bulk", headers: authHeaders(editor), payload: { linkIds: [id, json(cross).id], changes: { routeMode: "direct" } } });
+  assert.equal(bulk.statusCode, 403, bulk.body);
+  assert.equal((db.prepare("SELECT routeMode FROM portLinks WHERE id=?").get(id) as {routeMode:string}).routeMode, "auto");
+  const points = [{ id: "legacy", roomId: room.id, face: "front", x: 30, y: 200 }];
+  const legacy = await app.inject({ method: "PATCH", url: `/api/port-links/${id}`, headers: authHeaders(editor), payload: { routeWaypoints: points } });
+  assert.equal(legacy.statusCode, 200, legacy.body);
+  assert.equal(json(legacy).routeMode, "manual");
+  const success = await app.inject({ method: "POST", url: "/api/port-links/bulk", headers: authHeaders(editor), payload: { linkIds: [id], changes: { routeMode: "managed", routeGuides: [guide] } } });
+  assert.equal(success.statusCode, 200, success.body);
+  const read = await app.inject({ method: "GET", url: `/api/port-links/${id}`, headers: authHeaders(editor) });
+  assert.deepEqual(json(read).routeWaypoints, points);
+  assert.deepEqual(json(read).routeGuides, [guide]);
+});
+
+test("rack movement, reguiding and detachment use the rack physical room consistently", async () => {
+  const token = await bootstrapAdmin();
+  const oldRoom = await createRoom(token, "Old room");
+  const newRoom = await createRoom(token, "New room");
+  const rack = await createRack(token, oldRoom.id, "Moving rack", 12);
+  const a = await createDevice(token, oldRoom.id, "moving-a");
+  const b = await createDevice(token, oldRoom.id, "moving-b");
+  const brush = await createDevice(token, oldRoom.id, "moving-brush", "blanking_panel");
+  db.prepare("UPDATE devices SET rackId=? WHERE id=?").run(rack.id, brush.id);
+  const from = await createPort(token, a.id, "NIC", "front");
+  const to = await createPort(token, b.id, "NIC", "rear");
+  const guide = { id: "g", deviceId: brush.id, roomId: oldRoom.id, entryFace: "front", exitFace: "rear", x: 500, y: 500 };
+  const response = await app.inject({ method: "POST", url: "/api/port-links", headers: authHeaders(token), payload: { fromPortId: from.id, toPortId: to.id, routeMode: "managed", routeGuides: [guide] } });
+  assert.equal(response.statusCode, 201, response.body);
+  const id = json(response).id;
+  const moved = await app.inject({ method: "PATCH", url: `/api/racks/${rack.id}`, headers: authHeaders(token), payload: { roomId: newRoom.id } });
+  assert.equal(moved.statusCode, 200, moved.body);
+  const read = () => app.inject({ method: "GET", url: `/api/port-links/${id}`, headers: authHeaders(token) });
+  assert.deepEqual(json(await read()).routeGuides, []);
+  const reguided = await app.inject({ method: "PATCH", url: `/api/port-links/${id}`, headers: authHeaders(token), payload: { routeGuides: [{ ...guide, roomId: newRoom.id }] } });
+  assert.equal(reguided.statusCode, 200, reguided.body);
+  // The device still has an explicit old room. Detachment falls back to it.
+  db.prepare("DELETE FROM racks WHERE id=?").run(rack.id);
+  assert.deepEqual(json(await read()).routeGuides, []);
+  const edited = await app.inject({ method: "PATCH", url: `/api/port-links/${id}`, headers: authHeaders(token), payload: { label: "Still connected" } });
+  assert.equal(edited.statusCode, 200, edited.body);
+});

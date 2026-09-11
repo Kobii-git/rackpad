@@ -227,6 +227,8 @@ export type PortLinkBulkPatch = Nullable<
     | "label"
     | "visible"
     | "routeWaypoints"
+    | "routeMode"
+    | "routeGuides"
   >
 >;
 export type PortLinkCreate = Omit<PortLink, "id"> & {

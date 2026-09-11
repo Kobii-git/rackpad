@@ -1,5 +1,6 @@
-import { rackCableFixture } from "./fixtures/rack-cables";
-import type { Port } from "../src/lib/types";
+import { rackCableFixture, rackShelfCableFixture } from "./fixtures/rack-cables";
+import { devicePlacementState } from "../src/lib/rack-studio";
+import type { Device, Port } from "../src/lib/types";
 import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
 import {
@@ -1643,6 +1644,7 @@ test("Rack Studio patches exact ports, saves routes, exports, and traces", async
       .getByRole("button", { name: "eno3 · rj45", exact: true })
       .click();
     await page
+      .getByRole("group", { name: /^pdu-cmp-/ })
       .getByRole("button", { name: "Outlet 1 · power", exact: true })
       .click();
     await expect(page.getByText("rj45 → power", { exact: true })).toBeVisible();
@@ -1654,6 +1656,7 @@ test("Rack Studio patches exact ports, saves routes, exports, and traces", async
     await inspector
       .getByRole("textbox", { name: "Label", exact: true })
       .fill("Phase 5 QA cable");
+    await inspector.getByRole("combobox", { name: "Routing mode", exact: true }).selectOption("manual");
     await inspector.getByRole("button", { name: "Add", exact: true }).click();
     await inspector
       .getByRole("spinbutton", { name: "Position: X", exact: true })
@@ -5467,16 +5470,18 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
     const slot = layout.snapshot.portSlots.find(
       (row) => row.id === `slot:${portId}`,
     )!;
-    await expect(portTarget.locator("rect").first()).toHaveAttribute(
+    // The invisible hit area is deliberately larger than the saved connector.
+    const connector = portTarget.locator('rect:not([fill="transparent"])').first();
+    await expect(connector).toHaveAttribute(
       "x",
       String(slot.x),
     );
-    await expect(portTarget.locator("rect").first()).toHaveAttribute(
+    await expect(connector).toHaveAttribute(
       "y",
       String(slot.y),
     );
     await portTarget.click();
-    await expect(portTarget.locator("rect").first()).toHaveAttribute(
+    await expect(connector).toHaveAttribute(
       "stroke-width",
       "5",
     );
@@ -5502,5 +5507,108 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
     await request.delete(`/api/devices/${stack.id}`, { headers });
     await request.delete(`/api/racks/${rackId}`, { headers });
     await request.delete(`/api/rooms/${roomId}`, { headers });
+  }
+});
+
+test("Rack Studio guides follow brush passages and compact rear racks stay readable", async ({ page, request }, testInfo) => {
+  test.setTimeout(180_000);
+  const headers = { Authorization: `Bearer ${token}` };
+  const fixture = rackShelfCableFixture();
+  const suffix = Date.now().toString(36);
+  const post = async <T>(url: string, data: unknown): Promise<T> => {
+    const response = await request.post(url, { headers, data });
+    expect(response.ok(), await response.text()).toBeTruthy();
+    return await response.json() as T;
+  };
+  const room = await post<{id:string}>("/api/rooms", { labId: "lab_home", name: `Rear routing ${suffix}` });
+  const destination = await post<{id:string}>("/api/rooms", { labId: "lab_home", name: `Guide destination ${suffix}` });
+  const rack = await post<{id:string}>("/api/racks", { labId: "lab_home", roomId: room.id, name: "Compute rack", totalU: 24 });
+  const other = await post<{id:string}>("/api/racks", { labId: "lab_home", roomId: room.id, name: "Network rack", totalU: 24 });
+  const deviceMap = new Map<string, string>();
+  const portMap = new Map<string, string>();
+  const linkIds: string[] = [];
+  const createdDevices: string[] = [];
+  const templateIds: string[] = [];
+  const baseTemplateId = `rear-ports-${suffix}`;
+  try {
+    await post("/api/ports/templates", { id: baseTemplateId, name: "Rear routing ports", description: "Synthetic routing fixture", deviceTypes: ["switch", "server", "rack_shelf", "ups", "patch_panel"], ports: fixture.ports.filter(port => port.deviceId === fixture.devices[0]!.id) });
+    for (const device of fixture.devices) {
+      const layout = fixture.layouts.find(layout => layout.deviceId === device.id)!;
+      const templateId = `rear-art-${suffix}-${device.id}`;
+      await post("/api/hardware-templates", { ...fixture.template, id: templateId, name: device.hostname, deviceTypes: [device.deviceType], front: layout.snapshot.faces.front, rear: layout.snapshot.faces.rear });
+      templateIds.push(templateId);
+      const created = await post<Device>("/api/devices", { labId: "lab_home", hostname: device.hostname, deviceType: device.deviceType, status: "online", placement: "room", roomId: room.id, portTemplateId: baseTemplateId });
+      createdDevices.push(created.id); deviceMap.set(device.id, created.id);
+      await post("/api/rack-studio/actions", { kind: "device.place", targetId: created.id,
+        expected: devicePlacementState(created), next: devicePlacementState({ ...device, id: created.id, roomId: room.id, rackId: rack.id,
+          parentDeviceId: device.parentDeviceId ? deviceMap.get(device.parentDeviceId) : undefined }) });
+      const preview = await post(`/api/physical-layouts/${created.id}/preview`, { templateId });
+      await post(`/api/physical-layouts/${created.id}/apply`, preview);
+      const response = await request.get(`/api/ports?deviceId=${created.id}`, { headers });
+      const ports = await response.json() as Port[];
+      for (const original of fixture.ports.filter(port => port.deviceId === device.id)) {
+        const port = ports.find(port => port.face === original.face && port.name === original.name);
+        if (port) portMap.set(original.id, port.id);
+      }
+    }
+    // Additional installed hardware makes both 24U overviews representative.
+    for (const [index, device] of fixture.devices.filter(device => ["server", "switch"].includes(device.deviceType)).entries()) {
+      const created = await post<{id:string}>("/api/devices", { ...device, id: undefined, hostname: `network-${index + 1}`, roomId: room.id, rackId: other.id, startU: 20 - index * 4, heightU: index ? 2 : 1, rackColumn: 0, rackColumnSpan: 12, portTemplateId: baseTemplateId });
+      createdDevices.push(created.id);
+      const preview = await post(`/api/physical-layouts/${created.id}/preview`, { templateId: `rear-art-${suffix}-${device.id}` });
+      await post(`/api/physical-layouts/${created.id}/apply`, preview);
+    }
+    for (const link of fixture.links) {
+      const created = await post<{id:string}>("/api/port-links", { ...link, id: undefined, fromPortId: portMap.get(link.fromPortId), toPortId: portMap.get(link.toPortId) });
+      linkIds.push(created.id);
+    }
+    await authenticate(page);
+    await page.setViewportSize({ width: 1920, height: 1200 });
+    await page.goto(`/racks?roomId=${room.id}`);
+    await page.getByRole("button", { name: "Studio Beta", exact: true }).click();
+    await page.getByRole("button", { name: "Rear", exact: true }).click();
+    await expect(page.locator("[data-rack-elevation-id]")).toHaveCount(2);
+    for (const id of linkIds.slice(3, 6)) {
+      for (const stroke of await page.locator(`[data-testid="rack-studio-cable-stroke"][data-link-id="${id}"]`).all()) await expect(stroke).toHaveAttribute("d", / C /);
+    }
+    await page.screenshot({ path: testInfo.outputPath("representative-rear-racks.png"), fullPage: true });
+    await page.getByRole("button", { name: "Switch to dark mode" }).click();
+    await page.screenshot({ path: testInfo.outputPath("representative-rear-racks-dark.png"), fullPage: true });
+    const cableId = linkIds.at(-1)!;
+    await page.locator(`[data-testid="rack-studio-cable"][data-link-id="${cableId}"]`).last().press("Enter");
+    const inspector = page.getByTestId("rack-studio-cable-inspector");
+    await expect(inspector).toContainText("Selected cable");
+    await inspector.getByRole("combobox", { name: "Routing mode" }).selectOption("managed");
+    await inspector.getByRole("combobox", { name: "Add guide" }).selectOption(deviceMap.get("shelves-shelf-6")!);
+    await inspector.getByLabel("Exit face").selectOption("rear");
+    await inspector.getByRole("button", { name: "Save", exact: true }).click();
+    await expect.poll(async () => (await (await request.get(`/api/port-links/${cableId}`, { headers })).json()).routeGuides.length).toBe(1);
+    await page.reload();
+    await page.locator(`[data-testid="rack-studio-cable"][data-link-id="${cableId}"]`).last().press("Enter");
+    await expect(inspector.getByRole("combobox", { name: "Routing mode" })).toHaveValue("managed");
+    await inspector.getByRole("button", { name: /^From port:/ }).click();
+    await expect(page.getByTestId("rack-studio-workspace").getByRole("button", { name: "Front", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(inspector).toContainText("Selected cable");
+    await inspector.getByRole("combobox", { name: "Routing mode" }).selectOption("direct");
+    await inspector.getByRole("button", { name: "Save", exact: true }).click();
+    await expect.poll(async () => (await (await request.get(`/api/port-links/${cableId}`, { headers })).json()).routeMode).toBe("direct");
+    const persisted = await (await request.get(`/api/port-links/${cableId}`, { headers })).json();
+    expect(persisted.routeGuides).toHaveLength(1);
+    expect(persisted.fromPortId).toBe(portMap.get(fixture.links.at(-1)!.fromPortId));
+    // A rack move must remove stale guides even when devices store an explicit room.
+    await page.getByRole("button", { name: "Edit rack", exact: true }).click();
+    await page.getByRole("combobox", { name: "Room", exact: true }).selectOption(destination.id);
+    await page.getByRole("button", { name: "Save rack", exact: true }).click();
+    await expect.poll(async () => (await (await request.get(`/api/port-links/${cableId}`, { headers })).json()).routeGuides).toEqual([]);
+    await inspector.getByRole("textbox", { name: "Label", exact: true }).fill("Guide move verified");
+    await inspector.getByRole("button", { name: "Save", exact: true }).click();
+    await expect.poll(async () => (await (await request.get(`/api/port-links/${cableId}`, { headers })).json()).label).toBe("Guide move verified");
+  } finally {
+    for (const id of linkIds) await request.delete(`/api/port-links/${id}`, { headers });
+    for (const id of createdDevices.reverse()) await request.delete(`/api/devices/${id}`, { headers });
+    for (const id of templateIds) await request.delete(`/api/hardware-templates/${id}`, { headers });
+    await request.delete(`/api/ports/templates/${baseTemplateId}`, { headers });
+    for (const id of [rack.id, other.id]) await request.delete(`/api/racks/${id}`, { headers });
+    for (const id of [room.id, destination.id]) await request.delete(`/api/rooms/${id}`, { headers });
   }
 });

@@ -884,6 +884,21 @@ export interface PortLink {
   label?: string;
   visible?: boolean;
   routeWaypoints?: CableRouteWaypoint[];
+  routeMode?: CableRouteMode;
+  routeGuides?: CableRouteGuide[];
+}
+
+export type CableRouteMode = "auto" | "direct" | "managed" | "manual";
+
+/** Coordinates are normalized to 0–1000 on each physical device face. */
+export interface CableRouteGuide {
+  id: ID;
+  deviceId: ID;
+  roomId: ID;
+  entryFace: RackFace;
+  exitFace: RackFace;
+  x: number;
+  y: number;
 }
 
 export interface CableRouteWaypoint {

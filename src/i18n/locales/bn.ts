@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "Routing mode": "পথের ধরন",
+  "Automatic": "স্বয়ংক্রিয়",
+  "Managed": "পরিচালিত",
+  "Manual": "ম্যানুয়াল",
+  "Route guides": "পথ নির্দেশক",
+  "Entry face": "প্রবেশ দিক",
+  "Exit face": "প্রস্থান দিক",
+  "Add guide": "নির্দেশক যোগ করুন",
+  "Incomplete route": "অসম্পূর্ণ পথ",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "একটি ইনস্টল করা ব্রাশ প্যানেল বা কেবল ম্যানেজার নির্বাচন করুন, তারপর এর পৃষ্ঠে একটি নির্দেশক রাখুন।",
+  "Detailed": "বিস্তারিত",
   "Stacked switches": "স্ট্যাক করা সুইচ",
   "Stack Members": "স্ট্যাকের সদস্য",
   "Add member": "সদস্য যোগ করুন",

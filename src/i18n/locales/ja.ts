@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Routing mode": "経路モード",
+  "Automatic": "自動",
+  "Managed": "ガイド付き",
+  "Manual": "手動",
+  "Route guides": "経路ガイド",
+  "Entry face": "入口面",
+  "Exit face": "出口面",
+  "Add guide": "ガイドを追加",
+  "Incomplete route": "不完全な経路",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "設置済みのブラシパネルまたはケーブルマネージャーを選び、その面にガイドを配置します。",
+  "Detailed": "詳細",
   "Stacked switches": "スタック型スイッチ",
   "Stack Members": "スタックメンバー",
   "Add member": "メンバーを追加",

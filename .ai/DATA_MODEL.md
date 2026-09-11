@@ -115,3 +115,12 @@ The native validator accepts genuine schema-50 snapshots for startup migration,
 rejects inconsistent version markers, and retains the security cutoff at 50.
 The geometry core accepts an explicit SQLite connection so snapshot validation
 never reads the running database.
+
+Schema 52 adds `portLinks.routeMode` and `routeGuides`. Legacy waypointed links
+become manual; others become automatic. Guides carry bounded normalized device
+positions, entry/exit faces and a declared room within an endpoint lab. Mounted
+guide devices use their rack room. Transactional triggers remove references when
+a guide device is deleted or leaves its declared room, without deleting cables.
+Create/edit/bulk APIs and logical/native backups validate both fields. Inactive
+guides and waypoints survive mode changes. Client placement/room mutations
+refresh affected guide metadata from the server.

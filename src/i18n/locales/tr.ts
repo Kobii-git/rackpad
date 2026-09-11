@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Routing mode": "Güzergâh modu",
+  "Automatic": "Otomatik",
+  "Managed": "Yönlendirmeli",
+  "Manual": "Elle",
+  "Route guides": "Güzergâh kılavuzları",
+  "Entry face": "Giriş yüzü",
+  "Exit face": "Çıkış yüzü",
+  "Add guide": "Kılavuz ekle",
+  "Incomplete route": "Eksik güzergâh",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "Takılı bir fırça paneli veya kablo düzenleyici seçin, ardından yüzeyine bir kılavuz yerleştirin.",
+  "Detailed": "Ayrıntılı",
   "Stacked switches": "Yığın anahtarları",
   "Stack Members": "Yığın üyeleri",
   "Add member": "Üye ekle",

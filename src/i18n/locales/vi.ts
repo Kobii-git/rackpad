@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Routing mode": "Chế độ tuyến",
+  "Automatic": "Tự động",
+  "Managed": "Có dẫn hướng",
+  "Manual": "Thủ công",
+  "Route guides": "Điểm dẫn hướng",
+  "Entry face": "Mặt vào",
+  "Exit face": "Mặt ra",
+  "Add guide": "Thêm dẫn hướng",
+  "Incomplete route": "Tuyến chưa hoàn chỉnh",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "Chọn tấm chổi hoặc bộ quản lý cáp đã lắp, sau đó đặt điểm dẫn hướng trên bề mặt.",
+  "Detailed": "Chi tiết",
   "Stacked switches": "Bộ chuyển mạch xếp chồng",
   "Stack Members": "Thành viên ngăn xếp",
   "Add member": "Thêm thành viên",

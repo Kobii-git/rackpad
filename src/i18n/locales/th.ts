@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "Routing mode": "โหมดเส้นทาง",
+  "Automatic": "อัตโนมัติ",
+  "Managed": "ตามตัวนำทาง",
+  "Manual": "กำหนดเอง",
+  "Route guides": "ตัวนำทางสาย",
+  "Entry face": "ด้านเข้า",
+  "Exit face": "ด้านออก",
+  "Add guide": "เพิ่มตัวนำทาง",
+  "Incomplete route": "เส้นทางไม่สมบูรณ์",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "เลือกแผงแปรงหรืออุปกรณ์จัดสายที่ติดตั้งแล้ว จากนั้นวางตัวนำทางบนพื้นผิว",
+  "Detailed": "แบบละเอียด",
   "Stacked switches": "สวิตช์แบบสแต็ก",
   "Stack Members": "สมาชิกสแต็ก",
   "Add member": "เพิ่มสมาชิก",

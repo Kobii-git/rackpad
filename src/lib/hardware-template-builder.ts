@@ -41,6 +41,9 @@ export const HARDWARE_TEMPLATE_STARTERS: HardwareTemplateStarter[] = [
   starter("server-1u", "Generic 1U server", "server", "server", 1),
   starter("server-2u", "Generic 2U server", "server", "server", 2),
   starter("server-4u", "Generic 4U server", "server", "server", 4),
+  starter("mini-pc", "Mini PC", "endpoint", "endpoint", 1),
+  starter("nas", "NAS", "storage", "storage", 2),
+  starter("brush-panel", "Brush panel", "brush_panel", "blanking_panel", 1),
   starter("desktop", "Generic desktop PC", "endpoint", "endpoint", 1),
   starter("tower", "Generic tower PC", "endpoint", "endpoint", 4),
   starter("storage", "Storage equipment", "storage", "storage", 2),
@@ -153,98 +156,57 @@ function starter(
   return { id, name, category, deviceType, heightU, portBlocks: blocks };
 }
 
-function baseFace(face: RackFace, label: string): FaceDefinitionV1 {
-  return {
-    schemaVersion: 1,
-    width: 1000,
-    height: FACE_HEIGHT,
-    elements: [
-      {
-        kind: "panel",
-        id: `${face}-panel`,
-        x: 18,
-        y: 18,
-        width: 964,
-        height: 264,
-        tone: "mid",
-      },
-      {
-        kind: "handle",
-        id: `${face}-handle-left`,
-        x: 28,
-        y: 66,
-        width: 34,
-        height: 168,
-        tone: "dark",
-      },
-      {
-        kind: "handle",
-        id: `${face}-handle-right`,
-        x: 938,
-        y: 66,
-        width: 34,
-        height: 168,
-        tone: "dark",
-      },
-      {
-        kind: "vent",
-        id: `${face}-vent`,
-        x: 88,
-        y: 60,
-        width: 824,
-        height: 180,
-        tone: "dark",
-      },
-      {
-        kind: "screw",
-        id: `${face}-screw-tl`,
-        x: 45,
-        y: 42,
-        radius: 8,
-        tone: "light",
-      },
-      {
-        kind: "screw",
-        id: `${face}-screw-tr`,
-        x: 955,
-        y: 42,
-        radius: 8,
-        tone: "light",
-      },
-      {
-        kind: "screw",
-        id: `${face}-screw-bl`,
-        x: 45,
-        y: 258,
-        radius: 8,
-        tone: "light",
-      },
-      {
-        kind: "screw",
-        id: `${face}-screw-br`,
-        x: 955,
-        y: 258,
-        radius: 8,
-        tone: "light",
-      },
-      {
-        kind: "label",
-        id: `${face}-label`,
-        x: 92,
-        y: 43,
-        text: `${label} · ${face}`,
-        align: "start",
-      },
-      {
-        kind: "indicator",
-        id: `${face}-indicator`,
-        x: 900,
-        y: 40,
-        radius: 7,
-        tone: "accent",
-      },
-    ],
-  };
+function baseFace(face: RackFace, label: string, category: string): FaceDefinitionV1 {
+  const elements: FaceDefinitionV1["elements"] = [
+    { kind: "panel", id: `${face}-panel`, x: 8, y: 12, width: 984, height: 276, tone: "mid" },
+    ...[32, 968].flatMap((x, index) => [36, 264].map((y, row) => ({ kind: "screw" as const, id: `${face}-screw-${index}-${row}`, x, y, radius: 7, tone: "light" as const }))),
+    { kind: "label", id: `${face}-label`, x: 75, y: 40, text: label, align: "start" },
+  ];
+  const box = (kind: "vent" | "bay" | "display" | "handle" | "panel", id: string, x: number, y: number, width: number, height: number) =>
+    elements.push({ kind, id: `${face}-${id}`, x, y, width, height, tone: "dark" });
+  const led = (id: string, x: number, y: number) => elements.push({ kind: "indicator", id: `${face}-${id}`, x, y, radius: 5, tone: "accent" });
+  if (category === "brush_panel") {
+    box("vent", "brush", 80, 75, 840, 150);
+  } else if (category === "rack_shelf") {
+    box("panel", "lip", 60, 245, 880, 25);
+    for (let i = 0; i < 12; i += 1) box("vent", `slot-${i}`, 90 + i * 68, 75, 30, 125);
+  } else if (category === "blanking_panel") {
+    box("panel", "inset", 70, 65, 860, 170);
+  } else if (category === "server" || category === "storage") {
+    box("handle", "left", 48, 70, 25, 160);
+    box("handle", "right", 927, 70, 25, 160);
+    if (face === "front") {
+      const count = category === "storage" ? 8 : 4;
+      for (let i = 0; i < count; i += 1) {
+        const width = 790 / count;
+        box("bay", `drive-${i}`, 95 + i * width, 65, width - 10, 172);
+        led(`drive-led-${i}`, 106 + i * width, 219);
+      }
+    } else {
+      box("vent", "fan", 95, 65, 230, 180);
+      box("bay", "psu", 745, 65, 155, 180);
+      box("vent", "io", 365, 200, 325, 45);
+    }
+  } else if (category === "endpoint") {
+    box("panel", "case", 65, 55, 870, 190);
+    box("vent", "cooling", 125, 80, 540, 110);
+    box("display", "power", 795, 120, 70, 60);
+    led("power-led", 830, 205);
+  } else if (category === "ups") {
+    box("vent", "left-vent", 75, 75, 250, 160);
+    box("display", "screen", 405, 70, 185, 95);
+    box("vent", "right-vent", 675, 75, 250, 160);
+    led("status", 500, 205);
+  } else if (category === "pdu") {
+    box("display", "meter", 72, 60, 100, 50);
+    led("status", 910, 45);
+  } else if (category === "patch_panel") {
+    for (let i = 0; i < 6; i += 1) box("panel", `label-strip-${i}`, 106 + i * 132, 230, 116, 26);
+  } else {
+    box("vent", "vent", 75, 220, 790, 38);
+    for (let i = 0; i < 5; i += 1) led(`status-${i}`, 785 + i * 25, 44);
+  }
+  return { schemaVersion: 1, width: 1000, height: FACE_HEIGHT, elements };
 }
 
 function connectorSize(connector: PortKind) {
@@ -349,8 +311,8 @@ export function createStarterTemplate(
       heightU: starter.heightU,
       columnSpan: 12,
     },
-    front: baseFace("front", templateName),
-    rear: baseFace("rear", templateName),
+    front: baseFace("front", templateName, starter.category),
+    rear: baseFace("rear", templateName, starter.category),
     portSlots: starter.portBlocks.flatMap(generatePortBlock),
     moduleSlots,
     modules: hasModuleSlots

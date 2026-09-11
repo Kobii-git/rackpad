@@ -62,7 +62,7 @@ import {
   type PhysicalLayoutStatus,
 } from "../lib/physical-layout.js";
 import { legacyShelfGeometry } from "../lib/legacy-shelf-geometry.js";
-import { parseCableRouteWaypoints } from "../lib/cable-routing.js";
+import { parseCableRouteWaypoints, parseCableRouteMode, parseCableRouteGuides, assertCableGuideReferences } from "../lib/cable-routing.js";
 import {
   assertRackStudioRackFootprint,
   calculateRackStudioCanvasBounds,
@@ -178,7 +178,7 @@ const exportBackupSnapshot = db.transaction(
           db
             .prepare("SELECT * FROM portLinks ORDER BY fromPortId, toPortId, id")
             .all() as Record<string, unknown>[]
-        ).map((row) => parseRow(row, ["routeWaypoints"])),
+        ).map((row) => parseRow(row, ["routeWaypoints", "routeGuides"])),
         portTemplates: (
           db
             .prepare("SELECT * FROM portTemplates ORDER BY name, id")
@@ -850,6 +850,14 @@ function validateBackupNetworkIntegrity(input: {
 
     let routeWaypoints;
     try {
+      parseCableRouteMode(row.routeMode);
+      const guides = parseCableRouteGuides(parseBackupJson(row.routeGuides ?? [], "Backup cable route guides"));
+      assertCableGuideReferences(guides, [fromDevice.labId, toDevice.labId],
+        guideId => {
+          const target = input.devices.find(device => device.id === guideId);
+          const rack = target?.rackId ? input.racks.find(rack => rack.id === target.rackId) : undefined;
+          return target ? { labId: String(target.labId), roomId: rack?.roomId || target.roomId ? String(rack?.roomId || target.roomId) : null } : undefined;
+        }, guideRoomId => roomsById.get(guideRoomId));
       routeWaypoints = parseCableRouteWaypoints(
         parseBackupJson(
           row.routeWaypoints ?? [],
@@ -857,7 +865,7 @@ function validateBackupNetworkIntegrity(input: {
         ),
       );
     } catch {
-      invalid("Backup cable route waypoints are invalid.", "portLink", id);
+      invalid("Backup cable routing metadata is invalid.", "portLink", id);
     }
     for (const waypoint of routeWaypoints) {
       const room = roomsById.get(waypoint.roomId);
@@ -1704,8 +1712,8 @@ const restoreBackupSnapshot = db.transaction(
   `);
     const insertPortLink = db.prepare(
       `INSERT INTO portLinks
-        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints, routeMode, routeGuides)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const insertPortTemplate = db.prepare(`
     INSERT INTO portTemplates (id, name, description, deviceTypes, ports, createdAt, updatedAt)
@@ -2489,6 +2497,8 @@ const restoreBackupSnapshot = db.transaction(
         row.label ?? null,
         row.visible === false || row.visible === 0 ? 0 : 1,
         JSON.stringify(routeWaypoints),
+        parseCableRouteMode(row.routeMode, routeWaypoints),
+        JSON.stringify(parseCableRouteGuides(parseBackupJson(row.routeGuides ?? [], "Backup cable route guides"))),
       );
     }
     for (const row of portTemplates) {

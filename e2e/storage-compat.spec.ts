@@ -67,7 +67,7 @@ for (const uuidMode of ["native", "missing", "throwing"] as const) {
           page.getByRole("textbox", { name: "Description", exact: true }),
         ).toHaveValue("Preserved schema-50 template");
         const backup = await request.get("/api/admin/export", { headers });
-        expect((await backup.json()).schemaVersion).toBe(51);
+        expect((await backup.json()).schemaVersion).toBe(52);
       }
       await page
         .getByRole("button", { name: "Custom template", exact: true })

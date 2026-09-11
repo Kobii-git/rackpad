@@ -121,3 +121,70 @@ export function decodeCableRouteWaypoints(value: unknown) {
     return [];
   }
 }
+
+
+export type CableRouteMode = "auto" | "direct" | "managed" | "manual";
+export interface CableRouteGuide {
+  id: string;
+  deviceId: string;
+  roomId: string;
+  entryFace: "front" | "rear";
+  exitFace: "front" | "rear";
+  x: number;
+  y: number;
+}
+
+export function parseCableRouteMode(value: unknown, waypoints: CableRouteWaypoint[] = []): CableRouteMode {
+  if (value === undefined) return waypoints.length ? "manual" : "auto";
+  if (value === "auto" || value === "direct" || value === "managed" || value === "manual") return value;
+  throw new ValidationError("routeMode must be auto, direct, managed, or manual.");
+}
+
+export function parseCableRouteGuides(value: unknown): CableRouteGuide[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_CABLE_ROUTE_WAYPOINTS) {
+    throw new ValidationError("routeGuides must be an array of 32 guides or fewer.");
+  }
+  const ids = new Set<string>();
+  return value.map(entry => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new ValidationError("Invalid cable route guide.");
+    const guide = entry as Record<string, unknown>;
+    if (Object.keys(guide).some(key => !["id", "deviceId", "roomId", "entryFace", "exitFace", "x", "y"].includes(key))) {
+      throw new ValidationError("Cable route guide contains unsupported fields.");
+    }
+    for (const key of ["id", "deviceId", "roomId"] as const) {
+      if (typeof guide[key] !== "string" || !guide[key].trim() || guide[key].length > 80) throw new ValidationError(`Cable route guide ${key} must contain 1–80 characters.`);
+    }
+    const id = (guide.id as string).trim();
+    if (ids.has(id)) throw new ValidationError("Cable route guide IDs must be unique.");
+    ids.add(id);
+    for (const key of ["entryFace", "exitFace"]) {
+      if (guide[key] !== "front" && guide[key] !== "rear") throw new ValidationError("Cable route guide faces must be front or rear.");
+    }
+    for (const key of ["x", "y"]) {
+      if (typeof guide[key] !== "number" || !Number.isFinite(guide[key]) || guide[key] < 0 || guide[key] > 1000) throw new ValidationError("Cable route guide coordinates must be between 0 and 1000.");
+    }
+    return { id, deviceId: (guide.deviceId as string).trim(), roomId: (guide.roomId as string).trim(),
+      entryFace: guide.entryFace as "front" | "rear", exitFace: guide.exitFace as "front" | "rear", x: guide.x as number, y: guide.y as number };
+  });
+}
+
+export function decodeCableRouteGuides(value: unknown) {
+  // Unlike an absent legacy field, malformed persisted routing must not silently disappear.
+  return parseCableRouteGuides(typeof value === "string" ? JSON.parse(value) : value);
+}
+
+export function assertCableGuideReferences(
+  guides: CableRouteGuide[],
+  endpointLabIds: string[],
+  device: (id: string) => { labId: string; roomId: string | null } | undefined,
+  room: (id: string) => { labId: string } | undefined,
+) {
+  for (const guide of guides) {
+    const target = device(guide.deviceId);
+    const targetRoom = room(guide.roomId);
+    if (!target || !targetRoom || target.roomId !== guide.roomId || targetRoom.labId !== target.labId || !endpointLabIds.includes(target.labId)) {
+      throw new ValidationError("Cable route guides must reference equipment in their declared room within an endpoint lab.");
+    }
+  }
+}

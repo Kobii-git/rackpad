@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const nl = {
+  "Routing mode": "Routemodus",
+  "Automatic": "Automatisch",
+  "Managed": "Geleid",
+  "Manual": "Handmatig",
+  "Route guides": "Routegeleiders",
+  "Entry face": "Ingangszijde",
+  "Exit face": "Uitgangszijde",
+  "Add guide": "Geleider toevoegen",
+  "Incomplete route": "Onvolledige route",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "Selecteer een geïnstalleerd borstelpaneel of kabelgeleider en plaats een geleidepunt op het oppervlak.",
+  "Detailed": "Gedetailleerd",
   "Stacked switches": "Gestapelde switches",
   "Stack Members": "Stackleden",
   "Add member": "Lid toevoegen",

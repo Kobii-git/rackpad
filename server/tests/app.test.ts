@@ -10070,6 +10070,11 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
     DROP TRIGGER IF EXISTS ports_stack_owner_insert;
     DROP TRIGGER IF EXISTS ports_stack_owner_update;
     DROP TRIGGER IF EXISTS stack_member_device_immutable;
@@ -10181,6 +10186,11 @@ test("storage topology migration upgrades a version-34 database without changing
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
     DROP TRIGGER IF EXISTS ports_stack_owner_insert;
     DROP TRIGGER IF EXISTS ports_stack_owner_update;
     DROP TRIGGER IF EXISTS stack_member_device_immutable;
@@ -10307,6 +10317,11 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
     DROP TRIGGER IF EXISTS ports_stack_owner_insert;
     DROP TRIGGER IF EXISTS ports_stack_owner_update;
     DROP TRIGGER IF EXISTS stack_member_device_immutable;
@@ -10388,6 +10403,11 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
     DROP TRIGGER IF EXISTS ports_stack_owner_insert;
     DROP TRIGGER IF EXISTS ports_stack_owner_update;
     DROP TRIGGER IF EXISTS stack_member_device_immutable;

@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "Routing mode": "Roetemodus",
+  "Automatic": "Outomaties",
+  "Managed": "Bestuur",
+  "Manual": "Handmatig",
+  "Route guides": "Roetegidse",
+  "Entry face": "Ingangskant",
+  "Exit face": "Uitgangskant",
+  "Add guide": "Voeg gids by",
+  "Incomplete route": "Onvolledige roete",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "Kies ’n geïnstalleerde borselpaneel of kabelbestuurder en plaas dan ’n gids op sy voorkant.",
+  "Detailed": "Gedetailleerd",
   "Stacked switches": "Gestapelde skakelaars",
   "Stack Members": "Stapel-lede",
   "Add member": "Voeg lid by",

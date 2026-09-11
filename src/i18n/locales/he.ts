@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "Routing mode": "מצב ניתוב",
+  "Automatic": "אוטומטי",
+  "Managed": "מנוהל",
+  "Manual": "ידני",
+  "Route guides": "מובילי ניתוב",
+  "Entry face": "צד כניסה",
+  "Exit face": "צד יציאה",
+  "Add guide": "הוספת מוביל",
+  "Incomplete route": "נתיב לא שלם",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "בחרו לוח מברשת או מארגן כבלים מותקן, ואז הציבו מוביל על פניו.",
+  "Detailed": "מפורט",
   "Stacked switches": "מתגים בערימה",
   "Stack Members": "חברי הערימה",
   "Add member": "הוספת חבר",

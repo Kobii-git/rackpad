@@ -1968,11 +1968,19 @@ export async function deleteRoomRecord(id: string): Promise<void> {
   }
 }
 
+async function refreshCableGuideReferences(deviceIds: string[]) {
+  const ids = new Set(deviceIds);
+  if (!state.portLinks.some(link => link.routeGuides?.some(guide => ids.has(guide.deviceId)))) return;
+  const portLinks = await api.getPortLinks();
+  setState(prev => ({ ...prev, portLinks }));
+}
+
 export async function updateRackRecord(
   id: string,
   changes: RackPatch,
 ): Promise<Rack> {
   const updated = await api.updateRack(id, changes);
+  if ("roomId" in changes) await refreshCableGuideReferences(state.devices.filter(device => device.rackId === id).map(device => device.id));
   setState((prev) => ({
     ...prev,
     racks: replaceById(prev.racks, updated, sortByName),
@@ -1985,6 +1993,7 @@ export async function applyRackStudioAction(
   action: RackStudioAction,
 ): Promise<RackStudioActionResult> {
   const result = await api.applyRackStudioAction(action);
+  await refreshCableGuideReferences(result.kind === "rack.move" ? state.devices.filter(device => device.rackId === result.rack.id).map(device => device.id) : result.devices.map(device => device.id));
   if (result.kind === "rack.move") {
     setState((prev) => ({
       ...prev,
@@ -2664,6 +2673,8 @@ export interface CreateCableInput {
   label?: string;
   visible?: boolean;
   routeWaypoints?: PortLink["routeWaypoints"];
+  routeMode?: PortLink["routeMode"];
+  routeGuides?: PortLink["routeGuides"];
   physicalMode?: boolean;
   confirmUnusual?: boolean;
 }
@@ -2846,6 +2857,8 @@ export async function updateCable(
     "label",
     "visible",
     "routeWaypoints",
+    "routeMode",
+    "routeGuides",
   ] as const;
   for (const key of allowedKeys) {
     if (Object.prototype.hasOwnProperty.call(changes, key)) {
@@ -3080,6 +3093,7 @@ export async function updateDevice(
     portTemplateId: changes.portTemplateId ?? undefined,
     driveBayTemplateId: changes.driveBayTemplateId ?? undefined,
   });
+  await refreshCableGuideReferences([id]);
   const syncResult = await syncDeviceManagementAssignment(
     updated,
     existing.managementIp,
@@ -3159,6 +3173,7 @@ export async function bulkUpdateDevices(input: {
   changes: Record<string, unknown>;
 }): Promise<{ updated: number; devices: Device[] }> {
   const result = await api.bulkUpdateDevices(input);
+  await refreshCableGuideReferences(result.devices.map(device => device.id));
   const nextDevices = result.devices.reduce(
     (devices, updated) => replaceById(devices, updated, sortDevices),
     state.devices,
@@ -3239,7 +3254,7 @@ export async function deleteDevice(id: string): Promise<boolean> {
       (link) =>
         !devicePortIds.includes(link.fromPortId) &&
         !devicePortIds.includes(link.toPortId),
-    ),
+    ).map(link => ({ ...link, routeGuides: link.routeGuides?.filter(guide => guide.deviceId !== id) })),
     ipAssignments: prev.ipAssignments.filter(
       (assignment) =>
         assignment.deviceId !== id &&

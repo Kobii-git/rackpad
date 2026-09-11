@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "Routing mode": "मार्ग मोड",
+  "Automatic": "स्वचालित",
+  "Managed": "प्रबंधित",
+  "Manual": "मैनुअल",
+  "Route guides": "मार्ग गाइड",
+  "Entry face": "प्रवेश सतह",
+  "Exit face": "निकास सतह",
+  "Add guide": "गाइड जोड़ें",
+  "Incomplete route": "अधूरा मार्ग",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "स्थापित ब्रश पैनल या केबल मैनेजर चुनें, फिर उसकी सतह पर एक गाइड रखें।",
+  "Detailed": "विस्तृत",
   "Stacked switches": "स्टैक किए गए स्विच",
   "Stack Members": "स्टैक के सदस्य",
   "Add member": "सदस्य जोड़ें",

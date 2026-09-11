@@ -1,3 +1,4 @@
+import { rackFaceForPhysicalFace } from "@/lib/rack-studio-scene";
 import { CableContinuationMarkers } from "@/components/rack/CableContinuationMarkers";
 import {
   type Dispatch,
@@ -83,6 +84,7 @@ interface RackCablingCanvasProps {
   model: VisualizerModel;
   rackOrder: string[];
   faceMode: VisualizerRackFaceMode;
+  onFaceModeChange: (face: VisualizerRackFaceMode) => void;
   cableType: string;
   healthOverlay: boolean;
   onToggleHealth: () => void;
@@ -128,6 +130,7 @@ export function RackCablingCanvas({
   model,
   rackOrder,
   faceMode,
+  onFaceModeChange,
   cableType,
   healthOverlay,
   onToggleHealth,
@@ -141,6 +144,7 @@ export function RackCablingCanvas({
   setTraceMode,
 }: RackCablingCanvasProps) {
   const { t } = useI18n();
+  const [pendingReveal, setPendingReveal] = useState<{ portId: string; cableId: string }>();
   const viewportRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const panRef = useRef<PanState | null>(null);
@@ -578,6 +582,29 @@ export function RackCablingCanvas({
       x: pointerX - worldX * nextZoom,
       y: pointerY - worldY * nextZoom,
     });
+  }
+
+  useEffect(() => {
+    if (!pendingReveal) return;
+    const anchor = scene?.anchors.find(anchor => anchor.portId === pendingReveal.portId);
+    const viewport = viewportRef.current;
+    if (!anchor || !viewport) return;
+    const bounds = viewport.getBoundingClientRect();
+    autoFitRef.current = false;
+    setZoom(1);
+    setPan({ x: bounds.width / 2 - anchor.x, y: bounds.height / 2 - anchor.y });
+    setSelection({ kind: "cable", id: pendingReveal.cableId });
+    setPendingReveal(undefined);
+  }, [scene, pendingReveal]);
+
+  function revealEndpoint(portId: string, cableId: string) {
+    const port = ports.find(port => port.id === portId);
+    const device = devices.find(device => device.id === port?.deviceId);
+    if (!port || !device) return;
+    const roomId = racks.find(rack => rack.id === device.rackId)?.roomId ?? device.roomId;
+    if (roomId) onRoomIdChange(roomId);
+    onFaceModeChange(rackFaceForPhysicalFace(device, port.face === "rear" ? "rear" : "front"));
+    setPendingReveal({ portId, cableId });
   }
 
   function selectDevice(deviceId: string) {
@@ -1158,7 +1185,7 @@ export function RackCablingCanvas({
                       fill="none"
                       stroke={route.color}
                       strokeWidth={
-                        selected || traced ? 4.5 : emphasized ? 3.5 : 2.5
+                        selected || traced ? 2.6 : emphasized ? 2 : 1.35
                       }
                       strokeDasharray={
                         route.handoffs.length > 0 ? "8 5" : undefined
@@ -1176,6 +1203,7 @@ export function RackCablingCanvas({
                       }
                     />
                     <CableContinuationMarkers
+                    onRevealEndpoint={revealEndpoint}
                       markers={route.continuations}
                       linkId={route.link.id}
                       cableLabel={route.label}

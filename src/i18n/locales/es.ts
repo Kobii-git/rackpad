@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const es = {
+  "Routing mode": "Modo de ruta",
+  "Automatic": "Automático",
+  "Managed": "Guiado",
+  "Manual": "Ruta manual",
+  "Route guides": "Guías de ruta",
+  "Entry face": "Cara de entrada",
+  "Exit face": "Cara de salida",
+  "Add guide": "Añadir guía",
+  "Incomplete route": "Ruta incompleta",
+  "Select an installed brush panel or cable manager, then place a guide on its face.": "Seleccione un panel de cepillo o gestor de cables instalado y coloque una guía en su cara.",
+  "Detailed": "Detallado",
   "Stacked switches": "Conmutadores apilados",
   "Stack Members": "Miembros de la pila",
   "Add member": "Añadir miembro",

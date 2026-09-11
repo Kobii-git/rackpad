@@ -1426,6 +1426,43 @@ const SCHEMA_MIGRATIONS = [
       BEGIN SELECT RAISE(ABORT, 'Stack height is derived from its members.'); END;
     `,
   },
+  {
+    version: 52,
+    sql: `
+      ALTER TABLE portLinks ADD COLUMN routeMode TEXT NOT NULL DEFAULT 'auto'
+        CHECK (routeMode IN ('auto', 'direct', 'managed', 'manual'));
+      ALTER TABLE portLinks ADD COLUMN routeGuides TEXT NOT NULL DEFAULT '[]'
+        CHECK (json_valid(routeGuides) AND json_type(routeGuides) = 'array');
+      UPDATE portLinks SET routeMode = 'manual' WHERE json_array_length(routeWaypoints) > 0;
+      CREATE TRIGGER cable_guide_device_delete AFTER DELETE ON devices
+      BEGIN
+        UPDATE portLinks SET routeGuides = (
+          SELECT json_group_array(json(value)) FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') != OLD.id
+        ) WHERE EXISTS (SELECT 1 FROM json_each(portLinks.routeGuides) WHERE json_extract(value, '$.deviceId') = OLD.id);
+      END;
+      CREATE TRIGGER cable_guide_device_room AFTER UPDATE OF labId, roomId, rackId ON devices
+      BEGIN
+        UPDATE portLinks SET routeGuides = (
+          SELECT json_group_array(json(value)) FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') != NEW.id
+            OR (NEW.labId IS OLD.labId AND json_extract(value, '$.roomId') IS COALESCE((SELECT roomId FROM racks WHERE id = NEW.rackId), NEW.roomId))
+        ) WHERE EXISTS (SELECT 1 FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') = NEW.id
+            AND (NEW.labId IS NOT OLD.labId OR json_extract(value, '$.roomId') IS NOT COALESCE((SELECT roomId FROM racks WHERE id = NEW.rackId), NEW.roomId)));
+      END;
+      CREATE TRIGGER cable_guide_rack_room AFTER UPDATE OF roomId ON racks
+      WHEN NEW.roomId IS NOT OLD.roomId
+      BEGIN
+        UPDATE portLinks SET routeGuides = (
+          SELECT json_group_array(json(value)) FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') NOT IN (SELECT id FROM devices WHERE rackId = NEW.id)
+        ) WHERE EXISTS (SELECT 1 FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') IN (SELECT id FROM devices WHERE rackId = NEW.id));
+      END;
+    `,
+  },
+
 ] as const;
 
 const applySchema = db.transaction(() => {

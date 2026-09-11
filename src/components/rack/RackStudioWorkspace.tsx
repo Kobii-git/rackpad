@@ -69,6 +69,7 @@ import {
 import {
   buildRackElevationScene,
   buildRackStudioScene,
+  rackFaceForPhysicalFace,
   type RackStudioSceneEquipment,
 } from "@/lib/rack-studio-scene";
 import type {
@@ -106,6 +107,10 @@ interface RackStudioWorkspaceProps {
   portLinks: PortLink[];
   canEdit: boolean;
   initialRackId?: string;
+  endpointDevices?: Device[];
+  initialCableId?: string;
+  initialPortId?: string;
+  onRevealCableEndpoint?: (portId: string, cableId: string) => void;
   face: RackFace | "both";
   onFaceChange: (face: RackFace | "both") => void;
 }
@@ -240,6 +245,10 @@ export function RackStudioWorkspace({
   portLinks,
   canEdit,
   initialRackId,
+  endpointDevices = devices,
+  initialCableId,
+  initialPortId,
+  onRevealCableEndpoint,
   face,
   onFaceChange,
 }: RackStudioWorkspaceProps) {
@@ -251,7 +260,7 @@ export function RackStudioWorkspace({
     initialRackId ?? racks[0]?.id ?? "",
   );
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>();
-  const [selectedCableId, setSelectedCableId] = useState<string>();
+  const [selectedCableId, setSelectedCableId] = useState<string | undefined>(initialCableId);
   const [hoveredCableId, setHoveredCableId] = useState<string>();
   const [patchStartPortId, setPatchStartPortId] = useState<string>();
   const [pendingUnusualPair, setPendingUnusualPair] = useState<{
@@ -271,10 +280,11 @@ export function RackStudioWorkspace({
       readLocalPreference(RACK_STUDIO_SHOW_LABELS_STORAGE_KEY),
     ),
   );
+  const [compact, setCompact] = useState(() => readLocalPreference("rackpad.rack-studio.compact") !== "false");
   const [exportScope, setExportScope] = useState<"room" | "rack">("room");
   const [search, setSearch] = useState("");
   const [healthOverlay, setHealthOverlay] = useState(false);
-  const [zoom, setZoom] = useState(0.72);
+  const [zoom, setZoom] = useState(compact ? 0.35 : 0.72);
   const [pan, setPan] = useState({ x: 12, y: 12 });
   const [draftRackPositions, setDraftRackPositions] = useState<
     Record<string, { x: number; y: number }>
@@ -294,6 +304,8 @@ export function RackStudioWorkspace({
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
+
+  useEffect(() => { writeLocalPreference("rackpad.rack-studio.compact", String(compact)); }, [compact]);
 
   useEffect(() => {
     writeLocalPreference(RACK_STUDIO_ROUTE_STYLE_STORAGE_KEY, routeStyle);
@@ -325,6 +337,20 @@ export function RackStudioWorkspace({
     () => devices.filter(isRackStudioPhysicalDevice),
     [devices],
   );
+  useEffect(() => {
+    if (initialCableId) setSelectedCableId(initialCableId);
+    if (!initialPortId) return;
+    const deviceId = ports.find(port => port.id === initialPortId)?.deviceId;
+    setSelectedDeviceId(deviceId);
+    const device = endpointDevices.find(device => device.id === deviceId);
+    if (!device) return;
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.querySelector<HTMLElement>(`[data-rack-elevation-id="${CSS.escape(device.rackId ?? "")}"] [aria-label="${CSS.escape(device.hostname)}"]`);
+      element?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      element?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialCableId, initialPortId, ports, endpointDevices]);
   const focusedRack = racks.find((rack) => rack.id === focusedRackId);
   const selectedCable = portLinks.find((link) => link.id === selectedCableId);
   const selectedDevice = physicalDevices.find(
@@ -364,7 +390,7 @@ export function RackStudioWorkspace({
       buildRackStudioCableRoutes({
         room,
         face,
-        devices: physicalDevices,
+        devices: endpointDevices,
         racks: effectiveRacks,
         layouts,
         ports,
@@ -375,10 +401,10 @@ export function RackStudioWorkspace({
       }),
     [
       cableCategory,
+      endpointDevices,
       effectiveRacks,
       face,
       layouts,
-      physicalDevices,
       portLinks,
       ports,
       room,
@@ -732,7 +758,7 @@ export function RackStudioWorkspace({
     return buildRackStudioSvg({
       room,
       racks: effectiveRacks,
-      devices: physicalDevices,
+      devices: endpointDevices,
       layouts,
       ports,
       links: portLinks,
@@ -740,6 +766,7 @@ export function RackStudioWorkspace({
       focusRackId: exportScope === "rack" ? focusedRack?.id : undefined,
       showLabels: showCableLabels,
       routeStyle,
+      compact,
       theme: isLight ? "light" : "dark",
       labels: {
         cable: t("Cable"),
@@ -751,6 +778,7 @@ export function RackStudioWorkspace({
         rack: t("Rack"),
         legend: `${t("Cable")} · ${t("Type")}`,
         crossRoom: t("Room"),
+        incompleteRoute: t("Incomplete route"),
         categories: {
           network: t("Network"),
           fiber: t("Fiber"),
@@ -886,6 +914,9 @@ export function RackStudioWorkspace({
           <option value="other">{t("Other")}</option>
         </select>
 
+        <label className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+          <input type="checkbox" checked={compact} onChange={event => setCompact(event.target.checked)} />{t("Compact")}
+        </label>
         <select
           aria-label={t("Cable routing")}
           value={routeStyle}
@@ -1033,7 +1064,7 @@ export function RackStudioWorkspace({
 
           <div
             ref={roomCanvasRef}
-            className="relative h-[420px] touch-none overflow-hidden bg-[radial-gradient(circle_at_1px_1px,var(--border-muted)_1px,transparent_0)] [background-size:22px_22px]"
+            className={cn("relative touch-none overflow-hidden", compact && !editMode ? "h-[120px] bg-[var(--surface-1)]" : "h-[420px] bg-[radial-gradient(circle_at_1px_1px,var(--border-subtle)_1px,transparent_0)] [background-size:22px_22px]")}
             onPointerDown={handleCanvasPointerDown}
             onPointerMove={handleCanvasPointerMove}
             onPointerUp={handleCanvasPointerUp}
@@ -1049,7 +1080,7 @@ export function RackStudioWorkspace({
               }}
             >
               <svg
-                className="pointer-events-none absolute inset-0 z-20 h-full w-full overflow-visible"
+                className="pointer-events-none absolute inset-0 z-50 h-full w-full overflow-visible"
                 viewBox={`0 0 ${roomScene.bounds.width} ${roomScene.bounds.height}`}
                 aria-label={t("Cables")}
               >
@@ -1062,12 +1093,16 @@ export function RackStudioWorkspace({
                     <g key={route.link.id}>
                       <path
                         data-testid="rack-studio-cable"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={t("{value1}: {name}", { value1: t("Cable"), name: route.label })}
+                        onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); setSelectedCableId(route.link.id); } }}
                         data-link-id={route.link.id}
                         d={route.path}
                         fill="none"
                         stroke="transparent"
                         strokeWidth={14}
-                        className="pointer-events-stroke cursor-pointer"
+                        className={patchMode ? "pointer-events-none" : "pointer-events-stroke cursor-pointer"}
                         onPointerEnter={() => setHoveredCableId(route.link.id)}
                         onPointerLeave={() =>
                           setHoveredCableId((current) =>
@@ -1086,7 +1121,7 @@ export function RackStudioWorkspace({
                         d={route.path}
                         fill="none"
                         stroke={route.color}
-                        strokeWidth={selected ? 5 : 3}
+                        strokeWidth={compact ? (selected ? 2.6 : 1.35) : (selected ? 5 : 3)}
                         strokeDasharray={route.handoff ? "8 5" : undefined}
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -1101,7 +1136,7 @@ export function RackStudioWorkspace({
                         cableLabel={route.label}
                         color={route.color}
                         ports={ports}
-                        devices={devices}
+                        devices={endpointDevices}
                         showLabels={showCableLabels || selected || hovered}
                         opacity={
                           selected || hovered ? 1 : activeCableId ? 0.16 : 0.82
@@ -1142,6 +1177,7 @@ export function RackStudioWorkspace({
                     </g>
                   );
                 })}
+                {selectedCable && roomScene.portAnchors.filter(anchor => [selectedCable.fromPortId, selectedCable.toPortId].includes(anchor.portId)).map(anchor => <circle key={anchor.portId} cx={anchor.x} cy={anchor.y} r={2.5} fill="none" stroke="var(--color-warning)" strokeWidth={1} className="pointer-events-none" />)}
               </svg>
               {effectiveRacks.map((rack, index) => {
                 const stored = rackCanvasState(rack, index);
@@ -1200,7 +1236,7 @@ export function RackStudioWorkspace({
                         (_, row) => (
                           <span
                             key={row}
-                            className="absolute inset-x-0 border-b border-[var(--border-muted)]"
+                            className="absolute inset-x-0 border-b border-[var(--border-subtle)]"
                             style={{
                               top: `${((row + 1) / Math.min(rack.totalU, 42)) * 100}%`,
                             }}
@@ -1343,15 +1379,18 @@ export function RackStudioWorkspace({
           </div>
 
           {focusedRack ? (
-            <div className="max-h-[72vh] overflow-auto bg-[var(--bg-shell)] p-4">
+            <div className={cn("overflow-auto bg-[var(--bg-shell)] p-4", !compact && "max-h-[72vh]")}>
               <div className="flex flex-wrap items-start gap-5">
-                {(face === "both" ? (["front", "rear"] as const) : [face]).map(
+                {(compact && !editMode ? racks : [focusedRack]).flatMap(displayRack => (face === "both" ? (["front", "rear"] as const) : [face]).map(
                   (rackFace) => (
                     <RackStudioElevation
-                      key={rackFace}
-                      rack={focusedRack}
+                      key={`${displayRack.id}:${rackFace}`}
+                      compact={compact}
+                      unitHeight={compact ? 24 : RACK_U_HEIGHT}
+                      rack={displayRack}
+                      racks={racks}
                       face={rackFace}
-                      devices={physicalDevices}
+                      devices={endpointDevices}
                       layouts={layouts}
                       ports={ports}
                       portLinks={portLinks}
@@ -1376,7 +1415,7 @@ export function RackStudioWorkspace({
                       onPlace={placeDevice}
                     />
                   ),
-                )}
+                ))}
               </div>
             </div>
           ) : (
@@ -1479,8 +1518,21 @@ export function RackStudioWorkspace({
           {patchMode || selectedCable ? (
             <RackStudioCableInspector
               link={selectedCable}
+              racks={racks}
+              layouts={layouts}
+              onRevealEndpoint={portId => {
+                if (selectedCable && onRevealCableEndpoint) { onRevealCableEndpoint(portId, selectedCable.id); return; }
+                const port = ports.find(port => port.id === portId);
+                const device = physicalDevices.find(device => device.id === port?.deviceId);
+                if (!port || !device) return;
+                onFaceChange(rackFaceForPhysicalFace(device, port.face === "rear" ? "rear" : "front"));
+                if (device.rackId) setFocusedRackId(device.rackId);
+                setSelectedDeviceId(device.id);
+                setPatchStartPortId(undefined);
+                window.requestAnimationFrame(() => document.querySelector(`[data-rack-elevation-id="${CSS.escape(device.rackId ?? "")}"]`)?.scrollIntoView({ block: "nearest" }));
+              }}
               ports={ports}
-              devices={physicalDevices}
+              devices={endpointDevices}
               room={room}
               face={face}
               canEdit={canEdit && !phoneView}
@@ -1516,6 +1568,7 @@ function statusClass(status: Device["status"]) {
 
 interface ElevationProps {
   rack: Rack;
+  racks: Rack[];
   face: RackFace;
   devices: Device[];
   layouts: DevicePhysicalLayout[];
@@ -1530,6 +1583,8 @@ interface ElevationProps {
   onSelectCable: (linkId: string) => void;
   cableCategory: PhysicalCableCategory | "all";
   routeStyle: RackStudioCableRouteStyle;
+  compact: boolean;
+  unitHeight: number;
   showCableLabels: boolean;
   hoveredCableId?: string;
   onHoverCable: (linkId: string | undefined) => void;
@@ -1551,6 +1606,7 @@ interface DirectDragDraft {
 
 function RackStudioElevation({
   rack,
+  racks,
   face,
   devices,
   layouts,
@@ -1565,6 +1621,8 @@ function RackStudioElevation({
   onSelectCable,
   cableCategory,
   routeStyle,
+  compact,
+  unitHeight,
   showCableLabels,
   hoveredCableId,
   onHoverCable,
@@ -1599,7 +1657,7 @@ function RackStudioElevation({
     layouts,
     ports,
     width: 1000,
-    unitHeight: RACK_U_HEIGHT,
+    unitHeight: unitHeight,
   });
   const directDevices = rackDevices.filter((device) => {
     const state = devicePlacementState(device);
@@ -1682,7 +1740,7 @@ function RackStudioElevation({
     const deltaColumns = Math.round(
       ((clientX - active.startClientX) / frameWidth) * 12,
     );
-    const deltaU = Math.round(-(clientY - active.startClientY) / RACK_U_HEIGHT);
+    const deltaU = Math.round(-(clientY - active.startClientY) / unitHeight);
     const columnSpan = active.state.columnSpan ?? 12;
     const next = {
       ...active.state,
@@ -1800,9 +1858,9 @@ function RackStudioElevation({
   }
 
   return (
-    <div className="w-[min(690px,100%)]">
+    <div data-rack-elevation-id={rack.id} className={compact ? "min-w-[280px] flex-1 basis-[42%]" : "w-[min(690px,100%)]"}>
       <div className="mb-2 flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-        <span>{face === "front" ? t("Front") : t("Rear")}</span>
+        <span>{rack.name} · {face === "front" ? t("Front") : t("Rear")}</span>
         <span>
           12 × {rack.totalU}
           {t("U")}
@@ -1811,11 +1869,14 @@ function RackStudioElevation({
       <div style={{ paddingTop: elevationScene.rackOffsetY }}>
         <RackElevationShell
           totalU={rack.totalU}
-          unitHeight={RACK_U_HEIGHT}
+          unitHeight={unitHeight}
           className="mx-7"
+          showColumns={editMode}
+          compact={compact}
         >
           <RackStudioElevationCableLayer
             rack={rack}
+            racks={racks}
             face={face}
             devices={devices}
             layouts={layouts}
@@ -1823,7 +1884,10 @@ function RackStudioElevation({
             links={portLinks}
             selectedCableId={selectedCableId}
             category={cableCategory}
+            patchMode={patchMode}
             routeStyle={routeStyle}
+            compact={compact}
+            unitHeight={unitHeight}
             showLabels={showCableLabels}
             hoveredCableId={hoveredCableId}
             onHover={onHoverCable}
@@ -1839,7 +1903,7 @@ function RackStudioElevation({
                 candidate.device.id === device.id &&
                 candidate.mountKind === "rack-top",
             );
-            const height = (state.heightU ?? 1) * RACK_U_HEIGHT - 2;
+            const height = (state.heightU ?? 1) * unitHeight - 2;
             const physicalFace: RackFace =
               state.face === face ? "front" : "rear";
             return (
@@ -1908,7 +1972,7 @@ function RackStudioElevation({
               rack.totalU,
               (state.startU ?? 1) + heightU - 1,
             );
-            const top = (rack.totalU - topU) * RACK_U_HEIGHT + 9;
+            const top = (rack.totalU - topU) * unitHeight + 9;
             const layout = layoutByDeviceId.get(device.id);
             const devicePorts = ports.filter(
               (port) =>
@@ -1936,7 +2000,7 @@ function RackStudioElevation({
                 linkedPortIds={linkedPortIds}
                 selectedPortId={selectedPortId}
                 rectWidth={((state.columnSpan ?? 12) / 12) * 1000}
-                rectHeight={heightU * RACK_U_HEIGHT - 2}
+                rectHeight={heightU * unitHeight - 2}
                 selected={selectedDeviceId === device.id}
                 matches={Boolean(matches)}
                 healthClassName={cn(
@@ -1965,7 +2029,7 @@ function RackStudioElevation({
                   top,
                   left: `${((state.column ?? 0) / 12) * 100}%`,
                   width: `${((state.columnSpan ?? 12) / 12) * 100}%`,
-                  height: heightU * RACK_U_HEIGHT - 2,
+                  height: heightU * unitHeight - 2,
                 }}
               >
                 {editMode ? (
@@ -2020,7 +2084,7 @@ function RackStudioElevation({
               x: state.side === "right" ? 1000 - 28 : 0,
               y: 12,
               width: 28,
-              height: rack.totalU * RACK_U_HEIGHT - 8,
+              height: rack.totalU * unitHeight - 8,
             };
             return (
               <RackElevationEquipmentFrame
@@ -2070,6 +2134,7 @@ function RackStudioElevation({
 
 function RackStudioElevationCableLayer({
   rack,
+  racks,
   face,
   devices,
   layouts,
@@ -2077,13 +2142,17 @@ function RackStudioElevationCableLayer({
   links,
   selectedCableId,
   category,
+  patchMode,
   routeStyle,
+  compact,
+  unitHeight,
   showLabels,
   hoveredCableId,
   onHover,
   onSelect,
 }: {
   rack: Rack;
+  racks: Rack[];
   face: RackFace;
   devices: Device[];
   layouts: DevicePhysicalLayout[];
@@ -2091,7 +2160,10 @@ function RackStudioElevationCableLayer({
   links: PortLink[];
   selectedCableId?: string;
   category: PhysicalCableCategory | "all";
+  patchMode: boolean;
   routeStyle: RackStudioCableRouteStyle;
+  compact: boolean;
+  unitHeight: number;
   showLabels: boolean;
   hoveredCableId?: string;
   onHover: (linkId: string | undefined) => void;
@@ -2100,6 +2172,7 @@ function RackStudioElevationCableLayer({
   const { t } = useI18n();
   const { scene, routes } = buildRackElevationCableRoutes({
     rack,
+    racks,
     face,
     devices,
     layouts,
@@ -2108,7 +2181,7 @@ function RackStudioElevationCableLayer({
     category,
     style: routeStyle,
     width: 1000,
-    unitHeight: RACK_U_HEIGHT,
+    unitHeight: unitHeight,
   });
   const height = scene.height;
   const activeCableId = hoveredCableId ?? selectedCableId;
@@ -2125,13 +2198,17 @@ function RackStudioElevationCableLayer({
       <g key={route.link.id}>
         <path
           data-testid="rack-studio-cable"
+          role="button"
+          tabIndex={0}
+          aria-label={t("{value1}: {name}", { value1: t("Cable"), name: route.label })}
+          onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); onSelect(route.link.id); } }}
           data-link-id={route.link.id}
           d={route.path}
           fill="none"
           stroke="transparent"
           strokeWidth={18}
           vectorEffect="non-scaling-stroke"
-          className="pointer-events-stroke cursor-pointer"
+          className={patchMode ? "pointer-events-none" : "pointer-events-stroke cursor-pointer"}
           onPointerEnter={() => onHover(route.link.id)}
           onPointerLeave={() => onHover(undefined)}
           onClick={(event) => {
@@ -2145,7 +2222,7 @@ function RackStudioElevationCableLayer({
           d={route.path}
           fill="none"
           stroke={color}
-          strokeWidth={selected ? 5 : 3}
+          strokeWidth={compact ? (selected ? 2.6 : 1.35) : (selected ? 5 : 3)}
           strokeDasharray={route.handoff ? "8 5" : undefined}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -2196,13 +2273,14 @@ function RackStudioElevationCableLayer({
 
   return (
     <svg
-      className="pointer-events-none absolute inset-x-0 z-20 w-full overflow-visible"
+      className="pointer-events-none absolute inset-x-0 z-50 w-full overflow-visible"
       style={{ top: -scene.rackOffsetY, height }}
       viewBox={`0 0 1000 ${height}`}
       preserveAspectRatio="none"
       aria-label={t("Cables")}
     >
       {routeElements}
+      {links.filter(link => link.id === selectedCableId).flatMap(link => scene.portAnchors.filter(anchor => [link.fromPortId, link.toPortId].includes(anchor.portId))).map(anchor => <circle key={anchor.portId} cx={anchor.x} cy={anchor.y} r={6} fill="none" stroke="var(--color-warning)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />)}
     </svg>
   );
 }
