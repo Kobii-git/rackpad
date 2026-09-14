@@ -253,3 +253,5 @@ Do not run an older binary against schema 52: rollback requires a compatible
 pre-upgrade native backup or volume snapshot. Publication and deployment are
 separate actions. Keep issue #139 open after a release until the tester confirms
 the reported rear routes and mixed-face behavior on their actual rack.
+
+Guided template authoring and worked examples: [Hardware templates](HARDWARE_TEMPLATES.md).

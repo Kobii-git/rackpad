@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "ลองตัวอย่างเหล่านี้: เพิ่มบล็อก RJ45 และ SFP แยกกัน สร้างตำแหน่งแต่ละด้านและเพิ่มโมดูล ทำสำเนาแม่แบบหกช่องแล้วลบสองช่อง",
+  "Rows": "แถว",
+  "Module positions": "ตำแหน่งโมดูล",
+  "Bays and appearance": "ช่องใส่อุปกรณ์และรูปลักษณ์",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "โมดูลติดตั้งในตำแหน่งที่กำหนด นำโมดูลที่กำหนดไว้ออกก่อนลบตำแหน่ง",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "การเปลี่ยนรูปลักษณ์ไม่เพิ่มหรือลบพอร์ตในคลัง ตรวจสอบตัวอย่างก่อนใช้เทมเพลต",
+  "Add creates a separate block. Select a block to update or duplicate it.": "เพิ่มจะสร้างบล็อกแยกต่างหาก เลือกบล็อกเพื่ออัปเดตหรือทำสำเนา",
   "Routing mode": "โหมดเส้นทาง",
   "Automatic": "อัตโนมัติ",
   "Managed": "ตามตัวนำทาง",

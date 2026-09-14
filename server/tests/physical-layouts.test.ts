@@ -5,7 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import { after, afterEach, beforeEach, test } from "node:test";
 import Database from "better-sqlite3";
-import { createStarterTemplate } from "../../src/lib/hardware-template-builder.ts";
+import { createStarterTemplate,
+  createHardwareModule,
+  updateModulePosition,
+} from "../../src/lib/hardware-template-builder.ts";
 
 const tempDir = mkdtempSync(
   path.join(os.tmpdir(), "rackpad-physical-layouts-"),
@@ -1199,7 +1202,8 @@ test("schema 45 migration preserves inventory and cabling while creating legacy 
   );
   assert.deepEqual(
     migrated.prepare("SELECT * FROM ports ORDER BY id").all(),
-    before.ports.map((row) => ({ ...(row as Record<string, unknown>), stackMemberId: null })),
+    before.ports.map((row) => ({ ...(row as Record<string, unknown>), stackMemberId: null,
+    })),
   );
   assert.deepEqual(
     migrated
@@ -1403,7 +1407,8 @@ test("schema 48 migration adds cable inspection defaults without changing invent
   );
   assert.deepEqual(
     migrated.prepare("SELECT * FROM ports ORDER BY id").all(),
-    beforePorts.map((row) => ({ ...(row as Record<string, unknown>), stackMemberId: null })),
+    beforePorts.map((row) => ({ ...(row as Record<string, unknown>), stackMemberId: null,
+    })),
   );
   assert.deepEqual(
     migrated
@@ -1725,3 +1730,73 @@ function authHeaders(token: string) {
 function json(response: { body: string }) {
   return JSON.parse(response.body);
 }
+
+test("guided template structures round-trip through schema-52 backup without changing device snapshots", async () => {
+  const token = await bootstrapAdmin();
+  let template = createStarterTemplate(
+    "server-2u",
+    "guided-roundtrip",
+    "Guided roundtrip",
+  );
+  const position = {
+    id: "front-nic",
+    face: "front" as const,
+    x: 100,
+    y: 100,
+    width: 130,
+    height: 112,
+  };
+  template = {
+    ...template,
+    moduleSlots: [position],
+    modules: [
+      createHardwareModule(
+        "guided-nic",
+        "NIC",
+        position.id,
+        "nic",
+        2,
+        position,
+      ),
+    ],
+  };
+  template = updateModulePosition(template, { ...position, x: 300 });
+  const create = await app.inject({
+    method: "POST",
+    url: "/api/hardware-templates",
+    headers: authHeaders(token),
+    payload: template,
+  });
+  assert.equal(create.statusCode, 201, create.body);
+  await createDevice(token, "guided-existing-device");
+  const snapshot = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: authHeaders(token),
+  });
+  assert.equal(snapshot.statusCode, 200, snapshot.body);
+  assert.equal(json(snapshot).schemaVersion, 52);
+  const before = db
+    .prepare("SELECT * FROM hardwareTemplates WHERE id = ?")
+    .get(template.id);
+  const layoutsBefore = db
+    .prepare("SELECT * FROM devicePhysicalLayouts ORDER BY deviceId")
+    .all();
+  assert.ok(layoutsBefore.length > 0);
+  db.prepare("DELETE FROM hardwareTemplates WHERE id = ?").run(template.id);
+  const restored = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers: authHeaders(token),
+    payload: json(snapshot),
+  });
+  assert.equal(restored.statusCode, 200, restored.body);
+  assert.deepEqual(
+    db.prepare("SELECT * FROM hardwareTemplates WHERE id = ?").get(template.id),
+    before,
+  );
+  assert.deepEqual(
+    db.prepare("SELECT * FROM devicePhysicalLayouts ORDER BY deviceId").all(),
+    layoutsBefore,
+  );
+});

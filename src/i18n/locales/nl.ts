@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const nl = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Probeer deze voorbeelden: voeg afzonderlijke RJ45- en SFP-blokken toe; maak op elke zijde een positie en voeg een module toe; dupliceer een sjabloon met zes bays en verwijder twee bays.",
+  "Rows": "Rijen",
+  "Module positions": "Moduleposities",
+  "Bays and appearance": "Compartimenten en uiterlijk",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "Modules passen in posities. Verwijder toegewezen modules voordat u een positie verwijdert.",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "Wijzigingen aan het uiterlijk voegen geen inventarispoorten toe en verwijderen ze niet. Bekijk het voorbeeld voordat u een sjabloon toepast.",
+  "Add creates a separate block. Select a block to update or duplicate it.": "Toevoegen maakt een apart blok. Selecteer een blok om bij te werken of te dupliceren.",
   "Routing mode": "Routemodus",
   "Automatic": "Automatisch",
   "Managed": "Geleid",

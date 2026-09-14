@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "例を試してください：RJ45とSFPのブロックを別々に追加し、各面に取付位置を作成してモジュールを追加します。6ベイのテンプレートを複製して2ベイを削除することもできます。",
+  "Rows": "行",
+  "Module positions": "モジュールの配置位置",
+  "Bays and appearance": "ベイと外観",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "モジュールは配置位置に取り付けます。位置を削除する前に、割り当てられたモジュールを削除してください。",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "外観の変更でインベントリのポートは追加・削除されません。テンプレートの適用前にプレビューを確認してください。",
+  "Add creates a separate block. Select a block to update or duplicate it.": "追加すると独立したブロックが作成されます。更新または複製するブロックを選択してください。",
   "Routing mode": "経路モード",
   "Automatic": "自動",
   "Managed": "ガイド付き",

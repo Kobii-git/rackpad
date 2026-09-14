@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "این نمونه‌ها را امتحان کنید: بلوک‌های جداگانه RJ45 و SFP اضافه کنید؛ در هر وجه یک موقعیت ایجاد و ماژول اضافه کنید؛ یک الگوی شش‌محفظه‌ای را تکثیر و دو محفظه را حذف کنید.",
+  "Rows": "ردیف‌ها",
+  "Module positions": "موقعیت ماژول‌ها",
+  "Bays and appearance": "محفظه‌ها و ظاهر",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "ماژول‌ها در موقعیت‌ها قرار می‌گیرند. پیش از حذف یک موقعیت، ماژول‌های اختصاص‌یافته را حذف کنید.",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "تغییر ظاهر، درگاه‌های موجودی را اضافه یا حذف نمی‌کند. پیش از اعمال الگو، پیش‌نمایش را بررسی کنید.",
+  "Add creates a separate block. Select a block to update or duplicate it.": "افزودن، یک بلوک جداگانه ایجاد می‌کند. برای به‌روزرسانی یا تکثیر، یک بلوک انتخاب کنید.",
   "Routing mode": "حالت مسیر",
   "Automatic": "خودکار",
   "Managed": "مدیریت‌شده",

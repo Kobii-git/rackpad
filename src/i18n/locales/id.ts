@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Coba contoh ini: tambahkan blok RJ45 dan SFP terpisah; buat posisi pada setiap sisi dan tambahkan modul; duplikasi templat enam bay lalu hapus dua bay.",
+  "Rows": "Baris",
+  "Module positions": "Posisi modul",
+  "Bays and appearance": "Bay dan tampilan",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "Modul ditempatkan pada posisi tertentu. Hapus modul yang ditetapkan sebelum menghapus posisi.",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "Perubahan tampilan tidak menambah atau menghapus port inventaris. Pratinjau sebelum menerapkan templat.",
+  "Add creates a separate block. Select a block to update or duplicate it.": "Tambah membuat blok terpisah. Pilih blok untuk diperbarui atau diduplikasi.",
   "Routing mode": "Mode rute",
   "Automatic": "Otomatis",
   "Managed": "Terarah",

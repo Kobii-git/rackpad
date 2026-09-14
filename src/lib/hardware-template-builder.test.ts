@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createStarterTemplate,
+  createHardwareModule,
+  deleteModulePosition,
+  updateModulePosition,
+  templatePortBlocks,
+  deletePortBlock,
+  nextTemplatePartId,
   generatePortBlock,
   movePhysicalPortSlot,
   replacePortBlock,
@@ -233,4 +239,90 @@ test("one-row 24-column patch blocks preserve their opposite face on repeated up
     assert.equal(new Set(updated.map((slot) => slot.x)).size, 24);
     assert.equal(new Set(template.portSlots.map((slot) => slot.id)).size, 48);
   }
+});
+
+test("block editing retains identities and deletes only the selected face and group", () => {
+  const original = createStarterTemplate("patch-panel", "panel", "Panel");
+  const front = templatePortBlocks(original).find(
+    (block) => block.face === "front",
+  )!;
+  assert.ok(front);
+  const edited = replacePortBlock(original, { ...front, x: front.x + 5 });
+  assert.deepEqual(
+    edited.portSlots.map((slot) => slot.id).sort(),
+    original.portSlots.map((slot) => slot.id).sort(),
+  );
+  const id = nextTemplatePartId(
+    front.id,
+    templatePortBlocks(edited).map((block) => block.id),
+  );
+  const duplicate = replacePortBlock(edited, {
+    ...front,
+    id,
+    connector: "sfp",
+    count: 4,
+    columns: 4,
+  });
+  assert.equal(duplicate.portSlots.length, original.portSlots.length + 4);
+  assert.equal(
+    new Set(duplicate.portSlots.map((slot) => slot.id)).size,
+    duplicate.portSlots.length,
+  );
+  const removed = deletePortBlock(duplicate, { ...front, id });
+  assert.deepEqual(removed.portSlots, edited.portSlots);
+  assert.deepEqual(removed.rear, original.rear);
+});
+
+test("module positions control both faces and preserve module port identities while moving and resizing", () => {
+  const template = createStarterTemplate("mini-pc", "mini", "Mini");
+  const position = {
+    id: "front-module",
+    face: "front" as const,
+    x: 40,
+    y: 20,
+    width: 260,
+    height: 224,
+  };
+  const module = createHardwareModule(
+    "nic-front",
+    "NIC",
+    position.id,
+    "nic",
+    2,
+    position,
+  );
+  assert.equal(module.face, "front");
+  assert.ok(
+    module.portSlots.every(
+      (slot) =>
+        slot.face === "front" && slot.x >= position.x && slot.y >= position.y,
+    ),
+  );
+  const assigned = { ...template, moduleSlots: [position], modules: [module] };
+  assert.equal(deleteModulePosition(assigned, position.id), assigned);
+  const moved = updateModulePosition(assigned, {
+    ...position,
+    face: "rear",
+    x: 500,
+    y: 40,
+    width: 130,
+    height: 112,
+  });
+  assert.equal(moved.modules[0].face, "rear");
+  assert.deepEqual(
+    moved.modules[0].portSlots.map((slot) => slot.id),
+    module.portSlots.map((slot) => slot.id),
+  );
+  assert.ok(
+    moved.modules[0].portSlots.every(
+      (slot) =>
+        slot.face === "rear" && slot.x >= 500 && slot.x + slot.width <= 630,
+    ),
+  );
+  assert.deepEqual(moved.portSlots, template.portSlots);
+  assert.equal(
+    deleteModulePosition({ ...moved, modules: [] }, position.id).moduleSlots
+      .length,
+    0,
+  );
 });

@@ -1,4 +1,11 @@
 export const en = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.",
+  "Rows": "Rows",
+  "Module positions": "Module positions",
+  "Bays and appearance": "Bays and appearance",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "Modules fit into positions. Remove assigned modules before deleting a position.",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "Appearance changes do not add or delete inventory ports. Preview before applying a template.",
+  "Add creates a separate block. Select a block to update or duplicate it.": "Add creates a separate block. Select a block to update or duplicate it.",
   "Routing mode": "Routing mode",
   "Automatic": "Automatic",
   "Managed": "Managed",

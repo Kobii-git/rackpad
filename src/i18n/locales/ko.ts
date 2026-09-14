@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "다음 예제를 시도하세요. RJ45와 SFP 블록을 따로 추가하고, 각 면에 위치를 만들어 모듈을 추가하고, 6베이 템플릿을 복제한 뒤 베이 두 개를 삭제하세요.",
+  "Rows": "행",
+  "Module positions": "모듈 위치",
+  "Bays and appearance": "베이 및 모양",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "모듈은 지정된 위치에 배치됩니다. 위치를 삭제하기 전에 할당된 모듈을 제거하세요.",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "모양을 변경해도 인벤토리 포트는 추가되거나 삭제되지 않습니다. 템플릿을 적용하기 전에 미리 보기를 확인하세요.",
+  "Add creates a separate block. Select a block to update or duplicate it.": "추가하면 별도 블록이 만들어집니다. 업데이트하거나 복제할 블록을 선택하세요.",
   "Routing mode": "경로 모드",
   "Automatic": "자동",
   "Managed": "가이드 경로",

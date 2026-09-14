@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const uk = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Спробуйте приклади: додайте окремі блоки RJ45 і SFP; створіть позицію на кожному боці та додайте модуль; дублюйте шаблон із шістьма відсіками й видаліть два відсіки.",
+  "Rows": "Рядки",
+  "Module positions": "Позиції модулів",
+  "Bays and appearance": "Відсіки та вигляд",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "Модулі встановлюються в позиції. Перед видаленням позиції видаліть призначені модулі.",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "Зміни вигляду не додають і не видаляють порти інвентарю. Перевірте попередній перегляд перед застосуванням шаблону.",
+  "Add creates a separate block. Select a block to update or duplicate it.": "Додавання створює окремий блок. Виберіть блок для оновлення або дублювання.",
   "Routing mode": "Режим траси",
   "Automatic": "Автоматично",
   "Managed": "За напрямними",

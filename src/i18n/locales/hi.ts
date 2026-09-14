@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "ये उदाहरण आज़माएँ: अलग RJ45 और SFP ब्लॉक जोड़ें; हर तरफ एक स्थान बनाकर मॉड्यूल जोड़ें; छह बे वाले टेम्पलेट की प्रतिलिपि बनाकर दो बे हटाएँ।",
+  "Rows": "पंक्तियाँ",
+  "Module positions": "मॉड्यूल के स्थान",
+  "Bays and appearance": "बे और रूप",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "मॉड्यूल निर्धारित स्थानों में लगते हैं। स्थान हटाने से पहले उससे जुड़े मॉड्यूल हटाएँ।",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "रूप बदलने से इन्वेंटरी पोर्ट जुड़ते या हटते नहीं हैं। टेम्पलेट लागू करने से पहले पूर्वावलोकन देखें।",
+  "Add creates a separate block. Select a block to update or duplicate it.": "जोड़ने से अलग ब्लॉक बनता है। अपडेट या प्रतिलिपि बनाने के लिए ब्लॉक चुनें।",
   "Routing mode": "मार्ग मोड",
   "Automatic": "स्वचालित",
   "Managed": "प्रबंधित",

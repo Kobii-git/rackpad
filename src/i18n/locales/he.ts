@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "נסו את הדוגמאות הבאות: הוסיפו בלוקים נפרדים של RJ45 ו-SFP; צרו מיקום בכל צד והוסיפו מודול; שכפלו תבנית בעלת שישה תאים ומחקו שני תאים.",
+  "Rows": "שורות",
+  "Module positions": "מיקומי מודולים",
+  "Bays and appearance": "תאים ומראה",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "מודולים מותקנים במיקומים. יש להסיר מודולים משויכים לפני מחיקת מיקום.",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "שינויי מראה אינם מוסיפים או מוחקים יציאות במלאי. יש לבדוק תצוגה מקדימה לפני החלת תבנית.",
+  "Add creates a separate block. Select a block to update or duplicate it.": "הוספה יוצרת בלוק נפרד. יש לבחור בלוק לעדכון או לשכפול.",
   "Routing mode": "מצב ניתוב",
   "Automatic": "אוטומטי",
   "Managed": "מנוהל",

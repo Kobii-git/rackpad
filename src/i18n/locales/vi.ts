@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Hãy thử các ví dụ: thêm các khối RJ45 và SFP riêng; tạo vị trí ở mỗi mặt rồi thêm mô-đun; nhân bản mẫu sáu khoang và xóa hai khoang.",
+  "Rows": "Hàng",
+  "Module positions": "Vị trí mô-đun",
+  "Bays and appearance": "Khay và giao diện",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "Mô-đun được lắp vào các vị trí. Xóa mô-đun đã gán trước khi xóa vị trí.",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "Thay đổi giao diện không thêm hoặc xóa cổng trong kho. Xem trước khi áp dụng mẫu.",
+  "Add creates a separate block. Select a block to update or duplicate it.": "Thêm tạo một khối riêng. Chọn khối để cập nhật hoặc nhân bản.",
   "Routing mode": "Chế độ tuyến",
   "Automatic": "Tự động",
   "Managed": "Có dẫn hướng",

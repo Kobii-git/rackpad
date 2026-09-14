@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "试试这些示例：分别添加 RJ45 和 SFP 端口块；在每一面创建安装位置并添加模块；复制六盘位模板并删除两个盘位。",
+  "Rows": "行数",
+  "Module positions": "模块位置",
+  "Bays and appearance": "槽位与外观",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "模块安装在指定位置。删除位置前，请先移除已分配的模块。",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "外观更改不会添加或删除资产端口。应用模板前请先预览。",
+  "Add creates a separate block. Select a block to update or duplicate it.": "添加会创建独立的端口组。选择端口组以更新或复制。",
   "Routing mode": "路径模式",
   "Automatic": "自动",
   "Managed": "引导",

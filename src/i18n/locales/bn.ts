@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "এই উদাহরণগুলি চেষ্টা করুন: আলাদা RJ45 ও SFP ব্লক যোগ করুন; প্রতিটি পাশে একটি অবস্থান তৈরি করে মডিউল যোগ করুন; ছয়টি বে-সহ টেমপ্লেটের অনুলিপি করে দুটি বে মুছুন।",
+  "Rows": "সারি",
+  "Module positions": "মডিউলের অবস্থান",
+  "Bays and appearance": "বে ও চেহারা",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "মডিউল নির্দিষ্ট অবস্থানে বসে। কোনো অবস্থান মুছতে আগে নির্ধারিত মডিউল সরান।",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "চেহারার পরিবর্তন ইনভেন্টরি পোর্ট যোগ বা মুছে না। টেমপ্লেট প্রয়োগের আগে পূর্বরূপ দেখুন।",
+  "Add creates a separate block. Select a block to update or duplicate it.": "যোগ করলে পৃথক ব্লক তৈরি হয়। হালনাগাদ বা অনুলিপি করতে একটি ব্লক বেছে নিন।",
   "Routing mode": "পথের ধরন",
   "Automatic": "স্বয়ংক্রিয়",
   "Managed": "পরিচালিত",

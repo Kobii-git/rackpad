@@ -156,15 +156,23 @@ function starter(
   return { id, name, category, deviceType, heightU, portBlocks: blocks };
 }
 
-function baseFace(face: RackFace, label: string, category: string): FaceDefinitionV1 {
+function baseFace(face: RackFace, label: string, category: string,
+): FaceDefinitionV1 {
   const elements: FaceDefinitionV1["elements"] = [
-    { kind: "panel", id: `${face}-panel`, x: 8, y: 12, width: 984, height: 276, tone: "mid" },
-    ...[32, 968].flatMap((x, index) => [36, 264].map((y, row) => ({ kind: "screw" as const, id: `${face}-screw-${index}-${row}`, x, y, radius: 7, tone: "light" as const }))),
-    { kind: "label", id: `${face}-label`, x: 75, y: 40, text: label, align: "start" },
+    { kind: "panel", id: `${face}-panel`, x: 8, y: 12, width: 984, height: 276, tone: "mid",
+    },
+    ...[32, 968].flatMap((x, index) => [36, 264].map((y, row) => ({ kind: "screw" as const, id: `${face}-screw-${index}-${row}`, x, y, radius: 7, tone: "light" as const,
+      })),
+    ),
+    { kind: "label", id: `${face}-label`, x: 75, y: 40, text: label, align: "start",
+    },
   ];
-  const box = (kind: "vent" | "bay" | "display" | "handle" | "panel", id: string, x: number, y: number, width: number, height: number) =>
-    elements.push({ kind, id: `${face}-${id}`, x, y, width, height, tone: "dark" });
-  const led = (id: string, x: number, y: number) => elements.push({ kind: "indicator", id: `${face}-${id}`, x, y, radius: 5, tone: "accent" });
+  const box = (kind: "vent" | "bay" | "display" | "handle" | "panel", id: string, x: number, y: number, width: number, height: number,
+  ) =>
+    elements.push({ kind, id: `${face}-${id}`, x, y, width, height, tone: "dark",
+    });
+  const led = (id: string, x: number, y: number) => elements.push({ kind: "indicator", id: `${face}-${id}`, x, y, radius: 5, tone: "accent",
+    });
   if (category === "brush_panel") {
     box("vent", "brush", 80, 75, 840, 150);
   } else if (category === "rack_shelf") {
@@ -351,6 +359,7 @@ export function createHardwareModule(
   slotId: string,
   primitive: HardwareModulePrimitive,
   count = 1,
+  position?: HardwareTemplateV1["moduleSlots"][number],
 ): HardwareModuleV1 {
   const secondSlot = slotId.endsWith("b");
   const x = secondSlot ? 770 : 620;
@@ -374,7 +383,7 @@ export function createHardwareModule(
     height: 60,
     labelPrefix: "",
   };
-  return {
+  const module: HardwareModuleV1 = {
     id: safeId(id),
     name,
     slotId,
@@ -400,6 +409,13 @@ export function createHardwareModule(
     ],
     portSlots: portCount > 0 ? generatePortBlock(block) : [],
   };
+  return position
+    ? transformHardwareModule(
+        module,
+        { id: slotId, face: "rear", x, y, width: 130, height: 112 },
+        position,
+      )
+    : module;
 }
 
 function moduleConnector(primitive: HardwareModulePrimitive): PortKind {
@@ -532,4 +548,132 @@ export function safeId(value: string) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 120);
   return normalized || "hardware-template";
+}
+
+export function nextTemplatePartId(prefix: string, ids: string[]): string {
+  const used = new Set(ids);
+  const base = safeId(prefix).replace(/:(front|rear)$/, "");
+  let suffix = 1;
+  while (
+    used.has(`${base}-${suffix}`) ||
+    used.has(`${base}-${suffix}:front`) ||
+    used.has(`${base}-${suffix}:rear`) || [...used].some(id => id.startsWith(`${base}-${suffix}-`))
+  )
+    suffix++;
+  return `${base}-${suffix}`;
+}
+
+export function templatePortBlocks(
+  template: HardwareTemplateV1,
+): PortBlockDefinition[] {
+  return template.portBlueprints.filter(
+    (entry) =>
+      typeof entry.id === "string" &&
+      (entry.face === "front" || entry.face === "rear") &&
+      typeof entry.connector === "string" &&
+      ["count", "rows", "columns", "start", "x", "y", "width", "height"].every(
+        (key) => typeof entry[key] === "number",
+      ),
+  ) as unknown as PortBlockDefinition[];
+}
+
+export function deletePortBlock(
+  template: HardwareTemplateV1,
+  block: PortBlockDefinition,
+): HardwareTemplateV1 {
+  const base = portBlockBaseId(block.id);
+  return {
+    ...template,
+    portBlueprints: template.portBlueprints.filter(
+      (entry) =>
+        !(
+          entry.face === block.face &&
+          typeof entry.id === "string" &&
+          portBlockBaseId(entry.id) === base
+        ),
+    ),
+    portSlots: template.portSlots.filter(
+      (slot) =>
+        !(
+          slot.face === block.face &&
+          (slot.groupId
+            ? portBlockBaseId(slot.groupId) === base
+            : slot.id.startsWith(`${base}-`))
+        ),
+    ),
+  };
+}
+
+type ModulePosition = HardwareTemplateV1["moduleSlots"][number];
+
+function transformHardwareModule(
+  module: HardwareModuleV1,
+  before: ModulePosition,
+  after: ModulePosition,
+): HardwareModuleV1 {
+  const sx = after.width / before.width;
+  const sy = after.height / before.height;
+  const point = (item: { x: number; y: number }) => ({
+    x: after.x + (item.x - before.x) * sx,
+    y: after.y + (item.y - before.y) * sy,
+  });
+  return {
+    ...module,
+    face: after.face,
+    elements: module.elements.map((item) => ({
+      ...item,
+      ...point(item),
+      ...("width" in item
+        ? { width: item.width * sx, height: item.height * sy }
+        : {}),
+      ...("radius" in item ? { radius: item.radius * Math.min(sx, sy) } : {}),
+    })),
+    portSlots: module.portSlots.map((item) => ({
+      ...item,
+      ...point(item),
+      face: after.face,
+      width: item.width * sx,
+      height: item.height * sy,
+    })),
+  };
+}
+
+export function updateModulePosition(
+  template: HardwareTemplateV1,
+  position: ModulePosition,
+): HardwareTemplateV1 {
+  const before = template.moduleSlots.find((slot) => slot.id === position.id);
+  if (!before) return template;
+  const bounds = template[position.face];
+  const width = Math.max(1, Math.min(bounds.width, position.width));
+  const height = Math.max(1, Math.min(bounds.height, position.height));
+  const after = {
+    ...position,
+    width,
+    height,
+    x: Math.max(0, Math.min(bounds.width - width, position.x)),
+    y: Math.max(0, Math.min(bounds.height - height, position.y)),
+  };
+  return {
+    ...template,
+    moduleSlots: template.moduleSlots.map((slot) =>
+      slot.id === after.id ? after : slot,
+    ),
+    modules: template.modules.map((module) =>
+      module.slotId === after.id
+        ? transformHardwareModule(module, before, after)
+        : module,
+    ),
+  };
+}
+
+export function deleteModulePosition(
+  template: HardwareTemplateV1,
+  id: string,
+): HardwareTemplateV1 {
+  if (template.modules.some((module) => module.slotId === id)) return template;
+  return {
+    ...template,
+    moduleSlots: template.moduleSlots.filter((slot) => slot.id !== id),
+  };
 }

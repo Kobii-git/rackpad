@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "جرّب هذه الأمثلة: أضف مجموعات RJ45 وSFP منفصلة؛ أنشئ موضعًا على كل وجه وأضف وحدة؛ كرّر قالبًا بست حجيرات واحذف حجيرتين.",
+  "Rows": "الصفوف",
+  "Module positions": "مواضع الوحدات",
+  "Bays and appearance": "الحجيرات والمظهر",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "توضع الوحدات في مواضع محددة. أزل الوحدات المعينة قبل حذف موضع.",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "تغييرات المظهر لا تضيف منافذ المخزون ولا تحذفها. عاين القالب قبل تطبيقه.",
+  "Add creates a separate block. Select a block to update or duplicate it.": "تنشئ الإضافة مجموعة مستقلة. حدد مجموعة لتحديثها أو تكرارها.",
   "Routing mode": "وضع المسار",
   "Automatic": "تلقائي",
   "Managed": "مُدار",

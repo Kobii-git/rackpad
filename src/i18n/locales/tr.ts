@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Şu örnekleri deneyin: ayrı RJ45 ve SFP blokları ekleyin; her yüzde bir konum oluşturup modül ekleyin; altı yuvalı bir şablonu çoğaltıp iki yuvayı silin.",
+  "Rows": "Satırlar",
+  "Module positions": "Modül konumları",
+  "Bays and appearance": "Yuvalar ve görünüm",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "Modüller konumlara yerleştirilir. Bir konumu silmeden önce atanmış modülleri kaldırın.",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "Görünüm değişiklikleri envanter bağlantı noktalarını eklemez veya silmez. Şablonu uygulamadan önce önizleyin.",
+  "Add creates a separate block. Select a block to update or duplicate it.": "Ekle ayrı bir blok oluşturur. Güncellemek veya çoğaltmak için bir blok seçin.",
   "Routing mode": "Güzergâh modu",
   "Automatic": "Otomatik",
   "Managed": "Yönlendirmeli",

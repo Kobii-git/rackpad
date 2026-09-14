@@ -17,6 +17,9 @@ import {
 } from "@/lib/device-types";
 import {
   createHardwareModule,
+  deletePortBlock,
+  nextTemplatePartId,
+  templatePortBlocks,
   createStarterTemplate,
   HARDWARE_TEMPLATE_STARTERS,
   MODULE_PRIMITIVES,
@@ -47,6 +50,7 @@ import {
   CardTitle,
 } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { TemplateStructureEditor } from "./TemplateStructureEditor";
 import { PhysicalPortSlotEditor } from "./PhysicalPortSlotEditor";
 
 const NEW_TEMPLATE = "__new_hardware_template__";
@@ -85,6 +89,11 @@ export function HardwareTemplateBuilder({
   const [face, setFace] = useState<RackFace>("rear");
   const [selectedSlotId, setSelectedSlotId] = useState<string>();
   const [block, setBlock] = useState<PortBlockDefinition>(EMPTY_BLOCK);
+  const [editingBlockKey, setEditingBlockKey] = useState("");
+  const blocks = templatePortBlocks(draft);
+  const editingBlock = blocks.find(
+    (entry) => `${entry.face}:${entry.id}` === editingBlockKey,
+  );
   const [modulePrimitive, setModulePrimitive] =
     useState<HardwareModulePrimitive>("nic");
   const [moduleSlotId, setModuleSlotId] = useState("rear-module-a");
@@ -176,6 +185,8 @@ export function HardwareTemplateBuilder({
   }, [selectedDeviceType, selectedId]);
 
   function selectTemplate(id: string) {
+    setEditingBlockKey("");
+    setBlock(EMPTY_BLOCK);
     setSelectedId(id);
     setBulkPreviews([]);
     if (id === NEW_TEMPLATE) {
@@ -194,6 +205,8 @@ export function HardwareTemplateBuilder({
   }
 
   function selectStarter(id: string) {
+    setEditingBlockKey("");
+    setBlock(EMPTY_BLOCK);
     setStarterId(id);
     setSelectedId(NEW_TEMPLATE);
     const next = createStarterTemplate(id);
@@ -613,7 +626,7 @@ export function HardwareTemplateBuilder({
                 </div>
               ))}
             </div>
-            {selectedSlot && (
+            {selectedSlot && editable && (
               <div className="grid gap-2 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3 sm:grid-cols-4">
                 <Field label={t("Port")}>
                   <Input
@@ -685,13 +698,56 @@ export function HardwareTemplateBuilder({
           </div>
         </div>
 
+        <p className="text-xs text-[var(--text-secondary)]">
+          {t(
+            "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.",
+          )}
+        </p>
+
         {editable && (
           <div className="grid gap-4 border-t border-[var(--border-default)] pt-5 xl:grid-cols-2">
-            <section className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3">
+            <section
+              data-testid="template-port-block-editor"
+              className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3">
               <div className="rk-kicker">{t("Port layout")}</div>
+              <p className="text-xs text-[var(--text-secondary)]">
+                {t(
+                  "Add creates a separate block. Select a block to update or duplicate it.",
+                )}
+              </p>
+              <label className="block text-xs">
+                {t("Port layout")}
+                <select
+                  data-testid="template-port-blocks"
+                  className="rk-control mt-1 w-full"
+                  value={editingBlock ? editingBlockKey : ""}
+                  onChange={(event) => {
+                    setEditingBlockKey(event.target.value);
+                    const selected = blocks.find(
+                      (entry) =>
+                        `${entry.face}:${entry.id}` === event.target.value,
+                    );
+                    setBlock(
+                      selected ? { ...selected } : { ...EMPTY_BLOCK, face },
+                    );
+                    if (selected) setFace(selected.face);
+                  }}
+                >
+                  <option value="">{t("New")}</option>
+                  {blocks.map((entry) => (
+                    <option
+                      key={`${entry.face}:${entry.id}`}
+                      value={`${entry.face}:${entry.id}`}
+                    >
+                      {entry.id} · {entry.connector}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <Field label={t("ID")}>
                   <Input
+                    disabled={Boolean(editingBlock)}
                     value={block.id}
                     onChange={(event) =>
                       setBlock((current) => ({
@@ -704,6 +760,7 @@ export function HardwareTemplateBuilder({
                 <Field label={t("Face")}>
                   <select
                     className="rk-control h-8 w-full px-2 text-sm"
+                    disabled={Boolean(editingBlock)}
                     value={block.face}
                     onChange={(event) =>
                       setBlock((current) => ({
@@ -773,7 +830,7 @@ export function HardwareTemplateBuilder({
                     }
                   />
                 </Field>
-                <Field label={t("Height (U)")}>
+                <Field label={t("Rows")}>
                   <Input
                     type="number"
                     min={1}
@@ -824,19 +881,103 @@ export function HardwareTemplateBuilder({
                   </select>
                 </Field>
               </div>
-              <Button
+              <div className="grid grid-cols-2 gap-2">
+                {(["x", "y", "width", "height"] as const).map((key) => (
+                  <Field
+                    key={key}
+                    label={
+                      key === "width"
+                        ? t("Width")
+                        : key === "height"
+                          ? t("Height")
+                          : t("{value1}: {name}", {
+                              value1: t("Position"),
+                              name: key.toUpperCase(),
+                            })
+                    }
+                  >
+                    <Input
+                      type="number"
+                      value={block[key]}
+                      onChange={(event) =>
+                        setBlock((current) => ({
+                          ...current,
+                          [key]: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
                 size="sm"
-                onClick={() => {
+                  onClick={() => {
+                    const id = nextTemplatePartId(block.id, [
+                      ...draft.portSlots.map((slot) => slot.groupId ?? slot.id),
+                      ...blocks.map((entry) => entry.id),
+                    ]);
+                    const next = { ...block, id };
+                    setDraft((current) => replacePortBlock(current, next));
+                    setFace(next.face);
+                    setBlock({ ...next, id: `${id}:${next.face}` });
+                    setEditingBlockKey(`${next.face}:${id}:${next.face}`);
+                  }}
+                >
+                  {t("Add")}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!editingBlock}
+                  onClick={() => {
                   setDraft((current) => replacePortBlock(current, block));
                   setFace(block.face);
                 }}
               >
-                <Plus />
-                {t("Add or update port block")}
+                  {t("Update")}
               </Button>
+                <Button
+                  size="sm"
+                  disabled={!editingBlock}
+                  onClick={() => {
+                    if (!editingBlock) return;
+                    const id = nextTemplatePartId(
+                      editingBlock.id,
+                      blocks.map((entry) => entry.id),
+                    );
+                    setDraft((current) =>
+                      replacePortBlock(current, { ...editingBlock, id }),
+                    );
+                    setBlock({
+                      ...editingBlock,
+                      id: `${id}:${editingBlock.face}`,
+                    });
+                    setEditingBlockKey(
+                      `${editingBlock.face}:${id}:${editingBlock.face}`,
+                    );
+                  }}
+                >
+                  {t("Duplicate")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={!editingBlock}
+                  onClick={() => {
+                    if (!editingBlock) return;
+                    setDraft((current) =>
+                      deletePortBlock(current, editingBlock),
+                    );
+                    setEditingBlockKey("");
+                    setBlock({ ...EMPTY_BLOCK, face });
+                  }}
+                >
+                  {t("Delete")}
+                </Button>
+              </div>
             </section>
 
-            <section className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3">
+            <section data-testid="template-module-editor" className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3">
               <div className="rk-kicker">{t("Hardware")}</div>
               <div className="grid gap-2 sm:grid-cols-3">
                 <Field label={t("Type")}>
@@ -873,10 +1014,11 @@ export function HardwareTemplateBuilder({
                   <Button
                     className="w-full"
                     size="sm"
-                    disabled={!moduleSlotId}
+                    disabled={!draft.moduleSlots.some(slot => slot.id === moduleSlotId)}
                     onClick={() => {
-                      const id = safeId(
-                        `${modulePrimitive}-${draft.modules.length + 1}`,
+                      const id = nextTemplatePartId(
+                        modulePrimitive,
+                        draft.modules.map((module) => module.id),
                       );
                       setDraft((current) => ({
                         ...current,
@@ -888,6 +1030,9 @@ export function HardwareTemplateBuilder({
                             moduleSlotId,
                             modulePrimitive,
                             modulePrimitive === "nic" ? 2 : 1,
+                            current.moduleSlots.find(
+                              (slot) => slot.id === moduleSlotId,
+                            ),
                           ),
                         ],
                       }));
@@ -912,6 +1057,17 @@ export function HardwareTemplateBuilder({
               </div>
             </section>
           </div>
+        )}
+
+        {editable && (
+          <TemplateStructureEditor
+            draft={draft}
+            setDraft={setDraft}
+            face={face}
+            setFace={setFace}
+            moduleSlotId={moduleSlotId}
+            setModuleSlotId={setModuleSlotId}
+          />
         )}
 
         {selectedDeviceType &&

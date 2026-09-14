@@ -92,6 +92,12 @@ export function PhysicalPortSlotEditor({
       {definition.elements.map((primitive) => (
         <Primitive key={primitive.id} primitive={primitive} />
       ))}
+      {"modules" in layout && layout.modules.filter(module => module.face === face).map(module => (
+        <g key={module.id} data-testid="template-module-preview">
+          {module.elements.map(primitive => <Primitive key={primitive.id} primitive={primitive} />)}
+          {module.portSlots.map(slot => <rect key={slot.id} x={slot.x} y={slot.y} width={slot.width} height={slot.height} fill="var(--color-bg)" stroke="var(--color-accent)"><title>{slot.label ?? slot.id}</title></rect>)}
+        </g>
+      ))}
       {moduleSlots.map((slot) => (
         <rect
           key={slot.id}

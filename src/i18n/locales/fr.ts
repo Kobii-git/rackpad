@@ -1,6 +1,13 @@
 import type { TranslationMap } from "../base";
 
 export const fr = {
+  "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Essayez ces exemples : ajoutez des blocs RJ45 et SFP séparés ; créez un emplacement sur chaque face et ajoutez un module ; dupliquez un modèle à six baies et supprimez deux baies.",
+  "Rows": "Lignes",
+  "Module positions": "Emplacements des modules",
+  "Bays and appearance": "Baies et apparence",
+  "Modules fit into positions. Remove assigned modules before deleting a position.": "Les modules occupent des emplacements. Retirez les modules affectés avant de supprimer un emplacement.",
+  "Appearance changes do not add or delete inventory ports. Preview before applying a template.": "Les changements d’apparence n’ajoutent ni ne suppriment de ports dans l’inventaire. Vérifiez l’aperçu avant d’appliquer un modèle.",
+  "Add creates a separate block. Select a block to update or duplicate it.": "Ajouter crée un bloc distinct. Sélectionnez un bloc pour le modifier ou le dupliquer.",
   "Routing mode": "Mode de cheminement",
   "Automatic": "Automatique",
   "Managed": "Guidé",

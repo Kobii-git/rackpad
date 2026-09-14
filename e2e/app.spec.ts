@@ -1,3 +1,4 @@
+import { createStarterTemplate } from "../src/lib/hardware-template-builder";
 import { rackCableFixture, rackShelfCableFixture } from "./fixtures/rack-cables";
 import { devicePlacementState } from "../src/lib/rack-studio";
 import type { Device, Port } from "../src/lib/types";
@@ -4623,33 +4624,27 @@ test("patch-panel hardware templates author, apply, and render both faces", asyn
     const rearPreview = builder.getByTestId("hardware-template-preview-rear");
     await expect(frontPreview.locator('g[role="button"]')).toHaveCount(24);
     await expect(rearPreview.locator('g[role="button"]')).toHaveCount(24);
+    const blocks = builder.getByTestId("template-port-block-editor");
     await expect(
-      builder.getByRole("button", {
-        name: "Add or update port block",
-        exact: true,
-      }),
+      blocks.getByRole("button", {
+        name: "Add",
+        exact: true }),
     ).toBeVisible();
 
     for (const face of ["front", "rear", "front", "rear"]) {
-      await builder
-        .getByRole("textbox", { name: "ID", exact: true })
-        .last()
-        .fill("ports");
-      await builder
-        .getByRole("combobox", { name: "Face", exact: true })
-        .selectOption(face);
-      await builder
+      await blocks
+        .getByTestId("template-port-blocks")
+        .selectOption(`${face}:ports:${face}`);
+      await blocks
         .getByRole("spinbutton", { name: "Ports", exact: true })
         .fill("24");
-      await builder
+      await blocks
         .getByRole("spinbutton", { name: "Columns", exact: true })
         .fill("24");
-      await builder
-        .getByRole("spinbutton", { name: "Height (U)", exact: true })
-        .last()
+      await blocks
+        .getByRole("spinbutton", { name: "Rows", exact: true })
         .fill("1");
-      await builder
-        .getByRole("button", { name: "Add or update port block", exact: true })
+      await blocks.getByRole("button", { name: "Update", exact: true })
         .click();
       await expect(frontPreview.locator('g[role="button"]')).toHaveCount(24);
       await expect(rearPreview.locator('g[role="button"]')).toHaveCount(24);
@@ -5638,5 +5633,60 @@ test("Rack Studio guides follow brush passages and compact rear racks stay reada
     await request.delete(`/api/ports/templates/${baseTemplateId}`, { headers });
     for (const id of [rack.id, other.id]) await request.delete(`/api/racks/${id}`, { headers });
     for (const id of [room.id, destination.id]) await request.delete(`/api/rooms/${id}`, { headers });
+  }
+});
+
+test("guided template editor preserves mixed blocks and edits six bays to four with modules on both faces", async ({ page, request }) => {
+  const id = `guided-editor-${Date.now().toString(36)}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  const source = createStarterTemplate("patch-panel", id, `Guided six bays ${id}`);
+  source.front.elements.push(...Array.from({ length: 6 }, (_, index) => ({ kind: "bay" as const, id: `example-bay-${index + 1}`, x: 80 + index * 140, y: 30, width: 100, height: 120, tone: "dark" as const })));
+  const created = await request.post("/api/hardware-templates", { headers, data: source });
+  expect(created.status(), await created.text()).toBe(201);
+  try {
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/admin/device-types");
+    await page.getByTestId("device-type-section-built-in").getByRole("button").filter({ hasText: "patch_panel" }).click();
+    const builder = page.getByTestId("hardware-template-builder");
+    await builder.getByRole("combobox", { name: "Templates", exact: true }).selectOption(id);
+    const blocks = builder.getByTestId("template-port-block-editor");
+    await blocks.getByTestId("template-port-blocks").selectOption("front:ports:front");
+    await blocks.getByRole("button", { name: "Duplicate", exact: true }).click();
+    await blocks.getByRole("combobox", { name: "Type", exact: true }).selectOption("sfp");
+    await blocks.getByRole("spinbutton", { name: "Ports", exact: true }).fill("4");
+    await blocks.getByRole("spinbutton", { name: "Columns", exact: true }).fill("4");
+    await blocks.getByRole("spinbutton", { name: "Position: X", exact: true }).fill("100");
+    await blocks.getByRole("button", { name: "Update", exact: true }).click();
+    const appearance = builder.getByTestId("template-appearance-editor");
+    for (const bay of ["example-bay-5", "example-bay-6"]) {
+      await appearance.getByRole("combobox", { name: "Physical layout", exact: true }).selectOption(bay);
+      await appearance.getByRole("button", { name: "Delete", exact: true }).click();
+    }
+    const positions = builder.getByTestId("module-position-editor");
+    for (const face of ["front", "rear"]) {
+      await positions.getByRole("button", { name: "Add", exact: true }).click();
+      await positions.getByRole("combobox", { name: "Face", exact: true }).selectOption(face);
+      await builder.getByTestId("template-module-editor").getByRole("button", { name: "Add", exact: true }).click();
+      await expect(positions.getByRole("button", { name: "Delete", exact: true })).toBeDisabled();
+    }
+    await page.screenshot({ path: test.info().outputPath("guided-template-editor.png"), fullPage: true });
+    const saved = page.waitForResponse(response => response.request().method() === "PATCH" && response.url().endsWith(`/api/hardware-templates/${id}`));
+    await builder.getByRole("button", { name: "Save template", exact: true }).click();
+    expect((await saved).status()).toBe(200);
+    const templatesResponse = await request.get("/api/hardware-templates", { headers });
+    const records = await templatesResponse.json();
+    const result = (Array.isArray(records) ? records : records.templates).find((entry: { id: string }) => entry.id === id);
+    expect(result.front.elements.filter((element: { id: string }) => element.id.startsWith("example-bay-"))).toHaveLength(4);
+    expect(result.front.elements.filter((element: { id: string }) => !element.id.startsWith("example-bay-"))).toEqual(source.front.elements.filter(element => !element.id.startsWith("example-bay-")));
+    expect(result.rear).toEqual(source.rear);
+    expect(result.portSlots).toHaveLength(source.portSlots.length + 4);
+    expect(result.modules.map((module: { face: string }) => module.face).sort()).toEqual(["front", "rear"]);
+    expect(result.portSlots.filter((slot: { face: string }) => slot.face === "rear")).toEqual(source.portSlots.filter(slot => slot.face === "rear"));
+    await page.reload();
+    await builder.getByRole("combobox", { name: "Templates", exact: true }).selectOption(id);
+    await expect(builder.getByTestId("template-port-blocks").locator("option")).toHaveCount(4);
+  } finally {
+    await request.delete(`/api/hardware-templates/${id}`, { headers });
   }
 });
