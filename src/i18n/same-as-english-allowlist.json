@@ -530,7 +530,7 @@
   },
   {
     "key": "ID",
-    "locales": ["af", "it", "ja", "pt", "uk", "vi"],
+    "locales": ["af", "it", "ja", "pt", "uk", "vi", "zh"],
     "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
   },
   {
@@ -575,7 +575,7 @@
   },
   {
     "key": "Markdown",
-    "locales": ["af", "he"],
+    "locales": ["af", "he", "zh"],
     "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
   },
   {
@@ -720,12 +720,12 @@
   },
   {
     "key": "Cloud Key Gen2 Plus",
-    "locales": ["de", "fa", "he", "id", "it", "pt", "uk", "vi"],
+    "locales": ["de", "fa", "he", "id", "it", "pt", "uk", "vi", "zh"],
     "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
   },
   {
     "key": "Home-Main",
-    "locales": ["de"],
+    "locales": ["de", "zh"],
     "reason": "Locale-standard cognate or invariant technical label; verified after translation and placeholder checks."
   },
   {
@@ -1550,7 +1550,8 @@
       "ko",
       "pt",
       "tr",
-      "uk"
+      "uk",
+      "zh"
     ],
     "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
   },
@@ -2113,9 +2114,7 @@
       "pl",
       "pt",
       "tr",
-      "vi",
-      "zh",
-      "zh-TW"
+      "vi"
     ],
     "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
   },
@@ -2135,7 +2134,8 @@
       "pt",
       "th",
       "tr",
-      "uk"
+      "uk",
+      "zh"
     ],
     "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
   },
@@ -2316,7 +2316,19 @@
   },
   {
     "key": "U |",
-    "locales": ["af", "de", "es", "fa", "fr", "he", "it", "nl", "tr", "uk"],
+    "locales": [
+      "af",
+      "de",
+      "es",
+      "fa",
+      "fr",
+      "he",
+      "it",
+      "nl",
+      "tr",
+      "uk",
+      "zh"
+    ],
     "reason": "Locale-invariant technical notation, unit, placeholder-only format, or accepted cognate verified after translation."
   },
   {
@@ -2409,5 +2421,15 @@
   {
     "key": "UTC",
     "reason": "Locale-invariant Coordinated Universal Time abbreviation used for scheduler semantics."
+  },
+  {
+    "key": "access",
+    "reason": "Technical identifier, networking mode, or example name retained by the Chinese translation.",
+    "locales": ["zh"]
+  },
+  {
+    "key": "trunk",
+    "reason": "Technical identifier, networking mode, or example name retained by the Chinese translation.",
+    "locales": ["zh"]
   }
 ]

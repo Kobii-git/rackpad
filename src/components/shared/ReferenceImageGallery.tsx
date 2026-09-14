@@ -106,7 +106,8 @@ export function ReferenceImageGallery({
           <CardLabel>{t("Pictures")}</CardLabel>
           <CardHeading>
             {entityType === "rack" && face
-              ? t("{value1} reference", { value1: capitalize(face) })
+              ? t("{value1} reference", { value1: t(face === "front" ? "Front" : "Rear"),
+                })
               : t("Reference images")}
           </CardHeading>
         </CardTitle>
@@ -243,8 +244,4 @@ export function ReferenceImageGallery({
       </CardBody>
     </Card>
   );
-}
-
-function capitalize(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }
