@@ -6,6 +6,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.4-beta.1]
+
 ### Fixed
 
 - Container and Compose healthchecks resolve the container's configured `PORT`
