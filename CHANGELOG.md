@@ -6,6 +6,36 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Container and Compose healthchecks resolve the container's configured `PORT`
+  with the same fallback as the server; host port mappings remain independent.
+  Existing user-defined healthcheck overrides must be updated separately.
+- Rack Cabling shares its rack-top band geometry across rails, U labels,
+  equipment and ports. Grouped topology includes rack-top equipment without
+  allocating rack U space.
+- Loose equipment retains individual cables and endpoint selection when expanded
+  or collapsed. Collapsed devices show one destination summary with a cable
+  count; focused details remain available with Labels disabled.
+
+### Added
+
+- Guided hardware-template controls for independent port blocks, module positions
+  on either face, and individual bay/appearance elements, with translated help
+  and worked examples. Template saves preserve existing device snapshots and
+  continue to use the preview/apply protections for linked ports.
+
+### Maintenance
+
+- Refreshed dependencies within compatible patch/minor ranges while preserving
+  the trusted-proxy parser and shipped security fixes.
+- Retained Chinese translation corrections and localized Front/Rear labels.
+- Prepared the quality workflow's setup-node v7 update separately.
+
+Studio remains opt-in. The classic rack view, pictures and current subtitle are
+unchanged. Major dependency upgrades, per-member stack templates, device skins
+and community template sharing remain deferred.
+
 ## [1.8.4-beta.0] - 2026-09-11
 
 ### Added
