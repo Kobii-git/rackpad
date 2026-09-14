@@ -30,8 +30,7 @@ import {
 } from "@/lib/device-types";
 import {
   canonicalMacAddress,
-  formatDeviceAddress,
-} from "@/lib/network-labels";
+  formatDeviceAddress } from "@/lib/network-labels";
 import { buildSnmpVerifiedPortIds } from "@/lib/snmp-port-status";
 import type {
   RackBand,
@@ -597,7 +596,8 @@ export function buildVisualizerModel(
       crossZone: cables.filter((cable) => cable.crossZone).length,
       patchPanel: cables.filter(
         (cable) =>
-          deviceBehaviorType(cable.fromDevice?.deviceType, input.deviceTypes) ===
+          deviceBehaviorType(cable.fromDevice?.deviceType, input.deviceTypes,
+          ) ===
             "patch_panel" ||
           deviceBehaviorType(cable.toDevice?.deviceType, input.deviceTypes) ===
             "patch_panel",
@@ -817,7 +817,8 @@ function buildPyramidVisualizerModel(
       crossZone: cables.filter((cable) => cable.crossZone).length,
       patchPanel: cables.filter(
         (cable) =>
-          deviceBehaviorType(cable.fromDevice?.deviceType, input.deviceTypes) ===
+          deviceBehaviorType(cable.fromDevice?.deviceType, input.deviceTypes,
+          ) ===
             "patch_panel" ||
           deviceBehaviorType(cable.toDevice?.deviceType, input.deviceTypes) ===
             "patch_panel",
@@ -848,17 +849,29 @@ function buildRackPanel(input: {
   monitorsByDeviceId: Record<string, DeviceMonitor[]>;
 }): RackPanel {
   const bodyX = input.x + 46;
-  const bodyY = input.y + 78;
+  const topDevices = input.devices.filter(
+    (device) => device.rackMountKind === "rack-top",
+  );
   const bodyWidth = input.width - 58;
+  const topDeviceIds = new Set(topDevices.map(device => device.id));
   const rackUnitHeight = rackUnitHeightForDevices(
-    input.devices,
+    input.devices.filter(device => !topDeviceIds.has(device.id) && !topDeviceIds.has(device.parentDeviceId ?? "")),
     input.portsByDeviceId,
     input.readableLabels,
     input.shelfLayout,
     input.rackScale,
   );
+  const topHeight = topDevices.length
+    ? Math.max(
+        NODE_HEIGHT,
+        rackUnitHeight,
+        rackUnitHeightForDevices(topDevices, input.portsByDeviceId, input.readableLabels, input.shelfLayout, input.rackScale),
+        ...topDevices.map(device => (device.heightU ?? 1) * 42),
+      ) + 12
+    : 0;
+  const bodyY = input.y + 78 + topHeight;
   const allMountedDevices = input.devices.filter(
-    (device) => device.startU != null,
+    (device) => device.startU != null || device.rackMountKind === "rack-top",
   );
   const mountedFrontCount = allMountedDevices.filter(
     (device) => (device.face ?? "front") === "front",
@@ -906,6 +919,7 @@ function buildRackPanel(input: {
   );
   const occupiedUnits = new Set<number>();
   for (const device of mountedDevices) {
+    if (device.rackMountKind === "rack-top") continue;
     const start = device.startU ?? 1;
     const height = device.heightU ?? 1;
     for (let u = start; u < start + height; u += 1) {
@@ -930,8 +944,11 @@ function buildRackPanel(input: {
     const topU = Math.min(input.rack.totalU, start + heightU - 1);
     const topBand = yByUnit.get(topU);
     const bottomBand = yByUnit.get(start);
-    const top = topBand?.y ?? bodyY + 8;
-    const bottom = bottomBand
+    const onTop = device.rackMountKind === "rack-top";
+    const top = onTop ? bodyY - topHeight : (topBand?.y ?? bodyY + 8);
+    const bottom = onTop
+      ? bodyY - 8
+      : bottomBand
       ? bottomBand.y + bottomBand.height
       : top + NODE_HEIGHT;
     rackNodeBounds.set(device.id, {
@@ -947,12 +964,14 @@ function buildRackPanel(input: {
     const slotGap = 6;
     const baseWidth = useDualFaceLayout ? faceNodeWidth : mountedNodeWidth;
     const halfSlotWidth = Math.max(0, Math.floor((baseWidth - slotGap) / 2));
-    const nodeWidth =
-      rackSlot === "full"
+    const nodeWidth = onTop
+      ? (baseWidth * (device.rackColumnSpan ?? 12)) / 12
+      : rackSlot === "full"
         ? baseWidth
         : halfSlotWidth;
-    const nodeX =
-      rackSlot === "right" ? faceBaseX + nodeWidth + slotGap : faceBaseX;
+    const nodeX = onTop
+      ? faceBaseX + (baseWidth * (device.rackColumn ?? 0)) / 12
+      : rackSlot === "right" ? faceBaseX + nodeWidth + slotGap : faceBaseX;
     return createNode({
       device,
       deviceTypes: input.deviceTypes,
@@ -2319,7 +2338,8 @@ function cableLaneLabel(cable: VisualizerCable) {
   ]
     .filter(Boolean)
     .join(":");
-  const to = [cable.toDevice?.hostname, cable.toPort?.position, cable.toPort?.name]
+  const to = [cable.toDevice?.hostname, cable.toPort?.position, cable.toPort?.name,
+  ]
     .filter(Boolean)
     .join(":");
   return [from, to].sort().join("|");

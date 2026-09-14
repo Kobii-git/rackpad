@@ -409,6 +409,16 @@ export function buildRackStudioScene(input: {
   };
 }
 
+export function rackTopBandOffset(rackId: string, devices: Device[], unitHeight = 42) {
+  const height = devices.reduce((maximum, device) => {
+    const state = devicePlacementState(device);
+    return state.mountKind === "rack-top" && state.rackId === rackId
+      ? Math.max(maximum, (state.heightU ?? 1) * unitHeight - 2)
+      : maximum;
+  }, 0);
+  return height > 0 ? height + 12 : 0;
+}
+
 export function buildRackElevationScene(input: {
   rack: Rack;
   rackFace: RackFace;
@@ -423,13 +433,7 @@ export function buildRackElevationScene(input: {
   const rackDevices = input.devices.filter(
     (device) => device.rackId === input.rack.id,
   );
-  const rackTopHeight = rackDevices.reduce((maximum, device) => {
-    const state = devicePlacementState(device);
-    return state.mountKind === "rack-top"
-      ? Math.max(maximum, (state.heightU ?? 1) * unitHeight - 2)
-      : maximum;
-  }, 0);
-  const rackOffsetY = rackTopHeight > 0 ? rackTopHeight + 12 : 0;
+  const rackOffsetY = rackTopBandOffset(input.rack.id, rackDevices, unitHeight);
   const height = rackOffsetY + input.rack.totalU * unitHeight + 16;
   const layoutByDevice = new Map(
     input.layouts.map((layout) => [layout.deviceId, layout]),

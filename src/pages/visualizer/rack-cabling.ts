@@ -14,6 +14,7 @@ import {
 } from "@/lib/rack-studio";
 import {
   buildRackElevationScene,
+  rackTopBandOffset,
   physicalFaceForRackFace,
   rackFaceForPhysicalFace,
   type RackStudioRect,
@@ -63,6 +64,7 @@ export interface RackCablingAnchor {
 }
 
 export interface RackCablingFaceFrame {
+  rackOffsetY: number;
   face: RackFace;
   x: number;
   y: number;
@@ -98,6 +100,13 @@ export interface RackCablingLooseCard {
 }
 
 export interface RackCablingScene {
+  looseSummaries: Array<{
+    device: Device;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>;
   room: Room;
   width: number;
   height: number;
@@ -171,11 +180,19 @@ export function buildRackCablingScope(
   return {
     rackIds: new Set(scene.racks.map((entry) => entry.rack.id)),
     deviceIds: new Set([
+      ...scene.looseSummaries.map((item) => item.device.id),
       ...scene.equipment.map((item) => item.device.id),
       ...scene.looseCards.map((item) => item.device.id),
+      ...routes.flatMap((route) =>
+        route.handoffs.map((handoff) => handoff.deviceId),
+      ),
       ...scene.anchors.map((anchor) => anchor.deviceId),
     ]),
     portIds: new Set([
+      ...routes.flatMap((route) => [
+        route.link.fromPortId,
+        route.link.toPortId,
+      ]),
       ...scene.anchors.map((anchor) => anchor.portId),
       ...scene.equipment.flatMap((item) =>
         item.fallbackReason && item.layout
@@ -245,15 +262,6 @@ function compareRacks(order: string[]) {
   };
 }
 
-function rackTopOffset(rack: Rack, devices: Device[]) {
-  const height = devices.reduce((maximum, device) => {
-    const state = devicePlacementState(device);
-    return state.mountKind === "rack-top" && state.rackId === rack.id
-      ? Math.max(maximum, (state.heightU ?? 1) * RACK_CABLING_UNIT_HEIGHT - 2)
-      : maximum;
-  }, 0);
-  return height > 0 ? height + 12 : 0;
-}
 
 function fallbackRect(
   rack: Rack,
@@ -454,9 +462,10 @@ export function buildRackCablingScene(input: {
   const faceList = facesForMode(input.faceMode);
   const rackBodyHeights = roomRacks.map(
     (rack) =>
-      rackTopOffset(
-        rack,
+      rackTopBandOffset(
+        rack.id,
         roomDevices.filter((device) => device.rackId === rack.id),
+        RACK_CABLING_UNIT_HEIGHT,
       ) +
       rack.totalU * RACK_CABLING_UNIT_HEIGHT +
       16,
@@ -486,7 +495,7 @@ export function buildRackCablingScene(input: {
     const rackDevices = roomDevices.filter(
       (candidate) => candidate.rackId === rack.id,
     );
-    const rackOffsetY = rackTopOffset(rack, rackDevices);
+    const rackOffsetY = rackTopBandOffset(rack.id, rackDevices, RACK_CABLING_UNIT_HEIGHT);
     for (const device of rackDevices.filter(
       (candidate) => devicePlacementState(candidate).mountKind === "direct",
     )) {
@@ -577,6 +586,7 @@ export function buildRackCablingScene(input: {
           })),
       );
       faceFrames.push({
+        rackOffsetY,
         face,
         x: faceX,
         y: faceY,
@@ -612,6 +622,7 @@ export function buildRackCablingScene(input: {
   const looseExpanded = Boolean(input.looseExpanded);
   const trayY = CANVAS_PADDING + RACK_HEADER_HEIGHT + tallestBody + TRAY_GAP;
   const looseCards: RackCablingLooseCard[] = [];
+  const looseSummaries: RackCablingScene["looseSummaries"] = [];
   let trayHeight =
     looseDevices.length > 0 ? TRAY_HEADER_HEIGHT + (looseExpanded ? 0 : 26) : 0;
   if (looseDevices.length > 0 && looseExpanded) {
@@ -697,7 +708,30 @@ export function buildRackCablingScene(input: {
       list.push(port);
       portsByDeviceId.set(port.deviceId, list);
     }
+    const columns = Math.max(
+      1,
+      Math.floor((baseWidth - CANVAS_PADDING * 2) / 220),
+    );
+    const cellWidth = (baseWidth - CANVAS_PADDING * 2) / columns;
+    const rowHeight = 52;
+    trayHeight =
+      TRAY_HEADER_HEIGHT +
+      16 +
+      Math.ceil(looseDevices.length / columns) * rowHeight;
     looseDevices.forEach((device, deviceIndex) => {
+      const x = CANVAS_PADDING + (deviceIndex % columns) * cellWidth;
+      const y =
+        trayY +
+        TRAY_HEADER_HEIGHT +
+        8 +
+        Math.floor(deviceIndex / columns) * rowHeight;
+      looseSummaries.push({
+        device,
+        x,
+        y,
+        width: cellWidth,
+        height: rowHeight,
+      });
       for (const port of portsByDeviceId.get(device.id) ?? []) {
         anchors.push({
           portId: port.id,
@@ -705,11 +739,8 @@ export function buildRackCablingScene(input: {
           rackId: null,
           rackFace: port.face === "rear" ? "rear" : "front",
           physicalFace: port.face === "rear" ? "rear" : "front",
-          x:
-            CANVAS_PADDING +
-            ((deviceIndex + 1) / (looseDevices.length + 1)) *
-              (baseWidth - CANVAS_PADDING * 2),
-          y: trayY + TRAY_HEADER_HEIGHT + 13,
+          x: x + cellWidth / 2,
+          y,
           kind: "loose-handoff",
         });
       }
@@ -725,6 +756,7 @@ export function buildRackCablingScene(input: {
         : CANVAS_PADDING * 2 + RACK_HEADER_HEIGHT + tallestBody,
     racks: rackFrames,
     looseCards,
+    looseSummaries,
     looseTray:
       looseDevices.length > 0
         ? {
@@ -952,6 +984,7 @@ function handoffLabelLane(input: {
 export function layoutRackCablingHandoffLabels(
   scene: RackCablingScene,
   routes: RackCablingRoute[],
+  measuredWidths: ReadonlyMap<string, number> = new Map(),
 ): RackCablingHandoffLabelGeometry[] {
   const maxY = Math.max(HANDOFF_LABEL_MIN_Y, scene.height - 16);
   const entries = [...routes]
@@ -977,6 +1010,26 @@ export function layoutRackCablingHandoffLabels(
               : placement.x > (scene.width * 2) / 3
                 ? ("right" as const)
                 : ("center" as const);
+          const columnIndex =
+            packingColumn === "left" ? 0 : packingColumn === "center" ? 1 : 2;
+          const width =
+            measuredWidths.get(`${route.link.id}:${handoff.endpoint}`) ?? 0;
+          const leftExtent =
+            placement.textAnchor === "end"
+              ? width
+              : placement.textAnchor === "middle"
+                ? width / 2
+                : 0;
+          const rightExtent = width - leftExtent;
+          const boundedX = width
+            ? Math.max(
+                (columnIndex * scene.width) / 3 + 12 + leftExtent,
+                Math.min(
+                  ((columnIndex + 1) * scene.width) / 3 - 12 - rightExtent,
+                  placement.x,
+                ),
+              )
+            : placement.x;
           return {
             id: `${route.link.id}:${handoff.endpoint}`,
             linkId: route.link.id,
@@ -985,7 +1038,7 @@ export function layoutRackCablingHandoffLabels(
             packingColumn,
             anchorX: anchor.x,
             anchorY: anchor.y,
-            x: placement.x,
+            x: boundedX,
             desiredY: Math.max(
               HANDOFF_LABEL_MIN_Y,
               Math.min(maxY, anchor.y - 7),
@@ -1178,6 +1231,47 @@ export function buildRackCablingRoutes(input: {
         addHandoff("to", "unavailable", to, toDevice, toPort, toRoomId);
       }
     }
+    const hiddenLooseAnchor = (
+      port: Port,
+      peer: RackCablingAnchor | undefined,
+    ) => {
+      const card = input.scene.looseCards.find(
+        (card) => card.device.id === port.deviceId,
+      );
+      if (!card) return undefined;
+      return {
+        rackFace: peer?.rackFace ?? card.faces[0]?.face ?? "front",
+        portId: port.id,
+        deviceId: port.deviceId,
+        rackId: null,
+        x: card.x + card.width / 2,
+        y: card.y,
+        physicalFace:
+          port.face === "rear" ? ("rear" as const) : ("front" as const),
+        kind: "handoff" as const,
+      };
+    };
+    if (!from) {
+      const hidden = hiddenLooseAnchor(fromPort, to);
+      if (hidden) {
+        from = hidden;
+        addHandoff(
+          "from",
+          "hidden-face",
+          hidden,
+          fromDevice,
+          fromPort,
+          fromRoomId,
+        );
+      }
+    }
+    if (!to) {
+      const hidden = hiddenLooseAnchor(toPort, from);
+      if (hidden) {
+        to = hidden;
+        addHandoff("to", "hidden-face", hidden, toDevice, toPort, toRoomId);
+      }
+    }
     if (!from && to) {
       const rackFrame = fromDevice?.rackId
         ? input.scene.racks.find((entry) => entry.rack.id === fromDevice.rackId)
@@ -1241,6 +1335,7 @@ export function buildRackCablingRoutes(input: {
         );
         const local = hidden?.endpoint === "from" ? route.to : route.from;
         const continuation =
+          Boolean(route.from.rackId && route.to.rackId) &&
           hidden &&
           hidden.rackFace !== local.rackFace &&
           (cableRouteMode(route.link) !== "manual" || !route.link.routeWaypoints?.length) &&
@@ -1249,17 +1344,24 @@ export function buildRackCablingRoutes(input: {
           id: route.link.id,
           routeMode: cableRouteMode(route.link),
           ...resolveCableGuidePoints({ link: route.link, equipment: input.scene.equipment, devices: input.devices,
-            roomId: input.scene.room.id, faces: input.scene.racks.flatMap(rack => rack.faces.map(face => face.face)),
-            reverse: continuation && local.portId !== route.link.fromPortId }),
+            roomId: input.scene.room.id, faces: input.scene.racks.flatMap((rack) => rack.faces.map((face) => face.face),
+            ),
+            reverse: continuation && local.portId !== route.link.fromPortId,
+          }),
           from: anchor(continuation ? local : route.from),
           to: continuation ? undefined : anchor(route.to),
           hiddenEndpoint: continuation
             ? { portId: hidden.portId, rackFace: hidden.rackFace }
             : undefined,
           manualPoints: projectCableWaypoints(route.link, input.racks,
-            input.scene.racks.flatMap(rack => rack.faces.map(face => ({ rackId: rack.rack.id, face: face.face,
-              rect: { x: face.x, y: face.y + 8, width: face.width, height: rack.rack.totalU * RACK_CABLING_UNIT_HEIGHT } }))), input.scene.room.id),
+            input.scene.racks.flatMap((rack) => rack.faces.map((face) => ({ rackId: rack.rack.id, face: face.face,
+              rect: { x: face.x, y: face.y + face.rackOffsetY + 8, width: face.width, height: rack.rack.totalU * RACK_CABLING_UNIT_HEIGHT,
+                },
+              })),
+            ), input.scene.room.id,
+          ),
           allowContinuation:
+            Boolean(route.from.rackId && route.to.rackId) &&
             (cableRouteMode(route.link) !== "manual" || !route.link.routeWaypoints?.length) &&
             route.handoffs.every((handoff) => handoff.reason === "hidden-face"),
           allowDirect:
@@ -1293,7 +1395,9 @@ export function buildRackCablingRoutes(input: {
     const hidden = route.handoffs.find(
       (handoff) => handoff.reason === "hidden-face",
     );
-    const marker = planned.continuations.find(marker => marker.destinationPortId === hidden?.portId);
+    const marker = planned.continuations.find(
+      (marker) => marker.destinationPortId === hidden?.portId,
+    );
     return {
       ...route,
       ...(hidden && marker

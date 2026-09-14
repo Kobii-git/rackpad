@@ -144,7 +144,8 @@ export function RackCablingCanvas({
   setTraceMode,
 }: RackCablingCanvasProps) {
   const { t } = useI18n();
-  const [pendingReveal, setPendingReveal] = useState<{ portId: string; cableId: string }>();
+  const [pendingReveal, setPendingReveal] = useState<{ portId: string; cableId: string;
+  }>();
   const viewportRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const panRef = useRef<PanState | null>(null);
@@ -154,6 +155,9 @@ export function RackCablingCanvas({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [search, setSearch] = useState("");
   const [selection, setSelection] = useState<RackCablingSelection>(null);
+  const [hoveredLooseDeviceId, setHoveredLooseDeviceId] = useState<
+    string | null
+  >(null);
   const [hoveredCableId, setHoveredCableId] = useState<string | null>(null);
   const [searchIndex, setSearchIndex] = useState(0);
   const room = rooms.find((candidate) => candidate.id === roomId);
@@ -189,9 +193,65 @@ export function RackCablingCanvas({
         : [],
     [scene, rooms, racks, devices, ports, portLinks, cableType, routeStyle],
   );
+  const handoffLabel = useCallback(
+    (handoff: RackCablingHandoff) => {
+      const endpoint = `${handoff.deviceLabel} · ${handoff.portLabel}`;
+      if (handoff.reason === "cross-room") {
+        return t("{value1}: {name}", {
+          value1: t("Room"),
+          name: `${handoff.roomLabel ?? t("Unknown")} · ${endpoint}`,
+        });
+      }
+      if (handoff.reason === "hidden-face") {
+        return t("{value1}: {name}", {
+          value1: handoff.rackFace === "rear" ? t("Rear") : t("Front"),
+          name: endpoint,
+        });
+      }
+      if (handoff.reason === "loose-tray") {
+        return t("{value1}: {name}", {
+          value1: t("Loose gear"),
+          name: endpoint,
+        });
+      }
+      return t("{value1}: {name}", {
+        value1:
+          handoff.fallbackReason === "missing-layout"
+            ? `${t("Physical layout")} · ${t("Needs attention")}`
+            : t("Physical position unavailable"),
+        name: endpoint,
+      });
+    },
+    [t],
+  );
+  const handoffLabels = useMemo(() => {
+    const context = document.createElement("canvas").getContext("2d");
+    if (context)
+      context.font = "9px ui-monospace, SFMono-Regular, Menlo, monospace";
+    const maxWidth = Math.max(40, (scene?.width ?? 600) / 3 - 24);
+    const measure = (value: string) =>
+      context?.measureText(value).width ?? value.length * 6;
+    return new Map(
+      routes.flatMap((route) =>
+        route.handoffs.map((handoff) => {
+          const full = handoffLabel(handoff);
+          let text = full;
+          while (text.length > 1 && measure(text) > maxWidth)
+            text = text.slice(0, -2) + "…";
+          return [
+            `${route.link.id}:${handoff.endpoint}`,
+            { full, text, width: measure(text) },
+          ] as const;
+        }),
+      ),
+    );
+  }, [routes, scene, handoffLabel]);
   const handoffLabelGeometry = useMemo(
-    () => (scene ? layoutRackCablingHandoffLabels(scene, routes) : []),
-    [routes, scene],
+    () =>
+      scene ? layoutRackCablingHandoffLabels(scene, routes,
+            new Map([...handoffLabels].map(([id, label]) => [id, label.width])),
+          ) : [],
+    [routes, scene, handoffLabels],
   );
   const handoffLabelGeometryById = useMemo(
     () => new Map(handoffLabelGeometry.map((entry) => [entry.id, entry])),
@@ -471,6 +531,7 @@ export function RackCablingCanvas({
     previousRoomIdRef.current = roomId;
     setSelection(null);
     setHoveredCableId(null);
+    setHoveredLooseDeviceId(null);
     setTraceMode((current) =>
       current.enabled
         ? {
@@ -499,6 +560,7 @@ export function RackCablingCanvas({
         event.preventDefault();
         setSelection(null);
         setHoveredCableId(null);
+        setHoveredLooseDeviceId(null);
         setSearch("");
         setTraceMode({
           enabled: false,
@@ -586,7 +648,9 @@ export function RackCablingCanvas({
 
   useEffect(() => {
     if (!pendingReveal) return;
-    const anchor = scene?.anchors.find(anchor => anchor.portId === pendingReveal.portId);
+    const anchor = scene?.anchors.find(
+      (anchor) => anchor.portId === pendingReveal.portId,
+    );
     const viewport = viewportRef.current;
     if (!anchor || !viewport) return;
     const bounds = viewport.getBoundingClientRect();
@@ -598,12 +662,13 @@ export function RackCablingCanvas({
   }, [scene, pendingReveal]);
 
   function revealEndpoint(portId: string, cableId: string) {
-    const port = ports.find(port => port.id === portId);
-    const device = devices.find(device => device.id === port?.deviceId);
+    const port = ports.find((port) => port.id === portId);
+    const device = devices.find((device) => device.id === port?.deviceId);
     if (!port || !device) return;
-    const roomId = racks.find(rack => rack.id === device.rackId)?.roomId ?? device.roomId;
+    const roomId = racks.find((rack) => rack.id === device.rackId)?.roomId ?? device.roomId;
     if (roomId) onRoomIdChange(roomId);
-    onFaceModeChange(rackFaceForPhysicalFace(device, port.face === "rear" ? "rear" : "front"));
+    onFaceModeChange(rackFaceForPhysicalFace(device, port.face === "rear" ? "rear" : "front"),
+    );
     setPendingReveal({ portId, cableId });
   }
 
@@ -728,35 +793,6 @@ export function RackCablingCanvas({
       const result = searchResults[searchIndex] ?? searchResults[0];
       if (result) activateSearchResult(result);
     }
-  }
-
-  function handoffLabel(handoff: RackCablingHandoff) {
-    const endpoint = `${handoff.deviceLabel} · ${handoff.portLabel}`;
-    if (handoff.reason === "cross-room") {
-      return t("{value1}: {name}", {
-        value1: t("Room"),
-        name: `${handoff.roomLabel ?? t("Unknown")} · ${endpoint}`,
-      });
-    }
-    if (handoff.reason === "hidden-face") {
-      return t("{value1}: {name}", {
-        value1: handoff.rackFace === "rear" ? t("Rear") : t("Front"),
-        name: endpoint,
-      });
-    }
-    if (handoff.reason === "loose-tray") {
-      return t("{value1}: {name}", {
-        value1: t("Loose gear"),
-        name: endpoint,
-      });
-    }
-    return t("{value1}: {name}", {
-      value1:
-        handoff.fallbackReason === "missing-layout"
-          ? `${t("Physical layout")} · ${t("Needs attention")}`
-          : t("Physical position unavailable"),
-      name: endpoint,
-    });
   }
 
   function selectTracePort(deviceId: string, portId: string) {
@@ -983,31 +1019,51 @@ export function RackCablingCanvas({
                     <ChevronDown className="ml-auto size-4" />
                   )}
                 </button>
-                {!looseExpanded &&
-                  Array.from(
-                    new Map(
-                      scene.anchors
-                        .filter(
-                          (anchor) =>
-                            anchor.kind === "loose-handoff" && !anchor.rackId,
-                        )
-                        .map((anchor) => [anchor.deviceId, anchor]),
-                    ).values(),
-                  ).map((anchor) => {
-                    const device = devices.find(
-                      (candidate) => candidate.id === anchor.deviceId,
-                    );
-                    return (
-                      <span
-                        key={anchor.deviceId}
-                        className="absolute top-[45px] flex max-w-28 -translate-x-1/2 items-center gap-1 truncate font-mono text-[8px] text-[var(--text-secondary)]"
-                        style={{ left: anchor.x - scene.looseTray!.x }}
-                      >
-                        <span className="size-1.5 shrink-0 rounded-full bg-[var(--accent-primary)]" />
-                        {device?.hostname ?? anchor.deviceId}
-                      </span>
-                    );
-                  })}
+                {scene.looseSummaries.map((summary) => {
+                    const connected = routes.filter(
+                      (route) =>
+                    [
+                      model.portById[route.link.fromPortId]?.deviceId,
+                      model.portById[route.link.toPortId]?.deviceId,
+                    ].includes(summary.device.id),
+                  );
+                  const details = connected
+                    .map((route) =>
+                      [route.link.fromPortId, route.link.toPortId]
+                        .map((id) => {
+                          const port = model.portById[id];
+                          return `${model.deviceById[port?.deviceId]?.hostname ?? t("Unknown")} · ${port?.name ?? "?"} · ${t(port?.face === "rear" ? "Rear" : "Front")}`;
+                        })
+                        .join(" → "),
+                    )
+                    .join("\n");
+                  const detailsVisible = hoveredLooseDeviceId === summary.device.id || (selection?.kind === "device" && selection.id === summary.device.id);
+                  const detailsId = `loose-details-${summary.device.id}`;
+                  return (
+                    <div key={summary.device.id} className="absolute z-50 min-w-0 focus-within:z-[60] hover:z-[60]"
+                      data-rack-cabling-interactive="true"
+                      style={{ left: summary.x - scene.looseTray!.x + 4, top: summary.y - scene.looseTray!.y + 3, width: summary.width - 8, height: summary.height - 8 }}
+                      onMouseEnter={() => setHoveredLooseDeviceId(summary.device.id)}
+                      onMouseLeave={() => setHoveredLooseDeviceId(null)}
+                      onFocus={() => setHoveredLooseDeviceId(summary.device.id)}
+                      onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setHoveredLooseDeviceId(null); }}>
+                      <button type="button" data-testid="loose-device-summary"
+                        data-cabling-selection-id={`device:${summary.device.id}`}
+                        className="h-full w-full min-w-0 overflow-hidden rounded border border-[var(--border-default)] bg-[var(--surface-1)] px-2 text-left text-[11px] focus-visible:outline-2 focus-visible:outline-[var(--accent-primary)]"
+                        aria-describedby={detailsVisible ? detailsId : undefined}
+                        aria-label={t("{value1}: {name}", { value1: summary.device.hostname, name: `${connected.length} ${t("Cables")}` })}
+                        onClick={event => { event.stopPropagation(); selectDevice(summary.device.id); }}>
+                        <span className="block truncate font-mono">{summary.device.hostname}</span>
+                        <span className="block text-[var(--text-secondary)]">{t("Cables")}: {connected.length}</span>
+                      </button>
+                      {detailsVisible && <div id={detailsId} role="tooltip" tabIndex={0} data-testid="loose-device-details"
+                        className="absolute bottom-full mb-1 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border border-[var(--border-default)] bg-[var(--surface-1)] p-3 text-xs shadow-lg"
+                        style={{ width: Math.min(400, scene.width - 32), left: Math.min(0, scene.width - summary.x - 416) }}>
+                        {details || summary.device.hostname}
+                      </div>}
+                    </div>
+                  );
+                })}
                 {scene.looseCards.map((card) => {
                   const matches =
                     !matchingDeviceIds || matchingDeviceIds.has(card.device.id);
@@ -1109,10 +1165,12 @@ export function RackCablingCanvas({
                   traceMode.result?.cableIds.has(route.link.id),
                 );
                 const deviceSelected =
-                  selection?.kind === "device" &&
+                  (selection?.kind === "device" ||
+                    hoveredLooseDeviceId !== null) &&
                   [route.link.fromPortId, route.link.toPortId].some(
                     (portId) =>
-                      model.portById[portId]?.deviceId === selection.id,
+                      model.portById[portId]?.deviceId ===
+                      (hoveredLooseDeviceId ?? selection?.id),
                   );
                 const portSelected =
                   selectedPortId === route.link.fromPortId ||
@@ -1197,9 +1255,7 @@ export function RackCablingCanvas({
                           ? 0.08
                           : anyFocus && !emphasized
                             ? 0.14
-                            : route.handoffs.length > 0 && !emphasized
-                              ? 0.34
-                              : 0.9
+                            : 0.9
                       }
                     />
                     <CableContinuationMarkers
@@ -1220,7 +1276,7 @@ export function RackCablingCanvas({
                       }
                     />
                     {!route.continuations.length &&
-                      (showLabels || selected || hovered) && (
+                      (showLabels || emphasized) && (
                         <text
                           data-testid="rack-cabling-cable-label"
                           x={route.labelPoint.x}
@@ -1240,8 +1296,10 @@ export function RackCablingCanvas({
                     {route.handoffs
                       .filter(
                         (handoff) =>
-                          !route.continuations.length ||
-                          handoff.reason !== "hidden-face",
+                          (showLabels || emphasized) &&
+                          (handoff.reason !== "loose-tray" || emphasized) &&
+                          (!route.continuations.length ||
+                          handoff.reason !== "hidden-face"),
                       )
                       .map((handoff) => {
                         const geometry = handoffLabelGeometryById.get(
@@ -1277,7 +1335,18 @@ export function RackCablingCanvas({
                               fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
                               className="pointer-events-none"
                             >
-                              {handoffLabel(handoff)}
+                              <title>
+                                {
+                                  handoffLabels.get(
+                                    `${route.link.id}:${handoff.endpoint}`,
+                                  )?.full
+                                }
+                              </title>
+                              {
+                                handoffLabels.get(
+                                  `${route.link.id}:${handoff.endpoint}`,
+                                )?.text
+                              }
                             </text>
                           </g>
                         );
@@ -1515,7 +1584,7 @@ function RackFaceFrame({
 }) {
   const { t } = useI18n();
   return (
-    <div className="absolute inset-0">
+    <div className="absolute inset-0" data-testid="rack-cabling-face" data-rack-face={frame.face}>
       <span
         className="absolute -top-5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
         style={{ left: frame.x - originX }}
@@ -1533,7 +1602,7 @@ function RackFaceFrame({
         className="absolute bg-[var(--bg-shell)] shadow-[inset_0_0_30px_rgb(0_0_0_/_0.34)]"
         style={{
           left: frame.x - originX - 12,
-          top: frame.y - originY - 8,
+          top: frame.y + frame.rackOffsetY - originY - 8,
         }}
       >
         {frame.equipment.map((item) => (
@@ -1541,7 +1610,7 @@ function RackFaceFrame({
             key={item.id}
             item={item}
             originX={frame.x}
-            originY={frame.y}
+            originY={frame.y + frame.rackOffsetY}
             ports={ports}
             linkedPortIds={linkedPortIds}
             selectedPortId={selectedPortId}

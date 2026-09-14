@@ -1458,6 +1458,16 @@ test("rack cabling scopes inspection and supports keyboard search and selection"
   await page.keyboard.press("Escape");
 
   await expect(page.getByTestId("rack-cabling-cable-label")).toHaveCount(0);
+  await expect(page.getByTestId("rack-cabling-handoff-label")).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Room", exact: true }).selectOption("room_office");
+  const looseSummary = page.getByTestId("loose-device-summary").filter({ hasText: /Cables: [1-9]/ }).first();
+  await looseSummary.focus();
+  await expect(page.getByTestId("loose-device-details")).toBeVisible();
+  await expect(page.getByTestId("loose-device-details")).toContainText(/Front|Rear/);
+  await page.getByRole("combobox", { name: "Room", exact: true }).selectOption("room_lab");
+
+  await page.getByRole("checkbox", { name: "Labels", exact: true }).check();
+  await page.getByRole("checkbox", { name: "Labels", exact: true }).blur();
   expect(
     await page.getByTestId("rack-cabling-handoff-label").count(),
   ).toBeGreaterThan(0);
@@ -1493,6 +1503,8 @@ test("rack cabling scopes inspection and supports keyboard search and selection"
     }
   }
 
+  await page.getByRole("checkbox", { name: "Labels", exact: true }).uncheck();
+  await page.getByRole("checkbox", { name: "Labels", exact: true }).blur();
   await page.keyboard.press("/");
   const search = page.getByRole("textbox", { name: "Search" });
   await expect(search).toBeFocused();
@@ -2201,6 +2213,22 @@ test("Rack Studio places rack-top equipment and supports keyboard undo and redo"
         return { column: device.rackColumn, startU: device.startU ?? null };
       })
       .toEqual({ column: 2, startU: null });
+    await page.evaluate(() => {
+      localStorage.setItem("rackpad.visualizer.layout-mode", "rack");
+      localStorage.setItem("rackpad.visualizer.rack-cabling-room", "room_lab");
+    });
+    await page.goto("/visualizer");
+    const topEquipment = page.locator(`[data-testid="rack-cabling-equipment"][aria-label="${hostname}"]`).first();
+    await expect(topEquipment).toBeVisible();
+    const geometry = await topEquipment.evaluate(element => {
+      const box = element.getBoundingClientRect();
+      const shell = element.parentElement!.getBoundingClientRect();
+      return { equipmentBottom: box.bottom, railTop: shell.top + Number.parseFloat(getComputedStyle(element.parentElement!).borderTopWidth) * shell.width / element.parentElement!.offsetWidth };
+    });
+    expect(geometry.equipmentBottom).toBeLessThanOrEqual(geometry.railTop);
+    await page.reload();
+    await expect(topEquipment).toBeVisible();
+
   } finally {
     if (deviceId) await request.delete(`/api/devices/${deviceId}`, { headers });
   }

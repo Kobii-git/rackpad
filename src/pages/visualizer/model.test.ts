@@ -19,7 +19,8 @@ import type {
 } from "./types";
 
 test("unmanaged devices remain neutral in visualizer health", () => {
-  const device = { ...testDevice("unmanaged-device"), status: "unmanaged" as const };
+  const device = { ...testDevice("unmanaged-device"), status: "unmanaged" as const,
+  };
   assert.equal(getDeviceHealth(device, []), "unknown");
   assert.equal(
     getDeviceHealth(device, [
@@ -424,8 +425,7 @@ test("visualizer search localizes built-in types and preserves custom labels", (
   );
   assert.equal(
     visualizerSearchResultMeta(model, archive, t),
-    "Archive shelf",
-  );
+    "Archive shelf");
 });
 
 test("visualizer search canonicalizes full MAC queries without changing fuzzy search", () => {
@@ -658,4 +658,66 @@ test("pyramid visualizer bounds expand around dragged nodes", () => {
     model.rackZone.width > draggedNode.x - model.rackZone.x + draggedNode.width,
   );
   assert.ok(model.rackZone.height > draggedNode.y + draggedNode.height);
+});
+
+test("grouped topology represents rack-top devices without consuming U bands", () => {
+  const rack = {
+    id: "top-rack",
+    labId: "lab_visualizer_routes",
+    name: "Top rack",
+    totalU: 12,
+  };
+  const mounted: Device = {
+    ...testDevice("ordinary"),
+    placement: "rack",
+    rackId: rack.id,
+    startU: 10,
+    heightU: 2,
+    rackMountKind: "direct",
+  };
+  const top: Device = {
+    ...testDevice("on-top"),
+    placement: "rack",
+    rackId: rack.id,
+    rackMountKind: "rack-top",
+    heightU: 1,
+    rackColumn: 3,
+    rackColumnSpan: 6,
+  };
+  for (const rackFaceMode of ["front", "rear", "both"] as const) {
+    const child: Device = { ...testDevice("shelf-child"), rackId: rack.id, parentDeviceId: mounted.id, placement: "rack", rackMountKind: "shelf" };
+    const make = (withTop: boolean) =>
+      buildVisualizerModel({
+        racks: [rack],
+        rooms: [],
+        devices: [mounted, child, ...(withTop ? [top] : [])].map((device) => ({
+          ...device,
+          face: rackFaceMode === "rear" ? "rear" : "front",
+        })),
+        deviceTypes: [],
+        ports: [],
+        portLinks: [],
+        deviceMonitors: [],
+        subnets: [],
+        vlans: [],
+        discoveredDevices: [],
+        virtualSwitches: [],
+        expandedRackRuns: new Set(),
+        collapsedGroups: new Set(),
+        layout: { rackFaceMode, readableLabels: true },
+      });
+    const before = make(false).rackZone.racks[0];
+    const after = make(true).rackZone.racks[0];
+    assert.ok(after.nodes.some((node) => node.device.id === top.id));
+    assert.equal(after.stats.freeU, before.stats.freeU);
+    assert.deepEqual(after.bands, before.bands);
+    assert.equal(
+      after.nodes.find((node) => node.device.id === mounted.id)!.y -
+        after.bodyY,
+      before.nodes[0].y - before.bodyY,
+    );
+    const topNode = after.nodes.find(node => node.device.id === top.id)!;
+    assert.ok(topNode.y < after.bodyY);
+    assert.ok(topNode.y + topNode.height <= after.bodyY);
+  }
 });

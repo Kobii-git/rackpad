@@ -877,3 +877,67 @@ function layout(deviceId: string, mappedPorts: Port[]): DevicePhysicalLayout {
     updatedAt: "2026-09-02T00:00:00.000Z",
   };
 }
+
+test("loose expansion retains cable and endpoint selection scope including hidden faces", () => {
+  const mounted = device("toggle-mounted", rack24.id, 12);
+  const loose = {
+    ...device("toggle-loose", undefined, 1),
+    roomId: room.id,
+    placement: "room" as const,
+    rackMountKind: "loose" as const,
+    startU: undefined,
+  };
+  const a = port("toggle-a", mounted.id, "front", 1);
+  const b = port("toggle-b", loose.id, "rear", 1);
+  const links = [link("toggle-link", a.id, b.id, "Cat6A")];
+  for (const looseExpanded of [false, true]) {
+    const scene = buildRackCablingScene({
+      room,
+      racks: [rack24],
+      devices: [mounted, loose],
+      layouts: [layout(mounted.id, [a]), layout(loose.id, [b])],
+      ports: [a, b],
+      faceMode: "front",
+      rackOrder: [],
+      looseExpanded,
+    });
+    const routes = buildRackCablingRoutes({
+      scene,
+      rooms: [room],
+      racks: [rack24],
+      devices: [mounted, loose],
+      ports: [a, b],
+      links,
+      cableType: "all",
+      style: "smooth",
+    });
+    assert.equal(routes.length, 1);
+    assert.equal(routes[0].link.id, links[0].id);
+    assert.ok(routes[0].path);
+    const scope = buildRackCablingScope(scene, routes);
+    assert.ok(scope.deviceIds.has(loose.id));
+    assert.ok(scope.portIds.has(b.id));
+    assert.ok(scope.cableIds.has(links[0].id));
+    if (!looseExpanded) assert.equal(scene.looseSummaries.length, 1);
+    else assert.equal(routes[0].handoffs[0]?.reason, "hidden-face");
+  }
+});
+
+
+test("expanding two loose devices with both endpoint faces hidden retains their cable", () => {
+  const devices = ["hidden-loose-a", "hidden-loose-b"].map(id => ({ ...device(id, undefined, 1), roomId: room.id, placement: "room" as const, rackMountKind: "loose" as const, startU: undefined }));
+  const ports = devices.map((entry, index) => port(`hidden-loose-port-${index}`, entry.id, "rear", 1));
+  for (const looseExpanded of [false, true]) {
+    const scene = buildRackCablingScene({ room, racks: [], devices, layouts: devices.map((entry, index) => layout(entry.id, [ports[index]])), ports, faceMode: "front", looseExpanded });
+    const routes = buildRackCablingRoutes({ scene, rooms: [room], racks: [], devices, ports, links: [link("hidden-loose-cable", ports[0].id, ports[1].id, "Cat6A")], style: "smooth" });
+    assert.equal(routes.length, 1);
+    assert.equal(routes[0].link.id, "hidden-loose-cable");
+    assert.ok(routes[0].path);
+    if (looseExpanded) {
+      assert.deepEqual(routes[0].handoffs.map(handoff => handoff.reason), ["hidden-face", "hidden-face"]);
+      assert.equal(routes[0].continuations.length, 0);
+      assert.equal(routes[0].from.x, scene.looseCards[0].x + scene.looseCards[0].width / 2);
+      assert.equal(routes[0].to.x, scene.looseCards[1].x + scene.looseCards[1].width / 2);
+    }
+  }
+});
