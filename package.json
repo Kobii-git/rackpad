@@ -31,7 +31,7 @@
     "lint:proof": "node scripts/check-lint-gate.mjs",
     "check:i18n": "node --test scripts/i18n-value-rules.test.mjs && node scripts/check-i18n-values.mjs",
     "check:bundle": "node scripts/check-bundle-size.mjs",
-    "check:config": "node --test scripts/check-env-contract.test.mjs scripts/check-release-contract.test.mjs scripts/check-publication.test.mjs scripts/install-docker.test.mjs && node scripts/check-env-contract.mjs && node scripts/check-dockerignore.mjs",
+    "check:config": "node --import tsx --test scripts/check-healthcheck.test.mjs && node --test scripts/check-env-contract.test.mjs scripts/check-release-contract.test.mjs scripts/check-publication.test.mjs scripts/install-docker.test.mjs && node scripts/check-env-contract.mjs && node scripts/check-dockerignore.mjs",
     "check:proxmox": "node scripts/check-proxmox.mjs && bash deploy/proxmox/tests/test-proxmox.sh",
     "check:docs": "node --test scripts/check-ai-docs.test.mjs scripts/check-operator-docs.test.mjs && node scripts/check-ai-docs.mjs && node scripts/check-operator-docs.mjs",
     "check": "npm run lint && npm run lint:proof && npm run typecheck && npm run check:i18n && npm run test && npm run check:config && npm run check:proxmox && npm run check:docs && npm run build && npm run check:bundle",

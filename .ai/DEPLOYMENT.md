@@ -14,7 +14,13 @@ and stable roadmap gates pass; Docker is still the supported general path.
 
 Default Compose uses a read-only root filesystem, `/tmp` tmpfs,
 `no-new-privileges`, init, a healthcheck, and the `rackpad_data:/data` volume.
-The internal HTTP port is 3000 and the host mapping uses `RACKPAD_PORT`.
+Standard Compose keeps the internal HTTP port at 3000 and uses `RACKPAD_PORT`
+for the host mapping; host discovery sets the listening `PORT` from `RACKPAD_PORT`.
+Image and Compose healthchecks resolve `PORT` inside the container using the
+server's positive-safe-integer parsing and fallback to 3000. Custom internal
+ports require both `PORT` and the container-side mapping to agree. Existing
+Compose healthcheck overrides must be updated too; replacing the image alone
+does not replace them. See `INSTALL.md` for custom-port and older-image guidance.
 
 The process enables the SNMP trap listener only when explicitly configured through
 `SNMP_TRAP_ENABLED=1` (the default is off), but normal
@@ -28,6 +34,8 @@ change that safer default without a product decision.
 including `RACKPAD_SECRET_KEY`, SNMP, OIDC, rate limits, queue limits, and
 background intervals, pass through every Compose variant. `npm run check:config`
 derives runtime names from server source and fails on example/manifest drift.
+It executes the image and Compose probe expressions with isolated HTTP stubs,
+checking port parsing against the server and retaining failure exit behavior.
 It also runs the installer against isolated download/daemon stubs with real
 Compose rendering. The installer preserves operator configuration and keys,
 recognizes generated manifests, and proposes custom-manifest updates for review.

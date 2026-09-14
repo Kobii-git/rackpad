@@ -66,7 +66,7 @@ USER rackpad
 VOLUME ["/data"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
+  CMD node -e "const configuredPort = Number(process.env.PORT); const port = Number.isSafeInteger(configuredPort) && configuredPort > 0 ? configuredPort : 3000; fetch('http://127.0.0.1:' + port + '/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 EXPOSE 3000
 CMD ["node", "dist-server/index.js"]

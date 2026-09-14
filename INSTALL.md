@@ -107,6 +107,41 @@ SNMP traps must reach Rackpad, or use the privileged host-discovery profile.
 
 Rackpad stores its SQLite database in the Docker volume `rackpad_data`.
 
+### Host and container HTTP ports
+
+With standard bridge networking, `RACKPAD_PORT=3006` publishes host port 3006
+to container port 3000 (`3006:3000`). Rackpad still listens on `PORT=3000`
+inside the container. This is the usual way to avoid a host-port conflict,
+including in Unraid: change the host port and leave the container port at 3000.
+
+If the internal listening port must also change, edit the existing `rackpad`
+service's `PORT` value and replace its HTTP port mapping together. For example,
+these entries use port 3006 on both sides (retain the other service settings):
+
+```yaml
+environment:
+  PORT: 3006
+ports:
+  - "3006:3006"
+```
+
+For a direct Docker or Unraid installation, likewise set the container
+environment variable `PORT=3006` and map host port 3006 to container port 3006.
+Changing only the mapping does not change the port where Rackpad listens.
+Host-discovery Compose uses host networking without a port mapping;
+`RACKPAD_PORT=3006` sets its listening `PORT` to 3006 directly.
+
+The image and Compose healthchecks in current source read `PORT` inside the
+container and use the server's numeric parsing and fallback to 3000. Published
+v1.8.3 images and their standard Compose manifests still probe port 3000. For
+those installations, use `3006:3000` with `PORT=3000`, or replace the container's
+healthcheck with the port-aware check from the current release Compose source.
+
+When updating an existing deployment, update any Compose or Unraid healthcheck
+override too: it takes precedence over the image's healthcheck, so replacing
+the image alone does not replace a hardcoded override. Recreate the container
+after changing its configuration, retaining its existing data volume.
+
 ### Native SQLite snapshots (optional)
 
 ![Rackpad Administration native-backup panel showing a configured capture-only SQLite snapshot](./docs/screenshots/admin-backups.png)
