@@ -108,7 +108,7 @@ test("patch-panel starter produces matching face-qualified front and rear blocks
   );
 });
 
-test("port-block replacement is face-aware and upgrades only the selected legacy face", () => {
+test("port-block replacement preserves existing identities while adding independent faces", () => {
   const legacyFront: PortBlockDefinition = {
     id: "ports",
     face: "front",
@@ -156,11 +156,11 @@ test("port-block replacement is face-aware and upgrades only the selected legacy
     updatedFront.portBlueprints.map((block) => [block.id, block.face]),
     [
       ["ports:rear", "rear"],
-      ["ports:front", "front"],
+      ["ports", "front"],
     ],
   );
   assert.equal(
-    updatedFront.portSlots.filter((slot) => slot.groupId === "ports:front")
+    updatedFront.portSlots.filter((slot) => slot.groupId === "ports")
       .length,
     3,
   );
@@ -170,7 +170,7 @@ test("port-block replacement is face-aware and upgrades only the selected legacy
     2,
   );
   assert.equal(
-    updatedFront.portSlots.some((slot) => slot.groupId === "ports"),
+    updatedFront.portSlots.some((slot) => slot.groupId === "ports:front"),
     false,
   );
   assert.equal(new Set(updatedFront.portSlots.map((slot) => slot.id)).size, 5);
@@ -325,4 +325,26 @@ test("module positions control both faces and preserve module port identities wh
       .length,
     0,
   );
+});
+
+
+test("repeated switch access and uplink edits preserve legacy block and port IDs", () => {
+  let template = createStarterTemplate("switch-24", "stable-switch", "Stable switch");
+  const originalIds = template.portSlots.map((slot) => slot.id).sort();
+  const originals = templatePortBlocks(template);
+  assert.deepEqual(originals.map((block) => block.id), ["ports", "uplinks"]);
+  for (const original of originals) {
+    for (const offset of [10, 20]) {
+      const block = templatePortBlocks(template).find(
+        (entry) => entry.id === original.id && entry.face === original.face,
+      );
+      assert.ok(block, "selected block remains addressable after Update");
+      const unaffected = template.portSlots.filter((slot) => slot.groupId !== original.id);
+      template = replacePortBlock(template, { ...block, x: original.x + offset });
+      const updated = templatePortBlocks(template).find((entry) => entry.id === original.id);
+      assert.equal(updated?.x, original.x + offset);
+      assert.deepEqual(template.portSlots.map((slot) => slot.id).sort(), originalIds);
+      assert.deepEqual(template.portSlots.filter((slot) => slot.groupId !== original.id), unaffected);
+    }
+  }
 });

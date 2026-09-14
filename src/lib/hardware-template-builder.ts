@@ -435,13 +435,19 @@ export function replacePortBlock(
   block: PortBlockDefinition,
 ): HardwareTemplateV1 {
   const baseId = portBlockBaseId(block.id);
-  const groupId = faceQualifiedPortBlockId(baseId, block.face);
-  const normalizedBlock = { ...block, id: groupId };
   const replacedBlueprints = template.portBlueprints.filter(
     (entry) =>
       portBlockBlueprintFace(entry) === block.face &&
       portBlockBlueprintBaseId(entry) === baseId,
   );
+  // Existing blueprint IDs belong to persisted template/port identities. Only
+  // new blocks need face qualification; geometry edits must retain selection.
+  const existing = replacedBlueprints.find((entry) => entry.id === block.id)
+    ?? replacedBlueprints[0];
+  const groupId = typeof existing?.id === "string"
+    ? safeId(existing.id)
+    : faceQualifiedPortBlockId(baseId, block.face);
+  const normalizedBlock = { ...block, id: groupId };
   const replacedGroupIds = new Set([
     baseId,
     groupId,

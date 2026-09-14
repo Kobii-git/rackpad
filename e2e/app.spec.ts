@@ -5690,3 +5690,44 @@ test("guided template editor preserves mixed blocks and edits six bays to four w
     await request.delete(`/api/hardware-templates/${id}`, { headers });
   }
 });
+
+
+test("guided switch block updates keep selection and persisted port identities", async ({ page, request }) => {
+  const id = `guided-switch-${Date.now().toString(36)}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  const source = createStarterTemplate("switch-24", id, `Guided switch ${id}`);
+  const created = await request.post("/api/hardware-templates", { headers, data: source });
+  expect(created.status(), await created.text()).toBe(201);
+  try {
+    await authenticate(page);
+    await page.goto("/admin/device-types");
+    await page.getByTestId("device-type-section-built-in").getByRole("button", { name: "Switch switch Built-in template", exact: true }).click();
+    const builder = page.getByTestId("hardware-template-builder");
+    await builder.getByRole("combobox", { name: "Templates", exact: true }).selectOption(id);
+    const blocks = builder.getByTestId("template-port-block-editor");
+    const update = blocks.getByRole("button", { name: "Update", exact: true });
+    for (const original of source.portBlueprints) {
+      const key = `${original.face}:${original.id}`;
+      await blocks.getByTestId("template-port-blocks").selectOption(key);
+      for (const offset of [10, 20]) {
+        await blocks.getByRole("spinbutton", { name: "Position: X", exact: true }).fill(String(Number(original.x) + offset));
+        await update.click();
+        await expect(update).toBeEnabled();
+        await expect(blocks.getByTestId("template-port-blocks")).toHaveValue(key);
+      }
+    }
+    const saved = page.waitForResponse(response => response.request().method() === "PATCH" && response.url().endsWith(`/api/hardware-templates/${id}`));
+    await builder.getByRole("button", { name: "Save template", exact: true }).click();
+    expect((await saved).status()).toBe(200);
+    const records = await (await request.get("/api/hardware-templates", { headers })).json();
+    const result = records.templates.find((entry: { id: string }) => entry.id === id);
+    expect(result.portSlots.map((slot: { id: string }) => slot.id).sort()).toEqual(source.portSlots.map(slot => slot.id).sort());
+    expect(result.portBlueprints.map((block: { id: string }) => block.id).sort()).toEqual(["ports", "uplinks"]);
+    await page.reload();
+    await builder.getByRole("combobox", { name: "Templates", exact: true }).selectOption(id);
+    await blocks.getByTestId("template-port-blocks").selectOption(`${source.portBlueprints[0].face}:ports`);
+    await expect(update).toBeEnabled();
+  } finally {
+    await request.delete(`/api/hardware-templates/${id}`, { headers });
+  }
+});
