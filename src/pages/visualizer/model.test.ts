@@ -721,3 +721,81 @@ test("grouped topology represents rack-top devices without consuming U bands", (
     assert.ok(topNode.y + topNode.height <= after.bodyY);
   }
 });
+
+test("grouped topology honors fractional columns for ordinary devices sharing a U", () => {
+  const rack = {
+    id: "fractional-rack",
+    labId: "lab_visualizer_routes",
+    name: "Fractional rack",
+    totalU: 12,
+  };
+  const devices: Device[] = [
+    {
+      ...testDevice("left-half"),
+      placement: "rack",
+      rackId: rack.id,
+      startU: 8,
+      heightU: 1,
+      rackMountKind: "direct",
+      rackColumn: 0,
+      rackColumnSpan: 6,
+    },
+    {
+      ...testDevice("right-quarter"),
+      placement: "rack",
+      rackId: rack.id,
+      startU: 8,
+      heightU: 1,
+      rackMountKind: "direct",
+      rackSlot: "left",
+      rackColumn: 6,
+      rackColumnSpan: 3,
+    },
+    {
+      ...testDevice("legacy-right"),
+      placement: "rack",
+      rackId: rack.id,
+      startU: 7,
+      heightU: 1,
+      rackMountKind: "direct",
+      rackSlot: "right",
+      rackColumn: null,
+      rackColumnSpan: null,
+    },
+  ];
+  for (const face of ["front", "rear"] as const) {
+    const model = buildVisualizerModel({
+      racks: [rack],
+      rooms: [],
+      devices: devices.map((device) => ({ ...device, face })),
+      deviceTypes: [],
+      ports: [],
+      portLinks: [],
+      deviceMonitors: [],
+      subnets: [],
+      vlans: [],
+      discoveredDevices: [],
+      virtualSwitches: [],
+      expandedRackRuns: new Set(),
+      collapsedGroups: new Set(),
+      layout: { rackFaceMode: "both", readableLabels: true },
+    });
+    const panel = model.rackZone.racks[0]!;
+    const left = panel.nodes.find((node) => node.device.id === "left-half")!;
+    const quarter = panel.nodes.find(
+      (node) => node.device.id === "right-quarter",
+    )!;
+    const legacy = panel.nodes.find(
+      (node) => node.device.id === "legacy-right",
+    )!;
+    assert.ok(left.x + left.width < quarter.x);
+    assert.ok(quarter.width < left.width);
+    assert.ok(legacy.x > left.x);
+    assert.ok(
+      panel.nodes.every(
+        (node) =>
+          node.x >= panel.x && node.x + node.width <= panel.x + panel.width,
+      ),
+    );
+  }
+});

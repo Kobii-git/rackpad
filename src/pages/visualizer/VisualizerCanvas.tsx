@@ -1368,6 +1368,7 @@ function DeviceCard({
   return (
     <div
       data-visualizer-interactive="true"
+      data-visualizer-device-id={node.device.id}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

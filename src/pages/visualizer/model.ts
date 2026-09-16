@@ -32,6 +32,7 @@ import {
   canonicalMacAddress,
   formatDeviceAddress } from "@/lib/network-labels";
 import { buildSnmpVerifiedPortIds } from "@/lib/snmp-port-status";
+import { devicePlacementState } from "@/lib/rack-studio";
 import type {
   RackBand,
   RackPanel,
@@ -78,6 +79,19 @@ const NODE_HEIGHT = 40;
 const ROOM_ZONE_WIDTH = 430;
 const ROOM_NODE_WIDTH = 360;
 const ROOM_ROW_HEIGHT = 54;
+
+function rackColumnBounds(device: Device, baseX: number, baseWidth: number) {
+  const placement = devicePlacementState(device);
+  const columnSpan = Math.max(1, Math.min(12, placement.columnSpan ?? 12));
+  const column = Math.max(0, Math.min(12 - columnSpan, placement.column ?? 0));
+  const gutter = 3;
+  const leftInset = column > 0 ? gutter : 0;
+  const rightInset = column + columnSpan < 12 ? gutter : 0;
+  return {
+    x: baseX + (baseWidth * column) / 12 + leftInset,
+    width: Math.max(1, (baseWidth * columnSpan) / 12 - leftInset - rightInset),
+  };
+}
 const PYRAMID_ZONE_X = 28;
 const PYRAMID_ZONE_Y = 28;
 const PYRAMID_NODE_WIDTH = 264;
@@ -960,18 +974,10 @@ function buildRackPanel(input: {
     const faceBaseX = useDualFaceLayout
       ? nodeAreaX + (face === "rear" ? faceNodeWidth + faceGap : 0)
       : bodyX + 32;
-    const rackSlot = device.rackSlot ?? "full";
-    const slotGap = 6;
     const baseWidth = useDualFaceLayout ? faceNodeWidth : mountedNodeWidth;
-    const halfSlotWidth = Math.max(0, Math.floor((baseWidth - slotGap) / 2));
-    const nodeWidth = onTop
-      ? (baseWidth * (device.rackColumnSpan ?? 12)) / 12
-      : rackSlot === "full"
-        ? baseWidth
-        : halfSlotWidth;
-    const nodeX = onTop
-      ? faceBaseX + (baseWidth * (device.rackColumn ?? 0)) / 12
-      : rackSlot === "right" ? faceBaseX + nodeWidth + slotGap : faceBaseX;
+    const columnBounds = rackColumnBounds(device, faceBaseX, baseWidth);
+    const nodeWidth = columnBounds.width;
+    const nodeX = columnBounds.x;
     return createNode({
       device,
       deviceTypes: input.deviceTypes,

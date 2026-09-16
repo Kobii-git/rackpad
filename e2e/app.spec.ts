@@ -1582,6 +1582,112 @@ test("rack cabling scopes inspection and supports keyboard search and selection"
   await expect(page.getByText("0 cables", { exact: true })).toBeVisible();
 });
 
+test("grouped visualizer separates fractional devices sharing a rack unit", async ({
+  page,
+  request,
+}) => {
+  const headers = { Authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(36);
+  const createdDeviceIds: string[] = [];
+  let roomId = "";
+  let rackId = "";
+  try {
+    const roomResponse = await request.post("/api/rooms", {
+      headers,
+      data: { labId: "lab_home", name: `Fractional room ${suffix}` },
+    });
+    expect(roomResponse.status(), await roomResponse.text()).toBe(201);
+    roomId = ((await roomResponse.json()) as { id: string }).id;
+    const rackResponse = await request.post("/api/racks", {
+      headers,
+      data: {
+        labId: "lab_home",
+        roomId,
+        name: `Fractional rack ${suffix}`,
+        totalU: 12,
+      },
+    });
+    expect(rackResponse.status(), await rackResponse.text()).toBe(201);
+    rackId = ((await rackResponse.json()) as { id: string }).id;
+
+    for (const [hostname, rackSlot] of [
+      [`fractional-left-${suffix}`, "left"],
+      [`fractional-quarter-${suffix}`, "right"],
+    ] as const) {
+      const response = await request.post("/api/devices", {
+        headers,
+        data: {
+          labId: "lab_home",
+          roomId,
+          rackId,
+          hostname,
+          deviceType: "server",
+          status: "online",
+          placement: "rack",
+          startU: 6,
+          heightU: 1,
+          face: "front",
+          rackSlot,
+        },
+      });
+      expect(response.status(), await response.text()).toBe(201);
+      createdDeviceIds.push(((await response.json()) as { id: string }).id);
+    }
+
+    const directState = {
+      mountKind: "direct",
+      roomId,
+      rackId,
+      parentDeviceId: null,
+      startU: 6,
+      heightU: 1,
+      face: "front",
+      column: 6,
+      columnSpan: 6,
+      shelfX: null,
+      shelfY: null,
+      shelfWidth: null,
+      shelfHeight: null,
+      orientation: null,
+      side: null,
+    };
+    const resizeResponse = await request.post("/api/rack-studio/actions", {
+      headers,
+      data: {
+        kind: "device.place",
+        targetId: createdDeviceIds[1],
+        expected: directState,
+        next: { ...directState, columnSpan: 3 },
+      },
+    });
+    expect(resizeResponse.status(), await resizeResponse.text()).toBe(200);
+
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/visualizer");
+    const left = page.locator(
+      `[data-visualizer-device-id="${createdDeviceIds[0]}"]`,
+    );
+    const quarter = page.locator(
+      `[data-visualizer-device-id="${createdDeviceIds[1]}"]`,
+    );
+    await expect(left).toBeVisible();
+    await expect(quarter).toBeVisible();
+    const leftBox = await left.boundingBox();
+    const quarterBox = await quarter.boundingBox();
+    expect(leftBox).not.toBeNull();
+    expect(quarterBox).not.toBeNull();
+    expect(leftBox!.x + leftBox!.width).toBeLessThan(quarterBox!.x);
+    expect(quarterBox!.width).toBeLessThan(leftBox!.width);
+  } finally {
+    for (const id of createdDeviceIds.reverse()) {
+      await request.delete(`/api/devices/${id}`, { headers });
+    }
+    if (rackId) await request.delete(`/api/racks/${rackId}`, { headers });
+    if (roomId) await request.delete(`/api/rooms/${roomId}`, { headers });
+  }
+});
+
 test("Rack Studio patches exact ports, saves routes, exports, and traces", async ({
   page,
   request,
