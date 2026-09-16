@@ -18,9 +18,15 @@ interface PhysicalPortSlotEditorProps {
   layout: HardwareTemplateV1 | ResolvedPhysicalLayoutV1;
   face: RackFace;
   selectedSlotId?: string;
+  selectedElementId?: string;
+  selectedModuleSlotId?: string;
   className?: string;
   onSelectSlot?: (slotId: string) => void;
+  onSelectElement?: (elementId: string) => void;
+  onSelectModuleSlot?: (slotId: string) => void;
   onMoveSlot: (slotId: string, x: number, y: number) => void;
+  onMoveElement?: (elementId: string, x: number, y: number) => void;
+  onMoveModuleSlot?: (slotId: string, x: number, y: number) => void;
 }
 
 function faceOf(
@@ -42,14 +48,21 @@ export function PhysicalPortSlotEditor({
   layout,
   face,
   selectedSlotId,
+  selectedElementId,
+  selectedModuleSlotId,
   className,
   onSelectSlot,
+  onSelectElement,
+  onSelectModuleSlot,
   onMoveSlot,
+  onMoveElement,
+  onMoveModuleSlot,
 }: PhysicalPortSlotEditorProps) {
   const { t } = useI18n();
   const definition = faceOf(layout, face);
   const [drag, setDrag] = useState<{
-    slotId: string;
+    kind: "slot" | "element" | "module-slot";
+    id: string;
     offsetX: number;
     offsetY: number;
   }>();
@@ -67,6 +80,24 @@ export function PhysicalPortSlotEditor({
     };
   }
 
+  function beginDrag(
+    event: ReactPointerEvent<SVGElement>,
+    kind: "slot" | "element" | "module-slot",
+    id: string,
+    x: number,
+    y: number,
+  ) {
+    const svg = event.currentTarget.ownerSVGElement;
+    if (!svg) return;
+    const bounds = svg.getBoundingClientRect();
+    const pointerX =
+      ((event.clientX - bounds.left) / bounds.width) * definition.width;
+    const pointerY =
+      ((event.clientY - bounds.top) / bounds.height) * definition.height;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDrag({ kind, id, offsetX: pointerX - x, offsetY: pointerY - y });
+  }
+
   return (
     <svg
       viewBox={`0 0 ${definition.width} ${definition.height}`}
@@ -79,7 +110,21 @@ export function PhysicalPortSlotEditor({
       onPointerMove={(event) => {
         if (!drag) return;
         const next = point(event);
-        onMoveSlot(drag.slotId, next.x - drag.offsetX, next.y - drag.offsetY);
+        if (drag.kind === "slot") {
+          onMoveSlot(drag.id, next.x - drag.offsetX, next.y - drag.offsetY);
+        } else if (drag.kind === "element") {
+          onMoveElement?.(
+            drag.id,
+            next.x - drag.offsetX,
+            next.y - drag.offsetY,
+          );
+        } else {
+          onMoveModuleSlot?.(
+            drag.id,
+            next.x - drag.offsetX,
+            next.y - drag.offsetY,
+          );
+        }
       }}
       onPointerUp={() => setDrag(undefined)}
       onPointerCancel={() => setDrag(undefined)}
@@ -90,14 +135,49 @@ export function PhysicalPortSlotEditor({
         fill="var(--color-bg)"
       />
       {definition.elements.map((primitive) => (
-        <Primitive key={primitive.id} primitive={primitive} />
+        <Primitive
+          key={primitive.id}
+          primitive={primitive}
+          selected={selectedElementId === primitive.id}
+          onPointerDown={
+            onMoveElement
+              ? (event) => {
+                  beginDrag(
+                    event,
+                    "element",
+                    primitive.id,
+                    primitive.x,
+                    primitive.y,
+                  );
+                  onSelectElement?.(primitive.id);
+                }
+              : undefined
+          }
+        />
       ))}
-      {"modules" in layout && layout.modules.filter(module => module.face === face).map(module => (
-        <g key={module.id} data-testid="template-module-preview">
-          {module.elements.map(primitive => <Primitive key={primitive.id} primitive={primitive} />)}
-          {module.portSlots.map(slot => <rect key={slot.id} x={slot.x} y={slot.y} width={slot.width} height={slot.height} fill="var(--color-bg)" stroke="var(--color-accent)"><title>{slot.label ?? slot.id}</title></rect>)}
-        </g>
-      ))}
+      {"modules" in layout &&
+        layout.modules
+          .filter((module) => module.face === face)
+          .map((module) => (
+            <g key={module.id} data-testid="template-module-preview">
+              {module.elements.map((primitive) => (
+                <Primitive key={primitive.id} primitive={primitive} />
+              ))}
+              {module.portSlots.map((slot) => (
+                <rect
+                  key={slot.id}
+                  x={slot.x}
+                  y={slot.y}
+                  width={slot.width}
+                  height={slot.height}
+                  fill="var(--color-bg)"
+                  stroke="var(--color-accent)"
+                >
+                  <title>{slot.label ?? slot.id}</title>
+                </rect>
+              ))}
+            </g>
+          ))}
       {moduleSlots.map((slot) => (
         <rect
           key={slot.id}
@@ -108,7 +188,16 @@ export function PhysicalPortSlotEditor({
           fill="none"
           stroke="var(--color-warning)"
           strokeDasharray="8 6"
-          strokeWidth="2"
+          strokeWidth={selectedModuleSlotId === slot.id ? "5" : "2"}
+          className={onMoveModuleSlot ? "cursor-move" : undefined}
+          onPointerDown={
+            onMoveModuleSlot
+              ? (event) => {
+                  beginDrag(event, "module-slot", slot.id, slot.x, slot.y);
+                  onSelectModuleSlot?.(slot.id);
+                }
+              : undefined
+          }
         >
           <title>{slot.id}</title>
         </rect>
@@ -119,20 +208,7 @@ export function PhysicalPortSlotEditor({
           slot={slot}
           selected={selectedSlotId === slot.id}
           onPointerDown={(event) => {
-            const svg = event.currentTarget.ownerSVGElement;
-            if (!svg) return;
-            const bounds = svg.getBoundingClientRect();
-            const pointerX =
-              ((event.clientX - bounds.left) / bounds.width) * definition.width;
-            const pointerY =
-              ((event.clientY - bounds.top) / bounds.height) *
-              definition.height;
-            event.currentTarget.setPointerCapture(event.pointerId);
-            setDrag({
-              slotId: slot.id,
-              offsetX: pointerX - slot.x,
-              offsetY: pointerY - slot.y,
-            });
+            beginDrag(event, "slot", slot.id, slot.x, slot.y);
             onSelectSlot?.(slot.id);
           }}
           onKeyDown={(event) => {
@@ -157,7 +233,16 @@ export function PhysicalPortSlotEditor({
   );
 }
 
-function Primitive({ primitive }: { primitive: PhysicalFacePrimitiveV1 }) {
+function Primitive({
+  primitive,
+  selected = false,
+  onPointerDown,
+}: {
+  primitive: PhysicalFacePrimitiveV1;
+  selected?: boolean;
+  onPointerDown?: (event: ReactPointerEvent<SVGElement>) => void;
+}) {
+  const interactive = onPointerDown ? "cursor-move" : undefined;
   if (primitive.kind === "label") {
     return (
       <text
@@ -167,6 +252,8 @@ function Primitive({ primitive }: { primitive: PhysicalFacePrimitiveV1 }) {
         fill="var(--color-fg-subtle)"
         fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
         fontSize="15"
+        className={interactive}
+        onPointerDown={onPointerDown}
       >
         {primitive.text}
       </text>
@@ -180,7 +267,9 @@ function Primitive({ primitive }: { primitive: PhysicalFacePrimitiveV1 }) {
         r={primitive.radius}
         fill={fillOf(primitive)}
         stroke="var(--color-line-strong)"
-        strokeWidth="2"
+        strokeWidth={selected ? "5" : "2"}
+        className={interactive}
+        onPointerDown={onPointerDown}
       />
     );
   }
@@ -194,8 +283,10 @@ function Primitive({ primitive }: { primitive: PhysicalFacePrimitiveV1 }) {
       rx={primitive.kind === "handle" ? 8 : 3}
       fill={fillOf(primitive)}
       stroke="var(--color-line-strong)"
-      strokeWidth="2"
+      strokeWidth={selected ? "5" : "2"}
       strokeDasharray={primitive.kind === "vent" ? "5 5" : undefined}
+      className={interactive}
+      onPointerDown={onPointerDown}
     />
   );
 }

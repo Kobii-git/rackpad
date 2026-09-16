@@ -99,8 +99,8 @@ interface RackCablingCanvasProps {
   onRouteStyleChange: (style: RackCablingRouteStyle) => void;
   showLabels: boolean;
   onShowLabelsChange: (show: boolean) => void;
-  looseExpanded: boolean;
-  onLooseExpandedChange: (expanded: boolean) => void;
+  looseExpandedRoomIds: ReadonlySet<string>;
+  onLooseExpandedChange: (roomId: string, expanded: boolean) => void;
   traceMode: TraceModeState;
   setTraceMode: Dispatch<SetStateAction<TraceModeState>>;
 }
@@ -145,7 +145,7 @@ export function RackCablingCanvas({
   onRouteStyleChange,
   showLabels,
   onShowLabelsChange,
-  looseExpanded,
+  looseExpandedRoomIds,
   onLooseExpandedChange,
   traceMode,
   setTraceMode,
@@ -170,6 +170,12 @@ export function RackCablingCanvas({
   >(null);
   const [hoveredCableId, setHoveredCableId] = useState<string | null>(null);
   const [searchIndex, setSearchIndex] = useState(0);
+  const looseExpandedRoomKey = [...looseExpandedRoomIds].sort().join("\u0000");
+  const looseExpandedRoomIdSet = useMemo(
+    () =>
+      new Set(looseExpandedRoomKey ? looseExpandedRoomKey.split("\u0000") : []),
+    [looseExpandedRoomKey],
+  );
   const selectedRooms = useMemo(() => {
     const selected = new Set(roomIds);
     return rooms.filter((room) => selected.has(room.id));
@@ -201,7 +207,7 @@ export function RackCablingCanvas({
         ports,
         faceMode,
         rackOrder,
-        looseExpanded,
+        looseExpandedRoomIds: looseExpandedRoomIdSet,
       }),
     [
       selectedRooms,
@@ -211,7 +217,7 @@ export function RackCablingCanvas({
       ports,
       faceMode,
       rackOrder,
-      looseExpanded,
+      looseExpandedRoomIdSet,
     ],
   );
   const routes = useMemo(
@@ -654,7 +660,7 @@ export function RackCablingCanvas({
     autoFitRef.current = true;
     const frame = window.requestAnimationFrame(applyFit);
     return () => window.cancelAnimationFrame(frame);
-  }, [applyFit, roomSelectionKey, faceMode, looseExpanded]);
+  }, [applyFit, roomSelectionKey, faceMode, looseExpandedRoomKey]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -673,7 +679,6 @@ export function RackCablingCanvas({
   useEffect(() => {
     if (previousRoomIdsRef.current === roomSelectionKey) return;
     previousRoomIdsRef.current = roomSelectionKey;
-    setSelection(null);
     setHoveredCableId(null);
     setHoveredLooseDeviceId(null);
     setTraceMode((current) =>
@@ -1190,7 +1195,9 @@ export function RackCablingCanvas({
                     type="button"
                     data-rack-cabling-interactive="true"
                     className="flex h-[42px] w-full items-center gap-2 border-b border-[var(--border-default)] px-3 text-left"
-                    onClick={() => onLooseExpandedChange(!looseExpanded)}
+                    onClick={() =>
+                      onLooseExpandedChange(roomFrame.room.id, !tray.expanded)
+                    }
                   >
                     <Box className="size-4 text-[var(--accent-primary)]" />
                     <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-primary)]">
@@ -1199,7 +1206,7 @@ export function RackCablingCanvas({
                     <span className="text-[10px] text-[var(--text-tertiary)]">
                       {tray.deviceCount} {t("devices")} · {roomFrame.room.name}
                     </span>
-                    {looseExpanded ? (
+                    {tray.expanded ? (
                       <ChevronUp className="ml-auto size-4" />
                     ) : (
                       <ChevronDown className="ml-auto size-4" />
@@ -1897,7 +1904,11 @@ function RackFaceFrame({
 }) {
   const { t } = useI18n();
   return (
-    <div className="absolute inset-0" data-testid="rack-cabling-face" data-rack-face={frame.face}>
+    <div
+      className="absolute inset-0"
+      data-testid="rack-cabling-face"
+      data-rack-face={frame.face}
+    >
       <span
         className="absolute -top-5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
         style={{ left: frame.x - originX }}

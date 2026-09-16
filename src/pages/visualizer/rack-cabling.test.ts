@@ -178,6 +178,39 @@ test("multi-room scenes stack deterministically and connect selected endpoints d
   assert.deepEqual(empty.anchors, []);
 });
 
+test("multi-room loose equipment expands independently by room", () => {
+  const branchRoom: Room = {
+    id: "room-loose-branch",
+    labId: room.labId,
+    name: "Loose branch",
+  };
+  const local = { ...device("loose-local", undefined, 1), roomId: room.id };
+  const remote = {
+    ...device("loose-remote", undefined, 1),
+    roomId: branchRoom.id,
+  };
+  const localPort = port("loose-local-port", local.id, "front", 1);
+  const remotePort = port("loose-remote-port", remote.id, "front", 1);
+  const scene = buildRackCablingScene({
+    rooms: [room, branchRoom],
+    racks: [],
+    devices: [local, remote],
+    layouts: [layout(local.id, [localPort]), layout(remote.id, [remotePort])],
+    ports: [localPort, remotePort],
+    faceMode: "front",
+    looseExpandedRoomIds: new Set([branchRoom.id]),
+  });
+
+  const localFrame = scene.rooms.find((frame) => frame.room.id === room.id)!;
+  const remoteFrame = scene.rooms.find(
+    (frame) => frame.room.id === branchRoom.id,
+  )!;
+  assert.equal(localFrame.looseTray?.expanded, false);
+  assert.equal(remoteFrame.looseTray?.expanded, true);
+  assert.equal(localFrame.looseSummaries.length, 1);
+  assert.equal(remoteFrame.looseCards.length, 1);
+});
+
 test("room selection preferences migrate once and preserve an explicit clear", () => {
   assert.deepEqual(parseRackCablingRoomSelection('["a","a","b"]'), ["a", "b"]);
   assert.deepEqual(parseRackCablingRoomSelection("[]"), []);
@@ -780,7 +813,7 @@ test("handoff label geometry packs stable lanes within scene bounds", () => {
   assert.ok(
     geometry.every((entry) => entry.y >= 16 && entry.y <= scene.height - 16),
   );
-  assert.ok(geometry.some((entry) => entry.lane.startsWith("scene-edge:")));
+  assert.ok(geometry.some((entry) => entry.lane.startsWith("room-edge:")));
   assert.ok(geometry.some((entry) => entry.lane.startsWith("rack-edge:")));
   assert.ok(
     geometry.some((entry) => entry.lane.startsWith("fallback-equipment:")),

@@ -918,6 +918,7 @@ export function buildRackCablingScene(input: {
   faceMode: VisualizerRackFaceMode;
   rackOrder?: string[];
   looseExpanded?: boolean;
+  looseExpandedRoomIds?: ReadonlySet<string>;
 }): RackCablingScene {
   const selectedRooms = [...(input.rooms ?? (input.room ? [input.room] : []))]
     .filter(
@@ -930,7 +931,12 @@ export function buildRackCablingScene(input: {
         left.id.localeCompare(right.id),
     );
   const roomScenes = selectedRooms.map((room) =>
-    buildRackCablingRoomScene({ ...input, room }),
+    buildRackCablingRoomScene({
+      ...input,
+      room,
+      looseExpanded:
+        input.looseExpandedRoomIds?.has(room.id) ?? input.looseExpanded,
+    }),
   );
   const width = Math.max(760, ...roomScenes.map((scene) => scene.width));
   let nextY = 0;
@@ -1120,11 +1126,18 @@ function handoffLabelLane(input: {
 }) {
   const { scene, route, handoff, anchor } = input;
   if (handoff.reason === "cross-room") {
-    const side = anchor.x < scene.width / 2 ? "left" : "right";
+    const room = scene.rooms.find((frame) => frame.room.id === anchor.roomId);
+    const side = room && anchor.x < room.x + room.width / 2 ? "left" : "right";
     return {
-      lane: `scene-edge:${side}`,
-      x: side === "left" ? 12 : scene.width - 12,
-      textAnchor: side === "left" ? ("start" as const) : ("end" as const),
+      lane: `room-edge:${room?.room.id ?? anchor.roomId ?? "unknown"}:${side}`,
+      x: room
+        ? side === "left"
+          ? Math.max(12, room.x - 12)
+          : Math.min(scene.width - 12, room.x + room.width + 12)
+        : side === "left"
+          ? 12
+          : scene.width - 12,
+      textAnchor: side === "left" ? ("end" as const) : ("start" as const),
     };
   }
   if (handoff.reason === "hidden-face") {

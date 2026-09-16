@@ -6,6 +6,25 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.4-beta.3] - 2026-09-17
+
+### Fixed
+
+- Rack Studio's classic Racks/Rooms elevation honours normalized 12-column
+  placement on both faces, including full-, half- and quarter-width devices at
+  the same U. Loose equipment can be placed directly on a focused rack top.
+- Hardware-template appearance editing now offers every supported primitive,
+  supports direct preview positioning for appearance and module positions, and
+  regenerates port-block geometry when its width or height changes.
+- Rack Cabling persists loose-equipment expansion independently per room, keeps
+  the active cable, port or label selected while panning, and keeps cross-room
+  handoff labels at the originating room boundary.
+- Room-canvas rack selection now consistently updates the focused Rack Studio
+  elevation.
+
+See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.3.md).
+Issues #164, #165, #166, #167 and #169 remain open pending tester confirmation.
+
 ## [1.8.4-beta.2] - 2026-09-16
 
 ### Added

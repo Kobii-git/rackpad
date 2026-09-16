@@ -13,6 +13,41 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
+const APPEARANCE_PRIMITIVES: PhysicalFacePrimitiveV1["kind"][] = [
+  "panel",
+  "handle",
+  "vent",
+  "bay",
+  "display",
+  "outlet",
+  "screw",
+  "indicator",
+  "label",
+];
+
+function appearancePrimitive(
+  kind: PhysicalFacePrimitiveV1["kind"],
+  id: string,
+  width: number,
+  height: number,
+): PhysicalFacePrimitiveV1 {
+  if (kind === "screw" || kind === "indicator") {
+    return { kind, id, x: 12, y: 12, radius: 8, tone: "dark" };
+  }
+  if (kind === "label") {
+    return { kind, id, x: 12, y: 24, text: "Label", align: "start" };
+  }
+  return {
+    kind,
+    id,
+    x: 0,
+    y: 0,
+    width: Math.min(100, width),
+    height: Math.min(80, height),
+    tone: "dark",
+  };
+}
+
 export function TemplateStructureEditor({
   draft,
   setDraft,
@@ -20,6 +55,8 @@ export function TemplateStructureEditor({
   setFace,
   moduleSlotId,
   setModuleSlotId,
+  elementId,
+  setElementId,
 }: {
   draft: HardwareTemplateV1;
   setDraft: Dispatch<SetStateAction<HardwareTemplateV1>>;
@@ -27,9 +64,12 @@ export function TemplateStructureEditor({
   setFace: (face: RackFace) => void;
   moduleSlotId: string;
   setModuleSlotId: (id: string) => void;
+  elementId: string;
+  setElementId: (id: string) => void;
 }) {
   const { t } = useI18n();
-  const [elementId, setElementId] = useState("");
+  const [elementKind, setElementKind] =
+    useState<PhysicalFacePrimitiveV1["kind"]>("bay");
   const position = draft.moduleSlots.find((slot) => slot.id === moduleSlotId);
   const element = draft[face].elements.find((item) => item.id === elementId);
   const changeElement = (patch: Partial<PhysicalFacePrimitiveV1>) =>
@@ -46,20 +86,17 @@ export function TemplateStructureEditor({
     }));
   const addElement = (source?: PhysicalFacePrimitiveV1) => {
     const id = nextTemplatePartId(
-      `${face}-bay`,
+      `${face}-${elementKind}`,
       draft[face].elements.map((item) => item.id),
     );
     const next: PhysicalFacePrimitiveV1 = source
       ? { ...source, id }
-      : {
-          kind: "bay",
+      : appearancePrimitive(
+          elementKind,
           id,
-          x: 0,
-          y: 0,
-          width: Math.min(100, draft[face].width),
-          height: Math.min(160, draft[face].height),
-          tone: "dark",
-        };
+          draft[face].width,
+          draft[face].height,
+        );
     setDraft((current) => ({
       ...current,
       [face]: { ...current[face], elements: [...current[face].elements, next] },
@@ -89,6 +126,24 @@ export function TemplateStructureEditor({
             {draft.moduleSlots.map((slot) => (
               <option key={slot.id} value={slot.id}>
                 {slot.id} · {t(slot.face === "front" ? "Front" : "Rear")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-xs">
+          {t("Physical layout")}
+          <select
+            className="rk-control mt-1 w-full"
+            value={elementKind}
+            onChange={(event) =>
+              setElementKind(
+                event.target.value as PhysicalFacePrimitiveV1["kind"],
+              )
+            }
+          >
+            {APPEARANCE_PRIMITIVES.map((kind) => (
+              <option key={kind} value={kind}>
+                {kind}
               </option>
             ))}
           </select>

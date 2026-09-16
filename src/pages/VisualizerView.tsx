@@ -55,6 +55,8 @@ const RACK_CABLING_LABELS_STORAGE_KEY =
   "rackpad.visualizer.rack-cabling-labels";
 const RACK_CABLING_LOOSE_STORAGE_KEY =
   "rackpad.visualizer.rack-cabling-loose-expanded";
+const RACK_CABLING_LOOSE_BY_ROOM_STORAGE_KEY =
+  "rackpad.visualizer.rack-cabling-loose-expanded-by-room";
 
 type MoveDirection = "up" | "down";
 
@@ -170,9 +172,13 @@ export default function VisualizerView() {
   const [rackCablingLabels, setRackCablingLabels] = useState(() =>
     readBoolean(RACK_CABLING_LABELS_STORAGE_KEY, false),
   );
-  const [rackCablingLooseExpanded, setRackCablingLooseExpanded] = useState(() =>
+  const legacyRackCablingLooseExpandedRef = useRef(
     readBoolean(RACK_CABLING_LOOSE_STORAGE_KEY, false),
   );
+  const [rackCablingLooseExpandedByRoom, setRackCablingLooseExpandedByRoom] =
+    useState<Record<string, boolean>>(() =>
+      readBooleanRecord(RACK_CABLING_LOOSE_BY_ROOM_STORAGE_KEY),
+    );
 
   useEffect(() => {
     if (!loaded) return;
@@ -193,6 +199,24 @@ export default function VisualizerView() {
     writeStringArray(RACK_CABLING_ROOMS_STORAGE_KEY, next);
     legacyRackCablingRoomIdRef.current = "";
   }, [loaded, rackCablingRoomIds, rooms]);
+
+  useEffect(() => {
+    if (
+      !legacyRackCablingLooseExpandedRef.current ||
+      !rackCablingRoomIds?.length
+    ) {
+      return;
+    }
+    setRackCablingLooseExpandedByRoom((current) => {
+      if (Object.keys(current).length > 0) return current;
+      const next = Object.fromEntries(
+        rackCablingRoomIds.map((id) => [id, true]),
+      );
+      writeBooleanRecord(RACK_CABLING_LOOSE_BY_ROOM_STORAGE_KEY, next);
+      return next;
+    });
+    legacyRackCablingLooseExpandedRef.current = false;
+  }, [rackCablingRoomIds]);
 
   const model = useMemo(
     () =>
@@ -645,10 +669,19 @@ export default function VisualizerView() {
             setRackCablingLabels(next);
             writeBoolean(RACK_CABLING_LABELS_STORAGE_KEY, next);
           }}
-          looseExpanded={rackCablingLooseExpanded}
-          onLooseExpandedChange={(next) => {
-            setRackCablingLooseExpanded(next);
-            writeBoolean(RACK_CABLING_LOOSE_STORAGE_KEY, next);
+          looseExpandedRoomIds={
+            new Set(
+              Object.entries(rackCablingLooseExpandedByRoom)
+                .filter(([, expanded]) => expanded)
+                .map(([roomId]) => roomId),
+            )
+          }
+          onLooseExpandedChange={(roomId, expanded) => {
+            setRackCablingLooseExpandedByRoom((current) => {
+              const next = { ...current, [roomId]: expanded };
+              writeBooleanRecord(RACK_CABLING_LOOSE_BY_ROOM_STORAGE_KEY, next);
+              return next;
+            });
           }}
           traceMode={traceMode}
           setTraceMode={setTraceMode}
@@ -931,9 +964,34 @@ function readBoolean(key: string, fallback: boolean) {
   }
 }
 
+function readBooleanRecord(key: string): Record<string, boolean> {
+  try {
+    const value = JSON.parse(
+      window.localStorage.getItem(key) ?? "null",
+    ) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return Object.fromEntries(
+      Object.entries(value).filter(
+        ([roomId, expanded]) =>
+          typeof roomId === "string" && typeof expanded === "boolean",
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
 function writeBoolean(key: string, value: boolean) {
   try {
     window.localStorage.setItem(key, String(value));
+  } catch {
+    // Ignore storage failures; the in-memory state still works.
+  }
+}
+
+function writeBooleanRecord(key: string, value: Record<string, boolean>) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // Ignore storage failures; the in-memory state still works.
   }

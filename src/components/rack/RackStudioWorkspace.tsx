@@ -259,8 +259,16 @@ export function RackStudioWorkspace({
   const [focusedRackId, setFocusedRackId] = useState(
     initialRackId ?? racks[0]?.id ?? "",
   );
+  const selectFocusedRack = useCallback(
+    (rackId: string) => {
+      if (racks.some((rack) => rack.id === rackId)) setFocusedRackId(rackId);
+    },
+    [racks],
+  );
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>();
-  const [selectedCableId, setSelectedCableId] = useState<string | undefined>(initialCableId);
+  const [selectedCableId, setSelectedCableId] = useState<string | undefined>(
+    initialCableId,
+  );
   const [hoveredCableId, setHoveredCableId] = useState<string>();
   const [patchStartPortId, setPatchStartPortId] = useState<string>();
   const [pendingUnusualPair, setPendingUnusualPair] = useState<{
@@ -280,7 +288,9 @@ export function RackStudioWorkspace({
       readLocalPreference(RACK_STUDIO_SHOW_LABELS_STORAGE_KEY),
     ),
   );
-  const [compact, setCompact] = useState(() => readLocalPreference("rackpad.rack-studio.compact") !== "false");
+  const [compact, setCompact] = useState(
+    () => readLocalPreference("rackpad.rack-studio.compact") !== "false",
+  );
   const [exportScope, setExportScope] = useState<"room" | "rack">("room");
   const [search, setSearch] = useState("");
   const [healthOverlay, setHealthOverlay] = useState(false);
@@ -305,7 +315,9 @@ export function RackStudioWorkspace({
     return () => media.removeEventListener("change", update);
   }, []);
 
-  useEffect(() => { writeLocalPreference("rackpad.rack-studio.compact", String(compact)); }, [compact]);
+  useEffect(() => {
+    writeLocalPreference("rackpad.rack-studio.compact", String(compact));
+  }, [compact]);
 
   useEffect(() => {
     writeLocalPreference(RACK_STUDIO_ROUTE_STYLE_STORAGE_KEY, routeStyle);
@@ -320,11 +332,11 @@ export function RackStudioWorkspace({
 
   useEffect(() => {
     if (initialRackId && racks.some((rack) => rack.id === initialRackId)) {
-      setFocusedRackId(initialRackId);
+      selectFocusedRack(initialRackId);
     } else if (!racks.some((rack) => rack.id === focusedRackId)) {
-      setFocusedRackId(racks[0]?.id ?? "");
+      selectFocusedRack(racks[0]?.id ?? "");
     }
-  }, [focusedRackId, initialRackId, racks]);
+  }, [focusedRackId, initialRackId, racks, selectFocusedRack]);
 
   useEffect(() => {
     if (phoneView) {
@@ -340,12 +352,14 @@ export function RackStudioWorkspace({
   useEffect(() => {
     if (initialCableId) setSelectedCableId(initialCableId);
     if (!initialPortId) return;
-    const deviceId = ports.find(port => port.id === initialPortId)?.deviceId;
+    const deviceId = ports.find((port) => port.id === initialPortId)?.deviceId;
     setSelectedDeviceId(deviceId);
-    const device = endpointDevices.find(device => device.id === deviceId);
+    const device = endpointDevices.find((device) => device.id === deviceId);
     if (!device) return;
     const frame = window.requestAnimationFrame(() => {
-      const element = document.querySelector<HTMLElement>(`[data-rack-elevation-id="${CSS.escape(device.rackId ?? "")}"] [aria-label="${CSS.escape(device.hostname)}"]`);
+      const element = document.querySelector<HTMLElement>(
+        `[data-rack-elevation-id="${CSS.escape(device.rackId ?? "")}"] [aria-label="${CSS.escape(device.hostname)}"]`,
+      );
       element?.scrollIntoView({ block: "nearest", inline: "nearest" });
       element?.focus({ preventScroll: true });
     });
@@ -620,7 +634,7 @@ export function RackStudioWorkspace({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     if (!active.moved) {
-      setFocusedRackId(rack.id);
+      selectFocusedRack(rack.id);
       return;
     }
     void runAction({
@@ -915,7 +929,12 @@ export function RackStudioWorkspace({
         </select>
 
         <label className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-          <input type="checkbox" checked={compact} onChange={event => setCompact(event.target.checked)} />{t("Compact")}
+          <input
+            type="checkbox"
+            checked={compact}
+            onChange={(event) => setCompact(event.target.checked)}
+          />
+          {t("Compact")}
         </label>
         <select
           aria-label={t("Cable routing")}
@@ -1064,7 +1083,12 @@ export function RackStudioWorkspace({
 
           <div
             ref={roomCanvasRef}
-            className={cn("relative touch-none overflow-hidden", compact && !editMode ? "h-[120px] bg-[var(--surface-1)]" : "h-[420px] bg-[radial-gradient(circle_at_1px_1px,var(--border-subtle)_1px,transparent_0)] [background-size:22px_22px]")}
+            className={cn(
+              "relative touch-none overflow-hidden",
+              compact && !editMode
+                ? "h-[120px] bg-[var(--surface-1)]"
+                : "h-[420px] bg-[radial-gradient(circle_at_1px_1px,var(--border-subtle)_1px,transparent_0)] [background-size:22px_22px]",
+            )}
             onPointerDown={handleCanvasPointerDown}
             onPointerMove={handleCanvasPointerMove}
             onPointerUp={handleCanvasPointerUp}
@@ -1095,14 +1119,27 @@ export function RackStudioWorkspace({
                         data-testid="rack-studio-cable"
                         role="button"
                         tabIndex={0}
-                        aria-label={t("{value1}: {name}", { value1: t("Cable"), name: route.label })}
-                        onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); setSelectedCableId(route.link.id); } }}
+                        aria-label={t("{value1}: {name}", {
+                          value1: t("Cable"),
+                          name: route.label,
+                        })}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setSelectedCableId(route.link.id);
+                          }
+                        }}
                         data-link-id={route.link.id}
                         d={route.path}
                         fill="none"
                         stroke="transparent"
                         strokeWidth={14}
-                        className={patchMode ? "pointer-events-none" : "pointer-events-stroke cursor-pointer"}
+                        className={
+                          patchMode
+                            ? "pointer-events-none"
+                            : "pointer-events-stroke cursor-pointer"
+                        }
                         onPointerEnter={() => setHoveredCableId(route.link.id)}
                         onPointerLeave={() =>
                           setHoveredCableId((current) =>
@@ -1121,7 +1158,9 @@ export function RackStudioWorkspace({
                         d={route.path}
                         fill="none"
                         stroke={route.color}
-                        strokeWidth={compact ? (selected ? 2.6 : 1.35) : (selected ? 5 : 3)}
+                        strokeWidth={
+                          compact ? (selected ? 2.6 : 1.35) : selected ? 5 : 3
+                        }
                         strokeDasharray={route.handoff ? "8 5" : undefined}
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -1177,7 +1216,26 @@ export function RackStudioWorkspace({
                     </g>
                   );
                 })}
-                {selectedCable && roomScene.portAnchors.filter(anchor => [selectedCable.fromPortId, selectedCable.toPortId].includes(anchor.portId)).map(anchor => <circle key={anchor.portId} cx={anchor.x} cy={anchor.y} r={2.5} fill="none" stroke="var(--color-warning)" strokeWidth={1} className="pointer-events-none" />)}
+                {selectedCable &&
+                  roomScene.portAnchors
+                    .filter((anchor) =>
+                      [
+                        selectedCable.fromPortId,
+                        selectedCable.toPortId,
+                      ].includes(anchor.portId),
+                    )
+                    .map((anchor) => (
+                      <circle
+                        key={anchor.portId}
+                        cx={anchor.x}
+                        cy={anchor.y}
+                        r={2.5}
+                        fill="none"
+                        stroke="var(--color-warning)"
+                        strokeWidth={1}
+                        className="pointer-events-none"
+                      />
+                    ))}
               </svg>
               {effectiveRacks.map((rack, index) => {
                 const stored = rackCanvasState(rack, index);
@@ -1215,7 +1273,7 @@ export function RackStudioWorkspace({
                       width: RACK_STUDIO_RACK_WIDTH,
                       height: RACK_STUDIO_RACK_HEIGHT,
                     }}
-                    onClick={() => setFocusedRackId(rack.id)}
+                    onClick={() => selectFocusedRack(rack.id)}
                     onPointerDown={(event) => beginRackDrag(event, rack, index)}
                     onPointerMove={moveRackDrag}
                     onPointerUp={(event) => endRackDrag(event, rack)}
@@ -1379,43 +1437,52 @@ export function RackStudioWorkspace({
           </div>
 
           {focusedRack ? (
-            <div className={cn("overflow-auto bg-[var(--bg-shell)] p-4", !compact && "max-h-[72vh]")}>
+            <div
+              className={cn(
+                "overflow-auto bg-[var(--bg-shell)] p-4",
+                !compact && "max-h-[72vh]",
+              )}
+            >
               <div className="flex flex-wrap items-start gap-5">
-                {(compact && !editMode ? racks : [focusedRack]).flatMap(displayRack => (face === "both" ? (["front", "rear"] as const) : [face]).map(
-                  (rackFace) => (
-                    <RackStudioElevation
-                      key={`${displayRack.id}:${rackFace}`}
-                      compact={compact}
-                      unitHeight={compact ? 24 : RACK_U_HEIGHT}
-                      rack={displayRack}
-                      racks={racks}
-                      face={rackFace}
-                      devices={endpointDevices}
-                      layouts={layouts}
-                      ports={ports}
-                      portLinks={portLinks}
-                      selectedDeviceId={selectedDeviceId}
-                      onSelectDevice={setSelectedDeviceId}
-                      selectedPortId={patchStartPortId}
-                      onSelectPort={selectPatchPort}
-                      patchMode={patchMode && canEdit && !phoneView}
-                      selectedCableId={selectedCableId}
-                      onSelectCable={(linkId) => {
-                        setSelectedCableId(linkId);
-                        setSelectedDeviceId(undefined);
-                      }}
-                      cableCategory={cableCategory}
-                      routeStyle={routeStyle}
-                      showCableLabels={showCableLabels}
-                      hoveredCableId={hoveredCableId}
-                      onHoverCable={setHoveredCableId}
-                      editMode={editMode && canEdit && !phoneView}
-                      healthOverlay={healthOverlay}
-                      search={normalizedSearch}
-                      onPlace={placeDevice}
-                    />
-                  ),
-                ))}
+                {(compact && !editMode ? racks : [focusedRack]).flatMap(
+                  (displayRack) =>
+                    (face === "both"
+                      ? (["front", "rear"] as const)
+                      : [face]
+                    ).map((rackFace) => (
+                      <RackStudioElevation
+                        key={`${displayRack.id}:${rackFace}`}
+                        compact={compact}
+                        unitHeight={compact ? 24 : RACK_U_HEIGHT}
+                        rack={displayRack}
+                        racks={racks}
+                        face={rackFace}
+                        devices={endpointDevices}
+                        layouts={layouts}
+                        ports={ports}
+                        portLinks={portLinks}
+                        selectedDeviceId={selectedDeviceId}
+                        onSelectDevice={setSelectedDeviceId}
+                        selectedPortId={patchStartPortId}
+                        onSelectPort={selectPatchPort}
+                        patchMode={patchMode && canEdit && !phoneView}
+                        selectedCableId={selectedCableId}
+                        onSelectCable={(linkId) => {
+                          setSelectedCableId(linkId);
+                          setSelectedDeviceId(undefined);
+                        }}
+                        cableCategory={cableCategory}
+                        routeStyle={routeStyle}
+                        showCableLabels={showCableLabels}
+                        hoveredCableId={hoveredCableId}
+                        onHoverCable={setHoveredCableId}
+                        editMode={editMode && canEdit && !phoneView}
+                        healthOverlay={healthOverlay}
+                        search={normalizedSearch}
+                        onPlace={placeDevice}
+                      />
+                    )),
+                )}
               </div>
             </div>
           ) : (
@@ -1520,16 +1587,32 @@ export function RackStudioWorkspace({
               link={selectedCable}
               racks={racks}
               layouts={layouts}
-              onRevealEndpoint={portId => {
-                if (selectedCable && onRevealCableEndpoint) { onRevealCableEndpoint(portId, selectedCable.id); return; }
-                const port = ports.find(port => port.id === portId);
-                const device = physicalDevices.find(device => device.id === port?.deviceId);
+              onRevealEndpoint={(portId) => {
+                if (selectedCable && onRevealCableEndpoint) {
+                  onRevealCableEndpoint(portId, selectedCable.id);
+                  return;
+                }
+                const port = ports.find((port) => port.id === portId);
+                const device = physicalDevices.find(
+                  (device) => device.id === port?.deviceId,
+                );
                 if (!port || !device) return;
-                onFaceChange(rackFaceForPhysicalFace(device, port.face === "rear" ? "rear" : "front"));
-                if (device.rackId) setFocusedRackId(device.rackId);
+                onFaceChange(
+                  rackFaceForPhysicalFace(
+                    device,
+                    port.face === "rear" ? "rear" : "front",
+                  ),
+                );
+                if (device.rackId) selectFocusedRack(device.rackId);
                 setSelectedDeviceId(device.id);
                 setPatchStartPortId(undefined);
-                window.requestAnimationFrame(() => document.querySelector(`[data-rack-elevation-id="${CSS.escape(device.rackId ?? "")}"]`)?.scrollIntoView({ block: "nearest" }));
+                window.requestAnimationFrame(() =>
+                  document
+                    .querySelector(
+                      `[data-rack-elevation-id="${CSS.escape(device.rackId ?? "")}"]`,
+                    )
+                    ?.scrollIntoView({ block: "nearest" }),
+                );
               }}
               ports={ports}
               devices={endpointDevices}
@@ -1858,9 +1941,16 @@ function RackStudioElevation({
   }
 
   return (
-    <div data-rack-elevation-id={rack.id} className={compact ? "min-w-[280px] flex-1 basis-[42%]" : "w-[min(690px,100%)]"}>
+    <div
+      data-rack-elevation-id={rack.id}
+      className={
+        compact ? "min-w-[280px] flex-1 basis-[42%]" : "w-[min(690px,100%)]"
+      }
+    >
       <div className="mb-2 flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-        <span>{rack.name} · {face === "front" ? t("Front") : t("Rear")}</span>
+        <span>
+          {rack.name} · {face === "front" ? t("Front") : t("Rear")}
+        </span>
         <span>
           12 × {rack.totalU}
           {t("U")}
@@ -2200,15 +2290,28 @@ function RackStudioElevationCableLayer({
           data-testid="rack-studio-cable"
           role="button"
           tabIndex={0}
-          aria-label={t("{value1}: {name}", { value1: t("Cable"), name: route.label })}
-          onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); onSelect(route.link.id); } }}
+          aria-label={t("{value1}: {name}", {
+            value1: t("Cable"),
+            name: route.label,
+          })}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              onSelect(route.link.id);
+            }
+          }}
           data-link-id={route.link.id}
           d={route.path}
           fill="none"
           stroke="transparent"
           strokeWidth={18}
           vectorEffect="non-scaling-stroke"
-          className={patchMode ? "pointer-events-none" : "pointer-events-stroke cursor-pointer"}
+          className={
+            patchMode
+              ? "pointer-events-none"
+              : "pointer-events-stroke cursor-pointer"
+          }
           onPointerEnter={() => onHover(route.link.id)}
           onPointerLeave={() => onHover(undefined)}
           onClick={(event) => {
@@ -2222,7 +2325,7 @@ function RackStudioElevationCableLayer({
           d={route.path}
           fill="none"
           stroke={color}
-          strokeWidth={compact ? (selected ? 2.6 : 1.35) : (selected ? 5 : 3)}
+          strokeWidth={compact ? (selected ? 2.6 : 1.35) : selected ? 5 : 3}
           strokeDasharray={route.handoff ? "8 5" : undefined}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -2280,7 +2383,25 @@ function RackStudioElevationCableLayer({
       aria-label={t("Cables")}
     >
       {routeElements}
-      {links.filter(link => link.id === selectedCableId).flatMap(link => scene.portAnchors.filter(anchor => [link.fromPortId, link.toPortId].includes(anchor.portId))).map(anchor => <circle key={anchor.portId} cx={anchor.x} cy={anchor.y} r={6} fill="none" stroke="var(--color-warning)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />)}
+      {links
+        .filter((link) => link.id === selectedCableId)
+        .flatMap((link) =>
+          scene.portAnchors.filter((anchor) =>
+            [link.fromPortId, link.toPortId].includes(anchor.portId),
+          ),
+        )
+        .map((anchor) => (
+          <circle
+            key={anchor.portId}
+            cx={anchor.x}
+            cy={anchor.y}
+            r={6}
+            fill="none"
+            stroke="var(--color-warning)"
+            strokeWidth={1.5}
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
     </svg>
   );
 }
@@ -2487,14 +2608,10 @@ function PlacementInspector({
     const current = devicePlacementState(device);
     if (current.mountKind === "loose" && focusedRack && editMode) {
       setDraft(
-        directPlacementState({
+        rackTopPlacementState({
           roomId: focusedRack.roomId ?? room?.id ?? null,
           rackId: focusedRack.id,
-          startU: 1,
           heightU: device.heightU ?? 1,
-          face: "front",
-          column: 0,
-          columnSpan: 12,
         }),
       );
     } else {
@@ -2535,9 +2652,15 @@ function PlacementInspector({
       <Input
         type="number"
         min={minimum}
-        max={key === "heightU" && inspectedDevice.stackMembers ? inspectedDevice.heightU : maximum}
+        max={
+          key === "heightU" && inspectedDevice.stackMembers
+            ? inspectedDevice.heightU
+            : maximum
+        }
         value={value ?? ""}
-        disabled={!editMode || (key === "heightU" && !!inspectedDevice.stackMembers)}
+        disabled={
+          !editMode || (key === "heightU" && !!inspectedDevice.stackMembers)
+        }
         onChange={(event) =>
           setDraft((current) =>
             current

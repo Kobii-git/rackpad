@@ -32,7 +32,8 @@ interface RackTile {
   device: Device;
   heightU: number;
   topOffsetU: number;
-  slot: NonNullable<Device["rackSlot"]>;
+  column: number;
+  columnSpan: number;
 }
 
 const DEVICE_ACCENT: Partial<Record<Device["deviceType"], string>> = {
@@ -57,7 +58,42 @@ function buildSlots(rack: Rack): Slot[] {
   return slots;
 }
 
-function buildTiles(rack: Rack, devices: Device[], face: RackFace): RackTile[] {
+export function resolveRackColumns(device: Device) {
+  const legacySpan =
+    device.rackSlot === "left" || device.rackSlot === "right" ? 6 : 12;
+  const requestedSpan = device.rackColumnSpan;
+  const columnSpan = Math.max(
+    1,
+    Math.min(
+      12,
+      Math.floor(
+        typeof requestedSpan === "number" && Number.isFinite(requestedSpan)
+          ? requestedSpan
+          : legacySpan,
+      ),
+    ),
+  );
+  const legacyColumn = device.rackSlot === "right" ? 6 : 0;
+  const requestedColumn = device.rackColumn;
+  const column = Math.max(
+    0,
+    Math.min(
+      12 - columnSpan,
+      Math.floor(
+        typeof requestedColumn === "number" && Number.isFinite(requestedColumn)
+          ? requestedColumn
+          : legacyColumn,
+      ),
+    ),
+  );
+  return { column, columnSpan };
+}
+
+export function buildRackTiles(
+  rack: Rack,
+  devices: Device[],
+  face: RackFace,
+): RackTile[] {
   return devices
     .filter(
       (device) => (device.face ?? "front") === face && device.startU != null,
@@ -69,13 +105,12 @@ function buildTiles(rack: Rack, devices: Device[], face: RackFace): RackTile[] {
         device,
         heightU,
         topOffsetU: Math.max(0, rack.totalU - topU),
-        slot: device.rackSlot ?? "full",
+        ...resolveRackColumns(device),
       };
     })
     .sort((a, b) => {
       if (a.topOffsetU !== b.topOffsetU) return a.topOffsetU - b.topOffsetU;
-      const slotOrder = { left: 0, full: 1, right: 2 };
-      return slotOrder[a.slot] - slotOrder[b.slot];
+      return a.column - b.column || a.device.id.localeCompare(b.device.id);
     });
 }
 
@@ -123,7 +158,7 @@ function RackFaceView({
   const { t } = useI18n();
   const slots = useMemo(() => buildSlots(rack), [rack]);
   const tiles = useMemo(
-    () => buildTiles(rack, devices, face),
+    () => buildRackTiles(rack, devices, face),
     [rack, devices, face],
   );
   const childDevicesByParent = useMemo(() => {
@@ -227,28 +262,11 @@ function RackRail({ slots, side }: { slots: Slot[]; side: "left" | "right" }) {
 }
 
 function tileStyle(tile: RackTile): CSSProperties {
-  const base: CSSProperties = {
+  return {
     top: `calc(var(--u-height) * ${tile.topOffsetU} + 1px)`,
     height: `calc(var(--u-height) * ${tile.heightU} - 2px)`,
-  };
-  if (tile.slot === "left") {
-    return {
-      ...base,
-      left: 0,
-      width: "calc(50% - 2px)",
-    };
-  }
-  if (tile.slot === "right") {
-    return {
-      ...base,
-      left: "calc(50% + 2px)",
-      width: "calc(50% - 2px)",
-    };
-  }
-  return {
-    ...base,
-    left: 0,
-    right: 0,
+    left: `calc(${(tile.column / 12) * 100}% + 1px)`,
+    width: `calc(${(tile.columnSpan / 12) * 100}% - 2px)`,
   };
 }
 

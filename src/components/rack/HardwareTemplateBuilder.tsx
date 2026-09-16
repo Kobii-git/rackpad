@@ -26,6 +26,7 @@ import {
   movePhysicalPortSlot,
   replacePortBlock,
   safeId,
+  updateModulePosition,
   type HardwareModulePrimitive,
   type PortBlockDefinition,
   type PortBlockDirection,
@@ -88,6 +89,7 @@ export function HardwareTemplateBuilder({
   const [draft, setDraft] = useState(() => createStarterTemplate("server-2u"));
   const [face, setFace] = useState<RackFace>("rear");
   const [selectedSlotId, setSelectedSlotId] = useState<string>();
+  const [selectedElementId, setSelectedElementId] = useState("");
   const [block, setBlock] = useState<PortBlockDefinition>(EMPTY_BLOCK);
   const [editingBlockKey, setEditingBlockKey] = useState("");
   const blocks = templatePortBlocks(draft);
@@ -615,12 +617,61 @@ export function HardwareTemplateBuilder({
                     layout={draft}
                     face={previewFace}
                     selectedSlotId={selectedSlotId}
+                    selectedElementId={selectedElementId}
+                    selectedModuleSlotId={moduleSlotId}
                     onSelectSlot={setSelectedSlotId}
+                    onSelectElement={(elementId) => {
+                      setFace(previewFace);
+                      setSelectedElementId(elementId);
+                    }}
+                    onSelectModuleSlot={(slotId) => {
+                      setFace(previewFace);
+                      setModuleSlotId(slotId);
+                    }}
                     onMoveSlot={(slotId, x, y) =>
                       editable &&
                       setDraft((current) =>
                         movePhysicalPortSlot(current, slotId, x, y),
                       )
+                    }
+                    onMoveElement={(elementId, x, y) =>
+                      editable &&
+                      setDraft((current) => ({
+                        ...current,
+                        [previewFace]: {
+                          ...current[previewFace],
+                          elements: current[previewFace].elements.map(
+                            (item) => {
+                              if (item.id !== elementId) return item;
+                              const radius = "radius" in item ? item.radius : 0;
+                              const maxX =
+                                "width" in item
+                                  ? current[previewFace].width - item.width
+                                  : current[previewFace].width - radius;
+                              const maxY =
+                                "height" in item
+                                  ? current[previewFace].height - item.height
+                                  : current[previewFace].height - radius;
+                              return {
+                                ...item,
+                                x: Math.max(radius, Math.min(maxX, x)),
+                                y: Math.max(radius, Math.min(maxY, y)),
+                              };
+                            },
+                          ),
+                        },
+                      }))
+                    }
+                    onMoveModuleSlot={(slotId, x, y) =>
+                      editable &&
+                      setDraft((current) => {
+                        const position = current.moduleSlots.find(
+                          (slot) => slot.id === slotId,
+                        );
+                        return position
+                          ? updateModulePosition(current, { ...position, x, y })
+                          : current;
+                      })
                     }
                   />
                 </div>
@@ -708,7 +759,8 @@ export function HardwareTemplateBuilder({
           <div className="grid gap-4 border-t border-[var(--border-default)] pt-5 xl:grid-cols-2">
             <section
               data-testid="template-port-block-editor"
-              className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3">
+              className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3"
+            >
               <div className="rk-kicker">{t("Port layout")}</div>
               <p className="text-xs text-[var(--text-secondary)]">
                 {t(
@@ -911,7 +963,7 @@ export function HardwareTemplateBuilder({
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
-                size="sm"
+                  size="sm"
                   onClick={() => {
                     const id = nextTemplatePartId(block.id, [
                       ...draft.portSlots.map((slot) => slot.groupId ?? slot.id),
@@ -930,12 +982,12 @@ export function HardwareTemplateBuilder({
                   size="sm"
                   disabled={!editingBlock}
                   onClick={() => {
-                  setDraft((current) => replacePortBlock(current, block));
-                  setFace(block.face);
-                }}
-              >
+                    setDraft((current) => replacePortBlock(current, block));
+                    setFace(block.face);
+                  }}
+                >
                   {t("Update")}
-              </Button>
+                </Button>
                 <Button
                   size="sm"
                   disabled={!editingBlock}
@@ -977,7 +1029,10 @@ export function HardwareTemplateBuilder({
               </div>
             </section>
 
-            <section data-testid="template-module-editor" className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3">
+            <section
+              data-testid="template-module-editor"
+              className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3"
+            >
               <div className="rk-kicker">{t("Hardware")}</div>
               <div className="grid gap-2 sm:grid-cols-3">
                 <Field label={t("Type")}>
@@ -1014,7 +1069,11 @@ export function HardwareTemplateBuilder({
                   <Button
                     className="w-full"
                     size="sm"
-                    disabled={!draft.moduleSlots.some(slot => slot.id === moduleSlotId)}
+                    disabled={
+                      !draft.moduleSlots.some(
+                        (slot) => slot.id === moduleSlotId,
+                      )
+                    }
                     onClick={() => {
                       const id = nextTemplatePartId(
                         modulePrimitive,
@@ -1067,6 +1126,8 @@ export function HardwareTemplateBuilder({
             setFace={setFace}
             moduleSlotId={moduleSlotId}
             setModuleSlotId={setModuleSlotId}
+            elementId={selectedElementId}
+            setElementId={setSelectedElementId}
           />
         )}
 
