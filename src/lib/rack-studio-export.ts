@@ -31,6 +31,7 @@ import {
   type PhysicalCableCategory,
   type RackStudioCableRouteStyle,
 } from "./rack-studio-cables";
+import { normalizeColorToCss } from "./utils";
 
 export type RackStudioExportTheme = "dark" | "light";
 
@@ -107,10 +108,26 @@ function escapeXml(value: unknown) {
     .replaceAll("'", "&apos;");
 }
 
-function safeColor(value: string | undefined, fallback: string) {
-  const candidate = value?.trim();
-  return candidate && /^#[\da-f]{6}$/i.test(candidate) ? candidate : fallback;
+function normalizedExportHex(value: string | undefined) {
+  const normalized = normalizeColorToCss(value)?.trim();
+  if (!normalized) return null;
+  const short = /^#([\da-f])([\da-f])([\da-f])$/i.exec(normalized);
+  const candidate = short
+    ? `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`
+    : normalized;
+  return /^#[\da-f]{6}$/i.test(candidate) ? candidate : null;
 }
+
+export function safeRackStudioExportColor(
+  value: string | undefined,
+  fallback: string,
+) {
+  return (
+    normalizedExportHex(value) ?? normalizedExportHex(fallback) ?? "#94a3b8"
+  );
+}
+
+const safeColor = safeRackStudioExportColor;
 
 function slug(value: string) {
   return (

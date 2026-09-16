@@ -14,7 +14,10 @@ import {
   rackStudioShowLabelsPreference,
   resolveRackStudioPortAnchor,
 } from "./rack-studio-cables";
-import { buildRackStudioSvg } from "./rack-studio-export";
+import {
+  buildRackStudioSvg,
+  safeRackStudioExportColor,
+} from "./rack-studio-export";
 import type {
   Device,
   DevicePhysicalLayout,
@@ -285,6 +288,17 @@ test("connector compatibility and defaults distinguish network, optical, and pow
   assert.equal(defaultCableMetadata(portA, power).cableType, "Power");
 });
 
+test("export colors normalize presets and shorthand hex without accepting unsafe CSS", () => {
+  assert.equal(safeRackStudioExportColor("blue", "#94a3b8"), "#4a78c4");
+  assert.equal(safeRackStudioExportColor("#0cf", "#94a3b8"), "#00ccff");
+  assert.equal(safeRackStudioExportColor("#12ABef", "#94a3b8"), "#12ABef");
+  assert.equal(
+    safeRackStudioExportColor("url(javascript:alert(1))", "#94a3b8"),
+    "#94a3b8",
+  );
+  assert.equal(safeRackStudioExportColor(undefined, "blue"), "#4a78c4");
+});
+
 test("room and focused-rack exports are deterministic, themed, and retain exact port labels", () => {
   const labels = {
     cable: "Cable",
@@ -319,6 +333,19 @@ test("room and focused-rack exports are deterministic, themed, and retain exact 
     theme: "dark" as const,
     labels,
   };
+  const svgWithColor = (color: string | undefined) =>
+    buildRackStudioSvg({
+      ...input,
+      links: [{ ...link, color }],
+    }).svg;
+  assert.match(svgWithColor("blue"), /<path[^>]+stroke="#4a78c4"/);
+  assert.match(svgWithColor("#0cf"), /<path[^>]+stroke="#00ccff"/);
+  assert.match(svgWithColor("#12ABef"), /<path[^>]+stroke="#12ABef"/);
+  assert.match(svgWithColor(undefined), /<path[^>]+stroke="#22d3ee"/);
+  assert.match(
+    svgWithColor("url(javascript:alert(1))"),
+    /<path[^>]+stroke="#22d3ee"/,
+  );
   const roomImage = buildRackStudioSvg(input);
   assert.equal(roomImage.svg, buildRackStudioSvg(input).svg);
   assert.match(roomImage.svg, /data-theme="dark"/);
