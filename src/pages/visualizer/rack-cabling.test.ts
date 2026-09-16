@@ -15,7 +15,9 @@ import {
   buildRackCablingScene,
   buildRackCablingScope,
   layoutRackCablingHandoffLabels,
+  parseRackCablingRoomSelection,
   rackCablingSelectionIsInScope,
+  reconcileRackCablingRoomSelection,
 } from "./rack-cabling";
 
 const room: Room = { id: "room-a", labId: "lab-a", name: "Server room" };
@@ -79,9 +81,131 @@ test("rack cabling scene bottom-aligns ordered racks and preserves exact face an
   assert.ok(frontAnchor);
   assert.equal(frontAnchor.rackFace, "front");
   assert.equal(frontAnchor.x, 120);
-  assert.equal(frontAnchor.y, 510.2);
+  assert.equal(frontAnchor.y, 548.2);
   assert.deepEqual(scene, repeat);
   assert.deepEqual(scene, shuffled);
+});
+
+test("multi-room scenes stack deterministically and connect selected endpoints directly", () => {
+  const branchRoom: Room = {
+    id: "room-branch",
+    labId: room.labId,
+    name: "Branch room",
+  };
+  const branchRack: Rack = {
+    id: "rack-branch",
+    labId: room.labId,
+    roomId: branchRoom.id,
+    name: "Branch rack",
+    totalU: 12,
+  };
+  const localDevice = device("multi-local", rack24.id, 8);
+  const remoteDevice = {
+    ...device("multi-remote", branchRack.id, 6),
+    roomId: branchRoom.id,
+  };
+  const localPort = port("multi-local-port", localDevice.id, "front", 1);
+  const remotePort = port("multi-remote-port", remoteDevice.id, "front", 1);
+  const rooms = [room, branchRoom];
+  const racks = [rack24, branchRack];
+  const devices = [localDevice, remoteDevice];
+  const ports = [localPort, remotePort];
+  const links = [link("multi-room-link", localPort.id, remotePort.id, "Cat6A")];
+  const layouts = [
+    layout(localDevice.id, [localPort]),
+    layout(remoteDevice.id, [remotePort]),
+  ];
+  const scene = buildRackCablingScene({
+    rooms,
+    racks,
+    devices,
+    layouts,
+    ports,
+    faceMode: "front",
+  });
+  assert.deepEqual(
+    scene.rooms.map((frame) => frame.room.id),
+    [branchRoom.id, room.id],
+  );
+  assert.ok(scene.rooms[1]!.y > scene.rooms[0]!.y + scene.rooms[0]!.height);
+  assert.equal(new Set(scene.anchors.map((anchor) => anchor.roomId)).size, 2);
+
+  const routes = buildRackCablingRoutes({
+    scene,
+    rooms,
+    racks,
+    devices,
+    ports,
+    links,
+    style: "smooth",
+  });
+  assert.equal(routes.length, 1);
+  assert.equal(routes[0]!.handoffs.length, 0);
+  assert.equal(routes[0]!.from.roomId, room.id);
+  assert.equal(routes[0]!.to.roomId, branchRoom.id);
+  assert.ok(routes[0]!.path.length > 0);
+
+  const localScene = buildRackCablingScene({
+    rooms: [room],
+    racks,
+    devices,
+    layouts,
+    ports,
+    faceMode: "front",
+  });
+  const handoff = buildRackCablingRoutes({
+    scene: localScene,
+    rooms,
+    racks,
+    devices,
+    ports,
+    links,
+    style: "smooth",
+  })[0]!;
+  assert.equal(handoff.handoffs[0]?.reason, "cross-room");
+  assert.equal(handoff.handoffs[0]?.roomId, branchRoom.id);
+
+  const empty = buildRackCablingScene({
+    rooms: [],
+    racks,
+    devices,
+    layouts,
+    ports,
+    faceMode: "front",
+  });
+  assert.deepEqual(empty.rooms, []);
+  assert.deepEqual(empty.anchors, []);
+});
+
+test("room selection preferences migrate once and preserve an explicit clear", () => {
+  assert.deepEqual(parseRackCablingRoomSelection('["a","a","b"]'), ["a", "b"]);
+  assert.deepEqual(parseRackCablingRoomSelection("[]"), []);
+  assert.equal(parseRackCablingRoomSelection("not-json"), null);
+  assert.deepEqual(
+    reconcileRackCablingRoomSelection({
+      selection: null,
+      legacyRoomId: "b",
+      availableRoomIds: ["a", "b"],
+      preferredRoomId: "a",
+    }),
+    ["b"],
+  );
+  assert.deepEqual(
+    reconcileRackCablingRoomSelection({
+      selection: [],
+      legacyRoomId: "b",
+      availableRoomIds: ["a", "b"],
+      preferredRoomId: "a",
+    }),
+    [],
+  );
+  assert.deepEqual(
+    reconcileRackCablingRoomSelection({
+      selection: ["missing", "a"],
+      availableRoomIds: ["a", "b"],
+    }),
+    ["a"],
+  );
 });
 
 test("rack cabling scene renders fallback equipment and collapsible loose gear", () => {
@@ -923,21 +1047,53 @@ test("loose expansion retains cable and endpoint selection scope including hidde
   }
 });
 
-
 test("expanding two loose devices with both endpoint faces hidden retains their cable", () => {
-  const devices = ["hidden-loose-a", "hidden-loose-b"].map(id => ({ ...device(id, undefined, 1), roomId: room.id, placement: "room" as const, rackMountKind: "loose" as const, startU: undefined }));
-  const ports = devices.map((entry, index) => port(`hidden-loose-port-${index}`, entry.id, "rear", 1));
+  const devices = ["hidden-loose-a", "hidden-loose-b"].map((id) => ({
+    ...device(id, undefined, 1),
+    roomId: room.id,
+    placement: "room" as const,
+    rackMountKind: "loose" as const,
+    startU: undefined,
+  }));
+  const ports = devices.map((entry, index) =>
+    port(`hidden-loose-port-${index}`, entry.id, "rear", 1),
+  );
   for (const looseExpanded of [false, true]) {
-    const scene = buildRackCablingScene({ room, racks: [], devices, layouts: devices.map((entry, index) => layout(entry.id, [ports[index]])), ports, faceMode: "front", looseExpanded });
-    const routes = buildRackCablingRoutes({ scene, rooms: [room], racks: [], devices, ports, links: [link("hidden-loose-cable", ports[0].id, ports[1].id, "Cat6A")], style: "smooth" });
+    const scene = buildRackCablingScene({
+      room,
+      racks: [],
+      devices,
+      layouts: devices.map((entry, index) => layout(entry.id, [ports[index]])),
+      ports,
+      faceMode: "front",
+      looseExpanded,
+    });
+    const routes = buildRackCablingRoutes({
+      scene,
+      rooms: [room],
+      racks: [],
+      devices,
+      ports,
+      links: [link("hidden-loose-cable", ports[0].id, ports[1].id, "Cat6A")],
+      style: "smooth",
+    });
     assert.equal(routes.length, 1);
     assert.equal(routes[0].link.id, "hidden-loose-cable");
     assert.ok(routes[0].path);
     if (looseExpanded) {
-      assert.deepEqual(routes[0].handoffs.map(handoff => handoff.reason), ["hidden-face", "hidden-face"]);
+      assert.deepEqual(
+        routes[0].handoffs.map((handoff) => handoff.reason),
+        ["hidden-face", "hidden-face"],
+      );
       assert.equal(routes[0].continuations.length, 0);
-      assert.equal(routes[0].from.x, scene.looseCards[0].x + scene.looseCards[0].width / 2);
-      assert.equal(routes[0].to.x, scene.looseCards[1].x + scene.looseCards[1].width / 2);
+      assert.equal(
+        routes[0].from.x,
+        scene.looseCards[0].x + scene.looseCards[0].width / 2,
+      );
+      assert.equal(
+        routes[0].to.x,
+        scene.looseCards[1].x + scene.looseCards[1].width / 2,
+      );
     }
   }
 });

@@ -15,7 +15,11 @@ import { buildVisualizerModel, traceFromPort } from "./visualizer/model";
 import { DiagramCanvas } from "./visualizer/DiagramCanvas";
 import { RackCablingCanvas } from "./visualizer/RackCablingCanvas";
 import { VisualizerCanvas } from "./visualizer/VisualizerCanvas";
-import type { RackCablingRouteStyle } from "./visualizer/rack-cabling";
+import {
+  parseRackCablingRoomSelection,
+  reconcileRackCablingRoomSelection,
+  type RackCablingRouteStyle,
+} from "./visualizer/rack-cabling";
 import type {
   TraceModeState,
   VisualizerCableLayout,
@@ -45,6 +49,7 @@ const CUSTOM_NODE_POSITIONS_STORAGE_KEY =
   "rackpad.visualizer.custom-node-positions";
 const ORDER_STORAGE_KEY = "rackpad.visualizer.order";
 const RACK_CABLING_ROOM_STORAGE_KEY = "rackpad.visualizer.rack-cabling-room";
+const RACK_CABLING_ROOMS_STORAGE_KEY = "rackpad.visualizer.rack-cabling-rooms";
 const RACK_CABLING_ROUTE_STORAGE_KEY = "rackpad.visualizer.rack-cabling-route";
 const RACK_CABLING_LABELS_STORAGE_KEY =
   "rackpad.visualizer.rack-cabling-labels";
@@ -149,8 +154,14 @@ export default function VisualizerView() {
     result: null,
     message: null,
   });
-  const [rackCablingRoomId, setRackCablingRoomId] = useState(() =>
+  const legacyRackCablingRoomIdRef = useRef(
     readString(RACK_CABLING_ROOM_STORAGE_KEY),
+  );
+  const [rackCablingRoomIds, setRackCablingRoomIds] = useState<string[] | null>(
+    () =>
+      parseRackCablingRoomSelection(
+        readString(RACK_CABLING_ROOMS_STORAGE_KEY) || null,
+      ),
   );
   const [rackCablingRouteStyle, setRackCablingRouteStyle] =
     useState<RackCablingRouteStyle>(() =>
@@ -163,21 +174,25 @@ export default function VisualizerView() {
     readBoolean(RACK_CABLING_LOOSE_STORAGE_KEY, false),
   );
 
-  const rackRooms = useMemo(
-    () => rooms.filter((room) => racks.some((rack) => rack.roomId === room.id)),
-    [racks, rooms],
-  );
-
   useEffect(() => {
-    if (rooms.length === 0) {
-      if (rackCablingRoomId) setRackCablingRoomId("");
+    if (!loaded) return;
+    const next = reconcileRackCablingRoomSelection({
+      selection: rackCablingRoomIds,
+      legacyRoomId: legacyRackCablingRoomIdRef.current,
+      availableRoomIds: rooms.map((room) => room.id),
+      preferredRoomId: rooms[0]?.id,
+    });
+    if (
+      rackCablingRoomIds &&
+      next.length === rackCablingRoomIds.length &&
+      next.every((id, index) => id === rackCablingRoomIds[index])
+    ) {
       return;
     }
-    if (rooms.some((room) => room.id === rackCablingRoomId)) return;
-    const next = rackRooms[0]?.id ?? rooms[0]!.id;
-    setRackCablingRoomId(next);
-    writeString(RACK_CABLING_ROOM_STORAGE_KEY, next);
-  }, [rackCablingRoomId, rackRooms, rooms]);
+    setRackCablingRoomIds(next);
+    writeStringArray(RACK_CABLING_ROOMS_STORAGE_KEY, next);
+    legacyRackCablingRoomIdRef.current = "";
+  }, [loaded, rackCablingRoomIds, rooms]);
 
   const model = useMemo(
     () =>
@@ -602,10 +617,11 @@ export default function VisualizerView() {
       ) : layoutMode === "rack" ? (
         <RackCablingCanvas
           rooms={rooms}
-          roomId={rackCablingRoomId}
-          onRoomIdChange={(next) => {
-            setRackCablingRoomId(next);
-            writeString(RACK_CABLING_ROOM_STORAGE_KEY, next);
+          roomIds={rackCablingRoomIds ?? []}
+          onRoomIdsChange={(next) => {
+            const normalized = uniqueStrings(next);
+            setRackCablingRoomIds(normalized);
+            writeStringArray(RACK_CABLING_ROOMS_STORAGE_KEY, normalized);
           }}
           racks={racks}
           devices={devices}
@@ -1142,6 +1158,14 @@ function isStringArray(value: unknown): value is string[] {
 function writeString(key: string, value: string) {
   try {
     window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures; the in-memory state still works.
+  }
+}
+
+function writeStringArray(key: string, value: string[]) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(uniqueStrings(value)));
   } catch {
     // Ignore storage failures; the in-memory state still works.
   }

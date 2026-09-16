@@ -1140,6 +1140,18 @@ async function authenticate(page: Page, language = "en") {
   );
 }
 
+async function setRackCablingRooms(page: Page, roomIds: string[]) {
+  const picker = page.getByTestId("rack-cabling-room-picker");
+  await picker.click();
+  const checkboxes = page.locator('input[type="checkbox"][data-room-id]');
+  for (const checkbox of await checkboxes.all()) {
+    const roomId = await checkbox.getAttribute("data-room-id");
+    await checkbox.setChecked(Boolean(roomId && roomIds.includes(roomId)));
+  }
+  await page.keyboard.press("Escape");
+  await expect(picker).toBeFocused();
+}
+
 test("rack cabling visualizer persists controls and stays read-only for every role", async ({
   browser,
   page,
@@ -1167,9 +1179,88 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
     ).toHaveValue("rack");
     await expect(page.getByTestId("rack-cabling-rack")).toHaveCount(2);
     await expect(page.getByTestId("rack-cabling-cable").first()).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "Room" })).toHaveValue(
-      "room_lab",
+    await setRackCablingRooms(page, ["room_lab"]);
+    expect(
+      await page
+        .getByTestId("rack-cabling-cable")
+        .evaluateAll(
+          (elements) =>
+            elements.filter((element) =>
+              element
+                .getAttribute("data-handoff-reasons")
+                ?.split(",")
+                .includes("cross-room"),
+            ).length,
+        ),
+    ).toBeGreaterThan(0);
+
+    const roomPicker = page.getByTestId("rack-cabling-room-picker");
+    await roomPicker.focus();
+    await roomPicker.press("Enter");
+    await expect(
+      page.getByRole("checkbox", { name: "Select all" }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(roomPicker).toBeFocused();
+
+    await setRackCablingRooms(page, ["room_lab", "room_office"]);
+    await expect(page.getByTestId("rack-cabling-room-section")).toHaveCount(2);
+    const completeInterRoomRoutes = await page
+      .getByTestId("rack-cabling-cable")
+      .evaluateAll(
+        (elements) =>
+          elements.filter(
+            (element) =>
+              element.getAttribute("data-from-room") !==
+                element.getAttribute("data-to-room") &&
+              !element
+                .getAttribute("data-handoff-reasons")
+                ?.split(",")
+                .includes("cross-room"),
+          ).length,
+      );
+    expect(completeInterRoomRoutes).toBeGreaterThan(0);
+
+    const looseTrayToggle = page.getByRole("button", { name: /Loose gear/ });
+    await looseTrayToggle.click();
+    const directInterRoomRoutes = await page
+      .getByTestId("rack-cabling-cable")
+      .evaluateAll(
+        (elements) =>
+          elements.filter(
+            (element) =>
+              element.getAttribute("data-from-room") !==
+                element.getAttribute("data-to-room") &&
+              element.getAttribute("data-handoff-count") === "0",
+          ).length,
+      );
+    expect(directInterRoomRoutes).toBeGreaterThan(0);
+    await looseTrayToggle.click();
+
+    await roomPicker.click();
+    const roomCount = await page
+      .locator('input[type="checkbox"][data-room-id]')
+      .count();
+    await page.getByRole("checkbox", { name: "Select all" }).check();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("rack-cabling-room-section")).toHaveCount(
+      roomCount,
     );
+
+    await roomPicker.click();
+    await page.getByRole("button", { name: "Clear", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByText("No room selected", { exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          localStorage.getItem("rackpad.visualizer.rack-cabling-rooms"),
+        ),
+      )
+      .toBe("[]");
+    await setRackCablingRooms(page, ["room_lab"]);
 
     await page
       .getByRole("combobox", { name: "Cable routing" })
@@ -1270,26 +1361,22 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
       page.getByText(/path traced|No onward path found/, { exact: false }),
     ).toBeVisible();
 
-    await page
-      .getByRole("combobox", { name: "Room" })
-      .selectOption("room_lounge");
+    await setRackCablingRooms(page, ["room_lounge"]);
     await expect(
       page.getByText("No racks assigned", { exact: true }),
     ).toBeVisible();
-    await page
-      .getByRole("combobox", { name: "Room" })
-      .selectOption("room_office");
+    await setRackCablingRooms(page, ["room_office"]);
     await page.getByRole("button", { name: /Loose gear/ }).click();
     await expect(
       page.getByText("build-mini-01", { exact: true }),
     ).toBeVisible();
-    await page.getByRole("combobox", { name: "Room" }).selectOption("room_lab");
+    await setRackCablingRooms(page, ["room_lab"]);
 
     await expect
       .poll(() =>
         page.evaluate(() => ({
           layout: localStorage.getItem("rackpad.visualizer.layout-mode"),
-          room: localStorage.getItem("rackpad.visualizer.rack-cabling-room"),
+          rooms: localStorage.getItem("rackpad.visualizer.rack-cabling-rooms"),
           route: localStorage.getItem("rackpad.visualizer.rack-cabling-route"),
           labels: localStorage.getItem(
             "rackpad.visualizer.rack-cabling-labels",
@@ -1301,7 +1388,7 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
       )
       .toEqual({
         layout: "rack",
-        room: "room_lab",
+        rooms: '["room_lab"]',
         route: "orthogonal",
         labels: "true",
         loose: "true",
@@ -1309,9 +1396,7 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
 
     await page.reload();
     await expect(page.getByTestId("rack-cabling-rack")).toHaveCount(2);
-    await expect(page.getByRole("combobox", { name: "Room" })).toHaveValue(
-      "room_lab",
-    );
+    await setRackCablingRooms(page, ["room_lab"]);
     await expect(
       page.getByRole("combobox", { name: "Cable routing" }),
     ).toHaveValue("orthogonal");
@@ -1347,15 +1432,13 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
       await page.getByRole("button", { name: "Close" }).click();
       await expect(target).toBeFocused();
     };
-    await page.getByRole("combobox", { name: "Room" }).selectOption("room_lab");
+    await setRackCablingRooms(page, ["room_lab"]);
     await restoreFocus(page.getByRole("button", { name: /Rack: CMP-01/ }));
     await restoreFocus(
       page.getByRole("button", { name: /eno1 · rj45/, exact: true }).first(),
     );
     await restoreFocus(page.getByTestId("rack-cabling-cable").first());
-    await page
-      .getByRole("combobox", { name: "Room" })
-      .selectOption("room_office");
+    await setRackCablingRooms(page, ["room_office"]);
     const looseDevice = page.getByRole("button", {
       name: "build-mini-01",
       exact: true,
@@ -1460,12 +1543,17 @@ test("rack cabling scopes inspection and supports keyboard search and selection"
 
   await expect(page.getByTestId("rack-cabling-cable-label")).toHaveCount(0);
   await expect(page.getByTestId("rack-cabling-handoff-label")).toHaveCount(0);
-  await page.getByRole("combobox", { name: "Room", exact: true }).selectOption("room_office");
-  const looseSummary = page.getByTestId("loose-device-summary").filter({ hasText: /Cables: [1-9]/ }).first();
+  await setRackCablingRooms(page, ["room_office"]);
+  const looseSummary = page
+    .getByTestId("loose-device-summary")
+    .filter({ hasText: /Cables: [1-9]/ })
+    .first();
   await looseSummary.focus();
   await expect(page.getByTestId("loose-device-details")).toBeVisible();
-  await expect(page.getByTestId("loose-device-details")).toContainText(/Front|Rear/);
-  await page.getByRole("combobox", { name: "Room", exact: true }).selectOption("room_lab");
+  await expect(page.getByTestId("loose-device-details")).toContainText(
+    /Front|Rear/,
+  );
+  await setRackCablingRooms(page, ["room_lab"]);
 
   await page.getByRole("checkbox", { name: "Labels", exact: true }).check();
   await page.getByRole("checkbox", { name: "Labels", exact: true }).blur();
@@ -1573,9 +1661,7 @@ test("rack cabling scopes inspection and supports keyboard search and selection"
     "true",
   );
 
-  await page
-    .getByRole("combobox", { name: "Room" })
-    .selectOption("room_lounge");
+  await setRackCablingRooms(page, ["room_lounge"]);
   await expect(
     page.getByText("No item selected", { exact: true }),
   ).toBeVisible();
@@ -1996,9 +2082,7 @@ test("24 short patch cords remain curved, selectable, and exportable across rack
     await page
       .getByRole("combobox", { name: "Visualizer layout", exact: true })
       .selectOption("rack");
-    await page
-      .getByRole("combobox", { name: "Room", exact: true })
-      .selectOption(roomId);
+    await setRackCablingRooms(page, [roomId]);
     await page
       .getByRole("combobox", { name: "Cable routing", exact: true })
       .selectOption("smooth");
@@ -2079,9 +2163,7 @@ test("24 short patch cords remain curved, selectable, and exportable across rack
       await page
         .getByRole("combobox", { name: "Visualizer layout", exact: true })
         .selectOption("rack");
-      await page
-        .getByRole("combobox", { name: "Room", exact: true })
-        .selectOption(roomId);
+      await setRackCablingRooms(page, [roomId]);
       await page
         .getByRole("combobox", { name: "Cable routing", exact: true })
         .selectOption("smooth");
