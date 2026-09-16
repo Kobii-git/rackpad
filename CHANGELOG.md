@@ -6,6 +6,29 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.4-beta.2] - 2026-09-16
+
+### Added
+
+- Rack Cabling can display any combination of rooms in ordered, named sections,
+  including complete routes between selected rooms and labelled handoffs to
+  rooms outside the current selection. The accessible room picker supports
+  individual selection, select all, clear, keyboard use and persisted choices.
+
+### Fixed
+
+- Place cable and handoff annotations deterministically without overlapping rack
+  or room headers, loose-equipment summaries, canvas edges or other labels. Dense
+  overflow moves to a labelled side rail with leaders.
+- Keep directly mounted half- and quarter-width equipment in its normalized
+  12-column span in Grouped view, including devices sharing the same U position
+  on either face and legacy left/right placements.
+- Preserve named presets and shorthand hexadecimal cable colours in Rack Studio
+  SVG and PNG exports while retaining safe category fallbacks for invalid CSS.
+
+See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.2.md).
+Issues #139, #165 and #166 remain open pending tester confirmation.
+
 ## [1.8.4-beta.1]
 
 ### Fixed
