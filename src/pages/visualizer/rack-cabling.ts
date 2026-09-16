@@ -1302,6 +1302,262 @@ export function layoutRackCablingHandoffLabels(
   return result.sort((left, right) => left.id.localeCompare(right.id));
 }
 
+export interface RackCablingAnnotationInput {
+  id: string;
+  linkId: string;
+  kind: "cable" | "handoff";
+  text: string;
+  priority: number;
+  anchor: CablePoint;
+  geometry?: CableRouteGeometry;
+  preferredPoint?: CablePoint;
+}
+
+export interface RackCablingAnnotationGeometry {
+  id: string;
+  linkId: string;
+  kind: "cable" | "handoff";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  textX: number;
+  textY: number;
+  leaderPath: string | null;
+  inRail: boolean;
+}
+
+export interface RackCablingAnnotationLayout {
+  annotations: RackCablingAnnotationGeometry[];
+  width: number;
+  height: number;
+}
+
+interface AnnotationRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function annotationRectsOverlap(left: AnnotationRect, right: AnnotationRect) {
+  const gap = 2;
+  return !(
+    left.x + left.width + gap <= right.x ||
+    right.x + right.width + gap <= left.x ||
+    left.y + left.height + gap <= right.y ||
+    right.y + right.height + gap <= left.y
+  );
+}
+
+function geometryPolyline(geometry: CableRouteGeometry): CablePoint[] {
+  if (geometry.kind === "segmented") {
+    return (
+      geometry.segments.map(geometryPolyline).sort((left, right) => {
+        const length = (points: CablePoint[]) =>
+          points
+            .slice(1)
+            .reduce(
+              (sum, point, index) =>
+                sum +
+                Math.hypot(
+                  point.x - points[index]!.x,
+                  point.y - points[index]!.y,
+                ),
+              0,
+            );
+        return length(right) - length(left);
+      })[0] ?? []
+    );
+  }
+  if (geometry.kind === "polyline") return geometry.points;
+  return Array.from({ length: 17 }, (_, index) => {
+    const t = index / 16;
+    const inverse = 1 - t;
+    return {
+      x:
+        inverse ** 3 * geometry.from.x +
+        3 * inverse ** 2 * t * geometry.control1.x +
+        3 * inverse * t ** 2 * geometry.control2.x +
+        t ** 3 * geometry.to.x,
+      y:
+        inverse ** 3 * geometry.from.y +
+        3 * inverse ** 2 * t * geometry.control1.y +
+        3 * inverse * t ** 2 * geometry.control2.y +
+        t ** 3 * geometry.to.y,
+    };
+  });
+}
+
+function pointAndTangentAt(geometry: CableRouteGeometry, fraction: number) {
+  const points = geometryPolyline(geometry);
+  if (points.length < 2) {
+    return { point: points[0] ?? { x: 0, y: 0 }, tangent: { x: 1, y: 0 } };
+  }
+  const lengths = points
+    .slice(1)
+    .map((point, index) =>
+      Math.hypot(point.x - points[index]!.x, point.y - points[index]!.y),
+    );
+  const target =
+    lengths.reduce((sum, length) => sum + length, 0) *
+    Math.max(0, Math.min(1, fraction));
+  let consumed = 0;
+  for (let index = 0; index < lengths.length; index += 1) {
+    const length = lengths[index]!;
+    if (consumed + length < target && index < lengths.length - 1) {
+      consumed += length;
+      continue;
+    }
+    const from = points[index]!;
+    const to = points[index + 1]!;
+    const ratio = length ? (target - consumed) / length : 0;
+    return {
+      point: {
+        x: from.x + (to.x - from.x) * ratio,
+        y: from.y + (to.y - from.y) * ratio,
+      },
+      tangent: {
+        x: length ? (to.x - from.x) / length : 1,
+        y: length ? (to.y - from.y) / length : 0,
+      },
+    };
+  }
+  return { point: points.at(-1)!, tangent: { x: 1, y: 0 } };
+}
+
+/**
+ * Places all visible Rack Cabling annotations in one deterministic pass. Labels
+ * prefer their cable or handoff, then move into a dedicated rail rather than
+ * becoming unreadable when the scene is dense.
+ */
+export function layoutRackCablingAnnotations(
+  scene: RackCablingScene,
+  inputs: RackCablingAnnotationInput[],
+): RackCablingAnnotationLayout {
+  const height = 18;
+  const blockers: AnnotationRect[] = [
+    ...scene.rooms.map((room) => ({
+      x: room.x,
+      y: room.y,
+      width: room.width,
+      height: ROOM_SECTION_HEADER_HEIGHT,
+    })),
+    ...scene.racks.map((rack) => ({
+      x: rack.x,
+      y: rack.y,
+      width: rack.width,
+      height: RACK_HEADER_HEIGHT,
+    })),
+    ...scene.looseTrays.map((tray) => ({
+      x: tray.x,
+      y: tray.y,
+      width: tray.width,
+      height: TRAY_HEADER_HEIGHT,
+    })),
+    ...scene.looseSummaries,
+    ...scene.looseCards,
+  ];
+  const placed: AnnotationRect[] = [];
+  const annotations: RackCablingAnnotationGeometry[] = [];
+  const rail: Array<{ input: RackCablingAnnotationInput; width: number }> = [];
+  const sorted = [...inputs].sort(
+    (left, right) =>
+      left.priority - right.priority || left.id.localeCompare(right.id),
+  );
+
+  for (const input of sorted) {
+    const width = Math.max(40, Math.min(240, input.text.length * 6 + 12));
+    const candidates: CablePoint[] = [];
+    if (input.geometry) {
+      for (const fraction of [0.5, 0.35, 0.65]) {
+        const sample = pointAndTangentAt(input.geometry, fraction);
+        const normal = { x: -sample.tangent.y, y: sample.tangent.x };
+        for (const offset of [0, 16, -16, 32, -32]) {
+          candidates.push({
+            x: sample.point.x + normal.x * offset,
+            y: sample.point.y + normal.y * offset,
+          });
+        }
+      }
+    } else {
+      const preferred = input.preferredPoint ?? input.anchor;
+      for (const offset of [0, 16, -16, 32, -32]) {
+        candidates.push({ x: preferred.x, y: preferred.y + offset });
+      }
+    }
+    const candidate = candidates
+      .map((point) => ({
+        point,
+        rect: {
+          x: point.x - width / 2,
+          y: point.y - height / 2,
+          width,
+          height,
+        },
+      }))
+      .find(
+        ({ rect }) =>
+          rect.x >= 8 &&
+          rect.y >= 8 &&
+          rect.x + rect.width <= scene.width - 8 &&
+          rect.y + rect.height <= scene.height - 8 &&
+          !blockers.some((blocker) => annotationRectsOverlap(rect, blocker)) &&
+          !placed.some((existing) => annotationRectsOverlap(rect, existing)),
+      );
+    if (!candidate) {
+      rail.push({ input, width });
+      continue;
+    }
+    placed.push(candidate.rect);
+    const moved = Math.hypot(
+      candidate.point.x - input.anchor.x,
+      candidate.point.y - input.anchor.y,
+    );
+    annotations.push({
+      id: input.id,
+      linkId: input.linkId,
+      kind: input.kind,
+      ...candidate.rect,
+      textX: candidate.rect.x + candidate.rect.width / 2,
+      textY: candidate.rect.y + 12,
+      leaderPath:
+        moved > 10
+          ? `M ${input.anchor.x.toFixed(2)} ${input.anchor.y.toFixed(2)} L ${candidate.point.x.toFixed(2)} ${candidate.point.y.toFixed(2)}`
+          : null,
+      inRail: false,
+    });
+  }
+
+  const railWidth = Math.max(0, ...rail.map((entry) => entry.width));
+  rail.forEach(({ input, width }, index) => {
+    const rect = {
+      x: scene.width + 16,
+      y: 8 + index * 20,
+      width,
+      height,
+    };
+    annotations.push({
+      id: input.id,
+      linkId: input.linkId,
+      kind: input.kind,
+      ...rect,
+      textX: rect.x + rect.width / 2,
+      textY: rect.y + 12,
+      leaderPath: `M ${input.anchor.x.toFixed(2)} ${input.anchor.y.toFixed(2)} L ${rect.x.toFixed(2)} ${(rect.y + rect.height / 2).toFixed(2)}`,
+      inRail: true,
+    });
+  });
+
+  return {
+    annotations: annotations.sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
+    width: rail.length ? scene.width + railWidth + 32 : scene.width,
+    height: Math.max(scene.height, rail.length ? 16 + rail.length * 20 : 0),
+  };
+}
+
 export function buildRackCablingRoutes(input: {
   scene: RackCablingScene;
   rooms?: Room[];

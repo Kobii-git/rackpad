@@ -1562,6 +1562,7 @@ test("rack cabling scopes inspection and supports keyboard search and selection"
   ).toBeGreaterThan(0);
   const handoffBoxes = await page
     .getByTestId("rack-cabling-handoff-label")
+    .locator("rect")
     .evaluateAll((labels) =>
       labels.map((label) => {
         const bounds = label.getBoundingClientRect();
@@ -1588,6 +1589,54 @@ test("rack cabling scopes inspection and supports keyboard search and selection"
       expect(
         overlapsHorizontally && overlapsVertically,
         `handoff labels ${leftIndex} and ${rightIndex} overlap`,
+      ).toBeFalsy();
+    }
+  }
+  const annotationAndLooseBoxes = await page.evaluate(() => ({
+    annotations: Array.from(
+      document.querySelectorAll<SVGRectElement>(
+        '[data-testid="rack-cabling-cable-label"] > rect, [data-testid="rack-cabling-handoff-label"] > rect',
+      ),
+      (element) => {
+        const bounds = element.getBoundingClientRect();
+        return {
+          left: bounds.left,
+          right: bounds.right,
+          top: bounds.top,
+          bottom: bounds.bottom,
+        };
+      },
+    ),
+    loose: Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-testid="loose-device-summary"]',
+      ),
+      (element) => {
+        const bounds = element.getBoundingClientRect();
+        return {
+          left: bounds.left,
+          right: bounds.right,
+          top: bounds.top,
+          bottom: bounds.bottom,
+        };
+      },
+    ),
+  }));
+  for (const [index, left] of annotationAndLooseBoxes.annotations.entries()) {
+    for (const right of annotationAndLooseBoxes.annotations.slice(index + 1)) {
+      expect(
+        left.left < right.right &&
+          left.right > right.left &&
+          left.top < right.bottom &&
+          left.bottom > right.top,
+      ).toBeFalsy();
+    }
+    for (const loose of annotationAndLooseBoxes.loose) {
+      expect(
+        left.left < loose.right &&
+          left.right > loose.left &&
+          left.top < loose.bottom &&
+          left.bottom > loose.top,
       ).toBeFalsy();
     }
   }
@@ -2099,28 +2148,10 @@ test("24 short patch cords remain curved, selectable, and exportable across rack
     await expect(
       page.getByText("Selected cable", { exact: true }).first(),
     ).toBeVisible();
-    const coordinates = (await cords.first().getAttribute("d"))!
-      .match(/-?\d+(?:\.\d+)?/g)!
-      .map(Number);
     const curveLabel = page.getByTestId("rack-cabling-cable-label");
     await expect(curveLabel).toHaveCount(1);
-    expect(Number(await curveLabel.getAttribute("x"))).toBeCloseTo(
-      (coordinates[0]! +
-        3 * coordinates[2]! +
-        3 * coordinates[4]! +
-        coordinates[6]!) /
-        8,
-      1,
-    );
-    expect(Number(await curveLabel.getAttribute("y"))).toBeCloseTo(
-      (coordinates[1]! +
-        3 * coordinates[3]! +
-        3 * coordinates[5]! +
-        coordinates[7]!) /
-        8 -
-        7,
-      1,
-    );
+    await expect(curveLabel).toHaveAttribute("data-label-rail", "false");
+    await expect(curveLabel.locator("rect")).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath("short-patch-cords.png"),
     });

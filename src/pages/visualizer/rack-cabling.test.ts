@@ -14,6 +14,7 @@ import {
   buildRackCablingRoutes,
   buildRackCablingScene,
   buildRackCablingScope,
+  layoutRackCablingAnnotations,
   layoutRackCablingHandoffLabels,
   parseRackCablingRoomSelection,
   rackCablingSelectionIsInScope,
@@ -206,6 +207,55 @@ test("room selection preferences migrate once and preserve an explicit clear", (
     }),
     ["a"],
   );
+});
+
+test("annotation layout prevents overlap and moves dense overflow into a rail", () => {
+  const scene = buildRackCablingScene({
+    rooms: [],
+    racks: [],
+    devices: [],
+    layouts: [],
+    ports: [],
+    faceMode: "front",
+  });
+  const geometry = {
+    kind: "polyline" as const,
+    points: [
+      { x: 100, y: 200 },
+      { x: 660, y: 200 },
+    ],
+    style: "orthogonal" as const,
+    manualPointIndexes: [],
+  };
+  const layoutResult = layoutRackCablingAnnotations(
+    scene,
+    Array.from({ length: 32 }, (_, index) => ({
+      id: index === 0 ? "selected" : `label-${index}`,
+      linkId: `link-${index}`,
+      kind: index % 2 ? ("cable" as const) : ("handoff" as const),
+      text: `Cable label ${index}`,
+      priority: index === 0 ? 0 : 2,
+      anchor: { x: 380, y: 200 },
+      geometry: index % 2 ? geometry : undefined,
+      preferredPoint: { x: 380, y: 200 },
+    })),
+  );
+  const selected = layoutResult.annotations.find(
+    (annotation) => annotation.id === "selected",
+  )!;
+  assert.equal(selected.inRail, false);
+  assert.ok(layoutResult.annotations.some((annotation) => annotation.inRail));
+  assert.ok(layoutResult.width > scene.width);
+  for (const [index, left] of layoutResult.annotations.entries()) {
+    for (const right of layoutResult.annotations.slice(index + 1)) {
+      assert.ok(
+        left.x + left.width <= right.x ||
+          right.x + right.width <= left.x ||
+          left.y + left.height <= right.y ||
+          right.y + right.height <= left.y,
+      );
+    }
+  }
 });
 
 test("rack cabling scene renders fallback equipment and collapsible loose gear", () => {

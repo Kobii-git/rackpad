@@ -58,10 +58,12 @@ import {
   buildRackCablingRoutes,
   buildRackCablingScene,
   buildRackCablingScope,
+  layoutRackCablingAnnotations,
   layoutRackCablingHandoffLabels,
   rackCablingSelectionIsInScope,
   RACK_CABLING_UNIT_HEIGHT,
   type RackCablingEquipment,
+  type RackCablingAnnotationGeometry,
   type RackCablingHandoff,
   type RackCablingRouteStyle,
 } from "./rack-cabling";
@@ -264,7 +266,7 @@ export function RackCablingCanvas({
     const maxWidth = Math.max(40, (scene?.width ?? 600) / 3 - 24);
     const measure = (value: string) =>
       context?.measureText(value).width ?? value.length * 6;
-    return new Map(
+    return new Map<string, { full: string; text: string; width: number }>(
       routes.flatMap((route) =>
         route.handoffs.map((handoff) => {
           const full = handoffLabel(handoff);
@@ -279,17 +281,6 @@ export function RackCablingCanvas({
       ),
     );
   }, [routes, scene, handoffLabel]);
-  const handoffLabelGeometry = useMemo(
-    () =>
-      scene ? layoutRackCablingHandoffLabels(scene, routes,
-            new Map([...handoffLabels].map(([id, label]) => [id, label.width])),
-          ) : [],
-    [routes, scene, handoffLabels],
-  );
-  const handoffLabelGeometryById = useMemo(
-    () => new Map(handoffLabelGeometry.map((entry) => [entry.id, entry])),
-    [handoffLabelGeometry],
-  );
   const scope = useMemo(
     () =>
       scene
@@ -496,6 +487,126 @@ export function RackCablingCanvas({
     );
   }, [normalizedSearch, searchResults]);
 
+  const emphasizedRouteIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const route of routes) {
+      const selected =
+        selection?.kind === "cable" && selection.id === route.link.id;
+      const hovered = hoveredCableId === route.link.id;
+      const traced = Boolean(
+        traceMode.enabled && traceMode.result?.cableIds.has(route.link.id),
+      );
+      const focusedDeviceId =
+        hoveredLooseDeviceId ??
+        (selection?.kind === "device" ? selection.id : null);
+      const deviceSelected =
+        focusedDeviceId != null &&
+        [route.link.fromPortId, route.link.toPortId].some(
+          (portId) => model.portById[portId]?.deviceId === focusedDeviceId,
+        );
+      const portSelected =
+        selectedPortId === route.link.fromPortId ||
+        selectedPortId === route.link.toPortId;
+      const rackSelected =
+        selectedRackId != null &&
+        [route.from.rackId, route.to.rackId].includes(selectedRackId);
+      if (
+        selected ||
+        hovered ||
+        traced ||
+        deviceSelected ||
+        portSelected ||
+        rackSelected
+      ) {
+        ids.add(route.link.id);
+      }
+    }
+    return ids;
+  }, [
+    hoveredCableId,
+    hoveredLooseDeviceId,
+    model.portById,
+    routes,
+    selectedPortId,
+    selectedRackId,
+    selection,
+    traceMode.enabled,
+    traceMode.result,
+  ]);
+
+  const annotationLayout = useMemo(() => {
+    const handoffGeometry = new Map(
+      layoutRackCablingHandoffLabels(
+        scene,
+        routes,
+        new Map([...handoffLabels].map(([id, label]) => [id, label.width])),
+      ).map((entry) => [entry.id, entry]),
+    );
+    const inputs = routes.flatMap((route) => {
+      const emphasized = emphasizedRouteIds.has(route.link.id);
+      const selectedOrHovered =
+        (selection?.kind === "cable" && selection.id === route.link.id) ||
+        hoveredCableId === route.link.id;
+      const traced = Boolean(
+        traceMode.enabled && traceMode.result?.cableIds.has(route.link.id),
+      );
+      const priority = selectedOrHovered ? 0 : traced ? 1 : 2;
+      const result = [];
+      if (!route.continuations.length && (showLabels || emphasized)) {
+        result.push({
+          id: `cable:${route.link.id}`,
+          linkId: route.link.id,
+          kind: "cable" as const,
+          text: route.label,
+          priority,
+          anchor: route.labelPoint,
+          geometry: route.geometry,
+        });
+      }
+      for (const handoff of route.handoffs) {
+        if (
+          !(showLabels || emphasized) ||
+          (handoff.reason === "loose-tray" && !emphasized) ||
+          (route.continuations.length > 0 && handoff.reason === "hidden-face")
+        ) {
+          continue;
+        }
+        const key = `${route.link.id}:${handoff.endpoint}`;
+        const anchor = handoff.endpoint === "from" ? route.from : route.to;
+        const preferred = handoffGeometry.get(key);
+        result.push({
+          id: `handoff:${key}`,
+          linkId: route.link.id,
+          kind: "handoff" as const,
+          text: handoffLabels.get(key)?.text ?? handoffLabel(handoff),
+          priority,
+          anchor,
+          preferredPoint: preferred
+            ? { x: preferred.x, y: preferred.y }
+            : anchor,
+        });
+      }
+      return result;
+    });
+    return layoutRackCablingAnnotations(scene, inputs);
+  }, [
+    emphasizedRouteIds,
+    handoffLabel,
+    handoffLabels,
+    hoveredCableId,
+    routes,
+    scene,
+    selection,
+    showLabels,
+    traceMode.enabled,
+    traceMode.result,
+  ]);
+  const annotationById = useMemo(
+    () =>
+      new Map(annotationLayout.annotations.map((entry) => [entry.id, entry])),
+    [annotationLayout.annotations],
+  );
+
   const applyFit = useCallback(() => {
     const viewport = viewportRef.current;
     if (!viewport || !scene) return;
@@ -504,16 +615,16 @@ export function RackCablingCanvas({
       0.28,
       Math.min(
         1.35,
-        (bounds.width - 56) / Math.max(1, scene.width),
-        (bounds.height - 56) / Math.max(1, scene.height),
+        (bounds.width - 56) / Math.max(1, annotationLayout.width),
+        (bounds.height - 56) / Math.max(1, annotationLayout.height),
       ),
     );
     setZoom(nextZoom);
     setPan({
-      x: (bounds.width - scene.width * nextZoom) / 2,
-      y: (bounds.height - scene.height * nextZoom) / 2,
+      x: (bounds.width - annotationLayout.width * nextZoom) / 2,
+      y: (bounds.height - annotationLayout.height * nextZoom) / 2,
     });
-  }, [scene]);
+  }, [annotationLayout.height, annotationLayout.width, scene]);
 
   const fitCanvas = useCallback(() => {
     autoFitRef.current = true;
@@ -934,8 +1045,8 @@ export function RackCablingCanvas({
             data-testid="rack-cabling-scene"
             className="absolute left-0 top-0"
             style={{
-              width: scene.width,
-              height: scene.height,
+              width: annotationLayout.width,
+              height: annotationLayout.height,
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transformOrigin: "top left",
             }}
@@ -1273,9 +1384,9 @@ export function RackCablingCanvas({
 
             <svg
               className="pointer-events-none absolute inset-0 z-40 overflow-visible"
-              width={scene.width}
-              height={scene.height}
-              viewBox={`0 0 ${scene.width} ${scene.height}`}
+              width={annotationLayout.width}
+              height={annotationLayout.height}
+              viewBox={`0 0 ${annotationLayout.width} ${annotationLayout.height}`}
               aria-label={t("Cables")}
             >
               {routes.map((route) => {
@@ -1330,6 +1441,9 @@ export function RackCablingCanvas({
                   ? model.deviceById[toPort.deviceId]
                   : undefined;
                 const cableAriaLabel = `${fromDevice?.hostname ?? t("Unknown")} ${fromPort?.name ?? "?"} ${t("to")} ${toDevice?.hostname ?? t("Unknown")} ${toPort?.name ?? "?"}`;
+                const cableAnnotation = annotationById.get(
+                  `cable:${route.link.id}`,
+                );
                 return (
                   <g key={route.link.id}>
                     <path
@@ -1403,80 +1517,36 @@ export function RackCablingCanvas({
                             : 0.9
                       }
                     />
-                    {!route.continuations.length &&
-                      (showLabels || emphasized) && (
-                        <text
-                          data-testid="rack-cabling-cable-label"
-                          x={route.labelPoint.x}
-                          y={route.labelPoint.y - 7}
-                          textAnchor="middle"
-                          fill="var(--text-primary)"
-                          stroke="var(--surface-1)"
-                          strokeWidth={4}
-                          paintOrder="stroke"
-                          fontSize={9}
-                          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-                          className="pointer-events-none"
-                        >
-                          {route.label}
-                        </text>
-                      )}
+                    {cableAnnotation ? (
+                      <RackCablingAnnotation
+                        geometry={cableAnnotation}
+                        text={route.label}
+                        testId="rack-cabling-cable-label"
+                      />
+                    ) : null}
                     {route.handoffs
                       .filter(
                         (handoff) =>
                           (showLabels || emphasized) &&
                           (handoff.reason !== "loose-tray" || emphasized) &&
                           (!route.continuations.length ||
-                          handoff.reason !== "hidden-face"),
+                            handoff.reason !== "hidden-face"),
                       )
                       .map((handoff) => {
-                        const geometry = handoffLabelGeometryById.get(
-                          `${route.link.id}:${handoff.endpoint}`,
-                        );
+                        const key = `${route.link.id}:${handoff.endpoint}`;
+                        const geometry = annotationById.get(`handoff:${key}`);
                         if (!geometry) return null;
                         return (
-                          <g key={handoff.anchorPortId}>
-                            {geometry.leaderPath ? (
-                              <path
-                                d={geometry.leaderPath}
-                                fill="none"
-                                stroke="var(--text-tertiary)"
-                                strokeWidth={0.75}
-                                strokeDasharray="2 2"
-                                className="pointer-events-none"
-                              />
-                            ) : null}
-                            <text
-                              data-testid="rack-cabling-handoff-label"
-                              data-handoff-lane={geometry.lane}
-                              data-handoff-packing-column={
-                                geometry.packingColumn
-                              }
-                              x={geometry.x}
-                              y={geometry.y}
-                              textAnchor={geometry.textAnchor}
-                              fill="var(--text-primary)"
-                              stroke="var(--surface-1)"
-                              strokeWidth={4}
-                              paintOrder="stroke"
-                              fontSize={9}
-                              fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-                              className="pointer-events-none"
-                            >
-                              <title>
-                                {
-                                  handoffLabels.get(
-                                    `${route.link.id}:${handoff.endpoint}`,
-                                  )?.full
-                                }
-                              </title>
-                              {
-                                handoffLabels.get(
-                                  `${route.link.id}:${handoff.endpoint}`,
-                                )?.text
-                              }
-                            </text>
-                          </g>
+                          <RackCablingAnnotation
+                            key={handoff.anchorPortId}
+                            geometry={geometry}
+                            text={
+                              handoffLabels.get(key)?.text ??
+                              handoffLabel(handoff)
+                            }
+                            title={handoffLabels.get(key)?.full}
+                            testId="rack-cabling-handoff-label"
+                          />
                         );
                       })}
                   </g>
@@ -1737,6 +1807,58 @@ export function RackCablingCanvas({
         </aside>
       )}
     </div>
+  );
+}
+
+function RackCablingAnnotation({
+  geometry,
+  text,
+  title,
+  testId,
+}: {
+  geometry: RackCablingAnnotationGeometry;
+  text: string;
+  title?: string;
+  testId: string;
+}) {
+  return (
+    <g
+      data-testid={testId}
+      data-annotation-id={geometry.id}
+      data-label-rail={geometry.inRail ? "true" : "false"}
+      className="pointer-events-none"
+    >
+      {geometry.leaderPath ? (
+        <path
+          d={geometry.leaderPath}
+          fill="none"
+          stroke="var(--text-tertiary)"
+          strokeWidth={0.75}
+          strokeDasharray="2 2"
+        />
+      ) : null}
+      <rect
+        x={geometry.x}
+        y={geometry.y}
+        width={geometry.width}
+        height={geometry.height}
+        rx={3}
+        fill="var(--surface-1)"
+        stroke="var(--border-default)"
+        strokeWidth={0.75}
+      />
+      <text
+        x={geometry.textX}
+        y={geometry.textY}
+        textAnchor="middle"
+        fill="var(--text-primary)"
+        fontSize={9}
+        fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+      >
+        {title ? <title>{title}</title> : null}
+        {text}
+      </text>
+    </g>
   );
 }
 
