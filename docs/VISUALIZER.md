@@ -54,8 +54,13 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
 - `Trace mode` lets you click two ports and highlights the documented L1 path between them.
 - `Rack cabling` switches to a read-only room view using the physical elevations
   and port anchors configured in Rack Studio.
-- The room selector scopes rack cabling to one room. `Front`, `Rear`, and `Both`
-  control which physical faces are visible.
+- The room selector scopes rack cabling to one or more rooms. `Front`, `Rear`,
+  and `Both` control which physical faces are visible. The room-layout control
+  offers **Auto** (ordered vertical sections), **Hub & spoke** (a selected room
+  centered among the remaining rooms), and **Manual** placement. Drag a room
+  header or use its arrow keys to nudge it; these room coordinates are personal
+  to the active browser and lab. Reset returns to Auto without changing
+  inventory, ports, or cables.
 - `Smooth` draws readable curves across the available rack height. Cables may
   cross shelves and equipment artwork. `Orthogonal` changes the drawing style
   independently of the saved routing mode.

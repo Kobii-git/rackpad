@@ -1167,6 +1167,7 @@ export const uk = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "Авто",
+  "Hub & spoke": "Хаб і промені",
   "Auto / none": "Авто/немає",
   "Auto / unknown": "Авто / невідомо",
   "Auto cables": "Автотроси",

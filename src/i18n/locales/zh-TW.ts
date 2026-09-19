@@ -1167,6 +1167,7 @@ export const zhTW = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "汽車",
+  "Hub & spoke": "中心與輻條",
   "Auto / none": "自動/無",
   "Auto / unknown": "自動/未知",
   "Auto cables": "汽車電纜",

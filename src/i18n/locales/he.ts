@@ -1167,6 +1167,7 @@ export const he = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "אוטומטי",
+  "Hub & spoke": "מרכז וחישורים",
   "Auto / none": "אוטומטי / אין",
   "Auto / unknown": "אוטומטי / לא ידוע",
   "Auto cables": "כבלים אוטומטיים",

@@ -1167,6 +1167,7 @@ export const nl = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "Automatisch",
+  "Hub & spoke": "Hub en spaken",
   "Auto / none": "Automatisch / geen",
   "Auto / unknown": "Auto / onbekend",
   "Auto cables": "Auto-kabels",

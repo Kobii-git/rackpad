@@ -1167,6 +1167,7 @@ export const hi = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "ऑटो",
+  "Hub & spoke": "हब और स्पोक",
   "Auto / none": "ऑटो/कोई नहीं",
   "Auto / unknown": "ऑटो/अज्ञात",
   "Auto cables": "ऑटो केबल",

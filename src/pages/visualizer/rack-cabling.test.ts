@@ -16,7 +16,9 @@ import {
   buildRackCablingScope,
   layoutRackCablingAnnotations,
   layoutRackCablingHandoffLabels,
+  parseRackCablingRoomLayout,
   parseRackCablingRoomSelection,
+  reconcileRackCablingRoomLayout,
   rackCablingSelectionIsInScope,
   reconcileRackCablingRoomSelection,
 } from "./rack-cabling";
@@ -176,6 +178,93 @@ test("multi-room scenes stack deterministically and connect selected endpoints d
   });
   assert.deepEqual(empty.rooms, []);
   assert.deepEqual(empty.anchors, []);
+});
+
+test("multi-room scenes support deterministic hub and persisted manual layouts", () => {
+  const branchRoom: Room = {
+    id: "room-layout-branch",
+    labId: room.labId,
+    name: "Branch room",
+  };
+  const edgeRoom: Room = {
+    id: "room-layout-edge",
+    labId: room.labId,
+    name: "Edge room",
+  };
+  const input = {
+    rooms: [room, branchRoom, edgeRoom],
+    racks: [],
+    devices: [],
+    layouts: [],
+    ports: [],
+    faceMode: "front" as const,
+  };
+  const auto = buildRackCablingScene(input);
+  assert.ok(auto.rooms[1]!.y > auto.rooms[0]!.y);
+  assert.equal(auto.rooms[0]!.x, auto.rooms[1]!.x);
+
+  const hub = buildRackCablingScene({
+    ...input,
+    roomLayout: { mode: "hub", hubRoomId: room.id, positions: {} },
+  });
+  const repeatedHub = buildRackCablingScene({
+    ...input,
+    roomLayout: { mode: "hub", hubRoomId: room.id, positions: {} },
+  });
+  assert.deepEqual(hub, repeatedHub);
+  const hubFrame = hub.rooms.find((frame) => frame.room.id === room.id)!;
+  for (const frame of hub.rooms) {
+    if (frame === hubFrame) continue;
+    assert.ok(
+      frame.x + frame.width <= hubFrame.x ||
+        hubFrame.x + hubFrame.width <= frame.x ||
+        frame.y + frame.height <= hubFrame.y ||
+        hubFrame.y + hubFrame.height <= frame.y,
+    );
+  }
+  for (const [index, left] of hub.rooms.entries()) {
+    for (const right of hub.rooms.slice(index + 1)) {
+      assert.ok(
+        left.x + left.width <= right.x ||
+          right.x + right.width <= left.x ||
+          left.y + left.height <= right.y ||
+          right.y + right.height <= left.y,
+      );
+    }
+  }
+
+  const manual = buildRackCablingScene({
+    ...input,
+    roomLayout: {
+      mode: "manual",
+      hubRoomId: null,
+      positions: {
+        [room.id]: { x: 80, y: 440 },
+        [branchRoom.id]: { x: 940, y: 80 },
+      },
+    },
+  });
+  assert.deepEqual(
+    manual.rooms.find((frame) => frame.room.id === room.id)?.x,
+    80,
+  );
+  assert.deepEqual(
+    manual.rooms.find((frame) => frame.room.id === branchRoom.id)?.y,
+    80,
+  );
+  const parsed = parseRackCablingRoomLayout({
+    mode: "manual",
+    hubRoomId: room.id,
+    positions: { [room.id]: { x: 1, y: 2 }, bad: { x: "no", y: 2 } },
+  });
+  assert.deepEqual(parsed.positions, { [room.id]: { x: 1, y: 2 } });
+  assert.deepEqual(
+    reconcileRackCablingRoomLayout({
+      layout: parsed,
+      availableRoomIds: [room.id],
+    }),
+    parsed,
+  );
 });
 
 test("multi-room loose equipment expands independently by room", () => {

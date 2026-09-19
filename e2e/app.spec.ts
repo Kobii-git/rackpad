@@ -1205,6 +1205,25 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
 
     await setRackCablingRooms(page, ["room_lab", "room_office"]);
     await expect(page.getByTestId("rack-cabling-room-section")).toHaveCount(2);
+    const roomLayout = page.getByTestId("rack-cabling-room-layout");
+    await roomLayout.selectOption("hub");
+    await expect(page.getByTestId("rack-cabling-hub-room")).toBeVisible();
+    await page.getByTestId("rack-cabling-hub-room").selectOption("room_office");
+    await roomLayout.selectOption("manual");
+    const roomHandle = page
+      .getByTestId("rack-cabling-room-drag-handle")
+      .first();
+    await roomHandle.focus();
+    await roomHandle.press("ArrowRight");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          localStorage.getItem(
+            "rackpad.visualizer.rack-cabling-room-layouts.v1",
+          ),
+        ),
+      )
+      .toContain('"mode":"manual"');
     const completeInterRoomRoutes = await page
       .getByTestId("rack-cabling-cable")
       .evaluateAll(
@@ -1381,8 +1400,10 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
           labels: localStorage.getItem(
             "rackpad.visualizer.rack-cabling-labels",
           ),
-          loose: localStorage.getItem(
-            "rackpad.visualizer.rack-cabling-loose-expanded",
+          looseByRoom: JSON.parse(
+            localStorage.getItem(
+              "rackpad.visualizer.rack-cabling-loose-expanded-by-room",
+            ) ?? "{}",
           ),
         })),
       )
@@ -1391,7 +1412,7 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
         rooms: '["room_lab"]',
         route: "orthogonal",
         labels: "true",
-        loose: "true",
+        looseByRoom: { room_office: true },
       });
 
     await page.reload();

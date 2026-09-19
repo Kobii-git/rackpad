@@ -1167,6 +1167,7 @@ export const ar = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "تلقائي",
+  "Hub & spoke": "مركز وأذرع",
   "Auto / none": "تلقائي / لا يوجد",
   "Auto / unknown": "تلقائي / غير معروف",
   "Auto cables": "كابلات السيارات",

@@ -1167,6 +1167,7 @@ export const ko = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "자동",
+  "Hub & spoke": "허브 및 스포크",
   "Auto / none": "자동 / 없음",
   "Auto / unknown": "자동 / 알 수 없음",
   "Auto cables": "자동차 케이블",

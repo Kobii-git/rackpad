@@ -17,7 +17,10 @@ import { RackCablingCanvas } from "./visualizer/RackCablingCanvas";
 import { VisualizerCanvas } from "./visualizer/VisualizerCanvas";
 import {
   parseRackCablingRoomSelection,
+  parseRackCablingRoomLayout,
+  reconcileRackCablingRoomLayout,
   reconcileRackCablingRoomSelection,
+  type RackCablingRoomLayout,
   type RackCablingRouteStyle,
 } from "./visualizer/rack-cabling";
 import type {
@@ -57,6 +60,8 @@ const RACK_CABLING_LOOSE_STORAGE_KEY =
   "rackpad.visualizer.rack-cabling-loose-expanded";
 const RACK_CABLING_LOOSE_BY_ROOM_STORAGE_KEY =
   "rackpad.visualizer.rack-cabling-loose-expanded-by-room";
+const RACK_CABLING_ROOM_LAYOUT_STORAGE_KEY =
+  "rackpad.visualizer.rack-cabling-room-layouts.v1";
 
 type MoveDirection = "up" | "down";
 
@@ -179,6 +184,12 @@ export default function VisualizerView() {
     useState<Record<string, boolean>>(() =>
       readBooleanRecord(RACK_CABLING_LOOSE_BY_ROOM_STORAGE_KEY),
     );
+  const [rackCablingRoomLayouts, setRackCablingRoomLayouts] = useState<
+    Record<string, RackCablingRoomLayout>
+  >(() => readRackCablingRoomLayouts(RACK_CABLING_ROOM_LAYOUT_STORAGE_KEY));
+  const rackCablingLayoutLabId = lab?.id ?? "default";
+  const rackCablingRoomLayout =
+    rackCablingRoomLayouts[rackCablingLayoutLabId];
 
   useEffect(() => {
     if (!loaded) return;
@@ -217,6 +228,22 @@ export default function VisualizerView() {
     });
     legacyRackCablingLooseExpandedRef.current = false;
   }, [rackCablingRoomIds]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    setRackCablingRoomLayouts((current) => {
+      const existing = current[rackCablingLayoutLabId];
+      if (!existing) return current;
+      const next = reconcileRackCablingRoomLayout({
+        layout: existing,
+        availableRoomIds: rooms.map((room) => room.id),
+      });
+      if (rackCablingRoomLayoutEqual(existing, next)) return current;
+      const updated = { ...current, [rackCablingLayoutLabId]: next };
+      writeRackCablingRoomLayouts(RACK_CABLING_ROOM_LAYOUT_STORAGE_KEY, updated);
+      return updated;
+    });
+  }, [loaded, rackCablingLayoutLabId, rooms]);
 
   const model = useMemo(
     () =>
@@ -683,6 +710,20 @@ export default function VisualizerView() {
               return next;
             });
           }}
+          roomLayout={rackCablingRoomLayout}
+          onRoomLayoutChange={(next) => {
+            setRackCablingRoomLayouts((current) => {
+              const updated = {
+                ...current,
+                [rackCablingLayoutLabId]: next,
+              };
+              writeRackCablingRoomLayouts(
+                RACK_CABLING_ROOM_LAYOUT_STORAGE_KEY,
+                updated,
+              );
+              return updated;
+            });
+          }}
           traceMode={traceMode}
           setTraceMode={setTraceMode}
         />
@@ -995,6 +1036,62 @@ function writeBooleanRecord(key: string, value: Record<string, boolean>) {
   } catch {
     // Ignore storage failures; the in-memory state still works.
   }
+}
+
+function readRackCablingRoomLayouts(key: string): Record<string, RackCablingRoomLayout> {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+    if (!parsed || typeof parsed !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([labId]) => typeof labId === "string")
+        .map(([labId, layout]) => [
+          labId,
+          parseRackCablingRoomLayout(layout),
+        ]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writeRackCablingRoomLayouts(
+  key: string,
+  value: Record<string, RackCablingRoomLayout>,
+) {
+  try {
+    if (Object.keys(value).length === 0) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage issues in locked-down browsers.
+  }
+}
+
+function rackCablingRoomLayoutEqual(
+  left: RackCablingRoomLayout,
+  right: RackCablingRoomLayout,
+) {
+  if (left.mode !== right.mode || left.hubRoomId !== right.hubRoomId) {
+    return false;
+  }
+  const leftEntries = Object.entries(left.positions).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  const rightEntries = Object.entries(right.positions).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  return (
+    leftEntries.length === rightEntries.length &&
+    leftEntries.every(
+      ([id, point], index) =>
+        id === rightEntries[index]?.[0] &&
+        point.x === rightEntries[index]?.[1].x &&
+        point.y === rightEntries[index]?.[1].y,
+    )
+  );
 }
 
 function readLooseDevicePlacement(key: string): VisualizerLooseDevicePlacement {

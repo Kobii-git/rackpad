@@ -1167,6 +1167,7 @@ export const zh = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "自动",
+  "Hub & spoke": "中心辐射",
   "Auto / none": "自动/无",
   "Auto / unknown": "自动/未知",
   "Auto cables": "自动线缆",

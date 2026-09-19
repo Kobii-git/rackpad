@@ -1167,6 +1167,7 @@ export const ja = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "自動",
+  "Hub & spoke": "ハブとスポーク",
   "Auto / none": "自動 / なし",
   "Auto / unknown": "自動 / 不明",
   "Auto cables": "オートケーブル",

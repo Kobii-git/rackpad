@@ -1167,6 +1167,7 @@ export const th = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "อัตโนมัติ",
+  "Hub & spoke": "ฮับและซี่ล้อ",
   "Auto / none": "อัตโนมัติ / ไม่มี",
   "Auto / unknown": "อัตโนมัติ / ไม่ทราบ",
   "Auto cables": "สายออโต้",

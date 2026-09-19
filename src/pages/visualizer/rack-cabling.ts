@@ -37,6 +37,72 @@ import type { VisualizerRackFaceMode } from "./types";
 
 export type RackCablingRouteStyle = "smooth" | "orthogonal";
 
+export type RackCablingRoomLayoutMode = "auto" | "hub" | "manual";
+
+export interface RackCablingRoomPosition {
+  x: number;
+  y: number;
+}
+
+export interface RackCablingRoomLayout {
+  mode: RackCablingRoomLayoutMode;
+  hubRoomId: string | null;
+  positions: Record<string, RackCablingRoomPosition>;
+}
+
+export const DEFAULT_RACK_CABLING_ROOM_LAYOUT: RackCablingRoomLayout = {
+  mode: "auto",
+  hubRoomId: null,
+  positions: {},
+};
+
+export function parseRackCablingRoomLayout(
+  value: unknown,
+): RackCablingRoomLayout {
+  if (!value || typeof value !== "object") {
+    return { ...DEFAULT_RACK_CABLING_ROOM_LAYOUT };
+  }
+  const candidate = value as Partial<RackCablingRoomLayout>;
+  const mode =
+    candidate.mode === "hub" || candidate.mode === "manual"
+      ? candidate.mode
+      : "auto";
+  const positions =
+    candidate.positions && typeof candidate.positions === "object"
+      ? Object.fromEntries(
+          Object.entries(candidate.positions).filter(([, position]) => {
+            if (!position || typeof position !== "object") return false;
+            const point = position as Partial<RackCablingRoomPosition>;
+            return Number.isFinite(point.x) && Number.isFinite(point.y);
+          }),
+        ) as Record<string, RackCablingRoomPosition>
+      : {};
+  return {
+    mode,
+    hubRoomId:
+      typeof candidate.hubRoomId === "string" ? candidate.hubRoomId : null,
+    positions,
+  };
+}
+
+export function reconcileRackCablingRoomLayout(input: {
+  layout: RackCablingRoomLayout;
+  availableRoomIds: string[];
+}): RackCablingRoomLayout {
+  const available = new Set(input.availableRoomIds);
+  const parsed = parseRackCablingRoomLayout(input.layout);
+  return {
+    ...parsed,
+    hubRoomId:
+      parsed.hubRoomId && available.has(parsed.hubRoomId)
+        ? parsed.hubRoomId
+        : null,
+    positions: Object.fromEntries(
+      Object.entries(parsed.positions).filter(([roomId]) => available.has(roomId)),
+    ),
+  };
+}
+
 export function parseRackCablingRoomSelection(
   value: string | null,
 ): string[] | null {
@@ -857,45 +923,59 @@ function translateRect(rect: RackStudioRect, x: number, y: number) {
 
 function translateRoomScene(
   scene: RackCablingRoomFrame,
+  x: number,
   y: number,
   width: number,
 ): RackCablingRoomFrame {
   const contentY = y + ROOM_SECTION_HEADER_HEIGHT;
   const racks = scene.racks.map((rack) => ({
     ...rack,
+    x: rack.x + x,
     y: rack.y + contentY,
     faces: rack.faces.map((face) => ({
       ...face,
+      x: face.x + x,
       y: face.y + contentY,
       equipment: face.equipment.map((item) => ({
         ...item,
-        rect: translateRect(item.rect, 0, contentY),
+        rect: translateRect(item.rect, x, contentY),
       })),
     })),
   }));
   const equipment = scene.equipment.map((item) => ({
     ...item,
-    rect: translateRect(item.rect, 0, contentY),
+    rect: translateRect(item.rect, x, contentY),
   }));
   const looseCards = scene.looseCards.map((card) => ({
     ...card,
+    x: card.x + x,
     y: card.y + contentY,
-    faces: card.faces.map((face) => ({ ...face, y: face.y + contentY })),
+    faces: card.faces.map((face) => ({
+      ...face,
+      x: face.x + x,
+      y: face.y + contentY,
+    })),
   }));
   const looseSummaries = scene.looseSummaries.map((summary) => ({
     ...summary,
+    x: summary.x + x,
     y: summary.y + contentY,
   }));
   const looseTray = scene.looseTray
-    ? { ...scene.looseTray, y: scene.looseTray.y + contentY }
+    ? {
+        ...scene.looseTray,
+        x: scene.looseTray.x + x,
+        y: scene.looseTray.y + contentY,
+      }
     : null;
   const anchors = scene.anchors.map((anchor) => ({
     ...anchor,
+    x: anchor.x + x,
     y: anchor.y + contentY,
   }));
   return {
     ...scene,
-    x: 0,
+    x,
     y,
     width,
     height: scene.height + ROOM_SECTION_HEADER_HEIGHT,
@@ -906,6 +986,143 @@ function translateRoomScene(
     looseTray,
     anchors,
   };
+}
+
+interface RoomScenePlacement {
+  scene: RackCablingRoomFrame;
+  x: number;
+  y: number;
+  width: number;
+}
+
+function intersects(
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number },
+) {
+  return !(
+    left.x + left.width <= right.x ||
+    right.x + right.width <= left.x ||
+    left.y + left.height <= right.y ||
+    right.y + right.height <= left.y
+  );
+}
+
+function autoRoomPlacements(roomScenes: RackCablingRoomFrame[]) {
+  const width = Math.max(760, ...roomScenes.map((scene) => scene.width));
+  let nextY = 0;
+  return roomScenes.map((scene) => {
+    const placement = { scene, x: 0, y: nextY, width };
+    nextY += scene.height + ROOM_SECTION_HEADER_HEIGHT + ROOM_SECTION_GAP;
+    return placement;
+  });
+}
+
+function hubRoomPlacements(
+  roomScenes: RackCablingRoomFrame[],
+  hubRoomId: string | null,
+): RoomScenePlacement[] {
+  if (roomScenes.length < 2) return autoRoomPlacements(roomScenes);
+  const hub =
+    roomScenes.find((scene) => scene.room.id === hubRoomId) ?? roomScenes[0]!;
+  const spokes = roomScenes.filter((scene) => scene !== hub);
+  const largestDimension = Math.max(
+    ...roomScenes.map((scene) =>
+      Math.max(scene.width, scene.height + ROOM_SECTION_HEADER_HEIGHT),
+    ),
+  );
+  const hubHeight = hub.height + ROOM_SECTION_HEADER_HEIGHT;
+  let radius = largestDimension + ROOM_SECTION_GAP * 2;
+  for (;;) {
+    const centerX = radius + hub.width / 2 + CANVAS_PADDING;
+    const centerY = radius + hubHeight / 2 + CANVAS_PADDING;
+    const next: RoomScenePlacement[] = [
+      { scene: hub, x: centerX - hub.width / 2, y: centerY - hubHeight / 2, width: hub.width },
+    ];
+    spokes.forEach((scene, index) => {
+      const angle = -Math.PI / 2 + (index * Math.PI * 2) / spokes.length;
+      const height = scene.height + ROOM_SECTION_HEADER_HEIGHT;
+      next.push({
+        scene,
+        x: centerX + Math.cos(angle) * radius - scene.width / 2,
+        y: centerY + Math.sin(angle) * radius - height / 2,
+        width: scene.width,
+      });
+    });
+    if (
+      next.every((placement, index) =>
+        next.slice(index + 1).every((other) =>
+          !intersects(
+            {
+              ...placement,
+              height: placement.scene.height + ROOM_SECTION_HEADER_HEIGHT,
+            },
+            {
+              ...other,
+              height: other.scene.height + ROOM_SECTION_HEADER_HEIGHT,
+            },
+          ),
+        ),
+      )
+    ) {
+      return next;
+    }
+    radius += Math.max(32, Math.round(largestDimension / 8));
+  }
+}
+
+function manualRoomPlacements(
+  roomScenes: RackCablingRoomFrame[],
+  positions: Record<string, RackCablingRoomPosition>,
+) {
+  const fallback = autoRoomPlacements(roomScenes);
+  const positioned = fallback.filter(
+    (placement) => positions[placement.scene.room.id],
+  );
+  let nextX = positioned.length
+    ? Math.max(
+        ...positioned.map(
+          (placement) =>
+            positions[placement.scene.room.id]!.x + placement.scene.width,
+        ),
+      ) + ROOM_SECTION_GAP
+    : 0;
+  const nextY = positioned.length
+    ? Math.min(
+        ...positioned.map((placement) => positions[placement.scene.room.id]!.y),
+      )
+    : 0;
+  return fallback.map((placement) => {
+    const point = positions[placement.scene.room.id];
+    if (point) {
+      return {
+        ...placement,
+        x: point.x,
+        y: point.y,
+        width: placement.scene.width,
+      };
+    }
+    const next = {
+      ...placement,
+      x: nextX,
+      y: nextY,
+      width: placement.scene.width,
+    };
+    nextX += placement.scene.width + ROOM_SECTION_GAP;
+    return next;
+  });
+}
+
+function normalizeRoomPlacements(placements: RoomScenePlacement[]) {
+  if (placements.length === 0) return placements;
+  const minX = Math.min(...placements.map((placement) => placement.x));
+  const minY = Math.min(...placements.map((placement) => placement.y));
+  const offsetX = minX < CANVAS_PADDING ? CANVAS_PADDING - minX : 0;
+  const offsetY = minY < CANVAS_PADDING ? CANVAS_PADDING - minY : 0;
+  return placements.map((placement) => ({
+    ...placement,
+    x: placement.x + offsetX,
+    y: placement.y + offsetY,
+  }));
 }
 
 export function buildRackCablingScene(input: {
@@ -919,6 +1136,7 @@ export function buildRackCablingScene(input: {
   rackOrder?: string[];
   looseExpanded?: boolean;
   looseExpandedRoomIds?: ReadonlySet<string>;
+  roomLayout?: RackCablingRoomLayout;
 }): RackCablingScene {
   const selectedRooms = [...(input.rooms ?? (input.room ? [input.room] : []))]
     .filter(
@@ -938,15 +1156,31 @@ export function buildRackCablingScene(input: {
         input.looseExpandedRoomIds?.has(room.id) ?? input.looseExpanded,
     }),
   );
-  const width = Math.max(760, ...roomScenes.map((scene) => scene.width));
-  let nextY = 0;
-  const rooms = roomScenes.map((roomScene) => {
-    const translated = translateRoomScene(roomScene, nextY, width);
-    nextY += translated.height + ROOM_SECTION_GAP;
-    return translated;
+  const layout = reconcileRackCablingRoomLayout({
+    layout: input.roomLayout ?? DEFAULT_RACK_CABLING_ROOM_LAYOUT,
+    availableRoomIds: selectedRooms.map((room) => room.id),
   });
+  const rawPlacements =
+    layout.mode === "hub"
+      ? hubRoomPlacements(roomScenes, layout.hubRoomId)
+      : layout.mode === "manual"
+        ? manualRoomPlacements(roomScenes, layout.positions)
+        : autoRoomPlacements(roomScenes);
+  const placements =
+    layout.mode === "auto" ? rawPlacements : normalizeRoomPlacements(rawPlacements);
+  const rooms = placements.map((placement) =>
+    translateRoomScene(
+      placement.scene,
+      placement.x,
+      placement.y,
+      placement.width,
+    ),
+  );
+  const width = rooms.length
+    ? Math.max(...rooms.map((room) => room.x + room.width)) + CANVAS_PADDING
+    : Math.max(760, CANVAS_PADDING * 2);
   const height = rooms.length
-    ? nextY - ROOM_SECTION_GAP
+    ? Math.max(...rooms.map((room) => room.y + room.height)) + CANVAS_PADDING
     : Math.max(520, CANVAS_PADDING * 2);
   const looseTrays = rooms.flatMap((room) =>
     room.looseTray ? [room.looseTray] : [],

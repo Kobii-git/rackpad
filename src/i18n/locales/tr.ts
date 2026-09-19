@@ -1167,6 +1167,7 @@ export const tr = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "Otomatik",
+  "Hub & spoke": "Merkez ve kollar",
   "Auto / none": "Otomatik / yok",
   "Auto / unknown": "Otomatik / bilinmiyor",
   "Auto cables": "Otomatik kablolar",

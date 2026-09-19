@@ -1167,6 +1167,7 @@ export const it = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "Automatico",
+  "Hub & spoke": "Mozzo e raggi",
   "Auto / none": "Automatico/nessuno",
   "Auto / unknown": "Automatico/sconosciuto",
   "Auto cables": "Cavi per automobili",

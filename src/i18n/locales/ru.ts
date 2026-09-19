@@ -1167,6 +1167,7 @@ export const ru = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "Авто",
+  "Hub & spoke": "Хаб и лучи",
   "Auto / none": "Авто / нет",
   "Auto / unknown": "Авто / неизвестно",
   "Auto cables": "Автомобильные кабели",

@@ -1167,6 +1167,7 @@ export const fa = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "خودکار",
+  "Hub & spoke": "مرکز و پره‌ها",
   "Auto / none": "خودکار / هیچکدام",
   "Auto / unknown": "خودکار / ناشناخته",
   "Auto cables": "کابل های خودکار",

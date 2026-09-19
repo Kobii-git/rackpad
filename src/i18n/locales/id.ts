@@ -1167,6 +1167,7 @@ export const id = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "Otomatis",
+  "Hub & spoke": "Hub dan spoke",
   "Auto / none": "Otomatis / tidak ada",
   "Auto / unknown": "Otomatis / tidak diketahui",
   "Auto cables": "Kabel otomatis",

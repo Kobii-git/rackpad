@@ -1167,6 +1167,7 @@ export const vi = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "Tự động",
+  "Hub & spoke": "Trung tâm và nan hoa",
   "Auto / none": "Tự động / không",
   "Auto / unknown": "Tự động / không xác định",
   "Auto cables": "Cáp tự động",

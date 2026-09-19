@@ -1167,6 +1167,7 @@ export const bn = {
   "authNoPriv": "authNoPriv",
   "authPriv (AES128)": "authPriv (AES128)",
   "Auto": "অটো",
+  "Hub & spoke": "কেন্দ্র ও রশ্মি",
   "Auto / none": "স্বয়ংক্রিয় / কোনটিই নয়",
   "Auto / unknown": "অটো/অজানা",
   "Auto cables": "অটো তারের",

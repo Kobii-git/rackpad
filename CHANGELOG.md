@@ -18,7 +18,9 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   regenerates port-block geometry when its width or height changes.
 - Rack Cabling persists loose-equipment expansion independently per room, keeps
   the active cable, port or label selected while panning, and keeps cross-room
-  handoff labels at the originating room boundary.
+  handoff labels at the originating room boundary. Selected rooms can now use
+  deterministic Auto, Hub & spoke, or browser-local Manual layouts without
+  changing inventory data.
 - Room-canvas rack selection now consistently updates the focused Rack Studio
   elevation.
 
