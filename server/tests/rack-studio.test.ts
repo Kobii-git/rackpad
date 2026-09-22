@@ -247,6 +247,7 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
   const first = await createDevice(adminToken, room.id, "third-a");
   const second = await createDevice(adminToken, room.id, "third-b");
   const third = await createDevice(adminToken, room.id, "third-conflict");
+  const thirdBeforeConflict = db.prepare("SELECT rackId, roomId, rackMountKind, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(third.id);
 
   const firstDirect = directState(room.id, rack.id, 2, 2, 0, 4);
   const secondDirect = directState(room.id, rack.id, 2, 2, 4, 4);
@@ -278,8 +279,26 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
       next: directState(room.id, rack.id, 2, 1, 3, 3),
     },
   });
-  assert.equal(overlap.statusCode, 400, overlap.body);
+  assert.equal(overlap.statusCode, 409, overlap.body);
   assert.match(overlap.body, /overlap/i);
+  assert.deepEqual({
+    code: json(overlap).code,
+    conflictDeviceId: json(overlap).conflictDeviceId,
+    conflictDeviceName: json(overlap).conflictDeviceName,
+    mountKind: json(overlap).mountKind,
+  }, {
+    code: "RACK_STUDIO_PLACEMENT_CONFLICT",
+    conflictDeviceId: first.id,
+    conflictDeviceName: "third-a",
+    mountKind: "direct",
+  });
+  assert.deepEqual(db.prepare("SELECT rackId, roomId, rackMountKind, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(third.id), thirdBeforeConflict);
+  assert.deepEqual(db.prepare("SELECT rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(first.id), {
+    rackId: rack.id,
+    startU: 2,
+    rackColumn: 0,
+    rackColumnSpan: 4,
+  });
 
   const overflow = await app.inject({
     method: "POST",
@@ -366,7 +385,7 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
       next: shelfState(room.id, rack.id, shelf.id, 100, 120, 120, 120, 0),
     },
   });
-  assert.equal(shelfOverlap.statusCode, 400, shelfOverlap.body);
+  assert.equal(shelfOverlap.statusCode, 409, shelfOverlap.body);
   assert.match(shelfOverlap.body, /overlap/i);
 
   const sideA = await createDevice(adminToken, room.id, "side-a", "pdu");
@@ -388,11 +407,12 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
       next: sideState(room.id, rack.id, "right"),
     },
   });
-  assert.equal(sideConflict.statusCode, 400, sideConflict.body);
+  assert.equal(sideConflict.statusCode, 409, sideConflict.body);
   assert.match(sideConflict.body, /side conflicts/i);
 
   const rackTopA = await createDevice(adminToken, room.id, "rack-top-a");
   const rackTopB = await createDevice(adminToken, room.id, "rack-top-b");
+  const rackTopBBeforeConflict = db.prepare("SELECT rackId, rackMountKind, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(rackTopB.id);
   const firstRackTop = rackTopState(room.id, rack.id, 0, 6);
   const rackTopPlaced = await applyStudioAction(adminToken, {
     kind: "device.place",
@@ -430,17 +450,23 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
       kind: "device.place",
       targetId: rackTopB.id,
       expected: looseState(room.id),
-      next: { ...rackTopState(room.id, rack.id, 4, 4), face: "rear" },
+      next: rackTopState(room.id, rack.id, 4, 4),
     },
   });
-  assert.equal(rackTopOverlap.statusCode, 400, rackTopOverlap.body);
+  assert.equal(rackTopOverlap.statusCode, 409, rackTopOverlap.body);
   assert.match(rackTopOverlap.body, /rack-top position overlaps/i);
-  await applyStudioAction(adminToken, {
+  assert.equal(json(rackTopOverlap).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
+  assert.equal(json(rackTopOverlap).conflictDeviceId, rackTopA.id);
+  assert.deepEqual(db.prepare("SELECT rackId, rackMountKind, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(rackTopB.id), rackTopBBeforeConflict);
+  const oppositeRackTop = { ...rackTopState(room.id, rack.id, 0, 6), face: "rear" as const };
+  const oppositePlaced = await applyStudioAction(adminToken, {
     kind: "device.place",
     targetId: rackTopB.id,
     expected: looseState(room.id),
-    next: rackTopState(room.id, rack.id, 6, 6),
+    next: oppositeRackTop,
   });
+  assert.equal(oppositePlaced.device.face, "rear");
+  assert.equal(oppositePlaced.device.rackColumn, 0);
 
   const secondUndone = await applyStudioAction(adminToken, {
     kind: "device.place",

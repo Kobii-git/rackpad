@@ -158,26 +158,79 @@ export function PhysicalPortSlotEditor({
       {"modules" in layout &&
         layout.modules
           .filter((module) => module.face === face)
-          .map((module) => (
-            <g key={module.id} data-testid="template-module-preview">
-              {module.elements.map((primitive) => (
-                <Primitive key={primitive.id} primitive={primitive} />
-              ))}
-              {module.portSlots.map((slot) => (
-                <rect
-                  key={slot.id}
-                  x={slot.x}
-                  y={slot.y}
-                  width={slot.width}
-                  height={slot.height}
-                  fill="var(--color-bg)"
-                  stroke="var(--color-accent)"
-                >
-                  <title>{slot.label ?? slot.id}</title>
-                </rect>
-              ))}
-            </g>
-          ))}
+          .map((module) => {
+            const moduleSlot = moduleSlots.find(
+              (slot) => slot.id === module.slotId,
+            );
+            return (
+              <g
+                key={module.id}
+                data-testid="template-module-preview"
+                role={moduleSlot && onMoveModuleSlot ? "button" : undefined}
+                tabIndex={moduleSlot && onMoveModuleSlot ? 0 : undefined}
+                aria-label={module.name}
+                className={
+                  moduleSlot && onMoveModuleSlot ? "cursor-move" : undefined
+                }
+                onPointerDown={
+                  moduleSlot && onMoveModuleSlot
+                    ? (event) => {
+                        beginDrag(
+                          event,
+                          "module-slot",
+                          moduleSlot.id,
+                          moduleSlot.x,
+                          moduleSlot.y,
+                        );
+                        onSelectModuleSlot?.(moduleSlot.id);
+                      }
+                    : undefined
+                }
+                onKeyDown={
+                  moduleSlot && onMoveModuleSlot
+                    ? (event) => {
+                        const step = event.shiftKey ? 10 : 1;
+                        const delta =
+                          event.key === "ArrowLeft"
+                            ? [-step, 0]
+                            : event.key === "ArrowRight"
+                              ? [step, 0]
+                              : event.key === "ArrowUp"
+                                ? [0, -step]
+                                : event.key === "ArrowDown"
+                                  ? [0, step]
+                                  : undefined;
+                        if (!delta) return;
+                        event.preventDefault();
+                        onSelectModuleSlot?.(moduleSlot.id);
+                        onMoveModuleSlot(
+                          moduleSlot.id,
+                          moduleSlot.x + delta[0],
+                          moduleSlot.y + delta[1],
+                        );
+                      }
+                    : undefined
+                }
+              >
+                {module.elements.map((primitive) => (
+                  <Primitive key={primitive.id} primitive={primitive} />
+                ))}
+                {module.portSlots.map((slot) => (
+                  <rect
+                    key={slot.id}
+                    x={slot.x}
+                    y={slot.y}
+                    width={slot.width}
+                    height={slot.height}
+                    fill="var(--color-bg)"
+                    stroke="var(--color-accent)"
+                  >
+                    <title>{slot.label ?? slot.id}</title>
+                  </rect>
+                ))}
+              </g>
+            );
+          })}
       {moduleSlots.map((slot) => (
         <rect
           key={slot.id}

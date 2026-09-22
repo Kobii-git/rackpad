@@ -20,6 +20,8 @@ import {
   ChevronUp,
   Focus,
   GripVertical,
+  Lock,
+  LockOpen,
   Minus,
   Plus,
   RotateCcw,
@@ -118,6 +120,7 @@ interface PanState {
   clientY: number;
   panX: number;
   panY: number;
+  moved: boolean;
 }
 
 interface RoomDragState {
@@ -191,7 +194,9 @@ export function RackCablingCanvas({
   const [searchIndex, setSearchIndex] = useState(0);
   const looseExpandedRoomKey = [...looseExpandedRoomIds].sort().join("\u0000");
   const effectiveRoomLayout = roomLayout ?? DEFAULT_RACK_CABLING_ROOM_LAYOUT;
-  const roomLayoutKey = `${effectiveRoomLayout.mode}\u0000${effectiveRoomLayout.hubRoomId ?? ""}\u0000${Object.entries(effectiveRoomLayout.positions)
+  const roomLayoutKey = `${effectiveRoomLayout.mode}\u0000${effectiveRoomLayout.hubRoomId ?? ""}\u0000${Object.entries(
+    effectiveRoomLayout.positions,
+  )
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([id, point]) => `${id}:${point.x}:${point.y}`)
     .join("\u0000")}`;
@@ -658,6 +663,25 @@ export function RackCablingCanvas({
     });
   }, [annotationLayout.height, annotationLayout.width, scene]);
 
+  const applyStructuralFit = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !scene) return;
+    const bounds = viewport.getBoundingClientRect();
+    const nextZoom = Math.max(
+      0.28,
+      Math.min(
+        1.35,
+        (bounds.width - 56) / Math.max(1, scene.width),
+        (bounds.height - 56) / Math.max(1, scene.height),
+      ),
+    );
+    setZoom(nextZoom);
+    setPan({
+      x: (bounds.width - scene.width * nextZoom) / 2,
+      y: (bounds.height - scene.height * nextZoom) / 2,
+    });
+  }, [scene]);
+
   const fitCanvas = useCallback(() => {
     autoFitRef.current = true;
     applyFit();
@@ -684,19 +708,25 @@ export function RackCablingCanvas({
 
   useEffect(() => {
     autoFitRef.current = true;
-    const frame = window.requestAnimationFrame(applyFit);
+    const frame = window.requestAnimationFrame(applyStructuralFit);
     return () => window.cancelAnimationFrame(frame);
-  }, [applyFit, roomSelectionKey, faceMode, looseExpandedRoomKey, roomLayoutKey]);
+  }, [
+    applyStructuralFit,
+    roomSelectionKey,
+    faceMode,
+    looseExpandedRoomKey,
+    roomLayoutKey,
+  ]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
-      if (autoFitRef.current) applyFit();
+      if (autoFitRef.current) applyStructuralFit();
     });
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [applyFit]);
+  }, [applyStructuralFit]);
 
   useEffect(() => {
     setSearchIndex(0);
@@ -779,6 +809,7 @@ export function RackCablingCanvas({
         mode,
         hubRoomId: null,
         positions: sceneRoomPositions(),
+        locked: false,
       });
       return;
     }
@@ -787,12 +818,13 @@ export function RackCablingCanvas({
       hubRoomId:
         mode === "hub"
           ? selectedRooms.some(
-                (room) => room.id === effectiveRoomLayout.hubRoomId,
-              )
+              (room) => room.id === effectiveRoomLayout.hubRoomId,
+            )
             ? effectiveRoomLayout.hubRoomId
             : (selectedRooms[0]?.id ?? null)
           : null,
       positions: effectiveRoomLayout.positions,
+      locked: false,
     });
   }
 
@@ -805,6 +837,7 @@ export function RackCablingCanvas({
         ...effectiveRoomLayout.positions,
         [roomId]: { x: Math.round(x), y: Math.round(y) },
       },
+      locked: effectiveRoomLayout.locked,
     });
   }
 
@@ -813,7 +846,11 @@ export function RackCablingCanvas({
     roomId: string,
   ) {
     const room = scene.rooms.find((entry) => entry.room.id === roomId);
-    if (!room) return;
+    if (
+      !room ||
+      (effectiveRoomLayout.mode === "manual" && effectiveRoomLayout.locked)
+    )
+      return;
     event.preventDefault();
     event.stopPropagation();
     autoFitRef.current = false;
@@ -831,13 +868,14 @@ export function RackCablingCanvas({
         mode: "manual",
         hubRoomId: null,
         positions: sceneRoomPositions(),
+        locked: false,
       });
     }
   }
 
   function nudgeRoom(roomId: string, dx: number, dy: number) {
     const room = scene.rooms.find((entry) => entry.room.id === roomId);
-    if (!room) return;
+    if (!room || effectiveRoomLayout.locked) return;
     autoFitRef.current = false;
     updateManualRoomPosition(roomId, room.x + dx, room.y + dy);
   }
@@ -847,7 +885,6 @@ export function RackCablingCanvas({
     if (target.closest("[data-rack-cabling-interactive='true']")) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     autoFitRef.current = false;
-    setSelection(null);
     event.currentTarget.setPointerCapture(event.pointerId);
     panRef.current = {
       pointerId: event.pointerId,
@@ -855,6 +892,7 @@ export function RackCablingCanvas({
       clientY: event.clientY,
       panX: pan.x,
       panY: pan.y,
+      moved: false,
     };
   }
 
@@ -870,9 +908,13 @@ export function RackCablingCanvas({
     }
     const active = panRef.current;
     if (!active || active.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - active.clientX;
+    const deltaY = event.clientY - active.clientY;
+    if (!active.moved && Math.hypot(deltaX, deltaY) < 4) return;
+    active.moved = true;
     setPan({
-      x: active.panX + event.clientX - active.clientX,
-      y: active.panY + event.clientY - active.clientY,
+      x: active.panX + deltaX,
+      y: active.panY + deltaY,
     });
   }
 
@@ -882,7 +924,9 @@ export function RackCablingCanvas({
       return;
     }
     if (panRef.current?.pointerId !== event.pointerId) return;
+    const moved = panRef.current.moved;
     panRef.current = null;
+    if (!moved && event.type === "pointerup") setSelection(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -1184,7 +1228,9 @@ export function RackCablingCanvas({
                 }}
               >
                 <h2 className="flex h-[38px] items-center justify-between border-b border-[var(--border-muted)] px-3 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
-                  <span>{t("Room")} · {roomFrame.room.name}</span>
+                  <span>
+                    {t("Room")} · {roomFrame.room.name}
+                  </span>
                   <button
                     type="button"
                     data-rack-cabling-interactive="true"
@@ -1194,6 +1240,10 @@ export function RackCablingCanvas({
                       name: roomFrame.room.name,
                     })}
                     className="pointer-events-auto rounded p-1 text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-[var(--accent-primary)]"
+                    disabled={
+                      effectiveRoomLayout.mode === "manual" &&
+                      effectiveRoomLayout.locked
+                    }
                     onPointerDown={(event) =>
                       beginRoomDrag(event, roomFrame.room.id)
                     }
@@ -1792,9 +1842,7 @@ export function RackCablingCanvas({
             value={effectiveRoomLayout.mode}
             data-testid="rack-cabling-room-layout"
             onChange={(event) =>
-              changeRoomLayout(
-                event.target.value as RackCablingRoomLayoutMode,
-              )
+              changeRoomLayout(event.target.value as RackCablingRoomLayoutMode)
             }
             className="rk-control h-8 w-28 shrink-0 px-2 text-xs text-[var(--text-primary)]"
           >
@@ -1821,6 +1869,36 @@ export function RackCablingCanvas({
                 </option>
               ))}
             </select>
+          )}
+          {effectiveRoomLayout.mode === "manual" && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={
+                effectiveRoomLayout.locked
+                  ? t("Unlock layout")
+                  : t("Lock layout")
+              }
+              title={
+                effectiveRoomLayout.locked
+                  ? t("Unlock layout")
+                  : t("Lock layout")
+              }
+              data-testid="rack-cabling-layout-lock"
+              onClick={() =>
+                onRoomLayoutChange({
+                  ...effectiveRoomLayout,
+                  locked: !effectiveRoomLayout.locked,
+                })
+              }
+            >
+              {effectiveRoomLayout.locked ? (
+                <Lock className="size-3.5" />
+              ) : (
+                <LockOpen className="size-3.5" />
+              )}
+            </Button>
           )}
           <Button
             type="button"

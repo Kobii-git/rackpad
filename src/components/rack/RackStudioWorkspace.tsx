@@ -61,6 +61,7 @@ import {
   RACK_STUDIO_RACK_HEIGHT,
   RACK_STUDIO_RACK_WIDTH,
   rackCanvasState,
+  reconcileFocusedRackId,
   shelfPlacementBounds,
   storedRackCanvasState,
   validateDirectPlacementPreview,
@@ -259,6 +260,7 @@ export function RackStudioWorkspace({
   const [focusedRackId, setFocusedRackId] = useState(
     initialRackId ?? racks[0]?.id ?? "",
   );
+  const appliedInitialRackIdRef = useRef(initialRackId);
   const selectFocusedRack = useCallback(
     (rackId: string) => {
       if (racks.some((rack) => rack.id === rackId)) setFocusedRackId(rackId);
@@ -331,12 +333,20 @@ export function RackStudioWorkspace({
   }, [showCableLabels]);
 
   useEffect(() => {
-    if (initialRackId && racks.some((rack) => rack.id === initialRackId)) {
-      selectFocusedRack(initialRackId);
-    } else if (!racks.some((rack) => rack.id === focusedRackId)) {
-      selectFocusedRack(racks[0]?.id ?? "");
-    }
-  }, [focusedRackId, initialRackId, racks, selectFocusedRack]);
+    const initialChanged = appliedInitialRackIdRef.current !== initialRackId;
+    const previousInitialRackId = appliedInitialRackIdRef.current;
+    appliedInitialRackIdRef.current = initialRackId;
+    setFocusedRackId((current) =>
+      reconcileFocusedRackId({
+        currentRackId: current,
+        initialRackId,
+        previousInitialRackId: initialChanged
+          ? previousInitialRackId
+          : initialRackId,
+        availableRackIds: racks.map((rack) => rack.id),
+      }),
+    );
+  }, [initialRackId, racks]);
 
   useEffect(() => {
     if (phoneView) {
@@ -452,9 +462,12 @@ export function RackStudioWorkspace({
           });
         }
         setError(
-          caught instanceof Error
+          caught instanceof ApiError &&
+            caught.code === "RACK_STUDIO_PLACEMENT_CONFLICT"
             ? caught.message
-            : t("Failed to update devices."),
+            : caught instanceof Error
+              ? caught.message
+              : t("Failed to update devices."),
         );
         return null;
       } finally {
@@ -1480,6 +1493,7 @@ export function RackStudioWorkspace({
                         healthOverlay={healthOverlay}
                         search={normalizedSearch}
                         onPlace={placeDevice}
+                        onPlacementRejected={setError}
                       />
                     )),
                 )}
@@ -1678,6 +1692,7 @@ interface ElevationProps {
     device: Device,
     next: RackStudioPlacementState,
   ) => Promise<RackStudioActionResult | null>;
+  onPlacementRejected: (reason: string) => void;
 }
 
 interface DirectDragDraft {
@@ -1685,6 +1700,7 @@ interface DirectDragDraft {
   next: RackStudioPlacementState;
   valid: boolean;
   reason: string | null;
+  conflictDeviceId?: string;
 }
 
 function RackStudioElevation({
@@ -1713,6 +1729,7 @@ function RackStudioElevation({
   healthOverlay,
   search,
   onPlace,
+  onPlacementRejected,
 }: ElevationProps) {
   const { t } = useI18n();
   const [dragDraft, setDragDraft] = useState<DirectDragDraft>();
@@ -1860,6 +1877,7 @@ function RackStudioElevation({
       next,
       valid: preview.valid,
       reason: preview.reason,
+      conflictDeviceId: preview.conflictDeviceId,
     };
     dragDraftRef.current = draft;
     setDragDraft(draft);
@@ -1878,6 +1896,8 @@ function RackStudioElevation({
     setDragDraft(undefined);
     if (draft?.deviceId === active.device.id && draft.valid) {
       void onPlace(active.device, draft.next);
+    } else if (draft?.reason) {
+      onPlacementRejected(draft.reason);
     }
   }
 
@@ -1935,7 +1955,10 @@ function RackStudioElevation({
             rack,
             devices,
           });
-    if (!preview.valid) return;
+    if (!preview.valid) {
+      if (preview.reason) onPlacementRejected(preview.reason);
+      return;
+    }
     event.preventDefault();
     void onPlace(device, next);
   }
@@ -1947,6 +1970,9 @@ function RackStudioElevation({
         compact ? "min-w-[280px] flex-1 basis-[42%]" : "w-[min(690px,100%)]"
       }
     >
+      <span className="sr-only" role="status" aria-live="polite">
+        {dragDraft && !dragDraft.valid ? dragDraft.reason : null}
+      </span>
       <div className="mb-2 flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
         <span>
           {rack.name} · {face === "front" ? t("Front") : t("Rear")}
@@ -2016,10 +2042,12 @@ function RackStudioElevation({
                 selected={selectedDeviceId === device.id}
                 healthClassName={cn(
                   healthOverlay && statusClass(device.status),
+                  dragDraft?.conflictDeviceId === device.id &&
+                    "border-red-400 shadow-[0_0_0_2px_rgb(248_113_113_/_0.45)]",
                   dragDraft?.deviceId === device.id &&
                     (dragDraft.valid
                       ? "border-emerald-400 shadow-[0_0_0_2px_rgb(52_211_153_/_0.35)]"
-                      : "border-red-400 shadow-[0_0_0_2px_rgb(248_113_113_/_0.35)]"),
+                      : "border-red-400 opacity-60 shadow-[0_0_0_2px_rgb(248_113_113_/_0.35)]"),
                 )}
                 testId="rack-studio-rack-top-device"
                 onSelectDevice={onSelectDevice}
@@ -2095,10 +2123,12 @@ function RackStudioElevation({
                 matches={Boolean(matches)}
                 healthClassName={cn(
                   healthOverlay && statusClass(device.status),
+                  dragDraft?.conflictDeviceId === device.id &&
+                    "border-red-400 shadow-[0_0_0_2px_rgb(248_113_113_/_0.45)]",
                   dragDraft?.deviceId === device.id &&
                     (dragDraft.valid
                       ? "border-emerald-400 shadow-[0_0_0_2px_rgb(52_211_153_/_0.35)]"
-                      : "border-red-400 shadow-[0_0_0_2px_rgb(248_113_113_/_0.35)]"),
+                      : "border-red-400 opacity-60 shadow-[0_0_0_2px_rgb(248_113_113_/_0.35)]"),
                 )}
                 testId="rack-studio-device"
                 onSelectDevice={onSelectDevice}

@@ -48,12 +48,14 @@ export interface RackCablingRoomLayout {
   mode: RackCablingRoomLayoutMode;
   hubRoomId: string | null;
   positions: Record<string, RackCablingRoomPosition>;
+  locked: boolean;
 }
 
 export const DEFAULT_RACK_CABLING_ROOM_LAYOUT: RackCablingRoomLayout = {
   mode: "auto",
   hubRoomId: null,
   positions: {},
+  locked: false,
 };
 
 export function parseRackCablingRoomLayout(
@@ -82,6 +84,7 @@ export function parseRackCablingRoomLayout(
     hubRoomId:
       typeof candidate.hubRoomId === "string" ? candidate.hubRoomId : null,
     positions,
+    locked: mode === "manual" && candidate.locked === true,
   };
 }
 
@@ -2144,6 +2147,10 @@ export function buildRackCablingRoutes(input: {
           face: item.rackFace,
           parentDeviceId: item.device.parentDeviceId,
           rect: item.rect,
+        })),
+        rooms: input.scene.rooms.map((room) => ({
+          id: room.room.id,
+          rect: { x: room.x, y: room.y, width: room.width, height: room.height },
         })),
       },
       input.style,

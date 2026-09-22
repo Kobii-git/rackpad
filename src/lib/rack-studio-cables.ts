@@ -146,6 +146,7 @@ export interface RoutePlanningContext {
     face?: RackFace;
     parentDeviceId?: string;
   }>;
+  rooms?: Array<{ id: string; rect: RackStudioRect }>;
 }
 
 const OPTICAL_KINDS = new Set<PortKind>(["sfp", "sfp_plus", "fiber"]);
@@ -278,12 +279,23 @@ class IntervalLaneAllocator {
 }
 
 function compactRoutePoints(points: Array<{ x: number; y: number }>) {
-  return points.filter(
+  const compacted = points.filter(
     (point, index) =>
       index === 0 ||
       point.x !== points[index - 1]!.x ||
       point.y !== points[index - 1]!.y,
   );
+  let changed = true;
+  while (changed && compacted.length > 2) {
+    changed = false;
+    for (let index = 1; index < compacted.length - 1; index += 1) {
+      const previous = compacted[index - 1]!, point = compacted[index]!, next = compacted[index + 1]!;
+      if ((previous.x === point.x && point.x === next.x) || (previous.y === point.y && point.y === next.y)) {
+        compacted.splice(index, 1); changed = true; break;
+      }
+    }
+  }
+  return compacted;
 }
 
 function rackRectForAnchor(
@@ -366,6 +378,40 @@ function routeAvoidsUnrelatedObstacles(
   });
 }
 
+function routeAvoidsUnrelatedRooms(points: CablePoint[], pending: CableRoutingInput, context: RoutePlanningContext) {
+  const endpointRooms = new Set([pending.from.roomId, pending.to?.roomId].filter(Boolean));
+  return (context.rooms ?? []).every(room => endpointRooms.has(room.id) ||
+    points.slice(1).every((point, index) => !segmentIntersectsRect(points[index]!, point, room.rect)));
+}
+
+function routeBacktracking(points: CablePoint[]) {
+  let reversals = 0, previousHorizontal = 0, previousVertical = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const dx = Math.sign(points[index]!.x - points[index - 1]!.x);
+    const dy = Math.sign(points[index]!.y - points[index - 1]!.y);
+    if (dx) { if (previousHorizontal && dx !== previousHorizontal) reversals += 1; previousHorizontal = dx; }
+    if (dy) { if (previousVertical && dy !== previousVertical) reversals += 1; previousVertical = dy; }
+  }
+  return reversals;
+}
+
+function routeCandidateScore(points: CablePoint[], pending: CableRoutingInput, context: RoutePlanningContext) {
+  const valid = routeAvoidsUnrelatedObstacles(points, pending, context) && routeAvoidsUnrelatedRooms(points, pending, context);
+  const length = points.slice(1).reduce((sum, point, index) => {
+    const previous = points[index]!;
+    return sum + Math.abs(point.x - previous.x) + Math.abs(point.y - previous.y);
+  }, 0);
+  return [valid ? 0 : 1, routeBacktracking(points), points.length - 2, length];
+}
+
+function bestRouteCandidate(candidates: CablePoint[][], pending: CableRoutingInput, context: RoutePlanningContext) {
+  return candidates.map(compactRoutePoints).sort((left, right) => {
+    const a = routeCandidateScore(left, pending, context), b = routeCandidateScore(right, pending, context);
+    for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return a[index]! - b[index]!;
+    return JSON.stringify(left).localeCompare(JSON.stringify(right));
+  })[0]!;
+}
+
 function automaticRoutePoints(
   pending: CableRoutingInput,
   context: RoutePlanningContext,
@@ -440,10 +486,8 @@ function automaticRoutePoints(
       Math.min(fromRack.x, toRack.x),
       Math.max(fromRack.x + fromRack.width, toRack.x + toRack.width),
     );
-    const fromEscapeX = gutterX(fromRack, fromSide, lane);
-    const toEscapeX = gutterX(toRack, toSide, lane);
-    const routeLeft = Math.min(fromEscapeX, toEscapeX);
-    const routeRight = Math.max(fromEscapeX, toEscapeX);
+    const routeLeft = Math.min(gutterX(fromRack, fromSide, lane), gutterX(toRack, toSide, lane));
+    const routeRight = Math.max(gutterX(fromRack, fromSide, lane), gutterX(toRack, toSide, lane));
     const intersectingRackRects = context.racks
       .map((rack) => rack.rect)
       .filter((rect) => rect.x < routeRight && rect.x + rect.width > routeLeft);
@@ -457,41 +501,34 @@ function automaticRoutePoints(
       toRack.y,
       ...intersectingRackRects.map((rect) => rect.y),
     );
-    const bottomY = bottom + ROUTE_CLEARANCE + lane * ROUTE_LANE_GAP;
-    const topY = top - ROUTE_CLEARANCE - lane * ROUTE_LANE_GAP;
-    const corridorY =
-      bottomY <= context.height - 4
-        ? bottomY
-        : topY >= 4
-          ? topY
-          : bound(bottomY, 4, context.height - 4);
+    const room = from.roomId === to.roomId ? context.rooms?.find(entry => entry.id === from.roomId)?.rect : undefined;
+    const lowerBound = room ? room.y + 4 : 4;
+    const upperBound = room ? room.y + room.height - 4 : context.height - 4;
+    const corridorYs = [
+      bound(bottom + ROUTE_CLEARANCE + lane * ROUTE_LANE_GAP, lowerBound, upperBound),
+      bound(top - ROUTE_CLEARANCE - lane * ROUTE_LANE_GAP, lowerBound, upperBound),
+    ];
+    if (from.roomId !== to.roomId && context.rooms?.length) {
+      const roomTop = Math.min(...context.rooms.map(entry => entry.rect.y));
+      const roomBottom = Math.max(...context.rooms.map(entry => entry.rect.y + entry.rect.height));
+      corridorYs.push(bound(roomTop - ROUTE_CLEARANCE, 4, context.height - 4),
+        bound(roomBottom + ROUTE_CLEARANCE, 4, context.height - 4));
+    }
     const candidates = [
       [fromSide, toSide],
       [fromSide === "left" ? "right" : "left", toSide],
       [fromSide, toSide === "left" ? "right" : "left"],
     ] as const;
-    for (const [candidateFromSide, candidateToSide] of candidates) {
-      const candidateFromX = gutterX(fromRack, candidateFromSide, lane);
-      const candidateToX = gutterX(toRack, candidateToSide, lane);
-      const points = compactRoutePoints([
-        from,
-        { x: candidateFromX, y: from.y },
-        { x: candidateFromX, y: corridorY },
-        { x: candidateToX, y: corridorY },
-        { x: candidateToX, y: to.y },
-        to,
-      ]);
-      if (routeAvoidsUnrelatedObstacles(points, pending, context))
-        return points;
-    }
-    return compactRoutePoints([
-      from,
-      { x: fromEscapeX, y: from.y },
-      { x: fromEscapeX, y: corridorY },
-      { x: toEscapeX, y: corridorY },
-      { x: toEscapeX, y: to.y },
-      to,
-    ]);
+    const routeCandidates = candidates.flatMap(([candidateFromSide, candidateToSide]) => {
+      const rawFromX = gutterX(fromRack, candidateFromSide, lane);
+      const rawToX = gutterX(toRack, candidateToSide, lane);
+      const candidateFromX = room ? bound(rawFromX, room.x + 4, room.x + room.width - 4) : rawFromX;
+      const candidateToX = room ? bound(rawToX, room.x + 4, room.x + room.width - 4) : rawToX;
+      return corridorYs.map(corridorY => [from, { x: candidateFromX, y: from.y },
+        { x: candidateFromX, y: corridorY }, { x: candidateToX, y: corridorY },
+        { x: candidateToX, y: to.y }, to]);
+    });
+    return bestRouteCandidate(routeCandidates, pending, context);
   }
 
   const lane = allocator.allocate("unracked", from.x, to.x);
@@ -853,6 +890,49 @@ export function resolveCableGuidePoints(input: {
   return { guidePoints: input.reverse ? points.reverse() : points, guideIncomplete: incomplete };
 }
 
+function cubicPoint(geometry: Extract<CableRouteGeometry, { kind: "cubic" }>, t: number) {
+  const inverse = 1 - t;
+  return {
+    x: inverse ** 3 * geometry.from.x + 3 * inverse ** 2 * t * geometry.control1.x +
+      3 * inverse * t ** 2 * geometry.control2.x + t ** 3 * geometry.to.x,
+    y: inverse ** 3 * geometry.from.y + 3 * inverse ** 2 * t * geometry.control1.y +
+      3 * inverse * t ** 2 * geometry.control2.y + t ** 3 * geometry.to.y,
+  };
+}
+
+function pointInsideRect(point: CablePoint, rect: RackStudioRect, padding = 0) {
+  return point.x >= rect.x - padding && point.x <= rect.x + rect.width + padding &&
+    point.y >= rect.y - padding && point.y <= rect.y + rect.height + padding;
+}
+
+function normalizedVector(from: CablePoint, to: CablePoint) {
+  const length = Math.hypot(to.x - from.x, to.y - from.y);
+  return length ? { x: (to.x - from.x) / length, y: (to.y - from.y) / length } : { x: 0, y: 0 };
+}
+
+function managedSmoothCurve(input: { context: RoutePlanningContext; from: RackStudioCableAnchor;
+  to: RackStudioCableAnchor; previous?: RackStudioCableAnchor; next?: RackStudioCableAnchor }) {
+  const { context, from, to, previous, next } = input;
+  const distance = Math.hypot(to.x - from.x, to.y - from.y);
+  const fromTangent = previous ? normalizedVector(previous, to) : normalizedVector(from, to);
+  const toTangent = next ? normalizedVector(from, next) : normalizedVector(from, to);
+  const sameRoom = from.roomId === to.roomId ? context.rooms?.find(room => room.id === from.roomId)?.rect : undefined;
+  for (const factor of [1, 0.5, 0.25]) {
+    const handle = Math.min(48, distance * 0.4) * factor;
+    const geometry: Extract<CableRouteGeometry, { kind: "cubic" }> = { kind: "cubic", from,
+      control1: { x: from.x + fromTangent.x * handle, y: from.y + fromTangent.y * handle },
+      control2: { x: to.x - toTangent.x * handle, y: to.y - toTangent.y * handle }, to };
+    const samples = Array.from({ length: 17 }, (_, index) => cubicPoint(geometry, index / 16));
+    const insideRoom = !sameRoom || samples.every(point => pointInsideRect(point, sameRoom));
+    const avoidsRooms = (context.rooms ?? []).every(room => room.id === from.roomId || room.id === to.roomId ||
+      samples.every(point => !pointInsideRect(point, room.rect, 2)));
+    const avoidsObstacles = context.obstacles.every(obstacle => obstacle.id === from.deviceId || obstacle.id === to.deviceId ||
+      (obstacle.face && obstacle.face !== from.rackFace) || samples.every(point => !pointInsideRect(point, obstacle.rect, 2)));
+    if (insideRoom && avoidsRooms && avoidsObstacles) return geometry;
+  }
+  return null;
+}
+
 function guidedCableRoute(pending: CableRoutingInput, context: RoutePlanningContext, allocator: IntervalLaneAllocator,
   style: RackStudioCableRouteStyle) {
   const anchors = [pending.from, ...pending.guidePoints!, pending.to ?? null];
@@ -863,6 +943,11 @@ function guidedCableRoute(pending: CableRoutingInput, context: RoutePlanningCont
     const from = anchors[index - 1];
     const to = anchors[index];
     if (from && to && from.rackFace === to.rackFace) {
+      const previous = anchors[index - 2], next = anchors[index + 1];
+      const curve = style === "smooth" ? managedSmoothCurve({ context, from, to,
+        previous: previous?.rackFace === from.rackFace ? previous : undefined,
+        next: next?.rackFace === to.rackFace ? next : undefined }) : null;
+      if (curve) { segments.push(curve); points.push(from, to); continue; }
       const segmentPoints = automaticRoutePoints({ ...pending, from, to, manualPoints: [] }, context, allocator);
       segments.push({ kind: "polyline", points: segmentPoints, style, manualPointIndexes: [] });
       points.push(...segmentPoints);

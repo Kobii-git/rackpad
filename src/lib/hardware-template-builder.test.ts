@@ -360,6 +360,37 @@ test("module positions control both faces and preserve module port identities wh
   );
 });
 
+test("hardware modules support one through sixteen ports while fans create none", () => {
+  const position = {
+    id: "rear-module",
+    face: "rear" as const,
+    x: 10,
+    y: 10,
+    width: 240,
+    height: 120,
+  };
+  for (const count of [1, 3, 16]) {
+    const module = createHardwareModule(
+      `nic-${count}`,
+      "NIC",
+      position.id,
+      "nic",
+      count,
+      position,
+    );
+    assert.equal(module.portSlots.length, count);
+  }
+  const fan = createHardwareModule(
+    "fan-1",
+    "Fan",
+    position.id,
+    "fan",
+    16,
+    position,
+  );
+  assert.equal(fan.portSlots.length, 0);
+});
+
 test("repeated switch access and uplink edits preserve legacy block and port IDs", () => {
   let template = createStarterTemplate(
     "switch-24",

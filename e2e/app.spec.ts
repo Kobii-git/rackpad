@@ -1224,6 +1224,27 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
         ),
       )
       .toContain('"mode":"manual"');
+    const roomPositionBeforeLock = await page
+      .getByTestId("rack-cabling-room-section")
+      .first()
+      .getAttribute("style");
+    await page.getByTestId("rack-cabling-layout-lock").click();
+    await expect(roomHandle).toBeDisabled();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          localStorage.getItem(
+            "rackpad.visualizer.rack-cabling-room-layouts.v1",
+          ),
+        ),
+      )
+      .toContain('"locked":true');
+    await roomHandle.dispatchEvent("keydown", { key: "ArrowRight" });
+    await expect(
+      page.getByTestId("rack-cabling-room-section").first(),
+    ).toHaveAttribute("style", roomPositionBeforeLock!);
+    await page.getByTestId("rack-cabling-layout-lock").click();
+    await expect(roomHandle).toBeEnabled();
     const completeInterRoomRoutes = await page
       .getByTestId("rack-cabling-cable")
       .evaluateAll(
@@ -1331,6 +1352,11 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
       )
       .toBe("true");
 
+    await page.getByTestId("rack-cabling-cable").first().dispatchEvent("click");
+    await expect(
+      page.getByText("Selected cable", { exact: true }).first(),
+    ).toBeVisible();
+
     const sceneTransformBefore = await page
       .getByTestId("rack-cabling-scene")
       .getAttribute("style");
@@ -1350,8 +1376,10 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
     await expect
       .poll(() => page.getByTestId("rack-cabling-scene").getAttribute("style"))
       .not.toBe(sceneTransformBefore);
-
-    await page.getByTestId("rack-cabling-cable").first().dispatchEvent("click");
+    await expect(
+      page.getByText("Selected cable", { exact: true }).first(),
+    ).toBeVisible();
+    await page.mouse.wheel(0, -120);
     await expect(
       page.getByText("Selected cable", { exact: true }).first(),
     ).toBeVisible();
@@ -1368,6 +1396,24 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
 
     await page.getByRole("button", { name: "Zoom in" }).click();
     await page.getByRole("button", { name: "Zoom out" }).click();
+    await expect(page.getByTestId("rack-cabling-rack").first()).toHaveAttribute(
+      "data-selected",
+      "true",
+    );
+    await page.mouse.click(
+      rackCanvasBounds!.x + rackCanvasBounds!.width - 30,
+      rackCanvasBounds!.y + rackCanvasBounds!.height - 30,
+    );
+    await expect(page.getByTestId("rack-cabling-rack").first()).toHaveAttribute(
+      "data-selected",
+      "false",
+    );
+    await page.getByTestId("rack-cabling-rack").first().dispatchEvent("click");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("rack-cabling-rack").first()).toHaveAttribute(
+      "data-selected",
+      "false",
+    );
     await page.getByRole("button", { name: "Fit" }).click();
     await page.getByRole("button", { name: "Reset" }).click();
 
@@ -2303,6 +2349,87 @@ test("24 short patch cords remain curved, selectable, and exportable across rack
     await request.delete(`/api/ports/templates/${fixture.template.id}`, {
       headers,
     });
+  }
+});
+
+test("Rack Studio keeps room-canvas rack selection after applying an initial rack", async ({ page, request }) => {
+  const headers = { Authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(36);
+  let roomId = "";
+  const rackIds: string[] = [];
+  try {
+    const roomResponse = await request.post("/api/rooms", { headers, data: { labId: "lab_home", name: `Focus room ${suffix}` } });
+    expect(roomResponse.status(), await roomResponse.text()).toBe(201);
+    roomId = ((await roomResponse.json()) as { id: string }).id;
+    for (const name of [`Focus A ${suffix}`, `Focus B ${suffix}`]) {
+      const response = await request.post("/api/racks", { headers, data: { labId: "lab_home", roomId, name, totalU: 12 } });
+      expect(response.status(), await response.text()).toBe(201);
+      rackIds.push(((await response.json()) as { id: string }).id);
+    }
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/racks");
+    await page.getByRole("button", { name: new RegExp(`Focus B ${suffix}`) }).first().click();
+    await page.getByRole("button", { name: "Studio Beta", exact: true }).click();
+    const workspace = page.getByTestId("rack-studio-workspace");
+    await expect(workspace.locator(`[data-rack-elevation-id="${rackIds[1]}"]`)).toBeVisible();
+    await workspace.getByRole("button", { name: new RegExp(`Focus A ${suffix}`) }).first().click();
+    await expect(workspace.locator(`[data-rack-elevation-id="${rackIds[0]}"]`)).toBeVisible();
+    await workspace.getByRole("button", { name: new RegExp(`Focus B ${suffix}`) }).first().click();
+    await expect(workspace.locator(`[data-rack-elevation-id="${rackIds[1]}"]`)).toBeVisible();
+  } finally {
+    for (const id of rackIds.reverse()) await request.delete(`/api/racks/${id}`, { headers });
+    if (roomId) await request.delete(`/api/rooms/${roomId}`, { headers });
+  }
+});
+
+test("Rack Studio rejects an occupied drag without hiding or moving either device", async ({ page, request }) => {
+  const headers = { Authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(36);
+  let roomId = "", rackId = "";
+  const deviceIds: string[] = [];
+  try {
+    const roomResponse = await request.post("/api/rooms", { headers, data: { labId: "lab_home", name: `Conflict room ${suffix}` } });
+    roomId = ((await roomResponse.json()) as { id: string }).id;
+    const rackResponse = await request.post("/api/racks", { headers, data: { labId: "lab_home", roomId, name: `Conflict rack ${suffix}`, totalU: 12 } });
+    rackId = ((await rackResponse.json()) as { id: string }).id;
+    for (const [hostname, rackSlot] of [[`conflict-left-${suffix}`, "left"], [`conflict-right-${suffix}`, "right"]] as const) {
+      const response = await request.post("/api/devices", { headers, data: { labId: "lab_home", roomId, rackId, hostname,
+        deviceType: "server", status: "online", placement: "rack", startU: 6, heightU: 1, face: "front", rackSlot } });
+      expect(response.status(), await response.text()).toBe(201);
+      deviceIds.push(((await response.json()) as { id: string }).id);
+    }
+    await authenticate(page); await page.setViewportSize({ width: 1600, height: 1000 }); await page.goto("/racks");
+    await page.getByRole("button", { name: new RegExp(`Conflict rack ${suffix}`) }).first().click();
+    await page.getByRole("button", { name: "Studio Beta", exact: true }).click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    const elevation = page.locator(`[data-rack-elevation-id="${rackId}"]`);
+    const left = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-left-${suffix}"]`);
+    const right = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-right-${suffix}"]`);
+    await expect(left).toBeVisible(); await expect(right).toBeVisible();
+    const box = await left.boundingBox();
+    const rackWidth = await left.evaluate(element => element.parentElement!.getBoundingClientRect().width);
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + box!.width / 2 + rackWidth / 2, box!.y + box!.height / 2);
+    await expect(left).toHaveClass(/opacity-60/); await expect(right).toHaveClass(/border-red-400/);
+    await expect(elevation.getByRole("status")).toContainText(
+      `overlaps with conflict-right-${suffix}`,
+    );
+    await page.mouse.up();
+    await expect(page.getByText(new RegExp(`overlaps with conflict-right-${suffix}`, "i"))).toBeVisible();
+    for (const [index, expectedColumn] of [[0, 0], [1, 6]] as const) {
+      await expect.poll(async () => {
+        const response = await request.get(`/api/devices/${deviceIds[index]}`, { headers });
+        return ((await response.json()) as { rackColumn?: number }).rackColumn;
+      }).toBe(expectedColumn);
+    }
+    await page.reload();
+    await expect(left).toBeVisible(); await expect(right).toBeVisible();
+  } finally {
+    for (const id of deviceIds.reverse()) await request.delete(`/api/devices/${id}`, { headers });
+    if (rackId) await request.delete(`/api/racks/${rackId}`, { headers });
+    if (roomId) await request.delete(`/api/rooms/${roomId}`, { headers });
   }
 });
 
@@ -5907,8 +6034,28 @@ test("guided template editor preserves mixed blocks and edits six bays to four w
     for (const face of ["front", "rear"]) {
       await positions.getByRole("button", { name: "Add", exact: true }).click();
       await positions.getByRole("combobox", { name: "Face", exact: true }).selectOption(face);
-      await builder.getByTestId("template-module-editor").getByRole("button", { name: "Add", exact: true }).click();
+      const moduleEditor = builder.getByTestId("template-module-editor");
+      await moduleEditor.getByRole("combobox", { name: "Type", exact: true }).selectOption("nic");
+      await moduleEditor.getByRole("spinbutton", { name: "Ports", exact: true }).fill("1");
+      await moduleEditor.getByRole("button", { name: "Add", exact: true }).click();
       await expect(positions.getByRole("button", { name: "Delete", exact: true })).toBeDisabled();
+      const positionX = positions.getByRole("spinbutton", {
+        name: "Position: X",
+        exact: true,
+      });
+      const beforeX = Number(await positionX.inputValue());
+      const moduleArtwork = builder
+        .getByTestId(`hardware-template-preview-${face}`)
+        .getByTestId("template-module-preview")
+        .last();
+      await moduleArtwork.scrollIntoViewIfNeeded();
+      const moduleBox = await moduleArtwork.boundingBox();
+      expect(moduleBox).not.toBeNull();
+      await page.mouse.move(moduleBox!.x + moduleBox!.width / 2, moduleBox!.y + moduleBox!.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(moduleBox!.x + moduleBox!.width / 2 + 16, moduleBox!.y + moduleBox!.height / 2);
+      await page.mouse.up();
+      await expect.poll(async () => Number(await positionX.inputValue())).not.toBe(beforeX);
     }
     await page.screenshot({ path: test.info().outputPath("guided-template-editor.png"), fullPage: true });
     const saved = page.waitForResponse(response => response.request().method() === "PATCH" && response.url().endsWith(`/api/hardware-templates/${id}`));
@@ -5922,6 +6069,7 @@ test("guided template editor preserves mixed blocks and edits six bays to four w
     expect(result.rear).toEqual(source.rear);
     expect(result.portSlots).toHaveLength(source.portSlots.length + 4);
     expect(result.modules.map((module: { face: string }) => module.face).sort()).toEqual(["front", "rear"]);
+    expect(result.modules.map((module: { portSlots: unknown[] }) => module.portSlots.length)).toEqual([1, 1]);
     expect(result.portSlots.filter((slot: { face: string }) => slot.face === "rear")).toEqual(source.portSlots.filter(slot => slot.face === "rear"));
     await page.reload();
     await builder.getByRole("combobox", { name: "Templates", exact: true }).selectOption(id);

@@ -113,7 +113,8 @@ export function TemplateStructureEditor({
         <p className="text-xs text-[var(--text-secondary)]">
           {t(
             "Modules fit into positions. Remove assigned modules before deleting a position.",
-          )}
+          )}{" "}
+          {t("Modules move with their positions.")}
         </p>
         <label className="block text-xs">
           {t("Position")}
@@ -126,24 +127,6 @@ export function TemplateStructureEditor({
             {draft.moduleSlots.map((slot) => (
               <option key={slot.id} value={slot.id}>
                 {slot.id} · {t(slot.face === "front" ? "Front" : "Rear")}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-xs">
-          {t("Physical layout")}
-          <select
-            className="rk-control mt-1 w-full"
-            value={elementKind}
-            onChange={(event) =>
-              setElementKind(
-                event.target.value as PhysicalFacePrimitiveV1["kind"],
-              )
-            }
-          >
-            {APPEARANCE_PRIMITIVES.map((kind) => (
-              <option key={kind} value={kind}>
-                {kind}
               </option>
             ))}
           </select>
@@ -303,6 +286,24 @@ export function TemplateStructureEditor({
             {draft[face].elements.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.id} ({item.kind})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-xs">
+          {t("Type")}
+          <select
+            className="rk-control mt-1 w-full"
+            value={elementKind}
+            onChange={(event) =>
+              setElementKind(
+                event.target.value as PhysicalFacePrimitiveV1["kind"],
+              )
+            }
+          >
+            {APPEARANCE_PRIMITIVES.map((kind) => (
+              <option key={kind} value={kind}>
+                {kind}
               </option>
             ))}
           </select>

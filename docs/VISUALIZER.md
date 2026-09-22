@@ -59,11 +59,15 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
   offers **Auto** (ordered vertical sections), **Hub & spoke** (a selected room
   centered among the remaining rooms), and **Manual** placement. Drag a room
   header or use its arrow keys to nudge it; these room coordinates are personal
-  to the active browser and lab. Reset returns to Auto without changing
-  inventory, ports, or cables.
+  to the active browser and lab. Manual layouts can be locked to disable pointer
+  dragging and keyboard nudging. Switching to Auto or Hub & spoke, or using
+  Reset, clears the lock without changing inventory, ports, or cables.
 - `Smooth` draws readable curves across the available rack height. Cables may
   cross shelves and equipment artwork. `Orthogonal` changes the drawing style
   independently of the saved routing mode.
+- Selecting a cable, port, rack, or device does not fit or otherwise move the
+  viewport. Pan and zoom preserve the selection; only an unmoved background
+  click or `Esc` clears it. Explicit Fit may include visible annotations.
 - Cable routing modes are **Automatic** (direct on one rack face, managed between
   racks), **Direct** (short visible same-face paths, including between racks),
   **Managed** (ordered device guides and rack gutters), and **Manual** (saved
@@ -72,7 +76,9 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
   or cable manager, choose entry/exit faces, and place the guide on its preview.
   Numeric X/Y controls use 0–1000 relative to that device face. Guides follow
   device movement and rotation. A front/rear passage is one cable and adds no
-  ports, links, or trace hops. Missing geometry displays **Incomplete route**.
+  ports, links, or trace hops. Smooth Managed routes pass through same-face
+  guide anchors with continuous curves; Orthogonal Managed routes retain
+  right-angle legs. Missing geometry displays **Incomplete route**.
 - Click the inspector's endpoint buttons or Rack Cabling's continuation markers
   to reveal the opposite endpoint while keeping its cable selected. Matching
   cable identifiers connect continuation markers in Both view.
@@ -151,6 +157,9 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
   Cross-room handoffs use the nearest canvas edge, hidden-face handoffs use the
   rack edge, and unavailable port positions attach to the affected fallback
   equipment.
+- Automatic same-room routes remain within their room section. Cross-room
+  routes use free space and avoid entering unrelated room rectangles; Direct
+  and Manual route semantics are unchanged.
 
 ## Link Aggregation
 

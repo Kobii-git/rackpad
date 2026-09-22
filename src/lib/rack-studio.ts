@@ -26,6 +26,27 @@ export function automaticRackCanvasPosition(index: number) {
   };
 }
 
+export function reconcileFocusedRackId(input: {
+  currentRackId: string;
+  initialRackId?: string;
+  previousInitialRackId?: string;
+  availableRackIds: string[];
+}) {
+  const available = new Set(input.availableRackIds);
+  if (
+    input.initialRackId !== input.previousInitialRackId &&
+    input.initialRackId &&
+    available.has(input.initialRackId)
+  ) {
+    return input.initialRackId;
+  }
+  if (available.has(input.currentRackId)) return input.currentRackId;
+  if (input.initialRackId && available.has(input.initialRackId)) {
+    return input.initialRackId;
+  }
+  return input.availableRackIds[0] ?? "";
+}
+
 export function rackCanvasState(
   rack: Rack,
   fallbackIndex = 0,
@@ -203,12 +224,19 @@ export function rackTopPlacementState(input: {
   };
 }
 
+export interface RackStudioPlacementPreview {
+  valid: boolean;
+  reason: string | null;
+  conflictDeviceId?: string;
+  conflictDeviceName?: string;
+}
+
 export function validateRackTopPlacementPreview(input: {
   targetDeviceId: string;
   next: RackStudioPlacementState;
   rack: Rack;
   devices: Device[];
-}) {
+}): RackStudioPlacementPreview {
   const { next, rack } = input;
   if (
     next.mountKind !== "rack-top" ||
@@ -229,6 +257,7 @@ export function validateRackTopPlacementPreview(input: {
     if (
       existing.mountKind !== "rack-top" ||
       existing.rackId !== rack.id ||
+      existing.face !== next.face ||
       existing.column === null ||
       existing.columnSpan === null
     ) {
@@ -245,6 +274,8 @@ export function validateRackTopPlacementPreview(input: {
       return {
         valid: false,
         reason: `Placement overlaps with ${device.hostname}.`,
+        conflictDeviceId: device.id,
+        conflictDeviceName: device.hostname,
       };
     }
   }
@@ -282,7 +313,7 @@ export function validateDirectPlacementPreview(input: {
   next: RackStudioPlacementState;
   rack: Rack;
   devices: Device[];
-}) {
+}): RackStudioPlacementPreview {
   const { next, rack } = input;
   if (
     next.mountKind !== "direct" ||
@@ -331,6 +362,8 @@ export function validateDirectPlacementPreview(input: {
       return {
         valid: false,
         reason: `Placement overlaps with ${device.hostname}.`,
+        conflictDeviceId: device.id,
+        conflictDeviceName: device.hostname,
       };
     }
   }

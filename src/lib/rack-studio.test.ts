@@ -6,6 +6,7 @@ import {
   devicePlacementState,
   directPlacementState,
   rackTopPlacementState,
+  reconcileFocusedRackId,
   shelfPlacementBounds,
   validateDirectPlacementPreview,
   validateRackTopPlacementPreview,
@@ -23,6 +24,13 @@ test("automatic rack positions are deterministic and form a stable grid", () => 
   assert.deepEqual(automaticRackCanvasPosition(0), { x: 30, y: 34 });
   assert.deepEqual(automaticRackCanvasPosition(4), { x: 790, y: 34 });
   assert.deepEqual(automaticRackCanvasPosition(5), { x: 30, y: 326 });
+});
+
+test("focused rack keeps canvas selection until the external initial rack changes", () => {
+  const availableRackIds = ["rack-a", "rack-b", "rack-c"];
+  assert.equal(reconcileFocusedRackId({ currentRackId: "rack-b", initialRackId: "rack-a", previousInitialRackId: "rack-a", availableRackIds }), "rack-b");
+  assert.equal(reconcileFocusedRackId({ currentRackId: "rack-b", initialRackId: "rack-c", previousInitialRackId: "rack-a", availableRackIds }), "rack-c");
+  assert.equal(reconcileFocusedRackId({ currentRackId: "missing", initialRackId: "rack-a", previousInitialRackId: "rack-a", availableRackIds }), "rack-a");
 });
 
 test("12-column preview permits adjacent thirds and rejects intersections", () => {
@@ -58,15 +66,15 @@ test("12-column preview permits adjacent thirds and rejects intersections", () =
     { valid: true, reason: null },
   );
   const overlap = { ...adjacent, column: 3 };
-  assert.match(
-    validateDirectPlacementPreview({
+  const conflict = validateDirectPlacementPreview({
       targetDeviceId: "target",
       next: overlap,
       rack,
       devices: [existing],
-    }).reason ?? "",
-    /existing-third/,
-  );
+    });
+  assert.match(conflict.reason ?? "", /existing-third/);
+  assert.equal(conflict.conflictDeviceId, existing.id);
+  assert.equal(conflict.conflictDeviceName, existing.hostname);
 });
 
 test("rotated shelf footprints swap their effective dimensions", () => {
@@ -130,14 +138,17 @@ test("rack-top placement reuses rack columns and rejects occupied surface ranges
     }),
     { valid: true, reason: null },
   );
-  assert.match(
-    validateRackTopPlacementPreview({
+  const conflict = validateRackTopPlacementPreview({
       targetDeviceId: "top-target",
-      next: { ...adjacent, column: 5 },
+      next: { ...adjacent, face: "rear", column: 5 },
       rack,
       devices: [existing],
-    }).reason ?? "",
-    /top-existing/,
+    });
+  assert.match(conflict.reason ?? "", /top-existing/);
+  assert.equal(conflict.conflictDeviceId, existing.id);
+  assert.deepEqual(
+    validateRackTopPlacementPreview({ targetDeviceId: "top-target", next: { ...adjacent, column: 0, face: "front" }, rack, devices: [existing] }),
+    { valid: true, reason: null },
   );
 });
 

@@ -780,6 +780,68 @@ test("routing policy is independent of style and preserves inactive route data",
   }
 });
 
+test("room-aware automatic routes stay inside one room and avoid unrelated rooms", () => {
+  const roomContext: RoutePlanningContext = {
+    width: 1000, height: 620,
+    rooms: [
+      { id: "left", rect: { x: 20, y: 100, width: 260, height: 300 } },
+      { id: "blocker", rect: { x: 370, y: 100, width: 260, height: 300 } },
+      { id: "right", rect: { x: 720, y: 100, width: 260, height: 300 } },
+    ],
+    racks: [
+      { id: "left-a", rect: { x: 60, y: 150, width: 80, height: 180 }, unitHeight: 10 },
+      { id: "left-b", rect: { x: 180, y: 150, width: 80, height: 180 }, unitHeight: 10 },
+      { id: "right-a", rect: { x: 760, y: 150, width: 80, height: 180 }, unitHeight: 10 },
+    ], obstacles: [],
+  };
+  const anchor = (portId: string, rackId: string, roomId: string, x: number, y: number) => ({
+    portId, deviceId: `device-${portId}`, roomId, rackId, face: "front" as const, rackFace: "front" as const, x, y,
+  });
+  const sameRoom = planPhysicalCableRoutes([{ id: "same-room",
+    from: anchor("a", "left-a", "left", 100, 200), to: anchor("b", "left-b", "left", 220, 260),
+    manualPoints: [], allowDirect: false }], roomContext, "orthogonal")[0]!;
+  assert.ok(sameRoom.points.every(point => point.x >= 20 && point.x <= 280 && point.y >= 100 && point.y <= 400));
+
+  const crossRoom = planPhysicalCableRoutes([{ id: "cross-room",
+    from: anchor("a", "left-a", "left", 100, 200), to: anchor("c", "right-a", "right", 800, 260),
+    manualPoints: [], allowDirect: false }], roomContext, "orthogonal")[0]!;
+  const blocker = roomContext.rooms![1]!.rect;
+  for (let index = 1; index < crossRoom.points.length; index += 1) {
+    const from = crossRoom.points[index - 1]!, to = crossRoom.points[index]!;
+    const crosses = from.x === to.x
+      ? from.x > blocker.x && from.x < blocker.x + blocker.width && Math.max(from.y, to.y) > blocker.y && Math.min(from.y, to.y) < blocker.y + blocker.height
+      : from.y > blocker.y && from.y < blocker.y + blocker.height && Math.max(from.x, to.x) > blocker.x && Math.min(from.x, to.x) < blocker.x + blocker.width;
+    assert.equal(crosses, false);
+  }
+});
+
+test("smooth managed guide legs share tangents and retain exact guide anchors", () => {
+  const base = connection();
+  const guide = { ...base.from, portId: "guide:brush:entry", deviceId: "brush", x: 340, y: 260 };
+  const input = { ...base, to: { ...base.to!, x: 620, y: 360 }, routeMode: "managed" as const, guidePoints: [guide] };
+  const smooth = planPhysicalCableRoutes([input], context, "smooth")[0]!;
+  assert.equal(smooth.geometry.kind, "segmented");
+  if (smooth.geometry.kind !== "segmented") return;
+  const [first, second] = smooth.geometry.segments;
+  assert.equal(first!.kind, "cubic"); assert.equal(second!.kind, "cubic");
+  if (first!.kind !== "cubic" || second!.kind !== "cubic") return;
+  assert.deepEqual(first!.to, guide); assert.deepEqual(second!.from, guide);
+  const incoming = { x: guide.x - first!.control2.x, y: guide.y - first!.control2.y };
+  const outgoing = { x: second!.control1.x - guide.x, y: second!.control1.y - guide.y };
+  assert.ok(Math.abs(incoming.x * outgoing.y - incoming.y * outgoing.x) < 1e-8);
+  assert.ok(incoming.x * outgoing.x + incoming.y * outgoing.y > 0);
+  for (const [from, control, to] of [[first!.from, first!.control1, first!.to], [first!.to, first!.control2, first!.from],
+    [second!.from, second!.control1, second!.to], [second!.to, second!.control2, second!.from]]) {
+    const controlLength = Math.hypot(control.x - from.x, control.y - from.y);
+    const segmentLength = Math.hypot(to.x - from.x, to.y - from.y);
+    assert.ok(controlLength <= 48 + 1e-8); assert.ok(controlLength <= segmentLength * 0.4 + 1e-8);
+  }
+  assert.equal(smooth.path, renderCableGeometry(smooth.geometry));
+  const orthogonal = planPhysicalCableRoutes([input], context, "orthogonal")[0]!;
+  assert.equal(orthogonal.geometry.kind, "segmented");
+  if (orthogonal.geometry.kind === "segmented") assert.ok(orthogonal.geometry.segments.every(segment => segment.kind === "polyline"));
+});
+
 test("a brush passage remains one cable and follows device geometry on both faces", () => {
   const fixture = rackShelfCableFixture();
   const brush = fixture.devices.find(device => device.hostname.includes("Shelf")) ?? fixture.devices[4]!;

@@ -98,6 +98,7 @@ export function HardwareTemplateBuilder({
   );
   const [modulePrimitive, setModulePrimitive] =
     useState<HardwareModulePrimitive>("nic");
+  const [modulePortCount, setModulePortCount] = useState(1);
   const [moduleSlotId, setModuleSlotId] = useState("rear-module-a");
   const [moduleIds, setModuleIds] = useState<string[]>([]);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
@@ -1034,7 +1035,7 @@ export function HardwareTemplateBuilder({
               className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3"
             >
               <div className="rk-kicker">{t("Hardware")}</div>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-4">
                 <Field label={t("Type")}>
                   <select
                     className="rk-control h-8 w-full px-2 text-sm"
@@ -1065,6 +1066,26 @@ export function HardwareTemplateBuilder({
                     ))}
                   </select>
                 </Field>
+                {modulePrimitive === "fan" ? (
+                  <div />
+                ) : (
+                  <Field label={t("Ports")}>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={16}
+                      value={modulePortCount}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        if (Number.isFinite(value)) {
+                          setModulePortCount(
+                            Math.max(1, Math.min(16, Math.round(value))),
+                          );
+                        }
+                      }}
+                    />
+                  </Field>
+                )}
                 <div className="flex items-end">
                   <Button
                     className="w-full"
@@ -1088,7 +1109,7 @@ export function HardwareTemplateBuilder({
                             modulePrimitive,
                             moduleSlotId,
                             modulePrimitive,
-                            modulePrimitive === "nic" ? 2 : 1,
+                            modulePortCount,
                             current.moduleSlots.find(
                               (slot) => slot.id === moduleSlotId,
                             ),

@@ -23,17 +23,22 @@ A position is the rectangle where a module mounts. A module is the removable
 part, including its artwork and physical port slots.
 
 1. In **Module positions**, choose Add, select Front, and set its position and
-   dimensions. Select that position in the module controls and add a NIC.
+   dimensions. Select that position in the module controls, choose a port count
+   from 1–16, and add a NIC. Fan modules do not create ports.
 2. Add another position on Rear and add a PSU there. Module creation uses the
    selected position's face.
 3. Move or resize a position: its assigned modules and ports move with it,
-   preserving their identities. Switching the position's face moves them too.
+   preserving their identities. You can drag the rendered module artwork or its
+   position outline; both move the containing position. Switching the position's
+   face moves the module too.
 4. Remove the assigned module before deleting its position. The Delete position
    action stays disabled while a module references it.
 
 ## Four bays from a six-bay chassis
 
 1. Duplicate a six-bay template, then select Front in **Bays and appearance**.
+   Choose the appearance primitive type beside the selected element and use Add
+   to create the new bay, label, handle, vent, or other artwork.
 2. Select the fifth bay's ID and Delete; repeat for the sixth bay. If the design
    has separate labels, handles or indicators for those bays, select and remove
    those associated elements individually. Their IDs remain visible in the list.

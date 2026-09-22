@@ -1074,7 +1074,11 @@ function rackCablingRoomLayoutEqual(
   left: RackCablingRoomLayout,
   right: RackCablingRoomLayout,
 ) {
-  if (left.mode !== right.mode || left.hubRoomId !== right.hubRoomId) {
+  if (
+    left.mode !== right.mode ||
+    left.hubRoomId !== right.hubRoomId ||
+    left.locked !== right.locked
+  ) {
     return false;
   }
   const leftEntries = Object.entries(left.positions).sort(([a], [b]) =>

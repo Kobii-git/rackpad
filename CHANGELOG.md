@@ -6,6 +6,30 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.4-beta.4] - 2026-09-22
+
+### Fixed
+
+- Rack Studio keeps room-canvas rack selection authoritative after the initial
+  rack is applied. Occupied direct and rack-top placements are rejected by the
+  client and server without moving either device, with an accessible conflict
+  preview and typed `RACK_STUDIO_PLACEMENT_CONFLICT` response.
+- Hardware templates keep appearance creation with Bays and appearance, support
+  one to sixteen ports on port-bearing modules, keep fans portless, and let
+  module artwork select and move its containing module position.
+- Rack Cabling preserves selections through pan and zoom, limits automatic fit
+  to structural changes, and supports browser-local, per-lab locking of Manual
+  room layouts. Automatic routes stay within same-room bounds and avoid
+  unrelated rooms on cross-room paths.
+- Smooth Managed cables pass through each same-face guide with continuous,
+  bounded curves shared by live Rack Studio, Rack Cabling, SVG, and PNG output.
+  Orthogonal Managed routes remain right-angled.
+
+See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.4.md).
+Issues #164, #165, #166, #169, #170 and #171 remain open pending focused beta
+confirmation. Issue #139 is the completed umbrella for the original Rack Studio
+delivery; later remediation remains tracked by those focused issues.
+
 ## [1.8.4-beta.3] - 2026-09-17
 
 ### Fixed

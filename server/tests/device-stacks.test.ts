@@ -424,7 +424,8 @@ test("resize is atomic, total height can exceed20, and derived layout preserves 
   const result = await call("POST", `/api/devices/${stack.id}/stack-members`, {
     name: "Overlap",
   });
-  assert.equal(result.statusCode, 400, result.body);
+  assert.equal(result.statusCode, 409, result.body);
+  assert.equal(result.json().code, "RACK_STUDIO_PLACEMENT_CONFLICT");
   assert.equal(listStackMembers(stack.id).length, 2);
   assert.equal(
     (await call("GET", `/api/devices/${stack.id}`)).json().heightU,

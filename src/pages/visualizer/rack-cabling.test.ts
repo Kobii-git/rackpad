@@ -205,11 +205,21 @@ test("multi-room scenes support deterministic hub and persisted manual layouts",
 
   const hub = buildRackCablingScene({
     ...input,
-    roomLayout: { mode: "hub", hubRoomId: room.id, positions: {} },
+    roomLayout: {
+      mode: "hub",
+      hubRoomId: room.id,
+      positions: {},
+      locked: false,
+    },
   });
   const repeatedHub = buildRackCablingScene({
     ...input,
-    roomLayout: { mode: "hub", hubRoomId: room.id, positions: {} },
+    roomLayout: {
+      mode: "hub",
+      hubRoomId: room.id,
+      positions: {},
+      locked: false,
+    },
   });
   assert.deepEqual(hub, repeatedHub);
   const hubFrame = hub.rooms.find((frame) => frame.room.id === room.id)!;
@@ -242,6 +252,7 @@ test("multi-room scenes support deterministic hub and persisted manual layouts",
         [room.id]: { x: 80, y: 440 },
         [branchRoom.id]: { x: 940, y: 80 },
       },
+      locked: true,
     },
   });
   assert.deepEqual(
@@ -258,6 +269,13 @@ test("multi-room scenes support deterministic hub and persisted manual layouts",
     positions: { [room.id]: { x: 1, y: 2 }, bad: { x: "no", y: 2 } },
   });
   assert.deepEqual(parsed.positions, { [room.id]: { x: 1, y: 2 } });
+  assert.equal(parsed.locked, false);
+  const locked = parseRackCablingRoomLayout({ ...parsed, locked: true });
+  assert.equal(locked.locked, true);
+  assert.equal(
+    parseRackCablingRoomLayout({ ...locked, mode: "auto" }).locked,
+    false,
+  );
   assert.deepEqual(
     reconcileRackCablingRoomLayout({
       layout: parsed,
