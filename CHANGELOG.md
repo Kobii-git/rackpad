@@ -6,6 +6,21 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.4-beta.5] - 2026-09-24
+
+### Fixed
+
+- Legacy device placement saves now check the same 12-column occupied rack space
+  as Studio actions, reject conflicts with a typed 409, and leave both devices
+  unchanged. Studio also checks inspector saves before submitting them.
+- Smooth Managed guide legs bend on either face when a guide crosses from front
+  to rear, while retaining exact anchors and shared live/export geometry.
+- Focused Rack Cabling labels prefer space beside the selected endpoint, and
+  Visible Links shows a space between “to” and the destination port.
+
+See [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.5.md).
+The hardware-template editor from beta.4 remains open for tester confirmation.
+
 ## [1.8.4-beta.4] - 2026-09-22
 
 ### Fixed

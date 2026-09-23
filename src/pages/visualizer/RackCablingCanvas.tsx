@@ -584,10 +584,16 @@ export function RackCablingCanvas({
       const selectedOrHovered =
         (selection?.kind === "cable" && selection.id === route.link.id) ||
         hoveredCableId === route.link.id;
+      const selectedEndpoint =
+        selectedPortId === route.link.fromPortId
+          ? route.from
+          : selectedPortId === route.link.toPortId
+            ? route.to
+            : null;
       const traced = Boolean(
         traceMode.enabled && traceMode.result?.cableIds.has(route.link.id),
       );
-      const priority = selectedOrHovered ? 0 : traced ? 1 : 2;
+      const priority = selectedOrHovered || selectedEndpoint ? 0 : traced ? 1 : 2;
       const result = [];
       if (!route.continuations.length && (showLabels || emphasized)) {
         result.push({
@@ -596,8 +602,9 @@ export function RackCablingCanvas({
           kind: "cable" as const,
           text: route.label,
           priority,
-          anchor: route.labelPoint,
+          anchor: selectedEndpoint ?? route.labelPoint,
           geometry: route.geometry,
+          preferredPoint: selectedEndpoint ?? (selectedOrHovered ? route.from : undefined),
         });
       }
       for (const handoff of route.handoffs) {
@@ -634,6 +641,7 @@ export function RackCablingCanvas({
     routes,
     scene,
     selection,
+    selectedPortId,
     showLabels,
     traceMode.enabled,
     traceMode.result,

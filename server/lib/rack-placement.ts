@@ -1,5 +1,6 @@
 import { db } from '../db.js'
 import { ValidationError } from './validation.js'
+import { currentRackStudioPlacement, placementConflict, type RackStudioDeviceRow } from './rack-studio-placement-core.js'
 
 interface RackPlacementInput {
   rackId?: string | null
@@ -17,11 +18,6 @@ function normalizeRackSlot(value: string | null | undefined): RackSlot {
   if (!value) return 'full'
   if (RACK_SLOTS.includes(value as RackSlot)) return value as RackSlot
   throw new ValidationError('Rack slot must be full, left, or right.')
-}
-
-function rackSlotsConflict(a: RackSlot, b: RackSlot) {
-  if (a === 'full' || b === 'full') return true
-  return a === b
 }
 
 export function validateRackPlacement(input: RackPlacementInput) {
@@ -69,27 +65,27 @@ export function validateRackPlacement(input: RackPlacementInput) {
   const rackSlot = normalizeRackSlot(input.rackSlot)
 
   const overlaps = db.prepare(`
-    SELECT id, hostname, startU, heightU, rackSlot
+    SELECT *
     FROM devices
     WHERE rackId = ?
       AND COALESCE(face, 'front') = ?
       AND startU IS NOT NULL
       AND heightU IS NOT NULL
+      AND COALESCE(rackMountKind, 'direct') = 'direct'
       AND id != COALESCE(?, '')
-  `).all(input.rackId, face, input.deviceId ?? null) as Array<{
-    id: string
-    hostname: string
-    startU: number
-    heightU: number
-    rackSlot: string | null
-  }>
+  `).all(input.rackId, face, input.deviceId ?? null) as RackStudioDeviceRow[]
+
+  const column = rackSlot === 'right' ? 6 : 0
+  const columnSpan = rackSlot === 'full' ? 12 : 6
 
   for (const device of overlaps) {
-    const deviceEnd = device.startU + device.heightU - 1
-    const intersects = !(endU < device.startU || startU > deviceEnd)
-    const existingRackSlot = normalizeRackSlot(device.rackSlot)
-    if (intersects && rackSlotsConflict(rackSlot, existingRackSlot)) {
-      throw new ValidationError(`Rack position overlaps with ${device.hostname}.`)
+    const existing = currentRackStudioPlacement(device)
+    if (existing.startU === null || existing.heightU === null || existing.column === null || existing.columnSpan === null) continue
+    const existingEndU = existing.startU + existing.heightU - 1
+    const uOverlap = !(endU < existing.startU || startU > existingEndU)
+    const columnOverlap = column < existing.column + existing.columnSpan && column + columnSpan > existing.column
+    if (uOverlap && columnOverlap) {
+      throw placementConflict(`Rack position overlaps with ${device.hostname}.`, device, 'direct')
     }
   }
 

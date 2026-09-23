@@ -837,6 +837,15 @@ test("smooth managed guide legs share tangents and retain exact guide anchors", 
     assert.ok(controlLength <= 48 + 1e-8); assert.ok(controlLength <= segmentLength * 0.4 + 1e-8);
   }
   assert.equal(smooth.path, renderCableGeometry(smooth.geometry));
+  const secondGuide = { ...guide, portId: "guide:brush-two:entry", deviceId: "brush-two", x: 470, y: 300 };
+  const multiple = planPhysicalCableRoutes([{ ...input, guidePoints: [guide, secondGuide] }], context, "smooth")[0]!;
+  assert.equal(multiple.geometry.kind, "segmented");
+  if (multiple.geometry.kind === "segmented") {
+    assert.deepEqual(multiple.geometry.segments[0]?.kind === "cubic" ? multiple.geometry.segments[0].to : null, guide);
+    assert.deepEqual(multiple.geometry.segments[1]?.kind === "cubic" ? multiple.geometry.segments[1].from : null, guide);
+    assert.deepEqual(multiple.geometry.segments[1]?.kind === "cubic" ? multiple.geometry.segments[1].to : null, secondGuide);
+    assert.equal(multiple.path, renderCableGeometry(multiple.geometry));
+  }
   const orthogonal = planPhysicalCableRoutes([input], context, "orthogonal")[0]!;
   assert.equal(orthogonal.geometry.kind, "segmented");
   if (orthogonal.geometry.kind === "segmented") assert.ok(orthogonal.geometry.segments.every(segment => segment.kind === "polyline"));
@@ -855,6 +864,7 @@ test("a brush passage remains one cable and follows device geometry on both face
     assert.equal(routes.length, 1);
     const route = routes[0]!;
     assert.equal(route.geometry.kind, "segmented");
+    if (face !== "both") assert.match(route.path, / [CQ] /);
     assert.ok(route.continuations.some(marker => marker.portId.startsWith("guide:brush:")));
     assert.ok(route.continuations.every(marker => !marker.incomplete));
     assert.ok(route.continuations.every(marker => [link.fromPortId, link.toPortId].includes(marker.destinationPortId)));

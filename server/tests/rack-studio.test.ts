@@ -293,6 +293,15 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
     mountKind: "direct",
   });
   assert.deepEqual(db.prepare("SELECT rackId, roomId, rackMountKind, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(third.id), thirdBeforeConflict);
+  const legacyOverlap = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${third.id}`,
+    headers: authHeaders(adminToken),
+    payload: { placement: "rack", rackId: rack.id, startU: 2, heightU: 1, face: "front", rackSlot: "left" },
+  });
+  assert.equal(legacyOverlap.statusCode, 409, legacyOverlap.body);
+  assert.equal(json(legacyOverlap).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
+  assert.deepEqual(db.prepare("SELECT rackId, roomId, rackMountKind, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(third.id), thirdBeforeConflict);
   assert.deepEqual(db.prepare("SELECT rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(first.id), {
     rackId: rack.id,
     startU: 2,

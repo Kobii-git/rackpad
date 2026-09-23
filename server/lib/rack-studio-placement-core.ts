@@ -63,7 +63,7 @@ interface RackRow {
   totalU: number;
 }
 
-function placementConflict(
+export function placementConflict(
   message: string,
   conflict: Pick<RackStudioDeviceRow, "id" | "hostname">,
   mountKind: RackStudioPlacementState["mountKind"],

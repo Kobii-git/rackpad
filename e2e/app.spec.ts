@@ -1753,6 +1753,7 @@ test("rack cabling scopes inspection and supports keyboard search and selection"
   await expect(visibleLinkPanel).toContainText(
     `${await page.getByTestId("rack-cabling-cable").count()} cables`,
   );
+  await expect(page.getByTestId("visible-link-ports").first()).toHaveText(/\S+ to \S+/);
 
   await page
     .getByRole("combobox", { name: "Filter visualized cables by type" })
@@ -2399,6 +2400,12 @@ test("Rack Studio rejects an occupied drag without hiding or moving either devic
       expect(response.status(), await response.text()).toBe(201);
       deviceIds.push(((await response.json()) as { id: string }).id);
     }
+    for (const [hostname, startU] of [[`conflict-lower-${suffix}`, 1], [`conflict-upper-${suffix}`, 2]] as const) {
+      const response = await request.post("/api/devices", { headers, data: { labId: "lab_home", roomId, rackId, hostname,
+        deviceType: "server", status: "online", placement: "rack", startU, heightU: 1, face: "front", rackSlot: "full" } });
+      expect(response.status(), await response.text()).toBe(201);
+      deviceIds.push(((await response.json()) as { id: string }).id);
+    }
     await authenticate(page); await page.setViewportSize({ width: 1600, height: 1000 }); await page.goto("/racks");
     await page.getByRole("button", { name: new RegExp(`Conflict rack ${suffix}`) }).first().click();
     await page.getByRole("button", { name: "Studio Beta", exact: true }).click();
@@ -2424,8 +2431,30 @@ test("Rack Studio rejects an occupied drag without hiding or moving either devic
         return ((await response.json()) as { rackColumn?: number }).rackColumn;
       }).toBe(expectedColumn);
     }
+    const lower = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-lower-${suffix}"]`);
+    const upper = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-upper-${suffix}"]`);
+    await lower.scrollIntoViewIfNeeded();
+    const lowerBox = await lower.boundingBox();
+    const upperBox = await upper.boundingBox();
+    await page.mouse.move(lowerBox!.x + lowerBox!.width / 2, lowerBox!.y + lowerBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(upperBox!.x + upperBox!.width / 2, upperBox!.y + upperBox!.height / 2);
+    await expect(lower).toHaveClass(/opacity-60/);
+    await expect(upper).toHaveClass(/border-red-400/);
+    await page.mouse.up();
+    for (const [index, expectedU] of [[2, 1], [3, 2]] as const) {
+      const response = await request.get(`/api/devices/${deviceIds[index]}`, { headers });
+      expect(((await response.json()) as { startU?: number }).startU).toBe(expectedU);
+    }
+    await lower.click();
+    await page.getByText("Start U", { exact: true }).locator("..").locator("input").fill("2");
+    await page.getByTestId("rack-studio-workspace").getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText(new RegExp(`overlaps with conflict-upper-${suffix}`, "i"))).toBeVisible();
+    const unchanged = await request.get(`/api/devices/${deviceIds[2]}`, { headers });
+    expect(((await unchanged.json()) as { startU?: number }).startU).toBe(1);
     await page.reload();
     await expect(left).toBeVisible(); await expect(right).toBeVisible();
+    await expect(lower).toBeVisible(); await expect(upper).toBeVisible();
   } finally {
     for (const id of deviceIds.reverse()) await request.delete(`/api/devices/${id}`, { headers });
     if (rackId) await request.delete(`/api/racks/${rackId}`, { headers });

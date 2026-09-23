@@ -1719,6 +1719,27 @@ export function layoutRackCablingAnnotations(
   for (const input of sorted) {
     const width = Math.max(40, Math.min(240, input.text.length * 6 + 12));
     const candidates: CablePoint[] = [];
+    if (input.priority === 0 && input.preferredPoint) {
+      const focus = input.preferredPoint;
+      const equipment = scene.equipment.find((item) =>
+        focus.x >= item.rect.x && focus.x <= item.rect.x + item.rect.width &&
+        focus.y >= item.rect.y && focus.y <= item.rect.y + item.rect.height,
+      );
+      if (equipment) {
+        candidates.push(
+          { x: equipment.rect.x - width / 2 - 8, y: focus.y },
+          { x: equipment.rect.x + equipment.rect.width + width / 2 + 8, y: focus.y },
+        );
+      }
+      for (const distance of [24, 40, 64]) {
+        candidates.push(
+          { x: focus.x, y: focus.y - distance },
+          { x: focus.x, y: focus.y + distance },
+          { x: focus.x - distance, y: focus.y },
+          { x: focus.x + distance, y: focus.y },
+        );
+      }
+    }
     if (input.geometry) {
       for (const fraction of [0.5, 0.35, 0.65]) {
         const sample = pointAndTangentAt(input.geometry, fraction);
@@ -1753,6 +1774,8 @@ export function layoutRackCablingAnnotations(
           rect.x + rect.width <= scene.width - 8 &&
           rect.y + rect.height <= scene.height - 8 &&
           !blockers.some((blocker) => annotationRectsOverlap(rect, blocker)) &&
+          (input.priority !== 0 || !input.preferredPoint ||
+            !scene.equipment.some((item) => annotationRectsOverlap(rect, item.rect))) &&
           !placed.some((existing) => annotationRectsOverlap(rect, existing)),
       );
     if (!candidate) {

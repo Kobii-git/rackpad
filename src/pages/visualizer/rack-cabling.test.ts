@@ -398,6 +398,26 @@ test("annotation layout prevents overlap and moves dense overflow into a rail", 
   }
 });
 
+test("focused cable annotation stays near the selected endpoint", () => {
+  const scene = buildRackCablingScene({ rooms: [], racks: [], devices: [], layouts: [], ports: [], faceMode: "front" });
+  const focus = { x: 100, y: 200 };
+  scene.equipment.push({
+    id: "device", device: device("device", rack24.id, 1), rackId: rack24.id,
+    rackFace: "front", physicalFace: "front", rect: { x: 80, y: 180, width: 60, height: 40 },
+    rotation: 0, fallbackReason: null,
+  });
+  const result = layoutRackCablingAnnotations(scene, [{
+    id: "focused", linkId: "link", kind: "cable", text: "Selected cable", priority: 0,
+    anchor: focus, preferredPoint: focus,
+    geometry: { kind: "polyline", points: [focus, { x: 660, y: 200 }], style: "smooth", manualPointIndexes: [] },
+  }]);
+  const label = result.annotations[0]!;
+  assert.equal(label.inRail, false);
+  assert.ok(Math.abs(label.textX - focus.x) <= 120);
+  assert.ok(Math.abs(label.textY - focus.y) <= 64);
+  assert.ok(label.x >= 140, "the focused label should sit beside the device");
+});
+
 test("rack cabling scene renders fallback equipment and collapsible loose gear", () => {
   const missing = device("missing-layout", rack24.id, 4);
   const incomplete = {

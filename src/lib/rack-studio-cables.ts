@@ -914,8 +914,11 @@ function managedSmoothCurve(input: { context: RoutePlanningContext; from: RackSt
   to: RackStudioCableAnchor; previous?: RackStudioCableAnchor; next?: RackStudioCableAnchor }) {
   const { context, from, to, previous, next } = input;
   const distance = Math.hypot(to.x - from.x, to.y - from.y);
-  const fromTangent = previous ? normalizedVector(previous, to) : normalizedVector(from, to);
-  const toTangent = next ? normalizedVector(from, next) : normalizedVector(from, to);
+  // A face-changing guide has no adjacent anchor on this face. Using the leg
+  // itself as both tangents makes its cubic mathematically straight.
+  const freeTangent = { x: to.x < from.x ? -1 : 1, y: 0 };
+  const fromTangent = previous ? normalizedVector(previous, to) : freeTangent;
+  const toTangent = next ? normalizedVector(from, next) : freeTangent;
   const sameRoom = from.roomId === to.roomId ? context.rooms?.find(room => room.id === from.roomId)?.rect : undefined;
   for (const factor of [1, 0.5, 0.25]) {
     const handle = Math.min(48, distance * 0.4) * factor;

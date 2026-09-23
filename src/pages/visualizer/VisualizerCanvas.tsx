@@ -2377,8 +2377,8 @@ export function VisualizerInspector({
                   {cable.fromDevice?.hostname ?? t("Unknown")} {t("to")}{" "}
                   {cable.toDevice?.hostname ?? t("Unknown")}
                 </div>
-                <Mono className="text-[10px] text-[var(--text-tertiary)]">
-                  {cable.fromPort?.name ?? "?"} {t("to")}
+                <Mono data-testid="visible-link-ports" className="text-[10px] text-[var(--text-tertiary)]">
+                  {cable.fromPort?.name ?? "?"} {t("to")}{" "}
                   {cable.toPort?.name ?? "?"}
                 </Mono>
               </div>

@@ -663,6 +663,16 @@ export function RackStudioWorkspace({
   }
 
   async function placeDevice(device: Device, next: RackStudioPlacementState) {
+    const rack = racks.find((entry) => entry.id === next.rackId);
+    if (rack && (next.mountKind === "direct" || next.mountKind === "rack-top")) {
+      const preview = next.mountKind === "direct"
+        ? validateDirectPlacementPreview({ targetDeviceId: device.id, next, rack, devices })
+        : validateRackTopPlacementPreview({ targetDeviceId: device.id, next, rack, devices });
+      if (!preview.valid) {
+        setError(preview.reason ?? t("Failed to update devices."));
+        return null;
+      }
+    }
     return runAction({
       kind: "device.place",
       targetId: device.id,
