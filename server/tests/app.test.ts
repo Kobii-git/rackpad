@@ -4522,7 +4522,8 @@ test("rack placement validation rejects overlapping devices", async () => {
     },
   });
 
-  assert.equal(overlapRes.statusCode, 400);
+  assert.equal(overlapRes.statusCode, 409);
+  assert.equal((readJson(overlapRes) as { code: string }).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
   assert.match(overlapRes.body, /overlap/i);
 });
 
@@ -4606,7 +4607,8 @@ test("rack placement validation allows opposite half-width slots only", async ()
       rackSlot: "left",
     },
   });
-  assert.equal(leftConflictRes.statusCode, 400);
+  assert.equal(leftConflictRes.statusCode, 409);
+  assert.equal((readJson(leftConflictRes) as { code: string }).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
   assert.match(leftConflictRes.body, /overlap/i);
 
   const fullConflictRes = await app.inject({
@@ -4627,7 +4629,8 @@ test("rack placement validation allows opposite half-width slots only", async ()
       rackSlot: "full",
     },
   });
-  assert.equal(fullConflictRes.statusCode, 400);
+  assert.equal(fullConflictRes.statusCode, 409);
+  assert.equal((readJson(fullConflictRes) as { code: string }).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
   assert.match(fullConflictRes.body, /overlap/i);
 
   const rearFullRes = await app.inject({
@@ -4660,7 +4663,8 @@ test("rack placement validation allows opposite half-width slots only", async ()
       rackSlot: "full",
     },
   });
-  assert.equal(patchConflictRes.statusCode, 400);
+  assert.equal(patchConflictRes.statusCode, 409);
+  assert.equal((readJson(patchConflictRes) as { code: string }).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
   assert.match(patchConflictRes.body, /overlap/i);
 });
 
