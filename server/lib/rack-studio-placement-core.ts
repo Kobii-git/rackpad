@@ -382,18 +382,18 @@ export function createRackStudioPlacementResolver(
         SELECT *
         FROM devices
         WHERE rackId = ?
-          AND COALESCE(face, 'front') = ?
           AND startU IS NOT NULL
           AND heightU IS NOT NULL
-          AND COALESCE(rackMountKind, 'direct') = 'direct'
           AND id != ?
       `,
       )
-      .all(rack.id, state.face, device.id) as RackStudioDeviceRow[];
+      .all(rack.id, device.id) as RackStudioDeviceRow[];
 
     for (const row of rows) {
       const existing = currentRackStudioPlacement(row);
       if (
+        existing.mountKind !== "direct" ||
+        existing.face !== state.face ||
         existing.startU === null ||
         existing.heightU === null ||
         existing.column === null ||

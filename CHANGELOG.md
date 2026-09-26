@@ -6,6 +6,19 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.4-beta.6] - 2026-09-27
+
+### Fixed
+
+- Rack Studio and standard device updates now include legacy rack records in
+  occupied-slot checks, using the same normalized face and rack-slot geometry
+  as the preview. Conflicts still identify the occupant with a typed 409 and
+  leave both placements unchanged.
+- The Diagram Visualizer Inspector's Direct connections port lines now include
+  the missing space after “to”. Visible Links spacing remains correct.
+
+See [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.6.md).
+
 ## [1.8.4-beta.5] - 2026-09-24
 
 ### Fixed

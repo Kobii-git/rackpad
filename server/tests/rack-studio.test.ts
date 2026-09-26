@@ -240,6 +240,54 @@ test("dense room bounds keep the last rack reachable and constrain full footprin
   assert.match(outside.body, /Rack Studio canvas/i);
 });
 
+test("occupied U rejects Studio and device writes for legacy rack metadata", async () => {
+  const token = await bootstrapAdmin();
+  const room = await createRoom(token, "Legacy placement room");
+  const rack = await createRack(token, room.id, "Legacy placement rack", 3);
+  const occupant = await createDevice(token, room.id, "daffy");
+  const mover = await createDevice(token, room.id, "david-macbook-pro");
+  await applyStudioAction(token, {
+    kind: "device.place",
+    targetId: occupant.id,
+    expected: looseState(room.id),
+    next: directState(room.id, rack.id, 2, 1, 0, 12),
+  });
+  await applyStudioAction(token, {
+    kind: "device.place",
+    targetId: mover.id,
+    expected: looseState(room.id),
+    next: directState(room.id, rack.id, 1, 1, 0, 12),
+  });
+  db.prepare("UPDATE devices SET rackMountKind = 'loose', rackColumn = NULL, rackColumnSpan = NULL WHERE id = ?").run(occupant.id);
+
+  const before = db.prepare("SELECT rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(mover.id);
+  const studio = await app.inject({
+    method: "POST",
+    url: "/api/rack-studio/actions",
+    headers: authHeaders(token),
+    payload: {
+      kind: "device.place",
+      targetId: mover.id,
+      expected: directState(room.id, rack.id, 1, 1, 0, 12),
+      next: directState(room.id, rack.id, 2, 1, 0, 12),
+    },
+  });
+  assert.equal(studio.statusCode, 409, studio.body);
+  assert.equal(json(studio).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
+  assert.equal(json(studio).conflictDeviceId, occupant.id);
+
+  const editor = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${mover.id}`,
+    headers: authHeaders(token),
+    payload: { placement: "rack", rackId: rack.id, startU: 2, heightU: 1, face: "front", rackSlot: "full" },
+  });
+  assert.equal(editor.statusCode, 409, editor.body);
+  assert.equal(json(editor).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
+  assert.equal(json(editor).conflictDeviceId, occupant.id);
+  assert.deepEqual(db.prepare("SELECT rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(mover.id), before);
+});
+
 test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cross-lab validation", async () => {
   const adminToken = await bootstrapAdmin();
   const room = await createRoom(adminToken, "Placement room");
