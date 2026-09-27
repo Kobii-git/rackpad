@@ -6,7 +6,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
-## [1.8.4-beta.6] - 2026-09-27
+## [1.8.4-beta.7] - 2026-09-27
 
 ### Fixed
 
@@ -17,7 +17,11 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - The Diagram Visualizer Inspector's Direct connections port lines now include
   the missing space after “to”. Visible Links spacing remains correct.
 
-See [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.6.md).
+The beta.6 tag did not publish an image or GitHub Release because its CodeQL
+approval was pinned to the prior server tree. Beta.7 carries these fixes after
+the exact SNMPv3 review pin was renewed; the reviewed SNMP source is unchanged.
+
+See [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.7.md).
 
 ## [1.8.4-beta.5] - 2026-09-24
 
