@@ -68,19 +68,17 @@ export function validateRackPlacement(input: RackPlacementInput) {
     SELECT *
     FROM devices
     WHERE rackId = ?
-      AND COALESCE(face, 'front') = ?
       AND startU IS NOT NULL
       AND heightU IS NOT NULL
-      AND COALESCE(rackMountKind, 'direct') = 'direct'
       AND id != COALESCE(?, '')
-  `).all(input.rackId, face, input.deviceId ?? null) as RackStudioDeviceRow[]
+  `).all(input.rackId, input.deviceId ?? null) as RackStudioDeviceRow[]
 
   const column = rackSlot === 'right' ? 6 : 0
   const columnSpan = rackSlot === 'full' ? 12 : 6
 
   for (const device of overlaps) {
     const existing = currentRackStudioPlacement(device)
-    if (existing.startU === null || existing.heightU === null || existing.column === null || existing.columnSpan === null) continue
+    if (existing.mountKind !== 'direct' || existing.face !== face || existing.startU === null || existing.heightU === null || existing.column === null || existing.columnSpan === null) continue
     const existingEndU = existing.startU + existing.heightU - 1
     const uOverlap = !(endU < existing.startU || startU > existingEndU)
     const columnOverlap = column < existing.column + existing.columnSpan && column + columnSpan > existing.column

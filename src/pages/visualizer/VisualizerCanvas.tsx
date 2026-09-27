@@ -2551,8 +2551,8 @@ function DeviceInspector({
                   <span className="block truncate text-xs font-medium text-[var(--text-primary)]">
                     {neighbor.device.hostname}
                   </span>
-                  <Mono className="text-[10px] text-[var(--text-tertiary)]">
-                    {neighbor.port.name} {t("to")}
+                  <Mono data-testid="direct-connection-ports" className="text-[10px] text-[var(--text-tertiary)]">
+                    {neighbor.port.name} {t("to")}{" "}
                     {neighbor.peerPort.name}
                     {neighbor.link.cableLength
                       ? t("| {cableLength}", {

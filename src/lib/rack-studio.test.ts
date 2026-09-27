@@ -77,6 +77,36 @@ test("12-column preview permits adjacent thirds and rejects intersections", () =
   assert.equal(conflict.conflictDeviceName, existing.hostname);
 });
 
+test("direct preview uses legacy rack-slot geometry even with stale mount metadata", () => {
+  const occupant = device({
+    id: "legacy-occupant",
+    hostname: "legacy-occupant",
+    placement: "rack",
+    rackId: rack.id,
+    startU: 2,
+    heightU: 1,
+    face: "front",
+    rackSlot: "full",
+    rackMountKind: "loose",
+  });
+  const preview = validateDirectPlacementPreview({
+    targetDeviceId: "mover",
+    next: directPlacementState({
+      roomId: rack.roomId ?? null,
+      rackId: rack.id,
+      startU: 2,
+      heightU: 1,
+      face: "front",
+      column: 0,
+      columnSpan: 12,
+    }),
+    rack,
+    devices: [occupant],
+  });
+  assert.equal(preview.valid, false);
+  assert.equal(preview.conflictDeviceId, occupant.id);
+});
+
 test("rotated shelf footprints swap their effective dimensions", () => {
   const shelfDevice = device({
     id: "shelf-child",
