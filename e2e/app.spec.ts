@@ -2440,10 +2440,11 @@ test("Rack Studio rejects an occupied drag without hiding or moving either devic
     const upper = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-upper-${suffix}"]`);
     await lower.scrollIntoViewIfNeeded();
     const lowerBox = await lower.boundingBox();
+    await lower.hover({ position: { x: 12, y: lowerBox!.height / 2 } });
+    const dragStartBox = await lower.boundingBox();
     const upperBox = await upper.boundingBox();
-    await page.mouse.move(lowerBox!.x + lowerBox!.width / 2, lowerBox!.y + lowerBox!.height / 2);
     await page.mouse.down();
-    await page.mouse.move(upperBox!.x + upperBox!.width / 2, upperBox!.y + upperBox!.height / 2);
+    await page.mouse.move(dragStartBox!.x + 12, upperBox!.y + upperBox!.height / 2, { steps: 8 });
     await expect(lower).toHaveClass(/opacity-60/);
     await expect(upper).toHaveClass(/border-red-400/);
     await page.mouse.up();
