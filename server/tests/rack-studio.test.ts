@@ -244,8 +244,8 @@ test("occupied U rejects Studio and device writes for legacy rack metadata", asy
   const token = await bootstrapAdmin();
   const room = await createRoom(token, "Legacy placement room");
   const rack = await createRack(token, room.id, "Legacy placement rack", 3);
-  const occupant = await createDevice(token, room.id, "daffy");
-  const mover = await createDevice(token, room.id, "david-macbook-pro");
+  const occupant = await createDevice(token, room.id, "legacy-occupant");
+  const mover = await createDevice(token, room.id, "rack-mover");
   await applyStudioAction(token, {
     kind: "device.place",
     targetId: occupant.id,

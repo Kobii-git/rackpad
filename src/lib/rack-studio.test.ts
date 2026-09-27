@@ -79,8 +79,8 @@ test("12-column preview permits adjacent thirds and rejects intersections", () =
 
 test("direct preview uses legacy rack-slot geometry even with stale mount metadata", () => {
   const occupant = device({
-    id: "daffy",
-    hostname: "daffy",
+    id: "legacy-occupant",
+    hostname: "legacy-occupant",
     placement: "rack",
     rackId: rack.id,
     startU: 2,
