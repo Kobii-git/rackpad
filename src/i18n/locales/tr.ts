@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "MCP": "MCP",
+  "Days": "Gün",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Şu örnekleri deneyin: ayrı RJ45 ve SFP blokları ekleyin; her yüzde bir konum oluşturup modül ekleyin; altı yuvalı bir şablonu çoğaltıp iki yuvayı silin.",
   "Rows": "Satırlar",
   "Module positions": "Modül konumları",
@@ -1877,6 +1879,7 @@ export const tr = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Kendinden imzalı, süresi dolmuş veya eşleşmeyen sertifikalara izin verir. Yalnızca güvenilen hedefler için kullanın.",
   "Download text": "Metni indir",
   "Download image": "Görseli indir",
+  "Download SVG": "SVG indir",
   "Internal pass-through": "Dahili geçiş",
   "IP mismatches": "IP uyuşmazlıkları",
   "No IP mismatches found.": "IP uyuşmazlığı bulunamadı.",

@@ -12,7 +12,7 @@ process.env.NODE_ENV = "test";
 process.env.OIDC_ENABLED = "0";
 process.env.RACKPAD_SECRET_KEY = "stack-test-only-key";
 const { createApp } = await import("../app.js");
-const { db } = await import("../db.js");
+const { CURRENT_SCHEMA_VERSION, db } = await import("../db.js");
 const { validateRackpadSqliteDatabase } =
   await import("../lib/native-backup-validation.js");
 const { buildStackPhysicalLayout } = await import("../lib/stack-layout.js");
@@ -477,7 +477,7 @@ test("logical and native integrity round trips reject malformed stacks atomicall
     stackMemberId: m.id,
   });
   assert.equal(p.statusCode, 201);
-  assert.equal(validateRackpadSqliteDatabase(db, "Test"), 52);
+  assert.equal(validateRackpadSqliteDatabase(db, "Test"), CURRENT_SCHEMA_VERSION);
   const backup = (await call("GET", "/api/admin/export")).json();
   for (const corrupt of ["height", "order", "owner", "mac"]) {
     const invalid = structuredClone(backup);
@@ -510,7 +510,7 @@ test("logical and native integrity round trips reject malformed stacks atomicall
   }
   const success = await call("POST", "/api/admin/restore", backup);
   assert.equal(success.statusCode, 200, success.body);
-  assert.equal(validateRackpadSqliteDatabase(db, "Restored"), 52);
+  assert.equal(validateRackpadSqliteDatabase(db, "Restored"), CURRENT_SCHEMA_VERSION);
   assert.equal(
     (
       db
@@ -703,7 +703,7 @@ test("native semantic validation rejects invalid geometry and version markers us
   snapshot.close();
   await assert.rejects(restoreNativeBackup({ source, active: destination }));
   const intact = new Database(destination, { readonly: true });
-  assert.equal(validateRackpadSqliteDatabase(intact, "Intact destination"), 52);
+  assert.equal(validateRackpadSqliteDatabase(intact, "Intact destination"), CURRENT_SCHEMA_VERSION);
   intact.close();
   const marker = new Database(source);
   marker.prepare("UPDATE schemaVersion SET version=50").run();
@@ -790,7 +790,7 @@ test("schema50 upgrades without changing existing ports and old logical backups 
     { env: { ...process.env, DATABASE_PATH: legacy } },
   );
   const upgraded = new Database(legacy, { readonly: true });
-  assert.equal(validateRackpadSqliteDatabase(upgraded, "Upgraded"), 52);
+  assert.equal(validateRackpadSqliteDatabase(upgraded, "Upgraded"), CURRENT_SCHEMA_VERSION);
   assert.deepEqual(
     upgraded.prepare("SELECT id, name, stackMemberId FROM ports").all(),
     [{ id: "legacy-port", name: "Port1", stackMemberId: null }],
@@ -912,5 +912,5 @@ test("rack and shelf removal preserve stacks as loose devices, and parent edits 
     (await call("GET", `/api/ports/${port.json().id}`)).json().stackMemberId,
     m.id,
   );
-  assert.equal(validateRackpadSqliteDatabase(db, "After parent removal"), 52);
+  assert.equal(validateRackpadSqliteDatabase(db, "After parent removal"), CURRENT_SCHEMA_VERSION);
 });

@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const pt = {
+  "MCP": "MCP",
+  "Days": "Dias",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Experimente estes exemplos: adicione blocos RJ45 e SFP separados; crie uma posição em cada face e adicione um módulo; duplique um modelo de seis baias e exclua duas.",
   "Rows": "Linhas",
   "Module positions": "Posições dos módulos",
@@ -1877,6 +1879,7 @@ export const pt = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Permite certificados autoassinados, expirados ou incompatíveis. Use apenas para destinos confiáveis.",
   "Download text": "Transferir texto",
   "Download image": "Transferir imagem",
+  "Download SVG": "Transferir SVG",
   "Internal pass-through": "Passagem interna",
   "IP mismatches": "Incompatibilidades de IP",
   "No IP mismatches found.": "Nenhuma incompatibilidade de IP encontrada.",

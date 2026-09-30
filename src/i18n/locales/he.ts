@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "MCP": "MCP",
+  "Days": "ימים",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "נסו את הדוגמאות הבאות: הוסיפו בלוקים נפרדים של RJ45 ו-SFP; צרו מיקום בכל צד והוסיפו מודול; שכפלו תבנית בעלת שישה תאים ומחקו שני תאים.",
   "Rows": "שורות",
   "Module positions": "מיקומי מודולים",
@@ -1877,6 +1879,7 @@ export const he = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "מאפשר אישורים בחתימה עצמית, שפג תוקפם או שאינם תואמים. יש להשתמש רק עבור יעדים מהימנים.",
   "Download text": "הורדת טקסט",
   "Download image": "הורדת תמונה",
+  "Download SVG": "הורד SVG",
   "Internal pass-through": "מעבר פנימי",
   "IP mismatches": "אי-התאמות IP",
   "No IP mismatches found.": "לא נמצאו אי-התאמות IP.",

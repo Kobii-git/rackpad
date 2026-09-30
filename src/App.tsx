@@ -30,6 +30,7 @@ const VisualizerView = lazy(() => import("@/pages/VisualizerView"));
 const DocumentationView = lazy(() => import("@/pages/DocumentationView"));
 const AdminPage = lazy(() => import("@/pages/UsersPage"));
 const DeviceTypesPage = lazy(() => import("@/pages/DeviceTypesPage"));
+const McpPage = lazy(() => import("@/pages/McpPage"));
 const OidcCallback = lazy(() => import("@/pages/OidcCallback"));
 
 export default function App() {
@@ -207,6 +208,8 @@ export default function App() {
           }
         />
         <Route path="/users" element={<Navigate to="/admin" replace />} />
+        <Route path="/mcp" element={<RouteFrame><McpPage /></RouteFrame>} />
+        <Route path="/mcp-proposals/:id" element={<RouteFrame><McpPage /></RouteFrame>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

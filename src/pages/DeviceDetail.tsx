@@ -1645,7 +1645,7 @@ export default function DeviceDetail() {
                   <dl className="space-y-2 text-xs">
                     <Row
                       label={t("Placement")}
-                      value={formatPlacement(device.placement, t)}
+                      value={device.rackMountKind === "rack-top" ? t("Rack top") : formatPlacement(device.placement, t)}
                     />
                     <Row label={t("Rack")} value={rack?.name} />
                     <Row

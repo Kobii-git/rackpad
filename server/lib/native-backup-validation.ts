@@ -476,6 +476,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "lastLoginAt",
   ],
   userSessions: ["id", "userId", "tokenHash", "createdAt", "expiresAt"],
+  mcpTokens: ["id", "userId", "name", "tokenHash", "capability", "labIds", "createdAt", "expiresAt", "revokedAt"],
   virtualSwitches: [
     "id",
     "hostDeviceId",
@@ -596,6 +597,7 @@ export function validateRackpadSqliteDatabase(
     CURRENT_RACKPAD_SCHEMA_COLUMNS,
   )) {
     if (schema.version === 50 && (table === "deviceStackMembers" || table === "deviceStackMemberMacs")) continue;
+    if (schema.version < 53 && table === "mcpTokens") continue;
     const columns = new Set(
       (
         database.prepare(`PRAGMA table_info(${table})`).all() as Array<{

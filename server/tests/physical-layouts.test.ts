@@ -1775,7 +1775,7 @@ test("guided template structures round-trip through schema-52 backup without cha
     headers: authHeaders(token),
   });
   assert.equal(snapshot.statusCode, 200, snapshot.body);
-  assert.equal(json(snapshot).schemaVersion, 52);
+  assert.equal(json(snapshot).schemaVersion, CURRENT_SCHEMA_VERSION);
   const before = db
     .prepare("SELECT * FROM hardwareTemplates WHERE id = ?")
     .get(template.id);

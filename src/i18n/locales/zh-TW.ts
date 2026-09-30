@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "MCP": "MCP",
+  "Days": "天",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "試試這些範例：分別新增 RJ45 和 SFP 連接埠區塊；在每一面建立安裝位置並新增模組；複製六槽位範本並刪除兩個槽位。",
   "Rows": "列數",
   "Module positions": "模組位置",
@@ -1877,6 +1879,7 @@ export const zhTW = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "允許自我簽署、已過期或不相符的憑證。僅用於受信任的目標。",
   "Download text": "下載文字",
   "Download image": "下載圖片",
+  "Download SVG": "下載 SVG",
   "Internal pass-through": "內部直通",
   "IP mismatches": "IP 不一致",
   "No IP mismatches found.": "找不到 IP 不一致。",

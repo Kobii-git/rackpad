@@ -7,6 +7,7 @@ import type {
 
 export type RouteAuthorization =
   | { kind: "public" }
+  | { kind: "mcp-token" }
   | { kind: "authenticated" }
   | { kind: "admin"; denialMessage: string }
   | { kind: "lab-read" }
@@ -46,6 +47,12 @@ define({ kind: "public" }, [
 ]);
 
 define({ kind: "authenticated" }, [
+  "GET /api/mcp-tokens",
+  "POST /api/mcp-tokens",
+  "DELETE /api/mcp-tokens/:id",
+  "GET /api/mcp-proposals",
+  "GET /api/mcp-proposals/:id",
+  "POST /api/mcp-proposals/:id/apply",
   "GET /api/auth/me",
   "GET /api/device-types",
   "GET /api/integrations/providers",
@@ -56,6 +63,12 @@ define({ kind: "authenticated" }, [
   "GET /api/storage/drive-bay-templates",
   "POST /api/auth/logout",
   "POST /api/imports/netbox-device-type/preview",
+]);
+
+define({ kind: "mcp-token" }, [
+  "GET /api/mcp",
+  "POST /api/mcp",
+  "DELETE /api/mcp",
 ]);
 
 define({ kind: "admin", denialMessage: "Administrator access required." }, [

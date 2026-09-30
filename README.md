@@ -1,5 +1,7 @@
 # Rackpad
 
+MCP inventory proposals are available as an opt-in beta feature. See [MCP operator guidance](docs/MCP.md).
+
 [![Latest tag](https://img.shields.io/github/v/tag/Kobii-git/rackpad?sort=semver&label=latest%20tag&color=2f81f7)](https://github.com/Kobii-git/rackpad/tags)
 [![Build](https://img.shields.io/github/actions/workflow/status/Kobii-git/rackpad/docker-publish.yml?branch=main&label=build)](https://github.com/Kobii-git/rackpad/actions/workflows/docker-publish.yml)
 [![Container](https://img.shields.io/badge/ghcr.io-rackpad-2496ed?logo=docker&logoColor=white)](https://github.com/Kobii-git/rackpad/pkgs/container/rackpad)
@@ -32,8 +34,8 @@ Stable: **v1.8.3**.
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm published artifacts.
 See the [release and upgrade notes](docs/releases/v1.8.3.md).
 
-This branch prepares **v1.8.4-beta.7** for Rack Studio placement and Inspector testing.
-See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.7.md).
+This branch prepares **v1.8.4-beta.8** for placement, Visualizer, MCP, and dependency testing.
+See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.8.md).
 Docker is the supported deployment; native Proxmox LXC remains experimental.
 See the [changelog](./CHANGELOG.md); the latest-tag badge may show a prerelease.
 

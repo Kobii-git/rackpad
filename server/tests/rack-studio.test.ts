@@ -12,7 +12,7 @@ process.env.OIDC_ENABLED = "0";
 process.env.RACKPAD_SECRET_KEY = "rackpad-studio-test-secret";
 
 const { createApp } = await import("../app.js");
-const { db } = await import("../db.js");
+const { CURRENT_SCHEMA_VERSION, db } = await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
 const { rackStudioRoomCanvasBounds } =
   await import("../lib/rack-studio-canvas.js");
@@ -258,34 +258,37 @@ test("occupied U rejects Studio and device writes for legacy rack metadata", asy
     expected: looseState(room.id),
     next: directState(room.id, rack.id, 1, 1, 0, 12),
   });
-  db.prepare("UPDATE devices SET rackMountKind = 'loose', rackColumn = NULL, rackColumnSpan = NULL WHERE id = ?").run(occupant.id);
-
   const before = db.prepare("SELECT rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(mover.id);
-  const studio = await app.inject({
-    method: "POST",
-    url: "/api/rack-studio/actions",
-    headers: authHeaders(token),
-    payload: {
-      kind: "device.place",
-      targetId: mover.id,
-      expected: directState(room.id, rack.id, 1, 1, 0, 12),
-      next: directState(room.id, rack.id, 2, 1, 0, 12),
-    },
-  });
-  assert.equal(studio.statusCode, 409, studio.body);
-  assert.equal(json(studio).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
-  assert.equal(json(studio).conflictDeviceId, occupant.id);
+  for (const [placement, mountKind] of [["rack", "loose"], ["rack", "side"], ["shelf", "shelf"]] as const) {
+    db.prepare("UPDATE devices SET placement = ?, rackMountKind = ?, parentDeviceId = NULL, rackColumn = NULL, rackColumnSpan = NULL WHERE id = ?")
+      .run(placement, mountKind, occupant.id);
 
-  const editor = await app.inject({
-    method: "PATCH",
-    url: `/api/devices/${mover.id}`,
-    headers: authHeaders(token),
-    payload: { placement: "rack", rackId: rack.id, startU: 2, heightU: 1, face: "front", rackSlot: "full" },
-  });
-  assert.equal(editor.statusCode, 409, editor.body);
-  assert.equal(json(editor).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
-  assert.equal(json(editor).conflictDeviceId, occupant.id);
-  assert.deepEqual(db.prepare("SELECT rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(mover.id), before);
+    const studio = await app.inject({
+      method: "POST",
+      url: "/api/rack-studio/actions",
+      headers: authHeaders(token),
+      payload: {
+        kind: "device.place",
+        targetId: mover.id,
+        expected: directState(room.id, rack.id, 1, 1, 0, 12),
+        next: directState(room.id, rack.id, 2, 1, 0, 12),
+      },
+    });
+    assert.equal(studio.statusCode, 409, studio.body);
+    assert.equal(json(studio).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
+    assert.equal(json(studio).conflictDeviceId, occupant.id);
+
+    const editor = await app.inject({
+      method: "PATCH",
+      url: `/api/devices/${mover.id}`,
+      headers: authHeaders(token),
+      payload: { placement: "rack", rackId: rack.id, startU: 2, heightU: 1, face: "front", rackSlot: "full" },
+    });
+    assert.equal(editor.statusCode, 409, editor.body);
+    assert.equal(json(editor).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
+    assert.equal(json(editor).conflictDeviceId, occupant.id);
+    assert.deepEqual(db.prepare("SELECT rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(mover.id), before);
+  }
 });
 
 test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cross-lab validation", async () => {
@@ -499,6 +502,23 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
       rackColumnSpan: 6,
     },
   );
+  const rackTopBeforeEdit = db.prepare("SELECT placement, roomId, rackId, rackMountKind, startU, heightU, face, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(rackTopA.id);
+  const metadataEdit = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${rackTopA.id}`,
+    headers: authHeaders(adminToken),
+    payload: { model: "Updated model" },
+  });
+  assert.equal(metadataEdit.statusCode, 200, metadataEdit.body);
+  assert.deepEqual(db.prepare("SELECT placement, roomId, rackId, rackMountKind, startU, heightU, face, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(rackTopA.id), rackTopBeforeEdit);
+  const ordinaryMove = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${rackTopA.id}`,
+    headers: authHeaders(adminToken),
+    payload: { placement: "room" },
+  });
+  assert.equal(ordinaryMove.statusCode, 409, ordinaryMove.body);
+  assert.deepEqual(db.prepare("SELECT placement, roomId, rackId, rackMountKind, startU, heightU, face, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(rackTopA.id), rackTopBeforeEdit);
   const rackTopOverlap = await app.inject({
     method: "POST",
     url: "/api/rack-studio/actions",
@@ -1235,7 +1255,7 @@ test("saved routing modes and guides round-trip without changing connectivity", 
   }
   const backup = await app.inject({ method: "GET", url: "/api/admin/export", headers: authHeaders(token) });
   const snapshot = json(backup);
-  assert.equal(snapshot.schemaVersion, 52);
+  assert.equal(snapshot.schemaVersion, CURRENT_SCHEMA_VERSION);
   assert.deepEqual(snapshot.data.portLinks[0].routeGuides, [guide]);
   const bad = structuredClone(snapshot);
   bad.data.portLinks[0].routeGuides[0].deviceId = "missing";

@@ -1462,6 +1462,23 @@ const SCHEMA_MIGRATIONS = [
       END;
     `,
   },
+  {
+    version: 53,
+    sql: `
+      CREATE TABLE IF NOT EXISTS mcpTokens (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 120),
+        tokenHash TEXT NOT NULL UNIQUE,
+        capability TEXT NOT NULL CHECK (capability IN ('read', 'write')),
+        labIds TEXT NOT NULL CHECK (json_valid(labIds) AND json_type(labIds) = 'array'),
+        createdAt TEXT NOT NULL,
+        expiresAt TEXT NOT NULL,
+        revokedAt TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_mcp_tokens_user ON mcpTokens(userId);
+    `,
+  },
 
 ] as const;
 

@@ -7,6 +7,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { Link } from "react-router-dom";
 import {
   Box,
   Cable,
@@ -54,6 +55,7 @@ import {
   clampRackStudioValue,
   devicePlacementState,
   directPlacementState,
+  findRackStudioPlacementConflicts,
   isRackStudioPhysicalDevice,
   loosePlacementState,
   rackTopPlacementState,
@@ -1781,6 +1783,7 @@ function RackStudioElevation({
     const state = devicePlacementState(device);
     return state.mountKind === "rack-top";
   });
+  const existingConflicts = findRackStudioPlacementConflicts(rackDevices, rack.id, face);
 
   useEffect(
     () => () => {
@@ -1992,6 +1995,20 @@ function RackStudioElevation({
           {t("U")}
         </span>
       </div>
+      {existingConflicts.length > 0 && (
+        <div role="alert" className="mx-1 mb-2 space-y-1 rounded border border-red-400/60 bg-red-500/10 p-2 text-xs text-red-300">
+          {existingConflicts.map(({ device, other }) => (
+            <div key={`${device.id}:${other.id}`} className="flex flex-wrap items-center gap-2">
+              <span>{device.hostname}: {t("Overlaps {value1}", { value1: other.hostname })}</span>
+              {[device, other].map((entry) => (
+                <button key={entry.id} type="button" className="underline" onClick={() => onSelectDevice(entry.id)}>
+                  {entry.hostname}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{ paddingTop: elevationScene.rackOffsetY }}>
         <RackElevationShell
           totalU={rack.totalU}
@@ -2784,6 +2801,12 @@ function PlacementInspector({
         <div className="mt-1 truncate font-mono text-sm font-semibold text-[var(--text-primary)]">
           {inspectedDevice.hostname}
         </div>
+        <Link
+          to={`/devices/${inspectedDevice.id}`}
+          className="mt-2 inline-flex text-xs text-[var(--accent-primary)] underline-offset-2 hover:underline focus-visible:underline"
+        >
+          {t("Open device")}
+        </Link>
         <div className="text-[11px] text-[var(--text-tertiary)]">
           {inspectedDevice.manufacturer} {inspectedDevice.model}
         </div>

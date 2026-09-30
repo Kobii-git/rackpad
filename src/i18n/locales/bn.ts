@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "MCP": "MCP",
+  "Days": "দিন",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "এই উদাহরণগুলি চেষ্টা করুন: আলাদা RJ45 ও SFP ব্লক যোগ করুন; প্রতিটি পাশে একটি অবস্থান তৈরি করে মডিউল যোগ করুন; ছয়টি বে-সহ টেমপ্লেটের অনুলিপি করে দুটি বে মুছুন।",
   "Rows": "সারি",
   "Module positions": "মডিউলের অবস্থান",
@@ -1877,6 +1879,7 @@ export const bn = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "স্ব-স্বাক্ষরিত, মেয়াদোত্তীর্ণ বা অমিল সার্টিফিকেটের অনুমতি দেয়। শুধুমাত্র বিশ্বস্ত টার্গেটের জন্য ব্যবহার করুন।",
   "Download text": "টেক্সট ডাউনলোড করুন",
   "Download image": "ছবি ডাউনলোড করুন",
+  "Download SVG": "SVG ডাউনলোড করুন",
   "Internal pass-through": "অভ্যন্তরীণ পাস-থ্রু",
   "IP mismatches": "IP অমিল",
   "No IP mismatches found.": "কোনো IP অমিল পাওয়া যায়নি।",

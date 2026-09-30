@@ -70,8 +70,10 @@ export function storedRackCanvasState(rack: Rack): RackStudioRackCanvasState {
 export function devicePlacementState(device: Device): RackStudioPlacementState {
   const storedMountKind = device.rackMountKind ?? "direct";
   const mountKind: RackStudioPlacementState["mountKind"] =
-    device.placement === "shelf"
+    device.placement === "shelf" && device.parentDeviceId
       ? "shelf"
+      : device.rackId && device.startU != null && device.heightU != null
+        ? "direct"
       : storedMountKind === "side"
         ? "side"
         : storedMountKind === "rack-top" && device.rackId
@@ -160,6 +162,31 @@ export function devicePlacementState(device: Device): RackStudioPlacementState {
     };
   }
   return loosePlacementState(device.roomId ?? null);
+}
+
+export function findRackStudioPlacementConflicts(
+  devices: Device[],
+  rackId: string,
+  face: "front" | "rear",
+) {
+  const placed = devices
+    .filter((device) => device.rackId === rackId)
+    .map((device) => ({ device, state: devicePlacementState(device) }))
+    .filter(({ state }) =>
+      (state.mountKind === "direct" || state.mountKind === "rack-top") &&
+      state.face === face,
+    );
+  return placed.flatMap((first, index) => placed.slice(index + 1).flatMap((second) => {
+    const a = first.state;
+    const b = second.state;
+    if (a.mountKind !== b.mountKind || a.column === null || a.columnSpan === null ||
+        b.column === null || b.columnSpan === null ||
+        !rangesOverlap(a.column, a.columnSpan, b.column, b.columnSpan)) return [];
+    if (a.mountKind === "direct" &&
+        (a.startU === null || a.heightU === null || b.startU === null || b.heightU === null ||
+         !rangesOverlap(a.startU, a.heightU, b.startU, b.heightU))) return [];
+    return [{ device: first.device, other: second.device }];
+  }));
 }
 
 export function loosePlacementState(

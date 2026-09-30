@@ -3,6 +3,7 @@ import { rackCableFixture, rackShelfCableFixture } from "./fixtures/rack-cables"
 import { devicePlacementState } from "../src/lib/rack-studio";
 import type { Device, Port } from "../src/lib/types";
 import AxeBuilder from "@axe-core/playwright";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { readFile } from "node:fs/promises";
 import {
   expect,
@@ -2467,6 +2468,53 @@ test("Rack Studio rejects an occupied drag without hiding or moving either devic
   }
 });
 
+test("Rack Studio reveals both devices in an existing legacy overlap", async ({ page, request }) => {
+  const headers = { Authorization: `Bearer ${token}` };
+  const suffix = Date.now().toString(36);
+  const ids: string[] = [];
+  let roomId = "", rackId = "";
+  try {
+    const room = await request.post("/api/rooms", { headers, data: { labId: "lab_home", name: `Legacy room ${suffix}` } });
+    expect(room.status()).toBe(201);
+    roomId = ((await room.json()) as { id: string }).id;
+    const rack = await request.post("/api/racks", { headers, data: { labId: "lab_home", roomId, name: `Legacy rack ${suffix}`, totalU: 5 } });
+    expect(rack.status()).toBe(201);
+    rackId = ((await rack.json()) as { id: string }).id;
+    for (const [hostname, startU] of [[`legacy-first-${suffix}`, 2], [`legacy-hidden-${suffix}`, 3]] as const) {
+      const created = await request.post("/api/devices", { headers, data: {
+        labId: "lab_home", roomId, rackId, hostname, deviceType: "server", status: "online",
+        placement: "rack", startU, heightU: 1, face: "front", rackSlot: "left",
+      } });
+      expect(created.status(), await created.text()).toBe(201);
+      ids.push(((await created.json()) as { id: string }).id);
+    }
+    await page.route("**/api/devices", async (route) => {
+      const response = await route.fetch();
+      const devices = (await response.json()) as Array<Record<string, unknown>>;
+      await route.fulfill({ response, json: devices.map((device) => device.id === ids[1]
+        ? { ...device, startU: 2, rackMountKind: "loose" } : device) });
+    });
+    await authenticate(page);
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/racks");
+    await page.getByRole("button", { name: new RegExp(`Legacy rack ${suffix}`) }).first().click();
+    await page.getByRole("button", { name: "Studio Beta", exact: true }).click();
+    const overlap = page.getByRole("alert").filter({ hasText: `legacy-hidden-${suffix}` });
+    await expect(overlap).toContainText(`legacy-first-${suffix}`);
+    await overlap.getByRole("button", { name: `legacy-hidden-${suffix}` }).click();
+    await expect(page.locator("aside").filter({ hasText: "Inspector" })).toContainText(`legacy-hidden-${suffix}`);
+    for (const [index, startU] of [[0, 2], [1, 3]] as const) {
+      const response = await request.get(`/api/devices/${ids[index]}`, { headers });
+      expect(response.status()).toBe(200);
+      expect(((await response.json()) as { startU: number }).startU).toBe(startU);
+    }
+  } finally {
+    for (const id of ids.reverse()) await request.delete(`/api/devices/${id}`, { headers });
+    if (rackId) await request.delete(`/api/racks/${rackId}`, { headers });
+    if (roomId) await request.delete(`/api/rooms/${roomId}`, { headers });
+  }
+});
+
 test("Rack Studio places rack-top equipment and supports keyboard undo and redo", async ({
   page,
   request,
@@ -2589,6 +2637,11 @@ test("Rack Studio places rack-top equipment and supports keyboard undo and redo"
           : null;
       })
       .toBe(1);
+    await rackTopDevice.click();
+    await expect(page.getByRole("link", { name: "Open device" })).toHaveAttribute(
+      "href",
+      `/devices/${deviceId}`,
+    );
 
     const rackTopBox = await rackTopDevice.boundingBox();
     expect(rackTopBox).not.toBeNull();
@@ -2631,9 +2684,79 @@ test("Rack Studio places rack-top equipment and supports keyboard undo and redo"
     await page.reload();
     await expect(topEquipment).toBeVisible();
 
+    await page.goto(`/devices/${deviceId}`);
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(page.locator("form").getByText("Rack top", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Studio Beta" })).toHaveAttribute(
+      "href",
+      "/racks?rackId=rack_cmp",
+    );
+    await page.getByRole("textbox", { name: "Manufacturer", exact: true }).fill("E2E vendor");
+    const saveResponse = page.waitForResponse((response) =>
+      response.request().method() === "PATCH" &&
+      response.url().endsWith(`/api/devices/${deviceId}`),
+    );
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    const savedEditResponse = await saveResponse;
+    expect(savedEditResponse.status(), await savedEditResponse.text()).toBe(200);
+    await page.reload();
+    const saved = await request.get(`/api/devices/${deviceId}`, { headers });
+    expect(saved.status()).toBe(200);
+    expect(await saved.json()).toMatchObject({
+      manufacturer: "E2E vendor",
+      rackId: "rack_cmp",
+      roomId: "room_lab",
+      rackMountKind: "rack-top",
+      rackColumn: 2,
+      startU: null,
+    });
+
   } finally {
     if (deviceId) await request.delete(`/api/devices/${deviceId}`, { headers });
   }
+});
+
+test("Visualizer Inspector labels editable manufacturer and discovered vendor separately", async ({ page }) => {
+  await page.route("**/api/devices", async (route) => {
+    const response = await route.fetch();
+    const devices = (await response.json()) as Array<Record<string, unknown>>;
+    await route.fulfill({
+      response,
+      json: devices.map((device) =>
+        device.id === "d_unifi" ? { ...device, manufacturer: "Manual manufacturer" } : device,
+      ),
+    });
+  });
+  await page.route("**/api/discovery", async (route) => {
+    const response = await route.fetch();
+    const discovered = (await response.json()) as Array<Record<string, unknown>>;
+    await route.fulfill({
+      response,
+      json: [
+        ...discovered,
+        {
+          id: "e2e-discovery-vendor",
+          labId: "lab_home",
+          ipAddress: "192.0.2.250",
+          vendor: "Detected vendor",
+          source: "snmp",
+          status: "imported",
+          importedDeviceId: "d_unifi",
+          lastScannedAt: "2026-09-29T00:00:00.000Z",
+        },
+      ],
+    });
+  });
+  await authenticate(page);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/visualizer");
+  await page.locator('[data-visualizer-device-id="d_unifi"]').click();
+  await expect(page.getByText("Manufacturer", { exact: true }).locator("..")).toContainText(
+    "Manual manufacturer",
+  );
+  await expect(page.getByText("Vendor", { exact: true }).locator("..")).toContainText(
+    "Detected vendor",
+  );
 });
 
 async function expectTracePngDownload(
@@ -2652,6 +2775,20 @@ async function expectTracePngDownload(
   expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
   expect(png.readUInt32BE(16)).toBeGreaterThan(0);
   expect(png.readUInt32BE(20)).toBeGreaterThan(0);
+}
+
+async function expectTraceSvgDownload(
+  page: Page,
+  expectedFilename: string,
+  trigger: Locator = page.getByTestId("trace-download-svg"),
+) {
+  const downloadPromise = page.waitForEvent("download");
+  await trigger.click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(expectedFilename);
+  const svg = await readFile((await download.path())!, "utf8");
+  expect(svg).toMatch(/^<svg[^>]+>/);
+  expect(svg).toContain("</svg>");
 }
 
 test("responsive and serious accessibility matrix passes for supported modes", async ({
@@ -3179,6 +3316,10 @@ test("visualizer trace downloads standalone PNGs under the production CSP", asyn
   await page.getByTestId("trace-port-select").selectOption("p_d_unifi_1");
   await page.getByTestId("trace-submit").click();
   await expect(page.getByTestId("trace-download-image")).toBeVisible();
+  await expectTraceSvgDownload(
+    page,
+    "rackpad-trace-unifi-01-eth0-to-sw-tor-01-24.svg",
+  );
   await page.getByTestId("trace-preview-image").click();
   const directDialog = page.getByTestId("trace-image-dialog");
   const directPreview = page.getByTestId("trace-preview-svg");
@@ -3344,6 +3485,30 @@ test("visualizer trace downloads standalone PNGs under the production CSP", asyn
     page,
     "rackpad-trace-fw-01-igb2-to-sw-tor-01-1.png",
     page.getByTestId("trace-preview-download-image"),
+  );
+  await page.getByTestId("trace-preview-close").click();
+
+  await page.evaluate(() => {
+    localStorage.setItem("rackpad.visualizer.layout-mode", "rack");
+    localStorage.setItem("rackpad.visualizer.rack-cabling-room", "room_lab");
+  });
+  await page.setViewportSize({ width: 1920, height: 1000 });
+  await page.reload();
+  await setRackCablingRooms(page, ["room_lab"]);
+  await page.getByRole("button", { name: "Trace mode" }).click();
+  await page.getByRole("button", { name: /eth0 · rj45/, exact: true }).first().click();
+  await expect(page.getByTestId("trace-preview-image").first()).toBeVisible();
+  await page.getByTestId("trace-preview-image").first().click();
+  await expect(page.getByTestId("trace-preview-svg")).toBeVisible();
+  await expectTracePngDownload(
+    page,
+    "rackpad-trace-unifi-01-eth0-to-sw-tor-01-24.png",
+    page.getByTestId("trace-preview-download-image"),
+  );
+  await expectTraceSvgDownload(
+    page,
+    "rackpad-trace-unifi-01-eth0-to-sw-tor-01-24.svg",
+    page.getByTestId("trace-preview-download-svg"),
   );
   await page.getByTestId("trace-preview-close").click();
 });
@@ -6088,6 +6253,19 @@ test("guided template editor preserves mixed blocks and edits six bays to four w
     await appearance.getByRole("combobox", { name: "Type", exact: true }).selectOption("label");
     await appearance.getByRole("button", { name: "Add", exact: true }).click();
     await expect(appearance.getByRole("combobox", { name: "Physical layout", exact: true })).toHaveValue(/front-label-/);
+    await appearance.getByRole("textbox", { name: "Name", exact: true }).fill("E2E appearance");
+    const appearanceX = appearance.getByRole("spinbutton", { name: "Position: X", exact: true });
+    const appearanceBeforeX = Number(await appearanceX.inputValue());
+    const appearanceArtwork = builder.getByTestId("hardware-template-preview-front")
+      .locator("svg text").filter({ hasText: "E2E appearance" });
+    await appearanceArtwork.scrollIntoViewIfNeeded();
+    const appearanceBox = await appearanceArtwork.boundingBox();
+    expect(appearanceBox).not.toBeNull();
+    await page.mouse.move(appearanceBox!.x + appearanceBox!.width / 2, appearanceBox!.y + appearanceBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(appearanceBox!.x + appearanceBox!.width / 2 + 20, appearanceBox!.y + appearanceBox!.height / 2);
+    await page.mouse.up();
+    await expect.poll(async () => Number(await appearanceX.inputValue())).not.toBe(appearanceBeforeX);
     const positions = builder.getByTestId("module-position-editor");
     for (const face of ["front", "rear"]) {
       await positions.getByRole("button", { name: "Add", exact: true }).click();
@@ -6189,4 +6367,59 @@ test("guided switch block updates keep selection and persisted port identities",
   } finally {
     await request.delete(`/api/hardware-templates/${id}`, { headers });
   }
+});
+
+test("MCP token UI shows credentials once and reviews an SDK proposal", async ({ page, request, baseURL }) => {
+  test.skip(process.env.MCP_ENABLED !== "1", "Run with MCP_ENABLED=1 to exercise the opt-in endpoint.");
+  const headers = { Authorization: `Bearer ${token}` };
+  let rackId: string | undefined;
+  await authenticate(page);
+  await page.goto("/mcp");
+  await page.getByRole("textbox", { name: "Name", exact: true }).fill("E2E MCP client");
+  await page.getByRole("combobox", { name: "Lab permissions" }).selectOption("write");
+  await page.getByRole("checkbox", { name: "Home Lab" }).check();
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  const issued = page.getByTestId("mcp-issued-token");
+  await expect(issued).toBeVisible();
+  const bearer = (await issued.locator("code").textContent())?.trim();
+  expect(bearer).toMatch(/^rpmcp_/);
+  await page.reload();
+  await expect(page.getByTestId("mcp-issued-token")).toHaveCount(0);
+  await expect(page.getByText("E2E MCP client", { exact: false })).toBeVisible();
+
+  const client = new Client({ name: "rackpad-e2e", version: "1.0.0" },
+    { versionNegotiation: { mode: { pin: "2026-07-28" } } });
+  try {
+    await client.connect(new StreamableHTTPClientTransport(new URL("/api/mcp", baseURL!), {
+      requestInit: { headers: { authorization: `Bearer ${bearer}` } },
+    }));
+    const proposal = await client.callTool({ name: "propose_inventory", arguments: {
+      labId: "lab_home", racks: [{ key: "e2e", name: "MCP review E2E" }],
+      devices: [], ports: [], connections: [],
+    } });
+    expect(proposal.isError).toBeUndefined();
+    const first = proposal.content[0] as { type: string; text: string };
+    expect(first.type).toBe("text");
+    const draft = JSON.parse(first.text) as { id: string; reviewLink: string; summary: { racks: Array<{ id: string }> } };
+    rackId = draft.summary.racks[0].id;
+    await page.goto(draft.reviewLink);
+    await expect(page.getByTestId("mcp-review-batch")).toContainText("MCP review E2E");
+    const axe = await new AxeBuilder({ page }).analyze();
+    expect(axe.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? ""))).toEqual([]);
+    await page.getByTestId("mcp-apply").click();
+    await expect(page).toHaveURL(/\/mcp$/);
+    const created = await request.get(`/api/racks/${rackId}`, { headers });
+    expect(created.status()).toBe(200);
+    const replay = await request.post(`/api/mcp-proposals/${draft.id}/apply`, { headers });
+    expect(replay.status()).toBe(404);
+  } finally {
+    await client.close();
+    if (rackId) await request.delete(`/api/racks/${rackId}`, { headers });
+  }
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  const revoked = await request.post("/api/mcp", {
+    headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
+    data: { jsonrpc: "2.0", id: 1, method: "ping" },
+  });
+  expect(revoked.status()).toBe(401);
 });

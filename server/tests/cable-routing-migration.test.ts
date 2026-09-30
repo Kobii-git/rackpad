@@ -6,6 +6,7 @@ import path from "node:path";
 import { test } from "node:test";
 import Database from "better-sqlite3";
 import { validateRackpadSqliteDatabase } from "../lib/native-backup-validation.js";
+import { CURRENT_SCHEMA_VERSION } from "../schema-version.js";
 
 test("schema 51 upgrades routing metadata, validates native backups, and cleans guides transactionally", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "rackpad-routing-migration-"));
@@ -51,7 +52,7 @@ test("schema 51 upgrades routing metadata, validates native backups, and cleans 
     const db = new Database(file);
     db.pragma("foreign_keys=ON");
     try {
-      assert.equal(validateRackpadSqliteDatabase(db, "Upgraded fixture"), 52);
+      assert.equal(validateRackpadSqliteDatabase(db, "Upgraded fixture"), CURRENT_SCHEMA_VERSION);
       assert.deepEqual(
         db
           .prepare(
@@ -84,7 +85,7 @@ test("schema 51 upgrades routing metadata, validates native backups, and cleans 
       db.prepare(
         "UPDATE portLinks SET routeMode='managed', routeGuides=? WHERE id='auto'",
       ).run(JSON.stringify(guides));
-      assert.equal(validateRackpadSqliteDatabase(db, "Guided fixture"), 52);
+      assert.equal(validateRackpadSqliteDatabase(db, "Guided fixture"), CURRENT_SCHEMA_VERSION);
       db.prepare("UPDATE portLinks SET routeGuides=? WHERE id='auto'").run(
         JSON.stringify([{ ...guides[0], deviceId: "missing" }]),
       );

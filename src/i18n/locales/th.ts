@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "MCP": "MCP",
+  "Days": "วัน",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "ลองตัวอย่างเหล่านี้: เพิ่มบล็อก RJ45 และ SFP แยกกัน สร้างตำแหน่งแต่ละด้านและเพิ่มโมดูล ทำสำเนาแม่แบบหกช่องแล้วลบสองช่อง",
   "Rows": "แถว",
   "Module positions": "ตำแหน่งโมดูล",
@@ -1877,6 +1879,7 @@ export const th = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "อนุญาตใบรับรองที่ลงนามด้วยตนเอง หมดอายุ หรือไม่ตรงกัน ใช้เฉพาะกับเป้าหมายที่เชื่อถือได้",
   "Download text": "ดาวน์โหลดข้อความ",
   "Download image": "ดาวน์โหลดรูปภาพ",
+  "Download SVG": "ดาวน์โหลด SVG",
   "Internal pass-through": "การเชื่อมต่อภายใน",
   "IP mismatches": "IP ไม่ตรงกัน",
   "No IP mismatches found.": "ไม่พบ IP ที่ไม่ตรงกัน",

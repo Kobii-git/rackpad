@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "MCP": "MCP",
+  "Days": "दिन",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "ये उदाहरण आज़माएँ: अलग RJ45 और SFP ब्लॉक जोड़ें; हर तरफ एक स्थान बनाकर मॉड्यूल जोड़ें; छह बे वाले टेम्पलेट की प्रतिलिपि बनाकर दो बे हटाएँ।",
   "Rows": "पंक्तियाँ",
   "Module positions": "मॉड्यूल के स्थान",
@@ -1877,6 +1879,7 @@ export const hi = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "स्व-हस्ताक्षरित, समाप्त या बेमेल प्रमाणपत्रों की अनुमति देता है। केवल विश्वसनीय लक्ष्यों के लिए उपयोग करें।",
   "Download text": "टेक्स्ट डाउनलोड करें",
   "Download image": "छवि डाउनलोड करें",
+  "Download SVG": "SVG डाउनलोड करें",
   "Internal pass-through": "आंतरिक पास-थ्रू",
   "IP mismatches": "IP विसंगतियाँ",
   "No IP mismatches found.": "कोई IP विसंगति नहीं मिली।",

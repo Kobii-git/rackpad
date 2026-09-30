@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { Link } from "react-router-dom";
 import { X, Save, Network, Plus, Trash2, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -205,6 +206,7 @@ export function DeviceDrawer({
   const scopes = useStore((s) => s.scopes);
   const ipZones = useStore((s) => s.ipZones);
   const isEdit = !!device;
+  const studioPlacement = isEdit && (device.rackMountKind === "rack-top" || device.rackMountKind === "side");
   const [form, setForm] = useState<FormState>(() =>
     device
       ? deviceToForm(device)
@@ -740,12 +742,7 @@ export function DeviceDrawer({
         .filter(Boolean);
       const nextNetworkMode: NonNullable<Device["networkMode"]> =
         usesHostSharedNetworking ? "host-shared" : "normal";
-      const preserveRackTopPlacement = Boolean(
-        isEdit &&
-        device?.rackMountKind === "rack-top" &&
-        form.placement === "rack" &&
-        form.rackId === device.rackId,
-      );
+      const preserveStudioPlacement = studioPlacement;
 
       const basePayload = {
         hostname: form.hostname.trim(),
@@ -760,7 +757,7 @@ export function DeviceDrawer({
         macAddress: form.macAddress.trim() || undefined,
         networkMode: nextNetworkMode,
         status: form.status,
-        placement: preserveRackTopPlacement ? undefined : form.placement,
+        placement: preserveStudioPlacement ? undefined : form.placement,
         parentDeviceId:
           showParentSelector && form.parentDeviceId
             ? form.parentDeviceId
@@ -776,22 +773,22 @@ export function DeviceDrawer({
           : undefined,
         specs: form.specs.trim() || undefined,
         rackId:
-          isRackMounted && !preserveRackTopPlacement ? form.rackId : undefined,
-        roomId: !isRackMounted && form.roomId ? form.roomId : undefined,
+          isRackMounted && !preserveStudioPlacement ? form.rackId : undefined,
+        roomId: !preserveStudioPlacement && !isRackMounted && form.roomId ? form.roomId : undefined,
         startU:
-          isRackMounted && !preserveRackTopPlacement && form.startU
+          isRackMounted && !preserveStudioPlacement && form.startU
             ? Number.parseInt(form.startU, 10)
             : undefined,
-        heightU: formIsStack ? (device?.stackMembers?.reduce((sum, member) => sum + member.heightU, 0) || 1) :
-          (isRackMounted && !preserveRackTopPlacement) || isShelfMounted
+        heightU: preserveStudioPlacement ? undefined : formIsStack ? (device?.stackMembers?.reduce((sum, member) => sum + member.heightU, 0) || 1) :
+          (isRackMounted && !preserveStudioPlacement) || isShelfMounted
             ? form.heightU
               ? Number.parseInt(form.heightU, 10)
               : 1
             : undefined,
         face:
-          isRackMounted && !preserveRackTopPlacement ? form.face : undefined,
+          isRackMounted && !preserveStudioPlacement ? form.face : undefined,
         rackSlot:
-          isRackMounted && !preserveRackTopPlacement
+          isRackMounted && !preserveStudioPlacement
             ? form.rackSlot
             : undefined,
         portTemplateId:
@@ -805,10 +802,17 @@ export function DeviceDrawer({
         tags: tags.length > 0 ? tags : undefined,
         notes: form.notes.trim() || undefined,
       };
+      // The store treats present nullable keys with `undefined` as explicit
+      // clears. Studio-managed placement fields must be absent from this patch.
+      const editPayload = preserveStudioPlacement
+        ? Object.fromEntries(Object.entries(basePayload).filter(([key]) =>
+            !["placement", "parentDeviceId", "rackId", "roomId", "startU", "heightU", "face", "rackSlot"].includes(key),
+          )) as Partial<typeof basePayload>
+        : basePayload;
 
       const saved =
         isEdit && device
-          ? await updateDevice(device.id, basePayload)
+          ? await updateDevice(device.id, editPayload)
           : await createDevice({
               ...basePayload,
               ipAllocationMode: form.ipAllocationMode,
@@ -1350,7 +1354,16 @@ export function DeviceDrawer({
                 <Separator />
 
                 <Section label={t("Placement")}>
-                  <Field label={t("Placement")}>
+                  {studioPlacement && device ? (
+                    <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] p-3 text-sm">
+                      <span>{device.rackMountKind === "rack-top" ? t("Rack top") : t("0U side")}</span>
+                      <span className="mx-2">·</span>
+                      <span>{racks.find((rack) => rack.id === device.rackId)?.name}</span>
+                      <Link className="ml-3 text-[var(--color-accent)] underline" to={`/racks?rackId=${device.rackId}`} onClick={onClose}>
+                        {t("Studio Beta")}
+                      </Link>
+                    </div>
+                  ) : <Field label={t("Placement")}>
                     <Select
                       value={form.placement}
                       onChange={(value) =>
@@ -1367,7 +1380,7 @@ export function DeviceDrawer({
                       <option value="wireless">{t("WiFi / AP linked")}</option>
                       <option value="virtual">{t("Virtual / hosted")}</option>
                     </Select>
-                  </Field>
+                  </Field>}
 
                   {showParentSelector && (
                     <>
@@ -1614,7 +1627,7 @@ export function DeviceDrawer({
                     isShelfMounted ? t("Shelf footprint") : t("Rack placement")
                   }
                 >
-                  {isRackMounted && (
+                  {isRackMounted && !studioPlacement && (
                     <Field label={t("Rack")}>
                       <Select
                         value={form.rackId}
@@ -1630,7 +1643,7 @@ export function DeviceDrawer({
                     </Field>
                   )}
 
-                  {isRackMounted && (
+                  {isRackMounted && !studioPlacement && (
                     <div className="grid grid-cols-2 gap-3">
                       <Field label={t("Start U")}>
                         <Input

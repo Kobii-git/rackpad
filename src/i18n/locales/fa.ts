@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "MCP": "MCP",
+  "Days": "روز",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "این نمونه‌ها را امتحان کنید: بلوک‌های جداگانه RJ45 و SFP اضافه کنید؛ در هر وجه یک موقعیت ایجاد و ماژول اضافه کنید؛ یک الگوی شش‌محفظه‌ای را تکثیر و دو محفظه را حذف کنید.",
   "Rows": "ردیف‌ها",
   "Module positions": "موقعیت ماژول‌ها",
@@ -1877,6 +1879,7 @@ export const fa = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "گواهی‌های خودامضا، منقضی یا نامنطبق را مجاز می‌کند. فقط برای اهداف مورد اعتماد استفاده کنید.",
   "Download text": "دانلود متن",
   "Download image": "دانلود تصویر",
+  "Download SVG": "دانلود SVG",
   "Internal pass-through": "عبور داخلی",
   "IP mismatches": "عدم تطابق‌های IP",
   "No IP mismatches found.": "هیچ عدم تطابق IP یافت نشد.",

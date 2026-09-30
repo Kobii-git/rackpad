@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "MCP": "MCP",
+  "Days": "Hari",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Coba contoh ini: tambahkan blok RJ45 dan SFP terpisah; buat posisi pada setiap sisi dan tambahkan modul; duplikasi templat enam bay lalu hapus dua bay.",
   "Rows": "Baris",
   "Module positions": "Posisi modul",
@@ -1877,6 +1879,7 @@ export const id = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Mengizinkan sertifikat yang ditandatangani sendiri, kedaluwarsa, atau tidak cocok. Gunakan hanya untuk target tepercaya.",
   "Download text": "Unduh teks",
   "Download image": "Unduh gambar",
+  "Download SVG": "Unduh SVG",
   "Internal pass-through": "Lintasan internal",
   "IP mismatches": "Ketidakcocokan IP",
   "No IP mismatches found.": "Tidak ditemukan ketidakcocokan IP.",

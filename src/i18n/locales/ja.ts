@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "MCP": "MCP",
+  "Days": "日数",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "例を試してください：RJ45とSFPのブロックを別々に追加し、各面に取付位置を作成してモジュールを追加します。6ベイのテンプレートを複製して2ベイを削除することもできます。",
   "Rows": "行",
   "Module positions": "モジュールの配置位置",
@@ -1877,6 +1879,7 @@ export const ja = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "自己署名、期限切れ、または不一致の証明書を許可します。信頼できるターゲットにのみ使用してください。",
   "Download text": "テキストをダウンロード",
   "Download image": "画像をダウンロード",
+  "Download SVG": "SVG をダウンロード",
   "Internal pass-through": "内部パススルー",
   "IP mismatches": "IP の不一致",
   "No IP mismatches found.": "IP の不一致は見つかりませんでした。",

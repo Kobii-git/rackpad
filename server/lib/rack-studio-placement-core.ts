@@ -92,8 +92,10 @@ export function currentRackStudioPlacement(
     ? (row.rackMountKind as (typeof MOUNT_KINDS)[number])
     : "direct";
   const mountKind =
-    row.placement === "shelf"
+    row.placement === "shelf" && row.parentDeviceId
       ? "shelf"
+      : row.rackId && row.startU !== null && row.heightU !== null
+        ? "direct"
       : storedMountKind === "side"
         ? "side"
         : storedMountKind === "rack-top" && row.rackId

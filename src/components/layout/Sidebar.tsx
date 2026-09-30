@@ -21,6 +21,7 @@ import {
   UploadCloud,
   HardDrive,
   Tags,
+  KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { selectLab, useStore } from "@/lib/store";
@@ -45,6 +46,7 @@ const baseNavItems = [
   { to: "/audit-log", icon: ScrollText, label: "Audit" },
   { to: "/visualizer", icon: Route, label: "Visualizer" },
   { to: "/documentation", icon: BookOpen, label: "Docs" },
+  { to: "/mcp", icon: KeyRound, label: "MCP" },
 ] as const;
 
 interface SidebarProps {

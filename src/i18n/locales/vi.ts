@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "MCP": "MCP",
+  "Days": "Ngày",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Hãy thử các ví dụ: thêm các khối RJ45 và SFP riêng; tạo vị trí ở mỗi mặt rồi thêm mô-đun; nhân bản mẫu sáu khoang và xóa hai khoang.",
   "Rows": "Hàng",
   "Module positions": "Vị trí mô-đun",
@@ -1877,6 +1879,7 @@ export const vi = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Cho phép chứng chỉ tự ký, hết hạn hoặc không khớp. Chỉ sử dụng cho các đích đáng tin cậy.",
   "Download text": "Tải văn bản",
   "Download image": "Tải hình ảnh",
+  "Download SVG": "Tải SVG xuống",
   "Internal pass-through": "Kết nối chuyển tiếp nội bộ",
   "IP mismatches": "IP không khớp",
   "No IP mismatches found.": "Không tìm thấy IP không khớp.",

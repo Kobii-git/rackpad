@@ -105,6 +105,33 @@ export class ApiError extends Error {
 
 export type DevicePatch = Nullable<Omit<Device, "id" | "labId">>;
 
+export interface McpTokenRecord {
+  id: string;
+  name: string;
+  capability: "read" | "write";
+  labIds: string[];
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+}
+
+export interface McpProposalRecord {
+  id: string;
+  labId: string;
+  createdAt: string;
+  expiresAt: string;
+  reviewLink: string;
+  summary: {
+    labId: string;
+    racks: Array<{ id: string; name: string }>;
+    devices: Array<{ id: string; hostname: string; placement: string }>;
+    ports: Array<{ id: string; deviceId: string; name: string }>;
+    connections: Array<{ id: string; fromPortId: string; toPortId: string }>;
+    warnings: string[];
+  };
+  batch?: unknown;
+}
+
 export interface NetboxDeviceTypeImportPreview {
   parsed: {
     manufacturer: string;
@@ -508,6 +535,24 @@ async function requestBlob(
 }
 
 export const api = {
+  listMcpTokens() {
+    return request<McpTokenRecord[]>("/mcp-tokens");
+  },
+  createMcpToken(input: { name: string; capability: "read" | "write"; labIds: string[]; expiresInDays: number }) {
+    return request<McpTokenRecord & { token: string }>("/mcp-tokens", { method: "POST", body: JSON.stringify(input) });
+  },
+  revokeMcpToken(id: string) {
+    return request<void>(`/mcp-tokens/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  listMcpProposals() {
+    return request<McpProposalRecord[]>("/mcp-proposals");
+  },
+  getMcpProposal(id: string) {
+    return request<McpProposalRecord>(`/mcp-proposals/${encodeURIComponent(id)}`);
+  },
+  applyMcpProposal(id: string) {
+    return request<{ summary: McpProposalRecord["summary"] }>(`/mcp-proposals/${encodeURIComponent(id)}/apply`, { method: "POST" });
+  },
   getAuthStatus() {
     return request<AuthStatus>("/auth/status");
   },

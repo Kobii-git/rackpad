@@ -1497,6 +1497,10 @@ export default function DevicesList() {
                               </>
                             )}
                           </span>
+                        ) : rack && device.rackMountKind === "rack-top" ? (
+                          <span className="text-xs text-[var(--color-fg-muted)]">
+                            {rack.name} | {t("Rack top")}
+                          </span>
                         ) : rack && device.startU ? (
                           <span className="text-xs">
                             <span className="text-[var(--color-fg-muted)]">
@@ -1708,6 +1712,7 @@ function devicePlacementSortValue(
       .join(" | ");
   }
 
+  if (rack && device.rackMountKind === "rack-top") return `${rack.name} | Rack top`;
   if (rack && device.startU) {
     return `${rack.name} | ${formatRackUnit(device)}`;
   }

@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "MCP": "MCP",
+  "Days": "일",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "다음 예제를 시도하세요. RJ45와 SFP 블록을 따로 추가하고, 각 면에 위치를 만들어 모듈을 추가하고, 6베이 템플릿을 복제한 뒤 베이 두 개를 삭제하세요.",
   "Rows": "행",
   "Module positions": "모듈 위치",
@@ -1877,6 +1879,7 @@ export const ko = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "자체 서명, 만료 또는 불일치 인증서를 허용합니다. 신뢰할 수 있는 대상에만 사용하세요.",
   "Download text": "텍스트 다운로드",
   "Download image": "이미지 다운로드",
+  "Download SVG": "SVG 다운로드",
   "Internal pass-through": "내부 패스스루",
   "IP mismatches": "IP 불일치",
   "No IP mismatches found.": "IP 불일치가 없습니다.",

@@ -6,6 +6,35 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.4-beta.8] - 2026-10-01
+
+### Added
+
+- Opt-in MCP inventory access in the existing server: scoped, expiring personal
+  tokens; paginated read tools; and create-only proposals that a person reviews
+  and applies in Rackpad. MCP remains disabled by default.
+
+### Fixed
+
+- Rack Studio and ordinary device editing share effective placement occupancy
+  for legacy and current records. Existing overlaps can be selected; conflicts
+  leave both devices unchanged. Rack-top placement remains intact during ordinary
+  edits and is labelled correctly in inventory and reports.
+- Visualizer Inspector distinguishes Manufacturer from discovery Vendor. Rack
+  Studio Inspector links to device details, and Rack Cabling shares trace image
+  preview plus SVG and PNG export with Grouped view.
+
+### Changed
+
+- Updated compatible dependencies and the rate-limit security fix; moved
+  Nodemailer, Lucide, and better-sqlite3 to individually vetted major versions;
+  removed unused Recharts; and updated CodeQL's setup-node action to v7.
+- Refreshed affected transitive dependencies to clear current npm advisories.
+
+MCP adds forward-only schema 53. Take a protected pre-upgrade database snapshot
+and keep it with the prior image for rollback. MCP tokens are excluded from
+backups and are revoked by restore. See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.8.md).
+
 ## [1.8.4-beta.7] - 2026-09-27
 
 ### Fixed

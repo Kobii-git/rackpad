@@ -1,4 +1,6 @@
 export const en = {
+  "MCP": "MCP",
+  "Days": "Days",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.",
   "Rows": "Rows",
   "Module positions": "Module positions",
@@ -1875,6 +1877,7 @@ export const en = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.",
   "Download text": "Download text",
   "Download image": "Download image",
+  "Download SVG": "Download SVG",
   "Internal pass-through": "Internal pass-through",
   "IP mismatches": "IP mismatches",
   "No IP mismatches found.": "No IP mismatches found.",

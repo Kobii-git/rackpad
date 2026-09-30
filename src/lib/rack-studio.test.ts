@@ -5,6 +5,7 @@ import {
   automaticRackCanvasPosition,
   devicePlacementState,
   directPlacementState,
+  findRackStudioPlacementConflicts,
   rackTopPlacementState,
   reconcileFocusedRackId,
   shelfPlacementBounds,
@@ -89,22 +90,45 @@ test("direct preview uses legacy rack-slot geometry even with stale mount metada
     rackSlot: "full",
     rackMountKind: "loose",
   });
-  const preview = validateDirectPlacementPreview({
-    targetDeviceId: "mover",
-    next: directPlacementState({
-      roomId: rack.roomId ?? null,
-      rackId: rack.id,
-      startU: 2,
-      heightU: 1,
-      face: "front",
-      column: 0,
-      columnSpan: 12,
-    }),
-    rack,
-    devices: [occupant],
+  for (const legacy of [occupant, { ...occupant, rackMountKind: "side" as const }, { ...occupant, placement: "shelf" as const, rackMountKind: "shelf" as const }]) {
+    const preview = validateDirectPlacementPreview({
+      targetDeviceId: "mover",
+      next: directPlacementState({
+        roomId: rack.roomId ?? null,
+        rackId: rack.id,
+        startU: 2,
+        heightU: 1,
+        face: "front",
+        column: 0,
+        columnSpan: 12,
+      }),
+      rack,
+      devices: [legacy],
+    });
+    assert.equal(preview.valid, false);
+    assert.equal(preview.conflictDeviceId, occupant.id);
+  }
+});
+
+test("existing overlaps remain selectable for both legacy and current placements", () => {
+  const first = device({
+    id: "first", hostname: "first", placement: "rack", rackId: rack.id,
+    startU: 2, heightU: 2, face: "front", rackSlot: "left",
+    rackMountKind: "loose",
   });
-  assert.equal(preview.valid, false);
-  assert.equal(preview.conflictDeviceId, occupant.id);
+  const second = device({
+    id: "second", hostname: "second", placement: "rack", rackId: rack.id,
+    startU: 3, heightU: 1, face: "front", rackSlot: "left",
+    rackMountKind: "direct",
+  });
+  const rear = device({
+    ...second, id: "rear", hostname: "rear", face: "rear",
+  });
+  assert.deepEqual(
+    findRackStudioPlacementConflicts([first, second, rear], rack.id, "front")
+      .map(({ device, other }) => [device.id, other.id]),
+    [["first", "second"]],
+  );
 });
 
 test("rotated shelf footprints swap their effective dimensions", () => {

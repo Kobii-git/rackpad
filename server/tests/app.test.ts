@@ -1897,6 +1897,8 @@ test("backup schema coverage requires an explicit decision for every application
     // Sessions are deliberately invalidated on restore so every user must
     // authenticate again against the restored account and permission state.
     ["userSessions", "ephemeral authentication state"],
+    // MCP credentials must never become usable after a backup restore.
+    ["mcpTokens", "revoked credentials excluded from logical backups"],
   ]);
   const representedTables = new Set(Object.keys(snapshot.data));
   const missingDecisions = schemaTables.filter(

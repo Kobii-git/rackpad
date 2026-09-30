@@ -82,6 +82,7 @@ import type {
   VisualizerRackFaceMode,
 } from "./types";
 import {
+  TraceSummary,
   VisualizerInspector,
   type VisualizerInspectionSelection,
 } from "./VisualizerCanvas";
@@ -2055,6 +2056,11 @@ export function RackCablingCanvas({
       </div>
 
       <aside className="hidden min-h-0 overflow-y-auto bg-[var(--surface-1)] p-3 xl:block">
+        {traceMode.enabled && traceMode.result && (
+          <div className="mb-3">
+            <TraceSummary model={model} result={traceMode.result} />
+          </div>
+        )}
         <VisualizerInspector
           model={model}
           selection={selection}
@@ -2079,6 +2085,11 @@ export function RackCablingCanvas({
           >
             <X />
           </Button>
+          {traceMode.enabled && traceMode.result && (
+            <div className="mb-3">
+              <TraceSummary model={model} result={traceMode.result} />
+            </div>
+          )}
           <VisualizerInspector
             model={model}
             selection={selection}

@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "MCP": "MCP",
+  "Days": "Dae",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Probeer hierdie voorbeelde: voeg aparte RJ45- en SFP-blokke by; skep ’n posisie op elke kant en voeg ’n module by; dupliseer ’n seskompartementsjabloon en vee twee kompartemente uit.",
   "Rows": "Rye",
   "Module positions": "Moduleposisies",
@@ -1877,6 +1879,7 @@ export const af = {
   "Allows self-signed, expired, or mismatched certificates. Use only for trusted targets.": "Laat selfondertekende, vervalde of nie-ooreenstemmende sertifikate toe. Gebruik slegs vir vertroude teikens.",
   "Download text": "Laai teks af",
   "Download image": "Laai prent af",
+  "Download SVG": "Laai SVG af",
   "Internal pass-through": "Interne deurverbinding",
   "IP mismatches": "IP-wanpassings",
   "No IP mismatches found.": "Geen IP-wanpassings gevind nie.",

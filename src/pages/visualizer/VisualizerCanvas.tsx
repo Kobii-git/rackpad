@@ -73,6 +73,7 @@ import {
 import {
   buildTraceImageSvg,
   downloadTraceImagePng,
+  downloadTraceImageSvg,
   type TraceImageExport,
   type TraceImageTheme,
 } from "./trace-image";
@@ -2522,10 +2523,8 @@ function DeviceInspector({
           label={t("Ports")}
           value={`${node.portSummary.linked}/${node.portSummary.total} ${t("linked")}`}
         />
-        <InfoBox
-          label={t("Vendor")}
-          value={node.vendor ?? node.device.manufacturer}
-        />
+        <InfoBox label={t("Manufacturer")} value={node.device.manufacturer} />
+        <InfoBox label={t("Vendor")} value={node.vendor} />
       </div>
       <div>
         <div className="rk-kicker mb-2">{t("Direct connections")}</div>
@@ -2627,7 +2626,7 @@ function CableInspector({
   );
 }
 
-function TraceSummary({
+export function TraceSummary({
   model,
   result,
 }: {
@@ -2741,6 +2740,15 @@ function TraceSummary({
     }
   }
 
+  function downloadSvg(traceImage?: TraceImageExport) {
+    setImageError(null);
+    try {
+      downloadTraceImageSvg(traceImage ?? buildTraceImage());
+    } catch {
+      setImageError(t("Something went wrong. Try again."));
+    }
+  }
+
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--accent-primary-border)] bg-[var(--accent-primary-soft)] p-3">
       <div className="flex items-start justify-between gap-3">
@@ -2796,6 +2804,17 @@ function TraceSummary({
           >
             <Download className="size-3.5" />
             {preparingImage ? t("Preparing...") : t("Download image")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadSvg()}
+            disabled={!traceText}
+            aria-label={t("Download SVG")}
+            data-testid="trace-download-svg"
+          >
+            <Download className="size-3.5" />
+            {t("Download SVG")}
           </Button>
         </div>
       </div>
@@ -2878,6 +2897,15 @@ function TraceSummary({
                   >
                     <Download className="size-3.5" />
                     {preparingImage ? t("Preparing...") : t("Download image")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadSvg(activeImagePreview.traceImage)}
+                    data-testid="trace-preview-download-svg"
+                  >
+                    <Download className="size-3.5" />
+                    {t("Download SVG")}
                   </Button>
                   <Button
                     ref={previewCloseButtonRef}

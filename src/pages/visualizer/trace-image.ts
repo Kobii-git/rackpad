@@ -252,6 +252,13 @@ export async function downloadTraceImagePng(
   }
 }
 
+export function downloadTraceImageSvg(traceImage: TraceImageExport): void {
+  downloadBlob(
+    traceImage.filename.replace(/\.png$/i, ".svg"),
+    new Blob([traceImage.svg], { type: "image/svg+xml;charset=utf-8" }),
+  );
+}
+
 function buildTraceImageBlocks(
   model: VisualizerModel,
   result: TraceResult,
