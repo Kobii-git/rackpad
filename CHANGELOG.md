@@ -30,6 +30,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   Nodemailer, Lucide, and better-sqlite3 to individually vetted major versions;
   removed unused Recharts; and updated CodeQL's setup-node action to v7.
 - Refreshed affected transitive dependencies to clear current npm advisories.
+- Renewed the exact SNMPv3 CodeQL evidence pin after independent review of
+  the changed server tree; the SNMP source and exception scope are unchanged.
 
 MCP adds forward-only schema 53. Take a protected pre-upgrade database snapshot
 and keep it with the prior image for rollback. MCP tokens are excluded from
