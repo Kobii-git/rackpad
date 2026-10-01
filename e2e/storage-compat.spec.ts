@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { DriveBayTemplate } from "../src/lib/types";
+import { CURRENT_SCHEMA_VERSION } from "../server/schema-version";
 let token = "";
 test.beforeAll(async ({ request }) => {
   const status = await request.get("/api/auth/status");
@@ -67,7 +68,7 @@ for (const uuidMode of ["native", "missing", "throwing"] as const) {
           page.getByRole("textbox", { name: "Description", exact: true }),
         ).toHaveValue("Preserved schema-50 template");
         const backup = await request.get("/api/admin/export", { headers });
-        expect((await backup.json()).schemaVersion).toBe(52);
+        expect((await backup.json()).schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
       }
       await page
         .getByRole("button", { name: "Custom template", exact: true })
