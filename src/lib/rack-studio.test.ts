@@ -216,3 +216,11 @@ function device(overrides: Partial<Device>): Device {
     ...overrides,
   };
 }
+
+test("legacy missing heights use the same occupied 1U footprint as the server", () => {
+  const existing = device({id:"missing-height", hostname:"Legacy occupant", rackId:rack.id, startU:4, heightU:undefined, rackMountKind:"side", placement:"rack", rackSlot:"left"});
+  assert.equal(devicePlacementState(existing).mountKind,"direct");
+  const next = directPlacementState({roomId:rack.roomId!,rackId:rack.id,startU:4,heightU:1,face:"front",column:0,columnSpan:6});
+  assert.equal(validateDirectPlacementPreview({targetDeviceId:"mover",next,rack,devices:[existing]}).conflictDeviceId,existing.id);
+  assert.equal(validateDirectPlacementPreview({targetDeviceId:"mover",next:{...next,face:"rear"},rack,devices:[existing]}).valid,true);
+});

@@ -259,9 +259,10 @@ test("occupied U rejects Studio and device writes for legacy rack metadata", asy
     next: directState(room.id, rack.id, 1, 1, 0, 12),
   });
   const before = db.prepare("SELECT rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(mover.id);
-  for (const [placement, mountKind] of [["rack", "loose"], ["rack", "side"], ["shelf", "shelf"]] as const) {
+  for (const [placement, mountKind] of [["rack", "loose"], ["rack", "side"], ["shelf", "shelf"], ["rack", "missing-height"]] as const) {
     db.prepare("UPDATE devices SET placement = ?, rackMountKind = ?, parentDeviceId = NULL, rackColumn = NULL, rackColumnSpan = NULL WHERE id = ?")
-      .run(placement, mountKind, occupant.id);
+      .run(placement, mountKind === "missing-height" ? "direct" : mountKind, occupant.id);
+    db.prepare("UPDATE devices SET heightU = ? WHERE id = ?").run(mountKind === "missing-height" ? null : 1, occupant.id);
 
     const studio = await app.inject({
       method: "POST",
@@ -284,10 +285,34 @@ test("occupied U rejects Studio and device writes for legacy rack metadata", asy
       headers: authHeaders(token),
       payload: { placement: "rack", rackId: rack.id, startU: 2, heightU: 1, face: "front", rackSlot: "full" },
     });
+    const bulk = await app.inject({method:"POST", url:"/api/devices/bulk", headers:authHeaders(token), payload:{deviceIds:[mover.id], changes:{placement:"rack", rackSlot:"full"}}});
+    // Revalidating the current position is safe, even with malformed occupants elsewhere.
+    assert.equal(bulk.statusCode, 200, bulk.body);
     assert.equal(editor.statusCode, 409, editor.body);
     assert.equal(json(editor).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
     assert.equal(json(editor).conflictDeviceId, occupant.id);
     assert.deepEqual(db.prepare("SELECT rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(mover.id), before);
+  }
+});
+
+test("bulk widening rejects missing-height legacy occupants atomically on each face", async () => {
+  const token = await bootstrapAdmin();
+  const room = await createRoom(token, "Bulk legacy");
+  const rack = await createRack(token, room.id, "Bulk legacy", 6);
+  const occupant = await createDevice(token, room.id, "bulk-occupant");
+  const mover = await createDevice(token, room.id, "bulk-mover");
+  const first = await createDevice(token, room.id, "bulk-first");
+  for (const face of ["front", "rear"]) {
+    db.prepare("UPDATE devices SET rackId = ?, placement = 'rack', startU = 2, heightU = NULL, face = ?, rackSlot = 'left', rackColumn = NULL, rackColumnSpan = NULL, rackMountKind = 'loose' WHERE id = ?").run(rack.id,face,occupant.id);
+    db.prepare("UPDATE devices SET rackId = ?, placement = 'rack', startU = 2, heightU = 1, face = ?, rackSlot = 'right', rackColumn = 6, rackColumnSpan = 6, rackMountKind = 'direct' WHERE id = ?").run(rack.id,face,mover.id);
+    db.prepare("UPDATE devices SET rackId = ?, placement = 'rack', startU = 4, heightU = 1, face = ?, rackSlot = 'right', rackColumn = 6, rackColumnSpan = 6, rackMountKind = 'direct' WHERE id = ?").run(rack.id,face,first.id);
+    const before = db.prepare("SELECT id, rackSlot, rackColumn, rackColumnSpan FROM devices ORDER BY id").all();
+    const response = await app.inject({method:"POST",url:"/api/devices/bulk",headers:authHeaders(token),payload:{deviceIds:[first.id,mover.id],changes:{rackSlot:"full"}}});
+    assert.equal(response.statusCode,409,response.body);
+    assert.equal(json(response).conflictDeviceId,occupant.id);
+    assert.deepEqual(db.prepare("SELECT id, rackSlot, rackColumn, rackColumnSpan FROM devices ORDER BY id").all(),before);
+    const opposite = await app.inject({method:"PATCH",url:`/api/devices/${mover.id}`,headers:authHeaders(token),payload:{face: face === "front" ? "rear" : "front", rackSlot:"full"}});
+    assert.equal(opposite.statusCode,200,opposite.body);
   }
 });
 

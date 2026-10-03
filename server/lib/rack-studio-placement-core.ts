@@ -94,7 +94,7 @@ export function currentRackStudioPlacement(
   const mountKind =
     row.placement === "shelf" && row.parentDeviceId
       ? "shelf"
-      : row.rackId && row.startU !== null && row.heightU !== null
+      : row.rackId && row.startU !== null
         ? "direct"
       : storedMountKind === "side"
         ? "side"
@@ -112,7 +112,7 @@ export function currentRackStudioPlacement(
       rackId: row.rackId,
       parentDeviceId: null,
       startU: row.startU,
-      heightU: row.heightU,
+      heightU: row.heightU ?? 1,
       face: row.face === "rear" ? "rear" : "front",
       column: geometry.column,
       columnSpan: geometry.columnSpan,
@@ -385,7 +385,6 @@ export function createRackStudioPlacementResolver(
         FROM devices
         WHERE rackId = ?
           AND startU IS NOT NULL
-          AND heightU IS NOT NULL
           AND id != ?
       `,
       )

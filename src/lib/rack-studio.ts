@@ -72,7 +72,7 @@ export function devicePlacementState(device: Device): RackStudioPlacementState {
   const mountKind: RackStudioPlacementState["mountKind"] =
     device.placement === "shelf" && device.parentDeviceId
       ? "shelf"
-      : device.rackId && device.startU != null && device.heightU != null
+      : device.rackId && device.startU != null
         ? "direct"
       : storedMountKind === "side"
         ? "side"

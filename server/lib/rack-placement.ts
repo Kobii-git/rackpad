@@ -69,7 +69,6 @@ export function validateRackPlacement(input: RackPlacementInput) {
     FROM devices
     WHERE rackId = ?
       AND startU IS NOT NULL
-      AND heightU IS NOT NULL
       AND id != COALESCE(?, '')
   `).all(input.rackId, input.deviceId ?? null) as RackStudioDeviceRow[]
 
