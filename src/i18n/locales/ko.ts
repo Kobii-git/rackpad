@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Resize side panel": "측면 패널 크기 조절",
+  "Resize item": "항목 크기 조절",
+  "Copy to other face": "반대 면으로 복사",
+  "Move to other face": "반대 면으로 이동",
+  "Use a six-digit hexadecimal color.": "6자리 16진수 색상을 사용하세요.",
+  "Could not update template item.": "템플릿 항목을 업데이트할 수 없습니다.",
   "MCP": "MCP",
   "Days": "일",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "다음 예제를 시도하세요. RJ45와 SFP 블록을 따로 추가하고, 각 면에 위치를 만들어 모듈을 추가하고, 6베이 템플릿을 복제한 뒤 베이 두 개를 삭제하세요.",

@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Resize side panel": "Yan paneli yeniden boyutlandır",
+  "Resize item": "Öğeyi yeniden boyutlandır",
+  "Copy to other face": "Diğer yüze kopyala",
+  "Move to other face": "Diğer yüze taşı",
+  "Use a six-digit hexadecimal color.": "Altı basamaklı onaltılık bir renk kullanın.",
+  "Could not update template item.": "Şablon öğesi güncellenemedi.",
   "MCP": "MCP",
   "Days": "Gün",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Şu örnekleri deneyin: ayrı RJ45 ve SFP blokları ekleyin; her yüzde bir konum oluşturup modül ekleyin; altı yuvalı bir şablonu çoğaltıp iki yuvayı silin.",

@@ -183,6 +183,14 @@ Each device card shows a compact port strip on the right edge:
 - Hover a port for name, kind, speed, link state, VLAN summary, bridge membership, and patched destination.
 - In trace mode, click a first port and then a second port to compute the documented path.
 
+## Sidebar widths
+
+Grouped and Rack Cabling desktop sidebars have a draggable separator. Each mode
+remembers its own width in this browser, between 320 and 640 pixels and limited
+by the available canvas space. Focus the separator and use Left/Right to adjust
+10 pixels, Shift+Left/Right for 40 pixels, or Home/End for the minimum/maximum.
+Mobile keeps the existing overlay inspector.
+
 ## Trace Mode
 
 Trace mode follows documented `PortLink` records across rooms, racks, loose
@@ -191,6 +199,14 @@ to a port in another room as long as each hop is documented as a cable or
 patch-panel handoff. Patch panels also bridge matching front/rear ports with
 the same port name and kind. This is read-only: it does not create cables or
 modify port records.
+
+The device/port picker is available whenever trace mode is on in Grouped and
+Rack Cabling, including in the mobile overlay before a canvas selection. Picker
+and canvas actions use the same trace handlers. Rack Cabling choices follow its
+room, face, and cable filter inspection scope, including eligible continuation
+endpoints. Scope changes clear invalid choices; an empty scope disables submit.
+Trace actions wrap below the heading so they remain reachable in narrow panels
+and translated interfaces.
 
 If no path exists, Rackpad shows that no documented path was found. Usually this
 means one or more cable links or patch-panel pass-through records are missing.

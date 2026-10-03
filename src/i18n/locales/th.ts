@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "Resize side panel": "ปรับขนาดแผงด้านข้าง",
+  "Resize item": "ปรับขนาดรายการ",
+  "Copy to other face": "คัดลอกไปอีกด้าน",
+  "Move to other face": "ย้ายไปอีกด้าน",
+  "Use a six-digit hexadecimal color.": "ใช้สีเลขฐานสิบหกหกหลัก",
+  "Could not update template item.": "ไม่สามารถอัปเดตรายการเทมเพลตได้",
   "MCP": "MCP",
   "Days": "วัน",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "ลองตัวอย่างเหล่านี้: เพิ่มบล็อก RJ45 และ SFP แยกกัน สร้างตำแหน่งแต่ละด้านและเพิ่มโมดูล ทำสำเนาแม่แบบหกช่องแล้วลบสองช่อง",

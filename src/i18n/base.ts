@@ -1,4 +1,10 @@
 export const en = {
+  "Resize side panel": "Resize side panel",
+  "Resize item": "Resize item",
+  "Copy to other face": "Copy to other face",
+  "Move to other face": "Move to other face",
+  "Use a six-digit hexadecimal color.": "Use a six-digit hexadecimal color.",
+  "Could not update template item.": "Could not update template item.",
   "MCP": "MCP",
   "Days": "Days",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.",

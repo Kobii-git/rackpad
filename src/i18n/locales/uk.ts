@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const uk = {
+  "Resize side panel": "Змінити розмір бічної панелі",
+  "Resize item": "Змінити розмір елемента",
+  "Copy to other face": "Копіювати на інший бік",
+  "Move to other face": "Перемістити на інший бік",
+  "Use a six-digit hexadecimal color.": "Використовуйте шестизначний шістнадцятковий колір.",
+  "Could not update template item.": "Не вдалося оновити елемент шаблону.",
   "MCP": "MCP",
   "Days": "Дні",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Спробуйте приклади: додайте окремі блоки RJ45 і SFP; створіть позицію на кожному боці та додайте модуль; дублюйте шаблон із шістьма відсіками й видаліть два відсіки.",

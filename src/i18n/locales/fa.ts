@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Resize side panel": "تغییر اندازه پنل کناری",
+  "Resize item": "تغییر اندازه مورد",
+  "Copy to other face": "کپی به سمت دیگر",
+  "Move to other face": "انتقال به سمت دیگر",
+  "Use a six-digit hexadecimal color.": "از رنگ هگزادسیمال شش‌رقمی استفاده کنید.",
+  "Could not update template item.": "به‌روزرسانی مورد الگو انجام نشد.",
   "MCP": "MCP",
   "Days": "روز",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "این نمونه‌ها را امتحان کنید: بلوک‌های جداگانه RJ45 و SFP اضافه کنید؛ در هر وجه یک موقعیت ایجاد و ماژول اضافه کنید؛ یک الگوی شش‌محفظه‌ای را تکثیر و دو محفظه را حذف کنید.",

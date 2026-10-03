@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "Resize side panel": "שינוי גודל הלוח הצדדי",
+  "Resize item": "שינוי גודל הפריט",
+  "Copy to other face": "העתקה לצד השני",
+  "Move to other face": "העברה לצד השני",
+  "Use a six-digit hexadecimal color.": "יש להשתמש בצבע הקסדצימלי בן שש ספרות.",
+  "Could not update template item.": "לא ניתן לעדכן את פריט התבנית.",
   "MCP": "MCP",
   "Days": "ימים",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "נסו את הדוגמאות הבאות: הוסיפו בלוקים נפרדים של RJ45 ו-SFP; צרו מיקום בכל צד והוסיפו מודול; שכפלו תבנית בעלת שישה תאים ומחקו שני תאים.",

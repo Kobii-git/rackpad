@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "Resize side panel": "Verander sypaneelgrootte",
+  "Resize item": "Verander itemgrootte",
+  "Copy to other face": "Kopieer na ander kant",
+  "Move to other face": "Skuif na ander kant",
+  "Use a six-digit hexadecimal color.": "Gebruik ’n ses-syfer heksadesimale kleur.",
+  "Could not update template item.": "Kon nie die sjabloonitem bywerk nie.",
   "MCP": "MCP",
   "Days": "Dae",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Probeer hierdie voorbeelde: voeg aparte RJ45- en SFP-blokke by; skep ’n posisie op elke kant en voeg ’n module by; dupliseer ’n seskompartementsjabloon en vee twee kompartemente uit.",

@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Resize side panel": "调整侧栏大小",
+  "Resize item": "调整项目大小",
+  "Copy to other face": "复制到另一面",
+  "Move to other face": "移动到另一面",
+  "Use a six-digit hexadecimal color.": "请使用六位十六进制颜色。",
+  "Could not update template item.": "无法更新模板项目。",
   "MCP": "MCP",
   "Days": "天",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "试试这些示例：分别添加 RJ45 和 SFP 端口块；在每一面创建安装位置并添加模块；复制六盘位模板并删除两个盘位。",

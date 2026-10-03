@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Resize side panel": "Đổi kích thước bảng bên",
+  "Resize item": "Đổi kích thước mục",
+  "Copy to other face": "Sao chép sang mặt khác",
+  "Move to other face": "Di chuyển sang mặt khác",
+  "Use a six-digit hexadecimal color.": "Dùng màu thập lục phân gồm sáu chữ số.",
+  "Could not update template item.": "Không thể cập nhật mục mẫu.",
   "MCP": "MCP",
   "Days": "Ngày",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Hãy thử các ví dụ: thêm các khối RJ45 và SFP riêng; tạo vị trí ở mỗi mặt rồi thêm mô-đun; nhân bản mẫu sáu khoang và xóa hai khoang.",

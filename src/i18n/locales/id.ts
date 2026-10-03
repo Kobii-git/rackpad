@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Resize side panel": "Ubah ukuran panel samping",
+  "Resize item": "Ubah ukuran item",
+  "Copy to other face": "Salin ke sisi lain",
+  "Move to other face": "Pindahkan ke sisi lain",
+  "Use a six-digit hexadecimal color.": "Gunakan warna heksadesimal enam digit.",
+  "Could not update template item.": "Tidak dapat memperbarui item templat.",
   "MCP": "MCP",
   "Days": "Hari",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Coba contoh ini: tambahkan blok RJ45 dan SFP terpisah; buat posisi pada setiap sisi dan tambahkan modul; duplikasi templat enam bay lalu hapus dua bay.",

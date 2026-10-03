@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Resize side panel": "サイドパネルのサイズを変更",
+  "Resize item": "項目のサイズを変更",
+  "Copy to other face": "反対側にコピー",
+  "Move to other face": "反対側に移動",
+  "Use a six-digit hexadecimal color.": "6桁の16進数カラーを使用してください。",
+  "Could not update template item.": "テンプレート項目を更新できませんでした。",
   "MCP": "MCP",
   "Days": "日数",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "例を試してください：RJ45とSFPのブロックを別々に追加し、各面に取付位置を作成してモジュールを追加します。6ベイのテンプレートを複製して2ベイを削除することもできます。",

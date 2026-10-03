@@ -1,3 +1,5 @@
+import { TracePicker } from "./TracePicker";
+import { SidebarResize, useSidebarWidth } from "./SidebarResize";
 import { rackFaceForPhysicalFace } from "@/lib/rack-studio-scene";
 import { CableContinuationMarkers } from "@/components/rack/CableContinuationMarkers";
 import {
@@ -173,6 +175,9 @@ export function RackCablingCanvas({
   setTraceMode,
 }: RackCablingCanvasProps) {
   const { t } = useI18n();
+  const sidebar = useSidebarWidth("rack", 352);
+  const [tracePanelClosed, setTracePanelClosed] = useState(false);
+  useEffect(() => { setTracePanelClosed(false); }, [traceMode.enabled]);
   const [pendingReveal, setPendingReveal] = useState<{
     portId: string;
     cableId: string;
@@ -341,6 +346,9 @@ export function RackCablingCanvas({
   const routeIds = scope.cableIds;
   const sceneDeviceIds = scope.deviceIds;
   const scenePortIds = scope.portIds;
+  useEffect(() => {
+    if (traceMode.firstPortId && !scenePortIds.has(traceMode.firstPortId)) setTraceMode({enabled: traceMode.enabled, firstPortId: null, result: null, message: null});
+  }, [scenePortIds, traceMode.firstPortId, traceMode.enabled, setTraceMode]);
   const visibleCables = useMemo(
     () =>
       routes.map((route): VisualizerCable => {
@@ -1173,7 +1181,7 @@ export function RackCablingCanvas({
   }
 
   return (
-    <div className="relative grid h-[calc(100vh-8.5rem)] min-h-[620px] border-t border-[var(--border-subtle)] bg-[var(--surface-1)] xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div ref={sidebar.containerRef} style={{"--inspector-width": `${sidebar.width}px`} as React.CSSProperties} className="relative grid h-[calc(100vh-8.5rem)] min-h-[620px] border-t border-[var(--border-subtle)] bg-[var(--surface-1)] xl:grid-cols-[minmax(0,1fr)_var(--inspector-width)]">
       <div className="relative min-h-0 min-w-0 overflow-hidden border-r border-[var(--border-default)]">
         <div
           ref={viewportRef}
@@ -2055,7 +2063,10 @@ export function RackCablingCanvas({
         </div>
       </div>
 
-      <aside className="hidden min-h-0 overflow-y-auto bg-[var(--surface-1)] p-3 xl:block">
+      <aside className="relative hidden min-h-0 bg-[var(--surface-1)] xl:block">
+        <SidebarResize sidebar={sidebar} />
+        <div className="h-full overflow-y-auto p-3">
+        {traceMode.enabled && <TracePicker showMessage={false} model={model} eligiblePortIds={scenePortIds} traceMode={traceMode} onTracePortSelect={selectTracePort} onClearTrace={() => setTraceMode({enabled: true, firstPortId: null, result: null, message: null})} />}
         {traceMode.enabled && traceMode.result && (
           <div className="mb-3">
             <TraceSummary model={model} result={traceMode.result} />
@@ -2073,18 +2084,20 @@ export function RackCablingCanvas({
           racksById={racksById}
           roomsById={roomsById}
         />
+        </div>
       </aside>
-      {selection && (
+      {(selection || (traceMode.enabled && !tracePanelClosed)) && (
         <aside className="absolute bottom-16 right-3 z-[70] max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overflow-y-auto rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3 pt-12 shadow-[var(--shadow-card)] xl:hidden">
           <Button
             variant="ghost"
             size="icon"
             aria-label={t("Close")}
             className="absolute right-4 top-4"
-            onClick={closeInspector}
+            onClick={() => { closeInspector(); setTracePanelClosed(true); }}
           >
             <X />
           </Button>
+          {traceMode.enabled && <TracePicker showMessage={false} model={model} eligiblePortIds={scenePortIds} traceMode={traceMode} onTracePortSelect={selectTracePort} onClearTrace={() => setTraceMode({enabled: true, firstPortId: null, result: null, message: null})} />}
           {traceMode.enabled && traceMode.result && (
             <div className="mb-3">
               <TraceSummary model={model} result={traceMode.result} />

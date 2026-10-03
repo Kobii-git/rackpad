@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const pl = {
+  "Resize side panel": "Zmień rozmiar panelu bocznego",
+  "Resize item": "Zmień rozmiar elementu",
+  "Copy to other face": "Kopiuj na drugą stronę",
+  "Move to other face": "Przenieś na drugą stronę",
+  "Use a six-digit hexadecimal color.": "Użyj sześciocyfrowego koloru szesnastkowego.",
+  "Could not update template item.": "Nie udało się zaktualizować elementu szablonu.",
   "MCP": "MCP",
   "Days": "Dni",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "Wypróbuj te przykłady: dodaj osobne bloki RJ45 i SFP; utwórz pozycję na każdej stronie i dodaj moduł; zduplikuj szablon z sześcioma zatokami i usuń dwie zatoki.",

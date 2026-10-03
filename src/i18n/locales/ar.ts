@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Resize side panel": "تغيير حجم اللوحة الجانبية",
+  "Resize item": "تغيير حجم العنصر",
+  "Copy to other face": "نسخ إلى الوجه الآخر",
+  "Move to other face": "نقل إلى الوجه الآخر",
+  "Use a six-digit hexadecimal color.": "استخدم لونًا سداسيًا من ست خانات.",
+  "Could not update template item.": "تعذر تحديث عنصر القالب.",
   "MCP": "MCP",
   "Days": "أيام",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "جرّب هذه الأمثلة: أضف مجموعات RJ45 وSFP منفصلة؛ أنشئ موضعًا على كل وجه وأضف وحدة؛ كرّر قالبًا بست حجيرات واحذف حجيرتين.",

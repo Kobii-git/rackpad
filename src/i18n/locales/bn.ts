@@ -1,6 +1,12 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "Resize side panel": "পাশের প্যানেলের আকার বদলান",
+  "Resize item": "আইটেমের আকার বদলান",
+  "Copy to other face": "অন্য পাশে কপি করুন",
+  "Move to other face": "অন্য পাশে সরান",
+  "Use a six-digit hexadecimal color.": "ছয় অঙ্কের হেক্সাডেসিমাল রং ব্যবহার করুন।",
+  "Could not update template item.": "টেমপ্লেট আইটেম আপডেট করা যায়নি।",
   "MCP": "MCP",
   "Days": "দিন",
   "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.": "এই উদাহরণগুলি চেষ্টা করুন: আলাদা RJ45 ও SFP ব্লক যোগ করুন; প্রতিটি পাশে একটি অবস্থান তৈরি করে মডিউল যোগ করুন; ছয়টি বে-সহ টেমপ্লেটের অনুলিপি করে দুটি বে মুছুন।",
