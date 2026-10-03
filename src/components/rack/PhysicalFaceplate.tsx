@@ -1,3 +1,4 @@
+import { physicalItemColor } from "@/lib/faceplate-artwork";
 import { useMemo, type CSSProperties } from "react";
 import { useI18n } from "@/i18n";
 import type {
@@ -36,6 +37,7 @@ function bindingsOf(layout: DevicePhysicalLayout | ResolvedPhysicalLayoutV1) {
 
 function primitiveFill(primitive: PhysicalFacePrimitiveV1) {
   const tone = "tone" in primitive ? primitive.tone : undefined;
+  if (primitive.color) return physicalItemColor(primitive.color, "var(--color-surface)");
   if (tone === "accent") return "var(--color-accent)";
   if (tone === "light") return "var(--color-line-strong)";
   if (tone === "dark") return "var(--color-bg)";
@@ -49,7 +51,7 @@ function Primitive({ primitive }: { primitive: PhysicalFacePrimitiveV1 }) {
         x={primitive.x}
         y={primitive.y}
         textAnchor={primitive.align ?? "start"}
-        fill="var(--color-fg-subtle)"
+        fill={physicalItemColor(primitive.color, "var(--color-fg-subtle)")}
         fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
         fontSize="15"
         letterSpacing="1.4"
@@ -117,11 +119,11 @@ function PortConnector({
 }) {
   const centerX = slot.x + slot.width / 2;
   const centerY = slot.y + slot.height / 2;
-  const connectorFill = port
+  const connectorFill = physicalItemColor(slot.color, port
     ? linked
       ? "var(--color-accent)"
       : "var(--color-bg)"
-    : "var(--color-surface)";
+    : "var(--color-surface)");
   const connectorStroke = selected
     ? "var(--color-warning)"
     : linked

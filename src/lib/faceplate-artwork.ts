@@ -30,3 +30,8 @@ export function faceplateDetailPath(
   }
   return "";
 }
+
+/** Restrict SVG paint overrides to inert hexadecimal values, including exports. */
+export function physicalItemColor(value: unknown, fallback: string): string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : fallback;
+}

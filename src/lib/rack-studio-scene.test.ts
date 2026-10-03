@@ -396,3 +396,27 @@ function exportLabels() {
     },
   };
 }
+
+test("physical SVG exports preserve custom colors and independently reject paint injection", () => {
+  const rack = rackFixture(0);
+  const device = deviceFixture("colored-device", rack.id, 10);
+  const port = portFixture("colored-port", device.id, "front");
+  const layout = layoutFixture(device.id, [port]);
+  layout.snapshot.faces.front.elements = [
+    {kind:"panel",id:"colored-panel",x:0,y:0,width:1000,height:300,color:"#123456"},
+    {kind:"indicator",id:"colored-light",x:20,y:20,radius:5,color:"#abcdef"},
+    {kind:"label",id:"colored-label",x:50,y:50,text:"Color & label",color:"#654321"},
+  ];
+  layout.snapshot.portSlots[0].color = "#aabbcc";
+  const input = {room, face:"front" as const, racks:[rack], devices:[device], layouts:[layout], ports:[port], links:[], showLabels:true, routeStyle:"smooth" as const, theme:"dark" as const, labels:exportLabels()};
+  for (const focusRackId of [undefined,rack.id]) {
+    const image = buildRackStudioSvg({...input,focusRackId});
+    for (const color of ["#123456","#abcdef","#654321","#aabbcc"]) assert.ok(image.svg.includes(`fill="${color}"`));
+    assert.ok(image.svg.includes("Color &amp; label"));
+  }
+  layout.snapshot.portSlots[0].color = 'url(https://example.invalid/paint)';
+  layout.snapshot.faces.front.elements[0].color = '#123456" onload="alert(1)';
+  const unsafe = buildRackStudioSvg(input);
+  assert.ok(!unsafe.svg.includes("example.invalid"));
+  assert.ok(!unsafe.svg.includes("onload="));
+});

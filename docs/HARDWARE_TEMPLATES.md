@@ -24,7 +24,8 @@ part, including its artwork and physical port slots.
 
 1. In **Module positions**, choose Add, select Front, and set its position and
    dimensions. Select that position in the module controls, choose a port count
-   from 1–16, and add a NIC. Fan modules do not create ports.
+   from 1–16, rows and columns, and add a NIC. Eight ports can use 1 × 8
+   or 2 × 4. Capacity must cover every port. Fan modules do not create ports.
 2. Add another position on Rear and add a PSU there. Module creation uses the
    selected position's face.
 3. Move or resize a position: its assigned modules and ports move with it,
@@ -47,6 +48,33 @@ part, including its artwork and physical port slots.
 4. Check the front and rear previews. Appearance edits do not change unrelated
    artwork, module positions, port blocks or inventory ports.
 
+## Colors, resizing, and front/rear transfers
+
+Use the **Physical layout** item list to select artwork, individual ports,
+blocks, module positions, or parts inside a module. **Color** offers a native
+picker and six-digit hexadecimal input; **Reset** restores the palette. Custom
+fills leave selection, linkage, and health outlines or badges visible. Colors
+carry through device previews, Rack Studio, and physical SVG/PNG exports.
+
+Drag the selected item's lower-right handle to resize rectangles, blocks,
+ports, or module positions. Circular artwork uses a radius handle; labels keep
+text and position controls. Pointer movement uses face coordinates at the
+current display scale. Escape or pointer cancellation restores the geometry
+from the start of the gesture. Numeric size controls remain available. Moving
+or resizing a module position transforms every associated module's artwork and
+ports together, preserving IDs and compatible metadata.
+
+**Copy to other face** creates fresh IDs; **Move to other face** retains IDs.
+Module positions carry their modules and parts. Module parts transfer with their
+position. Vertical geometry scales to the destination face height; operations
+that exceed its bounds are rejected. A port moved out of a block stays detached
+when that source block is regenerated.
+
+Select an existing module to edit its port count, rows, and columns. Changing
+the grid preserves port order, IDs, colors, and compatible metadata. Reducing
+the explicit count removes template slots; device linked-port conflicts remain
+visible in preview/apply.
+
 ## Save and apply
 
 Save writes the library template; existing devices retain their saved physical
@@ -55,3 +83,8 @@ review the proposed port mappings, and retain any linked inventory ports. A
 removed physical slot does not authorize deleting its connected inventory port.
 Templates continue to use the existing schema-52 backup format and physical
 layout schema; no database migration is introduced.
+
+Colors and module `portGrid` are optional metadata in layout schema version 1.
+Existing modules load without regeneration. Backups retain the new metadata;
+older binaries may discard these optional fields when rewriting layouts. No
+SQLite migration or new API endpoint is required.

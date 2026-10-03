@@ -485,6 +485,8 @@ test("original six-port templates retain exact slots after their source template
     labRole: "viewer",
   });
   const template = sixPortServerTemplate();
+  template.portSlots[0].color = "#123456";
+  template.rear.elements[0].color = "#654321";
 
   const viewerCreate = await app.inject({
     method: "POST",
@@ -687,6 +689,8 @@ test("original six-port templates retain exact slots after their source template
     [90, 150, 430, 490, 780, 840],
   );
   assert.equal(JSON.parse(restoredLayout.bindings).length, 6);
+  assert.equal(JSON.parse(restoredLayout.snapshot).portSlots[0].color, "#123456");
+  assert.equal(JSON.parse(restoredLayout.snapshot).faces.rear.elements[0].color, "#654321");
   assert.equal(
     db
       .prepare("SELECT id FROM hardwareTemplates WHERE id = ?")
@@ -1571,7 +1575,7 @@ function moduleServerTemplate() {
   };
 }
 
-function sixPortServerTemplate() {
+function sixPortServerTemplate(): import("../lib/physical-layout.js").HardwareTemplateV1 {
   const face = {
     schemaVersion: 1 as const,
     width: 1000 as const,
@@ -1761,6 +1765,9 @@ test("guided template structures round-trip through schema-52 backup without cha
     ],
   };
   template = updateModulePosition(template, { ...position, x: 300 });
+  template.modules[0].elements[0].color = "#aabbcc";
+  template.modules[0].portSlots[0].color = "#bbccdd";
+  template.modules[0].portGrid = {rows:1,columns:2};
   const create = await app.inject({
     method: "POST",
     url: "/api/hardware-templates",

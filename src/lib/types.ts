@@ -288,6 +288,7 @@ export type PhysicalFacePrimitiveV1 =
   | {
       kind: "panel" | "handle" | "vent" | "bay" | "display" | "outlet";
       id: string;
+      color?: string;
       x: number;
       y: number;
       width: number;
@@ -297,6 +298,7 @@ export type PhysicalFacePrimitiveV1 =
   | {
       kind: "screw" | "indicator";
       id: string;
+      color?: string;
       x: number;
       y: number;
       radius: number;
@@ -305,6 +307,7 @@ export type PhysicalFacePrimitiveV1 =
   | {
       kind: "label";
       id: string;
+      color?: string;
       x: number;
       y: number;
       text: string;
@@ -320,6 +323,7 @@ export interface FaceDefinitionV1 {
 
 export interface PhysicalPortSlotV1 {
   id: string;
+  color?: string;
   face: RackFace;
   x: number;
   y: number;
@@ -397,6 +401,7 @@ export interface HardwareTemplateV1 {
 
 export interface HardwareModuleV1 {
   id: string;
+  portGrid?: { rows: number; columns: number };
   name: string;
   slotId: string;
   face: RackFace;

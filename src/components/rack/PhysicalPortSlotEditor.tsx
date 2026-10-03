@@ -1,3 +1,5 @@
+import { templateItemValue, type TemplateItem } from "@/lib/hardware-template-editing";
+import { physicalItemColor } from "@/lib/faceplate-artwork";
 import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -15,6 +17,10 @@ import type {
 import { cn } from "@/lib/utils";
 
 interface PhysicalPortSlotEditorProps {
+  selectedItem?: TemplateItem;
+  onEditStart?: () => void;
+  onEditCancel?: () => void;
+  onResizeItem?: (item: TemplateItem, dimensions: {width?: number; height?: number; radius?: number}) => void;
   layout: HardwareTemplateV1 | ResolvedPhysicalLayoutV1;
   face: RackFace;
   selectedSlotId?: string;
@@ -38,6 +44,7 @@ function faceOf(
 
 function fillOf(primitive: PhysicalFacePrimitiveV1) {
   const tone = "tone" in primitive ? primitive.tone : undefined;
+  if (primitive.color) return physicalItemColor(primitive.color, "var(--color-surface)");
   if (tone === "accent") return "var(--color-accent)";
   if (tone === "dark") return "var(--color-bg)";
   if (tone === "light") return "var(--color-line-strong)";
@@ -46,6 +53,10 @@ function fillOf(primitive: PhysicalFacePrimitiveV1) {
 
 export function PhysicalPortSlotEditor({
   layout,
+  selectedItem,
+  onEditStart,
+  onEditCancel,
+  onResizeItem,
   face,
   selectedSlotId,
   selectedElementId,
@@ -65,6 +76,8 @@ export function PhysicalPortSlotEditor({
     id: string;
     offsetX: number;
     offsetY: number;
+    pointerId: number;
+    resize?: TemplateItem;
   }>();
   const slots = layout.portSlots.filter((slot) => slot.face === face);
   const moduleSlots =
@@ -94,22 +107,37 @@ export function PhysicalPortSlotEditor({
       ((event.clientX - bounds.left) / bounds.width) * definition.width;
     const pointerY =
       ((event.clientY - bounds.top) / bounds.height) * definition.height;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setDrag({ kind, id, offsetX: pointerX - x, offsetY: pointerY - y });
+    onEditStart?.();
+    svg.focus();
+    svg.setPointerCapture(event.pointerId);
+    setDrag({ kind, id, pointerId: event.pointerId, offsetX: pointerX - x, offsetY: pointerY - y });
   }
 
   return (
     <svg
       viewBox={`0 0 ${definition.width} ${definition.height}`}
       role="application"
+      tabIndex={0}
       aria-label={t("Physical layout")}
       className={cn(
         "block w-full touch-none rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)]",
         className,
       )}
       onPointerMove={(event) => {
-        if (!drag) return;
+        if (!drag || drag.pointerId !== event.pointerId) return;
         const next = point(event);
+        if (drag.resize && "moduleSlots" in layout) {
+          const value = templateItemValue(layout, drag.resize);
+          if (!value || !("x" in value)) return;
+          if ("radius" in value) {
+            onResizeItem?.(drag.resize, {radius: Math.max(1, Math.min(100, value.x, value.y, definition.width-value.x, definition.height-value.y, next.x-value.x))});
+          } else if ("width" in value) {
+            const minimum = drag.resize.kind === "port" ? 4 : 1;
+            const maximum = drag.resize.kind === "port" ? 200 : 1000;
+            onResizeItem?.(drag.resize, {width: Math.max(minimum, Math.min(maximum, definition.width-value.x, next.x-value.x)), height: Math.max(minimum, Math.min(maximum, definition.height-value.y, next.y-value.y))});
+          }
+          return;
+        }
         if (drag.kind === "slot") {
           onMoveSlot(drag.id, next.x - drag.offsetX, next.y - drag.offsetY);
         } else if (drag.kind === "element") {
@@ -127,7 +155,8 @@ export function PhysicalPortSlotEditor({
         }
       }}
       onPointerUp={() => setDrag(undefined)}
-      onPointerCancel={() => setDrag(undefined)}
+      onPointerCancel={() => {onEditCancel?.(); setDrag(undefined);}}
+      onKeyDown={event => {if (event.key === "Escape" && drag) {event.preventDefault(); onEditCancel?.(); setDrag(undefined);}}}
     >
       <rect
         width={definition.width}
@@ -222,7 +251,7 @@ export function PhysicalPortSlotEditor({
                     y={slot.y}
                     width={slot.width}
                     height={slot.height}
-                    fill="var(--color-bg)"
+                    fill={physicalItemColor(slot.color, "var(--color-bg)")}
                     stroke="var(--color-accent)"
                   >
                     <title>{slot.label ?? slot.id}</title>
@@ -282,6 +311,14 @@ export function PhysicalPortSlotEditor({
           }}
         />
       ))}
+      {onResizeItem && selectedItem?.face === face && "moduleSlots" in layout && (() => {
+        const value = templateItemValue(layout, selectedItem);
+        if (!value || !("x" in value) || (!("width" in value) && !("radius" in value))) return null;
+        const x = value.x + ("width" in value ? value.width : value.radius);
+        const y = value.y + ("height" in value ? value.height : 0);
+        return <rect data-testid="template-resize-handle" x={x-6} y={y-6} width={12} height={12} fill="var(--color-warning)" stroke="var(--color-bg)" className="cursor-nwse-resize" role="button" tabIndex={0} aria-label={t("Resize item")}
+          onPointerDown={event => {event.stopPropagation(); onEditStart?.(); const svg = event.currentTarget.ownerSVGElement!; svg.focus(); svg.setPointerCapture(event.pointerId); setDrag({kind: "element", id: selectedItem.id, offsetX: 0, offsetY: 0, pointerId: event.pointerId, resize: selectedItem});}} />;
+      })()}
     </svg>
   );
 }
@@ -302,7 +339,7 @@ function Primitive({
         x={primitive.x}
         y={primitive.y}
         textAnchor={primitive.align ?? "start"}
-        fill="var(--color-fg-subtle)"
+        fill={physicalItemColor(primitive.color, "var(--color-fg-subtle)")}
         fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
         fontSize="15"
         className={interactive}
@@ -371,7 +408,7 @@ function EditableSlot({
         width={slot.width}
         height={slot.height}
         rx={slot.connector === "rj45" ? 3 : 1.5}
-        fill="var(--color-bg)"
+        fill={physicalItemColor(slot.color, "var(--color-bg)")}
         stroke={selected ? "var(--color-warning)" : "var(--color-accent)"}
         strokeWidth={selected ? 5 : 3}
       />

@@ -14,6 +14,7 @@ export type PhysicalFace = "front" | "rear";
 
 export interface PhysicalPortSlotV1 {
   id: string;
+  color?: string;
   face: PhysicalFace;
   x: number;
   y: number;
@@ -30,6 +31,7 @@ export type FacePrimitiveV1 =
   | {
       kind: "panel" | "handle" | "vent" | "bay" | "display" | "outlet";
       id: string;
+      color?: string;
       x: number;
       y: number;
       width: number;
@@ -39,6 +41,7 @@ export type FacePrimitiveV1 =
   | {
       kind: "screw" | "indicator";
       id: string;
+      color?: string;
       x: number;
       y: number;
       radius: number;
@@ -47,6 +50,7 @@ export type FacePrimitiveV1 =
   | {
       kind: "label";
       id: string;
+      color?: string;
       x: number;
       y: number;
       text: string;
@@ -111,6 +115,7 @@ export interface HardwareTemplateV1 {
 
 export interface HardwareModuleV1 {
   id: string;
+  portGrid?: { rows: number; columns: number };
   name: string;
   slotId: string;
   face: PhysicalFace;
@@ -396,6 +401,12 @@ function validateDeclarativeRecord(
   );
 }
 
+function validatedColor(value: unknown, label: string): { color?: string } {
+  if (value === undefined) return {};
+  if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) throw new ValidationError(`${label}.color must be a six-digit hexadecimal color.`);
+  return {color: value.toLowerCase()};
+}
+
 function validateFace(value: unknown, label: string): FaceDefinitionV1 {
   const face = asRecord(value, label);
   if (face.schemaVersion !== 1 || face.width !== 1000) {
@@ -422,6 +433,7 @@ function validateFace(value: unknown, label: string): FaceDefinitionV1 {
     const kind = String(primitive.kind ?? "");
     const x = finiteInRange(primitive.x, `${label}.${id}.x`);
     const y = finiteInRange(primitive.y, `${label}.${id}.y`, 0, height);
+    const color = validatedColor(primitive.color, `${label}.${id}`);
 
     if (kind === "screw" || kind === "indicator") {
       if (
@@ -433,6 +445,7 @@ function validateFace(value: unknown, label: string): FaceDefinitionV1 {
       return {
         kind: kind as "screw" | "indicator",
         id,
+        ...color,
         x,
         y,
         radius: finiteInRange(
@@ -468,6 +481,7 @@ function validateFace(value: unknown, label: string): FaceDefinitionV1 {
       return {
         kind: "label" as const,
         id,
+        ...color,
         x,
         y,
         text: primitive.text,
@@ -507,6 +521,7 @@ function validateFace(value: unknown, label: string): FaceDefinitionV1 {
     return {
       kind,
       id,
+      ...color,
       x,
       y,
       width,
@@ -543,6 +558,7 @@ function validatePortSlot(value: unknown, index: number): PhysicalPortSlotV1 {
   }
   return {
     id: validateId(slot.id, `portSlots[${index}].id`),
+    ...validatedColor(slot.color, `portSlots[${index}]`),
     face,
     x: finiteInRange(slot.x, `portSlots[${index}].x`),
     y: finiteInRange(slot.y, `portSlots[${index}].y`),
@@ -784,6 +800,13 @@ export function validateHardwareTemplateV1(value: unknown): HardwareTemplateV1 {
       face: module.face,
       elements,
       portSlots: modulePortSlots,
+      ...(module.portGrid !== undefined ? { portGrid: (() => {
+        const grid = asRecord(module.portGrid, "module.portGrid");
+        const rows = integerInRange(grid.rows, "module.portGrid.rows", 1, 16);
+        const columns = integerInRange(grid.columns, "module.portGrid.columns", 1, 16);
+        if (modulePortSlots.length > 16 || rows * columns < modulePortSlots.length) throw new ValidationError("Module grid cannot omit ports.");
+        return {rows, columns};
+      })() } : {}),
     };
   });
 

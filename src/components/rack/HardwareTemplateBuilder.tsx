@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { TemplateItemControls } from "./TemplateItemControls";
+import { updateTemplateItem, updateModuleGrid, type TemplateItem } from "@/lib/hardware-template-editing";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
   Check,
@@ -89,6 +91,8 @@ export function HardwareTemplateBuilder({
   const [draft, setDraft] = useState(() => createStarterTemplate("server-2u"));
   const [face, setFace] = useState<RackFace>("rear");
   const [selectedSlotId, setSelectedSlotId] = useState<string>();
+  const [selectedItem, setSelectedItem] = useState<TemplateItem>();
+  const editStart = useRef<HardwareTemplateV1 | null>(null);
   const [selectedElementId, setSelectedElementId] = useState("");
   const [block, setBlock] = useState<PortBlockDefinition>(EMPTY_BLOCK);
   const [editingBlockKey, setEditingBlockKey] = useState("");
@@ -99,6 +103,8 @@ export function HardwareTemplateBuilder({
   const [modulePrimitive, setModulePrimitive] =
     useState<HardwareModulePrimitive>("nic");
   const [modulePortCount, setModulePortCount] = useState(1);
+  const [moduleRows, setModuleRows] = useState(1);
+  const [moduleColumns, setModuleColumns] = useState(1);
   const [moduleSlotId, setModuleSlotId] = useState("rear-module-a");
   const [moduleIds, setModuleIds] = useState<string[]>([]);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
@@ -187,7 +193,10 @@ export function HardwareTemplateBuilder({
     setBulkPreviews([]);
   }, [selectedDeviceType, selectedId]);
 
+  useEffect(() => {setBulkPreviews([]);}, [draft]);
+
   function selectTemplate(id: string) {
+    setSelectedItem(undefined); setSelectedElementId(""); setSelectedSlotId(undefined); editStart.current = null;
     setEditingBlockKey("");
     setBlock(EMPTY_BLOCK);
     setSelectedId(id);
@@ -208,6 +217,7 @@ export function HardwareTemplateBuilder({
   }
 
   function selectStarter(id: string) {
+    setSelectedItem(undefined); setSelectedElementId(""); editStart.current = null;
     setEditingBlockKey("");
     setBlock(EMPTY_BLOCK);
     setStarterId(id);
@@ -620,14 +630,22 @@ export function HardwareTemplateBuilder({
                     selectedSlotId={selectedSlotId}
                     selectedElementId={selectedElementId}
                     selectedModuleSlotId={moduleSlotId}
-                    onSelectSlot={setSelectedSlotId}
+                    selectedItem={selectedItem}
+                    onEditStart={() => {editStart.current = structuredClone(draft);}}
+                    onEditCancel={() => {if (editStart.current) setDraft(editStart.current); editStart.current = null;}}
+                    onResizeItem={editable ? (item, dimensions) => {
+                      try {setDraft(updateTemplateItem(draft, item, dimensions)); setError("");} catch {setError(t("Could not update template item."));}
+                    } : undefined}
+                    onSelectSlot={(id) => {setSelectedSlotId(id); setSelectedItem({kind: "port",id,face:previewFace});}}
                     onSelectElement={(elementId) => {
                       setFace(previewFace);
                       setSelectedElementId(elementId);
+                      setSelectedItem({kind: "element", id: elementId, face: previewFace});
                     }}
                     onSelectModuleSlot={(slotId) => {
                       setFace(previewFace);
                       setModuleSlotId(slotId);
+                      setSelectedItem({kind: "position", id: slotId, face: previewFace});
                     }}
                     onMoveSlot={(slotId, x, y) =>
                       editable &&
@@ -971,7 +989,8 @@ export function HardwareTemplateBuilder({
                       ...blocks.map((entry) => entry.id),
                     ]);
                     const next = { ...block, id };
-                    setDraft((current) => replacePortBlock(current, next));
+                    try {setDraft(replacePortBlock(draft, next)); setError("");}
+                    catch {setError(t("Could not update template item.")); return;}
                     setFace(next.face);
                     setBlock({ ...next, id: `${id}:${next.face}` });
                     setEditingBlockKey(`${next.face}:${id}:${next.face}`);
@@ -983,7 +1002,8 @@ export function HardwareTemplateBuilder({
                   size="sm"
                   disabled={!editingBlock}
                   onClick={() => {
-                    setDraft((current) => replacePortBlock(current, block));
+                    try {setDraft(replacePortBlock(draft, block)); setError("");}
+                    catch {setError(t("Could not update template item.")); return;}
                     setFace(block.face);
                   }}
                 >
@@ -1078,14 +1098,18 @@ export function HardwareTemplateBuilder({
                       onChange={(event) => {
                         const value = Number(event.target.value);
                         if (Number.isFinite(value)) {
-                          setModulePortCount(
-                            Math.max(1, Math.min(16, Math.round(value))),
-                          );
+                          const count = Math.max(1, Math.min(16, Math.round(value)));
+                          setModulePortCount(count);
+                          setModuleColumns(Math.ceil(count / moduleRows));
                         }
                       }}
                     />
                   </Field>
                 )}
+                {modulePrimitive !== "fan" && <>
+                  <Field label={t("Rows")}><Input type="number" min={1} max={16} value={moduleRows} onChange={event => setModuleRows(Number(event.target.value))} /></Field>
+                  <Field label={t("Columns")}><Input type="number" min={1} max={16} value={moduleColumns} onChange={event => setModuleColumns(Number(event.target.value))} /></Field>
+                </>}
                 <div className="flex items-end">
                   <Button
                     className="w-full"
@@ -1100,22 +1124,11 @@ export function HardwareTemplateBuilder({
                         modulePrimitive,
                         draft.modules.map((module) => module.id),
                       );
-                      setDraft((current) => ({
-                        ...current,
-                        modules: [
-                          ...current.modules,
-                          createHardwareModule(
-                            id,
-                            modulePrimitive,
-                            moduleSlotId,
-                            modulePrimitive,
-                            modulePortCount,
-                            current.moduleSlots.find(
-                              (slot) => slot.id === moduleSlotId,
-                            ),
-                          ),
-                        ],
-                      }));
+                      try {
+                        const module = createHardwareModule(id, modulePrimitive, moduleSlotId, modulePrimitive, modulePortCount, draft.moduleSlots.find(slot => slot.id === moduleSlotId));
+                        const next = updateModuleGrid({...draft, modules: [...draft.modules, module]}, id, modulePortCount, moduleRows, moduleColumns);
+                        setDraft(next); setSelectedItem({kind: "module", id, face: module.face}); setError("");
+                      } catch {setError(t("Could not update template item."));}
                     }}
                   >
                     <Plus />
@@ -1139,6 +1152,7 @@ export function HardwareTemplateBuilder({
           </div>
         )}
 
+        {editable && <TemplateItemControls draft={draft} selected={selectedItem} onSelect={item => {setSelectedItem(item); setFace(item.face); if (item.kind === "port") setSelectedSlotId(item.id); if (item.kind === "element") setSelectedElementId(item.id); if (item.kind === "position") setModuleSlotId(item.id);}} onChange={next => {setDraft(next); setBulkPreviews([]);}} />}
         {editable && (
           <TemplateStructureEditor
             draft={draft}

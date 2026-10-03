@@ -24,6 +24,7 @@ export interface PortBlockDefinition {
   width: number;
   height: number;
   labelPrefix?: string;
+  excludedSlotIds?: string[];
 }
 
 export interface HardwareTemplateStarter {
@@ -239,7 +240,8 @@ export function generatePortBlock(
   const rows = clampInteger(block.rows, 1, 64);
   const columns = clampInteger(block.columns, 1, 64);
   const capacity = rows * columns;
-  const actualCount = Math.min(count, capacity);
+  if (capacity < count) throw new Error("Port grid cannot omit ports.");
+  const actualCount = count;
   const cellWidth = block.width / columns;
   const cellHeight = block.height / rows;
   const dimensions = connectorSize(block.connector);
@@ -265,13 +267,13 @@ export function generatePortBlock(
       y: round(block.y + row * cellHeight + (cellHeight - height) / 2),
       width: round(width),
       height: round(height),
-      rotation: 0,
+      rotation: 0 as const,
       connector: block.connector,
       acceptedPortKinds: [block.connector],
       groupId: safeId(block.id),
       label: `${block.labelPrefix ?? ""}${number}`,
     };
-  });
+  }).filter(slot => !block.excludedSlotIds?.includes(slot.id));
 }
 
 export function createStarterTemplate(
@@ -408,6 +410,7 @@ export function createHardwareModule(
       },
     ],
     portSlots: portCount > 0 ? generatePortBlock(block) : [],
+    ...(portCount ? {portGrid: {rows: block.rows, columns: block.columns}} : {}),
   };
   return position
     ? transformHardwareModule(
@@ -475,10 +478,20 @@ export function replacePortBlock(
           slot.face !== block.face ||
           !(
             (slot.groupId && replacedGroupIds.has(safeId(slot.groupId))) ||
-            (!slot.groupId && slot.id.startsWith(`${baseId}-`))
+            (!slot.groupId && [...replacedGroupIds].some(id => slot.id.startsWith(`${id}-`)) && !normalizedBlock.excludedSlotIds?.includes(slot.id))
           ),
       ),
-      ...generatePortBlock(normalizedBlock),
+      ...generatePortBlock(normalizedBlock).map(slot => {
+        const prior = template.portSlots.find(entry => entry.id === slot.id);
+        return {
+          ...prior,
+          ...slot,
+          ...(prior?.color ? {color: prior.color} : {}),
+          ...(prior ? {rotation: prior.rotation} : {}),
+          ...(prior?.connector === slot.connector ? {acceptedPortKinds: prior.acceptedPortKinds} : {}),
+          ...(prior && existing?.labelPrefix === block.labelPrefix && existing?.start === block.start ? {label: prior.label} : {}),
+        };
+      }),
     ],
     portBlueprints: nextBlocks,
   };

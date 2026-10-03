@@ -1,4 +1,4 @@
-import { createStarterTemplate } from "../src/lib/hardware-template-builder";
+import { createStarterTemplate, createHardwareModule } from "../src/lib/hardware-template-builder";
 import { rackCableFixture, rackShelfCableFixture } from "./fixtures/rack-cables";
 import { devicePlacementState } from "../src/lib/rack-studio";
 import type { Device, Port } from "../src/lib/types";
@@ -1141,7 +1141,7 @@ async function authenticate(page: Page, language = "en") {
   );
 }
 
-async function setRackCablingRooms(page: Page, roomIds: string[]) {
+async function setRackCablingRooms(page: Page, roomIds: string[], exitWithEscape = true) {
   const picker = page.getByTestId("rack-cabling-room-picker");
   await picker.click();
   const checkboxes = page.locator('input[type="checkbox"][data-room-id]');
@@ -1149,7 +1149,8 @@ async function setRackCablingRooms(page: Page, roomIds: string[]) {
     const roomId = await checkbox.getAttribute("data-room-id");
     await checkbox.setChecked(Boolean(roomId && roomIds.includes(roomId)));
   }
-  await page.keyboard.press("Escape");
+  if (exitWithEscape) await page.keyboard.press("Escape");
+  else await picker.click();
   await expect(picker).toBeFocused();
 }
 
@@ -2710,6 +2711,11 @@ test("Rack Studio places rack-top equipment and supports keyboard undo and redo"
       rackColumn: 2,
       startU: null,
     });
+    await page.goto("/visualizer"); await topEquipment.click();
+    const openDevice = page.getByRole("link", {name:"Open device",exact:true});
+    await openDevice.focus(); await page.keyboard.press("Shift+Tab"); await page.keyboard.press("Tab");
+    await expect(openDevice).toBeFocused(); await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(new RegExp(`/devices/${deviceId}$`));
 
   } finally {
     if (deviceId) await request.delete(`/api/devices/${deviceId}`, { headers });
@@ -6422,4 +6428,123 @@ test("MCP token UI shows credentials once and reviews an SDK proposal", async ({
     data: { jsonrpc: "2.0", id: 1, method: "ping" },
   });
   expect(revoked.status()).toBe(401);
+});
+
+
+test("remaining feedback trace picker and sidebar controls work on desktop, RTL and mobile", async ({ page }) => {
+  await authenticate(page);
+  await page.setViewportSize({width:1600,height:1000});
+  await page.goto("/visualizer");
+  const layout = page.locator('select').filter({has: page.locator('option[value="grouped"]')});
+  await layout.selectOption("grouped");
+  const separator = page.getByTestId("visualizer-sidebar-resize");
+  await separator.focus(); await page.keyboard.press("Home");
+  await expect(separator).toHaveAttribute("aria-valuenow","320");
+  await page.keyboard.press("ArrowLeft"); await expect(separator).toHaveAttribute("aria-valuenow","330");
+  await page.keyboard.press("Shift+ArrowLeft"); await expect(separator).toHaveAttribute("aria-valuenow","370");
+  await page.reload(); await expect(separator).toHaveAttribute("aria-valuenow","370");
+  await page.getByTestId("visualizer-trace-toggle").click();
+  await page.getByTestId("trace-device-select").selectOption({label:"unifi-01"});
+  await page.getByTestId("trace-port-select").selectOption("p_d_unifi_1");
+  await page.getByTestId("trace-submit").click();
+  await expect(page.getByTestId("trace-download-image")).toBeVisible();
+  await separator.focus(); await page.keyboard.press("Home");
+  for (const id of ["trace-copy-text","trace-download-text","trace-preview-image","trace-download-image","trace-download-svg"]) {
+    const inside = await page.getByTestId(id).evaluate(element => {const panel = element.closest("aside")!; const a=element.getBoundingClientRect(),b=panel.getBoundingClientRect(); return a.left>=b.left && a.right<=b.right;});
+    expect(inside).toBeTruthy();
+  }
+  await layout.selectOption("rack");
+  await expect(separator).toHaveAttribute("aria-valuenow","352");
+  await separator.focus(); await page.keyboard.press("Home");
+  const handle = await separator.boundingBox();
+  await page.mouse.move(handle!.x+4,handle!.y+40); await page.mouse.down(); await page.mouse.move(handle!.x-36,handle!.y+40); await page.mouse.up();
+  await expect(separator).toHaveAttribute("aria-valuenow","360");
+  await page.evaluate(() => {document.documentElement.dir="rtl";});
+  await separator.focus(); await page.keyboard.press("ArrowRight"); await expect(separator).toHaveAttribute("aria-valuenow","370");
+  await page.evaluate(() => {document.documentElement.dir="ltr";});
+  const device = page.locator('[data-testid="trace-device-select"]:visible');
+  const port = page.locator('[data-testid="trace-port-select"]:visible');
+  const submit = page.locator('[data-testid="trace-submit"]:visible');
+  await page.locator('aside:visible').getByRole("button",{name:"Reset",exact:true}).click();
+  await device.selectOption({label:"unifi-01"}); await port.selectOption("p_d_unifi_1"); await submit.click();
+  await expect(page.locator('[data-testid="trace-download-image"]:visible')).toBeVisible();
+  await setRackCablingRooms(page,["room_office"],false);
+  await expect(device.locator('option[value="d_unifi"]')).toHaveCount(0);
+  expect(await device.locator("option").count()).toBeGreaterThan(0);
+  await expect(submit).toHaveText("Set start port");
+  await setRackCablingRooms(page,["room_lab"],false); await expect(submit).toBeEnabled();
+  await page.setViewportSize({width:390,height:844});
+  await expect(device).toBeVisible(); await expect(submit).toBeVisible();
+  await page.screenshot({path:test.info().outputPath("remaining-trace-mobile.png"),fullPage:true});
+  await page.setViewportSize({width:1600,height:1000});
+  await page.evaluate(() => {localStorage.setItem("rackpad.language","fr");localStorage.setItem("rackpad.visualizer.layout-mode","grouped");});
+  await page.reload(); await page.getByTestId("visualizer-trace-toggle").click();
+  await page.getByTestId("trace-device-select").selectOption({label:"unifi-01"});
+  await page.getByTestId("trace-port-select").selectOption("p_d_unifi_1"); await page.getByTestId("trace-submit").click();
+  await separator.focus(); await page.keyboard.press("Home");
+  for (const id of ["trace-copy-text","trace-download-text","trace-preview-image","trace-download-image","trace-download-svg"]) {
+    await expect(page.getByTestId(id)).toBeVisible();
+    expect(await page.getByTestId(id).evaluate(element => {const a=element.getBoundingClientRect(),b=element.closest("aside")!.getBoundingClientRect();return a.left>=b.left && a.right<=b.right;})).toBeTruthy();
+  }
+  await page.route("**/api/ports", route => route.fulfill({json:[]}));
+  await page.route("**/api/port-links", route => route.fulfill({json:[]}));
+  await page.reload(); await page.getByTestId("visualizer-trace-toggle").click();
+  await expect(page.getByTestId("trace-device-select").locator("option")).toHaveCount(0);
+  await expect(page.getByTestId("trace-submit")).toBeDisabled();
+});
+
+test("remaining feedback template colors, resizing, grids and face operations persist", async ({ page, request }) => {
+  const id=`remaining-template-${Date.now().toString(36)}`;
+  const headers={Authorization:`Bearer ${token}`};
+  const source=createStarterTemplate("patch-panel",id,id);
+  source.front.elements.push({kind:"bay",id:"test-bay",x:100,y:20,width:60,height:60});
+  source.moduleSlots=[{id:"test-position",face:"rear",x:100,y:170,width:320,height:100}];
+  source.modules=[createHardwareModule("test-module","NIC","test-position","nic",8,source.moduleSlots[0])];
+  expect((await request.post("/api/hardware-templates",{headers,data:source})).status()).toBe(201);
+  try {
+    await authenticate(page); await page.setViewportSize({width:1600,height:1000}); await page.goto("/admin/device-types");
+    await page.getByTestId("device-type-section-built-in").getByRole("button").filter({hasText:"patch_panel"}).click();
+    const builder=page.getByTestId("hardware-template-builder");
+    await builder.getByRole("combobox",{name:"Templates",exact:true}).selectOption(id);
+    const controls=builder.getByTestId("template-item-controls");
+    const select=controls.getByRole("combobox");
+    await select.selectOption("element::front:test-bay");
+    const color=controls.getByTestId("template-item-color").locator('input:not([type="color"])');
+    await color.fill("#abc"); await expect(controls.getByRole("alert")).toContainText("six-digit");
+    await color.fill("#123456"); await expect(controls.getByRole("alert")).toHaveCount(0);
+    await controls.getByRole("button",{name:"Reset",exact:true}).click(); await expect(color).toHaveValue("");
+    await color.fill("#123456");
+    const width=controls.getByRole("spinbutton",{name:"Width",exact:true});
+    for (const viewport of [1600,1200]) {
+      await page.setViewportSize({width:viewport,height:1000});
+      const handle=builder.getByTestId("template-resize-handle"); await handle.scrollIntoViewIfNeeded();
+      const box=await handle.boundingBox(); const before=Number(await width.inputValue());
+      await page.mouse.move(box!.x+box!.width/2,box!.y+box!.height/2); await page.mouse.down(); await page.mouse.move(box!.x+box!.width/2+12,box!.y+box!.height/2+6);
+      await expect.poll(async()=>Number(await width.inputValue())).toBeGreaterThan(before);
+      await page.keyboard.press("Escape"); await page.mouse.up(); await expect(width).toHaveValue(String(before));
+    }
+    const cancelHandle=builder.getByTestId("template-resize-handle"); const cancelBox=await cancelHandle.boundingBox();
+    await page.mouse.move(cancelBox!.x+6,cancelBox!.y+6); await page.mouse.down(); await page.mouse.move(cancelBox!.x+20,cancelBox!.y+10);
+    await builder.getByTestId("hardware-template-preview-front").locator("svg").dispatchEvent("pointercancel"); await page.mouse.up(); await expect(width).toHaveValue("60");
+    await width.fill("80"); await controls.getByRole("button",{name:"Copy to other face",exact:true}).click();
+    await select.selectOption("module::rear:test-module");
+    const grid=controls.getByTestId("template-module-grid");
+    await grid.getByRole("spinbutton",{name:"Rows",exact:true}).fill("1"); await grid.getByRole("spinbutton",{name:"Columns",exact:true}).fill("8"); await grid.getByRole("button",{name:"Update",exact:true}).click();
+    await select.selectOption("position::rear:test-position");
+    await controls.getByRole("spinbutton",{name:"Width",exact:true}).fill("340");
+    await controls.getByRole("button",{name:"Move to other face",exact:true}).click();
+    const saved=page.waitForResponse(response=>response.request().method()==="PATCH" && response.url().endsWith(`/api/hardware-templates/${id}`));
+    await builder.getByRole("button",{name:"Save template",exact:true}).click(); expect((await saved).status()).toBe(200);
+    const records=await (await request.get("/api/hardware-templates",{headers})).json();
+    const result=records.templates.find((entry:{id:string})=>entry.id===id);
+    expect(result.front.elements.find((entry:{id:string})=>entry.id==="test-bay").color).toBe("#123456");
+    expect(result.rear.elements.find((entry:{id:string})=>entry.id.startsWith("test-bay-copy")).width).toBe(80);
+    expect(result.modules[0].face).toBe("front"); expect(result.modules[0].portGrid).toEqual({rows:1,columns:8});
+    expect(result.modules[0].portSlots.map((slot:{id:string})=>slot.id)).toEqual(source.modules[0].portSlots.map(slot=>slot.id));
+    await page.reload(); await builder.getByRole("combobox",{name:"Templates",exact:true}).selectOption(id);
+    await select.selectOption("element::front:test-bay"); await expect(color).toHaveValue("#123456");
+    const accessibility = await new AxeBuilder({page}).include('[data-testid="hardware-template-builder"]').analyze();
+    expect(accessibility.violations.filter(violation => violation.impact === "critical" || violation.impact === "serious")).toEqual([]);
+    await page.screenshot({path:test.info().outputPath("remaining-template-controls.png"),fullPage:true});
+  } finally {await request.delete(`/api/hardware-templates/${id}`,{headers});}
 });
