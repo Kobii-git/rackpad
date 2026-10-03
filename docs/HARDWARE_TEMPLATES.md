@@ -81,7 +81,7 @@ Save writes the library template; existing devices retain their saved physical
 layout snapshots. To update a device, use the existing preview/apply workflow,
 review the proposed port mappings, and retain any linked inventory ports. A
 removed physical slot does not authorize deleting its connected inventory port.
-Templates continue to use the existing schema-52 backup format and physical
+Templates continue to use the existing backup format and physical
 layout schema; no database migration is introduced.
 
 Colors and module `portGrid` are optional metadata in layout schema version 1.

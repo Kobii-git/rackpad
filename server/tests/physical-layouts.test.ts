@@ -1735,7 +1735,7 @@ function json(response: { body: string }) {
   return JSON.parse(response.body);
 }
 
-test("guided template structures round-trip through schema-52 backup without changing device snapshots", async () => {
+test("guided template structures round-trip through current-schema backup without changing device snapshots", async () => {
   const token = await bootstrapAdmin();
   let template = createStarterTemplate(
     "server-2u",
