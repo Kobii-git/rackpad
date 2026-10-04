@@ -339,7 +339,7 @@ test("ambiguous legacy ownership rejects edits, regeneration and deletion atomic
   }
 });
 
-test("unique legacy aliases preserve slot identities and detached ports survive source deletion", () => {
+test("unique legacy aliases preserve slot identities and detached ports survive source regeneration and deletion", () => {
   const original = twoFaceBlocks();
   const rear = templatePortBlocks(original).find(block => block.face === "rear")!;
   original.portSlots = original.portSlots.map(slot => slot.face === "rear" ? { ...slot, id: slot.id.replace("access:rear-", "access-"), groupId: undefined } : slot);
@@ -349,10 +349,14 @@ test("unique legacy aliases preserve slot identities and detached ports survive 
     const port = original.portSlots.find(slot => slot.face === "rear")!;
     const detached = transferTemplateItem(original, { kind: "port", id: port.id, face: "rear" }, copy);
     const movedPort = detached.portSlots.at(-1)!;
-    const removed = deletePortBlock(detached, rear);
+    const regeneratedSource = replacePortBlock(detached, { ...templatePortBlocks(detached).find(block => block.face === "rear")!, width: 300 });
+    assert.equal(regeneratedSource.portSlots.length, detached.portSlots.length);
+    assert.deepEqual(regeneratedSource.portSlots.find(slot => slot.id === movedPort.id), movedPort);
+    const removed = deletePortBlock(regeneratedSource, rear);
     const front = templatePortBlocks(removed).find(block => block.face === "front")!;
     const regenerated = replacePortBlock(removed, { ...front, x: 120 });
     assert.deepEqual(regenerated.portSlots.find(slot => slot.id === movedPort.id), movedPort);
+    assert.deepEqual(regenerated.portSlots.filter(slot => slot.groupId === front.id).map(slot => slot.id), original.portSlots.filter(slot => slot.face === "front").map(slot => slot.id));
     assert.doesNotThrow(() => validateHardwareTemplateV1(regenerated));
   }
 });

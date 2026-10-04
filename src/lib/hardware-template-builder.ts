@@ -445,7 +445,13 @@ export function replacePortBlock(
     : [];
   const ownedIds = new Set(owned.map(slot => slot.id));
   const retained = template.portSlots.filter(slot => !ownedIds.has(slot.id));
-  const generated = generatePortBlock(normalizedBlock).map(slot => {
+  const generated = generatePortBlock(normalizedBlock).filter(slot => {
+    const legacyId = slot.id.replace(`${groupId}-`, `${portBlockBaseId(groupId)}-`);
+    // A detached legacy cell stays excluded unless this block already owns
+    // the qualified slot; a sibling's legacy exclusion must not erase it.
+    return !normalizedBlock.excludedSlotIds?.includes(legacyId)
+      || owned.some(entry => entry.id === slot.id);
+  }).map(slot => {
     const legacyId = slot.id.replace(`${groupId}-`, `${portBlockBaseId(groupId)}-`);
     const prior = owned.find(entry => entry.id === slot.id)
       ?? owned.find(entry => entry.id === legacyId);
