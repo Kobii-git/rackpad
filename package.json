@@ -30,6 +30,7 @@
     "lint": "eslint . --max-warnings=0",
     "lint:proof": "node scripts/check-lint-gate.mjs",
     "check:i18n": "node --test scripts/i18n-value-rules.test.mjs && node scripts/check-i18n-values.mjs",
+    "check:codeql-review": "node scripts/check-codeql-review.mjs",
     "check:bundle": "node scripts/check-bundle-size.mjs",
     "check:config": "node --import tsx --test scripts/check-healthcheck.test.mjs && node --test scripts/check-env-contract.test.mjs scripts/check-release-contract.test.mjs scripts/check-publication.test.mjs scripts/install-docker.test.mjs && node scripts/check-env-contract.mjs && node scripts/check-dockerignore.mjs",
     "check:proxmox": "node scripts/check-proxmox.mjs && bash deploy/proxmox/tests/test-proxmox.sh",

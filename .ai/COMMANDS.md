@@ -25,6 +25,7 @@ separately.
 | All tests | `test:full` | Canonical environment-heavy aggregation |
 | Production build | `build` | Canonical client/server build |
 | Bundle/lazy locales | `check:bundle` | Run after `build` |
+| Committed CodeQL approval | `check:codeql-review` | Read-only preflight on a clean committed server tree; approval renewal requires independent review |
 | Env and Docker ignores | `check:config` | Canonical deployment/config gate |
 | Proxmox native LXC | `check:proxmox` | Canonical helper/metadata/privilege/rollback fixture gate |
 | AI-doc consistency | `check:docs` | Canonical durable-context gate |

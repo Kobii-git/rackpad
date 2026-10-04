@@ -20,6 +20,9 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Verify committed CodeQL review approval
+        run: npm run check:codeql-review
+
       - name: Install dependencies
         run: npm ci
 

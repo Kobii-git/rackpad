@@ -33,6 +33,10 @@ workflow also requires `test:e2e:storage`, `test:snmp:interop`, and then
 a disposable Net-SNMP fixture and runs both peers on an internal Docker bridge;
 it publishes no host ports. Storage compatibility installs Chromium and Firefox
 and tests both fresh data and a temporary schema-50 upgrade.
+Quality runs `check:codeql-review` before dependency installation to verify the
+actual committed server tree against the independently reviewed SNMP exception.
+Run it after committing server changes; working server edits intentionally fail.
+
 Run the bundled-font browser preflight before the long browser matrix; install
 dependencies within the worktree so Vite can serve font assets. Workflow lint and
 Bash syntax, ShellCheck, actionlint, and PowerShell syntax remain CI steps
