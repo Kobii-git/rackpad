@@ -1,4 +1,4 @@
-import { createStarterTemplate, createHardwareModule } from "../src/lib/hardware-template-builder";
+import { createStarterTemplate, createHardwareModule, replacePortBlock } from "../src/lib/hardware-template-builder";
 import { rackCableFixture, rackShelfCableFixture } from "./fixtures/rack-cables";
 import { devicePlacementState } from "../src/lib/rack-studio";
 import type { Device, Port } from "../src/lib/types";
@@ -6547,4 +6547,54 @@ test("remaining feedback template colors, resizing, grids and face operations pe
     expect(accessibility.violations.filter(violation => violation.impact === "critical" || violation.impact === "serious")).toEqual([]);
     await page.screenshot({path:test.info().outputPath("remaining-template-controls.png"),fullPage:true});
   } finally {await request.delete(`/api/hardware-templates/${id}`,{headers});}
+});
+
+test("template block transfers preserve sibling ports through regeneration save and reload", async ({ page, request }) => {
+  const id = `block-transfer-${Date.now().toString(36)}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  let source = createStarterTemplate("patch-panel", id, id);
+  source.modules = []; source.portSlots = []; source.portBlueprints = [];
+  const block = { id: "access", face: "front" as const, connector: "rj45" as const,
+    count: 2, rows: 1, columns: 2, start: 1, direction: "left-to-right" as const,
+    x: 100, y: 70, width: 240, height: 60 };
+  source = replacePortBlock(source, block);
+  source = replacePortBlock(source, { ...block, face: "rear", x: 500 });
+  source.portSlots[0].color = "#123456"; source.portSlots[0].rotation = 90;
+  const originalFront = source.portSlots.filter(slot => slot.face === "front");
+  expect((await request.post("/api/hardware-templates", { headers, data: source })).status()).toBe(201);
+  try {
+    await authenticate(page); await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/admin/device-types");
+    await page.getByTestId("device-type-section-built-in").getByRole("button").filter({ hasText: "patch_panel" }).click();
+    const builder = page.getByTestId("hardware-template-builder");
+    await builder.getByRole("combobox", { name: "Templates", exact: true }).selectOption(id);
+    const controls = builder.getByTestId("template-item-controls");
+    await controls.getByRole("combobox").selectOption("block::rear:access:rear");
+    await controls.getByRole("button", { name: "Move to other face", exact: true }).click();
+    const editor = builder.getByTestId("template-port-block-editor");
+    await editor.getByTestId("template-port-blocks").selectOption("front:access:rear");
+    await editor.getByRole("spinbutton", { name: "Width", exact: true }).fill("300");
+    await editor.getByRole("button", { name: "Update", exact: true }).click();
+    const save = page.waitForResponse(response => response.request().method() === "PATCH" && response.url().endsWith(`/api/hardware-templates/${id}`));
+    await builder.getByRole("button", { name: "Save template", exact: true }).click();
+    expect((await save).status()).toBe(200);
+    const readTemplate = async () => {
+      const result = await request.get("/api/hardware-templates", { headers });
+      expect(result.status()).toBe(200);
+      return (await result.json()).templates.find((entry: typeof source) => entry.id === id) as typeof source;
+    };
+    const saved = await readTemplate();
+    expect(saved.portSlots.filter(slot => slot.groupId === "access:front")).toEqual(originalFront);
+    expect(saved.portSlots.map(slot => slot.id).sort()).toEqual(source.portSlots.map(slot => slot.id).sort());
+    expect(saved.portBlueprints).toHaveLength(2);
+    await page.reload();
+    await builder.getByRole("combobox", { name: "Templates", exact: true }).selectOption(id);
+    await editor.getByTestId("template-port-blocks").selectOption("front:access:rear");
+    await expect(editor.getByRole("spinbutton", { name: "Width", exact: true })).toHaveValue("300");
+    await editor.getByRole("button", { name: "Delete", exact: true }).click();
+    const deleteSave = page.waitForResponse(response => response.request().method() === "PATCH" && response.url().endsWith(`/api/hardware-templates/${id}`));
+    await builder.getByRole("button", { name: "Save template", exact: true }).click();
+    expect((await deleteSave).status()).toBe(200);
+    expect((await readTemplate()).portSlots).toEqual(originalFront);
+  } finally { await request.delete(`/api/hardware-templates/${id}`, { headers }); }
 });

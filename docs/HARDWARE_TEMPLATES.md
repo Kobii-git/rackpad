@@ -65,6 +65,9 @@ or resizing a module position transforms every associated module's artwork and
 ports together, preserving IDs and compatible metadata.
 
 **Copy to other face** creates fresh IDs; **Move to other face** retains IDs.
+Blocks are identified by their ID and face, so transferred front/rear siblings
+remain independent when updated or deleted. Ambiguous legacy port ownership is
+rejected without changing the draft.
 Module positions carry their modules and parts. Module parts transfer with their
 position. Vertical geometry scales to the destination face height; operations
 that exceed its bounds are rejected. A port moved out of a block stays detached

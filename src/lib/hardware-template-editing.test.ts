@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createStarterTemplate,
+  deletePortBlock,
   createHardwareModule,
   replacePortBlock,
   templatePortBlocks,
 } from "./hardware-template-builder";
 import {
   templateItems,
+  templateItemValue,
   transferTemplateItem,
   updateModuleGrid,
   updateTemplateItem,
@@ -261,4 +263,109 @@ test("legacy ungrouped block slots transform and cannot overwrite a destination 
       ),
     /already contains/,
   );
+});
+
+function twoFaceBlocks() {
+  let template = createStarterTemplate("server-2u");
+  template.modules = [];
+  template.portSlots = [];
+  template.portBlueprints = [];
+  const block = {
+    id: "access", face: "front" as const, connector: "rj45" as const,
+    count: 2, rows: 1, columns: 2, start: 1,
+    direction: "left-to-right" as const, x: 100, y: 70, width: 240, height: 60,
+  };
+  template = replacePortBlock(template, block);
+  template = replacePortBlock(template, { ...block, face: "rear", x: 500 });
+  return template;
+}
+
+test("transferred face-qualified blocks regenerate and delete without consuming their sibling", () => {
+  for (const ungrouped of [false, true]) {
+    const original = twoFaceBlocks();
+    if (ungrouped) original.portSlots.forEach(slot => { delete slot.groupId; });
+    const frontPorts = structuredClone(original.portSlots.filter(slot => slot.face === "front"));
+    const rear = templatePortBlocks(original).find(block => block.face === "rear")!;
+    const moved = transferTemplateItem(original, { kind: "block", id: rear.id, face: "rear" }, false);
+    const regenerated = replacePortBlock(moved, { ...rear, face: "front", x: 550 });
+    assert.deepEqual(regenerated.portSlots.filter(slot => frontPorts.some(port => port.id === slot.id)), frontPorts);
+    assert.equal(regenerated.portSlots.length, original.portSlots.length);
+    assert.equal(templatePortBlocks(regenerated).length, 2);
+    const deleted = deletePortBlock(regenerated, { ...rear, face: "front" });
+    assert.deepEqual(deleted.portSlots, frontPorts);
+    assert.equal(templatePortBlocks(deleted).length, 1);
+    assert.doesNotThrow(() => validateHardwareTemplateV1(regenerated));
+  }
+});
+
+test("legacy shared blueprint IDs resize only the selected face", () => {
+  for (const ungrouped of [false, true]) {
+    const template = twoFaceBlocks();
+    template.portBlueprints = template.portBlueprints.map(block => ({ ...block, id: "shared" }));
+    template.portSlots = template.portSlots.map(slot => ({ ...slot, id: `${slot.face}-${slot.id}`, groupId: "shared" }));
+    if (ungrouped) template.portSlots = template.portSlots.map((slot, index) => {
+      const next = { ...slot, id: `shared-${index + 1}` }; delete next.groupId; return next;
+    });
+    validateHardwareTemplateV1(template);
+    const before = structuredClone(template);
+    const item = { kind: "block" as const, id: "shared", face: "rear" as const };
+    const selected = templateItemValue(template, item);
+    assert.ok(selected && "face" in selected);
+    assert.equal(selected.face, "rear");
+    const changed = updateTemplateItem(template, item, { width: 300 });
+    assert.deepEqual(changed.portSlots.filter(slot => slot.face === "front"), before.portSlots.filter(slot => slot.face === "front"));
+    assert.notDeepEqual(changed.portSlots.filter(slot => slot.face === "rear"), before.portSlots.filter(slot => slot.face === "rear"));
+    assert.deepEqual(template, before);
+    assert.doesNotThrow(() => validateHardwareTemplateV1(changed));
+  }
+});
+
+test("ambiguous legacy ownership rejects edits, regeneration and deletion atomically", () => {
+  const original = twoFaceBlocks();
+  const rear = templatePortBlocks(original).find(block => block.face === "rear")!;
+  const moved = transferTemplateItem(original, { kind: "block", id: rear.id, face: "rear" }, false);
+  moved.portSlots = moved.portSlots.map((slot, index) => ({ ...slot, id: `access-${index + 1}`, groupId: undefined }));
+  const before = structuredClone(moved);
+  const item = { kind: "block" as const, id: rear.id, face: "front" as const };
+  for (const operation of [
+    () => updateTemplateItem(moved, item, { width: 300 }),
+    () => replacePortBlock(moved, { ...rear, face: "front", width: 300 }),
+    () => deletePortBlock(moved, { ...rear, face: "front" }),
+    () => transferTemplateItem(moved, item, true),
+    () => replacePortBlock(moved, { ...rear, id: "access", face: "front" }),
+  ]) {
+    assert.throws(operation, /Ambiguous/);
+    assert.deepEqual(moved, before);
+  }
+});
+
+test("unique legacy aliases preserve slot identities and detached ports survive source deletion", () => {
+  const original = twoFaceBlocks();
+  const rear = templatePortBlocks(original).find(block => block.face === "rear")!;
+  original.portSlots = original.portSlots.map(slot => slot.face === "rear" ? { ...slot, id: slot.id.replace("access:rear-", "access-"), groupId: undefined } : slot);
+  const resized = replacePortBlock(original, { ...rear, id: "access", width: 300 });
+  assert.deepEqual(resized.portSlots.map(slot => slot.id), original.portSlots.map(slot => slot.id));
+  for (const copy of [false, true]) {
+    const port = original.portSlots.find(slot => slot.face === "rear")!;
+    const detached = transferTemplateItem(original, { kind: "port", id: port.id, face: "rear" }, copy);
+    const movedPort = detached.portSlots.at(-1)!;
+    const removed = deletePortBlock(detached, rear);
+    const front = templatePortBlocks(removed).find(block => block.face === "front")!;
+    const regenerated = replacePortBlock(removed, { ...front, x: 120 });
+    assert.deepEqual(regenerated.portSlots.find(slot => slot.id === movedPort.id), movedPort);
+    assert.doesNotThrow(() => validateHardwareTemplateV1(regenerated));
+  }
+});
+
+test("copying a qualified block with legacy slot IDs preserves copied identities on regeneration", () => {
+  const original = twoFaceBlocks();
+  const rear = templatePortBlocks(original).find(block => block.face === "rear")!;
+  original.portSlots = original.portSlots.map(slot => slot.face === "rear" ? { ...slot, id: slot.id.replace("access:rear-", "access-"), groupId: undefined, color: "#aabbcc", rotation: 90 } : slot);
+  const copied = transferTemplateItem(original, { kind: "block", id: rear.id, face: "rear" }, true);
+  const added = templatePortBlocks(copied).find(block => block.id !== "access:front" && block.id !== "access:rear")!;
+  const copiedPorts = copied.portSlots.filter(slot => slot.groupId === added.id);
+  const regenerated = replacePortBlock(copied, { ...added, x: 550 });
+  assert.deepEqual(regenerated.portSlots.filter(slot => slot.groupId === added.id).map(slot => ({ id: slot.id, color: slot.color, rotation: slot.rotation })), copiedPorts.map(slot => ({ id: slot.id, color: slot.color, rotation: slot.rotation })));
+  assert.deepEqual(regenerated.portSlots.filter(slot => slot.groupId !== added.id), original.portSlots);
+  assert.doesNotThrow(() => validateHardwareTemplateV1(regenerated));
 });

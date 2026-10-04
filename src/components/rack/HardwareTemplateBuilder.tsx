@@ -1018,9 +1018,8 @@ export function HardwareTemplateBuilder({
                       editingBlock.id,
                       blocks.map((entry) => entry.id),
                     );
-                    setDraft((current) =>
-                      replacePortBlock(current, { ...editingBlock, id }),
-                    );
+                    try { setDraft(replacePortBlock(draft, { ...editingBlock, id })); setError(""); }
+                    catch { setError(t("Could not update template item.")); return; }
                     setBlock({
                       ...editingBlock,
                       id: `${id}:${editingBlock.face}`,
@@ -1038,9 +1037,8 @@ export function HardwareTemplateBuilder({
                   disabled={!editingBlock}
                   onClick={() => {
                     if (!editingBlock) return;
-                    setDraft((current) =>
-                      deletePortBlock(current, editingBlock),
-                    );
+                    try { setDraft(deletePortBlock(draft, editingBlock)); setError(""); }
+                    catch { setError(t("Could not update template item.")); return; }
                     setEditingBlockKey("");
                     setBlock({ ...EMPTY_BLOCK, face });
                   }}

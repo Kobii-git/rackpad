@@ -437,74 +437,37 @@ export function replacePortBlock(
   template: HardwareTemplateV1,
   block: PortBlockDefinition,
 ): HardwareTemplateV1 {
-  const baseId = portBlockBaseId(block.id);
-  const replacedBlueprints = template.portBlueprints.filter(
-    (entry) =>
-      portBlockBlueprintFace(entry) === block.face &&
-      portBlockBlueprintBaseId(entry) === baseId,
-  );
-  // Existing blueprint IDs belong to persisted template/port identities. Only
-  // new blocks need face qualification; geometry edits must retain selection.
-  const existing = replacedBlueprints.find((entry) => entry.id === block.id)
-    ?? replacedBlueprints[0];
-  const groupId = typeof existing?.id === "string"
-    ? safeId(existing.id)
-    : faceQualifiedPortBlockId(baseId, block.face);
+  const existing = resolvePortBlock(template, block);
+  const groupId = existing?.id ?? faceQualifiedPortBlockId(block.id, block.face);
   const normalizedBlock = { ...block, id: groupId };
-  const replacedGroupIds = new Set([
-    baseId,
-    groupId,
-    ...replacedBlueprints
-      .map((entry) =>
-        typeof entry.id === "string" ? safeId(entry.id) : undefined,
-      )
-      .filter((id): id is string => Boolean(id)),
-  ]);
-  const nextBlocks = [
-    ...template.portBlueprints.filter(
-      (entry) =>
-        !(
-          portBlockBlueprintFace(entry) === block.face &&
-          portBlockBlueprintBaseId(entry) === baseId
-        ),
-    ),
-    normalizedBlock,
-  ];
+  const owned = existing
+    ? template.portSlots.filter(slot => portBlockOwnsSlot(template, existing, slot))
+    : [];
+  const ownedIds = new Set(owned.map(slot => slot.id));
+  const retained = template.portSlots.filter(slot => !ownedIds.has(slot.id));
+  const generated = generatePortBlock(normalizedBlock).map(slot => {
+    const legacyId = slot.id.replace(`${groupId}-`, `${portBlockBaseId(groupId)}-`);
+    const prior = owned.find(entry => entry.id === slot.id)
+      ?? owned.find(entry => entry.id === legacyId);
+    return {
+      ...prior,
+      ...slot,
+      ...(prior ? { id: prior.id, rotation: prior.rotation } : {}),
+      ...(prior?.color ? { color: prior.color } : {}),
+      ...(prior?.connector === slot.connector ? { acceptedPortKinds: prior.acceptedPortKinds } : {}),
+      ...(prior && existing?.labelPrefix === block.labelPrefix && existing?.start === block.start ? { label: prior.label } : {}),
+    };
+  }).filter(slot => !normalizedBlock.excludedSlotIds?.includes(slot.id));
+  if (generated.some(slot => retained.some(entry => entry.id === slot.id)))
+    throw new Error("Port block would overwrite an unrelated slot.");
   return {
     ...template,
-    portSlots: [
-      ...template.portSlots.filter(
-        (slot) =>
-          slot.face !== block.face ||
-          !(
-            (slot.groupId && replacedGroupIds.has(safeId(slot.groupId))) ||
-            (!slot.groupId && [...replacedGroupIds].some(id => slot.id.startsWith(`${id}-`)) && !normalizedBlock.excludedSlotIds?.includes(slot.id))
-          ),
-      ),
-      ...generatePortBlock(normalizedBlock).map(slot => {
-        const prior = template.portSlots.find(entry => entry.id === slot.id);
-        return {
-          ...prior,
-          ...slot,
-          ...(prior?.color ? {color: prior.color} : {}),
-          ...(prior ? {rotation: prior.rotation} : {}),
-          ...(prior?.connector === slot.connector ? {acceptedPortKinds: prior.acceptedPortKinds} : {}),
-          ...(prior && existing?.labelPrefix === block.labelPrefix && existing?.start === block.start ? {label: prior.label} : {}),
-        };
-      }),
+    portSlots: [...retained, ...generated],
+    portBlueprints: [
+      ...template.portBlueprints.filter(entry => entry.id !== existing?.id || entry.face !== existing?.face),
+      normalizedBlock,
     ],
-    portBlueprints: nextBlocks,
   };
-}
-
-function portBlockBlueprintFace(entry: Record<string, unknown>) {
-  return entry.face === "front" || entry.face === "rear"
-    ? entry.face
-    : undefined;
-}
-
-function portBlockBlueprintBaseId(entry: Record<string, unknown>) {
-  return typeof entry.id === "string" ? portBlockBaseId(entry.id) : undefined;
 }
 
 function portBlockBaseId(id: string) {
@@ -596,30 +559,50 @@ export function templatePortBlocks(
   ) as unknown as PortBlockDefinition[];
 }
 
+/** Resolve persisted identity first; legacy family aliases must be unambiguous. */
+export function resolvePortBlock(
+  template: HardwareTemplateV1,
+  block: Pick<PortBlockDefinition, "id" | "face">,
+): PortBlockDefinition | undefined {
+  const faceBlocks = templatePortBlocks(template).filter(entry => entry.face === block.face);
+  const exact = faceBlocks.filter(entry => entry.id === block.id);
+  const candidates = exact.length ? exact : faceBlocks.filter(entry => portBlockBaseId(entry.id) === portBlockBaseId(block.id));
+  if (candidates.length > 1) throw new Error("Ambiguous port block identity.");
+  return candidates[0];
+}
+
+/** Never let a shared base ID transfer ownership between sibling blocks. */
+export function portBlockOwnsSlot(
+  template: HardwareTemplateV1,
+  block: PortBlockDefinition,
+  slot: PhysicalPortSlotV1,
+): boolean {
+  if (slot.face !== block.face || block.excludedSlotIds?.includes(slot.id)) return false;
+  const faceBlocks = templatePortBlocks(template).filter(entry => entry.face === slot.face);
+  let candidates: PortBlockDefinition[];
+  if (slot.groupId) {
+    const exact = faceBlocks.filter(entry => entry.id === slot.groupId);
+    candidates = exact.length ? exact : faceBlocks.filter(entry => portBlockBaseId(entry.id) === portBlockBaseId(slot.groupId!));
+  } else {
+    if (templatePortBlocks(template).some(entry => entry.excludedSlotIds?.includes(slot.id))) return false;
+    const exact = faceBlocks.filter(entry => slot.id.startsWith(`${entry.id}-`));
+    candidates = exact.length ? exact : faceBlocks.filter(entry => slot.id.startsWith(`${portBlockBaseId(entry.id)}-`));
+  }
+  if (!candidates.some(entry => entry.id === block.id)) return false;
+  if (candidates.length > 1) throw new Error("Ambiguous port slot ownership.");
+  return true;
+}
+
 export function deletePortBlock(
   template: HardwareTemplateV1,
   block: PortBlockDefinition,
 ): HardwareTemplateV1 {
-  const base = portBlockBaseId(block.id);
+  const existing = resolvePortBlock(template, block);
+  if (!existing) return template;
   return {
     ...template,
-    portBlueprints: template.portBlueprints.filter(
-      (entry) =>
-        !(
-          entry.face === block.face &&
-          typeof entry.id === "string" &&
-          portBlockBaseId(entry.id) === base
-        ),
-    ),
-    portSlots: template.portSlots.filter(
-      (slot) =>
-        !(
-          slot.face === block.face &&
-          (slot.groupId
-            ? portBlockBaseId(slot.groupId) === base
-            : slot.id.startsWith(`${base}-`))
-        ),
-    ),
+    portBlueprints: template.portBlueprints.filter(entry => entry.id !== existing.id || entry.face !== existing.face),
+    portSlots: template.portSlots.filter(slot => !portBlockOwnsSlot(template, existing, slot)),
   };
 }
 
