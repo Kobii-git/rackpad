@@ -893,7 +893,7 @@ export default function RackViewPage() {
                           face={face}
                           canEdit={canEdit}
                           compact
-                          emptyText={t("No {face} rack picture yet.", { face })}
+                          emptyText={t(face === "front" ? "No front rack picture yet." : "No rear rack picture yet.")}
                         />
                       </div>
                     ))}

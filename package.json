@@ -43,8 +43,8 @@
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
-    "@fastify/rate-limit": "^11.1.0",
-    "@fastify/static": "^10.1.2",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/static": "^10.1.5",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/ibm-plex-sans": "^5.2.8",
     "@radix-ui/react-dialog": "^1.1.19",
@@ -67,7 +67,6 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.18.2",
-    "recharts": "^2.15.0",
     "tailwind-merge": "^2.6.0",
     "yaml": "^2.9.0"
   },
