@@ -66,7 +66,7 @@ test("real MCP SDK client previews one lab batch and a person applies it once", 
   await db.backup(legacyPath);
   const legacy = new Database(legacyPath);
   try {
-    legacy.exec("DROP TABLE mcpTokens; UPDATE schemaVersion SET version = 52");
+    legacy.exec("DROP TABLE deviceStackMemberLayouts; DROP TABLE mcpTokens; UPDATE schemaVersion SET version = 52");
     assert.equal(validateRackpadSqliteDatabase(legacy, "Legacy snapshot"), 52);
   } finally { legacy.close(); }
   const address = await app.listen({ host: "127.0.0.1", port: 0 });

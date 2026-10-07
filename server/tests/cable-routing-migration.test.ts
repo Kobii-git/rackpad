@@ -36,7 +36,7 @@ test("schema 51 upgrades routing metadata, validates native backups, and cleans 
     const legacy = new Database(file);
     legacy.pragma("foreign_keys=ON");
     legacy.exec(`DROP TRIGGER cable_guide_device_delete; DROP TRIGGER cable_guide_device_room; DROP TRIGGER cable_guide_rack_room;
-      ALTER TABLE portLinks DROP COLUMN routeMode; ALTER TABLE portLinks DROP COLUMN routeGuides; UPDATE schemaVersion SET version=51;
+      DROP TABLE deviceStackMemberLayouts; ALTER TABLE portLinks DROP COLUMN routeMode; ALTER TABLE portLinks DROP COLUMN routeGuides; UPDATE schemaVersion SET version=51;
       INSERT INTO labs(id,name) VALUES ('test','Test');
       INSERT INTO rooms(id,labId,name) VALUES ('room','test','Room');
       INSERT INTO devices(id,labId,roomId,hostname,deviceType) VALUES ('a','test','room','a','server'),('b','test','room','b','server'),('guide','test','room','Brush','blanking_panel');

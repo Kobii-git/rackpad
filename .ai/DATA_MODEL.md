@@ -108,8 +108,8 @@ and `ports.stackMemberId`. Members belong to a logical `switch_stack` device or
 its descendant type. Ports may reference only members of their own device.
 Heights are member sums (empty stacks use 1U), with transactional placement and
 reorder validation. Populated stack type/ancestry changes and referenced member
-deletion are rejected. Generic stack layouts are derived from members and
-canonical ports; there are no independent member templates or monitoring IDs.
+deletion are rejected. Stack layouts are derived from ordered members and canonical ports. Members
+retain one shared monitoring identity and may have independent applied snapshots.
 Logical/native restores validate all stack metadata and geometry atomically.
 The native validator accepts genuine schema-50 snapshots for startup migration,
 rejects inconsistent version markers, and retains the security cutoff at 50.
@@ -124,3 +124,20 @@ a guide device is deleted or leaves its declared room, without deleting cables.
 Create/edit/bulk APIs and logical/native backups validate both fields. Inactive
 guides and waypoints survive mode changes. Client placement/room mutations
 refresh affected guide metadata from the server.
+
+Schema 53 adds personal MCP token hashes and grants; logical/native backups exclude
+these ephemeral credentials. MCP proposals are process-local, one-hour, same-user
+review/apply drafts with live authorization and inventory revalidation.
+
+Schema 54 adds `deviceStackMemberLayouts`, keyed by immutable member ID with a
+cascading member FK. Source-template identity is intentionally not a FK: library
+removal must not erase an applied snapshot. Stored schema-v1 resolved layouts,
+canonical bindings, status/fingerprint and timestamps participate in logical/native
+recovery validation. Older snapshots omit member layouts and keep generic faces.
+Preview/apply atomically assigns explicitly selected unassigned ports, creates
+approved missing ports and accepts approved member-height changes. Other members'
+ports are ineligible. Full member/device/template/port/link inputs enter the stale
+fingerprint. Composition namespaces slots by member ID and scales into ordered
+member footprints, preserving canonical port/link identities across reorder.
+Optional per-face `artworkOrder` uses module-qualified template references and
+flattened resolved references; validators reject duplicates and missing references.

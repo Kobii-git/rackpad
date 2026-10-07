@@ -343,6 +343,9 @@ test("lab authorization covers every member method, unauthenticated and viewers"
     ["GET" | "POST" | "PATCH" | "DELETE" | "PUT", string, object?]
   > = [
     ["GET", `/api/devices/${stack.id}/stack-members`],
+    ["GET", `/api/devices/${stack.id}/stack-members/${m.id}/physical-layout`],
+    ["POST", `/api/devices/${stack.id}/stack-members/${m.id}/physical-layout/preview`, {templateId: "generic-auto-v1"}],
+    ["POST", `/api/devices/${stack.id}/stack-members/${m.id}/physical-layout/apply`, {templateId: "generic-auto-v1"}],
     ["POST", `/api/devices/${stack.id}/stack-members`, { name: "New" }],
     [
       "PATCH",
@@ -735,7 +738,7 @@ test("schema50 upgrades without changing existing ports and old logical backups 
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
     ALTER TABLE portLinks DROP COLUMN routeGuides;
-    DROP TRIGGER ports_stack_owner_insert; DROP TRIGGER ports_stack_owner_update; DROP TRIGGER stack_member_device_immutable; DROP TRIGGER stack_device_delete; DROP TRIGGER stack_type_guard; DROP TRIGGER stack_height_guard; DROP INDEX idx_ports_stack_member; ALTER TABLE ports DROP COLUMN stackMemberId; DROP TABLE deviceStackMemberMacs; DROP TABLE deviceStackMembers; UPDATE schemaVersion SET version=50; INSERT INTO labs (id,name) VALUES ('legacy','Legacy'); INSERT INTO devices (id,labId,hostname,deviceType) VALUES ('legacy-switch','legacy','old-switch','switch'); INSERT INTO ports (id,deviceId,name,position,kind) VALUES ('legacy-port','legacy-switch','Port1',1,'rj45');`,
+    DROP TABLE deviceStackMemberLayouts; DROP TRIGGER ports_stack_owner_insert; DROP TRIGGER ports_stack_owner_update; DROP TRIGGER stack_member_device_immutable; DROP TRIGGER stack_device_delete; DROP TRIGGER stack_type_guard; DROP TRIGGER stack_height_guard; DROP INDEX idx_ports_stack_member; ALTER TABLE ports DROP COLUMN stackMemberId; DROP TABLE deviceStackMemberMacs; DROP TABLE deviceStackMembers; UPDATE schemaVersion SET version=50; INSERT INTO labs (id,name) VALUES ('legacy','Legacy'); INSERT INTO devices (id,labId,hostname,deviceType) VALUES ('legacy-switch','legacy','old-switch','switch'); INSERT INTO ports (id,deviceId,name,position,kind) VALUES ('legacy-port','legacy-switch','Port1',1,'rj45');`,
   );
   assert.equal(validateRackpadSqliteDatabase(database, "Legacy"), 50);
   database.exec("CREATE INDEX idx_ports_stack_member ON ports(name)");
@@ -802,6 +805,7 @@ test("schema50 upgrades without changing existing ports and old logical backups 
   upgraded.close();
   const backup = (await call("GET", "/api/admin/export")).json();
   backup.schemaVersion = 50;
+  delete backup.data.deviceStackMemberLayouts;
   delete backup.data.deviceStackMembers;
   delete backup.data.deviceStackMemberMacs;
   backup.data.devices = backup.data.devices.filter(
@@ -913,4 +917,118 @@ test("rack and shelf removal preserve stacks as loose devices, and parent edits 
     m.id,
   );
   assert.equal(validateRackpadSqliteDatabase(db, "After parent removal"), CURRENT_SCHEMA_VERSION);
+});
+
+test("mixed-model member snapshots retain all220 canonical ports, cables, order and recovery", async () => {
+  const {createStarterTemplate, replacePortBlock} = await import("../../src/lib/hardware-template-builder.ts");
+  const {readStackMemberLayouts} = await import("../lib/stack-member-layout-data.js");
+  const {getPhysicalLayoutDevice, getPhysicalLayoutPorts, readDevicePhysicalLayout} = await import("../lib/device-physical-layout.js");
+  const stack = await device("mixed-model-stack");
+  const memberIds: string[] = [];
+  const templateIds: string[] = [];
+  const portIds: string[] = [];
+  for (let index=0; index<5; index++) {
+    const m = await member(stack.id, `Member ${index+1}`, {manufacturer: "Fixture", model: index ? "48 RJ45" : "28 SFP+"}); memberIds.push(m.id);
+    let template = createStarterTemplate("switch-8"); template.id = `mixed-member-template-${index}`; template.name = `Model ${index}`; template.portSlots=[]; template.modules=[]; template.moduleSlots=[];
+    const count = index ? 24 : 28;
+    for (const face of index ? ["front", "rear"] as const : ["rear"] as const) template = replacePortBlock(template, {id: `ports-${face}`, face, connector: index ? "rj45" : "sfp_plus", count, rows:2, columns:count/2, start:1, direction:"left-to-right", x:100,y:90,width:800,height:120});
+    assert.equal((await call("POST", "/api/hardware-templates", template)).statusCode,201);
+    templateIds.push(template.id);
+    const url = `/api/devices/${stack.id}/stack-members/${m.id}/physical-layout`;
+    const previewResponse = await call("POST", `${url}/preview`, {templateId:template.id}); assert.equal(previewResponse.statusCode,200,previewResponse.body);
+    const preview = previewResponse.json(); assert.equal(preview.portsToCreate.length,index ? 48 :28);
+    const applied = await call("POST", `${url}/apply`, {...preview,approvedPortSlotIds:preview.portsToCreate.map((port:{slotId:string})=>port.slotId)}); assert.equal(applied.statusCode,200,applied.body); portIds.push(...applied.json().createdPortIds);
+  }
+  assert.equal(portIds.length,220); assert.equal(new Set(portIds).size,220);
+  const source = getPhysicalLayoutDevice(stack.id)!;
+  const layout = () => readDevicePhysicalLayout(source,getPhysicalLayoutPorts(stack.id));
+  const before = layout(); assert.equal(before.bindings.length,220); validateResolvedPhysicalLayoutV1(before.snapshot);
+  assert.ok(before.snapshot.portSlots.some(slot=>slot.face==="front")); assert.ok(before.snapshot.portSlots.some(slot=>slot.face==="rear"));
+  const identity = new Map(before.bindings.map(binding=>[binding.portId,binding.slotId]));
+  const peer = await device("mixed-model-peer",{deviceType:"switch"});
+  const peerPort = await call("POST","/api/ports",{deviceId:peer.id,name:"uplink",kind:"sfp_plus",face:"rear"}); assert.equal(peerPort.statusCode,201);
+  const link = await call("POST","/api/port-links",{fromPortId:portIds[0],toPortId:peerPort.json().id});assert.equal(link.statusCode,201,link.body);
+  const originalCable = db.prepare("SELECT * FROM portLinks WHERE id=?").get(link.json().id);
+  assert.equal((await call("PUT",`/api/devices/${stack.id}/stack-members/order`,{memberIds:[...memberIds].reverse()})).statusCode,200);
+  assert.equal((await call("PATCH",`/api/devices/${stack.id}/stack-members/${memberIds[0]}`,{name:"Renamed"})).statusCode,200);
+  for (const binding of layout().bindings) assert.equal(binding.slotId,identity.get(binding.portId));
+  assert.deepEqual(db.prepare("SELECT * FROM portLinks WHERE id=?").get(link.json().id),originalCable);
+  const saved = readStackMemberLayouts(db,stack.id).get(memberIds[0])!;
+  assert.equal((await call("DELETE",`/api/hardware-templates/${templateIds[0]}`)).statusCode,204);
+  assert.deepEqual(readStackMemberLayouts(db,stack.id).get(memberIds[0]),saved);
+  const wrong = await call("POST",`/api/devices/${stack.id}/stack-members/${memberIds[0]}/physical-layout/preview`,{templateId:templateIds[1],bindings:[{portId:portIds[28],slotId:"ports-front-1"}]});
+  assert.equal(wrong.statusCode,200); assert.ok(wrong.json().conflicts.length);
+  const rejected = await call("POST",`/api/devices/${stack.id}/stack-members/${memberIds[0]}/physical-layout/apply`,wrong.json()); assert.equal(rejected.statusCode,409);
+  assert.deepEqual(readStackMemberLayouts(db,stack.id).get(memberIds[0]),saved);
+  const fewer = createStarterTemplate("switch-8"); fewer.id="linked-slot-removal"; fewer.modules=[]; fewer.moduleSlots=[]; fewer.portBlueprints=[]; fewer.front=saved.snapshot.faces.front; fewer.rear=saved.snapshot.faces.rear; fewer.portSlots=saved.snapshot.portSlots.filter(slot=>slot.id!==saved.bindings[0].slotId);
+  assert.equal((await call("POST","/api/hardware-templates",fewer)).statusCode,201);
+  const removal=(await call("POST",`/api/devices/${stack.id}/stack-members/${memberIds[0]}/physical-layout/preview`,{templateId:fewer.id})).json();
+  assert.deepEqual(removal.linkedUnmappedPortIds,[saved.bindings[0].portId]);
+  assert.equal((await call("POST",`/api/devices/${stack.id}/stack-members/${memberIds[0]}/physical-layout/apply`,removal)).statusCode,409);
+  assert.deepEqual(readStackMemberLayouts(db,stack.id).get(memberIds[0]),saved);
+  const backup = (await call("GET","/api/admin/export")).json();
+  assert.equal(backup.data.deviceStackMemberLayouts.filter((row:{memberId:string})=>memberIds.includes(row.memberId)).length,5);
+  const bad = structuredClone(backup);bad.data.deviceStackMemberLayouts.find((row:{memberId:string})=>row.memberId===memberIds[0]).bindings[0].portId=portIds[28];
+  assert.equal((await call("POST","/api/admin/restore",bad)).statusCode,422);
+  assert.deepEqual(readStackMemberLayouts(db,stack.id).get(memberIds[0]),saved);
+  const nonphysical = structuredClone(backup); nonphysical.data.ports.find((row:{id:string})=>row.id===portIds[0]).portRole="aggregate";
+  assert.equal((await call("POST","/api/admin/restore",nonphysical)).statusCode,422);
+  assert.deepEqual(readStackMemberLayouts(db,stack.id).get(memberIds[0]),saved);
+  assert.equal((await call("POST","/api/admin/restore",backup)).statusCode,200);
+  token=(await call("POST","/api/auth/login",{username:"admin",password:"stack-test-password"})).json().token;
+  assert.deepEqual(readStackMemberLayouts(db,stack.id).get(memberIds[0]),saved);
+  const nativePath=path.join(directory,"member-layout-native.db");await db.backup(nativePath);
+  const native=new Database(nativePath);try {assert.equal(validateRackpadSqliteDatabase(native,"Member snapshot"),CURRENT_SCHEMA_VERSION);native.prepare("UPDATE deviceStackMemberLayouts SET bindings=? WHERE memberId=?").run(JSON.stringify([{slotId:saved.bindings[0].slotId,portId:portIds[28]}]),memberIds[0]);assert.throws(()=>validateRackpadSqliteDatabase(native,"Wrong member"),/stack integrity/);}finally{native.close();}
+});
+
+test("member layout applies reject stale state and height collisions atomically, and require explicit port assignment",async()=>{
+  const stack=await device("member-apply-stack");const first=await member(stack.id,"First");const other=await member(stack.id,"Other");
+  const port=await call("POST","/api/ports",{deviceId:stack.id,name:"unassigned",kind:"rj45"});assert.equal(port.statusCode,201);
+  const url=`/api/devices/${stack.id}/stack-members/${first.id}/physical-layout`;
+  const input={templateId:"generic-auto-v1",unassignedPortIds:[port.json().id]};
+  let preview=(await call("POST",`${url}/preview`,input)).json();
+  const implicit=(await call("POST",`${url}/preview`,{templateId:"generic-auto-v1"})).json();assert.equal(implicit.bindings.length,0);
+  assert.equal((await call("PATCH",`/api/devices/${stack.id}/stack-members/${first.id}`,{name:"Changed"})).statusCode,200);
+  assert.equal((await call("POST",`${url}/apply`,preview)).statusCode,409);
+  preview=(await call("POST",`${url}/preview`,input)).json();assert.equal((await call("POST",`${url}/apply`,preview)).statusCode,200);
+  assert.equal((await call("GET",`/api/ports/${port.json().id}`)).json().stackMemberId,first.id);
+  assert.equal((await call("POST",`/api/devices/${stack.id}/stack-members/${other.id}/physical-layout/preview`,input)).statusCode,400);
+  const legacy=(await call("POST",`${url}/preview`,{templateId:"legacy-auto-v1"})).json();
+  assert.equal((await call("POST",`${url}/apply`,legacy)).statusCode,200);
+  const appliedLegacy=(await call("GET",url)).json();assert.equal(appliedLegacy.sourceTemplateId,"legacy-auto-v1");assert.equal(appliedLegacy.status,"legacy-default");
+  const rack=(await call("POST","/api/racks",{labId:"lab_home",name:"Member bounds",totalU:2})).json();
+  const placed=await call("PATCH",`/api/devices/${stack.id}`,{placement:"rack",rackId:rack.id,startU:1,face:"front"});assert.equal(placed.statusCode,200,placed.body);
+  const before=db.prepare("SELECT * FROM deviceStackMemberLayouts WHERE memberId=?").get(first.id);
+  preview=(await call("POST",`${url}/preview`,{templateId:"generic-auto-v1",heightU:2})).json();
+  const denied=await call("POST",`${url}/apply`,{...preview,acceptHeightChange:true});assert.equal(denied.statusCode,400,denied.body);
+  assert.deepEqual(db.prepare("SELECT * FROM deviceStackMemberLayouts WHERE memberId=?").get(first.id),before);
+  assert.equal(listStackMembers(stack.id)[0].heightU,1);
+});
+
+test("schema54 migration is forward-only and rolls back its table when the version update fails",async()=>{
+  for(const fail of [false,true]){
+    const filename=path.join(directory,`member-migration-${fail}.db`);await db.backup(filename);const legacy=new Database(filename);
+    legacy.exec("DROP TABLE deviceStackMemberLayouts; UPDATE schemaVersion SET version=53");
+    if(fail)legacy.exec("CREATE TRIGGER fail_schema54 BEFORE UPDATE ON schemaVersion WHEN NEW.version=54 BEGIN SELECT RAISE(ABORT,'fixture migration failure'); END");
+    legacy.close();
+    const run=()=>execFileSync(process.execPath,["--import","tsx","--input-type=module","-e","await import('./server/db.ts');"],{cwd:process.cwd(),env:{...process.env,DATABASE_PATH:filename},stdio:"pipe"});
+    if(fail)assert.throws(run);else run();
+    const result=new Database(filename);try {assert.equal((result.prepare("SELECT version FROM schemaVersion").get() as {version:number}).version,fail?53:54);assert.equal(!!result.prepare("SELECT name FROM sqlite_master WHERE name='deviceStackMemberLayouts'").get(),!fail);}finally{result.close();}
+  }
+});
+
+test("quarter-turn member slots preserve their scaled center and stay inside the member footprint", async()=>{
+  const {buildAutoPhysicalLayout} = await import("../lib/physical-layout.js");
+  const logical={id:"rotation-stack",deviceType:"switch_stack",heightU:1};
+  const m={id:"rotation-member",deviceId:logical.id,position:0,name:"Rotated",manufacturer:null,model:null,serial:null,heightU:1,status:"unknown" as const,notes:null,macs:[]};
+  for(const rotation of [90,270] as const){
+    const snapshot=buildAutoPhysicalLayout(logical,[],"generic").snapshot;
+    snapshot.portSlots=[{id:"x".repeat(120),face:"front",x:400,y:148,width:200,height:4,rotation,connector:"rj45",acceptedPortKinds:["rj45"]}];
+    validateResolvedPhysicalLayoutV1(snapshot);
+    const composed=buildStackPhysicalLayout(logical,[],[m],new Map([[m.id,{memberId:m.id,sourceTemplateId:snapshot.sourceTemplateId,status:"accurate",snapshot,bindings:[],portFingerprint:"fixture",createdAt:"fixture",updatedAt:"fixture"}]]));
+    validateResolvedPhysicalLayoutV1(composed.snapshot);
+    const slot=composed.snapshot.portSlots[0];const centerY=slot.y+slot.height/2;
+    assert.equal(centerY,50);assert.ok(centerY-slot.width/2>=0);assert.ok(centerY+slot.width/2<=100);
+    assert.equal(slot.x+slot.width/2,500);
+  }
 });

@@ -6,6 +6,7 @@ import type {
   AuthSession,
   Device,
   DeviceStackMember,
+  StackMemberLayoutPreview,
   DeviceImage,
   DevicePlacement,
   DeviceService,
@@ -1090,6 +1091,15 @@ export const api = {
     });
   },
 
+  getStackMemberLayout(id: string, memberId: string) {
+    return request<{sourceTemplateId: string; snapshot: import("./types").ResolvedPhysicalLayoutV1; bindings: import("./types").PortBindingV1[]} | null>(`/devices/${id}/stack-members/${memberId}/physical-layout`);
+  },
+  previewStackMemberLayout(id: string, memberId: string, body: {templateId: string; moduleIds?: string[]; unassignedPortIds?: string[]; heightU?: number; bindings?: import("./types").PortBindingV1[]}) {
+    return request<StackMemberLayoutPreview>(`/devices/${id}/stack-members/${memberId}/physical-layout/preview`, {method: "POST", body: JSON.stringify(body)});
+  },
+  applyStackMemberLayout(preview: StackMemberLayoutPreview, approvedPortSlotIds: string[], acceptHeightChange: boolean) {
+    return request<{memberId: string; createdPortIds: string[]}>(`/devices/${preview.deviceId}/stack-members/${preview.memberId}/physical-layout/apply`, {method: "POST", body: JSON.stringify({...preview, approvedPortSlotIds, acceptHeightChange})});
+  },
   getStackMembers(id: string) {
     return request<DeviceStackMember[]>(`/devices/${id}/stack-members`);
   },

@@ -1,3 +1,4 @@
+import { validateStackMemberLayouts } from "./stack-member-layout-data.js";
 import {
   createRackStudioPlacementResolver,
   currentRackStudioPlacement,
@@ -10,6 +11,7 @@ import { requiredString, ValidationError } from "./validation.js";
 
 /** Uses the supplied snapshot connection; never the running application's database. */
 export function validateStackIntegrity(database: Database.Database) {
+  validateStackMemberLayouts(database);
   const settings = database
     .prepare("SELECT value FROM appSettings WHERE key = 'deviceTypes'")
     .get() as { value: string } | undefined;

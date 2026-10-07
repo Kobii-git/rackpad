@@ -1,3 +1,4 @@
+import { StackMemberLayoutEditor } from "./StackMemberLayoutEditor";
 import { useState } from "react";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
@@ -47,6 +48,7 @@ export function StackMembersPanel({
   canEdit: boolean;
 }) {
   const { t } = useI18n();
+  const records = useStore(state => state.devices).filter(row => row.labId === device.labId).flatMap(row => [row, ...(row.stackMembers ?? [])]);
   const layouts = useStore((state) => state.physicalLayouts);
   const layout = layouts.find((row) => row.deviceId === device.id);
   const members = device.stackMembers ?? [];
@@ -179,6 +181,7 @@ export function StackMembersPanel({
                 </>
               )}
             </div>
+            <StackMemberLayoutEditor device={device} member={member} ports={ports} canEdit={canEdit} />
             <p>{member.notes}</p>
             {member.macs.map((mac) => (
               <p key={mac.macAddress}>
@@ -203,11 +206,14 @@ export function StackMembersPanel({
             );
           }}
         >
+          <datalist id={`stack-${device.id}-manufacturer`}>{[...new Set(records.map(row => row.manufacturer).filter(Boolean))].sort().map(value => <option key={value} value={value!} />)}</datalist>
+          <datalist id={`stack-${device.id}-model`}>{[...new Set(records.filter(row => (row.manufacturer ?? "").toLowerCase() === (draft.manufacturer ?? "").toLowerCase()).map(row => row.model).filter(Boolean))].sort().map(value => <option key={value} value={value!} />)}</datalist>
           <fieldset disabled={busy} className="grid gap-3 sm:grid-cols-2">
             {fields.map(([key, label]) => (
               <label key={key}>
                 {t(label)}
                 <Input
+                  list={key === "manufacturer" || key === "model" ? `stack-${device.id}-${key}` : undefined}
                   required={key === "name"}
                   maxLength={120}
                   value={draft[key] ?? ""}

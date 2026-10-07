@@ -28,8 +28,10 @@ try {
     DROP TRIGGER stack_height_guard;
     DROP INDEX idx_ports_stack_member;
     ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberLayouts;
     DROP TABLE deviceStackMemberMacs;
     DROP TABLE deviceStackMembers;
+    DROP TABLE mcpTokens;
     UPDATE schemaVersion SET version = 50;
   `);
   const sections = [
