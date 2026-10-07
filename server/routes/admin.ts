@@ -1,3 +1,4 @@
+import { parseStackMemberLayout } from "../lib/stack-member-layout-data.js";
 import { validateStackIntegrity } from "../lib/stack-integrity.js";
 import { restoredMonitorCommunity } from "../lib/security-migration.js";
 import { readFileSync } from "node:fs";
@@ -192,6 +193,7 @@ const exportBackupSnapshot = db.transaction(
         hardwareTemplateDefaults: db
           .prepare("SELECT * FROM hardwareTemplateDefaults ORDER BY deviceType")
           .all(),
+        deviceStackMemberLayouts: (db.prepare("SELECT * FROM deviceStackMemberLayouts ORDER BY memberId").all() as Record<string, unknown>[]).map(row => parseRow(row, ["snapshot", "bindings"])),
         deviceStackMembers: db.prepare("SELECT * FROM deviceStackMembers ORDER BY deviceId, position").all(),
         deviceStackMemberMacs: db.prepare("SELECT * FROM deviceStackMemberMacs ORDER BY memberId, macAddress").all(),
         devicePhysicalLayouts: (
@@ -1248,6 +1250,7 @@ const restoreBackupSnapshot = db.transaction(
       "data.virtualSwitches",
     );
     const ports = normalizeArrayRecordArray(data.ports, "data.ports");
+    const memberLayouts = normalizeArrayRecordArray(data.deviceStackMemberLayouts ?? [], "data.deviceStackMemberLayouts");
     const stackMembers = normalizeArrayRecordArray(data.deviceStackMembers ?? [], "data.deviceStackMembers");
     const stackMacs = normalizeArrayRecordArray(data.deviceStackMemberMacs ?? [], "data.deviceStackMemberMacs");
     const portLinks = normalizeArrayRecordArray(
@@ -1588,6 +1591,14 @@ const restoreBackupSnapshot = db.transaction(
       ids.add(String(port.id ?? ""));
       backupPortsByDevice.set(deviceId, ids);
     }
+    const restoredMemberLayoutIds = new Set<string>();
+    for (const row of memberLayouts) {
+      const member = stackMembers.find(member => member.id === row.memberId);
+      if (!member || restoredMemberLayoutIds.has(String(row.memberId))) throw new ValidationError("Backup member layout references a missing or duplicate member.", 422, "BACKUP_INTEGRITY_INVALID");
+      try {parseStackMemberLayout(row, ports.filter(port => port.stackMemberId === row.memberId && port.deviceId === member.deviceId) as unknown as PhysicalLayoutPort[]);}
+      catch {throw new ValidationError("Backup contains an invalid member layout or port binding.", 422, "BACKUP_INTEGRITY_INVALID");}
+      restoredMemberLayoutIds.add(String(row.memberId));
+    }
     for (const row of devicePhysicalLayouts) {
       const deviceId = String(row.deviceId ?? "");
       if (!backupDeviceIds.has(deviceId)) {
@@ -1653,6 +1664,7 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM discoveryScanSchedules;
     DELETE FROM discoveredDevices;
     DELETE FROM portLinks;
+    DELETE FROM deviceStackMemberLayouts;
     DELETE FROM devicePhysicalLayouts;
     DELETE FROM ports;
     DELETE FROM deviceStackMemberMacs;
@@ -2929,6 +2941,10 @@ const restoreBackupSnapshot = db.transaction(
           "BACKUP_INTEGRITY_INVALID",
         );
       }
+    }
+    for (const row of memberLayouts) {
+      const layout = parseStackMemberLayout(row);
+      db.prepare("INSERT INTO deviceStackMemberLayouts (memberId,sourceTemplateId,status,snapshot,bindings,portFingerprint,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?)").run(layout.memberId,layout.sourceTemplateId,layout.status,JSON.stringify(layout.snapshot),JSON.stringify(layout.bindings),layout.portFingerprint,layout.createdAt,layout.updatedAt);
     }
     validateStackIntegrity(db);
     const restoredAt = new Date().toISOString();

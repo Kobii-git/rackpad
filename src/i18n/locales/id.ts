@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Bring forward": "Majukan satu lapisan",
+  "Send backward": "Mundurkan satu lapisan",
+  "Bring to front": "Bawa ke depan",
+  "Send to back": "Kirim ke belakang",
+  "Copied {name} to {face}.": "{name} disalin ke {face}.",
   "Resize side panel": "Ubah ukuran panel samping",
   "Resize item": "Ubah ukuran item",
   "Copy to other face": "Salin ke sisi lain",

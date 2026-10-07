@@ -1480,6 +1480,22 @@ const SCHEMA_MIGRATIONS = [
     `,
   },
 
+  {
+    version: 54,
+    sql: `
+      CREATE TABLE IF NOT EXISTS deviceStackMemberLayouts (
+        memberId TEXT PRIMARY KEY REFERENCES deviceStackMembers(id) ON DELETE CASCADE,
+        sourceTemplateId TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('accurate','generic-default','legacy-default','needs-mapping','invalid')),
+        snapshot TEXT NOT NULL CHECK (json_valid(snapshot)),
+        bindings TEXT NOT NULL CHECK (json_valid(bindings)),
+        portFingerprint TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+    `,
+  },
+
 ] as const;
 
 const applySchema = db.transaction(() => {

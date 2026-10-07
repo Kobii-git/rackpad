@@ -1,3 +1,4 @@
+import { readStackMemberLayouts } from "./stack-member-layout-data.js";
 import { isStackType, listStackMembers } from "./device-stacks.js";
 import { buildStackPhysicalLayout } from "./stack-layout.js";
 import { db, parseRow } from "../db.js";
@@ -93,7 +94,7 @@ function resolveInitialLayout(
   ports: PhysicalLayoutPort[],
   fallbackMode: "legacy" | "generic",
 ) {
-  if (isStackType(device.deviceType)) return buildStackPhysicalLayout(device, ports, listStackMembers(device.id));
+  if (isStackType(device.deviceType)) return buildStackPhysicalLayout(device, ports, listStackMembers(device.id), readStackMemberLayouts(db, device.id));
   const selectDefault = db.prepare(
     "SELECT templateId FROM hardwareTemplateDefaults WHERE deviceType = ?",
   );
@@ -229,6 +230,12 @@ export function initializeDevicePhysicalLayout(
 }
 
 export function reconcileDevicePhysicalLayout(deviceId: string) {
+  for (const [memberId, layout] of readStackMemberLayouts(db, deviceId)) {
+    const ports = getPhysicalLayoutPorts(deviceId).filter(port => port.stackMemberId === memberId);
+    const reconciled = reconcilePhysicalLayoutBindings({...layout, ports});
+    db.prepare("UPDATE deviceStackMemberLayouts SET bindings=?, status=?, portFingerprint=?, updatedAt=? WHERE memberId=?").run(JSON.stringify(reconciled.bindings), reconciled.status, reconciled.portFingerprint, new Date().toISOString(), memberId);
+  }
+
   const device = getPhysicalLayoutDevice(deviceId);
   if (!device || !isPhysicalLayoutDevice(device)) return null;
   const existing = db

@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const it = {
+  "Bring forward": "Porta avanti",
+  "Send backward": "Porta indietro",
+  "Bring to front": "Porta in primo piano",
+  "Send to back": "Porta in secondo piano",
+  "Copied {name} to {face}.": "{name} copiato su {face}.",
   "Resize side panel": "Ridimensiona il pannello laterale",
   "Resize item": "Ridimensiona elemento",
   "Copy to other face": "Copia sull’altra faccia",

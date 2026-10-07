@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Bring forward": "Bir katman öne getir",
+  "Send backward": "Bir katman geriye gönder",
+  "Bring to front": "En öne getir",
+  "Send to back": "En arkaya gönder",
+  "Copied {name} to {face}.": "{name}, {face} tarafına kopyalandı.",
   "Resize side panel": "Yan paneli yeniden boyutlandır",
   "Resize item": "Öğeyi yeniden boyutlandır",
   "Copy to other face": "Diğer yüze kopyala",

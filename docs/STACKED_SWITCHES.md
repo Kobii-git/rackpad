@@ -14,8 +14,8 @@ the sum, or a 1U placeholder when empty.
 
 Use **Move up** and **Move down** to set top-to-bottom order. Both work with the
 keyboard. Assign existing canonical ports to members in the workspace table;
-the member filter includes **Stack-wide ports** for unassigned ports. Ports are
-not generated or renamed. Unassign referenced ports before deleting a member.
+the member filter includes **Stack-wide ports** for unassigned ports. Ordinary member edits do not generate or rename ports.
+Member layout apply can create only explicitly approved missing ports. Unassign referenced ports before deleting a member.
 A populated stack cannot change device type or lose its stack ancestry.
 
 The stack retains one hostname, management IP, status, monitoring identity,
@@ -26,11 +26,23 @@ and member changes commit together and reject rack overlap or invalid bounds.
 Rack shrinking is also checked against stacks. Deleting a rack or parent shelf
 unmounts surviving stacks while preserving their members and port assignments.
 
-Rack Studio and Rack Cabling use generic member faces from the same physical
-layout that supplies cable anchors, selection targets, and exports. Member
-hardware templates and independent member placement/monitoring are not supported.
-The physical-layout view is read-only for stacks; inherited canonical port
-creation templates remain available.
+Each member has its own **Physical layout** selector and Preview/Apply controls.
+Choose a hardware template and installed modules, inspect both faces and canonical
+port mappings, and approve each missing port you want created. Unassigned
+stack-wide ports must be explicitly selected before they become mapping candidates;
+ports belonging to another member cannot be taken implicitly. Linked ports must
+remain mapped. Changing the proposed member height also requires an explicit
+approval, and apply rejects rack bounds or collisions atomically.
+
+Applied layouts are independent snapshots. Editing or deleting the library
+source does not change a member. Reordering and renaming members preserve slot
+namespaces, canonical port IDs and cables. Rack Studio, Rack Cabling, tracing and
+exports use the same composed snapshots, scaled into member footprints. Members
+without a snapshot keep generic faces; unassigned stack-wide ports retain their
+separate area. Unmapped member ports remain visible in a generic area within
+that member. Members still share the logical device's placement and monitoring.
+Manufacturer/model suggestions come from accessible records in the current lab;
+model suggestions are filtered by manufacturer and both fields accept free text.
 
 ## Backup and compatibility
 
@@ -44,8 +56,16 @@ Native restores validate the supplied snapshot rather than the active database.
 
 Retain the encryption key and take a database/configuration backup before
 upgrading. Rollback requires the matching previous application and pre-upgrade
-database/configuration snapshot. Never run an older binary against schema 51.
+database/configuration snapshot. Never run an older binary against an unsupported schema.
 Existing backups remain sensitive and are not deleted automatically.
+
+Schema 54 appends `deviceStackMemberLayouts`, keyed by member ID, with the
+resolved snapshot, canonical bindings, status, source-template identity and
+fingerprint. Logical/native recovery validates ownership, physical-port kinds,
+slot references and compatibility. Backups without this table restore generic
+member faces. Snapshots remain valid when their source library template is absent.
+Before schema 54, retain a protected database/configuration snapshot and its
+matching image. Rollback restores that pair; an older image must not open schema 54.
 
 ## API
 
@@ -66,3 +86,17 @@ are server controlled. Device responses include `stackMembers` for stacks.
 Port create/PATCH accepts `stackMemberId`; null clears it, omission preserves an
 existing assignment. Cross-device assignment is rejected. Referenced deletion,
 populated type changes, and overriding derived height return HTTP 409.
+
+Member responses include nullable `appliedLayout: { sourceTemplateId, status }`.
+The following authenticated endpoints resolve authorization through the logical
+parent device, then verify member ownership:
+
+- `GET /api/devices/:id/stack-members/:memberId/physical-layout` reads the stored snapshot (lab read access).
+- `POST .../physical-layout/preview` requires lab write access and accepts `templateId`, optional `moduleIds`, `heightU`, `unassignedPortIds`, and requested `bindings`.
+- `POST .../physical-layout/apply` repeats those inputs plus `expectedFingerprint`, `approvedPortSlotIds`, and `acceptHeightChange` when resizing.
+
+Preview returns mappings, conflicts, linked unmapped ports, missing-port proposals,
+current/proposed/suggested heights and a fingerprint. Apply recomputes the preview
+inside the transaction. Changes to the member, device placement, prior layout,
+ports, cables or selected template invalidate it. Successful apply and its audit
+entry commit together; rejected apply leaves inventory unchanged.

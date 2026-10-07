@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Bring forward": "تقديم طبقة",
+  "Send backward": "إرجاع طبقة",
+  "Bring to front": "إحضار إلى المقدمة",
+  "Send to back": "إرسال إلى الخلف",
+  "Copied {name} to {face}.": "تم نسخ {name} إلى {face}.",
   "Resize side panel": "تغيير حجم اللوحة الجانبية",
   "Resize item": "تغيير حجم العنصر",
   "Copy to other face": "نسخ إلى الوجه الآخر",

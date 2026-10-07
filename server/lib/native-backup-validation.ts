@@ -67,6 +67,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "createdAt",
     "updatedAt",
   ],
+  deviceStackMemberLayouts: ["memberId", "sourceTemplateId", "status", "snapshot", "bindings", "portFingerprint", "createdAt", "updatedAt"],
   deviceStackMembers: ["id", "deviceId", "position", "name", "manufacturer", "model", "serial", "heightU", "status", "notes"],
   deviceStackMemberMacs: ["memberId", "label", "macAddress"],
   devices: [
@@ -592,12 +593,15 @@ export function validateRackpadSqliteDatabase(
       throw new RackpadSqliteValidationError(`${label} has inconsistent legacy routing schema.`);
     }
   }
+  if (schema.version < 54 && database.prepare("SELECT name FROM sqlite_master WHERE name='deviceStackMemberLayouts'").get())
+    throw new RackpadSqliteValidationError(`${label} has inconsistent legacy member layout schema.`);
   const missingSchema: string[] = [];
   for (const [table, requiredColumns] of Object.entries(
     CURRENT_RACKPAD_SCHEMA_COLUMNS,
   )) {
     if (schema.version === 50 && (table === "deviceStackMembers" || table === "deviceStackMemberMacs")) continue;
     if (schema.version < 53 && table === "mcpTokens") continue;
+    if (schema.version < 54 && table === "deviceStackMemberLayouts") continue;
     const columns = new Set(
       (
         database.prepare(`PRAGMA table_info(${table})`).all() as Array<{

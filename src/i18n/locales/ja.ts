@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Bring forward": "一つ前面へ",
+  "Send backward": "一つ背面へ",
+  "Bring to front": "最前面へ",
+  "Send to back": "最背面へ",
+  "Copied {name} to {face}.": "{name} を {face} にコピーしました。",
   "Resize side panel": "サイドパネルのサイズを変更",
   "Resize item": "項目のサイズを変更",
   "Copy to other face": "反対側にコピー",

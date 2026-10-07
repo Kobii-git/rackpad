@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "Bring forward": "上移一層",
+  "Send backward": "下移一層",
+  "Bring to front": "移到最上層",
+  "Send to back": "移到最下層",
+  "Copied {name} to {face}.": "已將 {name} 複製到{face}。",
   "Resize side panel": "調整側欄大小",
   "Resize item": "調整項目大小",
   "Copy to other face": "複製到另一面",
