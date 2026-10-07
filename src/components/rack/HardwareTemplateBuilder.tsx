@@ -1,6 +1,7 @@
+import { useTemplateHistory } from "@/lib/use-template-history";
 import { TemplateItemControls } from "./TemplateItemControls";
 import { updateTemplateItem, updateModuleGrid, type TemplateItem } from "@/lib/hardware-template-editing";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Boxes,
   Check,
@@ -88,18 +89,12 @@ export function HardwareTemplateBuilder({
   const [defaults, setDefaults] = useState<HardwareTemplateDefault[]>([]);
   const [selectedId, setSelectedId] = useState(NEW_TEMPLATE);
   const [starterId, setStarterId] = useState("server-2u");
-  const [draft, setDraft] = useState(() => createStarterTemplate("server-2u"));
   const [face, setFace] = useState<RackFace>("rear");
   const [selectedSlotId, setSelectedSlotId] = useState<string>();
   const [selectedItem, setSelectedItem] = useState<TemplateItem>();
-  const editStart = useRef<HardwareTemplateV1 | null>(null);
   const [selectedElementId, setSelectedElementId] = useState("");
   const [block, setBlock] = useState<PortBlockDefinition>(EMPTY_BLOCK);
   const [editingBlockKey, setEditingBlockKey] = useState("");
-  const blocks = templatePortBlocks(draft);
-  const editingBlock = blocks.find(
-    (entry) => `${entry.face}:${entry.id}` === editingBlockKey,
-  );
   const [modulePrimitive, setModulePrimitive] =
     useState<HardwareModulePrimitive>("nic");
   const [modulePortCount, setModulePortCount] = useState(1);
@@ -112,6 +107,17 @@ export function HardwareTemplateBuilder({
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const selection = { face, selectedSlotId, selectedItem, selectedElementId, moduleSlotId, moduleIds, editingBlockKey, block };
+  const history = useTemplateHistory(() => createStarterTemplate("server-2u"), selection, next => {
+    setFace(next.face); setSelectedSlotId(next.selectedSlotId); setSelectedItem(next.selectedItem);
+    setSelectedElementId(next.selectedElementId); setModuleSlotId(next.moduleSlotId); setModuleIds(next.moduleIds);
+    setEditingBlockKey(next.editingBlockKey); setBlock(next.block);
+  });
+  const { draft, setDraft } = history;
+  const blocks = templatePortBlocks(draft);
+  const editingBlock = blocks.find(
+    (entry) => `${entry.face}:${entry.id}` === editingBlockKey,
+  );
 
   const selectedTemplate = templates.find(
     (template) => template.id === selectedId,
@@ -146,7 +152,7 @@ export function HardwareTemplateBuilder({
       ? currentDefault.deviceType
       : undefined;
 
-  async function refreshTemplates(preferredId?: string) {
+  async function refreshTemplates(preferredId?: string, preserveHistory = false) {
     const response = await api.getHardwareTemplates();
     setTemplates(response.templates);
     setDefaults(response.defaults);
@@ -156,7 +162,8 @@ export function HardwareTemplateBuilder({
       );
       if (preferred) {
         setSelectedId(preferred.id);
-        setDraft(structuredClone(preferred));
+        if (preserveHistory) history.saved(structuredClone(preferred));
+        else history.reset(structuredClone(preferred));
         setModuleSlotId(preferred.moduleSlots[0]?.id ?? "");
       }
     }
@@ -196,7 +203,7 @@ export function HardwareTemplateBuilder({
   useEffect(() => {setBulkPreviews([]);}, [draft]);
 
   function selectTemplate(id: string) {
-    setSelectedItem(undefined); setSelectedElementId(""); setSelectedSlotId(undefined); editStart.current = null;
+    setSelectedItem(undefined); setSelectedElementId(""); setSelectedSlotId(undefined);
     setEditingBlockKey("");
     setBlock(EMPTY_BLOCK);
     setSelectedId(id);
@@ -204,27 +211,27 @@ export function HardwareTemplateBuilder({
     if (id === NEW_TEMPLATE) {
       const next = createStarterTemplate(starterId);
       if (selectedDeviceType) next.deviceTypes = [selectedDeviceType];
-      setDraft(next);
+      history.reset(next);
       setModuleSlotId(next.moduleSlots[0]?.id ?? "");
       return;
     }
     const template = templates.find((entry) => entry.id === id);
     if (template) {
-      setDraft(structuredClone(template));
+      history.reset(structuredClone(template));
       setModuleSlotId(template.moduleSlots[0]?.id ?? "");
       setModuleIds([]);
     }
   }
 
   function selectStarter(id: string) {
-    setSelectedItem(undefined); setSelectedElementId(""); editStart.current = null;
+    setSelectedItem(undefined); setSelectedElementId("");
     setEditingBlockKey("");
     setBlock(EMPTY_BLOCK);
     setStarterId(id);
     setSelectedId(NEW_TEMPLATE);
     const next = createStarterTemplate(id);
     if (selectedDeviceType) next.deviceTypes = [selectedDeviceType];
-    setDraft(next);
+    history.reset(next);
     setModuleSlotId(next.moduleSlots[0]?.id ?? "");
     setSelectedSlotId(undefined);
     setBulkPreviews([]);
@@ -244,7 +251,7 @@ export function HardwareTemplateBuilder({
         selectedTemplate && !selectedTemplate.builtIn
           ? await api.updateHardwareTemplate(selectedTemplate.id, normalized)
           : await api.createHardwareTemplate(normalized);
-      await refreshTemplates(saved.id);
+      await refreshTemplates(saved.id, true);
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -395,7 +402,17 @@ export function HardwareTemplateBuilder({
   );
 
   return (
-    <Card data-testid="hardware-template-builder">
+    <div
+      onFocusCapture={event => {if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) history.beginGesture();}}
+      onBlurCapture={event => {if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) history.finishGesture();}}
+      onKeyDownCapture={event => {
+        const target = event.target;
+        if (target instanceof HTMLElement && (target.closest("input, textarea, select") || target.isContentEditable)) return;
+        if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+        if (event.key.toLowerCase() === "z") {event.preventDefault(); if (event.shiftKey) history.redo(); else history.undo();}
+        else if (event.ctrlKey && event.key.toLowerCase() === "y") {event.preventDefault(); history.redo();}
+      }}
+    ><Card data-testid="hardware-template-builder">
       <CardHeader>
         <CardTitle>
           <CardLabel>{t("Hardware")}</CardLabel>
@@ -407,6 +424,10 @@ export function HardwareTemplateBuilder({
         </Badge>
       </CardHeader>
       <CardBody className="space-y-5">
+        {editable && <div className="flex gap-2">
+          <Button size="sm" variant="outline" disabled={!history.canUndo} onClick={history.undo}>{t("Undo")}</Button>
+          <Button size="sm" variant="outline" disabled={!history.canRedo} onClick={history.redo}>{t("Redo")}</Button>
+        </div>}
         {error && (
           <div
             role="alert"
@@ -631,8 +652,9 @@ export function HardwareTemplateBuilder({
                     selectedElementId={selectedElementId}
                     selectedModuleSlotId={moduleSlotId}
                     selectedItem={selectedItem}
-                    onEditStart={() => {editStart.current = structuredClone(draft);}}
-                    onEditCancel={() => {if (editStart.current) setDraft(editStart.current); editStart.current = null;}}
+                    onEditStart={history.beginGesture}
+                    onEditCancel={history.cancelGesture}
+                    onEditEnd={history.finishGesture}
                     onResizeItem={editable ? (item, dimensions) => {
                       try {setDraft(updateTemplateItem(draft, item, dimensions)); setError("");} catch {setError(t("Could not update template item."));}
                     } : undefined}
@@ -1160,7 +1182,7 @@ export function HardwareTemplateBuilder({
             moduleSlotId={moduleSlotId}
             setModuleSlotId={setModuleSlotId}
             elementId={selectedElementId}
-            setElementId={setSelectedElementId}
+            setElementId={id => {setSelectedElementId(id); setSelectedItem(id ? {kind: "element", id, face} : undefined);}}
           />
         )}
 
@@ -1276,7 +1298,7 @@ export function HardwareTemplateBuilder({
             </section>
           )}
       </CardBody>
-    </Card>
+    </Card></div>
   );
 }
 

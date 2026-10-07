@@ -1,3 +1,5 @@
+import { artworkReferenceKey, templateArtwork, reconcileArtworkOrder } from "./template-artwork";
+import type { ArtworkReference } from "./types";
 import type {
   HardwareTemplateV1,
   PhysicalFacePrimitiveV1,
@@ -221,6 +223,7 @@ export function transferTemplateItem(
   const ratio = template[destination].height / template[item.face].height;
   const result = structuredClone(template);
   const used = templateItems(template).map((entry) => entry.id);
+  const artworkTransfers = new Map<string, ArtworkReference>();
   const fresh = (id: string) => {
     const next = nextTemplatePartId(`${id}-copy`, used);
     used.push(next);
@@ -251,6 +254,7 @@ export function transferTemplateItem(
     );
     if (!original) return template;
     const next = transform(original);
+    artworkTransfers.set(artworkReferenceKey({elementId: original.id}), {elementId: next.id});
     if (result[destination].elements.some((entry) => entry.id === next.id))
       throw new Error("Destination already contains this item ID.");
     result[destination].elements.push(next);
@@ -287,17 +291,17 @@ export function transferTemplateItem(
     const next = transform(original);
     const modules = result.modules
       .filter((entry) => entry.slotId === item.id)
-      .map((module) => ({
-        ...module,
-        id: copy ? fresh(module.id) : module.id,
-        slotId: next.id,
-        face: destination,
-        elements: module.elements.map(transform),
-        portSlots: module.portSlots.map((slot) => ({
-          ...transform(slot),
-          groupId: undefined,
-        })),
-      }));
+      .map((module) => {
+        const id = copy ? fresh(module.id) : module.id;
+        const elements = module.elements.map(element => {
+          const next = transform(element);
+          artworkTransfers.set(artworkReferenceKey({moduleId: module.id, elementId: element.id}), {moduleId: id, elementId: next.id});
+          return next;
+        });
+        return {...module, id, slotId: next.id, face: destination, elements,
+          portSlots: module.portSlots.map(slot => ({...transform(slot), groupId: undefined})),
+        };
+      });
     if (!copy) {
       result.moduleSlots = result.moduleSlots.filter(
         (entry) => entry.id !== item.id,
@@ -357,7 +361,13 @@ export function transferTemplateItem(
     result.portBlueprints.push(next);
     result.portSlots.push(...slots);
   }
-  return result;
+  if (artworkTransfers.size && (template[item.face].artworkOrder || template[destination].artworkOrder)) {
+    const transferred = templateArtwork(template, item.face).flatMap(({reference}) => {
+      const next = artworkTransfers.get(artworkReferenceKey(reference)); return next ? [next] : [];
+    });
+    result[destination].artworkOrder = [...templateArtwork(template, destination).map(({reference}) => reference), ...transferred];
+  }
+  return reconcileArtworkOrder(result);
 }
 
 export function updateModuleGrid(

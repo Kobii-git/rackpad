@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "Bring forward": "एक परत आगे लाएँ",
+  "Send backward": "एक परत पीछे भेजें",
+  "Bring to front": "सबसे आगे लाएँ",
+  "Send to back": "सबसे पीछे भेजें",
+  "Copied {name} to {face}.": "{name} को {face} पर कॉपी किया गया।",
   "Resize side panel": "साइड पैनल का आकार बदलें",
   "Resize item": "आइटम का आकार बदलें",
   "Copy to other face": "दूसरी सतह पर कॉपी करें",

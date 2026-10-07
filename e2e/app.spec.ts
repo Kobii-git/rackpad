@@ -6527,6 +6527,14 @@ test("remaining feedback template colors, resizing, grids and face operations pe
     await page.mouse.move(cancelBox!.x+6,cancelBox!.y+6); await page.mouse.down(); await page.mouse.move(cancelBox!.x+20,cancelBox!.y+10);
     await builder.getByTestId("hardware-template-preview-front").locator("svg").dispatchEvent("pointercancel"); await page.mouse.up(); await expect(width).toHaveValue("60");
     await width.fill("80"); await controls.getByRole("button",{name:"Copy to other face",exact:true}).click();
+    await expect(controls.getByRole("status")).toHaveText("Copied test-bay to Rear.");
+    await expect(select).toHaveValue("element::front:test-bay");
+    await builder.getByRole("button", {name: "Undo", exact: true}).click();
+    await expect(select.locator('option[value^="element::rear:test-bay-copy"]')).toHaveCount(0);
+    await builder.getByRole("button", {name: "Redo", exact: true}).click();
+    await expect(select.locator('option[value^="element::rear:test-bay-copy"]')).toHaveCount(1);
+    await controls.getByRole("button", {name: "Bring to front", exact: true}).click();
+
     await select.selectOption("module::rear:test-module");
     const grid=controls.getByTestId("template-module-grid");
     await grid.getByRole("spinbutton",{name:"Rows",exact:true}).fill("1"); await grid.getByRole("spinbutton",{name:"Columns",exact:true}).fill("8"); await grid.getByRole("button",{name:"Update",exact:true}).click();

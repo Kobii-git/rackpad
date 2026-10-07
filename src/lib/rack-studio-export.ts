@@ -1,3 +1,4 @@
+import { orderedFaceElements } from "./template-artwork";
 import { buildRackCablingScene, buildRackCablingRoutes } from "../pages/visualizer/rack-cabling";
 import { faceplateDetailPath, physicalItemColor } from "./faceplate-artwork";
 import type {
@@ -206,7 +207,7 @@ function renderSceneEquipment(input: {
   if (layout) {
     const face = layout.snapshot.faces[input.item.physicalFace];
     const tone = (value?: string) => value === "dark" ? input.palette.background : value === "accent" ? input.palette.portLinked : value === "light" ? input.palette.border : input.palette.device;
-    const elements = face.elements.map(primitive => {
+    const elements = orderedFaceElements(face).map(primitive => {
       if (primitive.kind === "label") return `<text x="${primitive.x}" y="${primitive.y}" text-anchor="${primitive.align ?? "start"}" fill="${physicalItemColor(primitive.color, input.palette.subdued)}" font-size="15">${escapeXml(primitive.text)}</text>`;
       if (primitive.kind === "screw" || primitive.kind === "indicator") return `<circle cx="${primitive.x}" cy="${primitive.y}" r="${primitive.radius}" fill="${physicalItemColor(primitive.color, tone(primitive.tone))}"/>`;
       if (!("width" in primitive)) return "";

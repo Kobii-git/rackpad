@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const nl = {
+  "Bring forward": "Eén laag naar voren",
+  "Send backward": "Eén laag naar achteren",
+  "Bring to front": "Naar voorgrond",
+  "Send to back": "Naar achtergrond",
+  "Copied {name} to {face}.": "{name} naar {face} gekopieerd.",
   "Resize side panel": "Zijpaneel vergroten of verkleinen",
   "Resize item": "Item vergroten of verkleinen",
   "Copy to other face": "Naar andere zijde kopiëren",

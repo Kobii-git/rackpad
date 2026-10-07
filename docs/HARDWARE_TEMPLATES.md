@@ -91,3 +91,25 @@ Colors and module `portGrid` are optional metadata in layout schema version 1.
 Existing modules load without regeneration. Backups retain the new metadata;
 older binaries may discard these optional fields when rewriting layouts. No
 SQLite migration or new API endpoint is required.
+
+## Drawing order and draft history
+
+Appearance items, including module artwork, expose **Bring forward**, **Send
+backward**, **Bring to front**, and **Send to back**. The item list can select
+obscured artwork. Ports and editing indicators render above appearance layers.
+Each face optionally stores `artworkOrder`, an array of `{ elementId, moduleId? }`
+references. Module ownership distinguishes template references; resolved snapshots
+flatten selected module references. Missing metadata preserves the previous order.
+Copy/move, deletion and regeneration reconcile surviving references and append
+new artwork. Server validation rejects unknown references and duplicates.
+Editor previews, device snapshots, Rack Studio and SVG/PNG export share the order.
+Older schema-v1 binaries may discard this optional metadata when rewriting layouts.
+
+Copy announces the item and destination and keeps the source selected. Move keeps
+the destination selected. Undo/Redo retains 100 draft-and-selection entries. A drag,
+resize, color interaction or focused numeric edit creates one entry; Escape or
+pointer cancellation restores the gesture without adding one. Cmd/Ctrl+Z,
+Cmd/Ctrl+Shift+Z and Ctrl+Y operate outside text inputs, whose native editing undo
+remains available. A new edit clears redo. Switching templates resets history;
+saving the same draft retains it. Draft undo does not modify applied inventory
+snapshots; use Preview/Apply to update a device or stack member.

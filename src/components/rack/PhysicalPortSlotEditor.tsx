@@ -1,3 +1,4 @@
+import { templateArtwork, orderedFaceElements } from "@/lib/template-artwork";
 import { templateItemValue, type TemplateItem } from "@/lib/hardware-template-editing";
 import { physicalItemColor } from "@/lib/faceplate-artwork";
 import {
@@ -20,6 +21,7 @@ interface PhysicalPortSlotEditorProps {
   selectedItem?: TemplateItem;
   onEditStart?: () => void;
   onEditCancel?: () => void;
+  onEditEnd?: () => void;
   onResizeItem?: (item: TemplateItem, dimensions: {width?: number; height?: number; radius?: number}) => void;
   layout: HardwareTemplateV1 | ResolvedPhysicalLayoutV1;
   face: RackFace;
@@ -56,6 +58,7 @@ export function PhysicalPortSlotEditor({
   selectedItem,
   onEditStart,
   onEditCancel,
+  onEditEnd,
   onResizeItem,
   face,
   selectedSlotId,
@@ -107,8 +110,8 @@ export function PhysicalPortSlotEditor({
       ((event.clientX - bounds.left) / bounds.width) * definition.width;
     const pointerY =
       ((event.clientY - bounds.top) / bounds.height) * definition.height;
-    onEditStart?.();
     svg.focus();
+    onEditStart?.();
     svg.setPointerCapture(event.pointerId);
     setDrag({ kind, id, pointerId: event.pointerId, offsetX: pointerX - x, offsetY: pointerY - y });
   }
@@ -154,7 +157,7 @@ export function PhysicalPortSlotEditor({
           );
         }
       }}
-      onPointerUp={() => setDrag(undefined)}
+      onPointerUp={() => {if (drag) onEditEnd?.(); setDrag(undefined);}}
       onPointerCancel={() => {onEditCancel?.(); setDrag(undefined);}}
       onKeyDown={event => {if (event.key === "Escape" && drag) {event.preventDefault(); onEditCancel?.(); setDrag(undefined);}}}
     >
@@ -163,103 +166,26 @@ export function PhysicalPortSlotEditor({
         height={definition.height}
         fill="var(--color-bg)"
       />
-      {definition.elements.map((primitive) => (
-        <Primitive
-          key={primitive.id}
-          primitive={primitive}
-          selected={selectedElementId === primitive.id}
-          onPointerDown={
-            onMoveElement
-              ? (event) => {
-                  beginDrag(
-                    event,
-                    "element",
-                    primitive.id,
-                    primitive.x,
-                    primitive.y,
-                  );
-                  onSelectElement?.(primitive.id);
-                }
-              : undefined
-          }
-        />
-      ))}
-      {"modules" in layout &&
-        layout.modules
-          .filter((module) => module.face === face)
-          .map((module) => {
-            const moduleSlot = moduleSlots.find(
-              (slot) => slot.id === module.slotId,
-            );
-            return (
-              <g
-                key={module.id}
-                data-testid="template-module-preview"
-                role={moduleSlot && onMoveModuleSlot ? "button" : undefined}
-                tabIndex={moduleSlot && onMoveModuleSlot ? 0 : undefined}
-                aria-label={module.name}
-                className={
-                  moduleSlot && onMoveModuleSlot ? "cursor-move" : undefined
-                }
-                onPointerDown={
-                  moduleSlot && onMoveModuleSlot
-                    ? (event) => {
-                        beginDrag(
-                          event,
-                          "module-slot",
-                          moduleSlot.id,
-                          moduleSlot.x,
-                          moduleSlot.y,
-                        );
-                        onSelectModuleSlot?.(moduleSlot.id);
-                      }
-                    : undefined
-                }
-                onKeyDown={
-                  moduleSlot && onMoveModuleSlot
-                    ? (event) => {
-                        const step = event.shiftKey ? 10 : 1;
-                        const delta =
-                          event.key === "ArrowLeft"
-                            ? [-step, 0]
-                            : event.key === "ArrowRight"
-                              ? [step, 0]
-                              : event.key === "ArrowUp"
-                                ? [0, -step]
-                                : event.key === "ArrowDown"
-                                  ? [0, step]
-                                  : undefined;
-                        if (!delta) return;
-                        event.preventDefault();
-                        onSelectModuleSlot?.(moduleSlot.id);
-                        onMoveModuleSlot(
-                          moduleSlot.id,
-                          moduleSlot.x + delta[0],
-                          moduleSlot.y + delta[1],
-                        );
-                      }
-                    : undefined
-                }
-              >
-                {module.elements.map((primitive) => (
-                  <Primitive key={primitive.id} primitive={primitive} />
-                ))}
-                {module.portSlots.map((slot) => (
-                  <rect
-                    key={slot.id}
-                    x={slot.x}
-                    y={slot.y}
-                    width={slot.width}
-                    height={slot.height}
-                    fill={physicalItemColor(slot.color, "var(--color-bg)")}
-                    stroke="var(--color-accent)"
-                  >
-                    <title>{slot.label ?? slot.id}</title>
-                  </rect>
-                ))}
-              </g>
-            );
-          })}
+      {("modules" in layout ? templateArtwork(layout, face) : orderedFaceElements(definition).map(element => ({element, reference: {elementId: element.id, moduleId: undefined as string | undefined}}))).map(({element: primitive, reference}) => {
+        const module = "modules" in layout && reference.moduleId ? layout.modules.find(entry => entry.id === reference.moduleId) : undefined;
+        const moduleSlot = moduleSlots.find(slot => slot.id === module?.slotId);
+        return <g key={JSON.stringify(reference)} data-testid={module ? "template-module-preview" : undefined}
+          role={moduleSlot && onMoveModuleSlot ? "button" : undefined} tabIndex={moduleSlot && onMoveModuleSlot ? 0 : undefined} aria-label={module?.name}
+          onPointerDown={moduleSlot && onMoveModuleSlot ? event => {beginDrag(event, "module-slot", moduleSlot.id, moduleSlot.x, moduleSlot.y); onSelectModuleSlot?.(moduleSlot.id);} : undefined}
+          onKeyDown={moduleSlot && onMoveModuleSlot ? event => {
+            const step = event.shiftKey ? 10 : 1;
+            const delta = event.key === "ArrowLeft" ? [-step, 0] : event.key === "ArrowRight" ? [step, 0] : event.key === "ArrowUp" ? [0, -step] : event.key === "ArrowDown" ? [0, step] : undefined;
+            if (delta) {event.preventDefault(); onSelectModuleSlot?.(moduleSlot.id); onMoveModuleSlot(moduleSlot.id, moduleSlot.x + delta[0], moduleSlot.y + delta[1]);}
+          } : undefined}>
+          <Primitive primitive={primitive} selected={!module && selectedElementId === primitive.id}
+            onPointerDown={!module && onMoveElement ? event => {beginDrag(event, "element", primitive.id, primitive.x, primitive.y); onSelectElement?.(primitive.id);} : undefined} />
+        </g>;
+      })}
+      {"modules" in layout && layout.modules.filter(module => module.face === face).flatMap(module => module.portSlots.map(slot => (
+        <rect key={`${module.id}:${slot.id}`} x={slot.x} y={slot.y} width={slot.width} height={slot.height} fill={physicalItemColor(slot.color, "var(--color-bg)")} stroke="var(--color-accent)">
+          <title>{slot.label ?? slot.id}</title>
+        </rect>
+      )))}
       {moduleSlots.map((slot) => (
         <rect
           key={slot.id}
@@ -311,13 +237,19 @@ export function PhysicalPortSlotEditor({
           }}
         />
       ))}
+      {selectedItem?.kind === "element" && selectedItem.face === face && "modules" in layout && (() => {
+        const item = templateItemValue(layout, selectedItem);
+        if (!item || !("x" in item)) return null;
+        const radius = "radius" in item ? item.radius : 0;
+        return <rect data-testid="template-selection-outline" x={item.x-radius} y={item.y-radius} width={"width" in item ? item.width : radius ? radius*2 : 80} height={"height" in item ? item.height : radius ? radius*2 : 20} fill="none" stroke="var(--color-warning)" strokeWidth={3} pointerEvents="none" />;
+      })()}
       {onResizeItem && selectedItem?.face === face && "moduleSlots" in layout && (() => {
         const value = templateItemValue(layout, selectedItem);
         if (!value || !("x" in value) || (!("width" in value) && !("radius" in value))) return null;
         const x = value.x + ("width" in value ? value.width : value.radius);
         const y = value.y + ("height" in value ? value.height : 0);
         return <rect data-testid="template-resize-handle" x={x-6} y={y-6} width={12} height={12} fill="var(--color-warning)" stroke="var(--color-bg)" className="cursor-nwse-resize" role="button" tabIndex={0} aria-label={t("Resize item")}
-          onPointerDown={event => {event.stopPropagation(); onEditStart?.(); const svg = event.currentTarget.ownerSVGElement!; svg.focus(); svg.setPointerCapture(event.pointerId); setDrag({kind: "element", id: selectedItem.id, offsetX: 0, offsetY: 0, pointerId: event.pointerId, resize: selectedItem});}} />;
+          onPointerDown={event => {event.stopPropagation(); const svg = event.currentTarget.ownerSVGElement!; svg.focus(); onEditStart?.(); svg.setPointerCapture(event.pointerId); setDrag({kind: "element", id: selectedItem.id, offsetX: 0, offsetY: 0, pointerId: event.pointerId, resize: selectedItem});}} />;
       })()}
     </svg>
   );

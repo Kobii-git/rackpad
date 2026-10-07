@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Bring forward": "Đưa lên một lớp",
+  "Send backward": "Đưa xuống một lớp",
+  "Bring to front": "Đưa lên trên cùng",
+  "Send to back": "Đưa xuống dưới cùng",
+  "Copied {name} to {face}.": "Đã sao chép {name} sang {face}.",
   "Resize side panel": "Đổi kích thước bảng bên",
   "Resize item": "Đổi kích thước mục",
   "Copy to other face": "Sao chép sang mặt khác",

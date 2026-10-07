@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const ru = {
+  "Bring forward": "На слой вперёд",
+  "Send backward": "На слой назад",
+  "Bring to front": "На передний план",
+  "Send to back": "На задний план",
+  "Copied {name} to {face}.": "{name} скопировано на {face}.",
   "Resize side panel": "Изменить размер боковой панели",
   "Resize item": "Изменить размер элемента",
   "Copy to other face": "Копировать на другую сторону",
