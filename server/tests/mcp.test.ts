@@ -79,6 +79,16 @@ test("real MCP SDK client previews one lab batch and a person applies it once", 
     await client.connect(transport);
     const tools = await client.listTools();
     assert.ok(tools.tools.some((tool) => tool.name === "propose_inventory"));
+    assert.deepEqual(tools.tools.map(tool=>tool.name).sort(), ["list_connections","list_devices","list_labs","list_ports","list_racks","list_rooms","propose_inventory"]);
+    assert.equal(tools.tools.find(tool=>tool.name==="propose_inventory")!.inputSchema.type,"object");
+    for (const name of ["A room", "B room"]) assert.equal((await app.inject({method:"POST",url:"/api/rooms",headers,payload:{labId,name}})).statusCode,201);
+    const firstPage = JSON.parse(firstText((await client.callTool({name:"list_rooms",arguments:{labId,limit:1,cursor:0}})).content));
+    assert.equal(firstPage.items.length,1); assert.equal(firstPage.nextCursor,1);
+    const secondPage = JSON.parse(firstText((await client.callTool({name:"list_rooms",arguments:{labId,limit:1,cursor:firstPage.nextCursor}})).content));
+    assert.equal(secondPage.items.length,1); assert.equal(secondPage.nextCursor,null); assert.notEqual(firstPage.items[0].id,secondPage.items[0].id);
+    const exhausted = JSON.parse(firstText((await client.callTool({name:"list_rooms",arguments:{labId,limit:1,cursor:2}})).content));
+    assert.deepEqual(exhausted.items,[]); assert.equal(exhausted.nextCursor,null);
+
     const labs = await client.callTool({ name: "list_labs", arguments: { limit: 1, cursor: 0 } });
     assert.equal(JSON.parse(firstText(labs.content)).items[0].id, labId);
     const overLimit = await client.callTool({ name: "list_labs", arguments: { limit: 101, cursor: 0 } });
@@ -97,6 +107,8 @@ test("real MCP SDK client previews one lab batch and a person applies it once", 
     assert.equal(draft.summary.devices.length, 1);
     assert.equal(draft.reviewLink, `/mcp-proposals/${draft.id}`);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM devices WHERE labId = ?").get(labId) as { n: number }).n, 0);
+    const reviewed = await app.inject({method:"GET",url:`/api/mcp-proposals/${draft.id}`,headers});
+    assert.equal(reviewed.statusCode,200,reviewed.body); assert.equal(json(reviewed).id,draft.id);
     const applied = await app.inject({ method: "POST", url: `/api/mcp-proposals/${draft.id}/apply`, headers });
     assert.equal(applied.statusCode, 200, applied.body);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM devices WHERE labId = ?").get(labId) as { n: number }).n, 1);
@@ -161,6 +173,10 @@ test("real MCP SDK client previews one lab batch and a person applies it once", 
     }));
     try {
       assert.ok(!(await viewerClient.listTools()).tools.some((tool) => tool.name === "propose_inventory"));
+      const scopedRead=await viewerClient.callTool({name:"list_devices",arguments:{labId}});assert.equal(scopedRead.isError,undefined);
+      db.prepare("DELETE FROM userLabAccess WHERE userId=?").run(viewerId);
+      await assert.rejects(()=>viewerClient.listTools(),/401|expired or invalid/i);
+
     } finally { await viewerClient.close(); }
 
     db.prepare("DELETE FROM userLabAccess WHERE userId = ?").run(viewerId);
@@ -243,6 +259,8 @@ test("real MCP SDK client previews one lab batch and a person applies it once", 
     assert.equal(expiryResponse.statusCode, 201);
     const expiryToken = json(expiryResponse) as { id: string; token: string };
     db.prepare("UPDATE mcpTokens SET expiresAt = ? WHERE id = ?").run("2000-01-01T00:00:00.000Z", expiryToken.id);
+    const expiredClient=new Client({name:"expired-sdk",version:"1.0.0"},{versionNegotiation:{mode:{pin:"2026-07-28"}}});
+    try {await assert.rejects(()=>expiredClient.connect(new StreamableHTTPClientTransport(new URL("/api/mcp",address),{requestInit:{headers:{authorization:`Bearer ${expiryToken.token}`}}})),/401|expired or invalid/i);} finally {await expiredClient.close();}
     const expired = await fetch(new URL("/api/mcp", address), { method: "POST",
       headers: { authorization: `Bearer ${expiryToken.token}`, "content-type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
@@ -254,6 +272,7 @@ test("real MCP SDK client previews one lab batch and a person applies it once", 
       headers: { authorization: `Bearer ${issued.token}`, "content-type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
     assert.equal(roleDenied.status, 401);
+    await assert.rejects(()=>client.listTools(),/401|expired or invalid/i);
     db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(ownerId);
     process.env.MCP_ENABLED = "0";
     const disabled = await fetch(new URL("/api/mcp", address), { method: "POST",
@@ -267,6 +286,7 @@ test("real MCP SDK client previews one lab batch and a person applies it once", 
       headers: { authorization: `Bearer ${issued.token}`, "content-type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
     assert.equal(denied.status, 401);
+    await assert.rejects(()=>client.listTools(),/401|expired or invalid/i);
   } finally {
     await client.close();
   }

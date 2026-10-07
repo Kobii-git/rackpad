@@ -172,6 +172,13 @@ database files, backups, access tokens, or private network details.
 
 ## Required candidate evidence
 
+Successful Debian fresh installs were reported on [issue #138](https://github.com/Kobii-git/rackpad/issues/138)
+for 1.8.3 and 1.8.4-beta.0. Native LXC remains experimental until disposable
+Debian 13 and Ubuntu 24.04 install, update/paired rollback, reboot, recovery and
+seven-day soak evidence is complete. These individual reports do not establish
+Ubuntu coverage or the full operational acceptance matrix.
+
+
 Use the [beta.5 acceptance matrix](releases/v1.8.2-beta.5-test-notes.md) for
 both guest operating systems, the schema-49-to-50 update, paired rollback,
 security checks, and seven-day soak. Retain the original encryption key and a
