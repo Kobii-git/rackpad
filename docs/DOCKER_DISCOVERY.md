@@ -67,6 +67,22 @@ cap_add:
 Keep the existing `/data` volume and environment variables from the normal
 Rackpad compose file.
 
+## Storage ownership
+
+This opt-in profile explicitly runs as `user: "0:0"`; the standard profiles use
+the image's non-root user. The
+[custom-user instructions](../INSTALL.md#bind-mounts-and-container-users) apply
+to standard deployments. Overriding the discovery profile's user can change raw
+socket access and is not required to configure a bind mount.
+
+Files created while running as root may be inaccessible after returning to the
+standard profile. Stop Rackpad and preserve a paired data/configuration backup
+before changing profiles or correcting ownership. Check the selected UID/GID
+and adjust only the installation's data directory and its existing SQLite
+database/WAL/SHM files to that identity. Include the optional native-backup
+directory when configured. Do not run two Rackpad containers against the same
+database while transitioning, and do not make data world-writable.
+
 ## Security note
 
 Host networking and extra capabilities are broader than the default deployment.

@@ -1,7 +1,7 @@
-import Database from "better-sqlite3";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createId } from "./lib/ids.js";
+import { openDatabase } from "./lib/open-database.js";
 import {
   buildAutoPhysicalLayout,
   portSetFingerprint,
@@ -22,10 +22,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-export const db = new Database(DB_PATH);
-
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+export const db = openDatabase(DB_PATH);
 
 const BOOTSTRAP_SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS schemaVersion (

@@ -1005,6 +1005,45 @@ test("member layout applies reject stale state and height collisions atomically,
   assert.equal(listStackMembers(stack.id)[0].heightU,1);
 });
 
+test("schema51 and schema53 upgrades preserve populated stacks, ports and cables", async () => {
+  for (const version of [51, 53]) {
+    const filename = path.join(directory, `release-upgrade-${version}.db`);
+    await db.backup(filename);
+    const legacy = new Database(filename);
+    legacy.exec("DROP TABLE deviceStackMemberLayouts");
+    if (version === 51) {
+      legacy.exec(`
+        DROP TABLE mcpTokens;
+        DROP TRIGGER cable_guide_device_delete;
+        DROP TRIGGER cable_guide_device_room;
+        DROP TRIGGER cable_guide_rack_room;
+        ALTER TABLE portLinks DROP COLUMN routeMode;
+        ALTER TABLE portLinks DROP COLUMN routeGuides;
+      `);
+    }
+    legacy.prepare("UPDATE schemaVersion SET version=?").run(version);
+    const members = legacy.prepare("SELECT * FROM deviceStackMembers ORDER BY id").all();
+    const ports = legacy.prepare("SELECT * FROM ports ORDER BY id").all();
+    const links = legacy.prepare("SELECT id, fromPortId, toPortId, routeWaypoints FROM portLinks ORDER BY id").all();
+    assert.ok(members.length > 0);
+    assert.ok(ports.length > 0);
+    assert.ok(links.length > 0);
+    assert.equal(validateRackpadSqliteDatabase(legacy, "Pre-upgrade fixture"), version);
+    legacy.close();
+    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", "const { db } = await import('./server/db.ts'); db.close();"], {
+      cwd: process.cwd(), env: { ...process.env, DATABASE_PATH: filename }, stdio: "pipe",
+    });
+    const upgraded = new Database(filename, { readonly: true });
+    try {
+      assert.equal(validateRackpadSqliteDatabase(upgraded, "Upgraded fixture"), CURRENT_SCHEMA_VERSION);
+      assert.deepEqual(upgraded.prepare("SELECT * FROM deviceStackMembers ORDER BY id").all(), members);
+      assert.deepEqual(upgraded.prepare("SELECT * FROM ports ORDER BY id").all(), ports);
+      assert.deepEqual(upgraded.prepare("SELECT id, fromPortId, toPortId, routeWaypoints FROM portLinks ORDER BY id").all(), links);
+      assert.deepEqual(upgraded.prepare("SELECT * FROM deviceStackMemberLayouts").all(), []);
+    } finally { upgraded.close(); }
+  }
+});
+
 test("schema54 migration is forward-only and rolls back its table when the version update fails",async()=>{
   for(const fail of [false,true]){
     const filename=path.join(directory,`member-migration-${fail}.db`);await db.backup(filename);const legacy=new Database(filename);

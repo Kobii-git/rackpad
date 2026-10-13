@@ -37,6 +37,10 @@ Quality runs `check:codeql-review` before dependency installation to verify the
 actual committed server tree against the independently reviewed SNMP exception.
 Run it after committing server changes; working server edits intentionally fail.
 
+Quality also runs `test:e2e:acceptance` in Chromium and Firefox with MCP enabled,
+and `test:docker:storage` on Linux to verify the production image's data-volume
+ownership, custom-user overrides and persistence using disposable resources.
+
 Run the bundled-font browser preflight before the long browser matrix; install
 dependencies within the worktree so Vite can serve font assets. Workflow lint and
 Bash syntax, ShellCheck, actionlint, and PowerShell syntax remain CI steps
