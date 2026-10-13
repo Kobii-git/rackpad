@@ -119,7 +119,10 @@ test("each required check blocks image and release jobs on failure", () => {
   const { jobs } = workflow("docker-publish");
   assert.deepEqual(jobs.build.needs, ["quality", "codeql", "security"]);
   assert.equal(jobs.build.if, undefined, "must retain implicit success() prerequisite");
-  assert.equal(jobs.release.needs, "build");
+  assert.deepEqual(jobs.release.needs, ["build", "smoke"]);
+  assert.equal(jobs.smoke.needs, "build");
+  assert(!jobs.smoke.if.includes("always()"));
+  assert.deepEqual(jobs.smoke.strategy.matrix.platform, ["linux/amd64", "linux/arm64"]);
   assert(!jobs.release.if.includes("always()"));
   for (const failed of jobs.build.needs) {
     const states = Object.fromEntries(jobs.build.needs.map((name) => [name, name === failed ? "failure" : "success"]));
@@ -135,6 +138,7 @@ test("fork PRs cannot publish; scans retain transition, scheduled, and manual en
   assert.equal(build.with.push, "${{ github.event_name != 'pull_request' }}");
   assert(jobs.release.if.includes("github.event_name == 'push'"));
   assert(jobs.release.if.includes("refs/tags/v"));
+  assert.equal(jobs.smoke.if, "github.event_name == 'push'");
   assert(jobs.build.steps.find((step) => step.name === "Log in to GHCR").if.includes("!= 'pull_request'"));
   for (const name of ["codeql", "security-scan"]) {
     const triggers = workflow(name).on;

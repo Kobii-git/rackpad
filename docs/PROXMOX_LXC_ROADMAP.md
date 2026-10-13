@@ -202,27 +202,17 @@ Phase 4 continuation prompt:
 
 ## Current acceptance baseline
 
-The current tester beta is `v1.8.2-beta.5`, based on published
-`v1.8.2-beta.4`. It retains the AF_NETLINK startup fix and schema-50 security
-migration. The active [native guide](PROXMOX_NATIVE_LXC.md) and
-[acceptance matrix](releases/v1.8.2-beta.5-test-notes.md) supersede older test
-commands below; historical publication records remain unchanged. Beta.5 remains
-experimental while screenshot determinism and community acceptance are unresolved.
+[Issue #138](https://github.com/Kobii-git/rackpad/issues/138) includes successful
+Debian fresh-install reports for 1.8.3 and 1.8.4-beta.0. Those reports supersede the
+earlier claim that no Debian installation had succeeded. They do not establish
+the complete native-LXC support matrix.
 
-The combined [v1.8.3-beta.1 candidate](releases/v1.8.3-beta.1.md) starts from
-published beta.5 and includes native startup readiness, mixed-face cable
-continuations, stacked switches, and SNMPv3 interoperability repairs. Schema 51 adds stack state; published
-migrations 49 and 50 remain unchanged. This candidate replaces the separate
-unpublished beta.6 and stack-development release plans. The beta.0 tag is retained;
-its publication was canceled before image/release steps after a malformed CodeQL
-severity check was found. Beta.1 repairs that gate and updates Nodemailer to 9.1.1.
-
-Community testers supply real Debian 13 and Ubuntu 24.04 PVE 9.x evidence,
-Rack Studio/patch-panel/stack acceptance, and a seven-day soak on the combined
-candidate. Cisco IOS-XE and Firefox LAN-HTTP acceptance are also required.
-Stable 1.8.3 remains gated on those results. Targeting the stack
-feature at 1.8.3 is the requested exception to the usual minor-version feature
-convention. Automated checks cannot substitute for guest acceptance or soak.
+Native LXC remains experimental. Complete disposable Debian 13 and Ubuntu 24.04
+install, update/paired rollback, reboot, recovery, hardening and seven-day soak
+evidence before declaring support. Use the [native guide](PROXMOX_NATIVE_LXC.md)
+and its acceptance matrix; older phase and release records below are historical.
+Do not substitute automated fixtures for real PVE guest evidence. Cisco IOS-XE
+SNMPv3 and reporter-specific MCP/rack acceptance also remain external checks.
 
 ## Phase 4 - Beta 1 and fresh-install validation
 

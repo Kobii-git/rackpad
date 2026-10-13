@@ -1,3 +1,4 @@
+import { readStackMemberLayouts } from "./stack-member-layout-data.js";
 import { legacyShelfGeometry } from "./legacy-shelf-geometry.js";
 import { validateStackGeometry } from "./stack-integrity.js";
 import { db } from "../db.js";
@@ -21,7 +22,9 @@ export function listStackMembers(deviceId: string): StackMember[] {
       "SELECT * FROM deviceStackMembers WHERE deviceId = ? ORDER BY position, id",
     )
     .all(deviceId) as Omit<StackMember, "macs">[];
+  const layouts = readStackMemberLayouts(db, deviceId);
   return rows.map((row) => ({
+    appliedLayout: layouts.has(row.id) ? {sourceTemplateId: layouts.get(row.id)!.sourceTemplateId, status: layouts.get(row.id)!.status} : null,
     ...row,
     macs: db
       .prepare(

@@ -1,5 +1,8 @@
+import { createHash } from "node:crypto";
+import type { StackMemberLayout } from "./stack-member-layout-data.js";
 import {
   buildAutoPhysicalLayout,
+  reconcilePhysicalLayoutBindings,
   type PhysicalLayoutDevice,
   type PhysicalLayoutPort,
 } from "./physical-layout.js";
@@ -10,6 +13,7 @@ export function buildStackPhysicalLayout(
   device: PhysicalLayoutDevice,
   ports: PhysicalLayoutPort[],
   members: StackMember[],
+  layouts: Map<string, StackMemberLayout> = new Map(),
 ) {
   const result = buildAutoPhysicalLayout(device, [], "generic");
   const totalU = members.reduce((sum, row) => sum + row.heightU, 0) || 1;
@@ -55,10 +59,42 @@ export function buildStackPhysicalLayout(
     });
   let y = 0;
   for (const group of groups) {
-    const generated = buildAutoPhysicalLayout(device, group.ports, "generic");
+    const stored = layouts.get(group.id);
+    const reconciled = stored ? reconcilePhysicalLayoutBindings({...stored, ports: group.ports}) : undefined;
+    const boundPortIds = new Set(reconciled?.bindings.map(binding => binding.portId));
+    const extraPorts = stored ? group.ports.filter(port => !boundPortIds.has(port.id)) : group.ports;
+    const extraHeight = stored && extraPorts.length ? group.height * 0.25 : 0;
+    const appliedHeight = group.height - extraHeight;
+    if (stored && reconciled) {
+      const prefix = (id: string) => `member:${createHash("sha256").update(JSON.stringify([group.id, id])).digest("hex")}`;
+      for (const face of ["front", "rear"] as const) {
+        const definition = stored.snapshot.faces[face];
+        const scaleX = 1000 / definition.width;
+        const scaleY = appliedHeight / definition.height;
+        const rank = new Map(definition.artworkOrder?.map((ref, index) => [ref.elementId, index]));
+        const elements = [...definition.elements].sort((a,b) => (rank.get(a.id) ?? rank.size) - (rank.get(b.id) ?? rank.size));
+        for (const element of elements) result.snapshot.faces[face].elements.push({
+          ...element, id: prefix(element.id), x: element.x * scaleX, y: y + element.y * scaleY,
+          ...("width" in element ? {width: element.width * scaleX, height: element.height * scaleY} : {}),
+          ...("radius" in element ? {radius: element.radius * Math.min(scaleX, scaleY)} : {}),
+        });
+      }
+      for (const slot of stored.snapshot.portSlots) {
+        const definition = stored.snapshot.faces[slot.face];
+        const scaleX = 1000 / definition.width;
+        const scaleY = appliedHeight / definition.height;
+        const quarterTurn = slot.rotation === 90 || slot.rotation === 270;
+        const width = slot.width * (quarterTurn ? scaleY : scaleX);
+        const height = slot.height * (quarterTurn ? scaleX : scaleY);
+        result.snapshot.portSlots.push({...slot, id: prefix(slot.id), x: (slot.x + slot.width / 2) * scaleX - width / 2, width, y: y + (slot.y + slot.height / 2) * scaleY - height / 2, height, groupId: group.id});
+      }
+      result.bindings.push(...reconciled.bindings.map(binding => ({...binding, slotId: prefix(binding.slotId)})));
+      if (reconciled.status === "needs-mapping") result.status = "needs-mapping";
+    }
+    const generated = buildAutoPhysicalLayout(device, extraPorts, "generic");
     for (const face of ["front", "rear"] as const) {
       const elements = result.snapshot.faces[face].elements;
-      elements.push({
+      if (!stored) elements.push({
         kind: "panel",
         id: `${face}:${group.id}:panel`,
         x: 0,
@@ -78,8 +114,8 @@ export function buildStackPhysicalLayout(
     for (const slot of generated.snapshot.portSlots) {
       result.snapshot.portSlots.push({
         ...slot,
-        y: y + (slot.y / 300) * group.height,
-        height: (slot.height / 300) * group.height,
+        y: y + (stored ? appliedHeight : 0) + (slot.y / 300) * (stored ? extraHeight : group.height),
+        height: (slot.height / 300) * (stored ? extraHeight : group.height),
         groupId: group.id,
       });
     }

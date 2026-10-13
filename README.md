@@ -34,8 +34,8 @@ Stable: **v1.8.3**.
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm published artifacts.
 See the [release and upgrade notes](docs/releases/v1.8.3.md).
 
-This branch prepares **v1.8.4-beta.8** for placement, Visualizer, MCP, and dependency testing.
-See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.8.md).
+This branch prepares **v1.8.4-beta.9** for template-editor, stack-layout, deployment, and dependency testing.
+See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.9.md).
 Docker is the supported deployment; native Proxmox LXC remains experimental.
 See the [changelog](./CHANGELOG.md); the latest-tag badge may show a prerelease.
 
@@ -71,6 +71,7 @@ Rackpad's public website is [rackpad.net](https://rackpad.net). The repo also
 contains the core material you need:
 
 - [Installation guide](./INSTALL.md)
+- [Docker bind mounts and custom users](./INSTALL.md#bind-mounts-and-container-users)
 - [Proxmox install notes](./docs/PROXMOX.md)
 - [Proxmox native LXC operations (pre-release)](./docs/PROXMOX_NATIVE_LXC.md)
 - [Hyper-V import guide](./docs/HYPERV_IMPORT.md)

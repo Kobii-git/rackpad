@@ -1377,3 +1377,13 @@ test("rack movement, reguiding and detachment use the rack physical room consist
   const edited = await app.inject({ method: "PATCH", url: `/api/port-links/${id}`, headers: authHeaders(token), payload: { label: "Still connected" } });
   assert.equal(edited.statusCode, 200, edited.body);
 });
+
+test("legacy overlapping occupants remain readable and can be moved to free space without relocating their peer", async()=>{
+  const token=await bootstrapAdmin();const room=await createRoom(token,"Overlap recovery");const rack=await createRack(token,room.id,"Overlap recovery",8);
+  const first=await createDevice(token,room.id,"overlap-first");const second=await createDevice(token,room.id,"overlap-second");
+  for (const id of [first.id,second.id]) db.prepare("UPDATE devices SET rackId=?,placement='rack',rackMountKind='direct',startU=2,heightU=1,face='front',rackColumn=0,rackColumnSpan=12 WHERE id=?").run(rack.id,id);
+  const peer=db.prepare("SELECT * FROM devices WHERE id=?").get(first.id);
+  const read=await app.inject({method:"GET",url:`/api/devices/${second.id}`,headers:authHeaders(token)});assert.equal(read.statusCode,200);
+  const moved=await applyStudioAction(token,{kind:"device.place",targetId:second.id,expected:directState(room.id,rack.id,2,1,0,12),next:directState(room.id,rack.id,4,1,0,12)});
+  assert.equal(moved.device.startU,4);assert.deepEqual(db.prepare("SELECT * FROM devices WHERE id=?").get(first.id),peer);
+});

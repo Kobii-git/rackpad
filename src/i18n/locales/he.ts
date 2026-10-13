@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "Bring forward": "העבר שכבה קדימה",
+  "Send backward": "העבר שכבה אחורה",
+  "Bring to front": "העבר לחזית",
+  "Send to back": "העבר לרקע",
+  "Copied {name} to {face}.": "{name} הועתק אל {face}.",
   "Resize side panel": "שינוי גודל הלוח הצדדי",
   "Resize item": "שינוי גודל הפריט",
   "Copy to other face": "העתקה לצד השני",

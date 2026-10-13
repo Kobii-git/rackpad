@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "Bring forward": "เลื่อนมาด้านหน้าหนึ่งชั้น",
+  "Send backward": "เลื่อนไปด้านหลังหนึ่งชั้น",
+  "Bring to front": "นำมาไว้หน้าสุด",
+  "Send to back": "ส่งไปไว้หลังสุด",
+  "Copied {name} to {face}.": "คัดลอก {name} ไปยัง {face} แล้ว",
   "Resize side panel": "ปรับขนาดแผงด้านข้าง",
   "Resize item": "ปรับขนาดรายการ",
   "Copy to other face": "คัดลอกไปอีกด้าน",

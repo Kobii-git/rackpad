@@ -22,6 +22,16 @@ ports require both `PORT` and the container-side mapping to agree. Existing
 Compose healthcheck overrides must be updated too; replacing the image alone
 does not replace them. See `INSTALL.md` for custom-port and older-image guidance.
 
+The image's default UID is 10001; its group ID is assigned at build time.
+Standard deployments can use Compose's service-level `user` override with a
+matching writable data directory. `PUID`/`PGID` are not runtime settings.
+Bind mounts keep host ownership, including existing database/WAL/SHM files;
+the app never creates the parent directory, remaps users, or changes ownership.
+Database-open/access failures include a path-free operator hint while retaining
+the original exception. Root host-discovery remains a separate explicit opt-in;
+switching identities requires an offline data/ownership review. `INSTALL.md`
+documents standard bind mounts and optional backup-directory ownership.
+
 The process enables the SNMP trap listener only when explicitly configured through
 `SNMP_TRAP_ENABLED=1` (the default is off), but normal
 Compose deliberately does not publish UDP 1162. Operators must add an explicit
@@ -39,6 +49,12 @@ checking port parsing against the server and retaining failure exit behavior.
 It also runs the installer against isolated download/daemon stubs with real
 Compose rendering. The installer preserves operator configuration and keys,
 recognizes generated manifests, and proposes custom-manifest updates for review.
+
+`test:docker:storage` builds a disposable production image and validates default
+and custom users, named volumes, Linux bind mounts, restart persistence, access
+failures and an isolated ownership correction. It uses only generated temporary
+data and publishes no ports. The explicit `--named-volume-only` mode is a limited
+Docker Desktop check and does not replace the full Linux ownership gate.
 
 `TRUST_PROXY` is disabled at `0` and otherwise names explicit controlled proxy
 IPs/CIDRs. Legacy hop counts, truthy aliases, and invalid values disable trust with
@@ -93,6 +109,11 @@ by default.
 - `dev` publishes active development builds and uses distinct `-dev.N` versions.
 - `beta` publishes prerelease testing builds using `-beta.N`.
 - `main` and stable tags publish stable/latest images after beta smoke testing.
+
+Image publication emits an immutable digest. The publication workflow verifies
+that exact image and revision on AMD64 and ARM64 with isolated fresh-install,
+schema-53 upgrade and paired rollback fixtures. GitHub Release creation depends
+on both smoke jobs as well as the preceding quality/security/build gates.
 
 Release preparation includes version and lockfile, changelog Added/Fixed/Changed
 sections as applicable, full validation, test notes, tag/channel review, and smoke

@@ -1,7 +1,7 @@
-import Database from "better-sqlite3";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createId } from "./lib/ids.js";
+import { openDatabase } from "./lib/open-database.js";
 import {
   buildAutoPhysicalLayout,
   portSetFingerprint,
@@ -22,10 +22,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-export const db = new Database(DB_PATH);
-
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+export const db = openDatabase(DB_PATH);
 
 const BOOTSTRAP_SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS schemaVersion (
@@ -1477,6 +1474,22 @@ const SCHEMA_MIGRATIONS = [
         revokedAt TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_mcp_tokens_user ON mcpTokens(userId);
+    `,
+  },
+
+  {
+    version: 54,
+    sql: `
+      CREATE TABLE IF NOT EXISTS deviceStackMemberLayouts (
+        memberId TEXT PRIMARY KEY REFERENCES deviceStackMembers(id) ON DELETE CASCADE,
+        sourceTemplateId TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('accurate','generic-default','legacy-default','needs-mapping','invalid')),
+        snapshot TEXT NOT NULL CHECK (json_valid(snapshot)),
+        bindings TEXT NOT NULL CHECK (json_valid(bindings)),
+        portFingerprint TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
     `,
   },
 

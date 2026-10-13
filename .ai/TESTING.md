@@ -37,6 +37,16 @@ Quality runs `check:codeql-review` before dependency installation to verify the
 actual committed server tree against the independently reviewed SNMP exception.
 Run it after committing server changes; working server edits intentionally fail.
 
+Quality also runs `test:e2e:acceptance` in Chromium and Firefox with MCP enabled,
+and `test:docker:storage` on Linux to verify the production image's data-volume
+ownership, custom-user overrides and persistence using disposable resources.
+After image publication, `test:release:smoke` pulls the immutable build digest on
+both AMD64 and ARM64, checks its revision, exercises authenticated API writes,
+templates/member layouts and HTTP monitoring, and upgrades a disposable copy from
+the pinned schema-53 image. It verifies restart persistence and restores a
+separate pre-upgrade snapshot with the previous image. Both architecture jobs
+must pass before GitHub Release creation.
+
 Run the bundled-font browser preflight before the long browser matrix; install
 dependencies within the worktree so Vite can serve font assets. Workflow lint and
 Bash syntax, ShellCheck, actionlint, and PowerShell syntax remain CI steps

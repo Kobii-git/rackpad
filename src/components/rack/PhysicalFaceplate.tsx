@@ -1,3 +1,4 @@
+import { orderedFaceElements } from "@/lib/template-artwork";
 import { physicalItemColor } from "@/lib/faceplate-artwork";
 import { useMemo, type CSSProperties } from "react";
 import { useI18n } from "@/i18n";
@@ -13,7 +14,7 @@ import { faceplateDetailPath } from "@/lib/faceplate-artwork";
 import { cn } from "@/lib/utils";
 
 interface PhysicalFaceplateProps {
-  layout: DevicePhysicalLayout | ResolvedPhysicalLayoutV1;
+  layout: Pick<DevicePhysicalLayout, "snapshot" | "bindings"> | ResolvedPhysicalLayoutV1;
   face: RackFace;
   ports: Port[];
   linkedPortIds?: Set<string>;
@@ -27,11 +28,11 @@ interface PhysicalFaceplateProps {
   onSelectPort?: (portId: string) => void;
 }
 
-function snapshotOf(layout: DevicePhysicalLayout | ResolvedPhysicalLayoutV1) {
+function snapshotOf(layout: Pick<DevicePhysicalLayout, "snapshot" | "bindings"> | ResolvedPhysicalLayoutV1) {
   return "snapshot" in layout ? layout.snapshot : layout;
 }
 
-function bindingsOf(layout: DevicePhysicalLayout | ResolvedPhysicalLayoutV1) {
+function bindingsOf(layout: Pick<DevicePhysicalLayout, "snapshot" | "bindings"> | ResolvedPhysicalLayoutV1) {
   return "bindings" in layout ? layout.bindings : [];
 }
 
@@ -264,8 +265,8 @@ export function PhysicalFaceplate({
   const visibleElements = useMemo(
     () =>
       detail === "full"
-        ? faceDefinition.elements
-        : faceDefinition.elements.filter((primitive) =>
+        ? orderedFaceElements(faceDefinition)
+        : orderedFaceElements(faceDefinition).filter((primitive) =>
             [
               "panel",
               "handle",
@@ -275,7 +276,7 @@ export function PhysicalFaceplate({
               "indicator",
             ].includes(primitive.kind),
           ),
-    [detail, faceDefinition.elements],
+    [detail, faceDefinition],
   );
 
   return (
