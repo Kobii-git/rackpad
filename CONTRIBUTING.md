@@ -1,6 +1,15 @@
 # Contributing to Rackpad
 
-Thanks for helping improve Rackpad! This guide covers local setup, how we branch and release, and what we expect in pull requests.
+Rackpad is developed and maintained by @Kobii-git. Bug reports, reproducible
+examples, testing and feature feedback are welcome. External pull requests and
+submitted patches are not accepted; the maintainer independently implements
+accepted improvements. Existing contributions and attribution are preserved.
+
+Dependabot pull requests remain enabled as update suggestions. The maintainer
+selects and validates updates independently, then closes the corresponding bot
+pull requests without merging their commits.
+
+This guide covers maintainer setup, branching, validation and release work.
 
 ## Development setup
 
@@ -27,9 +36,10 @@ dev  →  beta  →  main
 - **`beta`** — pre-release testing; semver tags like `1.6.0-beta.4`.
 - **`main`** — stable releases.
 
-Beta versions use `-beta.N` suffixes (e.g. `1.6.0-beta.4`). Do not bump the version in drive-by PRs unless explicitly asked.
+Beta versions use `-beta.N` suffixes (e.g. `1.6.0-beta.4`). Version changes follow
+the maintainer's release plan.
 
-## Validation before you open a PR
+## Maintainer validation
 
 Run the canonical standard validation and fix any failures:
 
@@ -82,7 +92,7 @@ All locale files use `satisfies TranslationMap`, so **key parity is enforced at 
 
 Helper scripts live in `scripts/` (`sync-i18n-keys.mjs`, `check-i18n-values.mjs`).
 
-## Pull request expectations
+## Maintainer pull request expectations
 
 - **Scope:** One logical change per PR when possible; link related issues.
 - **Description:** What changed, why, and how you tested it.

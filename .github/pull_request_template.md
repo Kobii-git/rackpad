@@ -1,3 +1,6 @@
+Rackpad accepts maintainer-authored implementation only. Please use issues or
+discussions for reports and suggestions; see [the contribution policy](../CONTRIBUTING.md).
+
 ## Change
 
 Describe the problem, the resulting behavior, and any linked issue.
