@@ -5,6 +5,7 @@ import type { Device, Port } from "../src/lib/types";
 import AxeBuilder from "@axe-core/playwright";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import {
   expect,
   test,
@@ -6379,9 +6380,10 @@ test("MCP token UI shows credentials once and reviews an SDK proposal", async ({
   test.skip(process.env.MCP_ENABLED !== "1", "Run with MCP_ENABLED=1 to exercise the opt-in endpoint.");
   const headers = { Authorization: `Bearer ${token}` };
   let rackId: string | undefined;
+  const tokenName = `E2E MCP client ${randomUUID()}`;
   await authenticate(page);
   await page.goto("/mcp");
-  await page.getByRole("textbox", { name: "Name", exact: true }).fill("E2E MCP client");
+  await page.getByRole("textbox", { name: "Name", exact: true }).fill(tokenName);
   await page.getByRole("combobox", { name: "Lab permissions" }).selectOption("write");
   await page.getByRole("checkbox", { name: "Home Lab" }).check();
   await page.getByRole("button", { name: "Create", exact: true }).click();
@@ -6391,7 +6393,7 @@ test("MCP token UI shows credentials once and reviews an SDK proposal", async ({
   expect(bearer).toMatch(/^rpmcp_/);
   await page.reload();
   await expect(page.getByTestId("mcp-issued-token")).toHaveCount(0);
-  await expect(page.getByText("E2E MCP client", { exact: false })).toBeVisible();
+  await expect(page.getByText(tokenName, { exact: false })).toBeVisible();
 
   const client = new Client({ name: "rackpad-e2e", version: "1.0.0" },
     { versionNegotiation: { mode: { pin: "2026-07-28" } } });
@@ -6422,7 +6424,7 @@ test("MCP token UI shows credentials once and reviews an SDK proposal", async ({
     await client.close();
     if (rackId) await request.delete(`/api/racks/${rackId}`, { headers });
   }
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByText(tokenName, { exact: false }).locator("..").getByRole("button", { name: "Delete", exact: true }).click();
   const revoked = await request.post("/api/mcp", {
     headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
     data: { jsonrpc: "2.0", id: 1, method: "ping" },
