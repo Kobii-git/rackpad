@@ -110,6 +110,11 @@ by default.
 - `beta` publishes prerelease testing builds using `-beta.N`.
 - `main` and stable tags publish stable/latest images after beta smoke testing.
 
+Image publication emits an immutable digest. The publication workflow verifies
+that exact image and revision on AMD64 and ARM64 with isolated fresh-install,
+schema-53 upgrade and paired rollback fixtures. GitHub Release creation depends
+on both smoke jobs as well as the preceding quality/security/build gates.
+
 Release preparation includes version and lockfile, changelog Added/Fixed/Changed
 sections as applicable, full validation, test notes, tag/channel review, and smoke
 testing. Push/tag/publish/deploy always requires explicit user authority.

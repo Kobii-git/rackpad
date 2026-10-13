@@ -12,6 +12,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
   preserved port identities and cable links, and schema-54 backup recovery.
 - Chromium and Firefox feature acceptance with MCP explicitly enabled, plus a
   Linux container gate for writable named volumes, bind mounts and custom users.
+- Published-image checks for both architectures, fresh installation, actual
+  schema-53 upgrade, API writes/monitoring and paired rollback before GitHub Release creation.
 
 ### Fixed
 
@@ -27,6 +29,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 - Documented maintainer-only implementation while welcoming reports, testing
   and feedback. Dependabot remains a source of suggestions; its PRs are not merged.
+- Renewed only the SNMP server-tree review pin after independent review and
+  explicit maintainer approval; the two protocol call sites and expiry are unchanged.
 
 Schema 54 is forward-only. Keep a protected database/configuration snapshot and
 the matching previous image before upgrading; rollback restores that pair.

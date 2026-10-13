@@ -42,7 +42,8 @@
     "test:snmp:interop": "node scripts/check-snmp-interop.mjs",
     "test:e2e:storage": "node scripts/check-storage-compat.mjs",
     "test:docker:storage": "node scripts/check-container-storage.mjs",
-    "test:e2e:acceptance": "playwright test --config=playwright.acceptance.config.ts"
+    "test:e2e:acceptance": "playwright test --config=playwright.acceptance.config.ts",
+    "test:release:smoke": "node scripts/check-release-image.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
