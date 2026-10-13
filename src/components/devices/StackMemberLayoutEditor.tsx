@@ -336,9 +336,10 @@ export function StackMemberLayoutEditor({
                   approved,
                   acceptHeight,
                 );
-                await loadAll(true);
                 invalidate();
                 setBindings(undefined);
+                setUnassignedPortIds([]);
+                await loadAll(true);
               })
             }
           >

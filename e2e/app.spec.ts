@@ -6539,7 +6539,19 @@ test("remaining feedback template colors, resizing, grids and face operations pe
 
     await select.selectOption("module::rear:test-module");
     const grid=controls.getByTestId("template-module-grid");
-    await grid.getByRole("spinbutton",{name:"Rows",exact:true}).fill("1"); await grid.getByRole("spinbutton",{name:"Columns",exact:true}).fill("8"); await grid.getByRole("button",{name:"Update",exact:true}).click();
+    await grid.getByRole("spinbutton",{name:"Ports",exact:true}).fill("9");
+    await grid.getByRole("spinbutton",{name:"Rows",exact:true}).fill("1"); await grid.getByRole("spinbutton",{name:"Columns",exact:true}).fill("9"); await grid.getByRole("button",{name:"Update",exact:true}).click();
+    await builder.getByRole("button", {name:"Undo",exact:true}).click();
+    await expect(grid.getByRole("spinbutton",{name:"Ports",exact:true})).toHaveValue("8");
+    await expect(grid.getByRole("spinbutton",{name:"Rows",exact:true})).toHaveValue("2");
+    await expect(grid.getByRole("spinbutton",{name:"Columns",exact:true})).toHaveValue("4");
+    await builder.getByRole("button", {name:"Redo",exact:true}).click();
+    await expect(grid.getByRole("spinbutton",{name:"Ports",exact:true})).toHaveValue("9");
+    await expect(grid.getByRole("spinbutton",{name:"Rows",exact:true})).toHaveValue("1");
+    await expect(grid.getByRole("spinbutton",{name:"Columns",exact:true})).toHaveValue("9");
+    await grid.getByRole("spinbutton",{name:"Ports",exact:true}).fill("8");
+    await grid.getByRole("spinbutton",{name:"Columns",exact:true}).fill("8");
+    await grid.getByRole("button",{name:"Update",exact:true}).click();
     await select.selectOption("position::rear:test-position");
     await controls.getByRole("spinbutton",{name:"Width",exact:true}).fill("340");
     await controls.getByRole("button",{name:"Move to other face",exact:true}).click();
@@ -6626,16 +6638,26 @@ test("mixed-model220-port stacks retain applied modules, front/rear targets and 
       if(!index){template.moduleSlots=[{id:"uplink-position",face:"rear",x:200,y:180,width:300,height:90}];template.modules=[createHardwareModule("uplink-module","Applied uplink module","uplink-position","sfp_plus",2,template.moduleSlots[0])];}
       await post("/api/hardware-templates",template);templates.push(template.id);
       const preview=await post(`/api/devices/${stack.id}/stack-members/${member.id}/physical-layout/preview`,{templateId:template.id,moduleIds:template.modules.map(module=>module.id)});
-      const applied=await post(`/api/devices/${stack.id}/stack-members/${member.id}/physical-layout/apply`,{...preview,approvedPortSlotIds:preview.portsToCreate.map((port:{slotId:string})=>port.slotId)});canonical.push(...applied.createdPortIds);
+      const applied=await post(`/api/devices/${stack.id}/stack-members/${member.id}/physical-layout/apply`,{...preview,approvedPortSlotIds:preview.portsToCreate.map((port:{slotId:string})=>port.slotId).slice(index === 0 ? 1 : 0)});canonical.push(...applied.createdPortIds);
     }
+    const unassigned=await post("/api/ports",{deviceId:stack.id,name:"Stack-wide uplink",kind:"sfp_plus",face:"rear"});canonical.push(unassigned.id);
     expect(canonical).toHaveLength(220);expect(new Set(canonical).size).toBe(220);
-    const before=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();expect(before.bindings).toHaveLength(220);
     await authenticate(page);await page.goto(`/devices/${stack.id}?tab=stack-members`);
     const first=page.getByTestId("stack-member").filter({has:page.getByText("Model 1",{exact:true})});
     await expect(first.getByRole("checkbox",{name:"Applied uplink module",exact:true})).toBeChecked();
+    await first.locator("summary").filter({hasText:"Stack-wide ports"}).click();
+    await first.getByRole("checkbox",{name:"Stack-wide uplink",exact:true}).check();
     await first.getByRole("button",{name:"Preview",exact:true}).click();
     await expect(first.getByRole("combobox")).toHaveCount(29);
     await expect(first.getByRole("alert")).toHaveCount(0);
+    const applyResponse=page.waitForResponse(response=>response.request().method()==="POST" && response.url().endsWith(`/stack-members/${members[0]}/physical-layout/apply`));
+    await first.getByRole("button",{name:"Apply",exact:true}).click();expect((await applyResponse).status()).toBe(200);
+    await expect(first.getByRole("checkbox",{name:"Stack-wide uplink",exact:true})).toHaveCount(0);
+    const nextPreview=page.waitForResponse(response=>response.request().method()==="POST" && response.url().endsWith(`/stack-members/${members[0]}/physical-layout/preview`));
+    await first.getByRole("button",{name:"Preview",exact:true}).click();expect((await nextPreview).status()).toBe(200);
+    await expect(first.getByRole("alert")).toHaveCount(0);
+    const before=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();expect(before.bindings).toHaveLength(220);
+    expect(before.bindings.map((binding:{portId:string})=>binding.portId).sort()).toEqual([...canonical].sort());
     await page.reload();await expect(first.getByRole("checkbox",{name:"Applied uplink module",exact:true})).toBeChecked();
     await first.getByRole("button",{name:"Move Model 1 down",exact:true}).click();
     const after=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();

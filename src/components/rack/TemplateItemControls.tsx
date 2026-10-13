@@ -136,6 +136,8 @@ export function TemplateItemControls({
   const key = (item: TemplateItem) =>
     `${item.kind}:${item.moduleId ?? ""}:${item.face}:${item.id}`;
   const value = selected ? templateItemValue(draft, selected) : undefined;
+  const selectedModule =
+    selected?.kind === "module" ? (value as HardwareModuleV1 | undefined) : undefined;
   function apply(operation: () => HardwareTemplateV1) {
     try {
       onChange(operation());
@@ -218,10 +220,10 @@ export function TemplateItemControls({
                 ))}
             </div>
           )}
-          {selected.kind === "module" && (
+          {selectedModule && (
             <ModuleGrid
-              key={selected.id}
-              module={value as HardwareModuleV1}
+              key={`${selectedModule.id}:${selectedModule.portSlots.length}:${selectedModule.portGrid?.rows}:${selectedModule.portGrid?.columns}`}
+              module={selectedModule}
               apply={(count, rows, columns) =>
                 apply(() =>
                   updateModuleGrid(draft, selected.id, count, rows, columns),
