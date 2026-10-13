@@ -1,3 +1,4 @@
+import { isStackType } from "../lib/device-stacks.js";
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import { writeAuditLogEntry } from "../lib/audit-log.js";
@@ -11,7 +12,10 @@ import {
   type DevicePhysicalLayoutRow,
   type PhysicalLayoutDeviceRow,
 } from "../lib/device-physical-layout.js";
-import { requiredDeviceType } from "../lib/device-types.js";
+import {
+  deviceTypeMatches,
+  requiredDeviceType,
+} from "../lib/device-types.js";
 import { createId } from "../lib/ids.js";
 import {
   appendLabFilter,
@@ -77,10 +81,7 @@ function assertTemplateSupportsDeviceType(
   template: HardwareTemplateV1,
   deviceType: string,
 ) {
-  if (
-    template.deviceTypes.length > 0 &&
-    !template.deviceTypes.includes(deviceType)
-  ) {
+  if (!deviceTypeMatches(deviceType, template.deviceTypes)) {
     throw new ValidationError(
       `Hardware template ${template.name} does not support device type ${deviceType}.`,
     );
@@ -129,6 +130,7 @@ function parseRequestedBindings(value: unknown): PortBindingV1[] | undefined {
 }
 
 function buildPreview(device: DeviceRow, body: Record<string, unknown>) {
+  if (isStackType(device.deviceType)) throw new ValidationError("Stack member faces are generated from their members and port assignments.", 409);
   const ports = getDevicePorts(device.id);
   const customSnapshot = body.customSnapshot;
   const moduleIds =
@@ -416,6 +418,29 @@ export const hardwareTemplatesRoutes: FastifyPluginAsync = async (app) => {
       });
       assignDefault();
       return { deviceType, templateId, updatedAt: now };
+    },
+  );
+
+  app.delete<{ Params: { deviceType: string } }>(
+    "/defaults/:deviceType",
+    async (req, reply) => {
+      if (!assertGlobalAdmin(req, reply)) return;
+      const deviceType = requiredDeviceType({
+        deviceType: req.params.deviceType,
+      });
+      const result = db
+        .prepare("DELETE FROM hardwareTemplateDefaults WHERE deviceType = ?")
+        .run(deviceType);
+      if (result.changes > 0) {
+        writeAuditLogEntry({
+          user: req.authUser!.username,
+          action: "hardware-template.default.remove",
+          entityType: "DeviceType",
+          entityId: deviceType,
+          summary: `Removed the hardware template override for ${deviceType}`,
+        });
+      }
+      return reply.status(204).send();
     },
   );
 

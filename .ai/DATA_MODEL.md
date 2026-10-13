@@ -77,6 +77,13 @@ automatic rack positions without changing restored port or link identities.
 Rack Studio placement writes use a single lab-authorized action endpoint. Each
 action supplies its expected canonical before-state; stale browser-session undo,
 redo, and placement attempts are rejected instead of overwriting newer changes.
+Schema 49 adds `rack-top` to the persisted `devices.rackMountKind` meaning and an
+index on `(rackId, rackMountKind)`. Rack-top rows reuse the existing rack, face,
+height, column, and column-span fields, leave U/shelf/side fields empty, and may
+not overlap another rack-top column range on the same rack regardless of face.
+No row rewrite is required. Because older binaries do not understand this enum
+meaning, rollback after placing rack-top equipment requires the pre-upgrade
+native backup or volume snapshot.
 
 `portLinks` stores optional inspection metadata (`label`, `visible`) plus a
 bounded JSON list of uniquely identified room/face canvas waypoints. Existing
@@ -87,3 +94,33 @@ the metadata does not create a second cabling model. Link create, edit, bulk
 edit, and delete authorize both endpoint labs, update endpoint state, and write
 their audit entry in the same transaction. Logical backups parse waypoint JSON
 and older backups default missing metadata safely.
+
+Schema 50 adds `deviceMonitors.snmpCommunityEnc` and
+`oidcIdentities.roleRecheckRequired`. Legacy plaintext communities are encrypted
+inside the migration transaction, the plaintext column is cleared, old OIDC
+sessions are revoked, and historical trap-source credentials are discarded.
+Legacy logical restores apply the same conversion atomically; current snapshots
+preserve encrypted values and the role-check marker. Native schema manifests include
+both fields. A missing encryption key prevents a plaintext conversion from committing.
+
+Schema 51 adds ordered `deviceStackMembers`, labelled `deviceStackMemberMacs`,
+and `ports.stackMemberId`. Members belong to a logical `switch_stack` device or
+its descendant type. Ports may reference only members of their own device.
+Heights are member sums (empty stacks use 1U), with transactional placement and
+reorder validation. Populated stack type/ancestry changes and referenced member
+deletion are rejected. Generic stack layouts are derived from members and
+canonical ports; there are no independent member templates or monitoring IDs.
+Logical/native restores validate all stack metadata and geometry atomically.
+The native validator accepts genuine schema-50 snapshots for startup migration,
+rejects inconsistent version markers, and retains the security cutoff at 50.
+The geometry core accepts an explicit SQLite connection so snapshot validation
+never reads the running database.
+
+Schema 52 adds `portLinks.routeMode` and `routeGuides`. Legacy waypointed links
+become manual; others become automatic. Guides carry bounded normalized device
+positions, entry/exit faces and a declared room within an endpoint lab. Mounted
+guide devices use their rack room. Transactional triggers remove references when
+a guide device is deleted or leaves its declared room, without deleting cables.
+Create/edit/bulk APIs and logical/native backups validate both fields. Inactive
+guides and waypoints survive mode changes. Client placement/room mutations
+refresh affected guide metadata from the server.

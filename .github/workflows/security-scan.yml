@@ -1,6 +1,7 @@
 name: security-scan
 
 on:
+  workflow_call:
   push:
     branches: [main, beta, dev]
   pull_request:

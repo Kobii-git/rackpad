@@ -675,7 +675,7 @@ export default function PortView() {
 
   const isVisualGrid =
     device &&
-    (device.deviceType === "switch" || device.deviceType === "router");
+    (["switch", "router"].includes(deviceTypeBase(device.deviceType, deviceTypes)));
 
   const linkedCount = devicePorts.filter(
     (port) => port.linkState === "up",

@@ -79,7 +79,7 @@ Add authenticated APIs for listing templates and lab-scoped physical layouts.
 ### Phase 2 — Hardware Template Builder and exact device configurations
 
 - Add the visual Hardware Template Builder under Device Types.
-- Provide original parameterized starting families: generic 1U/2U/4U servers, desktop/tower PCs, storage equipment, firewalls, routers, 8/16/24/48-port switches, patch panels, PDUs, UPS units, KVMs, shelves, and blanking panels.
+- Provide original parameterized starting families: generic 1U/2U/4U servers, desktop/tower PCs, storage equipment, firewalls, routers, 8/16/24/48-port switches, patch panels with matching face-qualified front/rear blocks, PDUs, UPS units, KVMs, shelves, and blanking panels.
 - Provide original module primitives for NIC blocks, PCIe adapters, PSUs, fans, drive bays, management ports, console, USB, serial, VGA, SFP/SFP+/QSFP, and other physical connectors.
 - Allow users to generate port blocks by count, rows, columns, starting number, numbering direction, and connector kind, then click or drag ports into exact positions.
 - Support left-to-right, right-to-left, vertical, and serpentine port sequencing plus separate uplink blocks.
@@ -93,21 +93,25 @@ Add authenticated APIs for listing templates and lab-scoped physical layouts.
 
 Implementation status: completed behind the Studio Beta toggle. The shared room
 canvas, focused rack editor, unmounted equipment tray, 12-column direct mounts,
-shelf footprints and rotation, 0U side mounts, pointer and keyboard editing,
-zoom/pan/fit, search and health overlays, inspectors, responsive view-only mode,
-and conflict-safe session undo/redo are implemented. Studio actions are
+shelf footprints and rotation, 0U side mounts, rack-top surfaces, pointer and
+keyboard editing, zoom/pan/fit, search and health overlays, inspectors,
+responsive view-only mode, and conflict-safe session undo/redo are implemented. Studio actions are
 lab-authorized, transactional, audited, and protected by expected before-state.
 The room and focused views now consume the same `RackStudioScene` geometry as
-cable routing and export. Direct, shelf, rotated shelf, side, and loose devices
-all render device-owned faceplates with exact transformed anchors. Front, rear,
-and both selection is authoritative: fully hidden cables are omitted and a
-single visible endpoint terminates at a labeled hidden-face handoff.
+cable routing and export. Direct, shelf, rotated shelf, side, rack-top, and loose
+devices all render device-owned faceplates with exact transformed anchors.
+Front, rear, and both selection is authoritative: fully hidden cables are
+omitted and a single visible endpoint terminates at a labeled hidden-face
+handoff.
 
 - Replace the beta preview with a room canvas showing all racks in the room, an unmounted equipment tray, and individual-rack focus.
 - Render industrial-technical front/rear faceplates with equipment depth, handles, screws, vents, bays, labels, status LEDs, and exact port geometry.
 - Add explicit View/Edit mode, desktop/tablet pointer support, keyboard controls, zoom/pan/fit, search, health overlay, face selection, and inspector forms.
 - Support integer U height plus a 12-column width grid for direct mounts.
 - Support bounded 2D shelf placement, 90° rotation, vertically installed devices, and left/right 0U side equipment.
+- Support one 12-column rack-top surface per rack, with horizontal pointer and
+  keyboard placement, face selection, overlap rejection across both faces, and
+  vertical position derived from the rack.
 - Preview valid footprints and collisions before drop. Reject rack overflow, overlapping column/U ranges, overlapping shelf rectangles, invalid parent shelves, side conflicts, and cross-lab placement.
 - Save each completed action transactionally and support conflict-safe session undo/redo.
 - Keep phone layouts view-only with a clear editing-size message.
@@ -137,13 +141,17 @@ mode creates canonical `PortLink` records from exact mapped faceplate ports,
 keeps logical and aggregate relationships out of the physical workflow, and
 requires confirmation for unusual connector pairs. Cable inspection now covers
 labels, type, length, color, notes, visibility, deletion, tracing, filters, and
-bounded room/face waypoints. Room and focused-rack views use deterministic
-equipment-aware lanes, preserve manual waypoints while racks move, and terminate
-cross-room links as labeled handoffs. Theme-aware full-room and focused-rack SVG
-and PNG exports include selected faces, physical ports, cable labels, metadata,
-and a legend. Exports use the same scene and face filtering as the interactive
-view, including shelf, side, and loose equipment. Studio remains opt-in; this
-phase does not make it the default.
+bounded room/face waypoints. Room and focused-rack views share one deterministic
+exterior-gutter planner. Stable endpoint ordering plus interval-based lane reuse
+avoids fixed modulo collisions, treats unrelated rack/equipment rectangles as
+obstacles, and preserves exact manual waypoints while racks move. Smooth rounded
+and orthogonal renderers consume the same points; namespaced local preferences
+store the chosen style and all-label setting. Cross-room links terminate as
+labeled handoffs. Theme-aware full-room and focused-rack SVG and PNG exports use
+the same planned geometry and include selected faces, physical ports, cable
+labels, metadata, and a legend. Exports use the same scene and face filtering as
+the interactive view, including shelf, side, rack-top, and loose equipment.
+Studio remains opt-in; this phase does not make it the default.
 
 - Add Patch mode for creating real `PortLink` records by selecting or dragging between available physical ports.
 - Support copper, fiber, power, console, USB, and other physical links. Keep virtual, WiFi, VLAN, and aggregate relationships in Diagram mode.
@@ -160,7 +168,7 @@ phase does not make it the default.
 - Migration tests prove populated legacy databases retain identical device, port, and `PortLink` IDs and metadata.
 - Backup tests cover new tables/fields, old backups without physical layouts, newer-schema rejection, atomic restore, and device snapshots after template deletion.
 - Profile tests cover schema validation, bounds, element limits, module resolution, deterministic expansion, inherited defaults, exact port bindings, unmatched ports, and prohibited arbitrary SVG/URLs/scripts.
-- Placement tests cover full/half/third-width devices, U overlap, shelf bounds and rotation, vertical equipment, side mounting, cross-lab rejection, and safe undo conflicts.
+- Placement tests cover full/half/third-width devices, U overlap, shelf bounds and rotation, vertical equipment, side and rack-top mounting, cross-lab rejection, and safe undo conflicts.
 - Cable tests cover existing linked devices, physical endpoint validation, network/power/console links, cross-rack routes, cross-room handoffs, waypoint validation, trace behavior, and aggregate exclusion.
 - Browser tests cover administrator/editor/viewer permissions, legacy warnings, profile creation, template application, exact manual mapping, bulk assignment, touch editing, phone view-only behavior, front/rear/both rendering, Physical Visualizer nodes, and CSP-safe PNG/SVG export.
 - Required scenarios:
@@ -200,3 +208,50 @@ discarded from scene or export output.
 - Reference photographs remain documentation assets and are not used as hardware faceplates.
 - No new graphics dependency, public unauthenticated route, environment variable, container change, deployment, or release action is required.
 - Existing uncommitted work must be preserved; implementation must recheck Git status and carefully reconcile overlapping server composition, route authorization, tests, and AI guardrail changes.
+
+## Routing and compact presentation
+
+The shared physical planner uses direct curves across the available rack height.
+Faceplates, shelves and intermediate equipment are drawing surfaces; they do not
+force cables outside a rack. Endpoint transformations, canonical ordering, curve
+reversal, parallel cord spacing and continuation identifiers remain shared by
+Studio, Rack Cabling and SVG/PNG output.
+
+`PortLink.routeMode` stores `auto`, `direct`, `managed` or `manual`. The Smooth /
+Orthogonal preference is independent. Automatic selects direct paths within one
+rack face and managed paths between racks; explicit Direct also permits same-face
+cross-rack curves. Manual retains the existing exact room waypoints, projected
+through rack canvas frames in elevations. Switching modes does not discard the
+inactive route arrays.
+
+`routeGuides` is an ordered list of at most 32 positions. Each contains a unique
+ID, device ID, declared room ID, entry and exit physical faces, and normalized
+0–1000 X/Y coordinates. Its geometry uses the same transform as device ports,
+including rotated shelf equipment. A front/rear brush passage renders matching
+continuations as part of the original link. Missing layout geometry is labeled
+incomplete. Routing never creates inventory ports, extra links or trace hops.
+
+Schema 52 adds routing metadata. Existing links with waypoints become Manual;
+others become Automatic. Guide validation uses the rack room for mounted devices
+and the device room otherwise; it requires that room to belong to an authorized
+endpoint lab. Device deletion or movement out of a declared room removes guide
+references transactionally while preserving the cable. The client refreshes
+canonical guide metadata after placement and room mutations. Both logical and
+native backup validation cover modes and guides, and old backups default safely.
+
+Compact viewing shows room racks side by side with smaller consistent labels,
+subdued rails/grids and thin cables. Editing exposes placement guides, while
+invisible hit regions and keyboard selection remain available. Generic starter
+artwork distinguishes servers, storage, mini PCs, networking, power equipment,
+shelves, blanking panels and brush panels. Existing snapshots receive shared
+renderer improvements without rewriting their geometry. Revised starter geometry
+uses the established preview/apply workflow and stable port bindings.
+
+Studio remains opt-in and the classic view remains available. Free loose-device
+placement, breakout modeling, 3D and changing the default viewer remain deferred.
+Do not run an older binary against schema 52: rollback requires a compatible
+pre-upgrade native backup or volume snapshot. Publication and deployment are
+separate actions. Keep issue #139 open after a release until the tester confirms
+the reported rear routes and mixed-face behavior on their actual rack.
+
+Guided template authoring and worked examples: [Hardware templates](HARDWARE_TEMPLATES.md).

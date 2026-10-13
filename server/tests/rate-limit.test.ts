@@ -38,21 +38,11 @@ after(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
-test("parses only bounded proxy hop counts and compatibility aliases", () => {
-  for (const value of [undefined, "", "0", "false", "no", "off"]) {
-    assert.equal(parseTrustProxySetting(value), false);
+test("accepts explicit proxy IPs/CIDRs and disables legacy or invalid settings", () => {
+  for (const value of [undefined, "", "0", "false", "no", "off", "1", "2", "10", "true", "yes", "on", "-1", "01", "1.5", "11", "invalid", "0.0.0.0/0", "::/0", "10.0.0.1,invalid", "127.1", "10.0.0.1/33"]) {
+    assert.equal(parseTrustProxySetting(value), false, value);
   }
-
-  for (const value of ["1", "true", "yes", "on"]) {
-    assert.equal(parseTrustProxySetting(value), 1);
-  }
-
-  assert.equal(parseTrustProxySetting("2"), 2);
-  assert.equal(parseTrustProxySetting("10"), 10);
-
-  for (const value of ["-1", "01", "1.5", "11", "invalid"]) {
-    assert.equal(parseTrustProxySetting(value), false);
-  }
+  assert.deepEqual(parseTrustProxySetting("172.18.0.2, 10.0.0.0/24 fd00::/64"), ["172.18.0.2", "10.0.0.0/24", "fd00::/64"]);
 });
 
 test("applies one global limiter across routes and preserves 429 headers", async () => {
@@ -75,7 +65,7 @@ test("applies one global limiter across routes and preserves 429 headers", async
 });
 
 test("one trusted proxy ignores spoofed leftmost forwarded addresses", async () => {
-  process.env.TRUST_PROXY = "1";
+  process.env.TRUST_PROXY = "172.18.0.2";
   app = await createApp();
 
   const first = await app.inject({
@@ -96,7 +86,7 @@ test("one trusted proxy ignores spoofed leftmost forwarded addresses", async () 
 });
 
 test("one trusted proxy gives distinct real clients distinct buckets", async () => {
-  process.env.TRUST_PROXY = "1";
+  process.env.TRUST_PROXY = "172.18.0.2";
   app = await createApp();
 
   const first = await app.inject({
@@ -117,7 +107,7 @@ test("one trusted proxy gives distinct real clients distinct buckets", async () 
 });
 
 test("configured multi-hop trust selects the client before the proxy chain", async () => {
-  process.env.TRUST_PROXY = "2";
+  process.env.TRUST_PROXY = "172.18.0.0/24";
   app = await createApp();
 
   const first = await app.inject({
@@ -139,4 +129,13 @@ test("configured multi-hop trust selects the client before the proxy chain", asy
     },
   });
   assert.equal(limited.statusCode, 429);
+});
+
+test("untrusted direct peers cannot select a rate-limit bucket with forwarding headers", async () => {
+  process.env.TRUST_PROXY = "172.18.0.2";
+  app = await createApp();
+  for (const [index, ip] of ["203.0.113.20", "203.0.113.21"].entries()) {
+    const response: { statusCode: number } = await app.inject({ method: "GET", url: "/api/health", remoteAddress: "10.1.2.3", headers: { "x-forwarded-for": ip } });
+    assert.equal(response.statusCode, index === 0 ? 200 : 429);
+  }
 });

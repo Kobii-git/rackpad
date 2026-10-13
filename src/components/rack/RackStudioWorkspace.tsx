@@ -1,3 +1,4 @@
+import { CableContinuationMarkers } from "./CableContinuationMarkers";
 import {
   useCallback,
   useEffect,
@@ -6,6 +7,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { Link } from "react-router-dom";
 import {
   Box,
   Cable,
@@ -31,13 +33,18 @@ import {
 } from "@/lib/store";
 import { ApiError } from "@/lib/api";
 import {
+  buildRackElevationCableRoutes,
   buildRackStudioCableRoutes,
-  cableCategoryForPorts,
   connectorPairIsUsual,
   defaultCableColor,
   defaultCableMetadata,
   portSupportsPhysicalPatching,
   type PhysicalCableCategory,
+  RACK_STUDIO_ROUTE_STYLE_STORAGE_KEY,
+  RACK_STUDIO_SHOW_LABELS_STORAGE_KEY,
+  rackStudioRouteStylePreference,
+  rackStudioShowLabelsPreference,
+  type RackStudioCableRouteStyle,
 } from "@/lib/rack-studio-cables";
 import {
   buildRackStudioSvg,
@@ -48,15 +55,19 @@ import {
   clampRackStudioValue,
   devicePlacementState,
   directPlacementState,
+  findRackStudioPlacementConflicts,
   isRackStudioPhysicalDevice,
   loosePlacementState,
+  rackTopPlacementState,
   RACK_STUDIO_CANVAS_WIDTH,
   RACK_STUDIO_RACK_HEIGHT,
   RACK_STUDIO_RACK_WIDTH,
   rackCanvasState,
+  reconcileFocusedRackId,
   shelfPlacementBounds,
   storedRackCanvasState,
   validateDirectPlacementPreview,
+  validateRackTopPlacementPreview,
 } from "@/lib/rack-studio";
 import {
   buildRackElevationScene,
@@ -80,6 +91,10 @@ import { cn, normalizeColorToCss } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { PhysicalFaceplate } from "./PhysicalFaceplate";
+import {
+  RackElevationEquipmentFrame,
+  RackElevationShell,
+} from "./RackElevationPresentation";
 import { RackStudioCableInspector } from "./RackStudioCableInspector";
 
 const RACK_U_HEIGHT = 42;
@@ -95,6 +110,10 @@ interface RackStudioWorkspaceProps {
   portLinks: PortLink[];
   canEdit: boolean;
   initialRackId?: string;
+  endpointDevices?: Device[];
+  initialCableId?: string;
+  initialPortId?: string;
+  onRevealCableEndpoint?: (portId: string, cableId: string) => void;
   face: RackFace | "both";
   onFaceChange: (face: RackFace | "both") => void;
 }
@@ -202,6 +221,24 @@ function replayAction(result: RackStudioActionResult): RackStudioAction {
   };
 }
 
+function readLocalPreference(key: string) {
+  try {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalPreference(key: string, value: string) {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Rack Studio remains usable when storage is unavailable or disabled.
+  }
+}
+
 export function RackStudioWorkspace({
   room,
   racks,
@@ -211,6 +248,10 @@ export function RackStudioWorkspace({
   portLinks,
   canEdit,
   initialRackId,
+  endpointDevices = devices,
+  initialCableId,
+  initialPortId,
+  onRevealCableEndpoint,
   face,
   onFaceChange,
 }: RackStudioWorkspaceProps) {
@@ -221,8 +262,18 @@ export function RackStudioWorkspace({
   const [focusedRackId, setFocusedRackId] = useState(
     initialRackId ?? racks[0]?.id ?? "",
   );
+  const appliedInitialRackIdRef = useRef(initialRackId);
+  const selectFocusedRack = useCallback(
+    (rackId: string) => {
+      if (racks.some((rack) => rack.id === rackId)) setFocusedRackId(rackId);
+    },
+    [racks],
+  );
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>();
-  const [selectedCableId, setSelectedCableId] = useState<string>();
+  const [selectedCableId, setSelectedCableId] = useState<string | undefined>(
+    initialCableId,
+  );
+  const [hoveredCableId, setHoveredCableId] = useState<string>();
   const [patchStartPortId, setPatchStartPortId] = useState<string>();
   const [pendingUnusualPair, setPendingUnusualPair] = useState<{
     fromPortId: string;
@@ -231,11 +282,23 @@ export function RackStudioWorkspace({
   const [cableCategory, setCableCategory] = useState<
     PhysicalCableCategory | "all"
   >("all");
-  const [showCableLabels, setShowCableLabels] = useState(true);
+  const [routeStyle, setRouteStyle] = useState<RackStudioCableRouteStyle>(() =>
+    rackStudioRouteStylePreference(
+      readLocalPreference(RACK_STUDIO_ROUTE_STYLE_STORAGE_KEY),
+    ),
+  );
+  const [showCableLabels, setShowCableLabels] = useState(() =>
+    rackStudioShowLabelsPreference(
+      readLocalPreference(RACK_STUDIO_SHOW_LABELS_STORAGE_KEY),
+    ),
+  );
+  const [compact, setCompact] = useState(
+    () => readLocalPreference("rackpad.rack-studio.compact") !== "false",
+  );
   const [exportScope, setExportScope] = useState<"room" | "rack">("room");
   const [search, setSearch] = useState("");
   const [healthOverlay, setHealthOverlay] = useState(false);
-  const [zoom, setZoom] = useState(0.72);
+  const [zoom, setZoom] = useState(compact ? 0.35 : 0.72);
   const [pan, setPan] = useState({ x: 12, y: 12 });
   const [draftRackPositions, setDraftRackPositions] = useState<
     Record<string, { x: number; y: number }>
@@ -257,12 +320,35 @@ export function RackStudioWorkspace({
   }, []);
 
   useEffect(() => {
-    if (initialRackId && racks.some((rack) => rack.id === initialRackId)) {
-      setFocusedRackId(initialRackId);
-    } else if (!racks.some((rack) => rack.id === focusedRackId)) {
-      setFocusedRackId(racks[0]?.id ?? "");
-    }
-  }, [focusedRackId, initialRackId, racks]);
+    writeLocalPreference("rackpad.rack-studio.compact", String(compact));
+  }, [compact]);
+
+  useEffect(() => {
+    writeLocalPreference(RACK_STUDIO_ROUTE_STYLE_STORAGE_KEY, routeStyle);
+  }, [routeStyle]);
+
+  useEffect(() => {
+    writeLocalPreference(
+      RACK_STUDIO_SHOW_LABELS_STORAGE_KEY,
+      String(showCableLabels),
+    );
+  }, [showCableLabels]);
+
+  useEffect(() => {
+    const initialChanged = appliedInitialRackIdRef.current !== initialRackId;
+    const previousInitialRackId = appliedInitialRackIdRef.current;
+    appliedInitialRackIdRef.current = initialRackId;
+    setFocusedRackId((current) =>
+      reconcileFocusedRackId({
+        currentRackId: current,
+        initialRackId,
+        previousInitialRackId: initialChanged
+          ? previousInitialRackId
+          : initialRackId,
+        availableRackIds: racks.map((rack) => rack.id),
+      }),
+    );
+  }, [initialRackId, racks]);
 
   useEffect(() => {
     if (phoneView) {
@@ -275,6 +361,22 @@ export function RackStudioWorkspace({
     () => devices.filter(isRackStudioPhysicalDevice),
     [devices],
   );
+  useEffect(() => {
+    if (initialCableId) setSelectedCableId(initialCableId);
+    if (!initialPortId) return;
+    const deviceId = ports.find((port) => port.id === initialPortId)?.deviceId;
+    setSelectedDeviceId(deviceId);
+    const device = endpointDevices.find((device) => device.id === deviceId);
+    if (!device) return;
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-rack-elevation-id="${CSS.escape(device.rackId ?? "")}"] [aria-label="${CSS.escape(device.hostname)}"]`,
+      );
+      element?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      element?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialCableId, initialPortId, ports, endpointDevices]);
   const focusedRack = racks.find((rack) => rack.id === focusedRackId);
   const selectedCable = portLinks.find((link) => link.id === selectedCableId);
   const selectedDevice = physicalDevices.find(
@@ -282,9 +384,7 @@ export function RackStudioWorkspace({
   );
   const linkedPortIds = useMemo(
     () =>
-      new Set(
-        portLinks.flatMap((link) => [link.fromPortId, link.toPortId]),
-      ),
+      new Set(portLinks.flatMap((link) => [link.fromPortId, link.toPortId])),
     [portLinks],
   );
   const normalizedSearch = search.trim().toLowerCase();
@@ -295,9 +395,7 @@ export function RackStudioWorkspace({
     () =>
       racks.map((rack) => {
         const draft = draftRackPositions[rack.id];
-        return draft
-          ? { ...rack, studioX: draft.x, studioY: draft.y }
-          : rack;
+        return draft ? { ...rack, studioX: draft.x, studioY: draft.y } : rack;
       }),
     [draftRackPositions, racks],
   );
@@ -318,24 +416,26 @@ export function RackStudioWorkspace({
       buildRackStudioCableRoutes({
         room,
         face,
-        devices: physicalDevices,
+        devices: endpointDevices,
         racks: effectiveRacks,
         layouts,
         ports,
         links: portLinks,
         category: cableCategory,
+        style: routeStyle,
         scene: roomScene,
       }),
     [
       cableCategory,
+      endpointDevices,
       effectiveRacks,
       face,
       layouts,
-      physicalDevices,
       portLinks,
       ports,
       room,
       roomScene,
+      routeStyle,
     ],
   );
 
@@ -364,9 +464,12 @@ export function RackStudioWorkspace({
           });
         }
         setError(
-          caught instanceof Error
+          caught instanceof ApiError &&
+            caught.code === "RACK_STUDIO_PLACEMENT_CONFLICT"
             ? caught.message
-            : t("Failed to update devices."),
+            : caught instanceof Error
+              ? caught.message
+              : t("Failed to update devices."),
         );
         return null;
       } finally {
@@ -546,7 +649,7 @@ export function RackStudioWorkspace({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     if (!active.moved) {
-      setFocusedRackId(rack.id);
+      selectFocusedRack(rack.id);
       return;
     }
     void runAction({
@@ -562,6 +665,16 @@ export function RackStudioWorkspace({
   }
 
   async function placeDevice(device: Device, next: RackStudioPlacementState) {
+    const rack = racks.find((entry) => entry.id === next.rackId);
+    if (rack && (next.mountKind === "direct" || next.mountKind === "rack-top")) {
+      const preview = next.mountKind === "direct"
+        ? validateDirectPlacementPreview({ targetDeviceId: device.id, next, rack, devices })
+        : validateRackTopPlacementPreview({ targetDeviceId: device.id, next, rack, devices });
+      if (!preview.valid) {
+        setError(preview.reason ?? t("Failed to update devices."));
+        return null;
+      }
+    }
     return runAction({
       kind: "device.place",
       targetId: device.id,
@@ -644,10 +757,7 @@ export function RackStudioWorkspace({
     void completePhysicalPatch(fromPort.id, port.id, false);
   }
 
-  async function saveCable(
-    id: string,
-    changes: Partial<Omit<PortLink, "id">>,
-  ) {
+  async function saveCable(id: string, changes: Partial<Omit<PortLink, "id">>) {
     setSaving(true);
     setError("");
     try {
@@ -687,14 +797,15 @@ export function RackStudioWorkspace({
     return buildRackStudioSvg({
       room,
       racks: effectiveRacks,
-      devices: physicalDevices,
+      devices: endpointDevices,
       layouts,
       ports,
       links: portLinks,
       face,
-      focusRackId:
-        exportScope === "rack" ? focusedRack?.id : undefined,
+      focusRackId: exportScope === "rack" ? focusedRack?.id : undefined,
       showLabels: showCableLabels,
+      routeStyle,
+      compact,
       theme: isLight ? "light" : "dark",
       labels: {
         cable: t("Cable"),
@@ -706,6 +817,7 @@ export function RackStudioWorkspace({
         rack: t("Rack"),
         legend: `${t("Cable")} · ${t("Type")}`,
         crossRoom: t("Room"),
+        incompleteRoute: t("Incomplete route"),
         categories: {
           network: t("Network"),
           fiber: t("Fiber"),
@@ -839,6 +951,26 @@ export function RackStudioWorkspace({
           <option value="usb">{t("USB")}</option>
           <option value="storage">{t("Storage")}</option>
           <option value="other">{t("Other")}</option>
+        </select>
+
+        <label className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+          <input
+            type="checkbox"
+            checked={compact}
+            onChange={(event) => setCompact(event.target.checked)}
+          />
+          {t("Compact")}
+        </label>
+        <select
+          aria-label={t("Cable routing")}
+          value={routeStyle}
+          onChange={(event) =>
+            setRouteStyle(event.target.value as RackStudioCableRouteStyle)
+          }
+          className="h-8 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] px-2 text-[11px] text-[var(--text-secondary)]"
+        >
+          <option value="smooth">{t("Smooth")}</option>
+          <option value="orthogonal">{t("Orthogonal")}</option>
         </select>
 
         <label className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
@@ -976,7 +1108,12 @@ export function RackStudioWorkspace({
 
           <div
             ref={roomCanvasRef}
-            className="relative h-[420px] touch-none overflow-hidden bg-[radial-gradient(circle_at_1px_1px,var(--border-muted)_1px,transparent_0)] [background-size:22px_22px]"
+            className={cn(
+              "relative touch-none overflow-hidden",
+              compact && !editMode
+                ? "h-[120px] bg-[var(--surface-1)]"
+                : "h-[420px] bg-[radial-gradient(circle_at_1px_1px,var(--border-subtle)_1px,transparent_0)] [background-size:22px_22px]",
+            )}
             onPointerDown={handleCanvasPointerDown}
             onPointerMove={handleCanvasPointerMove}
             onPointerUp={handleCanvasPointerUp}
@@ -992,21 +1129,48 @@ export function RackStudioWorkspace({
               }}
             >
               <svg
-                className="pointer-events-none absolute inset-0 z-20 h-full w-full overflow-visible"
+                className="pointer-events-none absolute inset-0 z-50 h-full w-full overflow-visible"
                 viewBox={`0 0 ${roomScene.bounds.width} ${roomScene.bounds.height}`}
                 aria-label={t("Cables")}
               >
                 {roomCableRoutes.map((route) => {
                   const selected = selectedCableId === route.link.id;
+                  const hovered = hoveredCableId === route.link.id;
+                  const activeCableId = hoveredCableId ?? selectedCableId;
                   const labelPoint = route.points.at(-1);
                   return (
                     <g key={route.link.id}>
                       <path
+                        data-testid="rack-studio-cable"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={t("{value1}: {name}", {
+                          value1: t("Cable"),
+                          name: route.label,
+                        })}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setSelectedCableId(route.link.id);
+                          }
+                        }}
+                        data-link-id={route.link.id}
                         d={route.path}
                         fill="none"
                         stroke="transparent"
                         strokeWidth={14}
-                        className="pointer-events-stroke cursor-pointer"
+                        className={
+                          patchMode
+                            ? "pointer-events-none"
+                            : "pointer-events-stroke cursor-pointer"
+                        }
+                        onPointerEnter={() => setHoveredCableId(route.link.id)}
+                        onPointerLeave={() =>
+                          setHoveredCableId((current) =>
+                            current === route.link.id ? undefined : current,
+                          )
+                        }
                         onClick={(event) => {
                           event.stopPropagation();
                           setSelectedCableId(route.link.id);
@@ -1014,18 +1178,40 @@ export function RackStudioWorkspace({
                         }}
                       />
                       <path
+                        data-testid="rack-studio-cable-stroke"
+                        data-link-id={route.link.id}
                         d={route.path}
                         fill="none"
                         stroke={route.color}
-                        strokeWidth={selected ? 5 : 3}
+                        strokeWidth={
+                          compact ? (selected ? 2.6 : 1.35) : selected ? 5 : 3
+                        }
                         strokeDasharray={route.handoff ? "8 5" : undefined}
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        opacity={selected ? 1 : 0.82}
+                        opacity={
+                          selected || hovered ? 1 : activeCableId ? 0.16 : 0.82
+                        }
                         className="pointer-events-none"
                       />
-                      {showCableLabels && labelPoint ? (
+                      <CableContinuationMarkers
+                        markers={route.continuations}
+                        linkId={route.link.id}
+                        cableLabel={route.label}
+                        color={route.color}
+                        ports={ports}
+                        devices={endpointDevices}
+                        showLabels={showCableLabels || selected || hovered}
+                        opacity={
+                          selected || hovered ? 1 : activeCableId ? 0.16 : 0.82
+                        }
+                      />
+                      {!route.continuations.length &&
+                      (showCableLabels || selected || hovered) &&
+                      labelPoint ? (
                         <text
+                          data-testid="rack-studio-cable-label"
+                          data-link-id={route.link.id}
                           x={labelPoint.x + 5}
                           y={labelPoint.y - 6}
                           fill="var(--text-primary)"
@@ -1055,6 +1241,26 @@ export function RackStudioWorkspace({
                     </g>
                   );
                 })}
+                {selectedCable &&
+                  roomScene.portAnchors
+                    .filter((anchor) =>
+                      [
+                        selectedCable.fromPortId,
+                        selectedCable.toPortId,
+                      ].includes(anchor.portId),
+                    )
+                    .map((anchor) => (
+                      <circle
+                        key={anchor.portId}
+                        cx={anchor.x}
+                        cy={anchor.y}
+                        r={2.5}
+                        fill="none"
+                        stroke="var(--color-warning)"
+                        strokeWidth={1}
+                        className="pointer-events-none"
+                      />
+                    ))}
               </svg>
               {effectiveRacks.map((rack, index) => {
                 const stored = rackCanvasState(rack, index);
@@ -1092,7 +1298,7 @@ export function RackStudioWorkspace({
                       width: RACK_STUDIO_RACK_WIDTH,
                       height: RACK_STUDIO_RACK_HEIGHT,
                     }}
-                    onClick={() => setFocusedRackId(rack.id)}
+                    onClick={() => selectFocusedRack(rack.id)}
                     onPointerDown={(event) => beginRackDrag(event, rack, index)}
                     onPointerMove={moveRackDrag}
                     onPointerUp={(event) => endRackDrag(event, rack)}
@@ -1113,7 +1319,7 @@ export function RackStudioWorkspace({
                         (_, row) => (
                           <span
                             key={row}
-                            className="absolute inset-x-0 border-b border-[var(--border-muted)]"
+                            className="absolute inset-x-0 border-b border-[var(--border-subtle)]"
                             style={{
                               top: `${((row + 1) / Math.min(rack.totalU, 42)) * 100}%`,
                             }}
@@ -1256,36 +1462,52 @@ export function RackStudioWorkspace({
           </div>
 
           {focusedRack ? (
-            <div className="max-h-[72vh] overflow-auto bg-[var(--bg-shell)] p-4">
+            <div
+              className={cn(
+                "overflow-auto bg-[var(--bg-shell)] p-4",
+                !compact && "max-h-[72vh]",
+              )}
+            >
               <div className="flex flex-wrap items-start gap-5">
-                {(face === "both" ? (["front", "rear"] as const) : [face]).map(
-                  (rackFace) => (
-                    <RackStudioElevation
-                      key={rackFace}
-                      rack={focusedRack}
-                      face={rackFace}
-                      devices={physicalDevices}
-                      layouts={layouts}
-                      ports={ports}
-                      portLinks={portLinks}
-                      selectedDeviceId={selectedDeviceId}
-                      onSelectDevice={setSelectedDeviceId}
-                      selectedPortId={patchStartPortId}
-                      onSelectPort={selectPatchPort}
-                      patchMode={patchMode && canEdit && !phoneView}
-                      selectedCableId={selectedCableId}
-                      onSelectCable={(linkId) => {
-                        setSelectedCableId(linkId);
-                        setSelectedDeviceId(undefined);
-                      }}
-                      cableCategory={cableCategory}
-                      showCableLabels={showCableLabels}
-                      editMode={editMode && canEdit && !phoneView}
-                      healthOverlay={healthOverlay}
-                      search={normalizedSearch}
-                      onPlace={placeDevice}
-                    />
-                  ),
+                {(compact && !editMode ? racks : [focusedRack]).flatMap(
+                  (displayRack) =>
+                    (face === "both"
+                      ? (["front", "rear"] as const)
+                      : [face]
+                    ).map((rackFace) => (
+                      <RackStudioElevation
+                        key={`${displayRack.id}:${rackFace}`}
+                        compact={compact}
+                        unitHeight={compact ? 24 : RACK_U_HEIGHT}
+                        rack={displayRack}
+                        racks={racks}
+                        face={rackFace}
+                        devices={endpointDevices}
+                        layouts={layouts}
+                        ports={ports}
+                        portLinks={portLinks}
+                        selectedDeviceId={selectedDeviceId}
+                        onSelectDevice={setSelectedDeviceId}
+                        selectedPortId={patchStartPortId}
+                        onSelectPort={selectPatchPort}
+                        patchMode={patchMode && canEdit && !phoneView}
+                        selectedCableId={selectedCableId}
+                        onSelectCable={(linkId) => {
+                          setSelectedCableId(linkId);
+                          setSelectedDeviceId(undefined);
+                        }}
+                        cableCategory={cableCategory}
+                        routeStyle={routeStyle}
+                        showCableLabels={showCableLabels}
+                        hoveredCableId={hoveredCableId}
+                        onHoverCable={setHoveredCableId}
+                        editMode={editMode && canEdit && !phoneView}
+                        healthOverlay={healthOverlay}
+                        search={normalizedSearch}
+                        onPlace={placeDevice}
+                        onPlacementRejected={setError}
+                      />
+                    )),
                 )}
               </div>
             </div>
@@ -1310,9 +1532,8 @@ export function RackStudioWorkspace({
                 }{" "}
                 →{" "}
                 {
-                  ports.find(
-                    (port) => port.id === pendingUnusualPair.toPortId,
-                  )?.kind
+                  ports.find((port) => port.id === pendingUnusualPair.toPortId)
+                    ?.kind
                 }
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -1390,8 +1611,37 @@ export function RackStudioWorkspace({
           {patchMode || selectedCable ? (
             <RackStudioCableInspector
               link={selectedCable}
+              racks={racks}
+              layouts={layouts}
+              onRevealEndpoint={(portId) => {
+                if (selectedCable && onRevealCableEndpoint) {
+                  onRevealCableEndpoint(portId, selectedCable.id);
+                  return;
+                }
+                const port = ports.find((port) => port.id === portId);
+                const device = physicalDevices.find(
+                  (device) => device.id === port?.deviceId,
+                );
+                if (!port || !device) return;
+                onFaceChange(
+                  rackFaceForPhysicalFace(
+                    device,
+                    port.face === "rear" ? "rear" : "front",
+                  ),
+                );
+                if (device.rackId) selectFocusedRack(device.rackId);
+                setSelectedDeviceId(device.id);
+                setPatchStartPortId(undefined);
+                window.requestAnimationFrame(() =>
+                  document
+                    .querySelector(
+                      `[data-rack-elevation-id="${CSS.escape(device.rackId ?? "")}"]`,
+                    )
+                    ?.scrollIntoView({ block: "nearest" }),
+                );
+              }}
               ports={ports}
-              devices={physicalDevices}
+              devices={endpointDevices}
               room={room}
               face={face}
               canEdit={canEdit && !phoneView}
@@ -1427,6 +1677,7 @@ function statusClass(status: Device["status"]) {
 
 interface ElevationProps {
   rack: Rack;
+  racks: Rack[];
   face: RackFace;
   devices: Device[];
   layouts: DevicePhysicalLayout[];
@@ -1440,7 +1691,12 @@ interface ElevationProps {
   selectedCableId?: string;
   onSelectCable: (linkId: string) => void;
   cableCategory: PhysicalCableCategory | "all";
+  routeStyle: RackStudioCableRouteStyle;
+  compact: boolean;
+  unitHeight: number;
   showCableLabels: boolean;
+  hoveredCableId?: string;
+  onHoverCable: (linkId: string | undefined) => void;
   editMode: boolean;
   healthOverlay: boolean;
   search: string;
@@ -1448,6 +1704,7 @@ interface ElevationProps {
     device: Device,
     next: RackStudioPlacementState,
   ) => Promise<RackStudioActionResult | null>;
+  onPlacementRejected: (reason: string) => void;
 }
 
 interface DirectDragDraft {
@@ -1455,10 +1712,12 @@ interface DirectDragDraft {
   next: RackStudioPlacementState;
   valid: boolean;
   reason: string | null;
+  conflictDeviceId?: string;
 }
 
 function RackStudioElevation({
   rack,
+  racks,
   face,
   devices,
   layouts,
@@ -1472,11 +1731,17 @@ function RackStudioElevation({
   selectedCableId,
   onSelectCable,
   cableCategory,
+  routeStyle,
+  compact,
+  unitHeight,
   showCableLabels,
+  hoveredCableId,
+  onHoverCable,
   editMode,
   healthOverlay,
   search,
   onPlace,
+  onPlacementRejected,
 }: ElevationProps) {
   const { t } = useI18n();
   const [dragDraft, setDragDraft] = useState<DirectDragDraft>();
@@ -1504,7 +1769,7 @@ function RackStudioElevation({
     layouts,
     ports,
     width: 1000,
-    unitHeight: RACK_U_HEIGHT,
+    unitHeight: unitHeight,
   });
   const directDevices = rackDevices.filter((device) => {
     const state = devicePlacementState(device);
@@ -1514,6 +1779,11 @@ function RackStudioElevation({
     const state = devicePlacementState(device);
     return state.mountKind === "side";
   });
+  const rackTopDevices = rackDevices.filter((device) => {
+    const state = devicePlacementState(device);
+    return state.mountKind === "rack-top";
+  });
+  const existingConflicts = findRackStudioPlacementConflicts(rackDevices, rack.id, face);
 
   useEffect(
     () => () => {
@@ -1528,7 +1798,7 @@ function RackStudioElevation({
   ) {
     if (!editMode) return;
     const state = devicePlacementState(device);
-    if (state.mountKind !== "direct") return;
+    if (state.mountKind !== "direct" && state.mountKind !== "rack-top") return;
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     dragDraftRef.current = undefined;
@@ -1575,7 +1845,7 @@ function RackStudioElevation({
     const active = dragRef.current;
     if (!active || active.pointerId !== pointerId) return;
     const deviceFrame = active.captureTarget.closest<HTMLElement>(
-      '[data-testid="rack-studio-device"]',
+      '[data-testid="rack-studio-device"], [data-testid="rack-studio-rack-top-device"]',
     );
     const rackFrame = deviceFrame?.parentElement;
     if (!rackFrame) return;
@@ -1583,9 +1853,7 @@ function RackStudioElevation({
     const deltaColumns = Math.round(
       ((clientX - active.startClientX) / frameWidth) * 12,
     );
-    const deltaU = Math.round(
-      -(clientY - active.startClientY) / RACK_U_HEIGHT,
-    );
+    const deltaU = Math.round(-(clientY - active.startClientY) / unitHeight);
     const columnSpan = active.state.columnSpan ?? 12;
     const next = {
       ...active.state,
@@ -1594,23 +1862,35 @@ function RackStudioElevation({
         0,
         12 - columnSpan,
       ),
-      startU: clampRackStudioValue(
-        (active.state.startU ?? 1) + deltaU,
-        1,
-        rack.totalU - (active.state.heightU ?? 1) + 1,
-      ),
+      startU:
+        active.state.mountKind === "direct"
+          ? clampRackStudioValue(
+              (active.state.startU ?? 1) + deltaU,
+              1,
+              rack.totalU - (active.state.heightU ?? 1) + 1,
+            )
+          : null,
     };
-    const preview = validateDirectPlacementPreview({
-      targetDeviceId: active.device.id,
-      next,
-      rack,
-      devices,
-    });
+    const preview =
+      active.state.mountKind === "rack-top"
+        ? validateRackTopPlacementPreview({
+            targetDeviceId: active.device.id,
+            next,
+            rack,
+            devices,
+          })
+        : validateDirectPlacementPreview({
+            targetDeviceId: active.device.id,
+            next,
+            rack,
+            devices,
+          });
     const draft: DirectDragDraft = {
       deviceId: active.device.id,
       next,
       valid: preview.valid,
       reason: preview.reason,
+      conflictDeviceId: preview.conflictDeviceId,
     };
     dragDraftRef.current = draft;
     setDragDraft(draft);
@@ -1629,6 +1909,8 @@ function RackStudioElevation({
     setDragDraft(undefined);
     if (draft?.deviceId === active.device.id && draft.valid) {
       void onPlace(active.device, draft.next);
+    } else if (draft?.reason) {
+      onPlacementRejected(draft.reason);
     }
   }
 
@@ -1642,7 +1924,7 @@ function RackStudioElevation({
     )
       return;
     const state = devicePlacementState(device);
-    if (state.mountKind !== "direct") return;
+    if (state.mountKind !== "direct" && state.mountKind !== "rack-top") return;
     const multiplier = event.shiftKey ? 2 : 1;
     const next = { ...state };
     if (event.key === "ArrowLeft") {
@@ -1657,6 +1939,8 @@ function RackStudioElevation({
         0,
         12 - (state.columnSpan ?? 12),
       );
+    } else if (state.mountKind === "rack-top") {
+      return;
     } else if (event.key === "ArrowUp") {
       next.startU = clampRackStudioValue(
         (state.startU ?? 1) + multiplier,
@@ -1670,228 +1954,326 @@ function RackStudioElevation({
         rack.totalU - (state.heightU ?? 1) + 1,
       );
     }
-    const preview = validateDirectPlacementPreview({
-      targetDeviceId: device.id,
-      next,
-      rack,
-      devices,
-    });
-    if (!preview.valid) return;
+    const preview =
+      state.mountKind === "rack-top"
+        ? validateRackTopPlacementPreview({
+            targetDeviceId: device.id,
+            next,
+            rack,
+            devices,
+          })
+        : validateDirectPlacementPreview({
+            targetDeviceId: device.id,
+            next,
+            rack,
+            devices,
+          });
+    if (!preview.valid) {
+      if (preview.reason) onPlacementRejected(preview.reason);
+      return;
+    }
     event.preventDefault();
     void onPlace(device, next);
   }
 
   return (
-    <div className="w-[min(690px,100%)]">
+    <div
+      data-rack-elevation-id={rack.id}
+      className={
+        compact ? "min-w-[280px] flex-1 basis-[42%]" : "w-[min(690px,100%)]"
+      }
+    >
+      <span className="sr-only" role="status" aria-live="polite">
+        {dragDraft && !dragDraft.valid ? dragDraft.reason : null}
+      </span>
       <div className="mb-2 flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-        <span>{face === "front" ? t("Front") : t("Rear")}</span>
+        <span>
+          {rack.name} · {face === "front" ? t("Front") : t("Rear")}
+        </span>
         <span>
           12 × {rack.totalU}
           {t("U")}
         </span>
       </div>
-      <div
-        className="relative mx-7 border-x-[14px] border-y-[8px] border-[var(--border-strong)] bg-[var(--color-bg)] shadow-[inset_0_0_36px_rgb(0_0_0_/_0.35)]"
-        style={{ height: rack.totalU * RACK_U_HEIGHT + 16 }}
-      >
-        {Array.from({ length: rack.totalU }, (_, index) => {
-          const u = rack.totalU - index;
-          return (
-            <div
-              key={u}
-              className="absolute inset-x-0 border-b border-[var(--border-muted)]"
-              style={{ top: index * RACK_U_HEIGHT + 8, height: RACK_U_HEIGHT }}
-            >
-              <span className="absolute -left-11 top-1/2 w-8 -translate-y-1/2 text-right font-mono text-[9px] text-[var(--text-muted)]">
-                {u}
-              </span>
-              <span className="absolute -right-11 top-1/2 w-8 -translate-y-1/2 font-mono text-[9px] text-[var(--text-muted)]">
-                {u}
-              </span>
-              {Array.from({ length: 11 }, (_, column) => (
-                <span
-                  key={column}
-                  className="absolute inset-y-0 border-r border-dashed border-[var(--border-muted)] opacity-50"
-                  style={{ left: `${((column + 1) / 12) * 100}%` }}
-                />
-              ))}
-            </div>
-          );
-        })}
-
-        <RackStudioElevationCableLayer
-          rack={rack}
-          face={face}
-          devices={devices}
-          layouts={layouts}
-          ports={ports}
-          links={portLinks}
-          selectedCableId={selectedCableId}
-          category={cableCategory}
-          showLabels={showCableLabels}
-          onSelect={onSelectCable}
-        />
-
-        {directDevices.map((device) => {
-          const storedState = devicePlacementState(device);
-          const physicalFace: RackFace =
-            storedState.face === face ? "front" : "rear";
-          const state =
-            dragDraft?.deviceId === device.id ? dragDraft.next : storedState;
-          const heightU = state.heightU ?? 1;
-          const topU = Math.min(rack.totalU, (state.startU ?? 1) + heightU - 1);
-          const top = (rack.totalU - topU) * RACK_U_HEIGHT + 9;
-          const layout = layoutByDeviceId.get(device.id);
-          const devicePorts = ports.filter(
-            (port) =>
-              port.deviceId === device.id &&
-              port.portRole !== "aggregate" &&
-              port.kind !== "virtual" &&
-              port.kind !== "wifi",
-          );
-          const matches =
-            !search ||
-            device.hostname.toLowerCase().includes(search) ||
-            device.model?.toLowerCase().includes(search);
-          const shelfChildren = devices.filter(
-            (child) =>
-              child.parentDeviceId === device.id &&
-              devicePlacementState(child).mountKind === "shelf",
-          );
-          return (
-            <div
-              key={device.id}
-              role="button"
-              tabIndex={0}
-              aria-label={device.hostname}
-              data-testid="rack-studio-device"
-              onClick={() => onSelectDevice(device.id)}
-              onKeyDown={(event) => handleDeviceKeyDown(event, device)}
-              onPointerDown={(event) => beginDeviceDrag(event, device)}
-              className={cn(
-                "absolute overflow-hidden rounded-[2px] border bg-[var(--surface-1)] text-left outline-none transition-[box-shadow,border-color,opacity]",
-                selectedDeviceId === device.id
-                  ? "z-30 border-[var(--accent-primary)] shadow-[0_0_0_2px_var(--accent-primary-border)]"
-                  : "z-10 border-[var(--border-strong)] hover:border-[var(--accent-primary)]",
-                editMode && "cursor-move touch-none",
-                !matches && "opacity-20",
-                healthOverlay && statusClass(device.status),
-                dragDraft?.deviceId === device.id &&
-                  (dragDraft.valid
-                    ? "border-emerald-400 shadow-[0_0_0_2px_rgb(52_211_153_/_0.35)]"
-                    : "border-red-400 shadow-[0_0_0_2px_rgb(248_113_113_/_0.35)]"),
-              )}
-              title={
-                dragDraft?.deviceId === device.id
-                  ? (dragDraft.reason ?? device.hostname)
-                  : device.hostname
-              }
-              style={{
-                top,
-                left: `${((state.column ?? 0) / 12) * 100}%`,
-                width: `${((state.columnSpan ?? 12) / 12) * 100}%`,
-                height: heightU * RACK_U_HEIGHT - 2,
-              }}
-            >
-              {layout ? (
-                <PhysicalFaceplate
-                  layout={layout}
-                  face={physicalFace}
-                  ports={devicePorts}
-                  linkedPortIds={linkedPortIds}
-                  selectedPortId={selectedPortId}
-                  compact
-                  fit="stretch"
-                  onSelectPort={patchMode ? onSelectPort : undefined}
-                  className={cn(
-                    "h-full rounded-none border-0 shadow-none",
-                    editMode && "pointer-events-none",
-                  )}
-                />
-              ) : (
-                <span className="flex h-full items-center px-3 font-mono text-xs text-[var(--text-primary)]">
-                  {device.hostname}
-                </span>
-              )}
-              <span className="pointer-events-none absolute left-1.5 top-1 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[8px] text-white">
-                {device.hostname}
-              </span>
-              {editMode ? (
-                <button
-                  type="button"
-                  aria-label={t("{value1}: {name}", {
-                    value1: t("Position"),
-                    name: device.hostname,
-                  })}
-                  className="absolute right-1 top-1 z-50 grid size-6 touch-none place-items-center rounded-[2px] border border-[var(--accent-primary)] bg-[var(--surface-1)] text-[var(--accent-primary)] shadow-sm"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelectDevice(device.id);
-                  }}
-                  onPointerDown={(event) => beginDeviceDrag(event, device)}
-                >
-                  <Move className="size-3" />
+      {existingConflicts.length > 0 && (
+        <div role="alert" className="mx-1 mb-2 space-y-1 rounded border border-red-400/60 bg-red-500/10 p-2 text-xs text-red-300">
+          {existingConflicts.map(({ device, other }) => (
+            <div key={`${device.id}:${other.id}`} className="flex flex-wrap items-center gap-2">
+              <span>{device.hostname}: {t("Overlaps {value1}", { value1: other.hostname })}</span>
+              {[device, other].map((entry) => (
+                <button key={entry.id} type="button" className="underline" onClick={() => onSelectDevice(entry.id)}>
+                  {entry.hostname}
                 </button>
-              ) : null}
-              {shelfChildren.map((child) => (
-                <ShelfChild
-                  key={child.id}
-                  child={child}
-                  item={elevationScene.equipment.find(
-                    (candidate) =>
-                      candidate.device.id === child.id &&
-                      candidate.mountKind === "shelf",
-                  )}
-                  siblings={shelfChildren}
-                  selected={selectedDeviceId === child.id}
-                  editMode={editMode}
-                  ports={ports}
-                  linkedPortIds={linkedPortIds}
-                  selectedPortId={selectedPortId}
-                  onSelectPort={patchMode ? onSelectPort : undefined}
-                  onSelect={onSelectDevice}
-                  onPlace={onPlace}
-                />
               ))}
             </div>
-          );
-        })}
+          ))}
+        </div>
+      )}
+      <div style={{ paddingTop: elevationScene.rackOffsetY }}>
+        <RackElevationShell
+          totalU={rack.totalU}
+          unitHeight={unitHeight}
+          className="mx-7"
+          showColumns={editMode}
+          compact={compact}
+        >
+          <RackStudioElevationCableLayer
+            rack={rack}
+            racks={racks}
+            face={face}
+            devices={devices}
+            layouts={layouts}
+            ports={ports}
+            links={portLinks}
+            selectedCableId={selectedCableId}
+            category={cableCategory}
+            patchMode={patchMode}
+            routeStyle={routeStyle}
+            compact={compact}
+            unitHeight={unitHeight}
+            showLabels={showCableLabels}
+            hoveredCableId={hoveredCableId}
+            onHover={onHoverCable}
+            onSelect={onSelectCable}
+          />
 
-        {sideDevices.map((device) => {
-          const state = devicePlacementState(device);
-          const item = elevationScene.equipment.find(
-            (candidate) =>
-              candidate.device.id === device.id &&
-              candidate.mountKind === "side",
-          );
-          return (
-            <button
-              key={device.id}
-              type="button"
-              onClick={() => onSelectDevice(device.id)}
-              className={cn(
-                "absolute top-3 z-40 flex h-[calc(100%-24px)] w-7 items-center justify-center overflow-hidden rounded-[2px] border border-[var(--border-strong)] bg-[var(--surface-1)] font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-secondary)]",
-                state.side === "left" ? "left-0" : "right-0",
-                selectedDeviceId === device.id &&
-                  "border-[var(--accent-primary)]",
-                healthOverlay && statusClass(device.status),
-              )}
-            >
-              {item ? (
-                <SceneFaceplate
-                  item={item}
-                  ports={ports}
-                  linkedPortIds={linkedPortIds}
-                  selectedPortId={selectedPortId}
-                  onSelectPort={patchMode ? onSelectPort : undefined}
-                />
-              ) : null}
-              <span className="pointer-events-none relative z-10 rounded bg-black/65 px-1 py-0.5 text-white [writing-mode:vertical-rl]">
-                {device.hostname}
-              </span>
-            </button>
-          );
-        })}
+          {rackTopDevices.map((device) => {
+            const storedState = devicePlacementState(device);
+            const state =
+              dragDraft?.deviceId === device.id ? dragDraft.next : storedState;
+            const item = elevationScene.equipment.find(
+              (candidate) =>
+                candidate.device.id === device.id &&
+                candidate.mountKind === "rack-top",
+            );
+            const height = (state.heightU ?? 1) * unitHeight - 2;
+            const physicalFace: RackFace =
+              state.face === face ? "front" : "rear";
+            return (
+              <RackElevationEquipmentFrame
+                key={device.id}
+                device={device}
+                layout={item?.layout ?? layoutByDeviceId.get(device.id)}
+                physicalFace={item?.physicalFace ?? physicalFace}
+                ports={ports.filter(
+                  (port) =>
+                    port.deviceId === device.id &&
+                    port.portRole !== "aggregate" &&
+                    port.kind !== "virtual" &&
+                    port.kind !== "wifi",
+                )}
+                linkedPortIds={linkedPortIds}
+                selectedPortId={selectedPortId}
+                rectWidth={((state.columnSpan ?? 12) / 12) * 1000}
+                rectHeight={height}
+                selected={selectedDeviceId === device.id}
+                healthClassName={cn(
+                  healthOverlay && statusClass(device.status),
+                  dragDraft?.conflictDeviceId === device.id &&
+                    "border-red-400 shadow-[0_0_0_2px_rgb(248_113_113_/_0.45)]",
+                  dragDraft?.deviceId === device.id &&
+                    (dragDraft.valid
+                      ? "border-emerald-400 shadow-[0_0_0_2px_rgb(52_211_153_/_0.35)]"
+                      : "border-red-400 opacity-60 shadow-[0_0_0_2px_rgb(248_113_113_/_0.35)]"),
+                )}
+                testId="rack-studio-rack-top-device"
+                onSelectDevice={onSelectDevice}
+                onSelectPort={
+                  patchMode
+                    ? (_deviceId, portId) => onSelectPort(portId)
+                    : undefined
+                }
+                onKeyDown={(event) => handleDeviceKeyDown(event, device)}
+                onPointerDown={(event) => beginDeviceDrag(event, device)}
+                className={cn(
+                  "z-40",
+                  editMode && "cursor-ew-resize touch-none",
+                )}
+                title={
+                  dragDraft?.deviceId === device.id
+                    ? (dragDraft.reason ?? device.hostname)
+                    : device.hostname
+                }
+                style={{
+                  top:
+                    (item?.rect.y ?? elevationScene.rackOffsetY - height - 4) -
+                    elevationScene.rackOffsetY,
+                  left: `${((state.column ?? 0) / 12) * 100}%`,
+                  width: `${((state.columnSpan ?? 12) / 12) * 100}%`,
+                  height,
+                }}
+              />
+            );
+          })}
+
+          {directDevices.map((device) => {
+            const storedState = devicePlacementState(device);
+            const physicalFace: RackFace =
+              storedState.face === face ? "front" : "rear";
+            const state =
+              dragDraft?.deviceId === device.id ? dragDraft.next : storedState;
+            const heightU = state.heightU ?? 1;
+            const topU = Math.min(
+              rack.totalU,
+              (state.startU ?? 1) + heightU - 1,
+            );
+            const top = (rack.totalU - topU) * unitHeight + 9;
+            const layout = layoutByDeviceId.get(device.id);
+            const devicePorts = ports.filter(
+              (port) =>
+                port.deviceId === device.id &&
+                port.portRole !== "aggregate" &&
+                port.kind !== "virtual" &&
+                port.kind !== "wifi",
+            );
+            const matches =
+              !search ||
+              device.hostname.toLowerCase().includes(search) ||
+              device.model?.toLowerCase().includes(search);
+            const shelfChildren = devices.filter(
+              (child) =>
+                child.parentDeviceId === device.id &&
+                devicePlacementState(child).mountKind === "shelf",
+            );
+            return (
+              <RackElevationEquipmentFrame
+                key={device.id}
+                device={device}
+                layout={layout}
+                physicalFace={physicalFace}
+                ports={devicePorts}
+                linkedPortIds={linkedPortIds}
+                selectedPortId={selectedPortId}
+                rectWidth={((state.columnSpan ?? 12) / 12) * 1000}
+                rectHeight={heightU * unitHeight - 2}
+                selected={selectedDeviceId === device.id}
+                matches={Boolean(matches)}
+                healthClassName={cn(
+                  healthOverlay && statusClass(device.status),
+                  dragDraft?.conflictDeviceId === device.id &&
+                    "border-red-400 shadow-[0_0_0_2px_rgb(248_113_113_/_0.45)]",
+                  dragDraft?.deviceId === device.id &&
+                    (dragDraft.valid
+                      ? "border-emerald-400 shadow-[0_0_0_2px_rgb(52_211_153_/_0.35)]"
+                      : "border-red-400 opacity-60 shadow-[0_0_0_2px_rgb(248_113_113_/_0.35)]"),
+                )}
+                testId="rack-studio-device"
+                onSelectDevice={onSelectDevice}
+                onSelectPort={
+                  patchMode
+                    ? (_deviceId, portId) => onSelectPort(portId)
+                    : undefined
+                }
+                onKeyDown={(event) => handleDeviceKeyDown(event, device)}
+                onPointerDown={(event) => beginDeviceDrag(event, device)}
+                className={cn(editMode && "cursor-move touch-none")}
+                title={
+                  dragDraft?.deviceId === device.id
+                    ? (dragDraft.reason ?? device.hostname)
+                    : device.hostname
+                }
+                style={{
+                  top,
+                  left: `${((state.column ?? 0) / 12) * 100}%`,
+                  width: `${((state.columnSpan ?? 12) / 12) * 100}%`,
+                  height: heightU * unitHeight - 2,
+                }}
+              >
+                {editMode ? (
+                  <button
+                    type="button"
+                    aria-label={t("{value1}: {name}", {
+                      value1: t("Position"),
+                      name: device.hostname,
+                    })}
+                    className="absolute right-1 top-1 z-50 grid size-6 touch-none place-items-center rounded-[2px] border border-[var(--accent-primary)] bg-[var(--surface-1)] text-[var(--accent-primary)] shadow-sm"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectDevice(device.id);
+                    }}
+                    onPointerDown={(event) => beginDeviceDrag(event, device)}
+                  >
+                    <Move className="size-3" />
+                  </button>
+                ) : null}
+                {shelfChildren.map((child) => (
+                  <ShelfChild
+                    key={child.id}
+                    child={child}
+                    item={elevationScene.equipment.find(
+                      (candidate) =>
+                        candidate.device.id === child.id &&
+                        candidate.mountKind === "shelf",
+                    )}
+                    siblings={shelfChildren}
+                    selected={selectedDeviceId === child.id}
+                    editMode={editMode}
+                    ports={ports}
+                    linkedPortIds={linkedPortIds}
+                    selectedPortId={selectedPortId}
+                    onSelectPort={patchMode ? onSelectPort : undefined}
+                    onSelect={onSelectDevice}
+                    onPlace={onPlace}
+                  />
+                ))}
+              </RackElevationEquipmentFrame>
+            );
+          })}
+
+          {sideDevices.map((device) => {
+            const state = devicePlacementState(device);
+            const item = elevationScene.equipment.find(
+              (candidate) =>
+                candidate.device.id === device.id &&
+                candidate.mountKind === "side",
+            );
+            const rect = item?.rect ?? {
+              x: state.side === "right" ? 1000 - 28 : 0,
+              y: 12,
+              width: 28,
+              height: rack.totalU * unitHeight - 8,
+            };
+            return (
+              <RackElevationEquipmentFrame
+                key={device.id}
+                device={device}
+                layout={item?.layout}
+                physicalFace={
+                  item?.physicalFace ?? (state.face === face ? "front" : "rear")
+                }
+                ports={ports.filter(
+                  (port) =>
+                    port.deviceId === device.id &&
+                    port.portRole !== "aggregate" &&
+                    port.kind !== "virtual" &&
+                    port.kind !== "wifi",
+                )}
+                linkedPortIds={linkedPortIds}
+                selectedPortId={selectedPortId}
+                rotation={90}
+                rectWidth={rect.width}
+                rectHeight={rect.height}
+                selected={selectedDeviceId === device.id}
+                healthClassName={
+                  healthOverlay ? statusClass(device.status) : undefined
+                }
+                className="z-40"
+                style={{
+                  left: rect.x,
+                  top: rect.y - elevationScene.rackOffsetY,
+                  width: rect.width,
+                  height: rect.height,
+                }}
+                onSelectDevice={onSelectDevice}
+                onSelectPort={
+                  patchMode
+                    ? (_deviceId, portId) => onSelectPort(portId)
+                    : undefined
+                }
+              />
+            );
+          })}
+        </RackElevationShell>
       </div>
     </div>
   );
@@ -1899,6 +2281,7 @@ function RackStudioElevation({
 
 function RackStudioElevationCableLayer({
   rack,
+  racks,
   face,
   devices,
   layouts,
@@ -1906,10 +2289,17 @@ function RackStudioElevationCableLayer({
   links,
   selectedCableId,
   category,
+  patchMode,
+  routeStyle,
+  compact,
+  unitHeight,
   showLabels,
+  hoveredCableId,
+  onHover,
   onSelect,
 }: {
   rack: Rack;
+  racks: Rack[];
   face: RackFace;
   devices: Device[];
   layouts: DevicePhysicalLayout[];
@@ -1917,110 +2307,103 @@ function RackStudioElevationCableLayer({
   links: PortLink[];
   selectedCableId?: string;
   category: PhysicalCableCategory | "all";
+  patchMode: boolean;
+  routeStyle: RackStudioCableRouteStyle;
+  compact: boolean;
+  unitHeight: number;
   showLabels: boolean;
+  hoveredCableId?: string;
+  onHover: (linkId: string | undefined) => void;
   onSelect: (linkId: string) => void;
 }) {
   const { t } = useI18n();
-  const height = rack.totalU * RACK_U_HEIGHT + 16;
-  const portById = new Map(ports.map((port) => [port.id, port]));
-  const deviceById = new Map(devices.map((device) => [device.id, device]));
-  const anchors = new Map<string, { x: number; y: number }>();
-  const scene = buildRackElevationScene({
+  const { scene, routes } = buildRackElevationCableRoutes({
     rack,
-    rackFace: face,
+    racks,
+    face,
     devices,
     layouts,
     ports,
+    links,
+    category,
+    style: routeStyle,
     width: 1000,
-    unitHeight: RACK_U_HEIGHT,
+    unitHeight: unitHeight,
   });
-  for (const anchor of scene.portAnchors) {
-    anchors.set(anchor.portId, { x: anchor.x, y: anchor.y });
-  }
+  const height = scene.height;
+  const activeCableId = hoveredCableId ?? selectedCableId;
 
-  const routeElements = links.flatMap((link) => {
-    if (link.visible === false) return [];
-    const fromPort = portById.get(link.fromPortId);
-    const toPort = portById.get(link.toPortId);
-    const cableCategory = cableCategoryForPorts(fromPort, toPort);
-    if (category !== "all" && category !== cableCategory) return [];
-    const from = anchors.get(link.fromPortId);
-    const to = anchors.get(link.toPortId);
-    if (!from && !to) return [];
-    let points: Array<{ x: number; y: number }>;
-    let handoff = false;
-    let handoffFace: RackFace | undefined;
-    if (from && to) {
-      let hash = 0;
-      for (const character of link.id) {
-        hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-      }
-      const gutter = Math.max(
-        8,
-        Math.min(992, (from.x + to.x) / 2 + ((hash % 11) - 5) * 10),
-      );
-      points = [
-        from,
-        { x: gutter, y: from.y },
-        { x: gutter, y: to.y },
-        to,
-      ];
-    } else {
-      handoff = true;
-      const local = (from ?? to)!;
-      const remotePort = from ? toPort : fromPort;
-      const remoteDevice = remotePort
-        ? deviceById.get(remotePort.deviceId)
-        : undefined;
-      if (remoteDevice?.rackId === rack.id && remotePort) {
-        handoffFace = rackFaceForPhysicalFace(
-          remoteDevice,
-          remotePort.face === "rear" ? "rear" : "front",
-        );
-      }
-      points = [
-        local,
-        { x: local.x < 500 ? 992 : 8, y: local.y },
-      ];
-    }
-    const path = points
-      .map(
-        (point, index) =>
-          `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`,
-      )
-      .join(" ");
-    const selected = selectedCableId === link.id;
-    const last = points.at(-1)!;
-    const label = link.label || link.cableType || t("Cable");
+  const routeElements = routes.map((route) => {
+    const selected = selectedCableId === route.link.id;
+    const hovered = hoveredCableId === route.link.id;
+    const last = route.points.at(-1)!;
+    const label = route.link.label || route.link.cableType || t("Cable");
     const color =
-      normalizeColorToCss(link.color) ?? defaultCableColor(cableCategory);
+      normalizeColorToCss(route.link.color) ??
+      defaultCableColor(route.category);
     return [
-      <g key={link.id}>
+      <g key={route.link.id}>
         <path
-          d={path}
+          data-testid="rack-studio-cable"
+          role="button"
+          tabIndex={0}
+          aria-label={t("{value1}: {name}", {
+            value1: t("Cable"),
+            name: route.label,
+          })}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              onSelect(route.link.id);
+            }
+          }}
+          data-link-id={route.link.id}
+          d={route.path}
           fill="none"
           stroke="transparent"
           strokeWidth={18}
           vectorEffect="non-scaling-stroke"
-          className="pointer-events-stroke cursor-pointer"
+          className={
+            patchMode
+              ? "pointer-events-none"
+              : "pointer-events-stroke cursor-pointer"
+          }
+          onPointerEnter={() => onHover(route.link.id)}
+          onPointerLeave={() => onHover(undefined)}
           onClick={(event) => {
             event.stopPropagation();
-            onSelect(link.id);
+            onSelect(route.link.id);
           }}
         />
         <path
-          d={path}
+          data-testid="rack-studio-cable-stroke"
+          data-link-id={route.link.id}
+          d={route.path}
           fill="none"
           stroke={color}
-          strokeWidth={selected ? 5 : 3}
-          strokeDasharray={handoff ? "8 5" : undefined}
+          strokeWidth={compact ? (selected ? 2.6 : 1.35) : selected ? 5 : 3}
+          strokeDasharray={route.handoff ? "8 5" : undefined}
           strokeLinecap="round"
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
+          opacity={selected || hovered ? 1 : activeCableId ? 0.16 : 0.82}
           className="pointer-events-none"
         />
-        {showLabels ? (
+        <CableContinuationMarkers
+          markers={route.continuations}
+          linkId={route.link.id}
+          cableLabel={route.label}
+          color={color}
+          ports={ports}
+          devices={devices}
+          showLabels={showLabels || selected || hovered}
+          opacity={selected || hovered ? 1 : activeCableId ? 0.16 : 0.82}
+        />
+        {!route.continuations.length && (showLabels || selected || hovered) ? (
           <text
+            data-testid="rack-studio-cable-label"
+            data-link-id={route.link.id}
             x={last.x + (last.x < 500 ? 8 : -8)}
             y={last.y - 7}
             textAnchor={last.x < 500 ? "start" : "end"}
@@ -2032,11 +2415,11 @@ function RackStudioElevationCableLayer({
             fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
             className="pointer-events-none"
           >
-            {handoff
+            {route.handoff
               ? t("{value1}: {name}", {
                   value1: label,
-                  name: handoffFace
-                    ? handoffFace === "front"
+                  name: route.handoffFace
+                    ? route.handoffFace === "front"
                       ? t("Front")
                       : t("Rear")
                     : t("Room"),
@@ -2050,12 +2433,32 @@ function RackStudioElevationCableLayer({
 
   return (
     <svg
-      className="pointer-events-none absolute inset-0 z-20 h-full w-full overflow-visible"
+      className="pointer-events-none absolute inset-x-0 z-50 w-full overflow-visible"
+      style={{ top: -scene.rackOffsetY, height }}
       viewBox={`0 0 1000 ${height}`}
       preserveAspectRatio="none"
       aria-label={t("Cables")}
     >
       {routeElements}
+      {links
+        .filter((link) => link.id === selectedCableId)
+        .flatMap((link) =>
+          scene.portAnchors.filter((anchor) =>
+            [link.fromPortId, link.toPortId].includes(anchor.portId),
+          ),
+        )
+        .map((anchor) => (
+          <circle
+            key={anchor.portId}
+            cx={anchor.x}
+            cy={anchor.y}
+            r={6}
+            fill="none"
+            stroke="var(--color-warning)"
+            strokeWidth={1.5}
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
     </svg>
   );
 }
@@ -2113,7 +2516,7 @@ function ShelfChild({
     );
   });
 
-  function begin(event: ReactPointerEvent<HTMLButtonElement>) {
+  function begin(event: ReactPointerEvent<HTMLDivElement>) {
     event.stopPropagation();
     onSelect(child.id);
     if (!editMode) return;
@@ -2129,7 +2532,7 @@ function ShelfChild({
     };
   }
 
-  function move(event: ReactPointerEvent<HTMLButtonElement>) {
+  function move(event: ReactPointerEvent<HTMLDivElement>) {
     const active = dragRef.current;
     if (!active || active.pointerId !== event.pointerId) return;
     const parent = event.currentTarget.parentElement;
@@ -2158,7 +2561,7 @@ function ShelfChild({
     setDraft(next);
   }
 
-  function end(event: ReactPointerEvent<HTMLButtonElement>) {
+  function end(event: ReactPointerEvent<HTMLDivElement>) {
     const active = dragRef.current;
     if (!active || active.pointerId !== event.pointerId) return;
     dragRef.current = null;
@@ -2172,30 +2575,46 @@ function ShelfChild({
       : undefined;
     const finalOverlaps = Boolean(
       finalBounds &&
-        siblings.some((sibling) => {
-          if (sibling.id === child.id) return false;
-          const other = shelfPlacementBounds(devicePlacementState(sibling));
-          return Boolean(
-            other &&
-              finalBounds.x < other.x + other.width &&
-              finalBounds.x + finalBounds.width > other.x &&
-              finalBounds.y < other.y + other.height &&
-              finalBounds.y + finalBounds.height > other.y,
-          );
-        }),
+      siblings.some((sibling) => {
+        if (sibling.id === child.id) return false;
+        const other = shelfPlacementBounds(devicePlacementState(sibling));
+        return Boolean(
+          other &&
+          finalBounds.x < other.x + other.width &&
+          finalBounds.x + finalBounds.width > other.x &&
+          finalBounds.y < other.y + other.height &&
+          finalBounds.y + finalBounds.height > other.y,
+        );
+      }),
     );
     if (finalDraft && !finalOverlaps) void onPlace(child, finalDraft);
     setDraft(undefined);
   }
 
   return (
-    <button
-      type="button"
+    <RackElevationEquipmentFrame
+      device={child}
+      layout={item?.layout}
+      physicalFace={item?.physicalFace ?? "front"}
+      ports={ports.filter(
+        (port) =>
+          port.deviceId === child.id &&
+          port.portRole !== "aggregate" &&
+          port.kind !== "virtual" &&
+          port.kind !== "wifi",
+      )}
+      linkedPortIds={linkedPortIds}
+      selectedPortId={selectedPortId}
+      rotation={item?.rotation ?? 0}
+      rectWidth={effectiveBounds.width}
+      rectHeight={effectiveBounds.height}
+      selected={selected}
+      onSelectDevice={onSelect}
+      onSelectPort={
+        onSelectPort ? (_deviceId, portId) => onSelectPort(portId) : undefined
+      }
       className={cn(
-        "absolute z-30 overflow-hidden rounded-[2px] border bg-[var(--surface-2)] font-mono text-[7px] text-[var(--text-primary)] shadow-sm",
-        selected
-          ? "border-[var(--accent-primary)]"
-          : "border-[var(--border-strong)]",
+        "z-30 bg-[var(--surface-2)] font-mono text-[7px] shadow-sm",
         editMode && "cursor-move touch-none",
         overlaps && "border-red-400 bg-red-500/20",
       )}
@@ -2209,24 +2628,7 @@ function ShelfChild({
       onPointerMove={move}
       onPointerUp={end}
       onPointerCancel={end}
-      onClick={(event) => {
-        event.stopPropagation();
-        onSelect(child.id);
-      }}
-    >
-      {item ? (
-        <SceneFaceplate
-          item={item}
-          ports={ports}
-          linkedPortIds={linkedPortIds}
-          selectedPortId={selectedPortId}
-          onSelectPort={onSelectPort}
-        />
-      ) : null}
-      <span className="pointer-events-none relative z-10 rounded bg-black/65 px-1 text-white">
-        {child.hostname}
-      </span>
-    </button>
+    />
   );
 }
 
@@ -2263,14 +2665,10 @@ function PlacementInspector({
     const current = devicePlacementState(device);
     if (current.mountKind === "loose" && focusedRack && editMode) {
       setDraft(
-        directPlacementState({
+        rackTopPlacementState({
           roomId: focusedRack.roomId ?? room?.id ?? null,
           rackId: focusedRack.id,
-          startU: 1,
           heightU: device.heightU ?? 1,
-          face: "front",
-          column: 0,
-          columnSpan: 12,
         }),
       );
     } else {
@@ -2311,9 +2709,15 @@ function PlacementInspector({
       <Input
         type="number"
         min={minimum}
-        max={maximum}
+        max={
+          key === "heightU" && inspectedDevice.stackMembers
+            ? inspectedDevice.heightU
+            : maximum
+        }
         value={value ?? ""}
-        disabled={!editMode}
+        disabled={
+          !editMode || (key === "heightU" && !!inspectedDevice.stackMembers)
+        }
         onChange={(event) =>
           setDraft((current) =>
             current
@@ -2346,6 +2750,16 @@ function PlacementInspector({
           face: "front",
           column: 0,
           columnSpan: 12,
+        }),
+      );
+      return;
+    }
+    if (kind === "rack-top") {
+      setDraft(
+        rackTopPlacementState({
+          roomId: rack.roomId ?? room?.id ?? null,
+          rackId: rack.id,
+          heightU: inspectedDevice.heightU ?? 1,
         }),
       );
       return;
@@ -2387,6 +2801,12 @@ function PlacementInspector({
         <div className="mt-1 truncate font-mono text-sm font-semibold text-[var(--text-primary)]">
           {inspectedDevice.hostname}
         </div>
+        <Link
+          to={`/devices/${inspectedDevice.id}`}
+          className="mt-2 inline-flex text-xs text-[var(--accent-primary)] underline-offset-2 hover:underline focus-visible:underline"
+        >
+          {t("Open device")}
+        </Link>
         <div className="text-[11px] text-[var(--text-tertiary)]">
           {inspectedDevice.manufacturer} {inspectedDevice.model}
         </div>
@@ -2409,6 +2829,7 @@ function PlacementInspector({
           <option value="direct">{t("Direct")}</option>
           <option value="shelf">{t("Shelf")}</option>
           <option value="side">{t("0U side")}</option>
+          <option value="rack-top">{t("Rack top")}</option>
           <option value="loose">{t("Loose gear")}</option>
         </select>
       </label>
@@ -2446,16 +2867,18 @@ function PlacementInspector({
         </label>
       )}
 
-      {draft.mountKind === "direct" && (
+      {(draft.mountKind === "direct" || draft.mountKind === "rack-top") && (
         <div className="grid grid-cols-2 gap-2">
-          <InspectorField label={t("Start U")}>
-            {numberField(
-              "startU",
-              draft.startU,
-              1,
-              selectedRack?.totalU ?? 100,
-            )}
-          </InspectorField>
+          {draft.mountKind === "direct" ? (
+            <InspectorField label={t("Start U")}>
+              {numberField(
+                "startU",
+                draft.startU,
+                1,
+                selectedRack?.totalU ?? 100,
+              )}
+            </InspectorField>
+          ) : null}
           <InspectorField label={t("Height (U)")}>
             {numberField("heightU", draft.heightU, 1, 20)}
           </InspectorField>
@@ -2468,7 +2891,9 @@ function PlacementInspector({
         </div>
       )}
 
-      {(draft.mountKind === "direct" || draft.mountKind === "side") && (
+      {(draft.mountKind === "direct" ||
+        draft.mountKind === "side" ||
+        draft.mountKind === "rack-top") && (
         <label className="block space-y-1">
           <span className="text-[11px] text-[var(--text-secondary)]">
             {t("Rack face")}

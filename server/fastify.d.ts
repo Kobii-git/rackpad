@@ -1,6 +1,7 @@
 import 'fastify'
 import type { AuthUser } from './lib/auth.js'
 import type { LabAccessEntry } from './lib/lab-access.js'
+import type { McpTokenAccess } from './lib/mcp-tokens.js'
 import type {
   RouteAuthorization,
   RouteAuthorizationInventoryEntry,
@@ -11,6 +12,7 @@ declare module 'fastify' {
     authUser: AuthUser | null
     sessionId: string | null
     labAccess: LabAccessEntry[] | null
+    mcpAuth: McpTokenAccess | null
   }
 
   interface FastifyContextConfig {

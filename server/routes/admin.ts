@@ -1,3 +1,5 @@
+import { validateStackIntegrity } from "../lib/stack-integrity.js";
+import { restoredMonitorCommunity } from "../lib/security-migration.js";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,6 +39,7 @@ import { listAssignmentIntegrityIssues } from "../lib/ip-assignment-integrity.js
 import { getSnmpProfile } from "../lib/snmp-profiles/index.js";
 import {
   BUILT_IN_DEVICE_TYPES,
+  deviceTypeLineageFromParents,
   normalizeDeviceTypeId,
 } from "../lib/device-types.js";
 import { monitoringOperationalStatus } from "../lib/monitoring.js";
@@ -59,7 +62,7 @@ import {
   type PhysicalLayoutStatus,
 } from "../lib/physical-layout.js";
 import { legacyShelfGeometry } from "../lib/legacy-shelf-geometry.js";
-import { parseCableRouteWaypoints } from "../lib/cable-routing.js";
+import { parseCableRouteWaypoints, parseCableRouteMode, parseCableRouteGuides, assertCableGuideReferences } from "../lib/cable-routing.js";
 import {
   assertRackStudioRackFootprint,
   calculateRackStudioCanvasBounds,
@@ -175,7 +178,7 @@ const exportBackupSnapshot = db.transaction(
           db
             .prepare("SELECT * FROM portLinks ORDER BY fromPortId, toPortId, id")
             .all() as Record<string, unknown>[]
-        ).map((row) => parseRow(row, ["routeWaypoints"])),
+        ).map((row) => parseRow(row, ["routeWaypoints", "routeGuides"])),
         portTemplates: (
           db
             .prepare("SELECT * FROM portTemplates ORDER BY name, id")
@@ -189,6 +192,8 @@ const exportBackupSnapshot = db.transaction(
         hardwareTemplateDefaults: db
           .prepare("SELECT * FROM hardwareTemplateDefaults ORDER BY deviceType")
           .all(),
+        deviceStackMembers: db.prepare("SELECT * FROM deviceStackMembers ORDER BY deviceId, position").all(),
+        deviceStackMemberMacs: db.prepare("SELECT * FROM deviceStackMemberMacs ORDER BY memberId, macAddress").all(),
         devicePhysicalLayouts: (
           db
             .prepare("SELECT * FROM devicePhysicalLayouts ORDER BY deviceId")
@@ -845,6 +850,14 @@ function validateBackupNetworkIntegrity(input: {
 
     let routeWaypoints;
     try {
+      parseCableRouteMode(row.routeMode);
+      const guides = parseCableRouteGuides(parseBackupJson(row.routeGuides ?? [], "Backup cable route guides"));
+      assertCableGuideReferences(guides, [fromDevice.labId, toDevice.labId],
+        guideId => {
+          const target = input.devices.find(device => device.id === guideId);
+          const rack = target?.rackId ? input.racks.find(rack => rack.id === target.rackId) : undefined;
+          return target ? { labId: String(target.labId), roomId: rack?.roomId || target.roomId ? String(rack?.roomId || target.roomId) : null } : undefined;
+        }, guideRoomId => roomsById.get(guideRoomId));
       routeWaypoints = parseCableRouteWaypoints(
         parseBackupJson(
           row.routeWaypoints ?? [],
@@ -852,7 +865,7 @@ function validateBackupNetworkIntegrity(input: {
         ),
       );
     } catch {
-      invalid("Backup cable route waypoints are invalid.", "portLink", id);
+      invalid("Backup cable routing metadata is invalid.", "portLink", id);
     }
     for (const waypoint of routeWaypoints) {
       const room = roomsById.get(waypoint.roomId);
@@ -1224,6 +1237,7 @@ const restoreBackupSnapshot = db.transaction(
       }
     }
 
+    const legacySecurity = Number(snapshot.schemaVersion ?? 0) < 50;
     const data = asObject(snapshot.data);
     const labs = normalizeArrayRecordArray(data.labs, "data.labs");
     const rooms = normalizeArrayRecordArray(data.rooms ?? [], "data.rooms");
@@ -1234,6 +1248,8 @@ const restoreBackupSnapshot = db.transaction(
       "data.virtualSwitches",
     );
     const ports = normalizeArrayRecordArray(data.ports, "data.ports");
+    const stackMembers = normalizeArrayRecordArray(data.deviceStackMembers ?? [], "data.deviceStackMembers");
+    const stackMacs = normalizeArrayRecordArray(data.deviceStackMemberMacs ?? [], "data.deviceStackMemberMacs");
     const portLinks = normalizeArrayRecordArray(
       data.portLinks,
       "data.portLinks",
@@ -1547,17 +1563,14 @@ const restoreBackupSnapshot = db.transaction(
           "BACKUP_INTEGRITY_INVALID",
         );
       }
-      let compatibleType: string | null = deviceType;
-      const seenTypes = new Set<string>();
-      let supported = template.deviceTypes.length === 0;
-      while (compatibleType && !seenTypes.has(compatibleType)) {
-        if (template.deviceTypes.includes(compatibleType)) {
-          supported = true;
-          break;
-        }
-        seenTypes.add(compatibleType);
-        compatibleType = restoredDeviceTypeParents.get(compatibleType) ?? null;
-      }
+      const supported =
+        template.deviceTypes.length === 0 ||
+        deviceTypeLineageFromParents(
+          deviceType,
+          restoredDeviceTypeParents,
+        ).some((compatibleType) =>
+          template.deviceTypes.includes(compatibleType),
+        );
       if (!supported) {
         throw new ValidationError(
           "Backup hardware-template default is incompatible with its device type.",
@@ -1642,6 +1655,8 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM portLinks;
     DELETE FROM devicePhysicalLayouts;
     DELETE FROM ports;
+    DELETE FROM deviceStackMemberMacs;
+    DELETE FROM deviceStackMembers;
     DELETE FROM virtualSwitches;
     DELETE FROM storagePoolDrives;
     DELETE FROM storagePools;
@@ -1697,8 +1712,8 @@ const restoreBackupSnapshot = db.transaction(
   `);
     const insertPortLink = db.prepare(
       `INSERT INTO portLinks
-        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints, routeMode, routeGuides)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const insertPortTemplate = db.prepare(`
     INSERT INTO portTemplates (id, name, description, deviceTypes, ports, createdAt, updatedAt)
@@ -1833,8 +1848,8 @@ const restoreBackupSnapshot = db.transaction(
     VALUES (?, ?, ?)
   `);
     const insertOidcIdentity = db.prepare(`
-    INSERT INTO oidcIdentities (issuer, subject, userId, email, displayName, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO oidcIdentities (issuer, subject, userId, email, displayName, createdAt, updatedAt, roleRecheckRequired)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDeviceMonitor = db.prepare(`
     INSERT INTO deviceMonitors (
@@ -1847,7 +1862,7 @@ const restoreBackupSnapshot = db.transaction(
       path,
       ignoreTlsErrors,
       snmpVersion,
-      snmpCommunity,
+      snmpCommunityEnc,
       snmpOid,
       snmpExpectedValue,
       snmpMatchMode,
@@ -2047,6 +2062,10 @@ const restoreBackupSnapshot = db.transaction(
       insertUserLabAccess.run(row.userId, row.labId, row.role);
     }
     for (const row of oidcIdentities) {
+      const roleRecheckRequired = legacySecurity ? 1 : row.roleRecheckRequired ?? 1;
+      if (roleRecheckRequired !== 0 && roleRecheckRequired !== 1) {
+        throw new ValidationError("Invalid OIDC role recheck marker in backup.");
+      }
       insertOidcIdentity.run(
         row.issuer,
         row.subject,
@@ -2055,6 +2074,7 @@ const restoreBackupSnapshot = db.transaction(
         row.displayName ?? null,
         row.createdAt,
         row.updatedAt,
+        roleRecheckRequired,
       );
     }
     for (const row of rooms) {
@@ -2253,6 +2273,10 @@ const restoreBackupSnapshot = db.transaction(
         row.rackSide ?? null,
       );
     }
+    for (const row of stackMembers) {
+      db.prepare(`INSERT INTO deviceStackMembers (id, deviceId, position, name, manufacturer, model, serial, heightU, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(row.id, row.deviceId, row.position, row.name, row.manufacturer ?? null, row.model ?? null, row.serial ?? null, row.heightU, row.status, row.notes ?? null);
+    }
+    for (const row of stackMacs) db.prepare('INSERT INTO deviceStackMemberMacs (memberId, label, macAddress) VALUES (?, ?, ?)').run(row.memberId, row.label, row.macAddress);
     const deviceIds = new Set(devices.map((row) => String(row.id)));
     for (const row of devices) {
       const parentDeviceId = row.parentDeviceId
@@ -2266,29 +2290,6 @@ const restoreBackupSnapshot = db.transaction(
         continue;
       }
       updateDeviceParent.run(parentDeviceId, row.id);
-    }
-    const restoredDeviceRows = db
-      .prepare("SELECT * FROM devices ORDER BY id")
-      .all() as RackStudioDeviceRow[];
-    for (const device of restoredDeviceRows) {
-      const current = currentRackStudioPlacement(device);
-      try {
-        const resolved = resolveRackStudioPlacement(device, current);
-        if (
-          current.roomId !== null &&
-          current.roomId !== resolved.roomId
-        ) {
-          throw new ValidationError(
-            "Stored room does not match the resolved physical placement.",
-          );
-        }
-      } catch (error) {
-        throw new ValidationError(
-          `Backup device ${device.id} has invalid Rack Studio placement: ${error instanceof Error ? error.message : "invalid placement"}`,
-          422,
-          "BACKUP_INTEGRITY_INVALID",
-        );
-      }
     }
     for (const row of storageDrives) {
       insertStorageDrive.run(
@@ -2362,8 +2363,8 @@ const restoreBackupSnapshot = db.transaction(
         row.labId,
         row.deviceId ?? null,
         row.sourceIp,
-        row.community ?? null,
-        row.credentialId ?? null,
+        null,
+        legacySecurity ? null : row.credentialId ?? null,
         row.lastTrapAt ?? null,
       );
     }
@@ -2447,7 +2448,12 @@ const restoreBackupSnapshot = db.transaction(
     }
     ensurePatchPanelPassThroughPorts(
       devices
-        .filter((row) => row.deviceType === "patch_panel")
+        .filter((row) =>
+          deviceTypeLineageFromParents(
+            String(row.deviceType ?? ""),
+            restoredDeviceTypeParents,
+          ).includes("patch_panel"),
+        )
         .map((row) => String(row.id)),
     );
     const portIds = new Set(ports.map((row) => String(row.id)));
@@ -2491,6 +2497,8 @@ const restoreBackupSnapshot = db.transaction(
         row.label ?? null,
         row.visible === false || row.visible === 0 ? 0 : 1,
         JSON.stringify(routeWaypoints),
+        parseCableRouteMode(row.routeMode, routeWaypoints),
+        JSON.stringify(parseCableRouteGuides(parseBackupJson(row.routeGuides ?? [], "Backup cable route guides"))),
       );
     }
     for (const row of portTemplates) {
@@ -2793,7 +2801,7 @@ const restoreBackupSnapshot = db.transaction(
         row.path ?? null,
         Number(row.ignoreTlsErrors ?? 0) === 1 ? 1 : 0,
         row.snmpVersion ?? null,
-        row.snmpCommunity ?? null,
+        restoredMonitorCommunity(row),
         row.snmpOid ?? null,
         row.snmpExpectedValue ?? null,
         row.snmpMatchMode ?? "equals",
@@ -2896,6 +2904,33 @@ const restoreBackupSnapshot = db.transaction(
       );
     }
 
+    for (const row of ports) {
+      if (row.stackMemberId != null) db.prepare('UPDATE ports SET stackMemberId = ? WHERE id = ?').run(row.stackMemberId, row.id);
+    }
+    const restoredDeviceRows = db
+      .prepare("SELECT * FROM devices ORDER BY id")
+      .all() as RackStudioDeviceRow[];
+    for (const device of restoredDeviceRows) {
+      const current = currentRackStudioPlacement(device);
+      try {
+        const resolved = resolveRackStudioPlacement(device, current);
+        if (
+          current.roomId !== null &&
+          current.roomId !== resolved.roomId
+        ) {
+          throw new ValidationError(
+            "Stored room does not match the resolved physical placement.",
+          );
+        }
+      } catch (error) {
+        throw new ValidationError(
+          `Backup device ${device.id} has invalid Rack Studio placement: ${error instanceof Error ? error.message : "invalid placement"}`,
+          422,
+          "BACKUP_INTEGRITY_INVALID",
+        );
+      }
+    }
+    validateStackIntegrity(db);
     const restoredAt = new Date().toISOString();
     const restoreAuditId = createId("a");
     insertAudit.run(

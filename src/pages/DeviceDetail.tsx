@@ -1,3 +1,5 @@
+import { StackMembersPanel } from "@/components/devices/StackMembersPanel";
+import { deviceTypeLineage } from "@/lib/device-types";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Link,
@@ -122,6 +124,7 @@ type MonitorForm = {
   ignoreTlsErrors: boolean;
   snmpVersion: NonNullable<DeviceMonitor["snmpVersion"]>;
   snmpCommunity: string;
+  clearSnmpCommunity: boolean;
   snmpOid: string;
   snmpExpectedValue: string;
   snmpMatchMode: NonNullable<DeviceMonitor["snmpMatchMode"]>;
@@ -176,6 +179,7 @@ const EMPTY_MONITOR_FORM: MonitorForm = {
   ignoreTlsErrors: false,
   snmpVersion: "2c",
   snmpCommunity: "public",
+  clearSnmpCommunity: false,
   snmpOid: "",
   snmpExpectedValue: "",
   snmpMatchMode: "equals",
@@ -247,6 +251,7 @@ const DEVICE_DETAIL_TABS = new Set([
   "overview",
   "ports",
   "physical",
+  "stack-members",
   "storage",
   "compute",
   "network",
@@ -363,6 +368,7 @@ export default function DeviceDetail() {
   const baseDeviceType = device
     ? deviceTypeBase(device.deviceType, deviceTypes)
     : null;
+  const isStack = !!device && deviceTypeLineage(device.deviceType, deviceTypes).includes("switch_stack");
   const showStorage =
     baseDeviceType === "server" ||
     baseDeviceType === "storage" ||
@@ -682,7 +688,7 @@ export default function DeviceDetail() {
     (port) => port.linkState === "up",
   ).length;
   const isVisualGrid =
-    device?.deviceType === "switch" || device?.deviceType === "router";
+    baseDeviceType === "switch" || baseDeviceType === "router";
   const compatiblePortTemplates = useMemo(
     () =>
       device
@@ -1010,9 +1016,10 @@ export default function DeviceDetail() {
       snmpVersion: monitorForm.snmpCredentialId.trim()
         ? undefined
         : monitorForm.snmpVersion,
+      monitorId: selectedMonitor?.id,
       snmpCommunity: monitorForm.snmpCredentialId.trim()
         ? undefined
-        : monitorForm.snmpCommunity.trim() || "public",
+        : monitorForm.clearSnmpCommunity ? "" : monitorForm.snmpCommunity.trim() || undefined,
     };
   }
 
@@ -1103,7 +1110,7 @@ export default function DeviceDetail() {
           monitorForm.type === "https" && monitorForm.ignoreTlsErrors,
         snmpVersion: usesSnmp ? monitorForm.snmpVersion : null,
         snmpCommunity: usesSnmp
-          ? monitorForm.snmpCommunity.trim() || null
+          ? monitorForm.clearSnmpCommunity ? null : monitorForm.snmpCommunity.trim() || undefined
           : null,
         snmpOid: usesSnmp ? monitorForm.snmpOid.trim() || null : null,
         snmpExpectedValue: usesSnmp
@@ -1529,6 +1536,7 @@ export default function DeviceDetail() {
               {t("Ports")} | {devicePorts.length}
             </TabsTrigger>
             <TabsTrigger value="physical">{t("Physical layout")}</TabsTrigger>
+            {isStack && <TabsTrigger value="stack-members">{t("Stack Members")}</TabsTrigger>}
             {showStorage && (
               <TabsTrigger value="storage">
                 {t("Storage")} | {deviceDriveSlots.length}
@@ -1556,6 +1564,7 @@ export default function DeviceDetail() {
             <TabsTrigger value="activity">{t("Activity")}</TabsTrigger>
           </TabsList>
 
+          {isStack && <TabsContent value="stack-members" className="pt-4"><StackMembersPanel device={device} ports={devicePorts} canEdit={canEdit} /></TabsContent>}
           <TabsContent value="overview" className="pt-4">
             <div className="grid grid-cols-12 gap-3">
               <Card className="col-span-12 md:col-span-6">
@@ -1636,7 +1645,7 @@ export default function DeviceDetail() {
                   <dl className="space-y-2 text-xs">
                     <Row
                       label={t("Placement")}
-                      value={formatPlacement(device.placement, t)}
+                      value={device.rackMountKind === "rack-top" ? t("Rack top") : formatPlacement(device.placement, t)}
                     />
                     <Row label={t("Rack")} value={rack?.name} />
                     <Row
@@ -2013,7 +2022,8 @@ export default function DeviceDetail() {
               allPorts={ports}
               portLinks={portLinks}
               devices={devices}
-              canEdit={canEdit}
+              deviceTypes={deviceTypes}
+              canEdit={canEdit && !isStack}
               initialLayout={physicalLayout}
               onLayoutChange={upsertPhysicalLayoutRecord}
               onInventoryReload={() => loadAll(true)}
@@ -2879,6 +2889,8 @@ export default function DeviceDetail() {
                         </Field>
                         <Field label={t("Community")}>
                           <Input
+                            type="password"
+                            autoComplete="new-password"
                             value={monitorForm.snmpCommunity}
                             disabled={
                               !canManageMonitoring ||
@@ -2888,10 +2900,17 @@ export default function DeviceDetail() {
                               setMonitorForm((prev) => ({
                                 ...prev,
                                 snmpCommunity: event.target.value,
+                                clearSnmpCommunity: false,
                               }))
                             }
-                            placeholder={t("public")}
+                            placeholder={selectedMonitor?.hasSnmpCommunity ? t("Leave blank to keep the stored secret") : t("public")}
                           />
+                          {selectedMonitor?.hasSnmpCommunity && !monitorForm.clearSnmpCommunity && (
+                            <div className="flex items-center justify-between text-xs text-text-muted">
+                              <span>{t("community stored")}</span>
+                              <button type="button" disabled={!canManageMonitoring} onClick={() => setMonitorForm((prev) => ({ ...prev, snmpCommunity: "", clearSnmpCommunity: true }))}>{t("Clear")}</button>
+                            </div>
+                          )}
                         </Field>
                         <Field label={t("OID")}>
                           <Input
@@ -3695,6 +3714,7 @@ function buildNewMonitorForm(
     ignoreTlsErrors: false,
     snmpVersion: "2c",
     snmpCommunity: "public",
+    clearSnmpCommunity: false,
     snmpOid: "",
     snmpExpectedValue: "",
     snmpMatchMode: "equals",
@@ -3720,7 +3740,8 @@ function monitorToForm(monitor: DeviceMonitor, device: Device): MonitorForm {
       monitor.snmpVersion === "3"
         ? monitor.snmpVersion
         : "2c",
-    snmpCommunity: monitor.snmpCommunity ?? "",
+    snmpCommunity: "",
+    clearSnmpCommunity: false,
     snmpOid: monitor.snmpOid ?? "",
     snmpExpectedValue: monitor.snmpExpectedValue ?? "",
     snmpMatchMode: monitor.snmpMatchMode ?? "equals",

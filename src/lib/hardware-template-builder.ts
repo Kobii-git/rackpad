@@ -24,6 +24,7 @@ export interface PortBlockDefinition {
   width: number;
   height: number;
   labelPrefix?: string;
+  excludedSlotIds?: string[];
 }
 
 export interface HardwareTemplateStarter {
@@ -41,6 +42,9 @@ export const HARDWARE_TEMPLATE_STARTERS: HardwareTemplateStarter[] = [
   starter("server-1u", "Generic 1U server", "server", "server", 1),
   starter("server-2u", "Generic 2U server", "server", "server", 2),
   starter("server-4u", "Generic 4U server", "server", "server", 4),
+  starter("mini-pc", "Mini PC", "endpoint", "endpoint", 1),
+  starter("nas", "NAS", "storage", "storage", 2),
+  starter("brush-panel", "Brush panel", "brush_panel", "blanking_panel", 1),
   starter("desktop", "Generic desktop PC", "endpoint", "endpoint", 1),
   starter("tower", "Generic tower PC", "endpoint", "endpoint", 4),
   starter("storage", "Storage equipment", "storage", "storage", 2),
@@ -107,25 +111,31 @@ function starter(
       : category === "storage"
         ? "sff"
         : "rj45";
-  const face: RackFace = category === "patch_panel" ? "front" : "rear";
+  const faces: RackFace[] =
+    category === "patch_panel" ? ["front", "rear"] : ["rear"];
   const blocks: PortBlockDefinition[] = [];
   if (portCount > 0) {
     const rows = portCount > 24 ? 2 : portCount > 12 ? 2 : 1;
-    blocks.push({
-      id: "ports",
-      face,
-      connector,
-      count: portCount,
-      rows,
-      columns: Math.ceil(portCount / rows),
-      start: 1,
-      direction: "left-to-right",
-      x: 110,
-      y: rows === 1 ? 108 : 80,
-      width: uplinkCount > 0 ? 650 : 780,
-      height: rows === 1 ? 62 : 126,
-      labelPrefix: category === "pdu" || category === "ups" ? "Outlet " : "",
-    });
+    for (const face of faces) {
+      blocks.push({
+        id:
+          category === "patch_panel"
+            ? faceQualifiedPortBlockId("ports", face)
+            : "ports",
+        face,
+        connector,
+        count: portCount,
+        rows,
+        columns: Math.ceil(portCount / rows),
+        start: 1,
+        direction: "left-to-right",
+        x: 110,
+        y: rows === 1 ? 108 : 80,
+        width: uplinkCount > 0 ? 650 : 780,
+        height: rows === 1 ? 62 : 126,
+        labelPrefix: category === "pdu" || category === "ups" ? "Outlet " : "",
+      });
+    }
   }
   if (uplinkCount > 0) {
     blocks.push({
@@ -147,98 +157,65 @@ function starter(
   return { id, name, category, deviceType, heightU, portBlocks: blocks };
 }
 
-function baseFace(face: RackFace, label: string): FaceDefinitionV1 {
-  return {
-    schemaVersion: 1,
-    width: 1000,
-    height: FACE_HEIGHT,
-    elements: [
-      {
-        kind: "panel",
-        id: `${face}-panel`,
-        x: 18,
-        y: 18,
-        width: 964,
-        height: 264,
-        tone: "mid",
-      },
-      {
-        kind: "handle",
-        id: `${face}-handle-left`,
-        x: 28,
-        y: 66,
-        width: 34,
-        height: 168,
-        tone: "dark",
-      },
-      {
-        kind: "handle",
-        id: `${face}-handle-right`,
-        x: 938,
-        y: 66,
-        width: 34,
-        height: 168,
-        tone: "dark",
-      },
-      {
-        kind: "vent",
-        id: `${face}-vent`,
-        x: 88,
-        y: 60,
-        width: 824,
-        height: 180,
-        tone: "dark",
-      },
-      {
-        kind: "screw",
-        id: `${face}-screw-tl`,
-        x: 45,
-        y: 42,
-        radius: 8,
-        tone: "light",
-      },
-      {
-        kind: "screw",
-        id: `${face}-screw-tr`,
-        x: 955,
-        y: 42,
-        radius: 8,
-        tone: "light",
-      },
-      {
-        kind: "screw",
-        id: `${face}-screw-bl`,
-        x: 45,
-        y: 258,
-        radius: 8,
-        tone: "light",
-      },
-      {
-        kind: "screw",
-        id: `${face}-screw-br`,
-        x: 955,
-        y: 258,
-        radius: 8,
-        tone: "light",
-      },
-      {
-        kind: "label",
-        id: `${face}-label`,
-        x: 92,
-        y: 43,
-        text: `${label} · ${face}`,
-        align: "start",
-      },
-      {
-        kind: "indicator",
-        id: `${face}-indicator`,
-        x: 900,
-        y: 40,
-        radius: 7,
-        tone: "accent",
-      },
-    ],
-  };
+function baseFace(face: RackFace, label: string, category: string,
+): FaceDefinitionV1 {
+  const elements: FaceDefinitionV1["elements"] = [
+    { kind: "panel", id: `${face}-panel`, x: 8, y: 12, width: 984, height: 276, tone: "mid",
+    },
+    ...[32, 968].flatMap((x, index) => [36, 264].map((y, row) => ({ kind: "screw" as const, id: `${face}-screw-${index}-${row}`, x, y, radius: 7, tone: "light" as const,
+      })),
+    ),
+    { kind: "label", id: `${face}-label`, x: 75, y: 40, text: label, align: "start",
+    },
+  ];
+  const box = (kind: "vent" | "bay" | "display" | "handle" | "panel", id: string, x: number, y: number, width: number, height: number,
+  ) =>
+    elements.push({ kind, id: `${face}-${id}`, x, y, width, height, tone: "dark",
+    });
+  const led = (id: string, x: number, y: number) => elements.push({ kind: "indicator", id: `${face}-${id}`, x, y, radius: 5, tone: "accent",
+    });
+  if (category === "brush_panel") {
+    box("vent", "brush", 80, 75, 840, 150);
+  } else if (category === "rack_shelf") {
+    box("panel", "lip", 60, 245, 880, 25);
+    for (let i = 0; i < 12; i += 1) box("vent", `slot-${i}`, 90 + i * 68, 75, 30, 125);
+  } else if (category === "blanking_panel") {
+    box("panel", "inset", 70, 65, 860, 170);
+  } else if (category === "server" || category === "storage") {
+    box("handle", "left", 48, 70, 25, 160);
+    box("handle", "right", 927, 70, 25, 160);
+    if (face === "front") {
+      const count = category === "storage" ? 8 : 4;
+      for (let i = 0; i < count; i += 1) {
+        const width = 790 / count;
+        box("bay", `drive-${i}`, 95 + i * width, 65, width - 10, 172);
+        led(`drive-led-${i}`, 106 + i * width, 219);
+      }
+    } else {
+      box("vent", "fan", 95, 65, 230, 180);
+      box("bay", "psu", 745, 65, 155, 180);
+      box("vent", "io", 365, 200, 325, 45);
+    }
+  } else if (category === "endpoint") {
+    box("panel", "case", 65, 55, 870, 190);
+    box("vent", "cooling", 125, 80, 540, 110);
+    box("display", "power", 795, 120, 70, 60);
+    led("power-led", 830, 205);
+  } else if (category === "ups") {
+    box("vent", "left-vent", 75, 75, 250, 160);
+    box("display", "screen", 405, 70, 185, 95);
+    box("vent", "right-vent", 675, 75, 250, 160);
+    led("status", 500, 205);
+  } else if (category === "pdu") {
+    box("display", "meter", 72, 60, 100, 50);
+    led("status", 910, 45);
+  } else if (category === "patch_panel") {
+    for (let i = 0; i < 6; i += 1) box("panel", `label-strip-${i}`, 106 + i * 132, 230, 116, 26);
+  } else {
+    box("vent", "vent", 75, 220, 790, 38);
+    for (let i = 0; i < 5; i += 1) led(`status-${i}`, 785 + i * 25, 44);
+  }
+  return { schemaVersion: 1, width: 1000, height: FACE_HEIGHT, elements };
 }
 
 function connectorSize(connector: PortKind) {
@@ -263,7 +240,8 @@ export function generatePortBlock(
   const rows = clampInteger(block.rows, 1, 64);
   const columns = clampInteger(block.columns, 1, 64);
   const capacity = rows * columns;
-  const actualCount = Math.min(count, capacity);
+  if (capacity < count) throw new Error("Port grid cannot omit ports.");
+  const actualCount = count;
   const cellWidth = block.width / columns;
   const cellHeight = block.height / rows;
   const dimensions = connectorSize(block.connector);
@@ -289,13 +267,13 @@ export function generatePortBlock(
       y: round(block.y + row * cellHeight + (cellHeight - height) / 2),
       width: round(width),
       height: round(height),
-      rotation: 0,
+      rotation: 0 as const,
       connector: block.connector,
       acceptedPortKinds: [block.connector],
       groupId: safeId(block.id),
       label: `${block.labelPrefix ?? ""}${number}`,
     };
-  });
+  }).filter(slot => !block.excludedSlotIds?.includes(slot.id));
 }
 
 export function createStarterTemplate(
@@ -343,8 +321,8 @@ export function createStarterTemplate(
       heightU: starter.heightU,
       columnSpan: 12,
     },
-    front: baseFace("front", templateName),
-    rear: baseFace("rear", templateName),
+    front: baseFace("front", templateName, starter.category),
+    rear: baseFace("rear", templateName, starter.category),
     portSlots: starter.portBlocks.flatMap(generatePortBlock),
     moduleSlots,
     modules: hasModuleSlots
@@ -383,6 +361,7 @@ export function createHardwareModule(
   slotId: string,
   primitive: HardwareModulePrimitive,
   count = 1,
+  position?: HardwareTemplateV1["moduleSlots"][number],
 ): HardwareModuleV1 {
   const secondSlot = slotId.endsWith("b");
   const x = secondSlot ? 770 : 620;
@@ -406,7 +385,7 @@ export function createHardwareModule(
     height: 60,
     labelPrefix: "",
   };
-  return {
+  const module: HardwareModuleV1 = {
     id: safeId(id),
     name,
     slotId,
@@ -431,7 +410,15 @@ export function createHardwareModule(
       },
     ],
     portSlots: portCount > 0 ? generatePortBlock(block) : [],
+    ...(portCount ? {portGrid: {rows: block.rows, columns: block.columns}} : {}),
   };
+  return position
+    ? transformHardwareModule(
+        module,
+        { id: slotId, face: "rear", x, y, width: 130, height: 112 },
+        position,
+      )
+    : module;
 }
 
 function moduleConnector(primitive: HardwareModulePrimitive): PortKind {
@@ -450,19 +437,51 @@ export function replacePortBlock(
   template: HardwareTemplateV1,
   block: PortBlockDefinition,
 ): HardwareTemplateV1 {
-  const groupId = safeId(block.id);
-  const nextBlocks = [
-    ...template.portBlueprints.filter((entry) => entry.id !== block.id),
-    { ...block },
-  ];
+  const existing = resolvePortBlock(template, block);
+  const groupId = existing?.id ?? faceQualifiedPortBlockId(block.id, block.face);
+  const normalizedBlock = { ...block, id: groupId };
+  const owned = existing
+    ? template.portSlots.filter(slot => portBlockOwnsSlot(template, existing, slot))
+    : [];
+  const ownedIds = new Set(owned.map(slot => slot.id));
+  const retained = template.portSlots.filter(slot => !ownedIds.has(slot.id));
+  const generated = generatePortBlock(normalizedBlock).filter(slot => {
+    const legacyId = slot.id.replace(`${groupId}-`, `${portBlockBaseId(groupId)}-`);
+    // A detached legacy cell stays excluded unless this block already owns
+    // the qualified slot; a sibling's legacy exclusion must not erase it.
+    return !normalizedBlock.excludedSlotIds?.includes(legacyId)
+      || owned.some(entry => entry.id === slot.id);
+  }).map(slot => {
+    const legacyId = slot.id.replace(`${groupId}-`, `${portBlockBaseId(groupId)}-`);
+    const prior = owned.find(entry => entry.id === slot.id)
+      ?? owned.find(entry => entry.id === legacyId);
+    return {
+      ...prior,
+      ...slot,
+      ...(prior ? { id: prior.id, rotation: prior.rotation } : {}),
+      ...(prior?.color ? { color: prior.color } : {}),
+      ...(prior?.connector === slot.connector ? { acceptedPortKinds: prior.acceptedPortKinds } : {}),
+      ...(prior && existing?.labelPrefix === block.labelPrefix && existing?.start === block.start ? { label: prior.label } : {}),
+    };
+  }).filter(slot => !normalizedBlock.excludedSlotIds?.includes(slot.id));
+  if (generated.some(slot => retained.some(entry => entry.id === slot.id)))
+    throw new Error("Port block would overwrite an unrelated slot.");
   return {
     ...template,
-    portSlots: [
-      ...template.portSlots.filter((slot) => slot.groupId !== groupId),
-      ...generatePortBlock(block),
+    portSlots: [...retained, ...generated],
+    portBlueprints: [
+      ...template.portBlueprints.filter(entry => entry.id !== existing?.id || entry.face !== existing?.face),
+      normalizedBlock,
     ],
-    portBlueprints: nextBlocks,
   };
+}
+
+function portBlockBaseId(id: string) {
+  return safeId(id).replace(/:(front|rear)$/, "");
+}
+
+function faceQualifiedPortBlockId(id: string, face: RackFace) {
+  return `${portBlockBaseId(id)}:${face}`;
 }
 
 export function movePhysicalPortSlot(
@@ -517,4 +536,152 @@ export function safeId(value: string) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 120);
   return normalized || "hardware-template";
+}
+
+export function nextTemplatePartId(prefix: string, ids: string[]): string {
+  const used = new Set(ids);
+  const base = safeId(prefix).replace(/:(front|rear)$/, "");
+  let suffix = 1;
+  while (
+    used.has(`${base}-${suffix}`) ||
+    used.has(`${base}-${suffix}:front`) ||
+    used.has(`${base}-${suffix}:rear`) || [...used].some(id => id.startsWith(`${base}-${suffix}-`))
+  )
+    suffix++;
+  return `${base}-${suffix}`;
+}
+
+export function templatePortBlocks(
+  template: HardwareTemplateV1,
+): PortBlockDefinition[] {
+  return template.portBlueprints.filter(
+    (entry) =>
+      typeof entry.id === "string" &&
+      (entry.face === "front" || entry.face === "rear") &&
+      typeof entry.connector === "string" &&
+      ["count", "rows", "columns", "start", "x", "y", "width", "height"].every(
+        (key) => typeof entry[key] === "number",
+      ),
+  ) as unknown as PortBlockDefinition[];
+}
+
+/** Resolve persisted identity first; legacy family aliases must be unambiguous. */
+export function resolvePortBlock(
+  template: HardwareTemplateV1,
+  block: Pick<PortBlockDefinition, "id" | "face">,
+): PortBlockDefinition | undefined {
+  const faceBlocks = templatePortBlocks(template).filter(entry => entry.face === block.face);
+  const exact = faceBlocks.filter(entry => entry.id === block.id);
+  const candidates = exact.length ? exact : faceBlocks.filter(entry => portBlockBaseId(entry.id) === portBlockBaseId(block.id));
+  if (candidates.length > 1) throw new Error("Ambiguous port block identity.");
+  return candidates[0];
+}
+
+/** Never let a shared base ID transfer ownership between sibling blocks. */
+export function portBlockOwnsSlot(
+  template: HardwareTemplateV1,
+  block: PortBlockDefinition,
+  slot: PhysicalPortSlotV1,
+): boolean {
+  if (slot.face !== block.face || block.excludedSlotIds?.includes(slot.id)) return false;
+  const faceBlocks = templatePortBlocks(template).filter(entry => entry.face === slot.face);
+  let candidates: PortBlockDefinition[];
+  if (slot.groupId) {
+    const exact = faceBlocks.filter(entry => entry.id === slot.groupId);
+    candidates = exact.length ? exact : faceBlocks.filter(entry => portBlockBaseId(entry.id) === portBlockBaseId(slot.groupId!));
+  } else {
+    if (templatePortBlocks(template).some(entry => entry.excludedSlotIds?.includes(slot.id))) return false;
+    const exact = faceBlocks.filter(entry => slot.id.startsWith(`${entry.id}-`));
+    candidates = exact.length ? exact : faceBlocks.filter(entry => slot.id.startsWith(`${portBlockBaseId(entry.id)}-`));
+  }
+  if (!candidates.some(entry => entry.id === block.id)) return false;
+  if (candidates.length > 1) throw new Error("Ambiguous port slot ownership.");
+  return true;
+}
+
+export function deletePortBlock(
+  template: HardwareTemplateV1,
+  block: PortBlockDefinition,
+): HardwareTemplateV1 {
+  const existing = resolvePortBlock(template, block);
+  if (!existing) return template;
+  return {
+    ...template,
+    portBlueprints: template.portBlueprints.filter(entry => entry.id !== existing.id || entry.face !== existing.face),
+    portSlots: template.portSlots.filter(slot => !portBlockOwnsSlot(template, existing, slot)),
+  };
+}
+
+type ModulePosition = HardwareTemplateV1["moduleSlots"][number];
+
+function transformHardwareModule(
+  module: HardwareModuleV1,
+  before: ModulePosition,
+  after: ModulePosition,
+): HardwareModuleV1 {
+  const sx = after.width / before.width;
+  const sy = after.height / before.height;
+  const point = (item: { x: number; y: number }) => ({
+    x: after.x + (item.x - before.x) * sx,
+    y: after.y + (item.y - before.y) * sy,
+  });
+  return {
+    ...module,
+    face: after.face,
+    elements: module.elements.map((item) => ({
+      ...item,
+      ...point(item),
+      ...("width" in item
+        ? { width: item.width * sx, height: item.height * sy }
+        : {}),
+      ...("radius" in item ? { radius: item.radius * Math.min(sx, sy) } : {}),
+    })),
+    portSlots: module.portSlots.map((item) => ({
+      ...item,
+      ...point(item),
+      face: after.face,
+      width: item.width * sx,
+      height: item.height * sy,
+    })),
+  };
+}
+
+export function updateModulePosition(
+  template: HardwareTemplateV1,
+  position: ModulePosition,
+): HardwareTemplateV1 {
+  const before = template.moduleSlots.find((slot) => slot.id === position.id);
+  if (!before) return template;
+  const bounds = template[position.face];
+  const width = Math.max(1, Math.min(bounds.width, position.width));
+  const height = Math.max(1, Math.min(bounds.height, position.height));
+  const after = {
+    ...position,
+    width,
+    height,
+    x: Math.max(0, Math.min(bounds.width - width, position.x)),
+    y: Math.max(0, Math.min(bounds.height - height, position.y)),
+  };
+  return {
+    ...template,
+    moduleSlots: template.moduleSlots.map((slot) =>
+      slot.id === after.id ? after : slot,
+    ),
+    modules: template.modules.map((module) =>
+      module.slotId === after.id
+        ? transformHardwareModule(module, before, after)
+        : module,
+    ),
+  };
+}
+
+export function deleteModulePosition(
+  template: HardwareTemplateV1,
+  id: string,
+): HardwareTemplateV1 {
+  if (template.modules.some((module) => module.slotId === id)) return template;
+  return {
+    ...template,
+    moduleSlots: template.moduleSlots.filter((slot) => slot.id !== id),
+  };
 }

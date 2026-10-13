@@ -1,13 +1,23 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  RACK_STUDIO_ROUTE_STYLE_STORAGE_KEY,
+  RACK_STUDIO_SHOW_LABELS_STORAGE_KEY,
+  buildRackElevationCableRoutes,
   buildRackStudioCableRoutes,
+  cablePath,
+  renderCableGeometry,
   connectorPairIsUsual,
   defaultCableMetadata,
   nextManualWaypoint,
+  rackStudioRouteStylePreference,
+  rackStudioShowLabelsPreference,
   resolveRackStudioPortAnchor,
 } from "./rack-studio-cables";
-import { buildRackStudioSvg } from "./rack-studio-export";
+import {
+  buildRackStudioSvg,
+  safeRackStudioExportColor,
+} from "./rack-studio-export";
 import type {
   Device,
   DevicePhysicalLayout,
@@ -68,7 +78,7 @@ test("exact mapped ports drive stable room routes while rack movement updates au
   const repeat = buildRackStudioCableRoutes(input)[0]!;
   assert.equal(first.path, repeat.path);
   assert.equal(first.category, "network");
-  assert.equal(first.points.length, 4);
+  assert.equal(first.points.length, 6);
 
   const movedRack = { ...rackB, studioX: 680, studioY: 190 };
   const moved = buildRackStudioCableRoutes({
@@ -107,6 +117,126 @@ test("manual waypoints remain fixed while endpoint anchors follow rack placement
   assert.deepEqual(original.points[1], { x: 400, y: 420 });
   assert.deepEqual(moved.points[1], { x: 400, y: 420 });
   assert.notDeepEqual(original.points.at(-1), moved.points.at(-1));
+  assert.match(original.path, /L 400\.00 420\.00/);
+});
+
+test("overlapping corridors receive unbounded stable lanes independent of input order", () => {
+  const devices: Device[] = [];
+  const ports: Port[] = [];
+  const routeLayouts: DevicePhysicalLayout[] = [];
+  const links: PortLink[] = [];
+  for (let index = 0; index < 14; index += 1) {
+    const fromDevice = {
+      ...device(`lane-from-${index}`, rackA.id, index + 1),
+      heightU: 1,
+    };
+    const toDevice = {
+      ...device(`lane-to-${index}`, rackA.id, index + 29),
+      heightU: 1,
+    };
+    const fromPort = port(
+      `lane-from-port-${index}`,
+      fromDevice.id,
+      `NIC ${index + 1}`,
+      "rj45",
+    );
+    const toPort = port(
+      `lane-to-port-${index}`,
+      toDevice.id,
+      `NIC ${index + 1}`,
+      "rj45",
+    );
+    devices.push(fromDevice, toDevice);
+    ports.push(fromPort, toPort);
+    routeLayouts.push(
+      layout(fromDevice.id, fromPort.id, 100, 260),
+      layout(toDevice.id, toPort.id, 900, 260),
+    );
+    links.push({
+      id: `lane-link-${String(index).padStart(2, "0")}`,
+      routeMode: "managed",
+      fromPortId: fromPort.id,
+      toPortId: toPort.id,
+      visible: true,
+      routeWaypoints: [],
+    });
+  }
+  const input = {
+    room,
+    face: "both" as const,
+    devices,
+    racks: [rackA],
+    layouts: routeLayouts,
+    ports,
+    links,
+    style: "orthogonal" as const,
+  };
+  const routes = buildRackStudioCableRoutes(input);
+  const shuffled = buildRackStudioCableRoutes({
+    ...input,
+    devices: [...devices].reverse(),
+    layouts: [...routeLayouts].reverse(),
+    ports: [...ports].reverse(),
+    links: [...links].reverse(),
+  });
+
+  assert.equal(routes.length, 14);
+  assert.equal(
+    new Set(routes.map((route) => route.points[1]!.x)).size,
+    14,
+    JSON.stringify(
+      routes.map((route) => ({
+        id: route.link.id,
+        points: route.points,
+      })),
+    ),
+  );
+  assert.deepEqual(
+    routes.map((route) => [route.link.id, route.path]),
+    shuffled.map((route) => [route.link.id, route.path]),
+  );
+});
+
+test("automatic cross-rack routes use an exterior corridor around unrelated racks", () => {
+  const blockingRack: Rack = {
+    ...rackA,
+    id: "rack-blocking",
+    name: "Rack blocking",
+    studioX: 310,
+  };
+  const route = buildRackStudioCableRoutes({
+    room,
+    face: "both",
+    devices: [serverA, serverB],
+    racks: [rackA, blockingRack, rackB],
+    layouts,
+    ports: [portA, portB],
+    links: [link],
+    style: "orthogonal",
+  })[0]!;
+
+  assert.ok(route.points.length >= 6);
+  assert.ok(route.points[2]!.y > blockingRack.studioY! + 278);
+});
+
+test("route preferences default safely and smooth paths retain manual anchors", () => {
+  assert.equal(rackStudioRouteStylePreference(null), "smooth");
+  assert.equal(rackStudioRouteStylePreference("invalid"), "smooth");
+  assert.equal(rackStudioRouteStylePreference("orthogonal"), "orthogonal");
+  assert.equal(rackStudioShowLabelsPreference(null), false);
+  assert.equal(rackStudioShowLabelsPreference("false"), false);
+  assert.equal(rackStudioShowLabelsPreference("true"), true);
+  assert.match(RACK_STUDIO_ROUTE_STYLE_STORAGE_KEY, /^rackpad\.rack-studio\./);
+  assert.match(RACK_STUDIO_SHOW_LABELS_STORAGE_KEY, /^rackpad\.rack-studio\./);
+  const points = [
+    { x: 0, y: 0 },
+    { x: 40, y: 0 },
+    { x: 40, y: 40 },
+    { x: 80, y: 40 },
+  ];
+  assert.match(cablePath(points, "smooth", [2]), /Q/);
+  assert.match(cablePath(points, "smooth", [2]), /L 40\.00 40\.00/);
+  assert.doesNotMatch(cablePath(points, "orthogonal"), /Q/);
 });
 
 test("cross-room endpoints become labeled canvas handoffs and hidden links stay hidden", () => {
@@ -128,7 +258,9 @@ test("cross-room endpoints become labeled canvas handoffs and hidden links stay 
   })[0]!;
   assert.equal(crossRoom.crossRoom, true);
   assert.equal(crossRoom.remoteRoomId, remoteRoom.id);
-  assert.equal(crossRoom.points.length, 2);
+  assert.equal(crossRoom.continuations.length, 1);
+  assert.equal(crossRoom.continuations[0]!.destinationPortId, portB.id);
+  assert.equal(crossRoom.continuations[0]!.destinationFace, "rear");
 
   const hidden = buildRackStudioCableRoutes({
     room,
@@ -154,6 +286,17 @@ test("connector compatibility and defaults distinguish network, optical, and pow
     color: "#22d3ee",
   });
   assert.equal(defaultCableMetadata(portA, power).cableType, "Power");
+});
+
+test("export colors normalize presets and shorthand hex without accepting unsafe CSS", () => {
+  assert.equal(safeRackStudioExportColor("blue", "#94a3b8"), "#4a78c4");
+  assert.equal(safeRackStudioExportColor("#0cf", "#94a3b8"), "#00ccff");
+  assert.equal(safeRackStudioExportColor("#12ABef", "#94a3b8"), "#12ABef");
+  assert.equal(
+    safeRackStudioExportColor("url(javascript:alert(1))", "#94a3b8"),
+    "#94a3b8",
+  );
+  assert.equal(safeRackStudioExportColor(undefined, "blue"), "#4a78c4");
 });
 
 test("room and focused-rack exports are deterministic, themed, and retain exact port labels", () => {
@@ -186,21 +329,78 @@ test("room and focused-rack exports are deterministic, themed, and retain exact 
     links: [{ ...link, color: '"/><script>alert(1)</script>' }],
     face: "both" as const,
     showLabels: true,
+    routeStyle: "smooth" as const,
     theme: "dark" as const,
     labels,
   };
+  const svgWithColor = (color: string | undefined) =>
+    buildRackStudioSvg({
+      ...input,
+      links: [{ ...link, color }],
+    }).svg;
+  assert.match(svgWithColor("blue"), /<path[^>]+stroke="#4a78c4"/);
+  assert.match(svgWithColor("#0cf"), /<path[^>]+stroke="#00ccff"/);
+  assert.match(svgWithColor("#12ABef"), /<path[^>]+stroke="#12ABef"/);
+  assert.match(svgWithColor(undefined), /<path[^>]+stroke="#22d3ee"/);
+  assert.match(
+    svgWithColor("url(javascript:alert(1))"),
+    /<path[^>]+stroke="#22d3ee"/,
+  );
   const roomImage = buildRackStudioSvg(input);
   assert.equal(roomImage.svg, buildRackStudioSvg(input).svg);
   assert.match(roomImage.svg, /data-theme="dark"/);
   assert.match(roomImage.svg, /Main room/);
   assert.match(roomImage.svg, /Cable · Type/);
   assert.doesNotMatch(roomImage.svg, /<script>/i);
+  const screenRoute = buildRackStudioCableRoutes({
+    room,
+    face: "both",
+    devices: [serverA, serverB],
+    racks: [rackA, rackB],
+    layouts,
+    ports: [portA, portB],
+    links: [link],
+    style: "smooth",
+  })[0]!;
+  const exportedPath = cablePath(
+    screenRoute.points.map((point) => ({ x: point.x + 60, y: point.y + 92 })),
+    "smooth",
+    screenRoute.manualPointIndexes,
+  );
+  assert.ok(roomImage.svg.includes(`d="${exportedPath}"`));
 
   const rackImage = buildRackStudioSvg({ ...input, focusRackId: rackA.id });
   assert.match(rackImage.filename, /rack-a-rack-studio\.svg/);
   assert.match(rackImage.svg, /Rack A · Front/);
   assert.match(rackImage.svg, /Rack A · Rear/);
   assert.match(rackImage.svg, /server-a: NIC 1/);
+
+  const focusedPlanning = buildRackElevationCableRoutes({
+    rack: rackA,
+    face: "rear",
+    devices: [serverA, serverB],
+    layouts,
+    ports: [portA, portB],
+    links: [link],
+    style: "smooth",
+    width: 1000,
+    unitHeight: 42,
+  });
+  const focusedRoute = focusedPlanning.routes[0]!;
+  const focusedImage = buildRackStudioSvg({
+    ...input,
+    face: "rear",
+    focusRackId: rackA.id,
+  });
+  const focusedPath = renderCableGeometry(
+    focusedRoute.geometry,
+    { x: 84, y: 150 },
+    {
+      x: 372 / focusedPlanning.scene.width,
+      y: 548 / focusedPlanning.scene.height,
+    },
+  );
+  assert.ok(focusedImage.svg.includes(`d="${focusedPath}"`));
 });
 
 test("six mapped rear ports retain left, center, and right physical anchors", () => {
@@ -289,7 +489,12 @@ function layout(
   x: number,
   y: number,
 ): DevicePhysicalLayout {
-  return multiPortLayout(deviceId, [port(portId, deviceId, "NIC 1", "rj45")], [x], y);
+  return multiPortLayout(
+    deviceId,
+    [port(portId, deviceId, "NIC 1", "rj45")],
+    [x],
+    y,
+  );
 }
 
 function multiPortLayout(

@@ -13,7 +13,16 @@ import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
 import { buildVisualizerModel, traceFromPort } from "./visualizer/model";
 import { DiagramCanvas } from "./visualizer/DiagramCanvas";
+import { RackCablingCanvas } from "./visualizer/RackCablingCanvas";
 import { VisualizerCanvas } from "./visualizer/VisualizerCanvas";
+import {
+  parseRackCablingRoomSelection,
+  parseRackCablingRoomLayout,
+  reconcileRackCablingRoomLayout,
+  reconcileRackCablingRoomSelection,
+  type RackCablingRoomLayout,
+  type RackCablingRouteStyle,
+} from "./visualizer/rack-cabling";
 import type {
   TraceModeState,
   VisualizerCableLayout,
@@ -42,6 +51,17 @@ const CABLE_LAYOUT_STORAGE_KEY = "rackpad.visualizer.cable-layout";
 const CUSTOM_NODE_POSITIONS_STORAGE_KEY =
   "rackpad.visualizer.custom-node-positions";
 const ORDER_STORAGE_KEY = "rackpad.visualizer.order";
+const RACK_CABLING_ROOM_STORAGE_KEY = "rackpad.visualizer.rack-cabling-room";
+const RACK_CABLING_ROOMS_STORAGE_KEY = "rackpad.visualizer.rack-cabling-rooms";
+const RACK_CABLING_ROUTE_STORAGE_KEY = "rackpad.visualizer.rack-cabling-route";
+const RACK_CABLING_LABELS_STORAGE_KEY =
+  "rackpad.visualizer.rack-cabling-labels";
+const RACK_CABLING_LOOSE_STORAGE_KEY =
+  "rackpad.visualizer.rack-cabling-loose-expanded";
+const RACK_CABLING_LOOSE_BY_ROOM_STORAGE_KEY =
+  "rackpad.visualizer.rack-cabling-loose-expanded-by-room";
+const RACK_CABLING_ROOM_LAYOUT_STORAGE_KEY =
+  "rackpad.visualizer.rack-cabling-room-layouts.v1";
 
 type MoveDirection = "up" | "down";
 
@@ -141,6 +161,89 @@ export default function VisualizerView() {
     result: null,
     message: null,
   });
+  const legacyRackCablingRoomIdRef = useRef(
+    readString(RACK_CABLING_ROOM_STORAGE_KEY),
+  );
+  const [rackCablingRoomIds, setRackCablingRoomIds] = useState<string[] | null>(
+    () =>
+      parseRackCablingRoomSelection(
+        readString(RACK_CABLING_ROOMS_STORAGE_KEY) || null,
+      ),
+  );
+  const [rackCablingRouteStyle, setRackCablingRouteStyle] =
+    useState<RackCablingRouteStyle>(() =>
+      readRackCablingRouteStyle(RACK_CABLING_ROUTE_STORAGE_KEY),
+    );
+  const [rackCablingLabels, setRackCablingLabels] = useState(() =>
+    readBoolean(RACK_CABLING_LABELS_STORAGE_KEY, false),
+  );
+  const legacyRackCablingLooseExpandedRef = useRef(
+    readBoolean(RACK_CABLING_LOOSE_STORAGE_KEY, false),
+  );
+  const [rackCablingLooseExpandedByRoom, setRackCablingLooseExpandedByRoom] =
+    useState<Record<string, boolean>>(() =>
+      readBooleanRecord(RACK_CABLING_LOOSE_BY_ROOM_STORAGE_KEY),
+    );
+  const [rackCablingRoomLayouts, setRackCablingRoomLayouts] = useState<
+    Record<string, RackCablingRoomLayout>
+  >(() => readRackCablingRoomLayouts(RACK_CABLING_ROOM_LAYOUT_STORAGE_KEY));
+  const rackCablingLayoutLabId = lab?.id ?? "default";
+  const rackCablingRoomLayout =
+    rackCablingRoomLayouts[rackCablingLayoutLabId];
+
+  useEffect(() => {
+    if (!loaded) return;
+    const next = reconcileRackCablingRoomSelection({
+      selection: rackCablingRoomIds,
+      legacyRoomId: legacyRackCablingRoomIdRef.current,
+      availableRoomIds: rooms.map((room) => room.id),
+      preferredRoomId: rooms[0]?.id,
+    });
+    if (
+      rackCablingRoomIds &&
+      next.length === rackCablingRoomIds.length &&
+      next.every((id, index) => id === rackCablingRoomIds[index])
+    ) {
+      return;
+    }
+    setRackCablingRoomIds(next);
+    writeStringArray(RACK_CABLING_ROOMS_STORAGE_KEY, next);
+    legacyRackCablingRoomIdRef.current = "";
+  }, [loaded, rackCablingRoomIds, rooms]);
+
+  useEffect(() => {
+    if (
+      !legacyRackCablingLooseExpandedRef.current ||
+      !rackCablingRoomIds?.length
+    ) {
+      return;
+    }
+    setRackCablingLooseExpandedByRoom((current) => {
+      if (Object.keys(current).length > 0) return current;
+      const next = Object.fromEntries(
+        rackCablingRoomIds.map((id) => [id, true]),
+      );
+      writeBooleanRecord(RACK_CABLING_LOOSE_BY_ROOM_STORAGE_KEY, next);
+      return next;
+    });
+    legacyRackCablingLooseExpandedRef.current = false;
+  }, [rackCablingRoomIds]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    setRackCablingRoomLayouts((current) => {
+      const existing = current[rackCablingLayoutLabId];
+      if (!existing) return current;
+      const next = reconcileRackCablingRoomLayout({
+        layout: existing,
+        availableRoomIds: rooms.map((room) => room.id),
+      });
+      if (rackCablingRoomLayoutEqual(existing, next)) return current;
+      const updated = { ...current, [rackCablingLayoutLabId]: next };
+      writeRackCablingRoomLayouts(RACK_CABLING_ROOM_LAYOUT_STORAGE_KEY, updated);
+      return updated;
+    });
+  }, [loaded, rackCablingLayoutLabId, rooms]);
 
   const model = useMemo(
     () =>
@@ -440,13 +543,13 @@ export default function VisualizerView() {
               <option value="grouped">{t("Grouped")}</option>
               <option value="pyramid">{t("Pyramid")}</option>
               <option value="diagram">{t("Diagram")}</option>
+              <option value="rack">{t("Rack cabling")}</option>
             </select>
             {layoutMode === "diagram" && (
               <select
                 value={diagramNodeStyle}
                 onChange={(event) => {
-                  const next = event.target
-                    .value as VisualizerDiagramNodeStyle;
+                  const next = event.target.value as VisualizerDiagramNodeStyle;
                   setDiagramNodeStyle(next);
                   writeString(DIAGRAM_NODE_STYLE_STORAGE_KEY, next);
                 }}
@@ -457,7 +560,8 @@ export default function VisualizerView() {
                 <option value="physical">{t("Physical layout")}</option>
               </select>
             )}
-            {layoutMode === "diagram" && diagramNodeStyle === "physical" && (
+            {((layoutMode === "diagram" && diagramNodeStyle === "physical") ||
+              layoutMode === "rack") && (
               <select
                 value={rackFaceMode}
                 onChange={(event) => {
@@ -560,6 +664,68 @@ export default function VisualizerView() {
           nodeStyle={diagramNodeStyle}
           physicalLayouts={physicalLayouts}
           physicalFaceMode={rackFaceMode}
+        />
+      ) : layoutMode === "rack" ? (
+        <RackCablingCanvas
+          rooms={rooms}
+          roomIds={rackCablingRoomIds ?? []}
+          onRoomIdsChange={(next) => {
+            const normalized = uniqueStrings(next);
+            setRackCablingRoomIds(normalized);
+            writeStringArray(RACK_CABLING_ROOMS_STORAGE_KEY, normalized);
+          }}
+          racks={racks}
+          devices={devices}
+          layouts={physicalLayouts}
+          ports={ports}
+          portLinks={portLinks}
+          model={model}
+          rackOrder={orderSettings.racks}
+          faceMode={rackFaceMode}
+          onFaceModeChange={setRackFaceMode}
+          cableType={cableType}
+          healthOverlay={healthOverlay}
+          onToggleHealth={toggleHealthOverlay}
+          routeStyle={rackCablingRouteStyle}
+          onRouteStyleChange={(next) => {
+            setRackCablingRouteStyle(next);
+            writeString(RACK_CABLING_ROUTE_STORAGE_KEY, next);
+          }}
+          showLabels={rackCablingLabels}
+          onShowLabelsChange={(next) => {
+            setRackCablingLabels(next);
+            writeBoolean(RACK_CABLING_LABELS_STORAGE_KEY, next);
+          }}
+          looseExpandedRoomIds={
+            new Set(
+              Object.entries(rackCablingLooseExpandedByRoom)
+                .filter(([, expanded]) => expanded)
+                .map(([roomId]) => roomId),
+            )
+          }
+          onLooseExpandedChange={(roomId, expanded) => {
+            setRackCablingLooseExpandedByRoom((current) => {
+              const next = { ...current, [roomId]: expanded };
+              writeBooleanRecord(RACK_CABLING_LOOSE_BY_ROOM_STORAGE_KEY, next);
+              return next;
+            });
+          }}
+          roomLayout={rackCablingRoomLayout}
+          onRoomLayoutChange={(next) => {
+            setRackCablingRoomLayouts((current) => {
+              const updated = {
+                ...current,
+                [rackCablingLayoutLabId]: next,
+              };
+              writeRackCablingRoomLayouts(
+                RACK_CABLING_ROOM_LAYOUT_STORAGE_KEY,
+                updated,
+              );
+              return updated;
+            });
+          }}
+          traceMode={traceMode}
+          setTraceMode={setTraceMode}
         />
       ) : (
         <VisualizerCanvas
@@ -839,12 +1005,97 @@ function readBoolean(key: string, fallback: boolean) {
   }
 }
 
+function readBooleanRecord(key: string): Record<string, boolean> {
+  try {
+    const value = JSON.parse(
+      window.localStorage.getItem(key) ?? "null",
+    ) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return Object.fromEntries(
+      Object.entries(value).filter(
+        ([roomId, expanded]) =>
+          typeof roomId === "string" && typeof expanded === "boolean",
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
 function writeBoolean(key: string, value: boolean) {
   try {
     window.localStorage.setItem(key, String(value));
   } catch {
     // Ignore storage failures; the in-memory state still works.
   }
+}
+
+function writeBooleanRecord(key: string, value: Record<string, boolean>) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage failures; the in-memory state still works.
+  }
+}
+
+function readRackCablingRoomLayouts(key: string): Record<string, RackCablingRoomLayout> {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+    if (!parsed || typeof parsed !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([labId]) => typeof labId === "string")
+        .map(([labId, layout]) => [
+          labId,
+          parseRackCablingRoomLayout(layout),
+        ]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writeRackCablingRoomLayouts(
+  key: string,
+  value: Record<string, RackCablingRoomLayout>,
+) {
+  try {
+    if (Object.keys(value).length === 0) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage issues in locked-down browsers.
+  }
+}
+
+function rackCablingRoomLayoutEqual(
+  left: RackCablingRoomLayout,
+  right: RackCablingRoomLayout,
+) {
+  if (
+    left.mode !== right.mode ||
+    left.hubRoomId !== right.hubRoomId ||
+    left.locked !== right.locked
+  ) {
+    return false;
+  }
+  const leftEntries = Object.entries(left.positions).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  const rightEntries = Object.entries(right.positions).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  return (
+    leftEntries.length === rightEntries.length &&
+    leftEntries.every(
+      ([id, point], index) =>
+        id === rightEntries[index]?.[0] &&
+        point.x === rightEntries[index]?.[1].x &&
+        point.y === rightEntries[index]?.[1].y,
+    )
+  );
 }
 
 function readLooseDevicePlacement(key: string): VisualizerLooseDevicePlacement {
@@ -859,10 +1110,24 @@ function readLooseDevicePlacement(key: string): VisualizerLooseDevicePlacement {
 function readLayoutMode(key: string): VisualizerLayoutMode {
   try {
     const value = window.localStorage.getItem(key);
-    return value === "pyramid" || value === "diagram" ? value : "grouped";
+    return value === "pyramid" || value === "diagram" || value === "rack"
+      ? value
+      : "grouped";
   } catch {
     return "grouped";
   }
+}
+
+function readString(key: string) {
+  try {
+    return window.localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function readRackCablingRouteStyle(key: string): RackCablingRouteStyle {
+  return readString(key) === "orthogonal" ? "orthogonal" : "smooth";
 }
 
 function readDiagramNodeStyle(key: string): VisualizerDiagramNodeStyle {
@@ -1052,6 +1317,14 @@ function isStringArray(value: unknown): value is string[] {
 function writeString(key: string, value: string) {
   try {
     window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures; the in-memory state still works.
+  }
+}
+
+function writeStringArray(key: string, value: string[]) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(uniqueStrings(value)));
   } catch {
     // Ignore storage failures; the in-memory state still works.
   }

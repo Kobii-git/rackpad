@@ -1,5 +1,7 @@
 import type {
   CableRouteWaypoint,
+  CableRouteMode,
+  CableRouteGuide,
   Device,
   DevicePhysicalLayout,
   Port,
@@ -12,21 +14,39 @@ import type {
 import {
   RACK_STUDIO_CANVAS_HEIGHT,
   RACK_STUDIO_CANVAS_WIDTH,
+  RACK_STUDIO_RACK_HEIGHT,
+  RACK_STUDIO_RACK_WIDTH,
+  rackCanvasState,
 } from "./rack-studio";
 import {
+  buildRackElevationScene,
   buildRackStudioScene,
   rackFaceForPhysicalFace,
+  type RackStudioRect,
   type RackStudioScene,
 } from "./rack-studio-scene";
 
+export type RackStudioCableRouteStyle = "smooth" | "orthogonal";
+
+export const RACK_STUDIO_ROUTE_STYLE_STORAGE_KEY =
+  "rackpad.rack-studio.route-style";
+export const RACK_STUDIO_SHOW_LABELS_STORAGE_KEY =
+  "rackpad.rack-studio.show-all-labels";
+
+export function rackStudioRouteStylePreference(
+  value: string | null | undefined,
+): RackStudioCableRouteStyle {
+  return value === "orthogonal" ? "orthogonal" : "smooth";
+}
+
+export function rackStudioShowLabelsPreference(
+  value: string | null | undefined,
+) {
+  return value === "true";
+}
+
 export type PhysicalCableCategory =
-  | "network"
-  | "fiber"
-  | "power"
-  | "console"
-  | "usb"
-  | "storage"
-  | "other";
+  "network" | "fiber" | "power" | "console" | "usb" | "storage" | "other";
 
 export interface RackStudioCableAnchor {
   portId: string;
@@ -34,6 +54,7 @@ export interface RackStudioCableAnchor {
   roomId: string | null;
   rackId: string | null;
   face: RackFace;
+  rackFace: RackFace;
   x: number;
   y: number;
 }
@@ -43,7 +64,10 @@ export interface RackStudioCableRoute {
   category: PhysicalCableCategory;
   color: string;
   points: Array<{ x: number; y: number }>;
+  manualPointIndexes: number[];
   path: string;
+  geometry: CableRouteGeometry;
+  continuations: CableContinuationMarker[];
   label: string;
   crossRoom: boolean;
   handoff?: "cross-room" | "hidden-face";
@@ -51,11 +75,81 @@ export interface RackStudioCableRoute {
   remoteRoomId?: string;
 }
 
-const OPTICAL_KINDS = new Set<PortKind>([
-  "sfp",
-  "sfp_plus",
-  "fiber",
-]);
+interface PendingCableRoute {
+  route: Omit<
+    RackStudioCableRoute,
+    "points" | "path" | "manualPointIndexes" | "geometry" | "continuations"
+  >;
+  from: RackStudioCableAnchor;
+  to?: RackStudioCableAnchor;
+  manualPoints: Array<{ x: number; y: number }>;
+  guidePoints?: Array<RackStudioCableAnchor | null>;
+  guideIncomplete?: boolean;
+  hiddenEndpoint?: { portId: string; rackFace: RackFace };
+}
+
+export type CablePoint = { x: number; y: number };
+export interface CableContinuationMarker extends CablePoint {
+  radius: number;
+  incomplete?: boolean;
+  portId: string;
+  destinationPortId: string;
+  face: RackFace;
+  destinationFace: RackFace;
+  textAnchor: "start" | "end";
+}
+export type CableRouteGeometry =
+  | {
+      kind: "segmented";
+      segments: CableRouteGeometry[];
+    }
+  | {
+      kind: "polyline";
+      points: CablePoint[];
+      style: RackStudioCableRouteStyle;
+      manualPointIndexes: number[];
+    }
+  | {
+      kind: "cubic";
+      from: CablePoint;
+      control1: CablePoint;
+      control2: CablePoint;
+      to: CablePoint;
+    };
+
+export interface CableRoutingInput {
+  id: string;
+  from: RackStudioCableAnchor;
+  to?: RackStudioCableAnchor;
+  manualPoints: CablePoint[];
+  routeMode?: CableRouteMode;
+  guidePoints?: Array<RackStudioCableAnchor | null>;
+  guideIncomplete?: boolean;
+  allowDirect?: boolean;
+  allowContinuation?: boolean;
+  hiddenEndpoint?: { portId: string; rackFace: RackFace };
+}
+
+export interface RoutePlanningContext {
+  width: number;
+  height: number;
+  racks: Array<{
+    id: string;
+    rect: RackStudioRect;
+    unitHeight: number;
+    face?: RackFace;
+  }>;
+  obstacles: Array<{
+    id: string;
+    rackId: string | null;
+    rect: RackStudioRect;
+    face?: RackFace;
+    parentDeviceId?: string;
+  }>;
+  rooms?: Array<{ id: string; rect: RackStudioRect }>;
+}
+
+const OPTICAL_KINDS = new Set<PortKind>(["sfp", "sfp_plus", "fiber"]);
 
 export function portSupportsPhysicalPatching(port: Port) {
   return (
@@ -120,15 +214,6 @@ export function defaultCableColor(category: PhysicalCableCategory) {
   }[category];
 }
 
-function stableLane(id: string) {
-  let hash = 2166136261;
-  for (let index = 0; index < id.length; index += 1) {
-    hash ^= id.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return Math.abs(hash) % 12;
-}
-
 function bound(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -157,52 +242,881 @@ export function resolveRackStudioPortAnchor(input: {
         roomId: anchor.roomId,
         rackId: anchor.rackId,
         face: anchor.physicalFace,
+        rackFace: anchor.rackFace,
         x: anchor.x,
         y: anchor.y,
       }
     : null;
 }
 
-function orthogonalPath(
-  from: RackStudioCableAnchor,
-  to: RackStudioCableAnchor,
-  linkId: string,
-  canvasWidth: number,
-) {
-  const lane = 12 + stableLane(linkId) * 5;
-  if (from.rackId === to.rackId) {
-    const direction = from.face === "rear" ? -1 : 1;
-    const gutterX = bound(
-      (from.x + to.x) / 2 + direction * lane,
-      4,
-      canvasWidth - 4,
-    );
-    return [
-      { x: from.x, y: from.y },
-      { x: gutterX, y: from.y },
-      { x: gutterX, y: to.y },
-      { x: to.x, y: to.y },
+const ROUTE_CLEARANCE = 10;
+const ROUTE_LANE_GAP = 6;
+
+class IntervalLaneAllocator {
+  private readonly lanes = new Map<string, Array<Array<[number, number]>>>();
+
+  allocate(group: string, start: number, end: number) {
+    const interval: [number, number] = [
+      Math.min(start, end),
+      Math.max(start, end),
     ];
+    const lanes = this.lanes.get(group) ?? [];
+    let lane = lanes.findIndex((occupied) =>
+      occupied.every(
+        ([occupiedStart, occupiedEnd]) =>
+          interval[1] + ROUTE_LANE_GAP <= occupiedStart ||
+          interval[0] >= occupiedEnd + ROUTE_LANE_GAP,
+      ),
+    );
+    if (lane < 0) {
+      lane = lanes.length;
+      lanes.push([]);
+    }
+    lanes[lane]!.push(interval);
+    this.lanes.set(group, lanes);
+    return lane;
   }
-  const midpointX = bound(
-    (from.x + to.x) / 2 + (stableLane(linkId) - 6) * 4,
-    4,
-    canvasWidth - 4,
-  );
-  return [
-    { x: from.x, y: from.y },
-    { x: midpointX, y: from.y },
-    { x: midpointX, y: to.y },
-    { x: to.x, y: to.y },
-  ];
 }
 
-export function cablePath(points: Array<{ x: number; y: number }>) {
+function compactRoutePoints(points: Array<{ x: number; y: number }>) {
+  const compacted = points.filter(
+    (point, index) =>
+      index === 0 ||
+      point.x !== points[index - 1]!.x ||
+      point.y !== points[index - 1]!.y,
+  );
+  let changed = true;
+  while (changed && compacted.length > 2) {
+    changed = false;
+    for (let index = 1; index < compacted.length - 1; index += 1) {
+      const previous = compacted[index - 1]!, point = compacted[index]!, next = compacted[index + 1]!;
+      if ((previous.x === point.x && point.x === next.x) || (previous.y === point.y && point.y === next.y)) {
+        compacted.splice(index, 1); changed = true; break;
+      }
+    }
+  }
+  return compacted;
+}
+
+function rackRectForAnchor(
+  anchor: RackStudioCableAnchor,
+  context: RoutePlanningContext,
+) {
+  return context.racks.find(
+    (rack) =>
+      rack.id === anchor.rackId &&
+      (!rack.face || rack.face === anchor.rackFace),
+  )?.rect;
+}
+
+function routeSide(
+  rect: RackStudioRect,
+  width: number,
+  peerX?: number,
+): "left" | "right" {
+  if (peerX != null && peerX < rect.x) return "left";
+  if (peerX != null && peerX > rect.x + rect.width) return "right";
+  return rect.x >= width - (rect.x + rect.width) ? "left" : "right";
+}
+
+function gutterX(rect: RackStudioRect, side: "left" | "right", lane: number) {
+  const offset = ROUTE_CLEARANCE + lane * ROUTE_LANE_GAP;
+  return side === "left" ? rect.x - offset : rect.x + rect.width + offset;
+}
+
+function segmentIntersectsRect(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  rect: RackStudioRect,
+) {
+  const left = rect.x - 2;
+  const right = rect.x + rect.width + 2;
+  const top = rect.y - 2;
+  const bottom = rect.y + rect.height + 2;
+  if (from.x === to.x) {
+    return (
+      from.x > left &&
+      from.x < right &&
+      Math.max(from.y, to.y) > top &&
+      Math.min(from.y, to.y) < bottom
+    );
+  }
+  if (from.y === to.y) {
+    return (
+      from.y > top &&
+      from.y < bottom &&
+      Math.max(from.x, to.x) > left &&
+      Math.min(from.x, to.x) < right
+    );
+  }
+  return false;
+}
+
+function routeAvoidsUnrelatedObstacles(
+  points: Array<{ x: number; y: number }>,
+  pending: CableRoutingInput,
+  context: RoutePlanningContext,
+) {
+  return context.obstacles.every((obstacle) => {
+    if (
+      (pending.from.rackFace === pending.to?.rackFace &&
+        obstacle.face &&
+        obstacle.face !== pending.from.rackFace) ||
+      obstacle.id === pending.from.deviceId ||
+      obstacle.id === pending.to?.deviceId ||
+      obstacle.id === `rack:${pending.from.rackId}` ||
+      obstacle.id === `rack:${pending.to?.rackId}`
+    ) {
+      return true;
+    }
+    return points
+      .slice(1)
+      .every(
+        (point, index) =>
+          !segmentIntersectsRect(points[index]!, point, obstacle.rect),
+      );
+  });
+}
+
+function routeAvoidsUnrelatedRooms(points: CablePoint[], pending: CableRoutingInput, context: RoutePlanningContext) {
+  const endpointRooms = new Set([pending.from.roomId, pending.to?.roomId].filter(Boolean));
+  return (context.rooms ?? []).every(room => endpointRooms.has(room.id) ||
+    points.slice(1).every((point, index) => !segmentIntersectsRect(points[index]!, point, room.rect)));
+}
+
+function routeBacktracking(points: CablePoint[]) {
+  let reversals = 0, previousHorizontal = 0, previousVertical = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const dx = Math.sign(points[index]!.x - points[index - 1]!.x);
+    const dy = Math.sign(points[index]!.y - points[index - 1]!.y);
+    if (dx) { if (previousHorizontal && dx !== previousHorizontal) reversals += 1; previousHorizontal = dx; }
+    if (dy) { if (previousVertical && dy !== previousVertical) reversals += 1; previousVertical = dy; }
+  }
+  return reversals;
+}
+
+function routeCandidateScore(points: CablePoint[], pending: CableRoutingInput, context: RoutePlanningContext) {
+  const valid = routeAvoidsUnrelatedObstacles(points, pending, context) && routeAvoidsUnrelatedRooms(points, pending, context);
+  const length = points.slice(1).reduce((sum, point, index) => {
+    const previous = points[index]!;
+    return sum + Math.abs(point.x - previous.x) + Math.abs(point.y - previous.y);
+  }, 0);
+  return [valid ? 0 : 1, routeBacktracking(points), points.length - 2, length];
+}
+
+function bestRouteCandidate(candidates: CablePoint[][], pending: CableRoutingInput, context: RoutePlanningContext) {
+  return candidates.map(compactRoutePoints).sort((left, right) => {
+    const a = routeCandidateScore(left, pending, context), b = routeCandidateScore(right, pending, context);
+    for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return a[index]! - b[index]!;
+    return JSON.stringify(left).localeCompare(JSON.stringify(right));
+  })[0]!;
+}
+
+function automaticRoutePoints(
+  pending: CableRoutingInput,
+  context: RoutePlanningContext,
+  allocator: IntervalLaneAllocator,
+) {
+  const { from, to } = pending;
+  const fromRack = rackRectForAnchor(from, context);
+  const toRack = to ? rackRectForAnchor(to, context) : undefined;
+
+  if (!to) {
+    const side = fromRack
+      ? routeSide(fromRack, context.width)
+      : from.x < context.width / 2
+        ? "left"
+        : "right";
+    const lane = allocator.allocate(
+      `handoff:${side}`,
+      from.y,
+      from.y + ROUTE_LANE_GAP,
+    );
+    const exitX = side === "left" ? 4 : context.width - 4;
+    const escapeX = fromRack
+      ? gutterX(fromRack, side, lane)
+      : from.x + (side === "left" ? -ROUTE_CLEARANCE : ROUTE_CLEARANCE);
+    const targetY = bound(
+      from.y + (lane % 2 === 0 ? lane : -lane) * ROUTE_LANE_GAP,
+      6,
+      context.height - 6,
+    );
+    return compactRoutePoints([
+      from,
+      { x: escapeX, y: from.y },
+      { x: escapeX, y: targetY },
+      { x: exitX, y: targetY },
+    ]);
+  }
+
+  if (
+    fromRack &&
+    toRack &&
+    from.rackId === to.rackId &&
+    from.rackFace === to.rackFace
+  ) {
+    const preferred = routeSide(fromRack, context.width);
+    const sides = [preferred, preferred === "left" ? "right" : "left"] as const;
+    let fallback: Array<{ x: number; y: number }> | undefined;
+    for (const side of sides) {
+      const lane = allocator.allocate(
+        `rack:${from.rackId}:${from.rackFace}:${side}`,
+        from.y,
+        to.y,
+      );
+      const x = gutterX(fromRack, side, lane);
+      const points = compactRoutePoints([
+        from,
+        { x, y: from.y },
+        { x, y: to.y },
+        to,
+      ]);
+      fallback ??= points;
+      if (routeAvoidsUnrelatedObstacles(points, pending, context))
+        return points;
+    }
+    return fallback!;
+  }
+
+  if (fromRack && toRack) {
+    const fromSide = routeSide(fromRack, context.width, to.x);
+    const toSide = routeSide(toRack, context.width, from.x);
+    const lane = allocator.allocate(
+      `room:${fromSide}:${toSide}`,
+      Math.min(fromRack.x, toRack.x),
+      Math.max(fromRack.x + fromRack.width, toRack.x + toRack.width),
+    );
+    const routeLeft = Math.min(gutterX(fromRack, fromSide, lane), gutterX(toRack, toSide, lane));
+    const routeRight = Math.max(gutterX(fromRack, fromSide, lane), gutterX(toRack, toSide, lane));
+    const intersectingRackRects = context.racks
+      .map((rack) => rack.rect)
+      .filter((rect) => rect.x < routeRight && rect.x + rect.width > routeLeft);
+    const bottom = Math.max(
+      fromRack.y + fromRack.height,
+      toRack.y + toRack.height,
+      ...intersectingRackRects.map((rect) => rect.y + rect.height),
+    );
+    const top = Math.min(
+      fromRack.y,
+      toRack.y,
+      ...intersectingRackRects.map((rect) => rect.y),
+    );
+    const room = from.roomId === to.roomId ? context.rooms?.find(entry => entry.id === from.roomId)?.rect : undefined;
+    const lowerBound = room ? room.y + 4 : 4;
+    const upperBound = room ? room.y + room.height - 4 : context.height - 4;
+    const corridorYs = [
+      bound(bottom + ROUTE_CLEARANCE + lane * ROUTE_LANE_GAP, lowerBound, upperBound),
+      bound(top - ROUTE_CLEARANCE - lane * ROUTE_LANE_GAP, lowerBound, upperBound),
+    ];
+    if (from.roomId !== to.roomId && context.rooms?.length) {
+      const roomTop = Math.min(...context.rooms.map(entry => entry.rect.y));
+      const roomBottom = Math.max(...context.rooms.map(entry => entry.rect.y + entry.rect.height));
+      corridorYs.push(bound(roomTop - ROUTE_CLEARANCE, 4, context.height - 4),
+        bound(roomBottom + ROUTE_CLEARANCE, 4, context.height - 4));
+    }
+    const candidates = [
+      [fromSide, toSide],
+      [fromSide === "left" ? "right" : "left", toSide],
+      [fromSide, toSide === "left" ? "right" : "left"],
+    ] as const;
+    const routeCandidates = candidates.flatMap(([candidateFromSide, candidateToSide]) => {
+      const rawFromX = gutterX(fromRack, candidateFromSide, lane);
+      const rawToX = gutterX(toRack, candidateToSide, lane);
+      const candidateFromX = room ? bound(rawFromX, room.x + 4, room.x + room.width - 4) : rawFromX;
+      const candidateToX = room ? bound(rawToX, room.x + 4, room.x + room.width - 4) : rawToX;
+      return corridorYs.map(corridorY => [from, { x: candidateFromX, y: from.y },
+        { x: candidateFromX, y: corridorY }, { x: candidateToX, y: corridorY },
+        { x: candidateToX, y: to.y }, to]);
+    });
+    return bestRouteCandidate(routeCandidates, pending, context);
+  }
+
+  const lane = allocator.allocate("unracked", from.x, to.x);
+  const corridorY = bound(
+    Math.max(from.y, to.y) + ROUTE_CLEARANCE + lane * ROUTE_LANE_GAP,
+    4,
+    context.height - 4,
+  );
+  return compactRoutePoints([
+    from,
+    { x: from.x, y: corridorY },
+    { x: to.x, y: corridorY },
+    to,
+  ]);
+}
+
+function routeSortKey(pending: CableRoutingInput) {
+  const endpoints = [
+    pending.from.portId,
+    pending.to?.portId ?? "handoff",
+  ].sort();
+  return `${endpoints[0]}:${endpoints[1]}:${pending.id}`;
+}
+
+function pointPair(point: CablePoint) {
+  return `${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+}
+
+function roundedPath(
+  points: Array<{ x: number; y: number }>,
+  fixedIndexes: Set<number>,
+  format: (point: CablePoint) => string,
+) {
+  if (points.length < 2) return "";
+  const commands = [`M ${format(points[0]!)}`];
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1]!;
+    const point = points[index]!;
+    const next = points[index + 1]!;
+    if (fixedIndexes.has(index)) {
+      commands.push(`L ${format(point)}`);
+      continue;
+    }
+    const incoming = Math.hypot(point.x - previous.x, point.y - previous.y);
+    const outgoing = Math.hypot(next.x - point.x, next.y - point.y);
+    const radius = Math.min(10, incoming / 3, outgoing / 3);
+    if (radius <= 0) continue;
+    const entry = {
+      x: point.x + ((previous.x - point.x) / incoming) * radius,
+      y: point.y + ((previous.y - point.y) / incoming) * radius,
+    };
+    const exit = {
+      x: point.x + ((next.x - point.x) / outgoing) * radius,
+      y: point.y + ((next.y - point.y) / outgoing) * radius,
+    };
+    commands.push(`L ${format(entry)} Q ${format(point)} ${format(exit)}`);
+  }
+  const last = points.at(-1)!;
+  commands.push(`L ${format(last)}`);
+  return commands.join(" ");
+}
+
+function serializeCablePoints(
+  points: Array<{ x: number; y: number }>,
+  style: RackStudioCableRouteStyle = "orthogonal",
+  manualPointIndexes: number[] = [],
+  format: (point: CablePoint) => string = pointPair,
+) {
+  if (style === "smooth") {
+    return roundedPath(points, new Set(manualPointIndexes), format);
+  }
   return points
-    .map((point, index) =>
-      `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`,
-    )
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${format(point)}`)
     .join(" ");
+}
+
+export function cablePath(
+  points: CablePoint[],
+  style: RackStudioCableRouteStyle = "orthogonal",
+  manualPointIndexes: number[] = [],
+) {
+  return serializeCablePoints(points, style, manualPointIndexes);
+}
+
+/** Geometry is the source of truth for both live strokes and translated exports. */
+export function renderCableGeometry(
+  geometry: CableRouteGeometry,
+  offset: CablePoint = { x: 0, y: 0 },
+  scale: CablePoint = { x: 1, y: 1 },
+): string {
+  if (geometry.kind === "segmented") {
+    return geometry.segments
+      .map((segment) => renderCableGeometry(segment, offset, scale))
+      .join(" ");
+  }
+  const shift = (point: CablePoint) => ({
+    x: point.x * scale.x + offset.x,
+    y: point.y * scale.y + offset.y,
+  });
+  const pair = (point: CablePoint) => {
+    const value = shift(point);
+    return `${value.x.toFixed(2)} ${value.y.toFixed(2)}`;
+  };
+  return geometry.kind === "cubic"
+    ? `M ${pair(geometry.from)} C ${pair(geometry.control1)} ${pair(geometry.control2)} ${pair(geometry.to)}`
+    : serializeCablePoints(
+        geometry.points,
+        geometry.style,
+        geometry.manualPointIndexes,
+        pair,
+      );
+}
+
+/** A stable on-path label/focus point, without browser-only SVG measurement. */
+export function cableGeometryLabelPoint(
+  geometry: CableRouteGeometry,
+): CablePoint {
+  if (geometry.kind === "segmented") {
+    return (
+      geometry.segments
+        .map(cableGeometryLabelPoint)
+        .sort((a, b) => a.y - b.y || a.x - b.x)[0] ?? { x: 0, y: 0 }
+    );
+  }
+  if (geometry.kind === "cubic") {
+    return {
+      x:
+        (geometry.from.x +
+          3 * geometry.control1.x +
+          3 * geometry.control2.x +
+          geometry.to.x) /
+        8,
+      y:
+        (geometry.from.y +
+          3 * geometry.control1.y +
+          3 * geometry.control2.y +
+          geometry.to.y) /
+        8,
+    };
+  }
+  let longest = -1;
+  let result = geometry.points[0] ?? { x: 0, y: 0 };
+  for (let index = 1; index < geometry.points.length; index += 1) {
+    const from = geometry.points[index - 1]!;
+    const to = geometry.points[index]!;
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    const midpoint = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+    if (
+      length < longest ||
+      (length === longest &&
+        (midpoint.y > result.y ||
+          (midpoint.y === result.y && midpoint.x >= result.x)))
+    )
+      continue;
+    longest = length;
+    // Rounded corners trim at most a third of each segment, leaving its
+    // midpoint on the straight section in both Smooth and Orthogonal modes.
+    result = midpoint;
+  }
+  return result;
+}
+
+function directCurve(
+  pending: CableRoutingInput,
+  context: RoutePlanningContext,
+): CableRouteGeometry | null {
+  const { from, to } = pending;
+  if (
+    !to ||
+    pending.allowDirect === false ||
+    pending.routeMode === "managed" ||
+    pending.routeMode === "manual" ||
+    pending.manualPoints.length ||
+    !from.rackId ||
+    (from.rackId !== to.rackId && pending.routeMode !== "direct") ||
+    from.rackFace !== to.rackFace ||
+    from.deviceId === to.deviceId
+  )
+    return null;
+  const rack = context.racks.find(
+    (entry) =>
+      entry.id === from.rackId && (!entry.face || entry.face === from.rackFace),
+  );
+  if (!rack) return null;
+
+  // Canonical endpoint order gives the same physical curve when a link is reversed.
+  const reverse =
+    from.y > to.y ||
+    (from.y === to.y &&
+      (from.x > to.x || (from.x === to.x && from.portId > to.portId)));
+  const [top, bottom] = reverse ? [to, from] : [from, to];
+  // Faceplates are drawing surfaces, not physical obstacles in an elevation.
+  // A cable may pass in front of a shelf or chassis without leaving the rack.
+  const deltaY = bottom.y - top.y;
+  if (from.rackId !== to.rackId) {
+    const middleX = (top.x + bottom.x) / 2;
+    const control1 = { x: middleX, y: top.y };
+    const control2 = { x: middleX, y: bottom.y };
+    return { kind: "cubic", from, to, control1: reverse ? control2 : control1, control2: reverse ? control1 : control2 };
+  }
+  const bow = Math.min(
+    rack.rect.width * 0.045,
+    Math.max(rack.unitHeight * 0.65, deltaY * 0.3),
+  );
+  const deviceRects = context.obstacles.filter(
+    (entry) =>
+      (entry.id === from.deviceId || entry.id === to.deviceId) &&
+      (!entry.face || entry.face === from.rackFace),
+  );
+  const center = deviceRects.length
+    ? deviceRects.reduce(
+        (sum, entry) => sum + entry.rect.x + entry.rect.width / 2,
+        0,
+      ) / deviceRects.length
+    : rack.rect.x + rack.rect.width / 2;
+  const preferred = center <= rack.rect.x + rack.rect.width / 2 ? 1 : -1;
+  for (const direction of [preferred, -preferred, 0]) {
+    const control1 = { x: top.x + direction * bow, y: top.y + deltaY / 3 };
+    const control2 = {
+      x: bottom.x + direction * bow,
+      y: bottom.y - deltaY / 3,
+    };
+    const hull = [top, control1, control2, bottom];
+    const left = Math.min(...hull.map((point) => point.x));
+    const right = Math.max(...hull.map((point) => point.x));
+    const upper = Math.min(...hull.map((point) => point.y));
+    const lower = Math.max(...hull.map((point) => point.y));
+    if (
+      left < rack.rect.x ||
+      right > rack.rect.x + rack.rect.width ||
+      upper < 0 ||
+      lower > context.height
+    )
+      continue;
+    return {
+      kind: "cubic",
+      from,
+      control1: reverse ? control2 : control1,
+      control2: reverse ? control1 : control2,
+      to,
+    };
+  }
+  return null;
+}
+
+function continuationBranch(
+  from: RackStudioCableAnchor,
+  remote: { portId: string; rackFace: RackFace },
+  context: RoutePlanningContext,
+  radius: number,
+) {
+  const rack = rackRectForAnchor(from, context);
+  // A short stub marks the view transition without inventing a physical path
+  // through the rack. Port-local markers also keep dense bundles distinct.
+  const marker: CableContinuationMarker = {
+    radius,
+    x: from.x,
+    y: bound(from.y + 14, 6, (rack ? rack.y + rack.height : context.height) - 6),
+    portId: from.portId,
+    destinationPortId: remote.portId,
+    face: from.rackFace,
+    destinationFace: remote.rackFace,
+    textAnchor:
+      from.x < (rack ? rack.x + rack.width / 2 : context.width / 2)
+        ? "start"
+        : "end",
+  };
+  return {
+    marker,
+    points: compactRoutePoints([from, marker]),
+  };
+}
+
+export function cableContinuationLabel(
+  marker: CableContinuationMarker,
+  ports: Port[],
+  devices: Device[],
+  labels: { front: string; rear: string },
+) {
+  const port = ports.find(
+    (candidate) => candidate.id === marker.destinationPortId,
+  );
+  const device = devices.find((candidate) => candidate.id === port?.deviceId);
+  return [
+    marker.destinationFace === "front" ? labels.front : labels.rear,
+    device?.displayName || device?.hostname,
+    port?.name ?? marker.destinationPortId,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export function cableRouteMode(link: Pick<PortLink, "routeMode" | "routeWaypoints">): CableRouteMode {
+  return link.routeMode ?? (link.routeWaypoints?.length ? "manual" : "auto");
+}
+
+/** Stored waypoints stay in room coordinates. Elevations project those coordinates
+ * through the nearest rack's canvas frame, without modifying the saved point. */
+export function projectCableWaypoints(link: PortLink, racks: Rack[], frames: Array<{ rackId: string; face: RackFace; rect: RackStudioRect }>, roomId: string | null) {
+  if (cableRouteMode(link) !== "manual") return [];
+  return (link.routeWaypoints ?? []).filter(point => point.roomId === roomId).flatMap(point => {
+    const candidates = frames.filter(frame => frame.face === point.face).flatMap(frame => {
+      const index = racks.findIndex(rack => rack.id === frame.rackId);
+      if (index < 0) return [];
+      const canvas = rackCanvasState(racks[index]!, index);
+      const x = (canvas.x ?? 0) + 20;
+      const y = (canvas.y ?? 0) + 53;
+      const width = RACK_STUDIO_RACK_WIDTH - 40;
+      const dx = Math.max(x - point.x, 0, point.x - x - width);
+      const dy = Math.max(y - point.y, 0, point.y - y - 188);
+      return [{ frame, x, y, width, distance: dx * dx + dy * dy }];
+    }).sort((a, b) => a.distance - b.distance || a.frame.rackId.localeCompare(b.frame.rackId));
+    const nearest = candidates[0];
+    if (!nearest) return [];
+    return [{ x: nearest.frame.rect.x + (point.x - nearest.x) / nearest.width * nearest.frame.rect.width,
+      y: nearest.frame.rect.y + (point.y - nearest.y) / 188 * nearest.frame.rect.height }];
+  });
+}
+
+interface GuideEquipment {
+  device: Device;
+  rackId: string | null;
+  rackFace: RackFace;
+  physicalFace: RackFace;
+  rect: RackStudioRect;
+  rotation: 0 | 90;
+  layout?: DevicePhysicalLayout;
+}
+
+/** Uses exactly the same normalized coordinate transform as physical port anchors. */
+export function resolveCableGuidePoints(input: {
+  link: PortLink;
+  equipment: GuideEquipment[];
+  devices: Device[];
+  roomId: string | null;
+  faces: RackFace[];
+  reverse?: boolean;
+}) {
+  if (cableRouteMode(input.link) !== "managed") return {};
+  let incomplete = false;
+  const point = (guide: CableRouteGuide, face: RackFace, side: string): RackStudioCableAnchor | null => {
+    const device = input.devices.find(device => device.id === guide.deviceId);
+    const rackFace = device ? rackFaceForPhysicalFace(device, face) : face;
+    const item = input.equipment.find(item => item.device.id === guide.deviceId && item.physicalFace === face && item.layout);
+    if (!item || guide.roomId !== input.roomId) {
+      if (!device || (guide.roomId === input.roomId && input.faces.includes(rackFace))) incomplete = true;
+      return null;
+    }
+    const u = guide.x / 1000;
+    const v = guide.y / 1000;
+    return { portId: `guide:${guide.id}:${side}`, deviceId: guide.deviceId, roomId: guide.roomId,
+      rackId: item.rackId, face, rackFace: item.rackFace,
+      x: item.rect.x + (item.rotation === 90 ? 1 - v : u) * item.rect.width,
+      y: item.rect.y + (item.rotation === 90 ? u : v) * item.rect.height };
+  };
+  const points = (input.link.routeGuides ?? []).flatMap(guide =>
+    guide.entryFace === guide.exitFace ? [point(guide, guide.entryFace, "entry")]
+      : [point(guide, guide.entryFace, "entry"), point(guide, guide.exitFace, "exit")]);
+  return { guidePoints: input.reverse ? points.reverse() : points, guideIncomplete: incomplete };
+}
+
+function cubicPoint(geometry: Extract<CableRouteGeometry, { kind: "cubic" }>, t: number) {
+  const inverse = 1 - t;
+  return {
+    x: inverse ** 3 * geometry.from.x + 3 * inverse ** 2 * t * geometry.control1.x +
+      3 * inverse * t ** 2 * geometry.control2.x + t ** 3 * geometry.to.x,
+    y: inverse ** 3 * geometry.from.y + 3 * inverse ** 2 * t * geometry.control1.y +
+      3 * inverse * t ** 2 * geometry.control2.y + t ** 3 * geometry.to.y,
+  };
+}
+
+function pointInsideRect(point: CablePoint, rect: RackStudioRect, padding = 0) {
+  return point.x >= rect.x - padding && point.x <= rect.x + rect.width + padding &&
+    point.y >= rect.y - padding && point.y <= rect.y + rect.height + padding;
+}
+
+function normalizedVector(from: CablePoint, to: CablePoint) {
+  const length = Math.hypot(to.x - from.x, to.y - from.y);
+  return length ? { x: (to.x - from.x) / length, y: (to.y - from.y) / length } : { x: 0, y: 0 };
+}
+
+function managedSmoothCurve(input: { context: RoutePlanningContext; from: RackStudioCableAnchor;
+  to: RackStudioCableAnchor; previous?: RackStudioCableAnchor; next?: RackStudioCableAnchor }) {
+  const { context, from, to, previous, next } = input;
+  const distance = Math.hypot(to.x - from.x, to.y - from.y);
+  // A face-changing guide has no adjacent anchor on this face. Using the leg
+  // itself as both tangents makes its cubic mathematically straight.
+  const freeTangent = { x: to.x < from.x ? -1 : 1, y: 0 };
+  const fromTangent = previous ? normalizedVector(previous, to) : freeTangent;
+  const toTangent = next ? normalizedVector(from, next) : freeTangent;
+  const sameRoom = from.roomId === to.roomId ? context.rooms?.find(room => room.id === from.roomId)?.rect : undefined;
+  for (const factor of [1, 0.5, 0.25]) {
+    const handle = Math.min(48, distance * 0.4) * factor;
+    const geometry: Extract<CableRouteGeometry, { kind: "cubic" }> = { kind: "cubic", from,
+      control1: { x: from.x + fromTangent.x * handle, y: from.y + fromTangent.y * handle },
+      control2: { x: to.x - toTangent.x * handle, y: to.y - toTangent.y * handle }, to };
+    const samples = Array.from({ length: 17 }, (_, index) => cubicPoint(geometry, index / 16));
+    const insideRoom = !sameRoom || samples.every(point => pointInsideRect(point, sameRoom));
+    const avoidsRooms = (context.rooms ?? []).every(room => room.id === from.roomId || room.id === to.roomId ||
+      samples.every(point => !pointInsideRect(point, room.rect, 2)));
+    const avoidsObstacles = context.obstacles.every(obstacle => obstacle.id === from.deviceId || obstacle.id === to.deviceId ||
+      (obstacle.face && obstacle.face !== from.rackFace) || samples.every(point => !pointInsideRect(point, obstacle.rect, 2)));
+    if (insideRoom && avoidsRooms && avoidsObstacles) return geometry;
+  }
+  return null;
+}
+
+function guidedCableRoute(pending: CableRoutingInput, context: RoutePlanningContext, allocator: IntervalLaneAllocator,
+  style: RackStudioCableRouteStyle) {
+  const anchors = [pending.from, ...pending.guidePoints!, pending.to ?? null];
+  const segments: CableRouteGeometry[] = [];
+  const points: CablePoint[] = [];
+  const markers = new Map<string, CableContinuationMarker>();
+  for (let index = 1; index < anchors.length; index += 1) {
+    const from = anchors[index - 1];
+    const to = anchors[index];
+    if (from && to && from.rackFace === to.rackFace) {
+      const previous = anchors[index - 2], next = anchors[index + 1];
+      const curve = style === "smooth" ? managedSmoothCurve({ context, from, to,
+        previous: previous?.rackFace === from.rackFace ? previous : undefined,
+        next: next?.rackFace === to.rackFace ? next : undefined }) : null;
+      if (curve) { segments.push(curve); points.push(from, to); continue; }
+      const segmentPoints = automaticRoutePoints({ ...pending, from, to, manualPoints: [] }, context, allocator);
+      segments.push({ kind: "polyline", points: segmentPoints, style, manualPointIndexes: [] });
+      points.push(...segmentPoints);
+    } else {
+      for (const endpoint of [from, to]) {
+        if (!endpoint) continue;
+        const remote = endpoint.portId === pending.to?.portId ? pending.from : pending.to ?? pending.hiddenEndpoint;
+        const branch = continuationBranch(endpoint, remote ?? pending.from, context, 3);
+        const isGuide = endpoint.portId.startsWith("guide:");
+        const marker = { ...branch.marker, ...(isGuide ? { x: endpoint.x, y: endpoint.y } : {}), incomplete: pending.guideIncomplete };
+        markers.set(endpoint.portId, marker);
+        if (!isGuide) {
+          segments.push({ kind: "polyline", points: branch.points, style, manualPointIndexes: [] });
+          points.push(...branch.points);
+        }
+      }
+    }
+  }
+  const geometry: CableRouteGeometry = { kind: "segmented", segments };
+  return { id: pending.id, points, manualPointIndexes: [], geometry, continuations: [...markers.values()], path: renderCableGeometry(geometry) };
+}
+
+export function planPhysicalCableRoutes(
+  inputs: CableRoutingInput[],
+  context: RoutePlanningContext,
+  style: RackStudioCableRouteStyle,
+) {
+  const allocator = new IntervalLaneAllocator();
+  const rows = new Map<string, Map<string, RackStudioCableAnchor>>();
+  for (const input of inputs) {
+    for (const endpoint of [input.from, ...(input.to ? [input.to] : [])]) {
+      const key = `${endpoint.deviceId}:${endpoint.rackFace}:${endpoint.y}`;
+      const row = rows.get(key) ?? new Map<string, RackStudioCableAnchor>();
+      row.set(endpoint.portId, endpoint);
+      rows.set(key, row);
+    }
+  }
+  const markerRadii = new Map<string, number>();
+  for (const row of rows.values()) {
+    const ordered = [...row.values()].sort((a, b) => a.x - b.x);
+    ordered.forEach((endpoint, index) => {
+      const spacing = Math.min(
+        index ? endpoint.x - ordered[index - 1]!.x : Infinity,
+        index + 1 < ordered.length
+          ? ordered[index + 1]!.x - endpoint.x
+          : Infinity,
+      );
+      markerRadii.set(endpoint.portId, bound(spacing / 3, 0.4, 4));
+    });
+  }
+  return [...inputs]
+    .sort((left, right) =>
+      routeSortKey(left).localeCompare(routeSortKey(right)),
+    )
+    .map((pending) => {
+      if (pending.routeMode === "managed" && pending.guidePoints?.length) {
+        return guidedCableRoute(pending, context, allocator, style);
+      }
+      const mixedFace =
+        pending.to && pending.from.rackFace !== pending.to.rackFace;
+      const continuations: CableContinuationMarker[] = [];
+      if (
+        (mixedFace || pending.hiddenEndpoint) &&
+        pending.allowContinuation !== false &&
+        !pending.manualPoints.length
+      ) {
+        const branches = [pending.from, ...(mixedFace ? [pending.to!] : [])]
+          .sort((a, b) => a.portId.localeCompare(b.portId))
+          .map((endpoint) => ({
+            portId: endpoint.portId,
+            ...continuationBranch(
+              endpoint,
+              endpoint.portId === pending.from.portId
+                ? (pending.to ?? pending.hiddenEndpoint!)
+                : pending.from,
+              context,
+              markerRadii.get(endpoint.portId) ?? 4,
+            ),
+          }));
+        const fromBranch = branches.find(
+          (branch) => branch.portId === pending.from.portId,
+        )!;
+        const toBranch = mixedFace
+          ? branches.find((branch) => branch.portId === pending.to!.portId)
+          : undefined;
+        continuations.push(...branches.map((branch) => branch.marker));
+        const segments: CableRouteGeometry[] = [
+          fromBranch.points,
+          ...(toBranch ? [[...toBranch.points].reverse()] : []),
+        ].map((points) => ({
+          kind: "polyline",
+          points,
+          style,
+          manualPointIndexes: [],
+        }));
+        const geometry: CableRouteGeometry =
+          segments.length === 1
+            ? segments[0]!
+            : { kind: "segmented", segments };
+        return {
+          id: pending.id,
+          points: [
+            ...fromBranch.points,
+            ...(toBranch ? [...toBranch.points].reverse() : []),
+          ],
+          manualPointIndexes: [],
+          geometry,
+          continuations,
+          path: renderCableGeometry(geometry),
+        };
+      }
+      const manualPointIndexes = pending.to
+        ? pending.manualPoints.map((_, index) => index + 1)
+        : [];
+      const direct = directCurve(pending, context);
+      const curve = style === "smooth" ? direct : null;
+      const points =
+        curve && pending.to
+          ? [pending.from, pending.to]
+          : pending.to && pending.manualPoints.length
+            ? [pending.from, ...pending.manualPoints, pending.to]
+            : direct && pending.to
+              ? compactRoutePoints([pending.from, { x: pending.from.x, y: pending.to.y }, pending.to])
+              : automaticRoutePoints(pending, context, allocator);
+      const geometry: CableRouteGeometry = curve ?? {
+        kind: "polyline",
+        points,
+        style,
+        manualPointIndexes,
+      };
+      return {
+        id: pending.id,
+        points,
+        manualPointIndexes,
+        geometry,
+        continuations,
+        path: renderCableGeometry(geometry),
+      };
+    });
+}
+
+function planPendingRoutes(
+  pendingRoutes: PendingCableRoute[],
+  context: RoutePlanningContext,
+  style: RackStudioCableRouteStyle,
+): RackStudioCableRoute[] {
+  const routes = new Map(
+    pendingRoutes.map((pending) => [pending.route.link.id, pending.route]),
+  );
+  return planPhysicalCableRoutes(
+    pendingRoutes.map((pending) => ({
+      id: pending.route.link.id,
+      from: pending.from,
+      to: pending.to,
+      routeMode: cableRouteMode(pending.route.link),
+      guidePoints: pending.guidePoints,
+      guideIncomplete: pending.guideIncomplete,
+      manualPoints: cableRouteMode(pending.route.link) === "manual" ? pending.manualPoints : [],
+      hiddenEndpoint: pending.hiddenEndpoint,
+      allowContinuation: cableRouteMode(pending.route.link) !== "manual" || !pending.route.link.routeWaypoints?.length,
+      allowDirect:
+        !pending.route.handoff,
+    })),
+    context,
+    style,
+  ).map(({ id, ...geometry }) => ({ ...routes.get(id)!, ...geometry }));
 }
 
 export function buildRackStudioCableRoutes(input: {
@@ -214,6 +1128,7 @@ export function buildRackStudioCableRoutes(input: {
   ports: Port[];
   links: PortLink[];
   category?: PhysicalCableCategory | "all";
+  style?: RackStudioCableRouteStyle;
   scene?: RackStudioScene;
 }) {
   if (!input.room) return [];
@@ -247,6 +1162,7 @@ export function buildRackStudioCableRoutes(input: {
             roomId: anchor.roomId,
             rackId: anchor.rackId,
             face: anchor.physicalFace,
+            rackFace: anchor.rackFace,
             x: anchor.x,
             y: anchor.y,
           }
@@ -259,8 +1175,8 @@ export function buildRackStudioCableRoutes(input: {
     const device = deviceById.get(port.deviceId);
     if (!device) return null;
     return (
-      device.roomId ??
       (device.rackId ? rackById.get(device.rackId)?.roomId : null) ??
+      device.roomId ??
       null
     );
   };
@@ -272,13 +1188,19 @@ export function buildRackStudioCableRoutes(input: {
     return rackFaceForPhysicalFace(device, physicalFace);
   };
 
-  const routes: RackStudioCableRoute[] = [];
-  for (const link of input.links) {
+  const pendingRoutes: PendingCableRoute[] = [];
+  for (const link of [...input.links].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  )) {
     if (link.visible === false) continue;
     const fromPort = portById.get(link.fromPortId);
     const toPort = portById.get(link.toPortId);
     const category = cableCategoryForPorts(fromPort, toPort);
-    if (input.category && input.category !== "all" && category !== input.category) {
+    if (
+      input.category &&
+      input.category !== "all" &&
+      category !== input.category
+    ) {
       continue;
     }
     const from = anchors.get(link.fromPortId) ?? null;
@@ -291,25 +1213,23 @@ export function buildRackStudioCableRoutes(input: {
     const label = link.label || link.cableType || category;
     const color = link.color || defaultCableColor(category);
     const crossRoom = !(fromBelongsToRoom && toBelongsToRoom);
-    let points: Array<{ x: number; y: number }>;
+    let toAnchor: RackStudioCableAnchor | undefined;
+    let fromAnchor: RackStudioCableAnchor;
+    let manualPoints: Array<{ x: number; y: number }> = [];
     let remoteRoomId: string | undefined;
     let handoff: RackStudioCableRoute["handoff"];
     let handoffFace: RackFace | undefined;
 
     if (fromLocal && toLocal && from && to) {
-      const manual = (link.routeWaypoints ?? []).filter(
-        (point) =>
-          point.roomId === input.room!.id &&
-          (input.face === "both" || point.face === input.face),
-      );
-      points =
-        manual.length > 0
-          ? [
-              { x: from.x, y: from.y },
-              ...manual.map((point) => ({ x: point.x, y: point.y })),
-              { x: to.x, y: to.y },
-            ]
-          : orthogonalPath(from, to, link.id, scene.bounds.width);
+      manualPoints = (link.routeWaypoints ?? [])
+        .filter(
+          (point) =>
+            point.roomId === input.room!.id &&
+            (input.face === "both" || point.face === input.face),
+        )
+        .map((point) => ({ x: point.x, y: point.y }));
+      fromAnchor = from;
+      toAnchor = to;
     } else {
       const local = (fromLocal ? from : to)!;
       const remote = fromLocal ? to : from;
@@ -317,42 +1237,206 @@ export function buildRackStudioCableRoutes(input: {
       const remoteBelongsToRoom = fromLocal
         ? toBelongsToRoom
         : fromBelongsToRoom;
-      const exitRight = local.x < scene.bounds.width / 2;
-      const laneOffset = (stableLane(link.id) - 6) * 5;
-      points = [
-        { x: local.x, y: local.y },
-        {
-          x: exitRight ? scene.bounds.width - 4 : 4,
-          y: bound(
-            local.y + laneOffset,
-            6,
-            scene.bounds.height - 6,
-          ),
-        },
-      ];
+      fromAnchor = local;
+      handoffFace = hiddenRackFace(remotePort);
       if (remoteBelongsToRoom) {
         handoff = "hidden-face";
-        handoffFace = hiddenRackFace(remotePort);
       } else {
         handoff = "cross-room";
         remoteRoomId = remote?.roomId ?? portRoomId(remotePort) ?? undefined;
       }
     }
 
-    routes.push({
-      link,
-      category,
-      color,
-      points,
-      path: cablePath(points),
-      label,
-      crossRoom,
-      handoff,
-      handoffFace,
-      remoteRoomId,
+    pendingRoutes.push({
+      ...resolveCableGuidePoints({ link, equipment: scene.equipment, devices: input.devices, roomId: input.room.id,
+        faces: input.face === "both" ? ["front", "rear"] : [input.face], reverse: fromAnchor.portId !== link.fromPortId }),
+      from: fromAnchor,
+      to: toAnchor,
+      manualPoints,
+      hiddenEndpoint:
+        handoff && handoffFace
+          ? {
+              portId: fromLocal ? link.toPortId : link.fromPortId,
+              rackFace: handoffFace,
+            }
+          : undefined,
+      route: {
+        link,
+        category,
+        color,
+        label,
+        crossRoom,
+        handoff,
+        handoffFace,
+        remoteRoomId,
+      },
     });
   }
-  return routes;
+  const rackRects = input.racks.map((rack, index) => {
+    const canvas = rackCanvasState(rack, index);
+    return {
+      id: rack.id,
+      unitHeight: 188 / rack.totalU,
+      rect: {
+        x: canvas.x ?? 0,
+        y: canvas.y ?? 0,
+        width: RACK_STUDIO_RACK_WIDTH,
+        height: RACK_STUDIO_RACK_HEIGHT,
+      },
+    };
+  });
+  return planPendingRoutes(
+    pendingRoutes,
+    {
+      width: scene.bounds.width,
+      height: scene.bounds.height,
+      racks: rackRects,
+      obstacles: [
+        ...rackRects.map((rack) => ({
+          id: `rack:${rack.id}`,
+          rackId: rack.id,
+          rect: rack.rect,
+        })),
+        ...scene.equipment.map((item) => ({
+          id: item.device.id,
+          rackId: item.rackId,
+          face: item.rackFace,
+          parentDeviceId: item.device.parentDeviceId,
+          rect: item.rect,
+        })),
+      ],
+    },
+    input.style ?? "smooth",
+  );
+}
+
+export function buildRackElevationCableRoutes(input: {
+  rack: Rack;
+  racks?: Rack[];
+  face: RackFace;
+  devices: Device[];
+  layouts: DevicePhysicalLayout[];
+  ports: Port[];
+  links: PortLink[];
+  category?: PhysicalCableCategory | "all";
+  style?: RackStudioCableRouteStyle;
+  width?: number;
+  unitHeight?: number;
+}) {
+  const width = input.width ?? 1000;
+  const scene = buildRackElevationScene({
+    rack: input.rack,
+    rackFace: input.face,
+    devices: input.devices,
+    layouts: input.layouts,
+    ports: input.ports,
+    width,
+    unitHeight: input.unitHeight,
+  });
+  const anchorByPort = new Map(
+    scene.portAnchors.map((anchor) => [
+      anchor.portId,
+      {
+        portId: anchor.portId,
+        deviceId: anchor.deviceId,
+        roomId: anchor.roomId,
+        rackId: anchor.rackId,
+        face: anchor.physicalFace,
+        rackFace: anchor.rackFace,
+        x: anchor.x,
+        y: anchor.y,
+      } satisfies RackStudioCableAnchor,
+    ]),
+  );
+  const portById = new Map(input.ports.map((port) => [port.id, port]));
+  const deviceById = new Map(
+    input.devices.map((device) => [device.id, device]),
+  );
+  const pendingRoutes: PendingCableRoute[] = [];
+  for (const link of [...input.links].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  )) {
+    if (link.visible === false) continue;
+    const fromPort = portById.get(link.fromPortId);
+    const toPort = portById.get(link.toPortId);
+    const category = cableCategoryForPorts(fromPort, toPort);
+    if (
+      input.category &&
+      input.category !== "all" &&
+      input.category !== category
+    ) {
+      continue;
+    }
+    const from = anchorByPort.get(link.fromPortId);
+    const to = anchorByPort.get(link.toPortId);
+    if (!from && !to) continue;
+    const local = (from ?? to)!;
+    const remotePort = from ? toPort : fromPort;
+    const remoteDevice = remotePort
+      ? deviceById.get(remotePort.deviceId)
+      : undefined;
+    const remoteFace = remoteDevice && remotePort
+      ? rackFaceForPhysicalFace(remoteDevice, remotePort.face === "rear" ? "rear" : "front")
+      : remotePort?.face === "rear" ? "rear" : "front";
+    const handoffFace = (!from || !to) && remoteDevice?.rackId === input.rack.id ? remoteFace : undefined;
+    pendingRoutes.push({
+      ...resolveCableGuidePoints({ link, equipment: scene.equipment, devices: input.devices, roomId: input.rack.roomId ?? null,
+        faces: [input.face], reverse: local.portId !== link.fromPortId }),
+      from: from ?? local,
+      to: from && to ? to : undefined,
+      manualPoints: projectCableWaypoints(link, input.racks ?? [input.rack], [{ rackId: input.rack.id, face: input.face,
+        rect: { x: 0, y: scene.rackOffsetY + 8, width, height: input.rack.totalU * (input.unitHeight ?? 42) } }], input.rack.roomId ?? null),
+      hiddenEndpoint:
+        (!from || !to) && remotePort
+          ? { portId: remotePort.id, rackFace: remoteFace }
+          : undefined,
+      route: {
+        link,
+        category,
+        color: link.color || defaultCableColor(category),
+        label: link.label || link.cableType || category,
+        crossRoom: Boolean((!from || !to) && !handoffFace),
+        handoff:
+          !from || !to
+            ? handoffFace
+              ? "hidden-face"
+              : "cross-room"
+            : undefined,
+        handoffFace,
+      },
+    });
+  }
+  const rackRect = {
+    x: 0,
+    y: scene.rackOffsetY,
+    width,
+    height: scene.height - scene.rackOffsetY,
+  };
+  return {
+    scene,
+    routes: planPendingRoutes(
+      pendingRoutes,
+      {
+        width,
+        height: scene.height,
+        racks: [
+          {
+            id: input.rack.id,
+            rect: rackRect,
+            unitHeight: input.unitHeight ?? 42,
+          },
+        ],
+        obstacles: scene.equipment.map((item) => ({
+          id: item.device.id,
+          rackId: item.rackId,
+          face: item.rackFace,
+          parentDeviceId: item.device.parentDeviceId,
+          rect: item.rect,
+        })),
+      },
+      input.style ?? "smooth",
+    ),
+  };
 }
 
 export function nextManualWaypoint(input: {
@@ -371,7 +1455,15 @@ export function nextManualWaypoint(input: {
     id: `route-${input.link.id}-${index}`,
     roomId: input.roomId,
     face: input.face,
-    x: bound(input.x ?? RACK_STUDIO_CANVAS_WIDTH / 2, 0, RACK_STUDIO_CANVAS_WIDTH),
-    y: bound(input.y ?? RACK_STUDIO_CANVAS_HEIGHT / 2, 0, RACK_STUDIO_CANVAS_HEIGHT),
+    x: bound(
+      input.x ?? RACK_STUDIO_CANVAS_WIDTH / 2,
+      0,
+      RACK_STUDIO_CANVAS_WIDTH,
+    ),
+    y: bound(
+      input.y ?? RACK_STUDIO_CANVAS_HEIGHT / 2,
+      0,
+      RACK_STUDIO_CANVAS_HEIGHT,
+    ),
   };
 }

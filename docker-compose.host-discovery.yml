@@ -23,6 +23,7 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-0}
       TRUSTED_HOSTS: ${TRUSTED_HOSTS:-}
       TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+      MCP_ENABLED: ${MCP_ENABLED:-0}
       RACKPAD_RATE_LIMIT_DISABLED: ${RACKPAD_RATE_LIMIT_DISABLED:-0}
       RACKPAD_RATE_LIMIT_MAX: ${RACKPAD_RATE_LIMIT_MAX:-600}
       RACKPAD_RATE_LIMIT_WINDOW: ${RACKPAD_RATE_LIMIT_WINDOW:-1 minute}
@@ -54,7 +55,7 @@ services:
       DISCOVERY_SCAN_MAX_QUEUED: ${DISCOVERY_SCAN_MAX_QUEUED:-32}
       RACKPAD_SECRET_KEY: ${RACKPAD_SECRET_KEY:-}
       SNMP_INVENTORY_SYNC: ${SNMP_INVENTORY_SYNC:-0}
-      SNMP_TRAP_ENABLED: ${SNMP_TRAP_ENABLED:-1}
+      SNMP_TRAP_ENABLED: ${SNMP_TRAP_ENABLED:-0}
       SNMP_TRAP_PORT: ${SNMP_TRAP_PORT:-1162}
       SNMP_TRAP_BIND: ${SNMP_TRAP_BIND:-0.0.0.0}
     volumes:
@@ -70,7 +71,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:' + (process.env.PORT || '3000') + '/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))",
+          "const configuredPort = Number(process.env.PORT); const port = Number.isSafeInteger(configuredPort) && configuredPort > 0 ? configuredPort : 3000; fetch('http://127.0.0.1:' + port + '/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))",
         ]
       interval: 30s
       timeout: 5s

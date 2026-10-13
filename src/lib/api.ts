@@ -5,6 +5,7 @@ import type {
   AuditEntry,
   AuthSession,
   Device,
+  DeviceStackMember,
   DeviceImage,
   DevicePlacement,
   DeviceService,
@@ -103,6 +104,33 @@ export class ApiError extends Error {
 }
 
 export type DevicePatch = Nullable<Omit<Device, "id" | "labId">>;
+
+export interface McpTokenRecord {
+  id: string;
+  name: string;
+  capability: "read" | "write";
+  labIds: string[];
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+}
+
+export interface McpProposalRecord {
+  id: string;
+  labId: string;
+  createdAt: string;
+  expiresAt: string;
+  reviewLink: string;
+  summary: {
+    labId: string;
+    racks: Array<{ id: string; name: string }>;
+    devices: Array<{ id: string; hostname: string; placement: string }>;
+    ports: Array<{ id: string; deviceId: string; name: string }>;
+    connections: Array<{ id: string; fromPortId: string; toPortId: string }>;
+    warnings: string[];
+  };
+  batch?: unknown;
+}
 
 export interface NetboxDeviceTypeImportPreview {
   parsed: {
@@ -226,6 +254,8 @@ export type PortLinkBulkPatch = Nullable<
     | "label"
     | "visible"
     | "routeWaypoints"
+    | "routeMode"
+    | "routeGuides"
   >
 >;
 export type PortLinkCreate = Omit<PortLink, "id"> & {
@@ -442,8 +472,7 @@ async function request<T>(
   if (!res.ok) {
     let message = `Request failed: ${res.status}`;
     let errorBody:
-      | { error?: string; code?: string; [key: string]: unknown }
-      | undefined;
+      { error?: string; code?: string; [key: string]: unknown } | undefined;
     try {
       errorBody = (await res.json()) as {
         error?: string;
@@ -506,6 +535,24 @@ async function requestBlob(
 }
 
 export const api = {
+  listMcpTokens() {
+    return request<McpTokenRecord[]>("/mcp-tokens");
+  },
+  createMcpToken(input: { name: string; capability: "read" | "write"; labIds: string[]; expiresInDays: number }) {
+    return request<McpTokenRecord & { token: string }>("/mcp-tokens", { method: "POST", body: JSON.stringify(input) });
+  },
+  revokeMcpToken(id: string) {
+    return request<void>(`/mcp-tokens/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  listMcpProposals() {
+    return request<McpProposalRecord[]>("/mcp-proposals");
+  },
+  getMcpProposal(id: string) {
+    return request<McpProposalRecord>(`/mcp-proposals/${encodeURIComponent(id)}`);
+  },
+  applyMcpProposal(id: string) {
+    return request<{ summary: McpProposalRecord["summary"] }>(`/mcp-proposals/${encodeURIComponent(id)}/apply`, { method: "POST" });
+  },
   getAuthStatus() {
     return request<AuthStatus>("/auth/status");
   },
@@ -901,6 +948,12 @@ export const api = {
     );
   },
 
+  clearHardwareTemplateDefault(deviceType: string) {
+    return request<void>(`/hardware-templates/defaults/${deviceType}`, {
+      method: "DELETE",
+    });
+  },
+
   getPhysicalLayouts(params?: { labId?: string; deviceId?: string }) {
     return request<DevicePhysicalLayout[]>(
       "/physical-layouts",
@@ -1037,6 +1090,39 @@ export const api = {
     });
   },
 
+  getStackMembers(id: string) {
+    return request<DeviceStackMember[]>(`/devices/${id}/stack-members`);
+  },
+  createStackMember(
+    id: string,
+    body: Omit<DeviceStackMember, "id" | "deviceId" | "position">,
+  ) {
+    return request<DeviceStackMember>(`/devices/${id}/stack-members`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  updateStackMember(
+    id: string,
+    memberId: string,
+    body: Partial<DeviceStackMember>,
+  ) {
+    return request<DeviceStackMember>(
+      `/devices/${id}/stack-members/${memberId}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    );
+  },
+  deleteStackMember(id: string, memberId: string) {
+    return request<void>(`/devices/${id}/stack-members/${memberId}`, {
+      method: "DELETE",
+    });
+  },
+  reorderStackMembers(id: string, memberIds: string[]) {
+    return request<DeviceStackMember[]>(`/devices/${id}/stack-members/order`, {
+      method: "PUT",
+      body: JSON.stringify({ memberIds }),
+    });
+  },
   getDevice(id: string) {
     return request<Device>(`/devices/${id}`);
   },
@@ -1628,6 +1714,7 @@ export const api = {
   },
 
   discoverSnmpInterfaces(body: {
+    monitorId?: string;
     deviceId: string;
     target?: string;
     port?: number;
@@ -1647,6 +1734,7 @@ export const api = {
   },
 
   importSnmpInterfaceMonitors(body: {
+    monitorId?: string;
     deviceId: string;
     target?: string;
     port?: number;

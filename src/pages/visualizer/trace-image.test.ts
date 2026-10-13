@@ -294,8 +294,11 @@ test("trace image groups a patch-panel pass-through into one device card", () =>
   ];
   const ports = [
     port("source_port", "source", "eth0"),
-    port("patch_front", "patch", "01", { face: "front" }),
-    port("patch_rear", "patch", "01", { face: "rear" }),
+    port("patch_front", "patch", "Jack 01", { face: "front", position: 1 }),
+    port("patch_rear", "patch", "  jack 01  ", {
+      face: "rear",
+      position: 99,
+    }),
     port("target_port", "target", "eth0"),
   ];
   const model = buildModel({
@@ -329,8 +332,8 @@ test("trace image groups a patch-panel pass-through into one device card", () =>
 
   const image = buildTraceImageSvg(model, result, labels, "light");
   assert.equal((image.svg.match(/>pp-01</g) ?? []).length, 1);
-  assert.match(image.svg, /01 \(Front\)/);
-  assert.match(image.svg, /01 \(Rear\)/);
+  assert.match(image.svg, /Jack 01 \(Front\)/);
+  assert.match(image.svg, /jack 01\s+\(Rear\)/);
   assert.match(image.svg, /Internal pass-through/);
   assert.match(image.svg, /3 hops · Length: 7m/);
   assert.ok(image.height > 800);

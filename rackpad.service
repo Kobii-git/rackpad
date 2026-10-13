@@ -1,3 +1,6 @@
+# Generic native-Node example for a manually built installation.
+# Not the managed Proxmox LXC unit: use deploy/proxmox for that deployment.
+# Configure secrets in a protected systemd EnvironmentFile before enabling integrations.
 [Unit]
 Description=Rackpad - homelab infrastructure management
 After=network.target

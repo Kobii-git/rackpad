@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import net from 'node:net'
 import { db } from '../db.js'
 import { sendMonitorTransitionAlert } from './alerts.js'
-import { requestPinnedUrl } from './net-guard.js'
+import { requestPinnedUrl, resolveRoutableHost } from './net-guard.js'
 import { snmpGet, SNMP_VERSIONS, type SnmpVersion } from './snmp.js'
 import { resolveMonitorSnmpSession } from './snmp-session.js'
 import { ValidationError } from './validation.js'
@@ -30,6 +30,7 @@ export interface DeviceMonitor {
   ignoreTlsErrors: boolean
   snmpVersion?: SnmpVersion | null
   snmpCommunity?: string | null
+  hasSnmpCommunity: boolean
   snmpOid?: string | null
   snmpExpectedValue?: string | null
   snmpMatchMode?: SnmpMatchMode | null
@@ -46,6 +47,13 @@ export interface DeviceMonitor {
 }
 
 let intervalHandle: NodeJS.Timeout | null = null
+let spawnProbe = spawn
+let connectProbe = net.connect
+
+export function setProbeTransportsForTests(transports: { spawn?: typeof spawn; connect?: typeof net.connect } | null) {
+  spawnProbe = transports?.spawn ?? spawn
+  connectProbe = transports?.connect ?? net.connect
+}
 
 export function monitoringOperationalStatus() {
   const enabled = db.prepare("SELECT COUNT(*) AS count FROM deviceMonitors WHERE enabled = 1 AND type != 'none'").get() as { count: number }
@@ -64,7 +72,8 @@ export function parseMonitor(row: Record<string, unknown>): DeviceMonitor {
     path: row.path ? String(row.path) : null,
     ignoreTlsErrors: Number(row.ignoreTlsErrors ?? 0) === 1,
     snmpVersion: row.snmpVersion ? String(row.snmpVersion) as SnmpVersion : null,
-    snmpCommunity: row.snmpCommunity ? String(row.snmpCommunity) : null,
+    snmpCommunity: null,
+    hasSnmpCommunity: Boolean(row.snmpCommunityEnc),
     snmpOid: row.snmpOid ? String(row.snmpOid) : null,
     snmpExpectedValue: row.snmpExpectedValue ? String(row.snmpExpectedValue) : null,
     snmpMatchMode: row.snmpMatchMode
@@ -295,11 +304,12 @@ async function executeCheck(monitor: DeviceMonitor) {
   }
 }
 
-export function runIcmpProbe(host: string): Promise<MonitorResult> {
-  const { command, args } = getPingCommand(host)
+export async function runIcmpProbe(host: string): Promise<MonitorResult> {
+  const resolved = await resolveRoutableHost(host)
+  const { command, args } = getPingCommand(resolved.address)
 
   return new Promise((resolve) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawnProbe(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''
     let stderr = ''
     let settled = false
@@ -320,10 +330,10 @@ export function runIcmpProbe(host: string): Promise<MonitorResult> {
     }, 6000)
 
     child.stdout.on('data', (chunk: Buffer | string) => {
-      stdout += chunk.toString()
+      stdout = (stdout + chunk.toString()).slice(-8192)
     })
     child.stderr.on('data', (chunk: Buffer | string) => {
-      stderr += chunk.toString()
+      stderr = (stderr + chunk.toString()).slice(-8192)
     })
 
     child.once('error', (error: NodeJS.ErrnoException) => {
@@ -357,9 +367,10 @@ export function runIcmpProbe(host: string): Promise<MonitorResult> {
   })
 }
 
-function tcpCheck(host: string, port: number) {
+async function tcpCheck(host: string, port: number) {
+  const resolved = await resolveRoutableHost(host)
   return new Promise<{ result: 'online' | 'offline'; message: string }>((resolve, reject) => {
-    const socket = net.connect({ host, port })
+    const socket = connectProbe({ host: resolved.address, family: resolved.family, port })
     const timeout = setTimeout(() => {
       socket.destroy()
       resolve({
@@ -370,7 +381,7 @@ function tcpCheck(host: string, port: number) {
 
     socket.once('connect', () => {
       clearTimeout(timeout)
-      socket.end()
+      socket.destroy()
       resolve({
         result: 'online',
         message: `TCP ${host}:${port} reachable.`,
@@ -484,11 +495,12 @@ function syncMonitorPortState(
 }
 
 function getPingCommand(host: string) {
+  const ipv6 = net.isIP(host) === 6
   if (process.platform === 'win32') {
-    return { command: 'ping', args: ['-n', '1', '-w', '5000', host] }
+    return { command: 'ping', args: [...(ipv6 ? ['-6'] : []), '-n', '1', '-w', '5000', host] }
   }
 
-  return { command: 'ping', args: ['-c', '1', '-W', '5', host] }
+  return { command: ipv6 && process.platform === 'darwin' ? 'ping6' : 'ping', args: [...(ipv6 && process.platform !== 'darwin' ? ['-6'] : []), '-c', '1', '-W', '5', host] }
 }
 
 function summarizePingFailure(host: string, stdout: string, stderr: string) {

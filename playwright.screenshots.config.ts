@@ -21,6 +21,10 @@ export default defineConfig({
     trace: "retain-on-failure",
     launchOptions: {
       args: [
+        // Stabilize rounded raster edges without --deterministic-mode: on Linux
+        // its manual frame control stalls settlePage's requestAnimationFrame.
+        "--disable-skia-runtime-opts",
+        "--disable-partial-raster",
         "--hide-scrollbars",
         "--force-color-profile=srgb",
         "--disable-gpu",

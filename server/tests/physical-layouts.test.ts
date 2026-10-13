@@ -5,6 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import { after, afterEach, beforeEach, test } from "node:test";
 import Database from "better-sqlite3";
+import { createStarterTemplate,
+  createHardwareModule,
+  updateModulePosition,
+} from "../../src/lib/hardware-template-builder.ts";
 
 const tempDir = mkdtempSync(
   path.join(os.tmpdir(), "rackpad-physical-layouts-"),
@@ -15,7 +19,8 @@ process.env.OIDC_ENABLED = "0";
 process.env.RACKPAD_SECRET_KEY = "rackpad-physical-layout-test-secret";
 
 const { createApp } = await import("../app.js");
-const { CURRENT_SCHEMA_VERSION, db } = await import("../db.js");
+const { CURRENT_SCHEMA_VERSION, db, ensurePatchPanelPassThroughPorts } =
+  await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
 
 type AppInstance = Awaited<ReturnType<typeof createApp>>;
@@ -277,11 +282,7 @@ test("physical layout reads and previews never persist compatibility fallbacks",
     headers: authHeaders(adminToken),
     payload: { templateId: "generic-auto-v1" },
   });
-  assert.equal(
-    stalePreviewResponse.statusCode,
-    200,
-    stalePreviewResponse.body,
-  );
+  assert.equal(stalePreviewResponse.statusCode, 200, stalePreviewResponse.body);
   assert.deepEqual(
     {
       layouts: db
@@ -304,7 +305,11 @@ test("approved physical ports follow all existing canonical port positions", asy
     headers: authHeaders(adminToken),
     payload: template,
   });
-  assert.equal(createTemplateResponse.statusCode, 201, createTemplateResponse.body);
+  assert.equal(
+    createTemplateResponse.statusCode,
+    201,
+    createTemplateResponse.body,
+  );
   const device = await createDevice(adminToken, "logical-port-ordering");
   const logicalPort = await createPort(
     adminToken,
@@ -336,7 +341,9 @@ test("approved physical ports follow all existing canonical port positions", asy
   assert.equal(applyResponse.statusCode, 200, applyResponse.body);
   assert.deepEqual(
     db
-      .prepare("SELECT id, position FROM ports WHERE deviceId = ? ORDER BY position")
+      .prepare(
+        "SELECT id, position FROM ports WHERE deviceId = ? ORDER BY position",
+      )
       .all(device.id),
     [
       { id: logicalPort.id, position: 1 },
@@ -348,6 +355,127 @@ test("approved physical ports follow all existing canonical port positions", asy
   );
 });
 
+test("24-port patch templates bind both faces without unmapped slots", async () => {
+  const adminToken = await bootstrapAdmin();
+  const customTypeResponse = await app.inject({
+    method: "POST",
+    url: "/api/device-types",
+    headers: authHeaders(adminToken),
+    payload: {
+      id: "keystone_patch",
+      label: "Keystone patch panel",
+      parentType: "patch_panel",
+    },
+  });
+  assert.equal(customTypeResponse.statusCode, 201, customTypeResponse.body);
+
+  const template = createStarterTemplate(
+    "patch-panel",
+    "keystone-patch-24",
+    "Keystone patch 24",
+  );
+  template.deviceTypes = ["keystone_patch"];
+  const createTemplateResponse = await app.inject({
+    method: "POST",
+    url: "/api/hardware-templates",
+    headers: authHeaders(adminToken),
+    payload: template,
+  });
+  assert.equal(
+    createTemplateResponse.statusCode,
+    201,
+    createTemplateResponse.body,
+  );
+
+  const deviceResponse = await app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers: authHeaders(adminToken),
+    payload: {
+      labId: "lab_home",
+      hostname: "keystone-patch-01",
+      deviceType: "keystone_patch",
+      status: "online",
+      placement: "room",
+      portTemplateId: "patch-panel-24",
+    },
+  });
+  assert.equal(deviceResponse.statusCode, 201, deviceResponse.body);
+  const device = json(deviceResponse) as { id: string };
+
+  const previewResponse = await app.inject({
+    method: "POST",
+    url: `/api/physical-layouts/${device.id}/preview`,
+    headers: authHeaders(adminToken),
+    payload: { templateId: template.id },
+  });
+  assert.equal(previewResponse.statusCode, 200, previewResponse.body);
+  const preview = json(previewResponse) as {
+    bindings: Array<{ portId: string; slotId: string }>;
+    unmappedPortIds: string[];
+    portsToCreate: Array<{ slotId: string }>;
+    snapshot: {
+      portSlots: Array<{ id: string; face: "front" | "rear" }>;
+    };
+  };
+  assert.equal(preview.bindings.length, 48);
+  assert.deepEqual(preview.unmappedPortIds, []);
+  assert.deepEqual(preview.portsToCreate, []);
+  assert.equal(
+    preview.snapshot.portSlots.filter((slot) => slot.face === "front").length,
+    24,
+  );
+  assert.equal(
+    preview.snapshot.portSlots.filter((slot) => slot.face === "rear").length,
+    24,
+  );
+
+  const applyResponse = await app.inject({
+    method: "POST",
+    url: `/api/physical-layouts/${device.id}/apply`,
+    headers: authHeaders(adminToken),
+    payload: preview,
+  });
+  assert.equal(applyResponse.statusCode, 200, applyResponse.body);
+  assert.equal(json(applyResponse).status, "accurate");
+  assert.equal(json(applyResponse).bindings.length, 48);
+});
+
+test("pass-through normalization includes custom patch-panel descendants", async () => {
+  const adminToken = await bootstrapAdmin();
+  const customTypeResponse = await app.inject({
+    method: "POST",
+    url: "/api/device-types",
+    headers: authHeaders(adminToken),
+    payload: {
+      id: "fiber_patch",
+      label: "Fiber patch panel",
+      parentType: "patch_panel",
+    },
+  });
+  assert.equal(customTypeResponse.statusCode, 201, customTypeResponse.body);
+  const device = await createDevice(
+    adminToken,
+    "fiber-patch-01",
+    "fiber_patch",
+  );
+  await createPort(adminToken, device.id, " LC 01 ", "front", "fiber");
+
+  assert.equal(ensurePatchPanelPassThroughPorts(), 1);
+  assert.deepEqual(
+    db
+      .prepare(
+        "SELECT name, kind, face FROM ports WHERE deviceId = ? ORDER BY face",
+      )
+      .all(device.id),
+    [
+      { name: "LC 01", kind: "fiber", face: "front" },
+      { name: "LC 01", kind: "fiber", face: "rear" },
+    ],
+  );
+  assert.equal(ensurePatchPanelPassThroughPorts(), 0);
+});
+
 test("original six-port templates retain exact slots after their source template is deleted", async () => {
   const adminToken = await bootstrapAdmin();
   const viewerToken = await createUserAndLogin(adminToken, {
@@ -357,6 +485,8 @@ test("original six-port templates retain exact slots after their source template
     labRole: "viewer",
   });
   const template = sixPortServerTemplate();
+  template.portSlots[0].color = "#123456";
+  template.rear.elements[0].color = "#654321";
 
   const viewerCreate = await app.inject({
     method: "POST",
@@ -559,12 +689,156 @@ test("original six-port templates retain exact slots after their source template
     [90, 150, 430, 490, 780, 840],
   );
   assert.equal(JSON.parse(restoredLayout.bindings).length, 6);
+  assert.equal(JSON.parse(restoredLayout.snapshot).portSlots[0].color, "#123456");
+  assert.equal(JSON.parse(restoredLayout.snapshot).faces.rear.elements[0].color, "#654321");
   assert.equal(
     db
       .prepare("SELECT id FROM hardwareTemplates WHERE id = ?")
       .get(template.id),
     undefined,
   );
+});
+
+test("hardware templates and defaults follow the complete device type lineage", async () => {
+  const adminToken = await bootstrapAdmin();
+  for (const definition of [
+    { id: "mini_server", label: "Mini server", parentType: "server" },
+    {
+      id: "custom_enclosure",
+      label: "Custom enclosure",
+      parentType: "storage_enclosure",
+    },
+  ]) {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/device-types",
+      headers: authHeaders(adminToken),
+      payload: definition,
+    });
+    assert.equal(response.statusCode, 201, response.body);
+  }
+
+  const parentTemplate = sixPortServerTemplate();
+  const childTemplate = {
+    ...sixPortServerTemplate(),
+    id: "mini-server-override-v1",
+    name: "Mini server override",
+  };
+  const enclosureTemplate = {
+    ...sixPortServerTemplate(),
+    id: "storage-enclosure-v1",
+    name: "Storage enclosure",
+    category: "storage",
+    deviceTypes: ["storage_enclosure"],
+  };
+  for (const template of [parentTemplate, childTemplate, enclosureTemplate]) {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/hardware-templates",
+      headers: authHeaders(adminToken),
+      payload: template,
+    });
+    assert.equal(response.statusCode, 201, response.body);
+  }
+
+  const miniServer = await createDevice(
+    adminToken,
+    "inherited-template-server",
+    "mini_server",
+  );
+  const compatiblePreview = await app.inject({
+    method: "POST",
+    url: `/api/physical-layouts/${miniServer.id}/preview`,
+    headers: authHeaders(adminToken),
+    payload: { templateId: parentTemplate.id },
+  });
+  assert.equal(compatiblePreview.statusCode, 200, compatiblePreview.body);
+  const incompatiblePreview = await app.inject({
+    method: "POST",
+    url: `/api/physical-layouts/${miniServer.id}/preview`,
+    headers: authHeaders(adminToken),
+    payload: { templateId: enclosureTemplate.id },
+  });
+  assert.equal(incompatiblePreview.statusCode, 400, incompatiblePreview.body);
+
+  const parentDefault = await app.inject({
+    method: "PUT",
+    url: "/api/hardware-templates/defaults/server",
+    headers: authHeaders(adminToken),
+    payload: { templateId: parentTemplate.id },
+  });
+  assert.equal(parentDefault.statusCode, 200, parentDefault.body);
+  const inheritedDevice = await createDevice(
+    adminToken,
+    "parent-default-server",
+    "mini_server",
+  );
+  const inheritedLayout = await app.inject({
+    method: "GET",
+    url: `/api/physical-layouts/${inheritedDevice.id}`,
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(inheritedLayout.statusCode, 200, inheritedLayout.body);
+  assert.equal(json(inheritedLayout).sourceTemplateId, parentTemplate.id);
+
+  const childDefault = await app.inject({
+    method: "PUT",
+    url: "/api/hardware-templates/defaults/mini_server",
+    headers: authHeaders(adminToken),
+    payload: { templateId: childTemplate.id },
+  });
+  assert.equal(childDefault.statusCode, 200, childDefault.body);
+  const overriddenDevice = await createDevice(
+    adminToken,
+    "child-default-server",
+    "mini_server",
+  );
+  const overriddenLayout = await app.inject({
+    method: "GET",
+    url: `/api/physical-layouts/${overriddenDevice.id}`,
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(overriddenLayout.statusCode, 200, overriddenLayout.body);
+  assert.equal(json(overriddenLayout).sourceTemplateId, childTemplate.id);
+
+  const resetDefault = await app.inject({
+    method: "DELETE",
+    url: "/api/hardware-templates/defaults/mini_server",
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(resetDefault.statusCode, 204, resetDefault.body);
+  const fallbackDevice = await createDevice(
+    adminToken,
+    "fallback-default-server",
+    "mini_server",
+  );
+  const fallbackLayout = await app.inject({
+    method: "GET",
+    url: `/api/physical-layouts/${fallbackDevice.id}`,
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(fallbackLayout.statusCode, 200, fallbackLayout.body);
+  assert.equal(json(fallbackLayout).sourceTemplateId, parentTemplate.id);
+
+  const enclosureDefault = await app.inject({
+    method: "PUT",
+    url: "/api/hardware-templates/defaults/storage_enclosure",
+    headers: authHeaders(adminToken),
+    payload: { templateId: enclosureTemplate.id },
+  });
+  assert.equal(enclosureDefault.statusCode, 200, enclosureDefault.body);
+  const nestedDevice = await createDevice(
+    adminToken,
+    "nested-default-enclosure",
+    "custom_enclosure",
+  );
+  const nestedLayout = await app.inject({
+    method: "GET",
+    url: `/api/physical-layouts/${nestedDevice.id}`,
+    headers: authHeaders(adminToken),
+  });
+  assert.equal(nestedLayout.statusCode, 200, nestedLayout.body);
+  assert.equal(json(nestedLayout).sourceTemplateId, enclosureTemplate.id);
 });
 
 test("module variants and device-owned custom layouts preserve exact linked-port bindings", async () => {
@@ -871,6 +1145,7 @@ test("schema 45 migration preserves inventory and cabling while creating legacy 
     DROP TABLE devicePhysicalLayouts;
     DROP TABLE hardwareTemplateDefaults;
     DROP TABLE hardwareTemplates;
+    DROP INDEX IF EXISTS idx_devices_rack_mount_kind;
     ALTER TABLE devices DROP COLUMN rackMountKind;
     ALTER TABLE devices DROP COLUMN rackColumn;
     ALTER TABLE devices DROP COLUMN rackColumnSpan;
@@ -885,6 +1160,23 @@ test("schema 45 migration preserves inventory and cabling while creating legacy 
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion SET version = 45, updatedAt = '2026-08-30T00:00:00.000Z' WHERE id = 1;
   `);
   const before = {
@@ -914,7 +1206,8 @@ test("schema 45 migration preserves inventory and cabling while creating legacy 
   );
   assert.deepEqual(
     migrated.prepare("SELECT * FROM ports ORDER BY id").all(),
-    before.ports,
+    before.ports.map((row) => ({ ...(row as Record<string, unknown>), stackMemberId: null,
+    })),
   );
   assert.deepEqual(
     migrated
@@ -991,6 +1284,23 @@ test("schema 46 migration adds nullable shared room-canvas coordinates without c
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion SET version = 46, updatedAt = '2026-08-31T00:00:00.000Z' WHERE id = 1;
   `);
   legacy.close();
@@ -1063,11 +1373,30 @@ test("schema 48 migration adds cable inspection defaults without changing invent
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
     SET version = 47, updatedAt = '2026-08-31T00:00:00.000Z'
     WHERE id = 1;
   `);
-  const beforeDevices = legacy.prepare("SELECT * FROM devices ORDER BY id").all();
+  const beforeDevices = legacy
+    .prepare("SELECT * FROM devices ORDER BY id")
+    .all();
   const beforePorts = legacy.prepare("SELECT * FROM ports ORDER BY id").all();
   const beforeLink = legacy
     .prepare("SELECT * FROM portLinks WHERE id = 'link_cable_v47'")
@@ -1082,7 +1411,8 @@ test("schema 48 migration adds cable inspection defaults without changing invent
   );
   assert.deepEqual(
     migrated.prepare("SELECT * FROM ports ORDER BY id").all(),
-    beforePorts,
+    beforePorts.map((row) => ({ ...(row as Record<string, unknown>), stackMemberId: null,
+    })),
   );
   assert.deepEqual(
     migrated
@@ -1100,6 +1430,69 @@ test("schema 48 migration adds cable inspection defaults without changing invent
       )
       .get(),
     { label: null, visible: 1, routeWaypoints: "[]" },
+  );
+  assert.equal(
+    (
+      migrated
+        .prepare("SELECT version FROM schemaVersion WHERE id = 1")
+        .get() as { version: number }
+    ).version,
+    CURRENT_SCHEMA_VERSION,
+  );
+  migrated.close();
+});
+
+test("schema 49 migration indexes persisted rack mount kinds without changing devices", () => {
+  const legacyPath = path.join(tempDir, "rack-top-source-v48.db");
+  initializeDatabase(legacyPath);
+  const legacy = new Database(legacyPath);
+  legacy.exec(`
+    INSERT INTO labs (id, name) VALUES ('lab_rack_top_v48', 'Rack top migration');
+    INSERT INTO devices (
+      id, labId, hostname, deviceType, status, placement, rackMountKind
+    ) VALUES (
+      'device_rack_top_v48', 'lab_rack_top_v48', 'rack-top-source',
+      'switch', 'online', 'room', 'loose'
+    );
+    DROP INDEX idx_devices_rack_mount_kind;
+    UPDATE schemaVersion
+    SET version = 48, updatedAt = '2026-09-03T00:00:00.000Z'
+    WHERE id = 1;
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
+  `);
+  const before = legacy
+    .prepare("SELECT * FROM devices WHERE id = 'device_rack_top_v48'")
+    .get();
+  legacy.close();
+
+  initializeDatabase(legacyPath);
+  const migrated = new Database(legacyPath, { readonly: true });
+  assert.deepEqual(
+    migrated
+      .prepare("SELECT * FROM devices WHERE id = 'device_rack_top_v48'")
+      .get(),
+    before,
+  );
+  assert.ok(
+    (migrated.pragma("index_list(devices)") as Array<{ name: string }>).some(
+      (index) => index.name === "idx_devices_rack_mount_kind",
+    ),
   );
   assert.equal(
     (
@@ -1182,7 +1575,7 @@ function moduleServerTemplate() {
   };
 }
 
-function sixPortServerTemplate() {
+function sixPortServerTemplate(): import("../lib/physical-layout.js").HardwareTemplateV1 {
   const face = {
     schemaVersion: 1 as const,
     width: 1000 as const,
@@ -1328,6 +1721,7 @@ function resetDatabase() {
     DELETE FROM racks;
     DELETE FROM rooms;
     DELETE FROM users;
+    DELETE FROM appSettings;
     DELETE FROM labs;
   `);
   setBootstrapState(null);
@@ -1340,3 +1734,76 @@ function authHeaders(token: string) {
 function json(response: { body: string }) {
   return JSON.parse(response.body);
 }
+
+test("guided template structures round-trip through current-schema backup without changing device snapshots", async () => {
+  const token = await bootstrapAdmin();
+  let template = createStarterTemplate(
+    "server-2u",
+    "guided-roundtrip",
+    "Guided roundtrip",
+  );
+  const position = {
+    id: "front-nic",
+    face: "front" as const,
+    x: 100,
+    y: 100,
+    width: 130,
+    height: 112,
+  };
+  template = {
+    ...template,
+    moduleSlots: [position],
+    modules: [
+      createHardwareModule(
+        "guided-nic",
+        "NIC",
+        position.id,
+        "nic",
+        2,
+        position,
+      ),
+    ],
+  };
+  template = updateModulePosition(template, { ...position, x: 300 });
+  template.modules[0].elements[0].color = "#aabbcc";
+  template.modules[0].portSlots[0].color = "#bbccdd";
+  template.modules[0].portGrid = {rows:1,columns:2};
+  const create = await app.inject({
+    method: "POST",
+    url: "/api/hardware-templates",
+    headers: authHeaders(token),
+    payload: template,
+  });
+  assert.equal(create.statusCode, 201, create.body);
+  await createDevice(token, "guided-existing-device");
+  const snapshot = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers: authHeaders(token),
+  });
+  assert.equal(snapshot.statusCode, 200, snapshot.body);
+  assert.equal(json(snapshot).schemaVersion, CURRENT_SCHEMA_VERSION);
+  const before = db
+    .prepare("SELECT * FROM hardwareTemplates WHERE id = ?")
+    .get(template.id);
+  const layoutsBefore = db
+    .prepare("SELECT * FROM devicePhysicalLayouts ORDER BY deviceId")
+    .all();
+  assert.ok(layoutsBefore.length > 0);
+  db.prepare("DELETE FROM hardwareTemplates WHERE id = ?").run(template.id);
+  const restored = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers: authHeaders(token),
+    payload: json(snapshot),
+  });
+  assert.equal(restored.statusCode, 200, restored.body);
+  assert.deepEqual(
+    db.prepare("SELECT * FROM hardwareTemplates WHERE id = ?").get(template.id),
+    before,
+  );
+  assert.deepEqual(
+    db.prepare("SELECT * FROM devicePhysicalLayouts ORDER BY deviceId").all(),
+    layoutsBefore,
+  );
+});

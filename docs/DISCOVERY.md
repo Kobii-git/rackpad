@@ -57,14 +57,17 @@ depends on where Rackpad runs:
 
 - Docker bridge networking may hide local layer-2 data.
 - Docker Desktop, VPNs, and routed VLANs often prevent ARP/MAC collection.
-- Proxmox LXC deployments may need host networking and Linux capabilities for
-  ARP-style tools.
+- Docker-in-Proxmox deployments may need host networking and Linux
+  capabilities for ARP-style tools. The first-party native LXC path instead
+  starts with neighbor-only safe mode and requires an explicit, preflighted
+  advanced-mode opt-in.
 
 If scans find reachable hosts but no MAC addresses, review the deployment
 guides:
 
 - [Discovery deployment](./DISCOVERY_DEPLOYMENT.md)
 - [Docker network discovery](./DOCKER_DISCOVERY.md)
+- [Proxmox native LXC operations](./PROXMOX_NATIVE_LXC.md)
 
 ## Backup and restore
 

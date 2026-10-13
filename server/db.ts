@@ -14,6 +14,7 @@ import {
 } from "./lib/physical-layout.js";
 import { legacyShelfGeometry } from "./lib/legacy-shelf-geometry.js";
 import { CURRENT_SCHEMA_VERSION } from "./schema-version.js";
+import { upgradeLegacySecurityState } from "./lib/security-migration.js";
 
 export { CURRENT_SCHEMA_VERSION } from "./schema-version.js";
 
@@ -1363,6 +1364,122 @@ const SCHEMA_MIGRATIONS = [
       ALTER TABLE portLinks ADD COLUMN routeWaypoints TEXT NOT NULL DEFAULT '[]';
     `,
   },
+  {
+    version: 49,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_devices_rack_mount_kind
+        ON devices (rackId, rackMountKind);
+    `,
+  },
+  {
+    version: 50,
+    sql: `
+      ALTER TABLE deviceMonitors ADD COLUMN snmpCommunityEnc TEXT;
+      ALTER TABLE oidcIdentities ADD COLUMN roleRecheckRequired INTEGER NOT NULL DEFAULT 0 CHECK (roleRecheckRequired IN (0, 1));
+    `,
+    run() {
+      upgradeLegacySecurityState(db);
+    },
+  },
+  {
+    version: 51,
+    sql: `
+      CREATE TABLE deviceStackMembers (
+        id TEXT PRIMARY KEY,
+        deviceId TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL CHECK (position >= 0),
+        name TEXT NOT NULL,
+        manufacturer TEXT, model TEXT, serial TEXT,
+        heightU INTEGER NOT NULL CHECK (heightU BETWEEN 1 AND 20),
+        status TEXT NOT NULL CHECK (status IN ('online','offline','warning','unknown','maintenance','unmanaged')),
+        notes TEXT,
+        UNIQUE (deviceId, position)
+      );
+      CREATE TABLE deviceStackMemberMacs (
+        memberId TEXT NOT NULL REFERENCES deviceStackMembers(id) ON DELETE CASCADE,
+        label TEXT NOT NULL,
+        macAddress TEXT NOT NULL,
+        PRIMARY KEY (memberId, macAddress)
+      );
+      ALTER TABLE ports ADD COLUMN stackMemberId TEXT REFERENCES deviceStackMembers(id) ON DELETE RESTRICT;
+      CREATE INDEX idx_ports_stack_member ON ports(stackMemberId);
+      CREATE TRIGGER ports_stack_owner_insert BEFORE INSERT ON ports
+      WHEN NEW.stackMemberId IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM deviceStackMembers WHERE id = NEW.stackMemberId AND deviceId = NEW.deviceId
+      ) BEGIN SELECT RAISE(ABORT, 'Stack member must belong to the port device.'); END;
+      CREATE TRIGGER ports_stack_owner_update BEFORE UPDATE OF stackMemberId, deviceId ON ports
+      WHEN NEW.stackMemberId IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM deviceStackMembers WHERE id = NEW.stackMemberId AND deviceId = NEW.deviceId
+      ) BEGIN SELECT RAISE(ABORT, 'Stack member must belong to the port device.'); END;
+      CREATE TRIGGER stack_member_device_immutable BEFORE UPDATE OF deviceId ON deviceStackMembers
+      WHEN NEW.deviceId != OLD.deviceId
+      BEGIN SELECT RAISE(ABORT, 'Stack member ownership is immutable.'); END;
+      CREATE TRIGGER stack_device_delete BEFORE DELETE ON devices
+      WHEN EXISTS (SELECT 1 FROM deviceStackMembers WHERE deviceId = OLD.id)
+      BEGIN DELETE FROM ports WHERE deviceId = OLD.id; END;
+      CREATE TRIGGER stack_type_guard BEFORE UPDATE OF deviceType ON devices
+      WHEN NEW.deviceType != OLD.deviceType AND EXISTS (SELECT 1 FROM deviceStackMembers WHERE deviceId = OLD.id)
+      BEGIN SELECT RAISE(ABORT, 'A populated stack cannot change type.'); END;
+      CREATE TRIGGER stack_height_guard BEFORE UPDATE OF heightU ON devices
+      WHEN EXISTS (SELECT 1 FROM deviceStackMembers WHERE deviceId = OLD.id)
+        AND NEW.heightU IS NOT (SELECT SUM(heightU) FROM deviceStackMembers WHERE deviceId = OLD.id)
+      BEGIN SELECT RAISE(ABORT, 'Stack height is derived from its members.'); END;
+    `,
+  },
+  {
+    version: 52,
+    sql: `
+      ALTER TABLE portLinks ADD COLUMN routeMode TEXT NOT NULL DEFAULT 'auto'
+        CHECK (routeMode IN ('auto', 'direct', 'managed', 'manual'));
+      ALTER TABLE portLinks ADD COLUMN routeGuides TEXT NOT NULL DEFAULT '[]'
+        CHECK (json_valid(routeGuides) AND json_type(routeGuides) = 'array');
+      UPDATE portLinks SET routeMode = 'manual' WHERE json_array_length(routeWaypoints) > 0;
+      CREATE TRIGGER cable_guide_device_delete AFTER DELETE ON devices
+      BEGIN
+        UPDATE portLinks SET routeGuides = (
+          SELECT json_group_array(json(value)) FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') != OLD.id
+        ) WHERE EXISTS (SELECT 1 FROM json_each(portLinks.routeGuides) WHERE json_extract(value, '$.deviceId') = OLD.id);
+      END;
+      CREATE TRIGGER cable_guide_device_room AFTER UPDATE OF labId, roomId, rackId ON devices
+      BEGIN
+        UPDATE portLinks SET routeGuides = (
+          SELECT json_group_array(json(value)) FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') != NEW.id
+            OR (NEW.labId IS OLD.labId AND json_extract(value, '$.roomId') IS COALESCE((SELECT roomId FROM racks WHERE id = NEW.rackId), NEW.roomId))
+        ) WHERE EXISTS (SELECT 1 FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') = NEW.id
+            AND (NEW.labId IS NOT OLD.labId OR json_extract(value, '$.roomId') IS NOT COALESCE((SELECT roomId FROM racks WHERE id = NEW.rackId), NEW.roomId)));
+      END;
+      CREATE TRIGGER cable_guide_rack_room AFTER UPDATE OF roomId ON racks
+      WHEN NEW.roomId IS NOT OLD.roomId
+      BEGIN
+        UPDATE portLinks SET routeGuides = (
+          SELECT json_group_array(json(value)) FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') NOT IN (SELECT id FROM devices WHERE rackId = NEW.id)
+        ) WHERE EXISTS (SELECT 1 FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') IN (SELECT id FROM devices WHERE rackId = NEW.id));
+      END;
+    `,
+  },
+  {
+    version: 53,
+    sql: `
+      CREATE TABLE IF NOT EXISTS mcpTokens (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 120),
+        tokenHash TEXT NOT NULL UNIQUE,
+        capability TEXT NOT NULL CHECK (capability IN ('read', 'write')),
+        labIds TEXT NOT NULL CHECK (json_valid(labIds) AND json_type(labIds) = 'array'),
+        createdAt TEXT NOT NULL,
+        expiresAt TEXT NOT NULL,
+        revokedAt TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_mcp_tokens_user ON mcpTokens(userId);
+    `,
+  },
+
 ] as const;
 
 const applySchema = db.transaction(() => {
@@ -1420,21 +1537,60 @@ type PatchPanelPortRow = {
   macAddress: string | null;
 };
 
+function patchPanelDeviceIdsFromStoredLineage() {
+  const parentById = new Map<string, string | null>();
+  const setting = db
+    .prepare("SELECT value FROM appSettings WHERE key = 'deviceTypes'")
+    .get() as { value?: string } | undefined;
+  if (setting?.value) {
+    try {
+      const custom = (JSON.parse(setting.value) as { custom?: unknown }).custom;
+      if (Array.isArray(custom)) {
+        for (const entry of custom) {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+            continue;
+          }
+          const record = entry as Record<string, unknown>;
+          if (typeof record.id !== "string") continue;
+          const id = record.id.trim().toLowerCase();
+          const parent =
+            typeof record.parentType === "string"
+              ? record.parentType.trim().toLowerCase()
+              : null;
+          if (id) parentById.set(id, parent || null);
+        }
+      }
+    } catch {
+      // Invalid settings are ignored by the device-type loader as well.
+    }
+  }
+
+  const includesPatchPanel = (deviceType: string) => {
+    const seen = new Set<string>();
+    let current = deviceType.trim().toLowerCase();
+    while (current && !seen.has(current)) {
+      if (current === "patch_panel") return true;
+      seen.add(current);
+      current = parentById.get(current) ?? "";
+    }
+    return false;
+  };
+
+  return (
+    db.prepare("SELECT id, deviceType FROM devices").all() as Array<{
+      id: string;
+      deviceType: string;
+    }>
+  )
+    .filter((row) => includesPatchPanel(row.deviceType))
+    .map((row) => row.id);
+}
+
 export function ensurePatchPanelPassThroughPorts(deviceIds?: string[]) {
   const targetDeviceIds =
     deviceIds && deviceIds.length > 0
       ? [...new Set(deviceIds)]
-      : (
-          db
-            .prepare(
-              `
-        SELECT id
-        FROM devices
-        WHERE deviceType = 'patch_panel'
-      `,
-            )
-            .all() as Array<{ id: string }>
-        ).map((row) => row.id);
+      : patchPanelDeviceIdsFromStoredLineage();
 
   if (targetDeviceIds.length === 0) return 0;
 

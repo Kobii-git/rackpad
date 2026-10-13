@@ -82,3 +82,36 @@ application/provider issuer path rather than only the IdP root domain.
 
 Turn `OIDC_DEBUG` off again after setup, because it adds extra authentication
 diagnostics to the logs.
+
+
+## Identity verification and login binding
+
+Domain restrictions require the provider to assert `email_verified: true` as a
+boolean. Email-shaped entries in `OIDC_ADMIN_USERS`, `OIDC_EDITOR_USERS`, and
+`OIDC_VIEWER_USERS` match only that verified email claim; a username alias cannot
+satisfy them. Email used as a scalar role claim also requires verification.
+Provider group mappings remain supported. Subject matching is case-sensitive;
+email-shaped identifiers are treated as email, so use a provider group when the
+provider uses an email-shaped subject without a verified email claim.
+
+The authorization callback and final session exchange must finish in the browser
+that started login. A temporary host-only, HttpOnly, SameSite=Lax cookie scoped to
+`/api/auth/oidc` binds both stages; HTTPS deployments set Secure. Authorization state
+expires after ten minutes and completion codes after two minutes. Starting another
+login replaces the unfinished flow. Successful completion removes the cookie and
+issues the normal bearer session; it does not introduce cookie-based application
+sessions. Set `APP_URL` or `OIDC_REDIRECT_URI` to the public HTTPS URL behind a proxy.
+
+## Upgrading existing OIDC accounts
+
+Schema 50 revokes existing OIDC sessions and marks identities for one-time role
+recalculation using the corrected claims at the next successful sign-in. This can
+replace previously assigned manual roles. Before upgrading, configure a trusted
+administrator subject or provider-controlled group and verify local administrator
+recovery access where available. Disabled users remain unable to sign in.
+Subsequent manual role changes keep their usual behavior after that one-time check.
+
+Legacy logical-backup restores also require this role recheck. Current backups
+preserve the marker, and every restore invalidates existing sessions. Keep a
+pre-upgrade database/configuration snapshot for rollback; do not run the previous
+binary against a migrated database.

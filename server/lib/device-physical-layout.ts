@@ -1,5 +1,7 @@
+import { isStackType, listStackMembers } from "./device-stacks.js";
+import { buildStackPhysicalLayout } from "./stack-layout.js";
 import { db, parseRow } from "../db.js";
-import { deviceTypeBase } from "./device-types.js";
+import { deviceTypeBase, deviceTypeLineage } from "./device-types.js";
 import {
   BUILT_IN_HARDWARE_TEMPLATES,
   buildAutoPhysicalLayout,
@@ -60,7 +62,7 @@ export function getPhysicalLayoutPorts(deviceId: string) {
     db
       .prepare(
         `
-          SELECT id, name, position, kind, face, portRole
+          SELECT id, name, position, kind, face, portRole, stackMemberId
           FROM ports
           WHERE deviceId = ?
           ORDER BY position, id
@@ -91,11 +93,17 @@ function resolveInitialLayout(
   ports: PhysicalLayoutPort[],
   fallbackMode: "legacy" | "generic",
 ) {
-  const defaultRow = db
-    .prepare(
-      "SELECT templateId FROM hardwareTemplateDefaults WHERE deviceType = ?",
-    )
-    .get(device.deviceType) as { templateId: string } | undefined;
+  if (isStackType(device.deviceType)) return buildStackPhysicalLayout(device, ports, listStackMembers(device.id));
+  const selectDefault = db.prepare(
+    "SELECT templateId FROM hardwareTemplateDefaults WHERE deviceType = ?",
+  );
+  let defaultRow: { templateId: string } | undefined;
+  for (const deviceType of deviceTypeLineage(device.deviceType)) {
+    defaultRow = selectDefault.get(deviceType) as
+      | { templateId: string }
+      | undefined;
+    if (defaultRow) break;
+  }
   const template = defaultRow
     ? getPhysicalHardwareTemplate(defaultRow.templateId)
     : null;
@@ -140,6 +148,7 @@ export function readDevicePhysicalLayoutRow(
   device: PhysicalLayoutDeviceRow,
   ports: PhysicalLayoutPort[],
 ) {
+  if (isStackType(device.deviceType)) return generatedLayoutRow(device, ports, "generic");
   return (
     (db
       .prepare("SELECT * FROM devicePhysicalLayouts WHERE deviceId = ?")

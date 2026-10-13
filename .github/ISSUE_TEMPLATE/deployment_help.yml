@@ -1,5 +1,5 @@
 name: Deployment help
-description: Docker, reverse proxy, backup, or production setup questions
+description: Docker, Proxmox native LXC, reverse proxy, backup, or production setup questions
 title: "[Deploy]: "
 labels: ["deployment", "question"]
 body:
@@ -14,6 +14,7 @@ body:
       label: How are you running Rackpad?
       options:
         - Docker / docker-compose
+        - Proxmox native LXC
         - Node directly (npm start)
         - Reverse proxy (nginx, Caddy, Traefik, …)
         - Behind auth (Authentik, OAuth2 proxy, …)

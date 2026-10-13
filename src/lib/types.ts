@@ -40,12 +40,7 @@ export type LinkState = "up" | "down" | "disabled" | "unknown";
 export type PortMode = "access" | "trunk";
 export type PortRole = "physical" | "aggregate";
 export type DeviceStatus =
-  | "online"
-  | "offline"
-  | "warning"
-  | "unknown"
-  | "maintenance"
-  | "unmanaged";
+  "online" | "offline" | "warning" | "unknown" | "maintenance" | "unmanaged";
 export type DevicePlacement =
   "rack" | "room" | "wireless" | "virtual" | "shelf";
 export type IpAssignmentType =
@@ -171,7 +166,22 @@ export interface Rack {
   studioY?: number | null;
 }
 
+export interface DeviceStackMember {
+  id: ID;
+  deviceId: ID;
+  position: number;
+  name: string;
+  manufacturer: string | null;
+  model: string | null;
+  serial: string | null;
+  heightU: number;
+  status: DeviceStatus;
+  notes: string | null;
+  macs: Array<{ label: string; macAddress: string }>;
+}
+
 export interface Device {
+  stackMembers?: DeviceStackMember[];
   id: ID;
   labId: ID;
   rackId?: ID;
@@ -201,7 +211,7 @@ export interface Device {
   notes?: string;
   lastSeen?: string;
   snmpCredentialId?: ID | null;
-  rackMountKind?: "direct" | "shelf" | "side" | "loose";
+  rackMountKind?: "direct" | "shelf" | "side" | "rack-top" | "loose";
   rackColumn?: number | null;
   rackColumnSpan?: number | null;
   shelfX?: number | null;
@@ -213,7 +223,7 @@ export interface Device {
 }
 
 export interface RackStudioPlacementState {
-  mountKind: "direct" | "shelf" | "side" | "loose";
+  mountKind: "direct" | "shelf" | "side" | "rack-top" | "loose";
   roomId: ID | null;
   rackId: ID | null;
   parentDeviceId: ID | null;
@@ -278,6 +288,7 @@ export type PhysicalFacePrimitiveV1 =
   | {
       kind: "panel" | "handle" | "vent" | "bay" | "display" | "outlet";
       id: string;
+      color?: string;
       x: number;
       y: number;
       width: number;
@@ -287,6 +298,7 @@ export type PhysicalFacePrimitiveV1 =
   | {
       kind: "screw" | "indicator";
       id: string;
+      color?: string;
       x: number;
       y: number;
       radius: number;
@@ -295,6 +307,7 @@ export type PhysicalFacePrimitiveV1 =
   | {
       kind: "label";
       id: string;
+      color?: string;
       x: number;
       y: number;
       text: string;
@@ -310,6 +323,7 @@ export interface FaceDefinitionV1 {
 
 export interface PhysicalPortSlotV1 {
   id: string;
+  color?: string;
   face: RackFace;
   x: number;
   y: number;
@@ -387,6 +401,7 @@ export interface HardwareTemplateV1 {
 
 export interface HardwareModuleV1 {
   id: string;
+  portGrid?: { rows: number; columns: number };
   name: string;
   slotId: string;
   face: RackFace;
@@ -834,6 +849,7 @@ export interface DocumentationDeviceLink {
 }
 
 export interface Port {
+  stackMemberId?: ID | null;
   id: ID;
   deviceId: ID;
   name: string;
@@ -873,6 +889,21 @@ export interface PortLink {
   label?: string;
   visible?: boolean;
   routeWaypoints?: CableRouteWaypoint[];
+  routeMode?: CableRouteMode;
+  routeGuides?: CableRouteGuide[];
+}
+
+export type CableRouteMode = "auto" | "direct" | "managed" | "manual";
+
+/** Coordinates are normalized to 0–1000 on each physical device face. */
+export interface CableRouteGuide {
+  id: ID;
+  deviceId: ID;
+  roomId: ID;
+  entryFace: RackFace;
+  exitFace: RackFace;
+  x: number;
+  y: number;
 }
 
 export interface CableRouteWaypoint {
@@ -1076,6 +1107,7 @@ export interface DeviceMonitor {
   ignoreTlsErrors: boolean;
   snmpVersion?: "1" | "2c" | "3" | null;
   snmpCommunity?: string | null;
+  hasSnmpCommunity?: boolean;
   snmpOid?: string | null;
   snmpExpectedValue?: string | null;
   snmpMatchMode?: "any" | "equals" | "notEquals" | "in" | "regex" | null;

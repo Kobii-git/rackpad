@@ -44,6 +44,7 @@ const { CURRENT_RACKPAD_SCHEMA_COLUMNS } =
 const { BUILT_IN_HARDWARE_TEMPLATES } =
   await import("../lib/physical-layout.js");
 const { cidrOverlaps, ipToInt } = await import("../lib/ip-cidr.js");
+const { setSnmpSocketFactoryForTests } = await import("../lib/snmp-transport.js");
 const { resolveSnmpSessionForTarget } = await import("../lib/snmp-session.js");
 const { inferDiscoveryPlacement } =
   await import("../lib/discovery-placement.js");
@@ -74,6 +75,7 @@ beforeEach(async () => {
 afterEach(async () => {
   resetDiscoveryScanJobsForTests();
   setNetworkHostLookupForTests(null);
+  setSnmpSocketFactoryForTests(null);
   setPinnedRequestTransportForTests(null);
   resetNativeBackupSchedulerStateForTests();
   await app.close();
@@ -1895,6 +1897,8 @@ test("backup schema coverage requires an explicit decision for every application
     // Sessions are deliberately invalidated on restore so every user must
     // authenticate again against the restored account and permission state.
     ["userSessions", "ephemeral authentication state"],
+    // MCP credentials must never become usable after a backup restore.
+    ["mcpTokens", "revoked credentials excluded from logical backups"],
   ]);
   const representedTables = new Set(Object.keys(snapshot.data));
   const missingDecisions = schemaTables.filter(
@@ -3429,10 +3433,10 @@ test("admin restore accepts older backups without subnet, rack-slot, Docker, mon
       "SELECT id, face FROM ports WHERE deviceId = ? ORDER BY position, face, id",
     )
     .all(legacyPatchPanel.id) as Array<{ id: string; face: string }>;
-  assert.deepEqual(
-    restoredPatchPorts.map((port) => port.face).sort(),
-    ["front", "rear"],
-  );
+  assert.deepEqual(restoredPatchPorts.map((port) => port.face).sort(), [
+    "front",
+    "rear",
+  ]);
   const restoredPatchLayout = db
     .prepare(
       "SELECT status, bindings, portFingerprint FROM devicePhysicalLayouts WHERE deviceId = ?",
@@ -4520,7 +4524,8 @@ test("rack placement validation rejects overlapping devices", async () => {
     },
   });
 
-  assert.equal(overlapRes.statusCode, 400);
+  assert.equal(overlapRes.statusCode, 409);
+  assert.equal((readJson(overlapRes) as { code: string }).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
   assert.match(overlapRes.body, /overlap/i);
 });
 
@@ -4604,7 +4609,8 @@ test("rack placement validation allows opposite half-width slots only", async ()
       rackSlot: "left",
     },
   });
-  assert.equal(leftConflictRes.statusCode, 400);
+  assert.equal(leftConflictRes.statusCode, 409);
+  assert.equal((readJson(leftConflictRes) as { code: string }).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
   assert.match(leftConflictRes.body, /overlap/i);
 
   const fullConflictRes = await app.inject({
@@ -4625,7 +4631,8 @@ test("rack placement validation allows opposite half-width slots only", async ()
       rackSlot: "full",
     },
   });
-  assert.equal(fullConflictRes.statusCode, 400);
+  assert.equal(fullConflictRes.statusCode, 409);
+  assert.equal((readJson(fullConflictRes) as { code: string }).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
   assert.match(fullConflictRes.body, /overlap/i);
 
   const rearFullRes = await app.inject({
@@ -4658,7 +4665,8 @@ test("rack placement validation allows opposite half-width slots only", async ()
       rackSlot: "full",
     },
   });
-  assert.equal(patchConflictRes.statusCode, 400);
+  assert.equal(patchConflictRes.statusCode, 409);
+  assert.equal((readJson(patchConflictRes) as { code: string }).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
   assert.match(patchConflictRes.body, /overlap/i);
 });
 
@@ -5195,7 +5203,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
     payload: {
       deviceId: device.id,
       type: "snmp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       enabled: true,
     },
   });
@@ -5212,7 +5220,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
       deviceId: device.id,
       name: "Interface 1",
       type: "snmp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       snmpVersion: "2c",
       snmpCommunity: "public",
       snmpOid: ".1.3.6.1.2.1.2.2.1.8.1",
@@ -5233,7 +5241,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
   assert.equal(snmpMonitor.type, "snmp");
   assert.equal(snmpMonitor.port, 161);
   assert.equal(snmpMonitor.snmpVersion, "2c");
-  assert.equal(snmpMonitor.snmpCommunity, "public");
+  assert.equal(snmpMonitor.snmpCommunity, null);
   assert.equal(snmpMonitor.snmpOid, ".1.3.6.1.2.1.2.2.1.8.1");
   assert.equal(snmpMonitor.snmpExpectedValue, "1");
 
@@ -5330,7 +5338,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
       deviceId: switchDevice.id,
       name: "Uplink",
       type: "snmp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       snmpVersion: "2c",
       snmpCommunity: "public",
       snmpOid: "1.3.6.1.2.1.2.2.1.8.1",
@@ -5371,7 +5379,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
         deviceId: switchDevice.id,
         name: "Gi0/1 index sync",
         type: "snmp",
-        target: "127.0.0.1",
+        target: "10.77.0.1",
         port: indexSyncAddress.port,
         snmpVersion: "2c",
         snmpCommunity: "public",
@@ -5415,7 +5423,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
         deviceId: device.id,
         name: "SNMP poll",
         type: "snmp",
-        target: "127.0.0.1",
+        target: "10.77.0.1",
         port: snmpAddress.port,
         snmpOid: "1.3.6.1.2.1.1.3.0",
         snmpExpectedValue: "1",
@@ -5454,7 +5462,7 @@ test("monitoring endpoints validate config, persist results, and stay admin-only
       deviceId: device.id,
       name: "SSH",
       type: "tcp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       port: 1,
       intervalMs: 1000,
       enabled: true,
@@ -5539,7 +5547,7 @@ test("SNMP exception responses stay unknown and never satisfy match modes", asyn
           deviceId: device.id,
           name: `Missing OID ${exceptionCase.name}`,
           type: "snmp",
-          target: "127.0.0.1",
+          target: "10.77.0.1",
           port: address.port,
           snmpVersion: "2c",
           snmpCommunity: "public",
@@ -5633,7 +5641,7 @@ test("SNMP walks stop and credential tests fail clearly on exception responses",
       throw new Error("SNMP test server did not expose a UDP port.");
     }
     const session = {
-      host: "127.0.0.1",
+      host: "10.77.0.1",
       port: address.port,
       version: "2c" as const,
       community: "public",
@@ -5648,7 +5656,7 @@ test("SNMP walks stop and credential tests fail clearly on exception responses",
       url: `/api/snmp-credentials/${credential.id}/test`,
       headers,
       payload: {
-        target: "127.0.0.1",
+        target: "10.77.0.1",
         port: address.port,
         timeoutMs: 1000,
       },
@@ -5721,7 +5729,7 @@ test("scheduled monitoring contains rejected checks and continues the cycle", as
           deviceId: device.id,
           name: monitorConfig.name,
           type: "snmp",
-          target: "127.0.0.1",
+          target: "10.77.0.1",
           port: monitorConfig.port,
           snmpVersion: "2c",
           snmpCommunity: "public",
@@ -6039,7 +6047,7 @@ test("disabled monitors preserve configuration and reject manual runs without ch
       deviceId: device.id,
       name: "Disabled uplink",
       type: "snmp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       port: 1161,
       snmpVersion: "2c",
       snmpCommunity: "test-readonly",
@@ -6074,7 +6082,7 @@ test("disabled monitors preserve configuration and reject manual runs without ch
     payload: {
       name: "Disabled uplink example",
       type: "snmp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       port: 1161,
       snmpVersion: "2c",
       snmpCommunity: "test-readonly",
@@ -6114,10 +6122,10 @@ test("disabled monitors preserve configuration and reject manual runs without ch
     {
       name: "Disabled uplink example",
       type: "snmp",
-      target: "127.0.0.1",
+      target: "10.77.0.1",
       port: 1161,
       snmpVersion: "2c",
-      snmpCommunity: "test-readonly",
+      snmpCommunity: null,
       snmpOid: "1.3.6.1.2.1.2.2.1.8.24",
       snmpExpectedValue: "1",
       snmpMatchMode: "equals",
@@ -6474,7 +6482,7 @@ test("lab-scoped SNMP credentials store encrypted secrets and can be tested", as
         authorization: `Bearer ${adminToken}`,
       },
       payload: {
-        target: "127.0.0.1",
+        target: "10.77.0.1",
         port: snmpAddress.port,
       },
     });
@@ -6493,7 +6501,7 @@ test("lab-scoped SNMP credentials store encrypted secrets and can be tested", as
         deviceId: device.id,
         name: "Uptime",
         type: "snmp",
-        target: "127.0.0.1",
+        target: "10.77.0.1",
         port: snmpAddress.port,
         snmpCredentialId: credential.id,
         snmpOid: "1.3.6.1.2.1.1.3.0",
@@ -10053,6 +10061,7 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
     DROP TABLE devicePhysicalLayouts;
     DROP TABLE hardwareTemplateDefaults;
     DROP TABLE hardwareTemplates;
+    DROP INDEX IF EXISTS idx_devices_rack_mount_kind;
     ALTER TABLE devices DROP COLUMN rackMountKind;
     ALTER TABLE devices DROP COLUMN rackColumn;
     ALTER TABLE devices DROP COLUMN rackColumnSpan;
@@ -10067,6 +10076,23 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
     SET version = 31, updatedAt = '2026-07-20T00:00:00.000Z'
     WHERE id = 1;
@@ -10151,6 +10177,7 @@ test("storage topology migration upgrades a version-34 database without changing
     DROP TABLE devicePhysicalLayouts;
     DROP TABLE hardwareTemplateDefaults;
     DROP TABLE hardwareTemplates;
+    DROP INDEX IF EXISTS idx_devices_rack_mount_kind;
     ALTER TABLE devices DROP COLUMN rackMountKind;
     ALTER TABLE devices DROP COLUMN rackColumn;
     ALTER TABLE devices DROP COLUMN rackColumnSpan;
@@ -10165,6 +10192,23 @@ test("storage topology migration upgrades a version-34 database without changing
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
     SET version = 34, updatedAt = '2026-08-01T00:00:00.000Z'
     WHERE id = 1;
@@ -10264,6 +10308,7 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     DROP TABLE devicePhysicalLayouts;
     DROP TABLE hardwareTemplateDefaults;
     DROP TABLE hardwareTemplates;
+    DROP INDEX IF EXISTS idx_devices_rack_mount_kind;
     ALTER TABLE devices DROP COLUMN rackMountKind;
     ALTER TABLE devices DROP COLUMN rackColumn;
     ALTER TABLE devices DROP COLUMN rackColumnSpan;
@@ -10278,6 +10323,23 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
     SET version = 35, updatedAt = '2026-08-01T00:00:00.000Z'
     WHERE id = 1;
@@ -10332,6 +10394,7 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     DROP TABLE devicePhysicalLayouts;
     DROP TABLE hardwareTemplateDefaults;
     DROP TABLE hardwareTemplates;
+    DROP INDEX IF EXISTS idx_devices_rack_mount_kind;
     ALTER TABLE devices DROP COLUMN rackMountKind;
     ALTER TABLE devices DROP COLUMN rackColumn;
     ALTER TABLE devices DROP COLUMN rackColumnSpan;
@@ -10346,6 +10409,23 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
+    DROP TRIGGER cable_guide_device_delete;
+    DROP TRIGGER cable_guide_device_room;
+    DROP TRIGGER cable_guide_rack_room;
+    ALTER TABLE portLinks DROP COLUMN routeMode;
+    ALTER TABLE portLinks DROP COLUMN routeGuides;
+    DROP TRIGGER IF EXISTS ports_stack_owner_insert;
+    DROP TRIGGER IF EXISTS ports_stack_owner_update;
+    DROP TRIGGER IF EXISTS stack_member_device_immutable;
+    DROP TRIGGER IF EXISTS stack_device_delete;
+    DROP TRIGGER IF EXISTS stack_type_guard;
+    DROP TRIGGER IF EXISTS stack_height_guard;
+    DROP INDEX IF EXISTS idx_ports_stack_member;
+    ALTER TABLE ports DROP COLUMN stackMemberId;
+    DROP TABLE deviceStackMemberMacs;
+    DROP TABLE deviceStackMembers;
+    ALTER TABLE deviceMonitors DROP COLUMN snmpCommunityEnc;
+    ALTER TABLE oidcIdentities DROP COLUMN roleRecheckRequired;
     UPDATE schemaVersion
     SET version = 44, updatedAt = '2026-08-01T00:00:00.000Z'
     WHERE id = 1;
@@ -11354,6 +11434,17 @@ async function createMalformedSnmpResponder() {
 }
 
 async function createSnmpResponder(buildResponse: (request: Buffer) => Buffer) {
+  setSnmpSocketFactoryForTests((type) => {
+    const socket = dgram.createSocket(type);
+    return {
+      once: socket.once.bind(socket),
+      close: socket.close.bind(socket),
+      send: (message: Buffer, port: number, address: string, callback: (error: Error | null) => void) => {
+        assert.equal(address, "10.77.0.1", "the production resolver must pin the allowed LAN target");
+        socket.send(message, port, "127.0.0.1", callback);
+      },
+    } as unknown as dgram.Socket;
+  });
   const server = dgram.createSocket("udp4");
   server.on("message", (packet, remote) => {
     try {

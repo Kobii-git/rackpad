@@ -22,7 +22,6 @@ const manualChunkPackages: Record<string, string[]> = {
     '@radix-ui/react-tabs',
     '@radix-ui/react-tooltip',
   ],
-  charts: ['recharts'],
 }
 
 function manualChunks(id: string) {

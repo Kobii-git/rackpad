@@ -256,7 +256,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { returnTo?: string } }>(
     '/oidc/start',
     async (req, reply) => {
-      const url = await createOidcAuthorizationUrl(req, req.query.returnTo)
+      const url = await createOidcAuthorizationUrl(req, reply, req.query.returnTo)
       return reply.redirect(url)
     },
   )
@@ -277,6 +277,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
           error: req.query.error,
           errorDescription: req.query.error_description,
         },
+        req,
         req.log,
       )
       const redirect = new URL('/auth/oidc/callback', 'http://rackpad.local')
@@ -296,7 +297,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.post('/oidc/session', async (req, reply) => {
     const body = asObject(req.body)
     const sessionCode = requiredString(body, 'session', { maxLength: 200 })
-    const session = consumeOidcSession(sessionCode)
+    const session = consumeOidcSession(sessionCode, req, reply)
     writeAuthAudit(
       'auth.oidc.login',
       session.user.username,

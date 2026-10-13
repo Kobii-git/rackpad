@@ -53,10 +53,12 @@ import {
 } from "@/components/ui/Tooltip";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { Mono } from "@/components/shared/Mono";
-import type { Port } from "@/lib/types";
+import type { Port, Rack, Room } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import { formatPortEndpointLabel } from "@/lib/utils";
+import { TracePicker } from "./TracePicker";
+import { SidebarResize, useSidebarWidth } from "./SidebarResize";
 import { useI18n } from "@/i18n";
 import { useStore } from "@/lib/store";
 import {
@@ -73,6 +75,7 @@ import {
 import {
   buildTraceImageSvg,
   downloadTraceImagePng,
+  downloadTraceImageSvg,
   type TraceImageExport,
   type TraceImageTheme,
 } from "./trace-image";
@@ -185,6 +188,7 @@ export function VisualizerCanvas({
   const [searchIndex, setSearchIndex] = useState(0);
   const [pulsedDeviceId, setPulsedDeviceId] = useState<string | null>(null);
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
+  const sidebar = useSidebarWidth("grouped", 416);
   const [nodeDrag, setNodeDrag] = useState<{
     deviceId: string;
     pointerId: number;
@@ -635,7 +639,7 @@ export function VisualizerCanvas({
 
   return (
     <TooltipProvider>
-      <div className="flex min-h-0 flex-1 gap-4 overflow-y-auto px-4 py-4 xl:overflow-hidden xl:px-6 xl:py-5">
+      <div ref={sidebar.containerRef} className="flex min-h-0 flex-1 gap-4 overflow-y-auto px-4 py-4 xl:overflow-hidden xl:px-6 xl:py-5">
         <div className="flex min-h-[620px] min-w-0 flex-1 flex-col xl:min-h-0">
           <Card className="min-h-0 flex flex-1 flex-col">
             <CardHeader className="flex-col lg:flex-row">
@@ -840,11 +844,11 @@ export function VisualizerCanvas({
         </div>
 
         <aside
-          className={`hidden h-full min-h-0 shrink-0 flex-col overflow-hidden xl:flex ${
-            sidePanelCollapsed ? "w-12" : "w-[26rem]"
-          }`}
+          className="relative hidden h-full min-h-0 shrink-0 flex-col xl:flex"
+          style={{width: sidePanelCollapsed ? 48 : sidebar.width}}
         >
-          <div className="flex h-full min-h-0 flex-col gap-3">
+          {!sidePanelCollapsed && <SidebarResize sidebar={sidebar} />}
+          <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
             <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-1)] px-2 py-2">
               {!sidePanelCollapsed && (
                 <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
@@ -1368,6 +1372,7 @@ function DeviceCard({
   return (
     <div
       data-visualizer-interactive="true"
+      data-visualizer-device-id={node.device.id}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -2036,7 +2041,7 @@ function VisualizerSidePanel({
         data-visualizer-scrollable="true"
         className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
       >
-        <Inspector
+        <VisualizerInspector
           model={model}
           selection={selection}
           selectedCable={selectedCable}
@@ -2049,146 +2054,98 @@ function VisualizerSidePanel({
   );
 }
 
-function TracePicker({
-  model,
-  traceMode,
-  onTracePortSelect,
-  onClearTrace,
-}: {
-  model: VisualizerModel;
-  traceMode: TraceModeState;
-  onTracePortSelect: (deviceId: string, portId: string) => void;
-  onClearTrace: () => void;
-}) {
-  const { t } = useI18n();
-  const traceDevices = useMemo(
-    () =>
-      model.nodes
-        .filter(
-          (node) => (model.portsByDeviceId[node.device.id] ?? []).length > 0,
-        )
-        .sort((a, b) => a.device.hostname.localeCompare(b.device.hostname)),
-    [model],
-  );
-  const [deviceId, setDeviceId] = useState(traceDevices[0]?.device.id ?? "");
-  const devicePorts = useMemo(
-    () => (deviceId ? (model.portsByDeviceId[deviceId] ?? []) : []),
-    [deviceId, model.portsByDeviceId],
-  );
-  const [portId, setPortId] = useState(devicePorts[0]?.id ?? "");
 
-  useEffect(() => {
-    if (traceDevices.some((node) => node.device.id === deviceId)) return;
-    setDeviceId(traceDevices[0]?.device.id ?? "");
-  }, [deviceId, traceDevices]);
+export type VisualizerInspectionSelection =
+  | Exclude<VisualizerSelection, null>
+  | { kind: "port"; id: string }
+  | { kind: "rack"; id: string }
+  | null;
 
-  useEffect(() => {
-    if (devicePorts.some((port) => port.id === portId)) return;
-    setPortId(devicePorts[0]?.id ?? "");
-  }, [devicePorts, portId]);
-
-  const firstPort = traceMode.firstPortId
-    ? model.portById[traceMode.firstPortId]
-    : undefined;
-  const firstDevice = firstPort
-    ? model.deviceById[firstPort.deviceId]
-    : undefined;
-
-  return (
-    <Card className="shrink-0">
-      <CardHeader>
-        <CardTitle>
-          <CardLabel>{t("Trace")}</CardLabel>
-          <CardHeading>{t("Device and port")}</CardHeading>
-        </CardTitle>
-        {traceMode.firstPortId && (
-          <Button variant="ghost" size="sm" onClick={onClearTrace}>
-            {t("Reset")}
-          </Button>
-        )}
-      </CardHeader>
-      <CardBody className="space-y-3">
-        {firstPort && firstDevice && (
-          <div className="rounded-[var(--radius-sm)] border border-[var(--accent-primary-border)] bg-[var(--accent-primary)]/8 px-3 py-2">
-            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-              {t("Start port")}
-            </div>
-            <div className="mt-1 truncate text-xs text-[var(--text-primary)]">
-              {firstDevice.hostname} / {firstPort.name}
-            </div>
-          </div>
-        )}
-        <div className="grid grid-cols-2 gap-2">
-          <LayoutField label={t("Device")}>
-            <select
-              value={deviceId}
-              onChange={(event) => setDeviceId(event.target.value)}
-              className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
-              data-testid="trace-device-select"
-            >
-              {traceDevices.map((node) => (
-                <option key={node.device.id} value={node.device.id}>
-                  {node.device.hostname}
-                </option>
-              ))}
-            </select>
-          </LayoutField>
-          <LayoutField label={t("Port")}>
-            <select
-              value={portId}
-              onChange={(event) => setPortId(event.target.value)}
-              className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
-              data-testid="trace-port-select"
-            >
-              {devicePorts.map((port) => (
-                <option key={port.id} value={port.id}>
-                  {formatPortEndpointLabel(
-                    port,
-                    model.deviceById[port.deviceId],
-                  )}
-                </option>
-              ))}
-            </select>
-          </LayoutField>
-        </div>
-        <Button
-          size="sm"
-          className="w-full"
-          disabled={!deviceId || !portId}
-          onClick={() => onTracePortSelect(deviceId, portId)}
-          data-testid="trace-submit"
-        >
-          {traceMode.firstPortId ? t("Trace to port") : t("Set start port")}
-        </Button>
-        {traceMode.message && (
-          <div className="text-xs text-[var(--text-tertiary)]">
-            {traceMode.message}
-          </div>
-        )}
-      </CardBody>
-    </Card>
-  );
-}
-
-function Inspector({
+export function VisualizerInspector({
   model,
   selection,
   selectedCable,
   selectedNode,
   onSelectDevice,
   onSelectCable,
+  visibleCables,
+  visibleDeviceIds,
+  racksById,
+  roomsById,
 }: {
   model: VisualizerModel;
-  selection: VisualizerSelection;
+  selection: VisualizerInspectionSelection;
   selectedCable: VisualizerCable | null;
   selectedNode: VisualizerNode | null;
   onSelectDevice: (id: string) => void;
   onSelectCable: (id: string) => void;
+  visibleCables?: VisualizerCable[];
+  visibleDeviceIds?: Set<string>;
+  racksById?: Record<string, Rack>;
+  roomsById?: Record<string, Room>;
 }) {
   const { t } = useI18n();
+  const scopedCables = visibleCables ?? model.cables;
   const neighbors = selectedNode
-    ? (model.directNeighborsByDeviceId[selectedNode.device.id] ?? [])
+    ? scopedCables.flatMap((cable) => {
+        if (
+          cable.fromDevice?.id === selectedNode.device.id &&
+          cable.toDevice &&
+          cable.fromPort &&
+          cable.toPort
+        ) {
+          return [
+            {
+              device: cable.toDevice,
+              port: cable.fromPort,
+              peerPort: cable.toPort,
+              link: cable.link,
+              color: cable.color,
+            },
+          ];
+        }
+        if (
+          cable.toDevice?.id === selectedNode.device.id &&
+          cable.fromDevice &&
+          cable.fromPort &&
+          cable.toPort
+        ) {
+          return [
+            {
+              device: cable.fromDevice,
+              port: cable.toPort,
+              peerPort: cable.fromPort,
+              link: cable.link,
+              color: cable.color,
+            },
+          ];
+        }
+        return [];
+      })
     : [];
+  const selectedPort =
+    selection?.kind === "port" ? model.portById[selection.id] : undefined;
+  const selectedRack =
+    selection?.kind === "rack" ? racksById?.[selection.id] : undefined;
+  const selectedPortCable = selectedPort
+    ? scopedCables.find(
+        (cable) =>
+          cable.link.fromPortId === selectedPort.id ||
+          cable.link.toPortId === selectedPort.id,
+      )
+    : undefined;
+  const selectedRackCableCount = selectedRack
+    ? scopedCables.filter((cable) =>
+        [cable.fromDevice?.rackId, cable.toDevice?.rackId].includes(
+          selectedRack.id,
+        ),
+      ).length
+    : 0;
+  const selectedRackDeviceCount = selectedRack
+    ? [...(visibleDeviceIds ?? new Set(Object.keys(model.deviceById)))].filter(
+        (deviceId) => model.deviceById[deviceId]?.rackId === selectedRack.id,
+      ).length
+    : 0;
   return (
     <>
       <Card className="shrink-0">
@@ -2196,11 +2153,15 @@ function Inspector({
           <CardTitle>
             <CardLabel>{t("Inspector")}</CardLabel>
             <CardHeading>
-              {selectedNode
-                ? selectedNode.device.hostname
-                : selectedCable
-                  ? t("Selected cable")
-                  : t("Select a link")}
+              {selectedRack
+                ? selectedRack.name
+                : selectedPort
+                  ? selectedPort.name
+                  : selectedNode
+                    ? selectedNode.device.hostname
+                    : selectedCable
+                      ? t("Selected cable")
+                      : t("Select a link")}
             </CardHeading>
           </CardTitle>
           {selectedNode && (
@@ -2227,6 +2188,26 @@ function Inspector({
               )}
             />
           )}
+          {selectedPort && (
+            <PortInspector
+              model={model}
+              port={selectedPort}
+              cable={selectedPortCable}
+              onSelectCable={onSelectCable}
+            />
+          )}
+          {selectedRack && (
+            <RackInspector
+              rack={selectedRack}
+              room={
+                selectedRack.roomId
+                  ? roomsById?.[selectedRack.roomId]
+                  : undefined
+              }
+              deviceCount={selectedRackDeviceCount}
+              cableCount={selectedRackCableCount}
+            />
+          )}
           {selectedNode && (
             <DeviceInspector
               model={model}
@@ -2250,7 +2231,7 @@ function Inspector({
           device={selectedNode.device}
           devices={Object.values(model.deviceById)}
           ports={Object.values(model.portById)}
-          portLinks={uniquePortLinks(model)}
+          portLinks={scopedCables.map((cable) => cable.link)}
           effectiveDeviceTypeByDeviceId={model.effectiveDeviceTypeByDeviceId}
         />
       )}
@@ -2260,7 +2241,7 @@ function Inspector({
           <CardTitle>
             <CardLabel>{t("Visible links")}</CardLabel>
             <CardHeading>
-              {model.cables.length} {t("cables")}
+              {scopedCables.length} {t("cables")}
             </CardHeading>
           </CardTitle>
         </CardHeader>
@@ -2268,7 +2249,7 @@ function Inspector({
           data-visualizer-scrollable="true"
           className="max-h-80 min-h-0 space-y-2 overflow-y-auto"
         >
-          {model.cables.map((cable) => (
+          {scopedCables.map((cable) => (
             <button
               key={cable.link.id}
               type="button"
@@ -2280,8 +2261,8 @@ function Inspector({
                   {cable.fromDevice?.hostname ?? t("Unknown")} {t("to")}{" "}
                   {cable.toDevice?.hostname ?? t("Unknown")}
                 </div>
-                <Mono className="text-[10px] text-[var(--text-tertiary)]">
-                  {cable.fromPort?.name ?? "?"} {t("to")}
+                <Mono data-testid="visible-link-ports" className="text-[10px] text-[var(--text-tertiary)]">
+                  {cable.fromPort?.name ?? "?"} {t("to")}{" "}
                   {cable.toPort?.name ?? "?"}
                 </Mono>
               </div>
@@ -2294,6 +2275,76 @@ function Inspector({
         </CardBody>
       </Card>
     </>
+  );
+}
+
+function PortInspector({
+  model,
+  port,
+  cable,
+  onSelectCable,
+}: {
+  model: VisualizerModel;
+  port: Port;
+  cable?: VisualizerCable;
+  onSelectCable: (id: string) => void;
+}) {
+  const { t } = useI18n();
+  const device = model.deviceById[port.deviceId];
+  return (
+    <div className="space-y-3">
+      {device && (
+        <Button size="sm" asChild>
+          <Link to={`/devices/${device.id}`}>
+            <ExternalLink className="size-3.5" />
+            {t("Open device")}
+          </Link>
+        </Button>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <InfoBox label={t("Device")} value={device?.hostname} />
+        <InfoBox label={t("Port")} value={port.name} mono />
+        <InfoBox label={t("Type")} value={port.kind} />
+        <InfoBox
+          label={t("Face")}
+          value={port.face === "rear" ? t("Rear") : t("Front")}
+        />
+        <InfoBox label={t("Status")} value={port.linkState} />
+        <InfoBox label={t("Mode")} value={port.mode} />
+      </div>
+      {cable && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onSelectCable(cable.link.id)}
+        >
+          <Cable className="size-3.5" />
+          {t("Cable")}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function RackInspector({
+  rack,
+  room,
+  deviceCount,
+  cableCount,
+}: {
+  rack: Rack;
+  room?: Room;
+  deviceCount: number;
+  cableCount: number;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <InfoBox label={t("Room")} value={room?.name} />
+      <InfoBox label={t("Height")} value={`${rack.totalU}${t("U")}`} mono />
+      <InfoBox label={t("Devices")} value={String(deviceCount)} />
+      <InfoBox label={t("Cables")} value={String(cableCount)} />
+    </div>
   );
 }
 
@@ -2316,9 +2367,7 @@ function DeviceInspector({
 }) {
   const { t } = useI18n();
   const physicalLayout = useStore((state) =>
-    state.physicalLayouts.find(
-      (layout) => layout.deviceId === node.device.id,
-    ),
+    state.physicalLayouts.find((layout) => layout.deviceId === node.device.id),
   );
   return (
     <div className="space-y-3">
@@ -2357,10 +2406,8 @@ function DeviceInspector({
           label={t("Ports")}
           value={`${node.portSummary.linked}/${node.portSummary.total} ${t("linked")}`}
         />
-        <InfoBox
-          label={t("Vendor")}
-          value={node.vendor ?? node.device.manufacturer}
-        />
+        <InfoBox label={t("Manufacturer")} value={node.device.manufacturer} />
+        <InfoBox label={t("Vendor")} value={node.vendor} />
       </div>
       <div>
         <div className="rk-kicker mb-2">{t("Direct connections")}</div>
@@ -2386,8 +2433,8 @@ function DeviceInspector({
                   <span className="block truncate text-xs font-medium text-[var(--text-primary)]">
                     {neighbor.device.hostname}
                   </span>
-                  <Mono className="text-[10px] text-[var(--text-tertiary)]">
-                    {neighbor.port.name} {t("to")}
+                  <Mono data-testid="direct-connection-ports" className="text-[10px] text-[var(--text-tertiary)]">
+                    {neighbor.port.name} {t("to")}{" "}
                     {neighbor.peerPort.name}
                     {neighbor.link.cableLength
                       ? t("| {cableLength}", {
@@ -2462,7 +2509,7 @@ function CableInspector({
   );
 }
 
-function TraceSummary({
+export function TraceSummary({
   model,
   result,
 }: {
@@ -2576,9 +2623,18 @@ function TraceSummary({
     }
   }
 
+  function downloadSvg(traceImage?: TraceImageExport) {
+    setImageError(null);
+    try {
+      downloadTraceImageSvg(traceImage ?? buildTraceImage());
+    } catch {
+      setImageError(t("Something went wrong. Try again."));
+    }
+  }
+
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--accent-primary-border)] bg-[var(--accent-primary-soft)] p-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-3">
         <div>
           <div className="rk-kicker">{t("Trace hops")}</div>
           <div className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
@@ -2586,7 +2642,7 @@ function TraceSummary({
             {result.totalCableLengthLabel}
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="flex min-w-0 flex-wrap gap-2 [&>button]:h-auto [&>button]:min-h-8 [&>button]:max-w-full [&>button]:whitespace-normal">
           <Button
             variant="outline"
             size="sm"
@@ -2631,6 +2687,17 @@ function TraceSummary({
           >
             <Download className="size-3.5" />
             {preparingImage ? t("Preparing...") : t("Download image")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadSvg()}
+            disabled={!traceText}
+            aria-label={t("Download SVG")}
+            data-testid="trace-download-svg"
+          >
+            <Download className="size-3.5" />
+            {t("Download SVG")}
           </Button>
         </div>
       </div>
@@ -2715,6 +2782,15 @@ function TraceSummary({
                     {preparingImage ? t("Preparing...") : t("Download image")}
                   </Button>
                   <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadSvg(activeImagePreview.traceImage)}
+                    data-testid="trace-preview-download-svg"
+                  >
+                    <Download className="size-3.5" />
+                    {t("Download SVG")}
+                  </Button>
+                  <Button
                     ref={previewCloseButtonRef}
                     variant="ghost"
                     size="sm"
@@ -2754,14 +2830,6 @@ function TraceSummary({
         )}
     </div>
   );
-}
-
-function uniquePortLinks(model: VisualizerModel) {
-  return [
-    ...new Map(
-      model.cables.map((cable) => [cable.link.id, cable.link]),
-    ).values(),
-  ];
 }
 
 function formatTraceText(

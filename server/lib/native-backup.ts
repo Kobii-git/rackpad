@@ -173,6 +173,16 @@ export async function createNativeBackup(actor = "system") {
   try {
     await db.backup(temporary);
     chmodSync(temporary, 0o600);
+    // MCP bearer tokens are deliberately revoked by a restore. Keep their
+    // hashes out of downloadable snapshots as well as logical exports.
+    const snapshot = new Database(temporary);
+    try {
+      snapshot.prepare("DELETE FROM mcpTokens").run();
+      // DELETE can leave token hashes in unused SQLite pages.
+      snapshot.exec("VACUUM");
+    } finally {
+      snapshot.close();
+    }
     validateNativeBackupSnapshot(temporary);
     renameSync(temporary, destination);
     const settings = loadNativeBackupSettings();

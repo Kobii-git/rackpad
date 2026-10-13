@@ -26,7 +26,7 @@ real check; “manual” is not a gate and must be reviewed honestly.
 - Backup change ⇒ run schema coverage, scoped-grant round trip, compatibility,
   and atomic rejection tests against a temporary database.
 - Enforcement: `npm run test:server` enumerates SQLite tables, permits only the
-  commented `schemaVersion`/`userSessions` exclusions, and tests round trips.
+  commented `schemaVersion`/`userSessions`/`mcpTokens` exclusions, and tests round trips.
 
 ## Outbound network access
 
@@ -99,14 +99,33 @@ real check; “manual” is not a gate and must be reviewed honestly.
 - Enforcement: `.dockerignore` safety is automated by `check:config`; effective
   privilege and data behavior require manual review and Compose rendering.
 
+## Proxmox native LXC
+
+- Native helper change ⇒ keep the dispatcher, tagged release assets, Community
+  core pin, CT helper, metadata, environment template, operational assets, and
+  updater paired.
+- Preserve unprivileged defaults, immutable root-owned code, the native marker,
+  `/opt/rackpad_data` as the only service-writable path, manual stable-only
+  updates, pre-downtime builds, integrity-checked snapshots, and complete paired
+  rollback.
+- Discovery safe mode must clear capabilities. Advanced mode may add only
+  `CAP_NET_RAW` and `CAP_NET_ADMIN` after an outer-LXC/raw-socket preflight; it
+  must never convert privilege or edit the Proxmox host. SNMP traps stay
+  independent and disabled by default.
+- Enforcement: `npm run check:proxmox`, fixture tests, Bash syntax, and
+  ShellCheck are automated; disposable real-Proxmox install/update/rollback
+  tests remain mandatory release evidence.
+
 ## Scanner suppressions
 
 - Suppression ⇒ one finding, narrowest supported scope, written justification,
   owner/review date or expiry, and no unrelated blind spot.
-- SNMPv3 legacy hash exceptions belong inline in `server/lib/snmp-v3.ts`; do not
-  suppress weak hashing repository-wide.
-- Enforcement: Trivy expiry is automated; CodeQL inline scope and review dates
-  require manual review because CodeQL config has no enforced expiry field.
+- Keep SNMPv3 protocol rationale inline in `server/lib/snmp-v3.ts`; do not
+  suppress weak hashing repository-wide. The two RFC 3414 password-to-key findings
+  have an exact-location/file-hash/server-tree policy with automated expiry.
+- Enforcement: Trivy expiry and the two reviewed SNMP findings are automated.
+  Other CodeQL inline scope/review dates remain manual. Preserve raw SARIF and
+  the exception summary; source changes or expiry disable the reviewed exceptions.
 
 ## Releases
 

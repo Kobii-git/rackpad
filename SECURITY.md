@@ -9,8 +9,11 @@ account data.
 
 Security fixes are expected to land on:
 
-- the latest tagged release
-- `main`, if it is ahead of the latest release
+- the current stable line (`main` and its stable tags)
+- the current experimental beta line (`beta` and its prerelease tags)
+
+The latest tag may be a beta; it does not replace the stable support channel.
+Development builds are integration snapshots, not a supported production channel.
 
 Older tags may not receive backported fixes.
 
@@ -40,13 +43,24 @@ disclosure whenever practical.
 ## Automated scanning
 
 Rackpad runs CodeQL and Trivy against development, beta, and stable branches.
-Fixable high and critical dependency, secret, and configuration findings block
-release builds.
+High/critical CodeQL findings, fixable high/critical dependency vulnerabilities,
+and high/critical secret or configuration findings block image publication.
+GitHub Release creation follows successful image publication.
 
 Scanner exceptions must identify one advisory, explain why Rackpad is not
-affected, and include an expiry date. An expired exception fails the scan again
-until it is removed, renewed with current evidence, or replaced by an upstream
-fix.
+affected, and include an expiry date. Trivy expiry is enforced by the scanner.
+SNMPv3 protocol rationale remains inline. The two reviewed RFC 3414 password-to-key
+findings additionally use an automated policy bound to exact source locations,
+the file hash, the unchanged server tree, and expiry at 2026-11-30 00:00 UTC.
+Missing evidence or changed server content disables those exceptions; renewal
+requires independent review and explicit approval. Other inline CodeQL review
+dates remain manually enforced. No exception permits weak hashes outside the
+identified SNMPv3 interoperability call sites.
+
+CodeQL retains the complete raw analysis and an explicit review summary as CI
+artifacts. Only the two eligible findings may be omitted from a separate upload
+report. Invalid analysis or any other blocking finding fails publication and
+uploads the raw report; report-upload failures also fail the gate.
 
 ## Hardening guidance
 
@@ -56,7 +70,7 @@ Before exposing Rackpad beyond a trusted LAN, use:
 - trusted host and origin settings
 - reverse-proxy rate limiting for `/api/auth/*`
 - a strong admin password
-- backups of the Rackpad database or JSON exports
+- protected backups of the Rackpad database or JSON exports **and** its original `RACKPAD_SECRET_KEY`
 - administrator-only control of discovery scans and active monitor configuration
 
 Rackpad backup exports still contain user password hashes so restores remain

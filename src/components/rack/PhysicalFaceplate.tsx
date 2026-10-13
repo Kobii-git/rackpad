@@ -1,3 +1,4 @@
+import { physicalItemColor } from "@/lib/faceplate-artwork";
 import { useMemo, type CSSProperties } from "react";
 import { useI18n } from "@/i18n";
 import type {
@@ -8,6 +9,7 @@ import type {
   RackFace,
   ResolvedPhysicalLayoutV1,
 } from "@/lib/types";
+import { faceplateDetailPath } from "@/lib/faceplate-artwork";
 import { cn } from "@/lib/utils";
 
 interface PhysicalFaceplateProps {
@@ -35,6 +37,7 @@ function bindingsOf(layout: DevicePhysicalLayout | ResolvedPhysicalLayoutV1) {
 
 function primitiveFill(primitive: PhysicalFacePrimitiveV1) {
   const tone = "tone" in primitive ? primitive.tone : undefined;
+  if (primitive.color) return physicalItemColor(primitive.color, "var(--color-surface)");
   if (tone === "accent") return "var(--color-accent)";
   if (tone === "light") return "var(--color-line-strong)";
   if (tone === "dark") return "var(--color-bg)";
@@ -48,7 +51,7 @@ function Primitive({ primitive }: { primitive: PhysicalFacePrimitiveV1 }) {
         x={primitive.x}
         y={primitive.y}
         textAnchor={primitive.align ?? "start"}
-        fill="var(--color-fg-subtle)"
+        fill={physicalItemColor(primitive.color, "var(--color-fg-subtle)")}
         fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
         fontSize="15"
         letterSpacing="1.4"
@@ -81,7 +84,7 @@ function Primitive({ primitive }: { primitive: PhysicalFacePrimitiveV1 }) {
   }
   if (!("width" in primitive)) return null;
   return (
-    <rect
+    <g><rect
       x={primitive.x}
       y={primitive.y}
       width={primitive.width}
@@ -91,8 +94,9 @@ function Primitive({ primitive }: { primitive: PhysicalFacePrimitiveV1 }) {
       fillOpacity={primitive.kind === "vent" ? 0.68 : 1}
       stroke="var(--color-line-strong)"
       strokeWidth={primitive.kind === "panel" ? 3 : 1.5}
-      strokeDasharray={primitive.kind === "vent" ? "5 5" : undefined}
-    />
+      vectorEffect="non-scaling-stroke"
+      style={{ strokeWidth: 0.5 }}
+    /><path d={faceplateDetailPath(primitive)} fill="none" stroke="var(--color-fg-subtle)" strokeOpacity={0.45} strokeWidth={0.6} vectorEffect="non-scaling-stroke" /></g>
   );
 }
 
@@ -115,11 +119,11 @@ function PortConnector({
 }) {
   const centerX = slot.x + slot.width / 2;
   const centerY = slot.y + slot.height / 2;
-  const connectorFill = port
+  const connectorFill = physicalItemColor(slot.color, port
     ? linked
       ? "var(--color-accent)"
       : "var(--color-bg)"
-    : "var(--color-surface)";
+    : "var(--color-surface)");
   const connectorStroke = selected
     ? "var(--color-warning)"
     : linked
@@ -133,8 +137,9 @@ function PortConnector({
     <g
       role={onSelect && port ? "button" : undefined}
       tabIndex={onSelect && port ? 0 : undefined}
+      data-cabling-selection-id={onSelect && port ? `port:${port.id}` : undefined}
       aria-label={title}
-      className={cn(onSelect && port && "cursor-pointer outline-none")}
+      className={cn(onSelect && port && "group cursor-pointer outline-none")}
       transform={`rotate(${slot.rotation} ${centerX} ${centerY})`}
       onPointerDown={
         port && onSelect
@@ -163,6 +168,7 @@ function PortConnector({
       }
     >
       <title>{title}</title>
+      {onSelect && <rect x={slot.x - 6} y={slot.y - 8} width={slot.width + 12} height={slot.height + 16} fill="transparent" />}
       {slot.connector === "power" ? (
         <g>
           <rect
@@ -212,8 +218,9 @@ function PortConnector({
           )}
         </g>
       )}
-      {!compact && port && (
+      {port && (
         <text
+          className={compact && !selected ? "opacity-0 group-hover:opacity-100 group-focus:opacity-100" : undefined}
           x={centerX}
           y={slot.y + slot.height + 13}
           textAnchor="middle"

@@ -328,11 +328,13 @@ export function parseNetBoxDeviceTypeYaml(
   };
 }
 
-export function findExistingNetboxDevice(manufacturer: string, model: string) {
+export function findExistingNetboxDevice(manufacturer: string, model: string, readableLabIds: string[] | null) {
+  if (readableLabIds?.length === 0) return null;
   const prefix = `${NETBOX_DEVICE_NOTES_PREFIX}${netboxDedupeKey(manufacturer, model)}`;
+  const labFilter = readableLabIds === null ? "" : ` AND labId IN (${readableLabIds.map(() => "?").join(",")})`;
   const row = db
-    .prepare("SELECT id, hostname FROM devices WHERE notes LIKE ? LIMIT 1")
-    .get(`${prefix}%`) as { id: string; hostname: string } | undefined;
+    .prepare(`SELECT id, hostname FROM devices WHERE substr(notes, 1, length(?)) = ?${labFilter} ORDER BY labId, id LIMIT 1`)
+    .get(prefix, prefix, ...(readableLabIds ?? [])) as { id: string; hostname: string } | undefined;
   return row ?? null;
 }
 
@@ -371,6 +373,7 @@ export function buildNetboxDeviceDraft(
 
 export function previewNetboxDeviceTypeImport(
   yamlText: string,
+  readableLabIds: string[] | null,
   templates: PortTemplate[] = listPortTemplates(),
 ): NetBoxImportPreview {
   const parsed = parseNetBoxDeviceTypeYaml(yamlText);
@@ -392,7 +395,7 @@ export function previewNetboxDeviceTypeImport(
           builtIn: existingTemplate.builtIn,
         }
       : null,
-    existingDevice: findExistingNetboxDevice(parsed.manufacturer, parsed.model),
+    existingDevice: findExistingNetboxDevice(parsed.manufacturer, parsed.model, readableLabIds),
     portTemplateDraft,
     deviceDraft: buildNetboxDeviceDraft(parsed),
   };

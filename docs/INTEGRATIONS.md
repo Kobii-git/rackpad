@@ -42,11 +42,12 @@ controllers stay reviewable.
 
 1. Create an API token: Datacenter → Permissions → API Tokens, e.g.
    `rackpad@pam!inventory` with **Privilege Separation** enabled.
-2. Give the token read access: Permissions → Add → API Token Permission,
-   path `/`, role `PVEAuditor`, propagate on. With Privilege Separation
-   enabled the token has its own ACL — the permission entry must name the
-   token itself, not just its user, or the API returns empty VM lists
-   instead of an error (Rackpad warns when a pull sees no guests).
+2. Grant the backing user `rackpad@pam` read access at `/` with role
+   `PVEAuditor` and propagation enabled. Then add an API Token Permission
+   for `rackpad@pam!inventory` with the same path, role, and propagation.
+   With Privilege Separation enabled, effective access is the intersection
+   of the user and token permissions. A token cannot exceed its user’s rights.
+   Missing permissions may yield empty VM lists; Rackpad warns when a pull sees no guests.
 3. In Rackpad, add a Proxmox VE connection with the URL
    (`https://pve.example:8006`), the token ID (`rackpad@pam!inventory`), and
    the token secret.

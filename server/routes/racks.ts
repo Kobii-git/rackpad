@@ -1,3 +1,4 @@
+import { isStackType, validateStackPlacement, unmountStack } from '../lib/device-stacks.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import {
@@ -88,7 +89,14 @@ export const racksRoutes: FastifyPluginAsync = async (app) => {
     if (updates.length === 0) return reply.status(400).send({ error: 'No valid fields to update' })
 
     values.push(req.params.id)
-    db.prepare(`UPDATE racks SET ${updates.join(', ')} WHERE id = ?`).run(...values)
+    db.transaction(() => {
+      db.prepare(`UPDATE racks SET ${updates.join(', ')} WHERE id = ?`).run(...values)
+      const occupants = db.prepare('SELECT id, deviceType FROM devices WHERE rackId = ?').all(req.params.id) as Array<{ id: string; deviceType: string }>
+      for (const device of occupants.filter(device => isStackType(device.deviceType))) {
+        if (roomId !== undefined) db.prepare('UPDATE devices SET roomId = ? WHERE id = ?').run(roomId, device.id)
+        validateStackPlacement(device.id)
+      }
+    })()
     return db.prepare('SELECT * FROM racks WHERE id = ?').get(req.params.id)
   })
 
@@ -96,6 +104,8 @@ export const racksRoutes: FastifyPluginAsync = async (app) => {
     const row = db.prepare('SELECT * FROM racks WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
     if (!assertLabWriteFromRow(req, reply, row)) return
     const removeRack = db.transaction(() => {
+      const stacks = (db.prepare('SELECT id, deviceType FROM devices WHERE rackId = ?').all(req.params.id) as Array<{ id: string; deviceType: string }>).filter(device => isStackType(device.deviceType))
+      for (const stack of stacks) unmountStack(stack.id)
       db.prepare("DELETE FROM referenceImages WHERE entityType = 'rack' AND entityId = ?").run(req.params.id)
       db.prepare('DELETE FROM racks WHERE id = ?').run(req.params.id)
     })

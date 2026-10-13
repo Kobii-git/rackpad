@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { deviceTypeBase, deviceTypeChainIncludes } from "./device-types.ts";
+import {
+  deviceTypeBase,
+  deviceTypeChainIncludes,
+  deviceTypeLineage,
+  deviceTypeMatchesTemplate,
+} from "./device-types.ts";
 import type { Device, DeviceTypeDefinition } from "./types.ts";
 
 test("device type ancestry distinguishes storage enclosures from storage hosts", () => {
@@ -43,6 +48,44 @@ test("device type ancestry distinguishes storage enclosures from storage hosts",
     deviceTypeChainIncludes("custom_storage", "storage_enclosure", definitions),
     false,
   );
+  assert.deepEqual(deviceTypeLineage("custom_enclosure", definitions), [
+    "custom_enclosure",
+    "storage_enclosure",
+    "storage",
+  ]);
+  assert.equal(
+    deviceTypeMatchesTemplate(
+      "custom_enclosure",
+      ["storage_enclosure"],
+      definitions,
+    ),
+    true,
+  );
+  assert.equal(
+    deviceTypeMatchesTemplate("custom_enclosure", ["storage"], definitions),
+    true,
+  );
+  assert.equal(
+    deviceTypeMatchesTemplate("custom_enclosure", ["server"], definitions),
+    false,
+  );
+  assert.equal(
+    deviceTypeMatchesTemplate("custom_enclosure", [], definitions),
+    true,
+  );
+});
+
+test("device type lineage terminates safely when definitions contain a cycle", () => {
+  const definitions: DeviceTypeDefinition[] = [
+    { id: "cycle_a", label: "Cycle A", parentType: "cycle_b", builtIn: false },
+    { id: "cycle_b", label: "Cycle B", parentType: "cycle_a", builtIn: false },
+  ];
+
+  assert.deepEqual(deviceTypeLineage("cycle_a", definitions), [
+    "cycle_a",
+    "cycle_b",
+  ]);
+  assert.equal(deviceTypeBase("cycle_a", definitions), "cycle_a");
 });
 
 test("custom device types inherit workload, AP, shelf, and patch-panel behavior", () => {

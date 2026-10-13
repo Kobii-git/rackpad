@@ -14,6 +14,11 @@ import {
   type SnmpV3PrivProtocol,
 } from "./snmp-v3.js";
 import { timingSafeEqual } from "node:crypto";
+import {
+  SnmpBerReader,
+  parseSnmpV3Envelope,
+  parseSnmpV3ScopedPdu,
+} from "./snmp-v3-message.js";
 
 export interface SnmpTrapVarbind {
   oid: string;
@@ -48,6 +53,52 @@ export interface ParseSnmpTrapOptions {
   v3Credentials?: SnmpV3TrapCredential[];
 }
 
+// RFC 3414 timeliness for authenticated authoritative trap engines. Never
+// learn clock state from an unsigned packet or a credential/context mismatch.
+const trapEngineClocks = new Map<
+  string,
+  { boots: number; time: number; syncedAt: number }
+>();
+
+export function resetSnmpV3TrapEngineClocks() {
+  trapEngineClocks.clear();
+}
+
+function verifyTrapTimeliness(
+  envelope: ReturnType<typeof parseSnmpV3Envelope>,
+  credentialId: string,
+) {
+  const key = JSON.stringify([credentialId, envelope.engineId.toString("hex")]);
+  const previous = trapEngineClocks.get(key);
+  const now = performance.now();
+  if (
+    envelope.engineBoots === 0x7fffffff ||
+    !envelope.engineId.length ||
+    (previous &&
+      (envelope.engineBoots < previous.boots ||
+        (envelope.engineBoots === previous.boots &&
+          envelope.engineTime <
+            previous.time +
+              Math.floor((now - previous.syncedAt) / 1000) -
+              150)))
+  ) {
+    throw new Error("SNMPv3 trap is outside the engine time window.");
+  }
+  if (
+    !previous ||
+    envelope.engineBoots > previous.boots ||
+    envelope.engineTime > previous.time
+  ) {
+    trapEngineClocks.set(key, {
+      boots: envelope.engineBoots,
+      time: envelope.engineTime,
+      syncedAt: now,
+    });
+    if (trapEngineClocks.size > 5000)
+      trapEngineClocks.delete(trapEngineClocks.keys().next().value!);
+  }
+}
+
 export const SNMP_TRAP_LINK_DOWN_OID = "1.3.6.1.6.3.1.1.5.3";
 export const SNMP_TRAP_LINK_UP_OID = "1.3.6.1.6.3.1.1.5.4";
 export const IF_INDEX_COLUMN_OID = "1.3.6.1.2.1.2.2.1.1";
@@ -66,7 +117,7 @@ export function parseSnmpTrapPacket(
   offset = versionTlv.nextOffset;
   const version = decodeInteger(versionTlv.value);
   if (version === 3) {
-    return parseSnmpV3TrapPdu(packet, root, options.v3Credentials ?? []);
+    return parseSnmpV3TrapPdu(packet, options.v3Credentials ?? []);
   }
 
   const communityTlv = readTlv(packet, offset);
@@ -88,12 +139,11 @@ export function parseSnmpTrapPacket(
 
 function parseSnmpV3TrapPdu(
   packet: Buffer,
-  root: ReturnType<typeof readTlv>,
   credentials: SnmpV3TrapCredential[],
 ): ParsedSnmpTrap {
-  const envelope = parseSnmpV3Envelope(packet, root);
-  const candidates = credentials.filter(
-    (credential) => credential.user === envelope.user,
+  const envelope = parseSnmpV3Envelope(packet);
+  const candidates = credentials.filter((credential) =>
+    envelope.userBytes.equals(Buffer.from(credential.user)),
   );
   if (candidates.length === 0) {
     throw new Error(
@@ -106,6 +156,7 @@ function parseSnmpV3TrapPdu(
     try {
       const scoped = decodeSnmpV3TrapScopedPdu(packet, envelope, credential);
       const parsed = parseScopedTrapPdu(scoped.scopedPdu);
+      verifyTrapTimeliness(envelope, credential.id);
       return {
         snmpVersion: "3",
         credentialId: credential.id,
@@ -127,81 +178,6 @@ function parseSnmpV3TrapPdu(
   );
 }
 
-function parseSnmpV3Envelope(packet: Buffer, root: ReturnType<typeof readTlv>) {
-  let offset = root.valueStart;
-  const versionTlv = readTlv(packet, offset);
-  offset = versionTlv.nextOffset;
-  const headerTlv = readTlv(packet, offset);
-  offset = headerTlv.nextOffset;
-  const securityParametersTlv = readTlv(packet, offset);
-  offset = securityParametersTlv.nextOffset;
-  const msgDataOffset = offset;
-  const msgDataTlv = readTlv(packet, offset);
-
-  if (decodeInteger(versionTlv.value) !== 3) {
-    throw new Error("SNMPv3 trap packet version was invalid.");
-  }
-  if (headerTlv.tag !== 0x30 || securityParametersTlv.tag !== 0x04) {
-    throw new Error("SNMPv3 trap packet header was invalid.");
-  }
-
-  let headerOffset = headerTlv.valueStart;
-  headerOffset = readTlv(packet, headerOffset).nextOffset;
-  headerOffset = readTlv(packet, headerOffset).nextOffset;
-  const flagsTlv = readTlv(packet, headerOffset);
-  headerOffset = flagsTlv.nextOffset;
-  const securityModelTlv = readTlv(packet, headerOffset);
-  const flags = flagsTlv.value[0] ?? 0;
-  if (
-    securityModelTlv.tag !== 0x02 ||
-    decodeInteger(securityModelTlv.value) !== 3
-  ) {
-    throw new Error("SNMPv3 trap packet did not use USM security.");
-  }
-
-  const usm = readTlv(securityParametersTlv.value, 0);
-  if (usm.tag !== 0x30) {
-    throw new Error("SNMPv3 trap USM parameters were invalid.");
-  }
-  let usmOffset = usm.valueStart;
-  const engineIdTlv = readTlv(securityParametersTlv.value, usmOffset);
-  usmOffset = engineIdTlv.nextOffset;
-  const engineBootsTlv = readTlv(securityParametersTlv.value, usmOffset);
-  usmOffset = engineBootsTlv.nextOffset;
-  const engineTimeTlv = readTlv(securityParametersTlv.value, usmOffset);
-  usmOffset = engineTimeTlv.nextOffset;
-  const userTlv = readTlv(securityParametersTlv.value, usmOffset);
-  usmOffset = userTlv.nextOffset;
-  const authParametersTlv = readTlv(securityParametersTlv.value, usmOffset);
-  usmOffset = authParametersTlv.nextOffset;
-  const privacyParametersTlv = readTlv(securityParametersTlv.value, usmOffset);
-
-  if (
-    engineIdTlv.tag !== 0x04 ||
-    engineBootsTlv.tag !== 0x02 ||
-    engineTimeTlv.tag !== 0x02 ||
-    userTlv.tag !== 0x04 ||
-    authParametersTlv.tag !== 0x04 ||
-    privacyParametersTlv.tag !== 0x04
-  ) {
-    throw new Error("SNMPv3 trap USM fields were invalid.");
-  }
-
-  return {
-    flags,
-    engineId: Buffer.from(engineIdTlv.value),
-    engineBoots: decodeInteger(engineBootsTlv.value),
-    engineTime: decodeInteger(engineTimeTlv.value),
-    user: userTlv.value.toString("utf8"),
-    authParameters: Buffer.from(authParametersTlv.value),
-    authParametersOffset:
-      securityParametersTlv.valueStart + authParametersTlv.valueStart,
-    privacyParameters: Buffer.from(privacyParametersTlv.value),
-    msgDataOffset,
-    msgDataTlv,
-  };
-}
-
 function decodeSnmpV3TrapScopedPdu(
   packet: Buffer,
   envelope: ReturnType<typeof parseSnmpV3Envelope>,
@@ -210,6 +186,14 @@ function decodeSnmpV3TrapScopedPdu(
   const authRequired = (envelope.flags & 0x01) !== 0;
   const privacyRequired = (envelope.flags & 0x02) !== 0;
 
+  // A configured v3 credential always requires authentication. Packet flags
+  // cannot downgrade the credential and still acquire its trusted identity.
+  if (
+    !authRequired ||
+    privacyRequired !== (credential.privProtocol === "AES128")
+  ) {
+    throw new Error("SNMPv3 trap security level did not match the credential.");
+  }
   if (authRequired) {
     if (!credential.authPassword.trim()) {
       throw new Error(
@@ -249,7 +233,7 @@ function decodeSnmpV3TrapScopedPdu(
         "SNMPv3 trap requires AES privacy but credential has no privacy password.",
       );
     }
-    if (envelope.msgDataTlv.tag !== 0x04) {
+    if (envelope.msgData.tag !== 0x04) {
       throw new Error("SNMPv3 encrypted trap payload was invalid.");
     }
     const privKey = localizedPrivKey(
@@ -258,39 +242,31 @@ function decodeSnmpV3TrapScopedPdu(
       envelope.engineId,
     );
     scopedPdu = decryptScopedPdu(
-      envelope.msgDataTlv.value,
+      envelope.msgData.value,
       privKey,
       envelope.engineBoots,
       envelope.engineTime,
       envelope.privacyParameters,
     );
   } else {
-    if (envelope.msgDataTlv.tag !== 0x30) {
+    if (envelope.msgData.tag !== 0x30) {
       throw new Error("SNMPv3 plaintext trap payload was invalid.");
     }
-    scopedPdu = packet.subarray(
-      envelope.msgDataOffset,
-      envelope.msgDataTlv.nextOffset,
-    );
+    scopedPdu = envelope.msgData.encoded;
   }
 
-  const scoped = readTlv(scopedPdu, 0);
-  if (scoped.tag !== 0x30) {
-    throw new Error("SNMPv3 scoped PDU was invalid.");
-  }
-  let scopedOffset = scoped.valueStart;
-  scopedOffset = readTlv(scopedPdu, scopedOffset).nextOffset;
-  const contextNameTlv = readTlv(scopedPdu, scopedOffset);
-  scopedOffset = contextNameTlv.nextOffset;
-  const contextName = contextNameTlv.value.toString("utf8");
+  const scoped = parseSnmpV3ScopedPdu(scopedPdu);
+  const contextName = scoped.contextName.toString("utf8");
   const configuredContext = credential.context?.trim() ?? "";
-  if (configuredContext && configuredContext !== contextName) {
+  if (
+    configuredContext &&
+    !scoped.contextName.equals(Buffer.from(configuredContext))
+  ) {
     throw new Error("SNMPv3 trap context did not match the credential.");
   }
 
   return {
     scopedPdu,
-    pduOffset: scopedOffset,
     contextName,
     authVerified: authRequired,
     privacyUsed: privacyRequired,
@@ -298,20 +274,34 @@ function decodeSnmpV3TrapScopedPdu(
 }
 
 function parseScopedTrapPdu(scopedPdu: Buffer) {
-  const scoped = readTlv(scopedPdu, 0);
-  let offset = scoped.valueStart;
-  offset = readTlv(scopedPdu, offset).nextOffset;
-  offset = readTlv(scopedPdu, offset).nextOffset;
-  const pdu = readTlv(scopedPdu, offset);
-  if (pdu.tag !== 0xa7) {
-    throw new Error(
-      `Unsupported SNMPv3 trap PDU tag 0x${pdu.tag.toString(16)}.`,
-    );
+  const scoped = parseSnmpV3ScopedPdu(scopedPdu);
+  if (
+    scoped.tag !== 0xa7 ||
+    scoped.errorStatus !== 0 ||
+    scoped.errorIndex !== 0
+  ) {
+    throw new Error("Invalid SNMPv3 trap PDU.");
   }
-  const parsed = parseSnmpV2TrapPdu(3, "", scopedPdu, pdu);
+  const bindings = new SnmpBerReader(scoped.bindings);
+  const varbinds: SnmpTrapVarbind[] = [];
+  while (bindings.more()) {
+    const binding = new SnmpBerReader(bindings.take(0x30).value);
+    const oid = binding.take(0x06).value;
+    if (!oid.length || oid[oid.length - 1]! & 0x80)
+      throw new Error("Invalid SNMPv3 trap OID.");
+    const value = binding.take();
+    binding.done();
+    varbinds.push({
+      oid: decodeObjectIdentifier(oid),
+      value: decodeSnmpValue(value.tag, value.value),
+    });
+  }
+  const trapVarbind = varbinds.find(
+    (entry) => entry.oid === "1.3.6.1.6.3.1.1.4.1.0",
+  );
   return {
-    trapOid: parsed.trapOid,
-    varbinds: parsed.varbinds,
+    trapOid: trapVarbind?.value ? normalizeOid(trapVarbind.value) : undefined,
+    varbinds,
   };
 }
 

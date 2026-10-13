@@ -1,3 +1,5 @@
+import { parseCableRouteMode, decodeCableRouteGuides, assertCableGuideReferences } from "./cable-routing.js";
+import { validateStackIntegrity } from "./stack-integrity.js";
 import type Database from "better-sqlite3";
 import { CURRENT_SCHEMA_VERSION } from "../schema-version.js";
 
@@ -39,6 +41,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "snmpMatchMode",
     "snmpCredentialId",
     "ignoreTlsErrors",
+    "snmpCommunityEnc",
   ],
   deviceServices: [
     "id",
@@ -64,6 +67,8 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "createdAt",
     "updatedAt",
   ],
+  deviceStackMembers: ["id", "deviceId", "position", "name", "manufacturer", "model", "serial", "heightU", "status", "notes"],
+  deviceStackMemberMacs: ["memberId", "label", "macAddress"],
   devices: [
     "id",
     "labId",
@@ -301,6 +306,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "displayName",
     "createdAt",
     "updatedAt",
+    "roleRecheckRequired",
   ],
   portLinks: [
     "id",
@@ -313,6 +319,8 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "label",
     "visible",
     "routeWaypoints",
+    "routeMode",
+    "routeGuides",
   ],
   portTemplates: [
     "id",
@@ -341,6 +349,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "macAddress",
     "portRole",
     "aggregatePortId",
+    "stackMemberId",
   ],
   racks: [
     "id",
@@ -467,6 +476,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "lastLoginAt",
   ],
   userSessions: ["id", "userId", "tokenHash", "createdAt", "expiresAt"],
+  mcpTokens: ["id", "userId", "name", "tokenHash", "capability", "labIds", "createdAt", "expiresAt", "revokedAt"],
   virtualSwitches: [
     "id",
     "hostDeviceId",
@@ -563,17 +573,31 @@ export function validateRackpadSqliteDatabase(
   if (
     !schema ||
     !Number.isInteger(schema.version) ||
-    schema.version !== CURRENT_SCHEMA_VERSION
+    (schema.version < 50 || schema.version > CURRENT_SCHEMA_VERSION)
   ) {
     throw new RackpadSqliteValidationError(
       `${label} schema is not supported by this Rackpad version.`,
     );
   }
 
+  if (schema.version === 50) {
+    const stackObjects = database.prepare("SELECT name FROM sqlite_master WHERE name IN ('deviceStackMembers', 'deviceStackMemberMacs', 'ports_stack_owner_insert', 'ports_stack_owner_update', 'stack_member_device_immutable', 'stack_type_guard', 'stack_height_guard', 'stack_device_delete', 'idx_ports_stack_member')").all();
+    const stackColumn = (database.prepare('PRAGMA table_info(ports)').all() as Array<{ name: string }>).some(row => row.name === 'stackMemberId');
+    if (stackObjects.length || stackColumn) throw new RackpadSqliteValidationError(`${label} has inconsistent schema 50 stack objects.`);
+  }
+  if (schema.version < 52) {
+    const routeColumns = database.prepare("PRAGMA table_info(portLinks)").all() as Array<{ name: string }>;
+    const triggers = database.prepare("SELECT name FROM sqlite_master WHERE name IN ('cable_guide_device_delete', 'cable_guide_device_room', 'cable_guide_rack_room')").all();
+    if (triggers.length || routeColumns.some(column => column.name === "routeMode" || column.name === "routeGuides")) {
+      throw new RackpadSqliteValidationError(`${label} has inconsistent legacy routing schema.`);
+    }
+  }
   const missingSchema: string[] = [];
   for (const [table, requiredColumns] of Object.entries(
     CURRENT_RACKPAD_SCHEMA_COLUMNS,
   )) {
+    if (schema.version === 50 && (table === "deviceStackMembers" || table === "deviceStackMemberMacs")) continue;
+    if (schema.version < 53 && table === "mcpTokens") continue;
     const columns = new Set(
       (
         database.prepare(`PRAGMA table_info(${table})`).all() as Array<{
@@ -586,6 +610,8 @@ export function validateRackpadSqliteDatabase(
       continue;
     }
     for (const column of requiredColumns) {
+      if (schema.version === 50 && table === "ports" && column === "stackMemberId") continue;
+      if (schema.version < 52 && table === "portLinks" && (column === "routeMode" || column === "routeGuides")) continue;
       if (!columns.has(column)) missingSchema.push(`${table}.${column}`);
     }
   }
@@ -602,5 +628,22 @@ export function validateRackpadSqliteDatabase(
     );
   }
 
+  try { if (schema.version >= 51) validateStackIntegrity(database); } catch (error) {
+    throw new RackpadSqliteValidationError(`${label} failed stack integrity validation: ${error instanceof Error ? error.message : "invalid stack"}`);
+  }
+  if (schema.version >= 52) {
+    try {
+      const links = database.prepare(`SELECT portLinks.routeMode, portLinks.routeGuides, a.labId AS fromLabId, b.labId AS toLabId
+        FROM portLinks JOIN ports p ON p.id = portLinks.fromPortId JOIN devices a ON a.id = p.deviceId
+        JOIN ports q ON q.id = portLinks.toPortId JOIN devices b ON b.id = q.deviceId`).all() as Array<{routeMode: unknown; routeGuides: unknown; fromLabId: string; toLabId: string}>;
+      for (const link of links) {
+        parseCableRouteMode(link.routeMode);
+        assertCableGuideReferences(decodeCableRouteGuides(link.routeGuides), [link.fromLabId, link.toLabId],
+          id => database.prepare(`SELECT devices.labId, COALESCE(racks.roomId, devices.roomId) AS roomId
+            FROM devices LEFT JOIN racks ON racks.id = devices.rackId WHERE devices.id = ?`).get(id) as {labId: string; roomId: string | null} | undefined,
+          id => database.prepare("SELECT labId FROM rooms WHERE id = ?").get(id) as {labId: string} | undefined);
+      }
+    } catch { throw new RackpadSqliteValidationError(`${label} has invalid cable routing metadata.`); }
+  }
   return schema.version;
 }
