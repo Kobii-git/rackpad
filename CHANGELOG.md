@@ -6,6 +6,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.4-beta.9] - 2026-10-13
+
 ### Added
 
 - Independent physical layouts for stack members, with scoped preview/apply,
