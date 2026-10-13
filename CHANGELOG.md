@@ -6,6 +6,13 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Update Fastify to 5.12.5 and Nodemailer to 10.0.13, and refresh vulnerable
+  transitive dependencies used by HTTP handling, logging, and development tools.
+  Retain explicit trusted-proxy handling and SMTP alert behavior, with new
+  delivery, authentication, and rejection regression coverage.
+
 ## [1.8.3] - 2026-09-09
 
 ### Added
