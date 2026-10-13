@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Bring forward": "یک لایه جلوتر",
+  "Send backward": "یک لایه عقب‌تر",
+  "Bring to front": "آوردن به جلو",
+  "Send to back": "فرستادن به پشت",
+  "Copied {name} to {face}.": "{name} به {face} کپی شد.",
   "Resize side panel": "تغییر اندازه پنل کناری",
   "Resize item": "تغییر اندازه مورد",
   "Copy to other face": "کپی به سمت دیگر",

@@ -1,3 +1,6 @@
+import { previewStackMemberLayout, applyStackMemberLayout } from "../lib/stack-member-layouts.js";
+import type { PhysicalLayoutDevice } from "../lib/physical-layout.js";
+import { readStackMemberLayouts } from "../lib/stack-member-layout-data.js";
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import {
@@ -22,6 +25,24 @@ export const deviceStacksRoutes: FastifyPluginAsync = async (app) => {
       .get(req.params.id) as Record<string, unknown> | undefined;
     if (!assertLabReadFromRow(req, reply, device)) return;
     return listStackMembers(req.params.id);
+  });
+  app.get<{Params: Params}>("/:id/stack-members/:memberId/physical-layout", async (req, reply) => {
+    const device = db.prepare("SELECT * FROM devices WHERE id=?").get(req.params.id) as Record<string, unknown> | undefined;
+    if (!assertLabReadFromRow(req, reply, device)) return;
+    if (!listStackMembers(req.params.id).some(member => member.id === req.params.memberId)) throw new ValidationError("Stack member not found.", 404);
+    return readStackMemberLayouts(db, req.params.id).get(req.params.memberId) ?? null;
+  });
+  for (const action of ["preview", "apply"] as const) app.post<{Params: Params}>(`/:id/stack-members/:memberId/physical-layout/${action}`, async (req, reply) => {
+    const device = db.prepare("SELECT * FROM devices WHERE id=?").get(req.params.id) as (PhysicalLayoutDevice & Record<string, unknown>) | undefined;
+    if (!assertLabWriteFromRow(req, reply, device)) return;
+    if (!isStackType(device!.deviceType)) throw new ValidationError("This device is not a stacked switch.", 409);
+    const body = asObject(req.body);
+    if (action === "preview") return previewStackMemberLayout(device!, req.params.memberId, body);
+    return db.transaction(() => {
+      const result = applyStackMemberLayout(device!, req.params.memberId, body);
+      writeAuditLogEntry({user: req.authUser!.username, action: "stack-member-layout.apply", entityType: "Device", entityId: req.params.id, summary: `Applied member layout ${String(body.templateId)} to ${req.params.memberId}`});
+      return result;
+    })();
   });
   for (const method of ["POST", "PATCH", "DELETE", "PUT"] as const) {
     const url =

@@ -5,6 +5,7 @@ import type { Device, Port } from "../src/lib/types";
 import AxeBuilder from "@axe-core/playwright";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import {
   expect,
   test,
@@ -5932,10 +5933,10 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
       const form = workspace.getByRole("form", { name: "Edit stack member" });
       await form.getByRole("textbox", { name: "Name", exact: true }).fill(name);
       await form
-        .getByRole("textbox", { name: "Manufacturer", exact: true })
+        .getByLabel("Manufacturer", {exact: true})
         .fill("Synthetic");
       await form
-        .getByRole("textbox", { name: "Model", exact: true })
+        .getByLabel("Model", {exact: true})
         .fill("Acceptance switch");
       await form
         .getByRole("textbox", { name: "Serial number", exact: true })
@@ -6379,9 +6380,10 @@ test("MCP token UI shows credentials once and reviews an SDK proposal", async ({
   test.skip(process.env.MCP_ENABLED !== "1", "Run with MCP_ENABLED=1 to exercise the opt-in endpoint.");
   const headers = { Authorization: `Bearer ${token}` };
   let rackId: string | undefined;
+  const tokenName = `E2E MCP client ${randomUUID()}`;
   await authenticate(page);
   await page.goto("/mcp");
-  await page.getByRole("textbox", { name: "Name", exact: true }).fill("E2E MCP client");
+  await page.getByRole("textbox", { name: "Name", exact: true }).fill(tokenName);
   await page.getByRole("combobox", { name: "Lab permissions" }).selectOption("write");
   await page.getByRole("checkbox", { name: "Home Lab" }).check();
   await page.getByRole("button", { name: "Create", exact: true }).click();
@@ -6391,7 +6393,7 @@ test("MCP token UI shows credentials once and reviews an SDK proposal", async ({
   expect(bearer).toMatch(/^rpmcp_/);
   await page.reload();
   await expect(page.getByTestId("mcp-issued-token")).toHaveCount(0);
-  await expect(page.getByText("E2E MCP client", { exact: false })).toBeVisible();
+  await expect(page.getByText(tokenName, { exact: false })).toBeVisible();
 
   const client = new Client({ name: "rackpad-e2e", version: "1.0.0" },
     { versionNegotiation: { mode: { pin: "2026-07-28" } } });
@@ -6422,7 +6424,7 @@ test("MCP token UI shows credentials once and reviews an SDK proposal", async ({
     await client.close();
     if (rackId) await request.delete(`/api/racks/${rackId}`, { headers });
   }
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByText(tokenName, { exact: false }).locator("..").getByRole("button", { name: "Delete", exact: true }).click();
   const revoked = await request.post("/api/mcp", {
     headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
     data: { jsonrpc: "2.0", id: 1, method: "ping" },
@@ -6527,9 +6529,29 @@ test("remaining feedback template colors, resizing, grids and face operations pe
     await page.mouse.move(cancelBox!.x+6,cancelBox!.y+6); await page.mouse.down(); await page.mouse.move(cancelBox!.x+20,cancelBox!.y+10);
     await builder.getByTestId("hardware-template-preview-front").locator("svg").dispatchEvent("pointercancel"); await page.mouse.up(); await expect(width).toHaveValue("60");
     await width.fill("80"); await controls.getByRole("button",{name:"Copy to other face",exact:true}).click();
+    await expect(controls.getByRole("status")).toHaveText("Copied test-bay to Rear.");
+    await expect(select).toHaveValue("element::front:test-bay");
+    await builder.getByRole("button", {name: "Undo", exact: true}).click();
+    await expect(select.locator('option[value^="element::rear:test-bay-copy"]')).toHaveCount(0);
+    await builder.getByRole("button", {name: "Redo", exact: true}).click();
+    await expect(select.locator('option[value^="element::rear:test-bay-copy"]')).toHaveCount(1);
+    await controls.getByRole("button", {name: "Bring to front", exact: true}).click();
+
     await select.selectOption("module::rear:test-module");
     const grid=controls.getByTestId("template-module-grid");
-    await grid.getByRole("spinbutton",{name:"Rows",exact:true}).fill("1"); await grid.getByRole("spinbutton",{name:"Columns",exact:true}).fill("8"); await grid.getByRole("button",{name:"Update",exact:true}).click();
+    await grid.getByRole("spinbutton",{name:"Ports",exact:true}).fill("9");
+    await grid.getByRole("spinbutton",{name:"Rows",exact:true}).fill("1"); await grid.getByRole("spinbutton",{name:"Columns",exact:true}).fill("9"); await grid.getByRole("button",{name:"Update",exact:true}).click();
+    await builder.getByRole("button", {name:"Undo",exact:true}).click();
+    await expect(grid.getByRole("spinbutton",{name:"Ports",exact:true})).toHaveValue("8");
+    await expect(grid.getByRole("spinbutton",{name:"Rows",exact:true})).toHaveValue("2");
+    await expect(grid.getByRole("spinbutton",{name:"Columns",exact:true})).toHaveValue("4");
+    await builder.getByRole("button", {name:"Redo",exact:true}).click();
+    await expect(grid.getByRole("spinbutton",{name:"Ports",exact:true})).toHaveValue("9");
+    await expect(grid.getByRole("spinbutton",{name:"Rows",exact:true})).toHaveValue("1");
+    await expect(grid.getByRole("spinbutton",{name:"Columns",exact:true})).toHaveValue("9");
+    await grid.getByRole("spinbutton",{name:"Ports",exact:true}).fill("8");
+    await grid.getByRole("spinbutton",{name:"Columns",exact:true}).fill("8");
+    await grid.getByRole("button",{name:"Update",exact:true}).click();
     await select.selectOption("position::rear:test-position");
     await controls.getByRole("spinbutton",{name:"Width",exact:true}).fill("340");
     await controls.getByRole("button",{name:"Move to other face",exact:true}).click();
@@ -6597,4 +6619,55 @@ test("template block transfers preserve sibling ports through regeneration save 
     expect((await deleteSave).status()).toBe(200);
     expect((await readTemplate()).portSlots).toEqual(originalFront);
   } finally { await request.delete(`/api/hardware-templates/${id}`, { headers }); }
+});
+
+test("mixed-model220-port stacks retain applied modules, front/rear targets and SVG/PNG exports", async({page,request})=>{
+  test.setTimeout(120_000);
+  const headers={Authorization:`Bearer ${token}`};const suffix=Date.now().toString(36);
+  const post=async(url:string,data:unknown)=>{const response=await request.post(url,{headers,data});expect(response.ok(),await response.text()).toBeTruthy();return response.json();};
+  const room=await post("/api/rooms",{labId:"lab_home",name:`Mixed models ${suffix}`});
+  const rack=await post("/api/racks",{labId:"lab_home",roomId:room.id,name:"Mixed stack rack",totalU:12});
+  const stack=await post("/api/devices",{labId:"lab_home",roomId:room.id,rackId:rack.id,hostname:`mixed-stack-${suffix}`,deviceType:"switch_stack",placement:"rack",startU:2});
+  const templates:string[]=[];const members:string[]=[];const canonical:string[]=[];
+  try {
+    for(let index=0;index<5;index++){
+      const member=await post(`/api/devices/${stack.id}/stack-members`,{name:`Model ${index+1}`,manufacturer:"Synthetic",model:index?"RJ45-48":"SFP-28"});members.push(member.id);
+      let template=createStarterTemplate("switch-8");template.id=`mixed-${suffix}-${index}`;template.name=`Mixed model ${index+1}`;template.portSlots=[];template.portBlueprints=[];template.modules=[];template.moduleSlots=[];
+      const count=index?24:26;
+      for(const face of index?["front","rear"] as const:["rear"] as const) template=replacePortBlock(template,{id:`ports-${face}`,face,connector:index?"rj45":"sfp_plus",count,rows:2,columns:count/2,start:1,direction:"left-to-right",x:100,y:50,width:800,height:100});
+      if(!index){template.moduleSlots=[{id:"uplink-position",face:"rear",x:200,y:180,width:300,height:90}];template.modules=[createHardwareModule("uplink-module","Applied uplink module","uplink-position","sfp_plus",2,template.moduleSlots[0])];}
+      await post("/api/hardware-templates",template);templates.push(template.id);
+      const preview=await post(`/api/devices/${stack.id}/stack-members/${member.id}/physical-layout/preview`,{templateId:template.id,moduleIds:template.modules.map(module=>module.id)});
+      const applied=await post(`/api/devices/${stack.id}/stack-members/${member.id}/physical-layout/apply`,{...preview,approvedPortSlotIds:preview.portsToCreate.map((port:{slotId:string})=>port.slotId).slice(index === 0 ? 1 : 0)});canonical.push(...applied.createdPortIds);
+    }
+    const unassigned=await post("/api/ports",{deviceId:stack.id,name:"Stack-wide uplink",kind:"sfp_plus",face:"rear"});canonical.push(unassigned.id);
+    expect(canonical).toHaveLength(220);expect(new Set(canonical).size).toBe(220);
+    await authenticate(page);await page.goto(`/devices/${stack.id}?tab=stack-members`);
+    const first=page.getByTestId("stack-member").filter({has:page.getByText("Model 1",{exact:true})});
+    await expect(first.getByRole("checkbox",{name:"Applied uplink module",exact:true})).toBeChecked();
+    await first.locator("summary").filter({hasText:"Stack-wide ports"}).click();
+    await first.getByRole("checkbox",{name:"Stack-wide uplink",exact:true}).check();
+    await first.getByRole("button",{name:"Preview",exact:true}).click();
+    await expect(first.getByRole("combobox")).toHaveCount(29);
+    await expect(first.getByRole("alert")).toHaveCount(0);
+    const applyResponse=page.waitForResponse(response=>response.request().method()==="POST" && response.url().endsWith(`/stack-members/${members[0]}/physical-layout/apply`));
+    await first.getByRole("button",{name:"Apply",exact:true}).click();expect((await applyResponse).status()).toBe(200);
+    await expect(first.getByRole("checkbox",{name:"Stack-wide uplink",exact:true})).toHaveCount(0);
+    const nextPreview=page.waitForResponse(response=>response.request().method()==="POST" && response.url().endsWith(`/stack-members/${members[0]}/physical-layout/preview`));
+    await first.getByRole("button",{name:"Preview",exact:true}).click();expect((await nextPreview).status()).toBe(200);
+    await expect(first.getByRole("alert")).toHaveCount(0);
+    const before=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();expect(before.bindings).toHaveLength(220);
+    expect(before.bindings.map((binding:{portId:string})=>binding.portId).sort()).toEqual([...canonical].sort());
+    await page.reload();await expect(first.getByRole("checkbox",{name:"Applied uplink module",exact:true})).toBeChecked();
+    await first.getByRole("button",{name:"Move Model 1 down",exact:true}).click();
+    const after=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();
+    expect(after.bindings).toEqual(expect.arrayContaining(before.bindings));
+    await page.goto("/racks");await page.getByRole("button",{name:"Studio Beta",exact:true}).click();await page.getByRole("button",{name:new RegExp(`${room.name} 1R`)}).click();await page.getByRole("button",{name:"Both",exact:true}).click();await page.getByRole("button",{name:"Cables",exact:true}).click();
+    const targets=page.locator('[data-testid="rack-studio-device"] [data-cabling-selection-id^="port:"]');expect(await targets.count()).toBeGreaterThanOrEqual(220);
+    const svgDownload=page.waitForEvent("download");await page.getByRole("button",{name:"Download SVG",exact:true}).click();const svg=await readFile((await(await svgDownload).path())!,"utf8");
+    expect(svg.match(new RegExp(`<title>${stack.hostname}:`,'g'))).toHaveLength(220);
+    const pngDownload=page.waitForEvent("download");await page.getByRole("button",{name:"Download PNG",exact:true}).click();const png=await readFile((await(await pngDownload).path())!);expect(png.subarray(0,8).toString("hex")).toBe("89504e470d0a1a0a");
+  } finally {
+    await request.delete(`/api/devices/${stack.id}`,{headers});for(const id of templates)await request.delete(`/api/hardware-templates/${id}`,{headers});await request.delete(`/api/racks/${rack.id}`,{headers});await request.delete(`/api/rooms/${room.id}`,{headers});
+  }
 });

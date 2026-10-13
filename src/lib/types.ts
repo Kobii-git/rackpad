@@ -167,6 +167,7 @@ export interface Rack {
 }
 
 export interface DeviceStackMember {
+  appliedLayout?: {sourceTemplateId: string; status: PhysicalLayoutStatus} | null;
   id: ID;
   deviceId: ID;
   position: number;
@@ -314,11 +315,17 @@ export type PhysicalFacePrimitiveV1 =
       align?: "start" | "middle" | "end";
     };
 
+export interface ArtworkReference {
+  elementId: string;
+  moduleId?: string;
+}
+
 export interface FaceDefinitionV1 {
   schemaVersion: 1;
   width: 1000;
   height: number;
   elements: PhysicalFacePrimitiveV1[];
+  artworkOrder?: ArtworkReference[];
 }
 
 export interface PhysicalPortSlotV1 {
@@ -1357,4 +1364,22 @@ export interface RackOccupant {
   device: Device;
   startU: number;
   heightU: number;
+}
+
+export interface StackMemberLayoutPreview {
+  deviceId: string;
+  memberId: string;
+  templateId: string;
+  moduleIds: string[];
+  unassignedPortIds: string[];
+  heightU: number;
+  currentHeightU: number;
+  suggestedHeightU: number;
+  snapshot: ResolvedPhysicalLayoutV1;
+  bindings: PortBindingV1[];
+  conflicts: string[];
+  unmappedPortIds: string[];
+  linkedUnmappedPortIds: string[];
+  portsToCreate: Array<{slotId: string; name: string; kind: string; face: RackFace}>;
+  expectedFingerprint: string;
 }

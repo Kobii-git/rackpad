@@ -1,3 +1,4 @@
+import { reorderTemplateArtwork } from "@/lib/template-artwork";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/i18n";
 import { Input } from "@/components/ui/Input";
@@ -129,10 +130,14 @@ export function TemplateItemControls({
 }) {
   const { t } = useI18n();
   const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const [statusVersion, setStatusVersion] = useState(0);
   const items = templateItems(draft);
   const key = (item: TemplateItem) =>
     `${item.kind}:${item.moduleId ?? ""}:${item.face}:${item.id}`;
   const value = selected ? templateItemValue(draft, selected) : undefined;
+  const selectedModule =
+    selected?.kind === "module" ? (value as HardwareModuleV1 | undefined) : undefined;
   function apply(operation: () => HardwareTemplateV1) {
     try {
       onChange(operation());
@@ -215,10 +220,10 @@ export function TemplateItemControls({
                 ))}
             </div>
           )}
-          {selected.kind === "module" && (
+          {selectedModule && (
             <ModuleGrid
-              key={selected.id}
-              module={value as HardwareModuleV1}
+              key={`${selectedModule.id}:${selectedModule.portSlots.length}:${selectedModule.portGrid?.rows}:${selectedModule.portGrid?.columns}`}
+              module={selectedModule}
               apply={(count, rows, columns) =>
                 apply(() =>
                   updateModuleGrid(draft, selected.id, count, rows, columns),
@@ -226,13 +231,23 @@ export function TemplateItemControls({
               }
             />
           )}
+          {selected.kind === "element" && <div className="flex flex-wrap gap-2">
+            {([ ["forward", "Bring forward"], ["backward", "Send backward"], ["front", "Bring to front"], ["back", "Send to back"] ] as const).map(([direction, label]) =>
+              <Button key={direction} size="sm" variant="outline" onClick={() => apply(() => reorderTemplateArtwork(draft, selected.face, {elementId: selected.id, ...(selected.moduleId ? {moduleId: selected.moduleId} : {})}, direction))}>{t(label)}</Button>
+            )}
+          </div>}
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               variant="outline"
               disabled={!!selected.moduleId}
               onClick={() =>
-                apply(() => transferTemplateItem(draft, selected, true))
+                apply(() => {
+                  const next = transferTemplateItem(draft, selected, true);
+                  setStatusVersion(value => value + 1);
+                  setStatus(t("Copied {name} to {face}.", {name: selected.id, face: t(selected.face === "front" ? "Rear" : "Front")}));
+                  return next;
+                })
               }
             >
               {t("Copy to other face")}
@@ -260,6 +275,7 @@ export function TemplateItemControls({
           )}
         </>
       )}
+      <p role="status" aria-live="polite" className="text-xs"><span key={statusVersion}>{status}</span></p>
       {error && (
         <p role="alert" className="text-xs text-[var(--danger)]">
           {error}

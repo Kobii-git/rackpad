@@ -19,6 +19,9 @@ separately.
 | SNMP wire interoperability | `test:snmp:interop` | Isolated Docker bridge with Net-SNMP; credential API, monitoring, IF-MIB and authenticated traps; required by reusable quality |
 | Storage browser compatibility | `test:e2e:storage` | Chromium/Firefox with native, missing and throwing UUID APIs; fresh and schema-50 upgrade fixtures |
 | Browser/accessibility | `test:e2e` | Environment-heavy; required by full CI/release |
+| Feature acceptance | `test:e2e:acceptance` | Chromium/Firefox editor, stack, cabling and placement regressions with MCP explicitly enabled |
+| Container storage | `test:docker:storage` | Linux Docker image smoke for named volumes, bind ownership, custom users and restart persistence |
+| Published image verification | `test:release:smoke` | Explicit image/previous-image digests, platform and revision; fresh install, real schema-53 upgrade, API writes/monitoring, restart and paired rollback |
 | Documentation screenshots | `screenshots:update` | Isolated deterministic 1920×1200 capture; outside normal E2E discovery |
 | Screenshot determinism | `screenshots:check` | Two isolated captures with manifest and bounded pixel comparison; failures retain temporary captures for diagnosis; required after application checks in the reusable quality workflow |
 | Non-browser tests | `test` | Canonical local aggregation |

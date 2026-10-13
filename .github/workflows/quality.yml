@@ -39,11 +39,19 @@ jobs:
       - name: Full repository validation
         run: npm run check:full
 
+      - name: Chromium and Firefox feature acceptance
+        run: npm run test:e2e:acceptance
+        env:
+          MCP_ENABLED: "1"
+
       - name: Storage browser compatibility
         run: npm run test:e2e:storage
 
       - name: Net-SNMP interoperability
         run: npm run test:snmp:interop
+
+      - name: Container storage and user overrides
+        run: npm run test:docker:storage
 
       - name: Verify documentation screenshot determinism
         run: npm run screenshots:check

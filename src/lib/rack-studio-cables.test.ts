@@ -541,3 +541,21 @@ function multiPortLayout(
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
 }
+
+test("historical wrong-side endpoint fixture uses the exact face and connector slot in routing and export",()=>{
+  const front={...portA,id:"front-end",face:"front" as const};
+  const rear={...portB,id:"rear-end",face:"rear" as const};
+  const frontLayout=layout(serverA.id,front.id,80,260);frontLayout.snapshot.portSlots[0].face="front";
+  const rearLayout=layout(serverB.id,rear.id,820,260);
+  const cable={...link,fromPortId:front.id,toPortId:rear.id};
+  const input={room,face:"both" as const,devices:[serverA,serverB],racks:[rackA,rackB],layouts:[frontLayout,rearLayout],ports:[front,rear],links:[cable],style:"smooth" as const};
+  const route=buildRackStudioCableRoutes(input)[0];
+  const from=resolveRackStudioPortAnchor({port:front,devices:input.devices,racks:input.racks,layouts:input.layouts})!;
+  const to=resolveRackStudioPortAnchor({port:rear,devices:input.devices,racks:input.racks,layouts:input.layouts})!;
+  assert.equal(from.rackFace,"front");assert.equal(to.rackFace,"rear");
+  assert.equal(route.points[0].x,from.x);assert.equal(route.points[0].y,from.y);
+  assert.equal(route.points.at(-1)!.x,to.x);assert.equal(route.points.at(-1)!.y,to.y);
+  const labels={cable:"Cable",cables:"Cables",devices:"devices",front:"Front",rear:"Rear",room:"Room",rack:"Rack",legend:"Type",crossRoom:"Room",categories:{network:"Network",fiber:"Fiber",power:"Power",console:"Console",usb:"USB",storage:"Storage",other:"Other"}};
+  const exported=buildRackStudioSvg({...input,routeStyle:"smooth",theme:"dark",showLabels:true,labels});
+  assert.match(exported.svg,new RegExp(`M ${(from.x+60).toFixed(2)} ${(from.y+92).toFixed(2)}`));
+});

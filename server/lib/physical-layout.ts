@@ -57,11 +57,17 @@ export type FacePrimitiveV1 =
       align?: "start" | "middle" | "end";
     };
 
+export interface ArtworkReference {
+  elementId: string;
+  moduleId?: string;
+}
+
 export interface FaceDefinitionV1 {
   schemaVersion: 1;
   width: 1000;
   height: number;
   elements: FacePrimitiveV1[];
+  artworkOrder?: ArtworkReference[];
 }
 
 export interface ResolvedPhysicalLayoutV1 {
@@ -532,7 +538,24 @@ function validateFace(value: unknown, label: string): FaceDefinitionV1 {
     } as FacePrimitiveV1;
   });
 
-  return { schemaVersion: 1, width: 1000, height, elements };
+  let artworkOrder: ArtworkReference[] | undefined;
+  if (face.artworkOrder !== undefined) {
+    if (!Array.isArray(face.artworkOrder) || face.artworkOrder.length > MAX_ELEMENTS * 129)
+      throw new ValidationError(`${label}.artworkOrder is invalid.`);
+    const seen = new Set<string>();
+    artworkOrder = face.artworkOrder.map((value, index) => {
+      const item = asRecord(value, `${label}.artworkOrder[${index}]`);
+      const reference = {
+        elementId: validateId(item.elementId, `${label}.artworkOrder[${index}].elementId`),
+        ...(item.moduleId !== undefined ? { moduleId: validateId(item.moduleId, `${label}.artworkOrder[${index}].moduleId`) } : {}),
+      };
+      const key = JSON.stringify([reference.moduleId ?? null, reference.elementId]);
+      if (seen.has(key)) throw new ValidationError(`${label}.artworkOrder contains duplicate references.`);
+      seen.add(key);
+      return reference;
+    });
+  }
+  return { schemaVersion: 1, width: 1000, height, elements, ...(artworkOrder ? { artworkOrder } : {}) };
 }
 
 function validatePortSlot(value: unknown, index: number): PhysicalPortSlotV1 {
@@ -810,6 +833,16 @@ export function validateHardwareTemplateV1(value: unknown): HardwareTemplateV1 {
     };
   });
 
+  for (const face of ["front", "rear"] as const) {
+    for (const reference of (face === "front" ? front : rear).artworkOrder ?? []) {
+      const elements = reference.moduleId
+        ? validatedModules.find(module => module.id === reference.moduleId && module.face === face)?.elements
+        : (face === "front" ? front : rear).elements;
+      if (!elements?.some(element => element.id === reference.elementId))
+        throw new ValidationError(`Unknown ${face} artwork reference ${reference.elementId}.`);
+    }
+  }
+
   return {
     schemaVersion: 1,
     id: validateId(template.id, "id"),
@@ -877,6 +910,12 @@ export function validateResolvedPhysicalLayoutV1(
   }
   const front = validateFace(faces.front, "physical layout front");
   const rear = validateFace(faces.rear, "physical layout rear");
+  for (const face of [front, rear]) {
+    for (const reference of face.artworkOrder ?? []) {
+      if (reference.moduleId || !face.elements.some(element => element.id === reference.elementId))
+        throw new ValidationError("Resolved artwork references must identify existing face elements.");
+    }
+  }
   for (const slot of portSlots) {
     const face = slot.face === "front" ? front : rear;
     if (
@@ -1277,6 +1316,19 @@ export function resolveTemplateSnapshot(
       ids.add(element.id);
     }
   }
+  function resolveFace(face: PhysicalFace): FaceDefinitionV1 {
+    const definition = template[face];
+    const entries = [
+      ...definition.elements.map(element => ({element, key: JSON.stringify([null, element.id])})),
+      ...selectedModules.filter(module => module.face === face).flatMap(module => module.elements.map(element => ({element, key: JSON.stringify([module.id, element.id])}))),
+    ];
+    const order = definition.artworkOrder;
+    if (order) {
+      const rank = new Map(order.map((reference, index) => [JSON.stringify([reference.moduleId ?? null, reference.elementId]), index]));
+      entries.sort((a, b) => (rank.get(a.key) ?? order.length) - (rank.get(b.key) ?? order.length));
+    }
+    return {schemaVersion: 1, width: definition.width, height: definition.height, elements: entries.map(entry => entry.element), ...(order ? {artworkOrder: entries.map(entry => ({elementId: entry.element.id}))} : {})};
+  }
   return {
     schemaVersion: 1,
     sourceTemplateId: template.id,
@@ -1290,26 +1342,7 @@ export function resolveTemplateSnapshot(
           ? template.mountDefaults.columnSpan
           : Math.min(6, template.mountDefaults.columnSpan),
     },
-    faces: {
-      front: {
-        ...template.front,
-        elements: [
-          ...template.front.elements,
-          ...selectedModules
-            .filter((module) => module.face === "front")
-            .flatMap((module) => module.elements),
-        ],
-      },
-      rear: {
-        ...template.rear,
-        elements: [
-          ...template.rear.elements,
-          ...selectedModules
-            .filter((module) => module.face === "rear")
-            .flatMap((module) => module.elements),
-        ],
-      },
-    },
+    faces: {front: resolveFace("front"), rear: resolveFace("rear")},
     portSlots: resolvedPortSlots,
     moduleIds: selectedModules.map((module) => module.id),
   };

@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Bring forward": "한 단계 앞으로",
+  "Send backward": "한 단계 뒤로",
+  "Bring to front": "맨 앞으로",
+  "Send to back": "맨 뒤로",
+  "Copied {name} to {face}.": "{name}을(를) {face}에 복사했습니다.",
   "Resize side panel": "측면 패널 크기 조절",
   "Resize item": "항목 크기 조절",
   "Copy to other face": "반대 면으로 복사",

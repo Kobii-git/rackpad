@@ -107,6 +107,65 @@ SNMP traps must reach Rackpad, or use the privileged host-discovery profile.
 
 Rackpad stores its SQLite database in the Docker volume `rackpad_data`.
 
+### Bind mounts and container users
+
+For standard Docker deployments, the image runs as non-root UID `10001`.
+The group ID is assigned when the image is built; do not assume it is `10001`.
+Docker bind mounts retain the host directory's ownership, so replacing the named
+volume with a host path requires preparing that directory, even on a fresh install.
+The image's build-time ownership of `/data` cannot change a mounted host directory.
+
+From your Compose project directory, inspect the configured service identity and
+prepare a **new, empty** data directory before replacing the mount:
+
+```bash
+rackpad_uid=$(docker compose run --rm --no-deps --entrypoint id rackpad -u)
+rackpad_gid=$(docker compose run --rm --no-deps --entrypoint id rackpad -g)
+sudo install -d -o "$rackpad_uid" -g "$rackpad_gid" -m 0700 /opt/rackpad/data
+```
+
+Replace the existing `/data` entry in the `rackpad` service, retaining the other
+settings. This long syntax refuses a missing host directory:
+
+```yaml
+volumes:
+  - type: bind
+    source: /opt/rackpad/data
+    target: /data
+    bind:
+      create_host_path: false
+```
+
+To use a different non-root identity, add `user` directly under the service,
+at the same indentation as `image` and `environment`:
+
+```yaml
+services:
+  rackpad:
+    user: "1000:1000"
+```
+
+Use your intended numeric UID and GID in place of `1000:1000`. With that setting
+in place, the identity commands above return the override. `PUID` and `PGID`
+environment variables are **not supported** and do not change the process user.
+Retain the read-only root filesystem, `/tmp` tmpfs and `no-new-privileges` settings.
+Custom users also need write access to any configured native-backup directory.
+
+For an existing installation, stop Rackpad and back up its data and configuration
+together before changing mounts or ownership. Changing to an empty host directory
+starts a separate empty installation; it does not move the named volume's data.
+Preserve or restore the existing database into the intended mount. The directory
+and existing `rackpad.db`, `rackpad.db-wal` and `rackpad.db-shm` files, when present,
+must be accessible to the selected identity. Never copy a live SQLite database or
+use world-writable permissions to work around access failures. Recreate the
+container after the configuration change and verify the existing inventory.
+
+These instructions cover standard Docker profiles on Linux. Rootless Docker,
+user-namespace remapping and network filesystems may require host-side ID or ACL
+configuration. The explicitly privileged host-discovery profile runs as root;
+see [discovery storage ownership](docs/DOCKER_DISCOVERY.md#storage-ownership)
+before switching between profiles.
+
 ### Host and container HTTP ports
 
 With standard bridge networking, `RACKPAD_PORT=3006` publishes host port 3006
@@ -165,11 +224,13 @@ the defaults are disabled, every 24 hours, with seven snapshots retained.
 Create-now, list, download, and delete operations are restricted to admins and
 to Rackpad-generated `rackpad-native-*.db` files in that directory.
 
-Create the host directory for Rackpad's fixed non-root UID and restrict it
-before mounting it:
+Create the host directory for the configured service identity and restrict it
+before mounting it (run these from the Compose project directory):
 
 ```bash
-sudo install -d -o 10001 -g 10001 -m 0700 /srv/rackpad-native
+rackpad_uid=$(docker compose run --rm --no-deps --entrypoint id rackpad -u)
+rackpad_gid=$(docker compose run --rm --no-deps --entrypoint id rackpad -g)
+sudo install -d -o "$rackpad_uid" -g "$rackpad_gid" -m 0700 /srv/rackpad-native
 ```
 
 Rackpad creates snapshot files with mode `0600`.
@@ -654,6 +715,16 @@ Your final proxy hop should pass:
 - `X-Forwarded-For`
 
 ## Troubleshooting
+
+### Database access fails with a bind mount
+
+`SqliteError: unable to open database file`, a read-only database error, or the
+`Database access failed` startup hint can mean that the data directory is missing
+or inaccessible to the container user. Check the effective UID/GID and ownership
+of both the directory and existing SQLite files using the
+[bind-mount instructions](#bind-mounts-and-container-users). A fresh directory
+can have the wrong ownership too. Adding `PUID`/`PGID` does not fix it, and running
+the ordinary profile as root is unnecessary.
 
 ### Direct URLs return JSON errors
 

@@ -1,4 +1,9 @@
 export const en = {
+  "Bring forward": "Bring forward",
+  "Send backward": "Send backward",
+  "Bring to front": "Bring to front",
+  "Send to back": "Send to back",
+  "Copied {name} to {face}.": "Copied {name} to {face}.",
   "Resize side panel": "Resize side panel",
   "Resize item": "Resize item",
   "Copy to other face": "Copy to other face",

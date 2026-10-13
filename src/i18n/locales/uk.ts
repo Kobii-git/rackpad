@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const uk = {
+  "Bring forward": "На шар уперед",
+  "Send backward": "На шар назад",
+  "Bring to front": "На передній план",
+  "Send to back": "На задній план",
+  "Copied {name} to {face}.": "{name} скопійовано на {face}.",
   "Resize side panel": "Змінити розмір бічної панелі",
   "Resize item": "Змінити розмір елемента",
   "Copy to other face": "Копіювати на інший бік",
