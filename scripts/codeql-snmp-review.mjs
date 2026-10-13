@@ -10,7 +10,7 @@ export const SNMP_REVIEW = Object.freeze({
   ruleId: "js/insufficient-password-hash",
   file: "server/lib/snmp-v3.ts",
   sourceSha256: "4029cff16fe59c2120322cf3340bc543564bd44f12835b57f20f27c2e35b3e63",
-  serverTree: "29b7962b93a62fa05da1e4147afef36a68166827",
+  serverTree: "e7e8e6c90b404de2cfbbfc4b61ab4f71d5f3d526",
   owner: "@Kobii-git",
   expiresAt: "2026-11-30T00:00:00.000Z",
   rationale: "RFC 3414 A.2 requires MD5/SHA1 for configured SNMP interoperability; credential storage is separately encrypted.",
