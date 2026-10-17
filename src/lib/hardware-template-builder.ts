@@ -33,6 +33,7 @@ export interface HardwareTemplateStarter {
   category: string;
   deviceType: string;
   heightU: number;
+  shape?: "round";
   portBlocks: PortBlockDefinition[];
 }
 
@@ -76,6 +77,30 @@ export const HARDWARE_TEMPLATE_STARTERS: HardwareTemplateStarter[] = [
   starter("kvm", "KVM", "kvm", "kvm", 1, 8),
   starter("shelf", "Rack shelf", "rack_shelf", "rack_shelf", 1),
   starter("blanking", "Blanking panel", "blanking_panel", "blanking_panel", 1),
+  {
+    id: "round-device",
+    name: "Round device",
+    category: "ap",
+    deviceType: "ap",
+    heightU: 1,
+    shape: "round",
+    portBlocks: [
+      {
+        id: "ports",
+        face: "rear",
+        connector: "rj45",
+        count: 1,
+        rows: 1,
+        columns: 1,
+        start: 1,
+        direction: "left-to-right",
+        x: 400,
+        y: 680,
+        width: 200,
+        height: 100,
+      },
+    ],
+  },
 ];
 
 export const MODULE_PRIMITIVES = [
@@ -218,6 +243,33 @@ function baseFace(face: RackFace, label: string, category: string,
   return { schemaVersion: 1, width: 1000, height: FACE_HEIGHT, elements };
 }
 
+function roundFace(face: RackFace, label: string): FaceDefinitionV1 {
+  return {
+    schemaVersion: 1,
+    width: 1000,
+    height: 1000,
+    shape: "round",
+    elements: [
+      {
+        kind: "label",
+        id: `${face}-label`,
+        x: 500,
+        y: 460,
+        text: label.slice(0, 120),
+        align: "middle",
+      },
+      {
+        kind: "indicator",
+        id: `${face}-indicator`,
+        x: 500,
+        y: 540,
+        radius: 12,
+        tone: "accent",
+      },
+    ],
+  };
+}
+
 function connectorSize(connector: PortKind) {
   if (connector === "power") return { width: 48, height: 50 };
   if (connector === "usb") return { width: 34, height: 18 };
@@ -317,12 +369,12 @@ export function createStarterTemplate(
     category: starter.category,
     deviceTypes: [starter.deviceType],
     mountDefaults: {
-      kind: starter.category === "endpoint" ? "shelf" : "direct",
+      kind: starter.shape === "round" ? "loose" : starter.category === "endpoint" ? "shelf" : "direct",
       heightU: starter.heightU,
       columnSpan: 12,
     },
-    front: baseFace("front", templateName, starter.category),
-    rear: baseFace("rear", templateName, starter.category),
+    front: starter.shape === "round" ? roundFace("front", templateName) : baseFace("front", templateName, starter.category),
+    rear: starter.shape === "round" ? roundFace("rear", templateName) : baseFace("rear", templateName, starter.category),
     portSlots: starter.portBlocks.flatMap(generatePortBlock),
     moduleSlots,
     modules: hasModuleSlots
@@ -497,7 +549,7 @@ export function movePhysicalPortSlot(
         ? {
             ...slot,
             x: round(Math.max(0, Math.min(1000 - slot.width, x))),
-            y: round(Math.max(0, Math.min(FACE_HEIGHT - slot.height, y))),
+            y: round(Math.max(0, Math.min(template[slot.face].height - slot.height, y))),
           }
         : slot,
     ),

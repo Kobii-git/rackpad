@@ -66,6 +66,7 @@ export interface FaceDefinitionV1 {
   schemaVersion: 1;
   width: 1000;
   height: number;
+  shape?: "round";
   elements: FacePrimitiveV1[];
   artworkOrder?: ArtworkReference[];
 }
@@ -421,6 +422,12 @@ function validateFace(value: unknown, label: string): FaceDefinitionV1 {
     );
   }
   const height = finiteInRange(face.height, `${label}.height`, 80, 1000);
+  if (face.shape !== undefined && face.shape !== "round") {
+    throw new ValidationError(`${label}.shape must be round when provided.`);
+  }
+  if (face.shape === "round" && height !== 1000) {
+    throw new ValidationError(`${label} round faces require a square canvas.`);
+  }
   if (!Array.isArray(face.elements) || face.elements.length > MAX_ELEMENTS) {
     throw new ValidationError(
       `${label}.elements must contain at most ${MAX_ELEMENTS} primitives.`,
@@ -555,7 +562,7 @@ function validateFace(value: unknown, label: string): FaceDefinitionV1 {
       return reference;
     });
   }
-  return { schemaVersion: 1, width: 1000, height, elements, ...(artworkOrder ? { artworkOrder } : {}) };
+  return { schemaVersion: 1, width: 1000, height, ...(face.shape === "round" ? { shape: "round" as const } : {}), elements, ...(artworkOrder ? { artworkOrder } : {}) };
 }
 
 function validatePortSlot(value: unknown, index: number): PhysicalPortSlotV1 {
@@ -1327,7 +1334,7 @@ export function resolveTemplateSnapshot(
       const rank = new Map(order.map((reference, index) => [JSON.stringify([reference.moduleId ?? null, reference.elementId]), index]));
       entries.sort((a, b) => (rank.get(a.key) ?? order.length) - (rank.get(b.key) ?? order.length));
     }
-    return {schemaVersion: 1, width: definition.width, height: definition.height, elements: entries.map(entry => entry.element), ...(order ? {artworkOrder: entries.map(entry => ({elementId: entry.element.id}))} : {})};
+    return {schemaVersion: 1, width: definition.width, height: definition.height, ...(definition.shape ? {shape: definition.shape} : {}), elements: entries.map(entry => entry.element), ...(order ? {artworkOrder: entries.map(entry => ({elementId: entry.element.id}))} : {})};
   }
   return {
     schemaVersion: 1,

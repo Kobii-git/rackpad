@@ -1307,3 +1307,18 @@ test("expanding two loose devices with both endpoint faces hidden retains their 
     }
   }
 });
+
+test("round loose-card anchors fit the same square as the faceplate", () => {
+  const ap = {...device("round-ap", rack24.id, 1), rackId: undefined, placement: "room" as const, rackMountKind: "loose" as const};
+  const lan = port("round-lan", ap.id, "rear", 1);
+  const physical = layout(ap.id, [lan]);
+  physical.snapshot.faces.rear = {schemaVersion: 1, width: 1000, height: 1000, shape: "round", elements: []};
+  const slot = physical.snapshot.portSlots[0]!;
+  slot.x=400; slot.y=680; slot.width=60; slot.height=40;
+  const scene=buildRackCablingScene({room, racks:[rack24], devices:[ap], layouts:[physical], ports:[lan], faceMode:"rear", looseExpanded:true});
+  const frame=scene.looseCards[0]!.faces[0]!;
+  const size=Math.min(frame.width,frame.height);
+  const anchor=scene.anchors.find(a=>a.portId===lan.id)!;
+  assert.equal(anchor.x,frame.x+(frame.width-size)/2+0.43*size);
+  assert.equal(anchor.y,frame.y+(frame.height-size)/2+0.7*size);
+});

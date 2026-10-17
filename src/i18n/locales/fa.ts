@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "New device type": "نوع دستگاه جدید",
+  "Starting layout": "چیدمان اولیه",
+  "Choose a starting layout, then name your template and select its device type.": "یک چیدمان اولیه انتخاب کنید، سپس الگو را نام‌گذاری کرده و نوع دستگاه را انتخاب کنید.",
+  "Round device": "دستگاه گرد",
   "Bring forward": "یک لایه جلوتر",
   "Send backward": "یک لایه عقب‌تر",
   "Bring to front": "آوردن به جلو",

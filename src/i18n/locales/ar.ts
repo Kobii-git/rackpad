@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "New device type": "نوع جهاز جديد",
+  "Starting layout": "التخطيط الأولي",
+  "Choose a starting layout, then name your template and select its device type.": "اختر تخطيطًا أوليًا، ثم سمّ القالب وحدد نوع الجهاز.",
+  "Round device": "جهاز دائري",
   "Bring forward": "تقديم طبقة",
   "Send backward": "إرجاع طبقة",
   "Bring to front": "إحضار إلى المقدمة",

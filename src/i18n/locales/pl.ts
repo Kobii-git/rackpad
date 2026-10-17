@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const pl = {
+  "New device type": "Nowy typ urządzenia",
+  "Starting layout": "Układ początkowy",
+  "Choose a starting layout, then name your template and select its device type.": "Wybierz układ początkowy, nazwij szablon i wybierz typ urządzenia.",
+  "Round device": "Okrągłe urządzenie",
   "Bring forward": "Przesuń do przodu",
   "Send backward": "Przesuń do tyłu",
   "Bring to front": "Przenieś na wierzch",

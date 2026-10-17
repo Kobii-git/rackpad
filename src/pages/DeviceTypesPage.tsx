@@ -491,6 +491,10 @@ export default function DeviceTypesPage() {
           <HardwareTemplateBuilder
             selectedDeviceType={selectedType?.id}
             deviceTypes={deviceTypes}
+            onDeviceTypeCreated={(id) => {
+              setSelectedId(id);
+              void refreshUsage();
+            }}
           />
         </div>
       </div>

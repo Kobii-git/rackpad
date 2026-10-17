@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createStarterTemplate,
+  templateToResolvedLayout,
   createHardwareModule,
   deleteModulePosition,
   updateModulePosition,
@@ -13,6 +14,36 @@ import {
   replacePortBlock,
   type PortBlockDefinition,
 } from "./hardware-template-builder";
+
+test("round starters retain both square faces, loose mounting and editable rear ports", () => {
+  const template = createStarterTemplate(
+    "round-device",
+    "ceiling-ap",
+    "Ceiling AP",
+  );
+  assert.equal(template.mountDefaults.kind, "loose");
+  assert.deepEqual(template.deviceTypes, ["ap"]);
+  assert.equal(template.modules.length, 0);
+  assert.equal(template.moduleSlots.length, 0);
+  for (const face of [template.front, template.rear]) {
+    assert.equal(face.shape, "round");
+    assert.equal(face.width, face.height);
+    assert.ok(!face.elements.some((element) => element.kind === "handle"));
+  }
+  const port = template.portSlots[0]!;
+  assert.equal(port.face, "rear");
+  assert.equal(port.connector, "rj45");
+  const moved = movePhysicalPortSlot(template, port.id, 600, 850);
+  assert.equal(moved.portSlots[0]!.y, 850);
+  const bounded = movePhysicalPortSlot(template, port.id, 2000, 2000);
+  assert.equal(bounded.portSlots[0]!.y + port.height, 1000);
+  assert.equal(bounded.portSlots[0]!.x + port.width, 1000);
+  const snapshot = templateToResolvedLayout(moved);
+  assert.equal(snapshot.faces.front.shape, "round");
+  assert.equal(snapshot.faces.rear.shape, "round");
+  assert.equal(createStarterTemplate("server-2u").front.shape, undefined);
+  assert.equal(createStarterTemplate("unknown").deviceTypes[0], "server");
+});
 
 test("port block generation is deterministic across supported numbering directions", () => {
   const base: PortBlockDefinition = {

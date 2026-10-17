@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "New device type": "새 장치 유형",
+  "Starting layout": "시작 레이아웃",
+  "Choose a starting layout, then name your template and select its device type.": "시작 레이아웃을 고른 다음 템플릿 이름과 장치 유형을 지정하세요.",
+  "Round device": "원형 장치",
   "Bring forward": "한 단계 앞으로",
   "Send backward": "한 단계 뒤로",
   "Bring to front": "맨 앞으로",

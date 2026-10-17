@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "New device type": "নতুন ডিভাইসের ধরন",
+  "Starting layout": "শুরুর বিন্যাস",
+  "Choose a starting layout, then name your template and select its device type.": "একটি শুরুর বিন্যাস বেছে নিন, তারপর টেমপ্লেটের নাম দিন এবং ডিভাইসের ধরন নির্বাচন করুন।",
+  "Round device": "গোলাকার ডিভাইস",
   "Bring forward": "এক ধাপ সামনে আনুন",
   "Send backward": "এক ধাপ পিছনে পাঠান",
   "Bring to front": "সবার সামনে আনুন",

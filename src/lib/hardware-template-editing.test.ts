@@ -373,3 +373,19 @@ test("copying a qualified block with legacy slot IDs preserves copied identities
   assert.deepEqual(regenerated.portSlots.filter(slot => slot.groupId !== added.id), original.portSlots);
   assert.doesNotThrow(() => validateHardwareTemplateV1(regenerated));
 });
+
+test("round editing retains colors, bounds and port identities across resize and face transfer", () => {
+  const template = createStarterTemplate("round-device");
+  const port = template.portSlots[0]!;
+  const item = {kind: "port" as const, id: port.id, face: port.face};
+  const edited = updateTemplateItem(template, item, {x: 700, y: 800, width: 90, height: 70, color: "#12ab34"});
+  assert.equal(edited.portSlots[0]!.id, port.id);
+  assert.equal(edited.portSlots[0]!.y, 800);
+  const copied = transferTemplateItem(edited, item, true);
+  const copy = copied.portSlots.find(slot => slot.face === "front")!;
+  assert.notEqual(copy.id, port.id);
+  assert.equal(copy.y, 800);
+  assert.equal(copy.color, "#12ab34");
+  assert.equal(validateHardwareTemplateV1(copied).front.shape, "round");
+  assert.throws(() => updateTemplateItem(edited, item, {y: 990}));
+});

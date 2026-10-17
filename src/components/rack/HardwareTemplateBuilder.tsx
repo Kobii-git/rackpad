@@ -17,6 +17,7 @@ import {
   deviceTypeChainIncludes,
   deviceTypeLineage,
   localizedDeviceTypeIdLabel,
+  localizedDeviceTypeLabel,
 } from "@/lib/device-types";
 import {
   createHardwareModule,
@@ -34,7 +35,7 @@ import {
   type PortBlockDefinition,
   type PortBlockDirection,
 } from "@/lib/hardware-template-builder";
-import { upsertPhysicalLayoutRecord, useStore } from "@/lib/store";
+import { createDeviceTypeRecord, upsertPhysicalLayoutRecord, useStore } from "@/lib/store";
 import type {
   DeviceTypeDefinition,
   HardwareTemplateDefault,
@@ -77,11 +78,13 @@ const EMPTY_BLOCK: PortBlockDefinition = {
 interface HardwareTemplateBuilderProps {
   selectedDeviceType?: string;
   deviceTypes: DeviceTypeDefinition[];
+  onDeviceTypeCreated?: (id: string) => void;
 }
 
 export function HardwareTemplateBuilder({
   selectedDeviceType,
   deviceTypes,
+  onDeviceTypeCreated,
 }: HardwareTemplateBuilderProps) {
   const { t } = useI18n();
   const devices = useStore((state) => state.devices);
@@ -107,6 +110,12 @@ export function HardwareTemplateBuilder({
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [addingType, setAddingType] = useState(false);
+  const [customTypeName, setCustomTypeName] = useState("");
+  const [customTypeParent, setCustomTypeParent] = useState("other");
+  const [creatingType, setCreatingType] = useState(false);
+  const [typeError, setTypeError] = useState("");
+
   const selection = { face, selectedSlotId, selectedItem, selectedElementId, moduleSlotId, moduleIds, editingBlockKey, block };
   const history = useTemplateHistory(() => createStarterTemplate("server-2u"), selection, next => {
     setFace(next.face); setSelectedSlotId(next.selectedSlotId); setSelectedItem(next.selectedItem);
@@ -114,6 +123,35 @@ export function HardwareTemplateBuilder({
     setEditingBlockKey(next.editingBlockKey); setBlock(next.block);
   });
   const { draft, setDraft } = history;
+  async function handleCreateDeviceType() {
+    if (creatingType || saving) return;
+    const label = customTypeName.trim();
+    if (!label) {
+      setTypeError(t("Device type name is required."));
+      return;
+    }
+    setCreatingType(true);
+    setTypeError("");
+    try {
+      const created = await createDeviceTypeRecord({
+        label,
+        parentType: customTypeParent,
+      });
+      setDraft((current) => ({ ...current, deviceTypes: [created.id] }));
+      onDeviceTypeCreated?.(created.id);
+      setAddingType(false);
+      setCustomTypeName("");
+    } catch (nextError) {
+      setTypeError(
+        nextError instanceof Error
+          ? nextError.message
+          : t("Failed to create device type."),
+      );
+    } finally {
+      setCreatingType(false);
+    }
+  }
+
   const blocks = templatePortBlocks(draft);
   const editingBlock = blocks.find(
     (entry) => `${entry.face}:${entry.id}` === editingBlockKey,
@@ -443,6 +481,7 @@ export function HardwareTemplateBuilder({
               <select
                 className="rk-control h-8 w-full px-2.5 text-sm"
                 value={selectedId}
+                disabled={creatingType}
                 onChange={(event) => selectTemplate(event.target.value)}
               >
                 <option value={NEW_TEMPLATE}>{t("New template")}</option>
@@ -453,20 +492,32 @@ export function HardwareTemplateBuilder({
                 ))}
               </select>
             </Field>
-            <Field label={t("Type")}>
-              <select
-                data-testid="hardware-template-starter"
-                className="rk-control h-8 w-full px-2.5 text-sm"
-                value={starterId}
-                onChange={(event) => selectStarter(event.target.value)}
-              >
-                {HARDWARE_TEMPLATE_STARTERS.map((starter) => (
-                  <option key={starter.id} value={starter.id}>
-                    {starter.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            {selectedId === NEW_TEMPLATE && (
+              <>
+                <Field label={t("Starting layout")}>
+                  <select
+                    disabled={creatingType}
+                    data-testid="hardware-template-starter"
+                    className="rk-control h-8 w-full px-2.5 text-sm"
+                    value={starterId}
+                    onChange={(event) => selectStarter(event.target.value)}
+                  >
+                    {HARDWARE_TEMPLATE_STARTERS.map((starter) => (
+                      <option key={starter.id} value={starter.id}>
+                        {starter.shape === "round"
+                          ? t("Round device")
+                          : starter.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <p className="text-xs text-[var(--text-muted)]">
+                  {t(
+                    "Choose a starting layout, then name your template and select its device type.",
+                  )}
+                </p>
+              </>
+            )}
             <Field label={t("Name")}>
               <Input
                 disabled={!editable}
@@ -495,7 +546,7 @@ export function HardwareTemplateBuilder({
             <div className="grid grid-cols-2 gap-2">
               <Field label={t("Device type")}>
                 <select
-                  disabled={!editable}
+                  disabled={!editable || creatingType}
                   className="rk-control h-8 w-full px-2 text-sm"
                   value={draft.deviceTypes[0] ?? "other"}
                   onChange={(event) =>
@@ -507,7 +558,7 @@ export function HardwareTemplateBuilder({
                 >
                   {deviceTypes.map((type) => (
                     <option key={type.id} value={type.id}>
-                      {type.label}
+                      {localizedDeviceTypeLabel(type, t)}
                     </option>
                   ))}
                 </select>
@@ -531,12 +582,87 @@ export function HardwareTemplateBuilder({
                 />
               </Field>
             </div>
+            {editable && (
+              <div className="space-y-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={creatingType || saving}
+                  aria-expanded={addingType}
+                  onClick={() => {
+                    setAddingType((current) => !current);
+                    setCustomTypeParent("other");
+                    setTypeError("");
+                  }}
+                >
+                  <Plus />
+                  {t("New device type")}
+                </Button>
+                {addingType && (
+                  <form
+                    data-testid="template-device-type-form"
+                    className="space-y-2 rounded-[var(--radius-sm)] border border-[var(--border-default)] p-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleCreateDeviceType();
+                    }}
+                  >
+                    {typeError && (
+                      <p role="alert" className="text-xs text-[var(--danger)]">
+                        {typeError}
+                      </p>
+                    )}
+                    <Field label={t("Name")}>
+                      <Input
+                        autoFocus
+                        maxLength={80}
+                        value={customTypeName}
+                        disabled={creatingType || saving}
+                        onChange={(event) =>
+                          setCustomTypeName(event.target.value)
+                        }
+                      />
+                    </Field>
+                    <Field label={t("Parent")}>
+                      <select
+                        className="rk-control h-8 w-full px-2 text-sm"
+                        value={customTypeParent}
+                        disabled={creatingType || saving}
+                        onChange={(event) =>
+                          setCustomTypeParent(event.target.value)
+                        }
+                      >
+                        {deviceTypes.map((type) => (
+                            <option key={type.id} value={type.id}>
+                              {localizedDeviceTypeLabel(type, t)}
+                            </option>
+                          ))}
+                      </select>
+                    </Field>
+                    <div className="flex gap-2">
+                      <Button type="submit" size="sm" disabled={creatingType || saving}>
+                        {creatingType ? t("Adding...") : t("Create")}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={creatingType || saving}
+                        onClick={() => setAddingType(false)}
+                      >
+                        {t("Cancel")}
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               {editable && (
                 <Button
                   size="sm"
                   onClick={() => void handleSave()}
-                  disabled={saving}
+                  disabled={saving || creatingType}
                 >
                   <Save />
                   {saving ? t("Saving...") : t("Save template")}
@@ -547,7 +673,7 @@ export function HardwareTemplateBuilder({
                   size="sm"
                   variant="outline"
                   onClick={() => void handleDuplicate()}
-                  disabled={saving}
+                  disabled={saving || creatingType}
                 >
                   <Copy />
                   {t("Duplicate")}
@@ -558,7 +684,7 @@ export function HardwareTemplateBuilder({
                   size="sm"
                   variant="destructive"
                   onClick={() => void handleDelete()}
-                  disabled={saving}
+                  disabled={saving || creatingType}
                 >
                   <Trash2 />
                   {t("Delete")}
@@ -575,7 +701,7 @@ export function HardwareTemplateBuilder({
                       : "outline"
                   }
                   onClick={() => void handleDefault()}
-                  disabled={saving}
+                  disabled={saving || creatingType}
                 >
                   <Check />
                   {t("Apply template")}
@@ -585,7 +711,7 @@ export function HardwareTemplateBuilder({
                     size="sm"
                     variant="ghost"
                     onClick={() => void handleDefaultReset()}
-                    disabled={saving}
+                    disabled={saving || creatingType}
                   >
                     {t("Reset")}
                   </Button>

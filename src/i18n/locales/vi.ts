@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "New device type": "Loại thiết bị mới",
+  "Starting layout": "Bố cục ban đầu",
+  "Choose a starting layout, then name your template and select its device type.": "Chọn bố cục ban đầu, đặt tên cho mẫu rồi chọn loại thiết bị.",
+  "Round device": "Thiết bị hình tròn",
   "Bring forward": "Đưa lên một lớp",
   "Send backward": "Đưa xuống một lớp",
   "Bring to front": "Đưa lên trên cùng",

@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "New device type": "Jenis perangkat baru",
+  "Starting layout": "Tata letak awal",
+  "Choose a starting layout, then name your template and select its device type.": "Pilih tata letak awal, lalu beri nama templat dan pilih jenis perangkatnya.",
+  "Round device": "Perangkat bundar",
   "Bring forward": "Majukan satu lapisan",
   "Send backward": "Mundurkan satu lapisan",
   "Bring to front": "Bawa ke depan",

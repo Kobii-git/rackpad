@@ -40,6 +40,142 @@ after(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
+test("round templates validate, duplicate, apply linked ports and survive backup restore", async () => {
+  const token = await bootstrapAdmin();
+  const template = createStarterTemplate(
+    "round-device",
+    "round-ap",
+    "Round AP",
+  );
+  const headers = authHeaders(token);
+  const customType = await app.inject({method: "POST", url: "/api/device-types", headers,
+    payload: {label: "Round ceiling sensor", parentType: "ap"}});
+  assert.equal(customType.statusCode, 201, customType.body);
+  const typeId = json(customType).id as string;
+  template.deviceTypes = [typeId];
+  for (const front of [
+    { ...template.front, shape: "square" },
+    { ...template.front, shape: "<svg>" },
+    { ...template.front, height: 300 },
+  ]) {
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/api/hardware-templates",
+      headers,
+      payload: { ...template, front },
+    });
+    assert.equal(invalid.statusCode, 400, invalid.body);
+  }
+  const create = await app.inject({
+    method: "POST",
+    url: "/api/hardware-templates",
+    headers,
+    payload: template,
+  });
+  assert.equal(create.statusCode, 201, create.body);
+  assert.equal(json(create).front.shape, "round");
+  const duplicate = await app.inject({
+    method: "POST",
+    url: `/api/hardware-templates/${template.id}/duplicate`,
+    headers,
+    payload: { id: "round-ap-copy", name: "Round AP copy" },
+  });
+  assert.equal(duplicate.statusCode, 201, duplicate.body);
+  assert.equal(json(duplicate).rear.shape, "round");
+  const device = await createDevice(token, "ceiling-ap", typeId);
+  const peer = await createDevice(token, "round-peer", "switch");
+  const port = await createPort(token, device.id, "LAN", "rear");
+  const peerPort = await createPort(token, peer.id, "AP", "front");
+  const link = await app.inject({
+    method: "POST",
+    url: "/api/port-links",
+    headers,
+    payload: { fromPortId: port.id, toPortId: peerPort.id },
+  });
+  assert.equal(link.statusCode, 201, link.body);
+  const preview = await app.inject({
+    method: "POST",
+    url: `/api/physical-layouts/${device.id}/preview`,
+    headers,
+    payload: { templateId: template.id },
+  });
+  assert.equal(preview.statusCode, 200, preview.body);
+  assert.deepEqual(json(preview).linkedUnmappedPortIds, []);
+  const apply = await app.inject({
+    method: "POST",
+    url: `/api/physical-layouts/${device.id}/apply`,
+    headers,
+    payload: json(preview),
+  });
+  assert.equal(apply.statusCode, 200, apply.body);
+  const loaded = await app.inject({
+    method: "GET",
+    url: `/api/physical-layouts/${device.id}`,
+    headers,
+  });
+  assert.equal(loaded.statusCode, 200, loaded.body);
+  assert.equal(json(loaded).snapshot.faces.front.shape, "round");
+  assert.deepEqual(json(loaded).bindings, [
+    { portId: port.id, slotId: template.portSlots[0]!.id },
+  ]);
+  const exported = await app.inject({
+    method: "GET",
+    url: "/api/admin/export",
+    headers,
+  });
+  assert.equal(exported.statusCode, 200, exported.body);
+  const restored = await app.inject({
+    method: "POST",
+    url: "/api/admin/restore",
+    headers,
+    payload: json(exported),
+  });
+  assert.equal(restored.statusCode, 200, restored.body);
+  const stored = db
+    .prepare(
+      "SELECT snapshot FROM devicePhysicalLayouts WHERE deviceId = ?",
+    )
+    .get(device.id) as { snapshot: string };
+  assert.equal(JSON.parse(stored.snapshot).faces.rear.shape, "round");
+  const definition = db
+    .prepare("SELECT definition FROM hardwareTemplates WHERE id = ?")
+    .get(template.id) as { definition: string };
+  assert.equal(JSON.parse(definition.definition).front.shape, "round");
+  const {listDeviceTypes, deviceTypeBase} = await import("../lib/device-types.js");
+  assert.equal(listDeviceTypes().find(type => type.id === typeId)?.parentType, "ap");
+  assert.equal(deviceTypeBase(typeId), "ap");
+  assert.deepEqual(JSON.parse(definition.definition).deviceTypes, [typeId]);
+  assert.ok(
+    db.prepare("SELECT id FROM portLinks WHERE id = ?").get(json(link).id),
+  );
+});
+
+test("round template and custom-type writes retain administrator and lab boundaries", async () => {
+  const token = await bootstrapAdmin();
+  const template = createStarterTemplate("round-device", "protected-round-ap", "Protected AP");
+  const headers = authHeaders(token);
+  const created = await app.inject({method: "POST", url: "/api/hardware-templates", headers, payload: template});
+  assert.equal(created.statusCode, 201, created.body);
+  const otherLab = await app.inject({method: "POST", url: "/api/labs", headers, payload: {name: "Other lab"}});
+  assert.equal(otherLab.statusCode, 201, otherLab.body);
+  const otherDevice = await app.inject({method: "POST", url: "/api/devices", headers,
+    payload: {labId: json(otherLab).id, hostname: "private-ap", deviceType: "ap", placement: "room"}});
+  assert.equal(otherDevice.statusCode, 201, otherDevice.body);
+  for (const role of ["viewer", "editor"] as const) {
+    const userToken = await createUserAndLogin(token, {username: `round-${role}`, password: `synthetic-round-${role}-password`, role, labRole: role});
+    const restricted = authHeaders(userToken);
+    for (const [url, payload] of [["/api/device-types", {label: `Forbidden ${role}`, parentType: "ap"}], ["/api/hardware-templates", {...template, id: `forbidden-${role}`}]] as const) {
+      assert.equal((await app.inject({method: "POST", url, headers: restricted, payload})).statusCode, 403);
+      assert.equal((await app.inject({method: "POST", url, payload})).statusCode, 401);
+    }
+    for (const operation of ["preview", "apply"]) {
+      const denied = await app.inject({method: "POST", url: `/api/physical-layouts/${json(otherDevice).id}/${operation}`,
+        headers: restricted, payload: {templateId: template.id}});
+      assert.equal(denied.statusCode, 403, denied.body);
+    }
+  }
+});
+
 test("physical layout preview is lab-authorized, fingerprinted, and preserves canonical cabling", async () => {
   const adminToken = await bootstrapAdmin();
   const device = await createDevice(adminToken, "layout-server");

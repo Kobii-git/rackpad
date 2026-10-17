@@ -5,7 +5,7 @@ process.env.MCP_ENABLED = "1";
 
 export default defineConfig({
   ...base,
-  grep: /guided template editor|remaining feedback template colors|template block transfers|mixed-model220-port stacks|Rack Studio rejects an occupied drag|Rack Studio reveals both devices|MCP token UI|24 short patch cords/,
+  grep: /template starting layouts|guided template editor|remaining feedback template colors|template block transfers|mixed-model220-port stacks|Rack Studio rejects an occupied drag|Rack Studio reveals both devices|MCP token UI|24 short patch cords/,
   projects: [
     { name: "acceptance-chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "acceptance-firefox", use: { ...devices["Desktop Firefox"] } },

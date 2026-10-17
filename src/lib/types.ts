@@ -324,6 +324,7 @@ export interface FaceDefinitionV1 {
   schemaVersion: 1;
   width: 1000;
   height: number;
+  shape?: "round";
   elements: PhysicalFacePrimitiveV1[];
   artworkOrder?: ArtworkReference[];
 }

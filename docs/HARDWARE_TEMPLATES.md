@@ -4,6 +4,32 @@ Open **Admin → Device types** and select a device type. Built-in templates are
 read-only: duplicate one before editing. Studio remains opt-in; templates do not
 replace the classic rack view or its reference pictures.
 
+## Custom types and round devices
+
+For a new template, choose its **Starting layout**, then edit the name and device
+type. The starter selector is hidden after saving; selecting a starter begins a
+new draft rather than changing an existing saved template.
+
+Choose **New device type** beside the type controls to create a named type without
+leaving the draft. Choose its parent (default **Other**) to inherit placement,
+ports/templates, Compute, WiFi, Storage and import behavior. Creation requires an
+administrator. Errors and Cancel leave the template unchanged; successful creation
+selects the type in the template and surrounding device-type page. Undo restores
+the draft's previous type association without deleting the created library type.
+
+**Round device** starts an access-point template with circular front and rear
+faces, loose mounting, and one rear RJ45 port. Both faces use square 1000-unit
+canvases. Move or resize parts using the existing editor controls. Round faces
+keep their aspect ratio in device views, Studio, the physical visualizer and
+SVG/PNG exports; cable anchors follow the fitted artwork.
+
+The optional `shape: "round"` face metadata uses layout schema version 1 and the
+existing JSON storage and backup format; no SQLite migration is needed. Templates
+without it retain their rectangular appearance. Older binaries may discard this
+optional field when rewriting a template or snapshot, so retain a current backup
+before using older software. Saving a library template does not change existing
+device snapshots; use Preview/Apply to update them and preserve connected ports.
+
 ## Mixed RJ45 and SFP blocks
 
 1. Start with a switch template. In **Port layout**, select its RJ45 block.

@@ -1,3 +1,4 @@
+import { physicalFaceRect } from "../../lib/physical-face";
 import type {
   Device,
   DevicePhysicalLayout,
@@ -805,6 +806,7 @@ function buildRackCablingRoomScene(input: {
       if (layout) {
         for (const faceFrame of faces) {
           const definition = layout.snapshot.faces[faceFrame.face];
+          const rect = physicalFaceRect(definition, faceFrame);
           for (const binding of layout.bindings) {
             const slot = layout.snapshot.portSlots.find(
               (candidate) =>
@@ -820,12 +822,12 @@ function buildRackCablingRoomScene(input: {
               rackFace: faceFrame.face,
               physicalFace: faceFrame.face,
               x:
-                faceFrame.x +
-                ((slot.x + slot.width / 2) / 1000) * faceFrame.width,
+                rect.x +
+                ((slot.x + slot.width / 2) / 1000) * rect.width,
               y:
-                faceFrame.y +
+                rect.y +
                 ((slot.y + slot.height / 2) / (definition.height || 1)) *
-                  faceFrame.height,
+                  rect.height,
               kind: "physical",
             });
           }

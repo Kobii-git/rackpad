@@ -1,3 +1,4 @@
+import { physicalFaceRect } from "./physical-face";
 import type {
   Device,
   DevicePhysicalLayout,
@@ -191,13 +192,14 @@ function addEquipmentFaces(input: {
   }
 }
 
-function portAnchorsForEquipment(
+export function portAnchorsForEquipment(
   equipment: RackStudioSceneEquipment[],
   ports: Port[],
 ) {
   const portById = new Map(ports.map((port) => [port.id, port]));
   const anchors: RackStudioScenePortAnchor[] = [];
   for (const item of equipment) {
+    const rect = physicalFaceRect(item.layout.snapshot.faces[item.physicalFace], item.rect);
     const faceHeight =
       item.layout.snapshot.faces[item.physicalFace].height || 1;
     for (const binding of item.layout.bindings) {
@@ -219,12 +221,12 @@ function portAnchorsForEquipment(
         physicalFace: item.physicalFace,
         x:
           item.rotation === 90
-            ? item.rect.x + (1 - v) * item.rect.width
-            : item.rect.x + u * item.rect.width,
+            ? rect.x + (1 - v) * rect.width
+            : rect.x + u * rect.width,
         y:
           item.rotation === 90
-            ? item.rect.y + u * item.rect.height
-            : item.rect.y + v * item.rect.height,
+            ? rect.y + u * rect.height
+            : rect.y + v * rect.height,
       });
     }
   }

@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "New device type": "新增裝置類型",
+  "Starting layout": "起始配置",
+  "Choose a starting layout, then name your template and select its device type.": "選擇起始配置，為範本命名並選擇裝置類型。",
+  "Round device": "圓形裝置",
   "Bring forward": "上移一層",
   "Send backward": "下移一層",
   "Bring to front": "移到最上層",

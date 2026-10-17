@@ -1,3 +1,4 @@
+import { physicalFaceRect } from "./physical-face";
 import { orderedFaceElements } from "./template-artwork";
 import { buildRackCablingScene, buildRackCablingRoutes } from "../pages/visualizer/rack-cabling";
 import { faceplateDetailPath, physicalItemColor } from "./faceplate-artwork";
@@ -17,6 +18,7 @@ import {
 } from "./rack-studio";
 import {
   buildRackStudioScene,
+  portAnchorsForEquipment,
   type RackStudioSceneEquipment,
   type RackStudioScenePortAnchor,
 } from "./rack-studio-scene";
@@ -198,10 +200,17 @@ function renderSceneEquipment(input: {
   const offsetY = input.offsetY ?? 0;
   const scaleX = input.scaleX ?? 1;
   const scaleY = input.scaleY ?? 1;
-  const x = offsetX + input.item.rect.x * scaleX;
-  const y = offsetY + input.item.rect.y * scaleY;
-  const width = Math.max(2, input.item.rect.width * scaleX);
-  const height = Math.max(2, input.item.rect.height * scaleY);
+  const projected = {
+    x: offsetX + input.item.rect.x * scaleX,
+    y: offsetY + input.item.rect.y * scaleY,
+    width: Math.max(2, input.item.rect.width * scaleX),
+    height: Math.max(2, input.item.rect.height * scaleY),
+  };
+  const definition = input.item.layout.snapshot.faces[input.item.physicalFace];
+  const { x, y, width, height } = physicalFaceRect(definition, projected);
+  const body = definition.shape === "round"
+    ? `<circle data-device-shape="round" cx="${x + width / 2}" cy="${y + height / 2}" r="${width * 0.482}" fill="${input.palette.device}" stroke="${input.palette.border}" stroke-width="0.8"/>`
+    : `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${width.toFixed(2)}" height="${height.toFixed(2)}" rx="1.5" fill="${input.palette.device}" stroke="${input.palette.border}" stroke-width="0.8"/>`;
   const layout = input.item.layout;
   let artwork = "";
   if (layout) {
@@ -238,7 +247,7 @@ function renderSceneEquipment(input: {
     })
     .join("");
   return [
-    `<g data-mount-kind="${input.item.mountKind}" data-device-id="${escapeXml(input.item.device.id)}"><rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${width.toFixed(2)}" height="${height.toFixed(2)}" rx="1.5" fill="${input.palette.device}" stroke="${input.palette.border}" stroke-width="0.8"/>`,
+    `<g data-mount-kind="${input.item.mountKind}" data-device-id="${escapeXml(input.item.device.id)}">${body}`,
     artwork || ports,
     `<text x="${x + 3}" y="${y + Math.min(10, height - 1)}" fill="${input.palette.text}" stroke="${input.palette.background}" stroke-width="2" paint-order="stroke" font-size="${Math.min(9, height * 0.55)}">${escapeXml(input.item.device.displayName || input.item.device.hostname)}</text>`,
     `</g>`,
@@ -392,7 +401,7 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
     const innerY = y + 48;
     const innerWidth = rackWidth - 68;
     const innerHeight = rackHeight - 72;
-    const planned = buildRackElevationCableRoutes({
+    let planned = buildRackElevationCableRoutes({
       rack,
       racks: input.racks,
       face,
@@ -404,9 +413,25 @@ function renderFocusedExport(input: RackStudioExportInput, rack: Rack) {
       style: input.routeStyle,
       width: 1000,
     });
-    const elevation = planned.scene;
-    const scaleX = innerWidth / elevation.width;
-    const scaleY = innerHeight / elevation.height;
+    let elevation = planned.scene;
+    let scaleX = innerWidth / elevation.width;
+    let scaleY = innerHeight / elevation.height;
+    if (elevation.equipment.some(item => item.layout.snapshot.faces[item.physicalFace].shape === "round")) {
+      const equipment = elevation.equipment.map(item => ({...item, rect: {
+        x: item.rect.x * scaleX, y: item.rect.y * scaleY,
+        width: item.rect.width * scaleX, height: item.rect.height * scaleY,
+      }}));
+      const scene = {...elevation, width: innerWidth, height: innerHeight,
+        rackOffsetY: elevation.rackOffsetY * scaleY, equipment,
+        portAnchors: portAnchorsForEquipment(equipment, input.ports)};
+      planned = buildRackElevationCableRoutes({rack, racks: input.racks, face,
+        devices: input.devices, layouts: input.layouts, ports: input.ports, links: input.links,
+        width: innerWidth, unitHeight: (input.compact ? 24 : 42) * scaleY,
+        style: input.routeStyle, scene});
+      elevation = scene;
+      scaleX = 1;
+      scaleY = 1;
+    }
     const rackBodyY = innerY + elevation.rackOffsetY * scaleY;
     const rackBodyHeight = (elevation.height - elevation.rackOffsetY) * scaleY;
     for (const route of planned.routes) {
@@ -496,8 +521,12 @@ function renderCompactRoomExport(input: RackStudioExportInput) {
     const name = `${rack.rack.name} · ${face.face === "front" ? input.labels.front : input.labels.rear}`;
     return `<rect x="${face.x - 8}" y="${face.y - 8}" width="${face.width + 16}" height="${face.height + 16}" fill="${palette.background}" stroke="${palette.border}" stroke-opacity="0.45" stroke-width="7"/><text x="${face.x}" y="${face.y - 18}" fill="${palette.text}" font-size="14">${escapeXml(name)}</text>`;
   })).join("");
-  const equipment = scene.equipment.filter(item => item.layout).map(item => renderSceneEquipment({
-    item: { ...item, layout: item.layout!, mountKind: item.device.rackMountKind ?? "direct" },
+  const looseEquipment: RackStudioSceneEquipment[] = scene.looseCards.flatMap(card => card.layout ? card.faces.map(face => ({
+    id: `${card.device.id}:${face.face}`, device: card.device, layout: card.layout!,
+    rackId: null, rackFace: face.face, physicalFace: face.face, mountKind: "loose", rect: face, rotation: 0,
+  })) : []);
+  const equipment = [...scene.equipment.filter(item => item.layout), ...looseEquipment].map(item => renderSceneEquipment({
+    item: { ...item, layout: item.layout!, mountKind: item.device.rackMountKind ?? (item.rackId ? "direct" : "loose") },
     anchors: [], linked, portById, palette,
   })).join("");
   const paths = routes.map(route => {

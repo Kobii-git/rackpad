@@ -161,11 +161,12 @@ export function PhysicalPortSlotEditor({
       onPointerCancel={() => {onEditCancel?.(); setDrag(undefined);}}
       onKeyDown={event => {if (event.key === "Escape" && drag) {event.preventDefault(); onEditCancel?.(); setDrag(undefined);}}}
     >
-      <rect
-        width={definition.width}
-        height={definition.height}
-        fill="var(--color-bg)"
-      />
+      {definition.shape === "round" ? (
+        <circle data-device-shape="round" cx="500" cy="500" r="482"
+          fill="var(--color-surface)" stroke="var(--color-line-strong)" strokeWidth="3" />
+      ) : (
+        <rect width={definition.width} height={definition.height} fill="var(--color-bg)" />
+      )}
       {("modules" in layout ? templateArtwork(layout, face) : orderedFaceElements(definition).map(element => ({element, reference: {elementId: element.id, moduleId: undefined as string | undefined}}))).map(({element: primitive, reference}) => {
         const module = "modules" in layout && reference.moduleId ? layout.modules.find(entry => entry.id === reference.moduleId) : undefined;
         const moduleSlot = moduleSlots.find(slot => slot.id === module?.slotId);

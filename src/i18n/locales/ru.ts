@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const ru = {
+  "New device type": "Новый тип устройства",
+  "Starting layout": "Начальный макет",
+  "Choose a starting layout, then name your template and select its device type.": "Выберите начальный макет, задайте имя шаблона и выберите тип устройства.",
+  "Round device": "Круглое устройство",
   "Bring forward": "На слой вперёд",
   "Send backward": "На слой назад",
   "Bring to front": "На передний план",

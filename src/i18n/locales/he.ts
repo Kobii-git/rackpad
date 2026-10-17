@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "New device type": "סוג מכשיר חדש",
+  "Starting layout": "פריסה התחלתית",
+  "Choose a starting layout, then name your template and select its device type.": "בחרו פריסה התחלתית, תנו שם לתבנית ובחרו את סוג המכשיר שלה.",
+  "Round device": "מכשיר עגול",
   "Bring forward": "העבר שכבה קדימה",
   "Send backward": "העבר שכבה אחורה",
   "Bring to front": "העבר לחזית",

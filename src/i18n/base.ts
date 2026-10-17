@@ -1,4 +1,8 @@
 export const en = {
+  "New device type": "New device type",
+  "Starting layout": "Starting layout",
+  "Choose a starting layout, then name your template and select its device type.": "Choose a starting layout, then name your template and select its device type.",
+  "Round device": "Round device",
   "Bring forward": "Bring forward",
   "Send backward": "Send backward",
   "Bring to front": "Bring to front",

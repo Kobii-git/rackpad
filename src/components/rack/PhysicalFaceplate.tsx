@@ -291,9 +291,14 @@ export function PhysicalFaceplate({
         className,
       )}
       style={style}
-      preserveAspectRatio={fit === "stretch" ? "none" : "xMidYMid meet"}
+      preserveAspectRatio={fit === "stretch" && faceDefinition.shape !== "round" ? "none" : "xMidYMid meet"}
     >
-      <rect width="1000" height={faceDefinition.height} fill="var(--color-bg)" />
+      {faceDefinition.shape === "round" ? (
+        <circle data-device-shape="round" cx="500" cy="500" r="482"
+          fill="var(--color-surface)" stroke="var(--color-line-strong)" strokeWidth="3" />
+      ) : (
+        <rect width={faceDefinition.width} height={faceDefinition.height} fill="var(--color-bg)" />
+      )}
       {visibleElements.map((primitive) => (
         <Primitive key={primitive.id} primitive={primitive} />
       ))}

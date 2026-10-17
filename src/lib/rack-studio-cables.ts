@@ -1322,9 +1322,10 @@ export function buildRackElevationCableRoutes(input: {
   style?: RackStudioCableRouteStyle;
   width?: number;
   unitHeight?: number;
+  scene?: ReturnType<typeof buildRackElevationScene>;
 }) {
   const width = input.width ?? 1000;
-  const scene = buildRackElevationScene({
+  const scene = input.scene ?? buildRackElevationScene({
     rack: input.rack,
     rackFace: input.face,
     devices: input.devices,
@@ -1385,7 +1386,7 @@ export function buildRackElevationCableRoutes(input: {
       from: from ?? local,
       to: from && to ? to : undefined,
       manualPoints: projectCableWaypoints(link, input.racks ?? [input.rack], [{ rackId: input.rack.id, face: input.face,
-        rect: { x: 0, y: scene.rackOffsetY + 8, width, height: input.rack.totalU * (input.unitHeight ?? 42) } }], input.rack.roomId ?? null),
+        rect: { x: 0, y: scene.rackOffsetY + (scene.height - scene.rackOffsetY - input.rack.totalU * (input.unitHeight ?? 42)) / 2, width, height: input.rack.totalU * (input.unitHeight ?? 42) } }], input.rack.roomId ?? null),
       hiddenEndpoint:
         (!from || !to) && remotePort
           ? { portId: remotePort.id, rackFace: remoteFace }

@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "New device type": "Nuwe toesteltipe",
+  "Starting layout": "Beginuitleg",
+  "Choose a starting layout, then name your template and select its device type.": "Kies ’n beginuitleg, gee jou sjabloon ’n naam en kies die toesteltipe.",
+  "Round device": "Ronde toestel",
   "Bring forward": "Bring vorentoe",
   "Send backward": "Stuur agtertoe",
   "Bring to front": "Bring heel voor",

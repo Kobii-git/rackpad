@@ -141,3 +141,8 @@ fingerprint. Composition namespaces slots by member ID and scales into ordered
 member footprints, preserving canonical port/link identities across reorder.
 Optional per-face `artworkOrder` uses module-qualified template references and
 flattened resolved references; validators reject duplicates and missing references.
+
+Optional per-face `shape: "round"` metadata keeps schema-v1 templates and snapshots
+on square 1000-unit canvases. Missing shape retains rectangular rendering. The
+existing JSON storage and backup validators retain it without a SQLite migration;
+older binaries may discard the field when rewriting layouts.
