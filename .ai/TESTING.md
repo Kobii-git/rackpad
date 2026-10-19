@@ -55,3 +55,8 @@ because tool availability is platform specific.
 All destructive restore/migration behavior must use an isolated temporary
 database. The server suite already sets `DATABASE_PATH` under the OS temp
 directory; do not point tests at a working-tree or deployment database.
+
+Pull requests also build unpublished candidate images on AMD64 and ARM64 and
+verify fresh installs, actual stable schema-51 and beta schema-53 upgrades,
+restart persistence and paired rollback. Candidate images are addressed by local
+immutable image IDs; previous images remain pinned GHCR digests.

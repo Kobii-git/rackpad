@@ -1,3 +1,4 @@
+import { physicalFaceRect } from "../../lib/physical-face";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {
@@ -1321,4 +1322,45 @@ test("round loose-card anchors fit the same square as the faceplate", () => {
   const anchor=scene.anchors.find(a=>a.portId===lan.id)!;
   assert.equal(anchor.x,frame.x+(frame.width-size)/2+0.43*size);
   assert.equal(anchor.y,frame.y+(frame.height-size)/2+0.7*size);
+});
+
+test("loose round devices keep cable anchors aligned with the centered circular face", () => {
+  const ap = {
+    ...device("round-ap", rack24.id, 1),
+    rackId: undefined,
+    startU: undefined,
+    placement: "room" as const,
+    rackMountKind: "loose" as const,
+  };
+  const lan = port("round-lan", ap.id, "rear", 1);
+  const physical = layout(ap.id, [lan]);
+  physical.snapshot.faces.rear = {
+    schemaVersion: 1,
+    width: 1000,
+    height: 1000,
+    shape: "round",
+    elements: [],
+  };
+  const slot = physical.snapshot.portSlots[0]!;
+  slot.x = 230;
+  slot.y = 730;
+  slot.width = 40;
+  slot.height = 40;
+  const scene = buildRackCablingScene({
+    room,
+    racks: [],
+    devices: [ap],
+    layouts: [physical],
+    ports: [lan],
+    faceMode: "rear",
+    looseExpanded: true,
+    rackOrder: [],
+  });
+  const frame = scene.looseCards[0]!.faces[0]!;
+  const rect = physicalFaceRect(physical.snapshot.faces.rear, frame);
+  const anchor = scene.anchors.find(
+    (candidate) => candidate.portId === lan.id,
+  )!;
+  assert.equal(anchor.x, rect.x + rect.width / 4);
+  assert.equal(anchor.y, rect.y + (rect.height * 3) / 4);
 });

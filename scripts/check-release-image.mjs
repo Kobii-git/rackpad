@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const usage = "node scripts/check-release-image.mjs --image ghcr.io/kobii-git/rackpad@sha256:DIGEST --previous-image ghcr.io/kobii-git/rackpad@sha256:DIGEST --platform linux/amd64|linux/arm64 --revision COMMIT_SHA";
+const usage = "node scripts/check-release-image.mjs --image ghcr.io/kobii-git/rackpad@sha256:DIGEST|sha256:LOCAL_IMAGE_ID --previous-image ghcr.io/kobii-git/rackpad@sha256:DIGEST [--previous-schema 51|53] --platform linux/amd64|linux/arm64 --revision COMMIT_SHA";
 const options = {};
 const args = process.argv.slice(2);
 if (args.length === 1 && args[0] === "--help") {
@@ -11,7 +11,7 @@ if (args.length === 1 && args[0] === "--help") {
 }
 while (args.length) {
   const flag = args.shift();
-  if (!["--image", "--previous-image", "--platform", "--revision"].includes(flag) || !args[0] || options[flag]) {
+  if (!["--image", "--previous-image", "--previous-schema", "--platform", "--revision"].includes(flag) || !args[0] || options[flag]) {
     throw new Error(usage);
   }
   options[flag] = args.shift();
@@ -20,10 +20,14 @@ const image = options["--image"];
 const previousImage = options["--previous-image"];
 const platform = options["--platform"];
 const revision = options["--revision"];
+const previousSchema = Number(options["--previous-schema"] ?? "53");
+assert.ok([51, 53].includes(previousSchema), "Previous schema must be 51 or 53.");
 const immutableImage = /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/;
-assert.ok(immutableImage.test(image ?? "") && immutableImage.test(previousImage ?? ""), "Both images must be immutable Rackpad GHCR digests.");
+const localImage = /^sha256:[a-f0-9]{64}$/;
+assert.ok(immutableImage.test(image ?? "") || localImage.test(image ?? ""), "Candidate must be an immutable Rackpad GHCR digest or local image ID.");
+assert.ok(immutableImage.test(previousImage ?? ""), "Previous image must be an immutable Rackpad GHCR digest.");
 assert.ok(["linux/amd64", "linux/arm64"].includes(platform), "Select linux/amd64 or linux/arm64.");
-assert.match(revision ?? "", /^[a-f0-9]{40}$/, "Provide the complete expected published revision.");
+assert.match(revision ?? "", /^[a-f0-9]{40}$/, "Provide the complete expected image revision.");
 
 const nonce = randomUUID();
 const prefix = `rackpad-release-smoke-${nonce}`;
@@ -244,7 +248,7 @@ function exercise(name, create, features, expectedSchema) {
 try {
   assert.equal(docker(["info", "--format", "{{.OSType}}"] ).stdout.trim(), "linux");
   for (const reference of new Set([image, previousImage])) {
-    docker(["pull", "--platform", platform, reference], { timeout: 600_000 });
+    if (!localImage.test(reference)) docker(["pull", "--platform", platform, reference], { timeout: 600_000 });
     const details = JSON.parse(docker(["image", "inspect", reference]).stdout)[0];
     assert.equal(`${details.Os}/${details.Architecture}`, platform);
     if (reference === image) assert.equal(details.Config.Labels["org.opencontainers.image.revision"], revision);
@@ -274,12 +278,12 @@ try {
 
   const upgradeVolume = createVolume("upgrade");
   app = start(previousImage, upgradeVolume);
-  exercise(app, true, false, 53);
+  exercise(app, true, false, previousSchema);
   execNode(app, async pair => {
     const fs = await import("node:fs");
     // Synthetic fixture configuration only; never print this paired recovery record.
     fs.writeFileSync("/data/.release-smoke-pair.json", JSON.stringify(pair), { mode: 0o600 });
-  }, { nonce, previousImage, platform, schema: 53, environment: { RACKPAD_SECRET_KEY: secretKey, OUI_AUTO_UPDATE: "0", OIDC_ENABLED: "0", SNMP_TRAP_ENABLED: "0", MCP_ENABLED: "0", TRUST_PROXY: "0" } });
+  }, { nonce, previousImage, platform, schema: previousSchema, environment: { RACKPAD_SECRET_KEY: secretKey, OUI_AUTO_UPDATE: "0", OIDC_ENABLED: "0", SNMP_TRAP_ENABLED: "0", MCP_ENABLED: "0", TRUST_PROXY: "0" } });
   stop(app);
   const snapshotVolume = createVolume("pre-upgrade-pair");
   // The stopped copy stays paired with previousImage and the same synthetic config/key.
@@ -290,7 +294,7 @@ try {
   app = start(image, upgradeVolume);
   exercise(app, false, true, 54);
   stop(app);
-  console.log(`Release image smoke ${platform}: actual schema 53 image upgraded to 54; inventory, cables, monitor and applied layouts survived restart.`);
+  console.log(`Release image smoke ${platform}: actual schema ${previousSchema} image upgraded to 54; inventory, cables, monitor and applied layouts survived restart.`);
 
   const rollbackVolume = createVolume("rollback");
   copyStoppedFixture(snapshotVolume, rollbackVolume);
@@ -300,13 +304,13 @@ try {
     const fs = await import("node:fs");
     const pair = JSON.parse(fs.readFileSync("/data/.release-smoke-pair.json", "utf8"));
     // Boolean assertion prevents mismatched fixture configuration from being printed.
-    assert.ok(pair.nonce === expected.nonce && pair.previousImage === expected.previousImage && pair.platform === expected.platform && pair.schema === 53);
+    assert.ok(pair.nonce === expected.nonce && pair.previousImage === expected.previousImage && pair.platform === expected.platform && pair.schema === expected.previousSchema);
     for (const [name, value] of Object.entries(pair.environment)) assert.ok(process.env[name] === value, "Paired recovery configuration mismatch.");
-  }, { nonce, previousImage, platform });
-  exercise(app, false, false, 53);
+  }, { nonce, previousImage, platform, previousSchema });
+  exercise(app, false, false, previousSchema);
   stop(app);
-  console.log(`Release image smoke ${platform}: previous image plus protected pre-upgrade fixture copy restored schema 53 and its inventory.`);
-  console.log(`Verified published revision ${revision} from ${image} on ${platform}. Browser interaction and real-device acceptance remain separate gates.`);
+  console.log(`Release image smoke ${platform}: previous image plus protected pre-upgrade fixture copy restored schema ${previousSchema} and its inventory.`);
+  console.log(`Verified image revision ${revision} from ${image} on ${platform}. Browser interaction and real-device acceptance remain separate gates.`);
 } finally {
   let cleanupFailed = false;
   for (const name of containers) {

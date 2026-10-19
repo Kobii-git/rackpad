@@ -6,6 +6,40 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.4] - 2026-10-20
+
+### Added
+
+- Custom device types from the hardware-template editor and round access-point
+  starters with circular front/rear faces, editable ports and inherited behavior.
+- Independent stack-member templates, guided port blocks/module bays, artwork
+  layers, colors, resizing and draft undo/redo while preserving linked ports.
+- Saved cable routing with brush-panel guides and multi-room Rack Cabling.
+- Opt-in MCP inventory tools with scoped expiring tokens and reviewed create-only
+  proposals. MCP remains disabled by default.
+- Unpublished pre-merge AMD64/ARM64 image checks for fresh installation, upgrades
+  from stable schema 51 and beta schema 53, restart persistence and paired rollback.
+
+### Fixed
+
+- Device names retain 12 screen pixels while zooming across Visualizer, Racks and
+  Studio, with upper-right placement, accessible full names and stable exports.
+- Occupied rack placement is rejected atomically; legacy overlaps stay selectable
+  and recoverable without relocating inventory automatically.
+- Template face transfers, grids, copy feedback and editing preserve item/port
+  identity. Saving a template leaves applied device snapshots unchanged until Apply.
+- Container healthchecks honor the internal port; database access diagnostics
+  explain ownership requirements without changing host ownership automatically.
+
+### Changed
+
+- Promoted the 1.8.4 beta feature series with dependency updates and documented
+  non-root custom-user deployment. Native Proxmox LXC remains experimental.
+- Schema advances from stable 51 to 54. Back up the database/configuration/key
+  with the previous image; rollback requires restoring that complete pair.
+
+See the [stable release and upgrade notes](docs/releases/v1.8.4.md).
+
 ## [1.8.4-beta.9] - 2026-10-13
 
 ### Added

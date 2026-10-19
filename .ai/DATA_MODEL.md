@@ -39,6 +39,10 @@ restore when the same `RACKPAD_SECRET_KEY` is retained.
 - Built-in hardware templates are code-owned and immutable. Custom templates are
   global administrator data, while device snapshots remain valid if their source
   template is later changed or deleted.
+- Physical faces may carry optional `shape: "round"` on a square 1000-unit
+  canvas. Omission keeps rectangular behavior. Template and snapshot validation
+  preserves shape through backup/restore without a SQL migration. Older binaries
+  may discard this optional JSON metadata when rewriting layouts.
 - Multi-row mutations and restore operations should be atomic.
 - Direct SQL is parameterized. Dynamic identifiers/fragments must be selected
   from code-controlled allowlists.

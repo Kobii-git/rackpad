@@ -125,3 +125,8 @@ One process and one SQLite volume imply single-instance operation. The public
 health endpoint is primarily liveness and currently includes trap receiver detail.
 No automatic volume backup, downgrade migration, readiness split, or metrics/APM
 is provided.
+
+Pull requests also build unpublished candidate images on AMD64 and ARM64 and
+verify fresh installs, actual stable schema-51 and beta schema-53 upgrades,
+restart persistence and paired rollback. Candidate images are addressed by local
+immutable image IDs; previous images remain pinned GHCR digests.

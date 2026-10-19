@@ -445,3 +445,21 @@ test("CodeQL preflight observes actual committed Git evidence and dirty server s
   git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "Changed");
   assert(codeqlReviewProblems(readSnmpReviewContext(root)).some(problem => problem.includes("source hash differs")));
 });
+
+test("pre-merge smoke builds unpublished immutable candidates and tests stable and beta recovery", () => {
+  const job = workflow("docker-publish").jobs["candidate-smoke"];
+  assert.equal(job.if, "github.event_name == 'pull_request'");
+  assert.deepEqual(job.needs, ["quality", "codeql", "security"]);
+  assert.deepEqual(job.strategy.matrix.platform, ["linux/amd64", "linux/arm64"]);
+  assert.equal(job.permissions.packages, "read");
+  const build = job.steps.find(step => step.id === "candidate");
+  assert.equal(build.with.push, false);
+  assert.equal(build.with.load, true);
+  assert.equal(build.with.labels, "org.opencontainers.image.revision=${{ github.sha }}");
+  const smoke = job.steps.find(step => step.env?.CANDIDATE_IMAGE);
+  assert.equal(smoke.env.CANDIDATE_IMAGE, "${{ steps.candidate.outputs.imageid }}");
+  for (const key of ["STABLE_IMAGE", "BETA_IMAGE"]) assert.match(smoke.env[key], /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/);
+  assert(smoke.run.includes('--previous-image "$STABLE_IMAGE" --previous-schema 51'));
+  assert(smoke.run.includes('--previous-image "$BETA_IMAGE" --previous-schema 53'));
+  assert(!job.steps.some(step => step.uses?.startsWith("docker/login-action")));
+});

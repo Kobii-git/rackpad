@@ -1,6 +1,6 @@
 # Rackpad Installation Guide
 
-Current stable release: `v1.8.3`
+Current stable release: `v1.8.4` (prepared candidate; confirm publication below).
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm
 the immutable tag and published artifacts before installation.
 
@@ -19,7 +19,7 @@ without cloning the repo, or clone the repo and build it yourself.
 ## Main Branch Or Version Tag?
 
 - `main` is the stable source branch and is fine for cloning the latest stable code.
-- `RACKPAD_TAG=1.8.3` pins the Docker image to a known release. Git tags use
+- `RACKPAD_TAG=1.8.4` pins the Docker image to a known release. Git tags use
   the `v` prefix, but Docker image tags do not.
 - `RACKPAD_TAG=latest` follows the newest published stable GHCR image and is
   convenient for quick installs or test labs.
@@ -35,6 +35,25 @@ from `beta`; for a pinned version, use its matching `v`-prefixed Git tag. Keep t
 manifest and image version paired. The maintenance installer resolves `latest`
 to `main`, `beta` to `beta`, `dev` to `dev`, and complete version tags to matching
 Git tags; custom images use the stable manifest.
+
+## Before upgrading to 1.8.4
+
+- Stop writes and retain a protected, consistent pre-upgrade database/volume
+  snapshot, configuration, original `RACKPAD_SECRET_KEY` and matching old image.
+- Stable 1.8.3 uses schema 51. This release advances to schema 54: saved cable
+  routing (52), opt-in MCP tokens (53), and independent stack-member layouts (54).
+  Existing device snapshots remain unchanged until template preview/apply.
+- MCP remains disabled by default. Tokens are scoped, expire, and are excluded
+  from backups; restore revokes them. Review [MCP guidance](docs/MCP.md) before enabling it.
+- Bind mounts retain host ownership. A Compose `user: "UID:GID"` override needs
+  matching writable directory/file ownership; `PUID`/`PGID` are unsupported.
+- Verify administrator access, lab isolation, inventory, connected ports,
+  monitoring and data persistence after upgrading.
+- Migrations are forward-only. Rollback restores the old image with its paired
+  pre-upgrade database/configuration/key; never open schema-54 data with 1.8.3.
+
+See the [1.8.4 release notes](docs/releases/v1.8.4.md). For installations older
+than 1.8.3, also follow the security precautions below.
 
 ## Before upgrading to 1.8.3
 
@@ -94,7 +113,7 @@ TRUSTED_ORIGINS=
 Most users only change:
 
 - `RACKPAD_PORT`: host port to expose, default `3000`.
-- `RACKPAD_TAG`: release version to run, for example `1.8.3`, or `latest` for
+- `RACKPAD_TAG`: release version to run, for example `1.8.4`, or `latest` for
   the newest stable GHCR image.
 - `TRUST_PROXY`, `TRUSTED_HOSTS`, `TRUSTED_ORIGINS`: set these when using a reverse proxy.
 
@@ -336,7 +355,7 @@ sudo docker compose up --build -d
 To build an exact release instead of current `main`:
 
 ```bash
-sudo git checkout v1.8.3
+sudo git checkout v1.8.4
 sudo docker compose up --build -d
 ```
 
