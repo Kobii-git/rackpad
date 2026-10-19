@@ -1,3 +1,4 @@
+import { DeviceName } from "./DeviceName";
 import { useMemo, type CSSProperties } from "react";
 import { motion } from "motion/react";
 import type { Device, DeviceImage, Rack, RackFace } from "@/lib/types";
@@ -302,6 +303,8 @@ function DeviceTile({
       <TooltipTrigger asChild>
         <motion.button
           data-testid="rack-device-tile"
+          data-device-name-host
+          aria-label={device.hostname}
           data-height-u={heightU}
           data-hostname={device.hostname}
           initial={{ opacity: 0, x: -4 }}
@@ -354,15 +357,13 @@ function DeviceTile({
               />
             ))}
 
+          <DeviceName name={device.hostname} selected={selected} reservedLeft={heightU > 1 ? 84 : 24} tooltip={false} />
           <div
             className={cn(
-              "relative z-10 min-w-0 flex-1 leading-tight",
+              "relative z-10 min-w-0 flex-1 pt-4 leading-tight",
               heightU > 1 ? "flex flex-col" : "flex items-center",
             )}
           >
-            <span className="truncate text-[13px] font-semibold tracking-normal text-[var(--text-primary)]">
-              {device.hostname}
-            </span>
             {heightU > 1 && (
               <span className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
                 {childDevices.length > 0
@@ -417,23 +418,28 @@ function DeviceTile({
 
           {physicalLayout?.effectiveStatus !== "accurate" && (
             <span
-              className="relative z-10 text-[var(--color-warning)]"
+              className="relative z-10 order-first text-[var(--color-warning)]"
               title={t("Needs attention")}
             >
               <AlertTriangle className="size-3.5" />
             </span>
           )}
 
-          <span className="relative z-10">
+          <span className="relative z-10 order-first inline-flex self-start mt-0.5">
             <StatusDot status={device.status} />
           </span>
         </motion.button>
       </TooltipTrigger>
       <TooltipContent side="right" className="max-w-xs">
         <div className="flex flex-col gap-1 text-[11px]">
-          <span className="font-medium">
+          <span className="break-all font-medium">
             {device.displayName ?? device.hostname}
           </span>
+          {device.displayName && device.displayName !== device.hostname && (
+            <span className="break-all font-mono text-[var(--text-tertiary)]">
+              {device.hostname}
+            </span>
+          )}
           <span className="text-[var(--text-tertiary)]">
             {[device.manufacturer, device.model].filter(Boolean).join(" ")}
           </span>

@@ -249,7 +249,7 @@ function renderSceneEquipment(input: {
   return [
     `<g data-mount-kind="${input.item.mountKind}" data-device-id="${escapeXml(input.item.device.id)}">${body}`,
     artwork || ports,
-    `<text x="${x + 3}" y="${y + Math.min(10, height - 1)}" fill="${input.palette.text}" stroke="${input.palette.background}" stroke-width="2" paint-order="stroke" font-size="${Math.min(9, height * 0.55)}">${escapeXml(input.item.device.displayName || input.item.device.hostname)}</text>`,
+    `<text data-device-name="true" text-anchor="end" x="${x + width - 3}" y="${y + Math.min(10, height - 1)}" fill="${input.palette.text}" stroke="${input.palette.background}" stroke-width="2" paint-order="stroke" font-size="${Math.min(9, height * 0.55)}">${escapeXml(input.item.device.displayName || input.item.device.hostname)}<title>${escapeXml(input.item.device.displayName || input.item.device.hostname)}</title></text>`,
     `</g>`,
   ].join("");
 }

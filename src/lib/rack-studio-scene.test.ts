@@ -468,3 +468,23 @@ test("round artwork and ports export without stretching in room, compact and foc
   const loose = {...device, placement: "room" as const, rackId: undefined, rackMountKind: "loose" as const};
   assert.match(buildRackStudioSvg({...input, compact: true, devices: [loose]}).svg, /data-device-shape="round"/);
 });
+
+
+test("device export names use the upper-right corner and preserve complete escaped titles", () => {
+  const rack = rackFixture(0);
+  const device = deviceFixture("name-export", rack.id, 10);
+  device.hostname = "Long <host> & name";
+  const port = portFixture("name-port", device.id, "front");
+  const layout = layoutFixture(device.id, [port]);
+  for (const compact of [false, true]) for (const focusRackId of [undefined, rack.id]) {
+    const image = buildRackStudioSvg({room, racks: [rack], devices: [device], layouts: [layout], ports: [port], links: [], face: "front", showLabels: true, routeStyle: "smooth", theme: "dark", labels: exportLabels(), compact, focusRackId});
+    const name = image.svg.match(/<text data-device-name="true" text-anchor="end" x="([\d.]+)" y="([\d.]+)"[^>]*>(.*?)<title>(.*?)<\/title><\/text>/);
+    assert.ok(name);
+    assert.equal(name[3], "Long &lt;host&gt; &amp; name");
+    assert.equal(name[4], name[3]);
+    const group = image.svg.slice(0, name.index).split('data-device-id="name-export"').at(-1)!;
+    const body = group.match(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)"/)!;
+    assert.ok(body);
+    assert.ok(Math.abs(Number(name[1]) - (Number(body[1]) + Number(body[3]) - 3)) < 0.02);
+  }
+});

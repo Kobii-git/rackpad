@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { DeviceName, DeviceNameZoom } from "@/components/rack/DeviceName";
 import { Link } from "react-router-dom";
 import {
   Box,
@@ -1231,6 +1232,7 @@ export function RackCablingCanvas({
               transformOrigin: "top left",
             }}
           >
+            <DeviceNameZoom zoom={zoom}>
             {scene.rooms.map((roomFrame) => (
               <section
                 key={roomFrame.room.id}
@@ -1474,8 +1476,9 @@ export function RackCablingCanvas({
                         <button
                           type="button"
                           data-testid="loose-device-summary"
+                          data-device-name-host
                           data-cabling-selection-id={`device:${summary.device.id}`}
-                          className="h-full w-full min-w-0 overflow-hidden rounded border border-[var(--border-default)] bg-[var(--surface-1)] px-2 text-left text-[11px] focus-visible:outline-2 focus-visible:outline-[var(--accent-primary)]"
+                          className="relative h-full w-full min-w-0 overflow-hidden rounded border border-[var(--border-default)] bg-[var(--surface-1)] px-2 text-left text-[11px] focus-visible:outline-2 focus-visible:outline-[var(--accent-primary)]"
                           aria-describedby={
                             detailsVisible ? detailsId : undefined
                           }
@@ -1488,10 +1491,13 @@ export function RackCablingCanvas({
                             selectDevice(summary.device.id);
                           }}
                         >
-                          <span className="block truncate font-mono">
-                            {summary.device.hostname}
-                          </span>
-                          <span className="block text-[var(--text-secondary)]">
+                          <DeviceName
+                            name={summary.device.hostname}
+                            // Leave the scaled cable-count row clear below the name.
+                            maxHeight={summary.height - 8 - 24}
+                            selected={selection?.kind === "device" && selection.id === summary.device.id}
+                          />
+                          <span className="absolute bottom-1 left-2 block text-[var(--text-secondary)]">
                             {t("Cables")}: {connected.length}
                           </span>
                         </button>
@@ -1524,6 +1530,16 @@ export function RackCablingCanvas({
                         key={card.device.id}
                         role="group"
                         aria-label={card.device.hostname}
+                        data-device-name-host
+                        tabIndex={0}
+                        data-cabling-selection-id={`device:${card.device.id}`}
+                        onKeyDown={(event) => {
+                          if (event.target === event.currentTarget &&
+                            (event.key === "Enter" || event.key === " ")) {
+                            event.preventDefault();
+                            selectDevice(card.device.id);
+                          }
+                        }}
                         data-rack-cabling-interactive="true"
                         className={cn(
                           "absolute overflow-hidden rounded-[var(--radius-sm)] border bg-[var(--surface-1)] text-left",
@@ -1552,17 +1568,10 @@ export function RackCablingCanvas({
                           selectDevice(card.device.id);
                         }}
                       >
-                        <button
-                          type="button"
-                          data-cabling-selection-id={`device:${card.device.id}`}
-                          className="absolute left-2 top-1.5 z-10 font-mono text-[9px] font-semibold text-[var(--text-primary)]"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            selectDevice(card.device.id);
-                          }}
-                        >
-                          {card.device.hostname}
-                        </button>
+                        <DeviceName
+                          name={card.device.hostname}
+                          selected={highlightedDeviceIds.has(card.device.id)}
+                        />
                         {card.layout ? (
                           card.faces.map((face) => (
                             <PhysicalFaceplate
@@ -1772,6 +1781,7 @@ export function RackCablingCanvas({
                 );
               })}
             </svg>
+            </DeviceNameZoom>
           </div>
         </div>
 

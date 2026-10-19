@@ -8,6 +8,7 @@ import { useI18n } from "@/i18n";
 import type { Device, DevicePhysicalLayout, Port, RackFace } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PhysicalFaceplate } from "./PhysicalFaceplate";
+import { DeviceName } from "./DeviceName";
 
 interface RackElevationShellProps {
   totalU: number;
@@ -155,20 +156,19 @@ export function RackElevationEquipmentFrame({
   const heightRatio = rectHeight > 0 ? rectWidth / rectHeight : 1;
   const interactive = Boolean(onSelectDevice);
   const hasPortControls = Boolean(onSelectPort);
-  const hostnameClassName = cn(
-    "absolute top-0.5 z-10 truncate rounded bg-black/70 px-1 py-0.5 font-mono text-[9px] leading-none text-white",
-    device.stackMembers ? "right-1 max-w-[45%]" : "left-1 max-w-[80%]",
-  );
 
   return (
     <div
-      role={interactive ? (hasPortControls ? "group" : "button") : undefined}
-      tabIndex={interactive && !hasPortControls ? 0 : undefined}
+      data-device-name-host
+      role={
+        interactive ? (hasPortControls || children ? "group" : "button") : undefined
+      }
+      tabIndex={interactive ? 0 : undefined}
       aria-label={interactive ? device.hostname : undefined}
       data-rack-cabling-interactive={interactive ? "true" : undefined}
       data-rack-cabling-equipment={interactive ? "true" : undefined}
       data-highlighted={selected ? "true" : "false"}
-      data-cabling-selection-id={!hasPortControls ? selectionId : undefined}
+      data-cabling-selection-id={selectionId}
       data-testid={testId}
       className={cn(
         "absolute overflow-hidden rounded-[2px] border bg-[var(--surface-1)] text-left outline-none transition-[box-shadow,border-color,opacity]",
@@ -194,7 +194,10 @@ export function RackElevationEquipmentFrame({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
       onKeyDown={(event) => {
-        if (!hasPortControls && (event.key === "Enter" || event.key === " ")) {
+        if (
+          event.target === event.currentTarget &&
+          (event.key === "Enter" || event.key === " ")
+        ) {
           event.preventDefault();
           onSelectDevice?.(device.id);
         }
@@ -237,23 +240,11 @@ export function RackElevationEquipmentFrame({
           {configurationWarning}
         </span>
       ) : null}
-      {interactive && hasPortControls ? (
-        <button
-          type="button"
-          data-cabling-selection-id={selectionId}
-          className={hostnameClassName}
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelectDevice?.(device.id);
-          }}
-        >
-          {device.hostname}
-        </button>
-      ) : (
-        <span className={cn("pointer-events-none", hostnameClassName)}>
-          {device.hostname}
-        </span>
-      )}
+      <DeviceName
+        name={device.hostname}
+        selected={selected}
+        widthFraction={device.stackMembers ? 0.45 : 1}
+      />
       {children}
     </div>
   );

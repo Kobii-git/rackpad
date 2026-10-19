@@ -7,6 +7,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { DeviceName, DeviceNameZoom } from "./DeviceName";
 import { Link } from "react-router-dom";
 import {
   Box,
@@ -588,7 +589,7 @@ export function RackStudioWorkspace({
   }
 
   function beginRackDrag(
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     rack: Rack,
     index: number,
   ) {
@@ -609,7 +610,7 @@ export function RackStudioWorkspace({
     };
   }
 
-  function moveRackDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+  function moveRackDrag(event: ReactPointerEvent<HTMLElement>) {
     const active = rackDragRef.current;
     if (!active || active.pointerId !== event.pointerId) return;
     const deltaX = (event.clientX - active.startClientX) / zoom;
@@ -639,7 +640,7 @@ export function RackStudioWorkspace({
   }
 
   function endRackDrag(
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     rack: Rack,
   ) {
     const active = rackDragRef.current;
@@ -1128,6 +1129,7 @@ export function RackStudioWorkspace({
                 transformOrigin: "top left",
               }}
             >
+              <DeviceNameZoom zoom={zoom}>
               <svg
                 className="pointer-events-none absolute inset-0 z-50 h-full w-full overflow-visible"
                 viewBox={`0 0 ${roomScene.bounds.width} ${roomScene.bounds.height}`}
@@ -1281,9 +1283,8 @@ export function RackStudioWorkspace({
                     device.hostname.toLowerCase().includes(normalizedSearch),
                   );
                 return (
-                  <button
+                  <div
                     key={rack.id}
-                    type="button"
                     className={cn(
                       "absolute touch-none overflow-visible rounded-[5px] border-2 bg-[var(--surface-2)] text-left shadow-[0_12px_28px_rgb(0_0_0_/_0.24)] transition-[border-color,opacity,box-shadow]",
                       focusedRackId === rack.id
@@ -1304,7 +1305,11 @@ export function RackStudioWorkspace({
                     onPointerUp={(event) => endRackDrag(event, rack)}
                     onPointerCancel={(event) => endRackDrag(event, rack)}
                   >
-                    <div className="flex h-9 items-center justify-between border-b border-[var(--border-default)] bg-[var(--surface-1)] px-2.5">
+                    <button
+                      type="button"
+                      onClick={() => selectFocusedRack(rack.id)}
+                      className="flex h-9 w-full items-center justify-between border-b border-[var(--border-default)] bg-[var(--surface-1)] px-2.5"
+                    >
                       <span className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-primary)]">
                         {rack.name}
                       </span>
@@ -1312,7 +1317,7 @@ export function RackStudioWorkspace({
                         {rack.totalU}
                         {t("U")}
                       </span>
-                    </div>
+                    </button>
                     <div className="relative mx-3 mt-3 h-[198px] border-x-[8px] border-y-[5px] border-[var(--border-strong)] bg-[var(--bg-shell)]">
                       {Array.from(
                         { length: Math.min(rack.totalU, 42) },
@@ -1329,6 +1334,16 @@ export function RackStudioWorkspace({
                       {rackEquipment.map((item) => (
                         <span
                           key={item.id}
+                          data-device-name-host
+                          tabIndex={0}
+                          role="button"
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              selectFocusedRack(rack.id);
+                            }
+                          }}
+                          aria-label={item.device.hostname}
                           className={cn(
                             "absolute overflow-hidden rounded-[1px] border border-[var(--accent-primary-border)] bg-[var(--accent-primary-soft)]",
                             healthOverlay && statusClass(item.device.status),
@@ -1340,6 +1355,10 @@ export function RackStudioWorkspace({
                             height: Math.max(2, item.rect.height),
                           }}
                         >
+                          <DeviceName
+                            name={item.device.hostname}
+                            selected={selectedDeviceId === item.device.id}
+                          />
                           <SceneFaceplate
                             item={item}
                             ports={ports}
@@ -1356,7 +1375,7 @@ export function RackStudioWorkspace({
                         <span aria-hidden="true">◇</span>
                       )}
                     </div>
-                  </button>
+                  </div>
                 );
               })}
               {roomScene.tray ? (
@@ -1377,6 +1396,8 @@ export function RackStudioWorkspace({
                     .map((item) => (
                       <button
                         key={item.id}
+                        data-device-name-host
+                        aria-label={item.device.hostname}
                         type="button"
                         className={cn(
                           "absolute overflow-hidden rounded-[3px] border bg-[var(--surface-1)] text-left",
@@ -1403,13 +1424,15 @@ export function RackStudioWorkspace({
                               : undefined
                           }
                         />
-                        <span className="pointer-events-none absolute left-1 top-1 rounded bg-black/65 px-1 font-mono text-[7px] text-white">
-                          {item.device.hostname}
-                        </span>
+                        <DeviceName
+                          name={item.device.hostname}
+                          selected={selectedDeviceId === item.device.id}
+                        />
                       </button>
                     ))}
                 </div>
               ) : null}
+              </DeviceNameZoom>
             </div>
           </div>
 

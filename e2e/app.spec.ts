@@ -1509,7 +1509,7 @@ test("rack cabling visualizer persists controls and stays read-only for every ro
     );
     await restoreFocus(page.getByTestId("rack-cabling-cable").first());
     await setRackCablingRooms(page, ["room_office"]);
-    const looseDevice = page.getByRole("button", {
+    const looseDevice = page.getByRole("group", {
       name: "build-mini-01",
       exact: true,
     });
@@ -1940,12 +1940,12 @@ test("Rack Studio patches exact ports, saves routes, exports, and traces", async
     await expect(page.getByRole("checkbox", { name: "Labels" })).toBeChecked();
     await page.getByRole("button", { name: "Cables", exact: true }).click();
 
-    const backupDevice = page.getByTestId("rack-studio-device").filter({
-      has: page.getByRole("button", { name: "backup-01", exact: true }),
-    });
-    const pveDevice = page.getByTestId("rack-studio-device").filter({
-      has: page.getByRole("button", { name: "pve-01", exact: true }),
-    });
+    const backupDevice = page.getByTestId("rack-studio-device").and(
+      page.getByRole("group", { name: "backup-01", exact: true }),
+    );
+    const pveDevice = page.getByTestId("rack-studio-device").and(
+      page.getByRole("group", { name: "pve-01", exact: true }),
+    );
     await backupDevice
       .getByRole("button", { name: "eno4 · rj45", exact: true })
       .click();
@@ -3878,11 +3878,16 @@ test("UI regression surfaces remain reachable and unclipped", async ({
   const oneUTileState = await tiles.evaluateAll((elements) =>
     elements.map((element) => ({
       clipped: element.scrollHeight > element.clientHeight + 1,
+      height: element.clientHeight,
+      scrollHeight: element.scrollHeight,
       hostname: element.getAttribute("data-hostname"),
       text: element.textContent?.trim(),
     })),
   );
-  expect(oneUTileState.every((tile) => !tile.clipped)).toBeTruthy();
+  expect(
+    oneUTileState.every((tile) => !tile.clipped),
+    JSON.stringify(oneUTileState.filter((tile) => tile.clipped)),
+  ).toBeTruthy();
   expect(
     oneUTileState.every((tile) => tile.hostname === tile.text),
   ).toBeTruthy();
@@ -6039,12 +6044,10 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
     await page.getByRole("button", { name: "Cables", exact: true }).click();
     const rackFace = page
       .getByTestId("rack-studio-device")
-      .filter({
-        has: page.getByRole("button", {
-          name: "acceptance-switch-stack",
-          exact: true,
-        }),
-      })
+      .and(page.getByRole("group", {
+        name: "acceptance-switch-stack",
+        exact: true,
+      }))
       .first();
     await expect(rackFace).toContainText("Core B");
     await expect(rackFace).toContainText("Core A");
@@ -6052,7 +6055,7 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
       .getByText("Core B · unknown", { exact: true })
       .boundingBox();
     const hostnameLabel = await rackFace
-      .getByRole("button", { name: "acceptance-switch-stack", exact: true })
+      .getByTestId("device-name")
       .boundingBox();
     expect(memberLabel).not.toBeNull();
     expect(hostnameLabel).not.toBeNull();

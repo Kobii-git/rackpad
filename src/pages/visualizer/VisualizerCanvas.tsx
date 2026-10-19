@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { DeviceName, DeviceNameZoom } from "@/components/rack/DeviceName";
 import { Link } from "react-router-dom";
 import {
   Cable,
@@ -638,6 +639,7 @@ export function VisualizerCanvas({
   }
 
   return (
+    <DeviceNameZoom zoom={transform.scale}>
     <TooltipProvider>
       <div ref={sidebar.containerRef} className="flex min-h-0 flex-1 gap-4 overflow-y-auto px-4 py-4 xl:overflow-hidden xl:px-6 xl:py-5">
         <div className="flex min-h-[620px] min-w-0 flex-1 flex-col xl:min-h-0">
@@ -918,6 +920,7 @@ export function VisualizerCanvas({
         </aside>
       </div>
     </TooltipProvider>
+    </DeviceNameZoom>
   );
 
   function isCableActive(cable: VisualizerCable) {
@@ -1357,14 +1360,6 @@ function DeviceCard({
   const showSecondaryLabel = readableLabels
     ? node.height >= 48
     : !compactRackNode;
-  const readableNameStyle = readableLabels
-    ? {
-        display: "-webkit-box",
-        WebkitBoxOrient: "vertical" as const,
-        WebkitLineClamp: node.height >= 58 ? 2 : 1,
-        overflow: "hidden",
-      }
-    : undefined;
   const portReserve = nodePortReserve(node, {
     compact: compactRackNode,
     readable: readableLabels,
@@ -1373,6 +1368,7 @@ function DeviceCard({
     <div
       data-visualizer-interactive="true"
       data-visualizer-device-id={node.device.id}
+      data-device-name-host
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -1412,6 +1408,11 @@ function DeviceCard({
         })}
         title={node.device.hostname}
       />
+      <DeviceName
+        name={node.device.hostname}
+        selected={selected}
+        reservedLeft={32}
+      />
       <span
         className="pointer-events-none absolute inset-y-1 left-1 z-10 w-0.5 rounded-full"
         style={{ background: stripe }}
@@ -1420,16 +1421,7 @@ function DeviceCard({
         <span className="shrink-0" style={{ color: node.typeColor }}>
           <DeviceTypeIcon type={node.device.deviceType} className="size-4" />
         </span>
-        <div className="min-w-0 flex-1">
-          <div
-            className={`font-semibold text-[var(--text-primary)] ${
-              readableLabels ? "text-[13px] leading-[1.15]" : "truncate text-xs"
-            }`}
-            style={readableNameStyle}
-            title={node.device.hostname}
-          >
-            {node.device.hostname}
-          </div>
+        <div className="min-w-0 flex-1 pt-4">
           {showSecondaryLabel && (
             <div className="truncate font-mono text-[9px] text-[var(--text-tertiary)]">
               {formatDeviceAddress(

@@ -109,6 +109,12 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
 - Cable type filter limits the canvas to one cable type.
 - Type chips fade non-matching devices and unrelated cables.
 - Shift-click type chips to multi-select device types.
+- Device names stay at 12 screen pixels while zooming and sit at the upper-right
+  of the device. Long names truncate; hovering or focusing the device reveals
+  the full name. When a device is too small to fit readable text, its persistent
+  name is hidden; hover, keyboard focus or selection reveals it above the canvas.
+  Rack/room SVG and PNG names use the same corner with stable export sizing,
+  independent of the current viewport zoom.
 - Search matches hostnames, IPs, MACs from discovery, cable color, cable notes, and cable endpoints.
 - Click a device to isolate its direct neighborhood.
 - Click a cable to highlight both endpoints and inspect metadata.
