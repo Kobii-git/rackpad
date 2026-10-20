@@ -6,6 +6,32 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.5] - 2026-10-20
+
+### Added
+
+- Saved room and rack header colors in Rack Cabling, with readable foreground
+  contrast and a reset to the theme default (#195).
+- Per-device upper-left or upper-right name placement across Visualizer, Diagram,
+  Racks, Studio and SVG/PNG exports, preserving zoom-readable names (#193).
+
+### Fixed
+
+- Logical/native backup recovery preserves presentation settings, applies legacy
+  defaults and rejects inconsistent native schema markers atomically.
+- Candidate image smoke checks follow the canonical application schema while
+  retaining pinned stable/beta upgrade and paired-rollback baselines.
+- Stack-member screenshot captures fit the workspace inside the browser viewport
+  while retaining exact screenshot equality and behavioral assertions.
+
+### Changed
+
+- Schema advances from 54 to 55. Existing headers retain theme colors and device
+  names retain upper-right placement. Rollback restores the previous image with
+  its paired pre-upgrade database/configuration/key.
+
+See the [release and upgrade notes](docs/releases/v1.8.5.md).
+
 ## [1.8.4] - 2026-10-20
 
 ### Added

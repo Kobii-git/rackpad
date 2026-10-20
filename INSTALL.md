@@ -1,6 +1,6 @@
 # Rackpad Installation Guide
 
-Current stable release: `v1.8.4` (prepared candidate; confirm publication below).
+Current stable release: `v1.8.5` (confirm publication below).
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm
 the immutable tag and published artifacts before installation.
 
@@ -19,7 +19,7 @@ without cloning the repo, or clone the repo and build it yourself.
 ## Main Branch Or Version Tag?
 
 - `main` is the stable source branch and is fine for cloning the latest stable code.
-- `RACKPAD_TAG=1.8.4` pins the Docker image to a known release. Git tags use
+- `RACKPAD_TAG=1.8.5` pins the Docker image to a known release. Git tags use
   the `v` prefix, but Docker image tags do not.
 - `RACKPAD_TAG=latest` follows the newest published stable GHCR image and is
   convenient for quick installs or test labs.
@@ -36,14 +36,19 @@ manifest and image version paired. The maintenance installer resolves `latest`
 to `main`, `beta` to `beta`, `dev` to `dev`, and complete version tags to matching
 Git tags; custom images use the stable manifest.
 
-## Presentation settings upgrade
+## Before upgrading to 1.8.5
 
-Builds with room/rack header colors and per-device name placement advance the
-SQLite schema to 55. Existing headers keep their theme colors and device names
-keep their upper-right position. Logical/native backups preserve the settings;
+Version 1.8.5 adds room/rack header colors and per-device name placement,
+advancing the SQLite schema from 54 to 55. Existing headers keep their theme
+colors and device names keep their upper-right position. Logical/native backups preserve the settings;
 older logical backups use the original defaults. Keep a consistent pre-upgrade
 backup and matching previous image. Downgrade is unsupported; rollback restores
-the previous image with its paired pre-upgrade database. Configuration is described in the [Visualizer guide](docs/VISUALIZER.md).
+the previous image with its paired pre-upgrade database. Verify saved colors/name
+placement, inventory, administrator access, connected ports, monitoring and restart
+persistence after upgrading. Configuration is
+described in the [Visualizer guide](docs/VISUALIZER.md). See the
+[1.8.5 release notes](docs/releases/v1.8.5.md); installations upgrading from
+1.8.3 or earlier must also follow the precautions below.
 
 ## Before upgrading to 1.8.4
 
@@ -122,7 +127,7 @@ TRUSTED_ORIGINS=
 Most users only change:
 
 - `RACKPAD_PORT`: host port to expose, default `3000`.
-- `RACKPAD_TAG`: release version to run, for example `1.8.4`, or `latest` for
+- `RACKPAD_TAG`: release version to run, for example `1.8.5`, or `latest` for
   the newest stable GHCR image.
 - `TRUST_PROXY`, `TRUSTED_HOSTS`, `TRUSTED_ORIGINS`: set these when using a reverse proxy.
 
@@ -364,7 +369,7 @@ sudo docker compose up --build -d
 To build an exact release instead of current `main`:
 
 ```bash
-sudo git checkout v1.8.4
+sudo git checkout v1.8.5
 sudo docker compose up --build -d
 ```
 
