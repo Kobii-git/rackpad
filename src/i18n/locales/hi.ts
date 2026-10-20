@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "Header color": "शीर्षक का रंग",
+  "Device name position": "डिवाइस के नाम की स्थिति",
+  "Upper left": "ऊपर बाएँ",
+  "Upper right": "ऊपर दाएँ",
   "New device type": "नया डिवाइस प्रकार",
   "Starting layout": "प्रारंभिक लेआउट",
   "Choose a starting layout, then name your template and select its device type.": "एक प्रारंभिक लेआउट चुनें, फिर टेम्पलेट को नाम दें और उसका डिवाइस प्रकार चुनें।",

@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Header color": "헤더 색상",
+  "Device name position": "장치 이름 위치",
+  "Upper left": "왼쪽 위",
+  "Upper right": "오른쪽 위",
   "New device type": "새 장치 유형",
   "Starting layout": "시작 레이아웃",
   "Choose a starting layout, then name your template and select its device type.": "시작 레이아웃을 고른 다음 템플릿 이름과 장치 유형을 지정하세요.",

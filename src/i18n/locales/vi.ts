@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Header color": "Màu tiêu đề",
+  "Device name position": "Vị trí tên thiết bị",
+  "Upper left": "Trên cùng bên trái",
+  "Upper right": "Trên cùng bên phải",
   "New device type": "Loại thiết bị mới",
   "Starting layout": "Bố cục ban đầu",
   "Choose a starting layout, then name your template and select its device type.": "Chọn bố cục ban đầu, đặt tên cho mẫu rồi chọn loại thiết bị.",

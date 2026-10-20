@@ -1409,6 +1409,7 @@ function DeviceCard({
         title={node.device.hostname}
       />
       <DeviceName
+        position={node.device.labelPosition}
         name={node.device.hostname}
         selected={selected}
         reservedLeft={32}

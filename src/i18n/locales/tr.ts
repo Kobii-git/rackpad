@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Header color": "Başlık rengi",
+  "Device name position": "Cihaz adı konumu",
+  "Upper left": "Sol üst",
+  "Upper right": "Sağ üst",
   "New device type": "Yeni cihaz türü",
   "Starting layout": "Başlangıç düzeni",
   "Choose a starting layout, then name your template and select its device type.": "Bir başlangıç düzeni seçin, şablonunuzu adlandırın ve cihaz türünü seçin.",

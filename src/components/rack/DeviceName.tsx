@@ -30,6 +30,7 @@ export function DeviceName({
   widthFraction = 1,
   reservedLeft = 0,
   reservedRight = 0,
+  position = "upper-right",
 }: {
   name: string;
   selected?: boolean;
@@ -39,6 +40,7 @@ export function DeviceName({
   widthFraction?: number;
   reservedLeft?: number;
   reservedRight?: number;
+  position?: "upper-left" | "upper-right";
 }) {
   const zoom = useContext(CanvasZoom);
   const ref = useRef<HTMLSpanElement>(null);
@@ -54,6 +56,7 @@ export function DeviceName({
     zoom,
     reservedLeft,
     reservedRight,
+    position,
   );
   const { visible, ...labelStyle } = metrics;
   const reveal =
@@ -135,7 +138,7 @@ export function DeviceName({
       const next = {
         x: Math.max(
           8,
-          Math.min(window.innerWidth - width - 8, rect.right - width),
+          Math.min(window.innerWidth - width - 8, position === "upper-left" ? rect.left : rect.right - width),
         ),
         y: Math.max(
           8,
@@ -161,13 +164,14 @@ export function DeviceName({
       cancelAnimationFrame(frame);
       window.removeEventListener("keydown", dismiss);
     };
-  }, [reveal]);
+  }, [reveal, position]);
 
   return (
     <>
       <span
         ref={ref}
         data-testid="device-name"
+        data-name-position={position}
         data-name-visible={visible}
         title={name}
         className="absolute z-10 box-border block truncate rounded bg-black/70 font-mono font-semibold text-white"
@@ -175,7 +179,7 @@ export function DeviceName({
           ...labelStyle,
           visibility: visible ? "visible" : "hidden",
           pointerEvents: "none",
-          textAlign: "right",
+          textAlign: position === "upper-left" ? "left" : "right",
         }}
       >
         {name}

@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "Header color": "標頭顏色",
+  "Device name position": "裝置名稱位置",
+  "Upper left": "左上",
+  "Upper right": "右上",
   "New device type": "新增裝置類型",
   "Starting layout": "起始配置",
   "Choose a starting layout, then name your template and select its device type.": "選擇起始配置，為範本命名並選擇裝置類型。",

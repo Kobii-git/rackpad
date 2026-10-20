@@ -36,6 +36,15 @@ manifest and image version paired. The maintenance installer resolves `latest`
 to `main`, `beta` to `beta`, `dev` to `dev`, and complete version tags to matching
 Git tags; custom images use the stable manifest.
 
+## Presentation settings upgrade
+
+Builds with room/rack header colors and per-device name placement advance the
+SQLite schema to 55. Existing headers keep their theme colors and device names
+keep their upper-right position. Logical/native backups preserve the settings;
+older logical backups use the original defaults. Keep a consistent pre-upgrade
+backup and matching previous image: schema-54 binaries cannot open schema-55
+storage. Configuration is described in the [Visualizer guide](docs/VISUALIZER.md).
+
 ## Before upgrading to 1.8.4
 
 - Stop writes and retain a protected, consistent pre-upgrade database/volume

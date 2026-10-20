@@ -1296,7 +1296,7 @@ test("schema 45 migration preserves inventory and cabling while creating legacy 
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -1420,7 +1420,7 @@ test("schema 46 migration adds nullable shared room-canvas coordinates without c
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -1509,7 +1509,7 @@ test("schema 48 migration adds cable inspection defaults without changing invent
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -1543,7 +1543,7 @@ test("schema 48 migration adds cable inspection defaults without changing invent
   const migrated = new Database(legacyPath, { readonly: true });
   assert.deepEqual(
     migrated.prepare("SELECT * FROM devices ORDER BY id").all(),
-    beforeDevices,
+    beforeDevices.map((row) => ({ ...(row as Record<string, unknown>), labelPosition: "upper-right" })),
   );
   assert.deepEqual(
     migrated.prepare("SELECT * FROM ports ORDER BY id").all(),
@@ -1594,7 +1594,7 @@ test("schema 49 migration indexes persisted rack mount kinds without changing de
     UPDATE schemaVersion
     SET version = 48, updatedAt = '2026-09-03T00:00:00.000Z'
     WHERE id = 1;
-    DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -1623,7 +1623,7 @@ test("schema 49 migration indexes persisted rack mount kinds without changing de
     migrated
       .prepare("SELECT * FROM devices WHERE id = 'device_rack_top_v48'")
       .get(),
-    before,
+    { ...(before as Record<string, unknown>), labelPosition: "upper-right" },
   );
   assert.ok(
     (migrated.pragma("index_list(devices)") as Array<{ name: string }>).some(

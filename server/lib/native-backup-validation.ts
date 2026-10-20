@@ -1,3 +1,4 @@
+import { optionalHeaderColor, optionalLabelPosition } from "./presentation.js";
 import { parseCableRouteMode, decodeCableRouteGuides, assertCableGuideReferences } from "./cable-routing.js";
 import { validateStackIntegrity } from "./stack-integrity.js";
 import type Database from "better-sqlite3";
@@ -109,6 +110,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "shelfHeight",
     "shelfOrientation",
     "rackSide",
+    "labelPosition",
   ],
   dhcpScopes: [
     "id",
@@ -363,6 +365,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "roomId",
     "studioX",
     "studioY",
+    "headerColor",
   ],
   referenceImages: [
     "id",
@@ -378,7 +381,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "createdAt",
     "updatedAt",
   ],
-  rooms: ["id", "labId", "name", "description", "location", "notes"],
+  rooms: ["id", "labId", "name", "description", "location", "notes", "headerColor"],
   schemaVersion: ["id", "version", "updatedAt"],
   snmpCredentials: [
     "id",
@@ -595,6 +598,13 @@ export function validateRackpadSqliteDatabase(
   }
   if (schema.version < 54 && database.prepare("SELECT name FROM sqlite_master WHERE name='deviceStackMemberLayouts'").get())
     throw new RackpadSqliteValidationError(`${label} has inconsistent legacy member layout schema.`);
+  if (schema.version < 55) {
+    for (const [table, field] of [["rooms", "headerColor"], ["racks", "headerColor"], ["devices", "labelPosition"]] as const) {
+      const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{name: string}>;
+      if (columns.some(column => column.name === field))
+        throw new RackpadSqliteValidationError(`${label} has inconsistent legacy presentation schema.`);
+    }
+  }
   const missingSchema: string[] = [];
   for (const [table, requiredColumns] of Object.entries(
     CURRENT_RACKPAD_SCHEMA_COLUMNS,
@@ -614,6 +624,8 @@ export function validateRackpadSqliteDatabase(
       continue;
     }
     for (const column of requiredColumns) {
+      if (schema.version < 55 && ((table === "devices" && column === "labelPosition") ||
+        ((table === "rooms" || table === "racks") && column === "headerColor"))) continue;
       if (schema.version === 50 && table === "ports" && column === "stackMemberId") continue;
       if (schema.version < 52 && table === "portLinks" && (column === "routeMode" || column === "routeGuides")) continue;
       if (!columns.has(column)) missingSchema.push(`${table}.${column}`);
@@ -623,6 +635,20 @@ export function validateRackpadSqliteDatabase(
     throw new RackpadSqliteValidationError(
       `${label} is missing required Rackpad schema: ${missingSchema.join(", ")}.`,
     );
+  }
+
+  if (schema.version >= 55) {
+    try {
+      for (const table of ["rooms", "racks"] as const)
+        for (const row of database.prepare(`SELECT headerColor FROM ${table}`).all() as Record<string, unknown>[])
+          optionalHeaderColor(row);
+      for (const row of database.prepare("SELECT labelPosition FROM devices").all() as Record<string, unknown>[]) {
+        if (row.labelPosition == null) throw new Error("Missing device label position.");
+        optionalLabelPosition(row);
+      }
+    } catch {
+      throw new RackpadSqliteValidationError(`${label} contains invalid presentation settings.`);
+    }
   }
 
   const foreignKeyFailures = database.pragma("foreign_key_check") as unknown[];

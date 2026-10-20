@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Header color": "Warna header",
+  "Device name position": "Posisi nama perangkat",
+  "Upper left": "Kiri atas",
+  "Upper right": "Kanan atas",
   "New device type": "Jenis perangkat baru",
   "Starting layout": "Tata letak awal",
   "Choose a starting layout, then name your template and select its device type.": "Pilih tata letak awal, lalu beri nama templat dan pilih jenis perangkatnya.",

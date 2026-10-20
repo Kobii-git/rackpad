@@ -8,7 +8,7 @@ test("device names retain 12 screen pixels across every canvas zoom range", () =
     assert.ok(Math.abs(metrics.fontSize * zoom - 12) < 1e-10);
     assert.ok(Math.abs(parseFloat(metrics.lineHeight) * zoom - 12) < 1e-10);
     assert.ok(Math.abs(metrics.top * zoom - 2) < 1e-10);
-    assert.ok(Math.abs(metrics.right * zoom - 4) < 1e-10);
+    assert.ok(Math.abs(Number(metrics.right) * zoom - 4) < 1e-10);
     assert.ok(metrics.maxWidth * zoom <= 180);
     assert.ok(metrics.maxWidth <= 400 - 8 / zoom + 1e-10);
   }
@@ -35,5 +35,19 @@ test("invalid zooms fall back to unscaled preview geometry", () => {
       deviceNameMetrics(300, 42, zoom),
       deviceNameMetrics(300, 42, 1),
     );
+  }
+});
+
+
+test("left labels retain screen size and respect reserved controls at every zoom", () => {
+  for (const zoom of [0.22, 0.5, 1, 1.8, 2]) {
+    const left = deviceNameMetrics(400, 200, zoom, 32, 8, "upper-left");
+    const right = deviceNameMetrics(400, 200, zoom, 32, 8);
+    assert.equal(left.right, undefined);
+    assert.equal(right.left, undefined);
+    assert.ok(Math.abs((Number(left.left) - 32) * zoom - 4) < 1e-10);
+    assert.equal(left.maxWidth, right.maxWidth);
+    assert.equal(left.fontSize, right.fontSize);
+    assert.equal(left.visible, right.visible);
   }
 });

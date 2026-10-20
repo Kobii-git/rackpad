@@ -1,4 +1,8 @@
 export const en = {
+  "Header color": "Header color",
+  "Device name position": "Device name position",
+  "Upper left": "Upper left",
+  "Upper right": "Upper right",
   "New device type": "New device type",
   "Starting layout": "Starting layout",
   "Choose a starting layout, then name your template and select its device type.": "Choose a starting layout, then name your template and select its device type.",

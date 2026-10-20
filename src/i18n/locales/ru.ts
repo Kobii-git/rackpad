@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const ru = {
+  "Header color": "Цвет заголовка",
+  "Device name position": "Положение имени устройства",
+  "Upper left": "Сверху слева",
+  "Upper right": "Сверху справа",
   "New device type": "Новый тип устройства",
   "Starting layout": "Начальный макет",
   "Choose a starting layout, then name your template and select its device type.": "Выберите начальный макет, задайте имя шаблона и выберите тип устройства.",

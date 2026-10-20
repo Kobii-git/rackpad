@@ -5,7 +5,7 @@ process.env.MCP_ENABLED = "1";
 
 export default defineConfig({
   ...base,
-  grep: /zoom-aware device names|template starting layouts|guided template editor|remaining feedback template colors|template block transfers|mixed-model220-port stacks|Rack Studio rejects an occupied drag|Rack Studio reveals both devices|MCP token UI|24 short patch cords/,
+  grep: /per-device name placement|header colors and device label placement|zoom-aware device names|template starting layouts|guided template editor|remaining feedback template colors|template block transfers|mixed-model220-port stacks|Rack Studio rejects an occupied drag|Rack Studio reveals both devices|MCP token UI|24 short patch cords/,
   projects: [
     { name: "acceptance-chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "acceptance-firefox", use: { ...devices["Desktop Firefox"] } },

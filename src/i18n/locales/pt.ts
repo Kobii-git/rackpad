@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const pt = {
+  "Header color": "Cor do cabeçalho",
+  "Device name position": "Posição do nome do dispositivo",
+  "Upper left": "Superior esquerdo",
+  "Upper right": "Superior direito",
   "New device type": "Novo tipo de dispositivo",
   "Starting layout": "Layout inicial",
   "Choose a starting layout, then name your template and select its device type.": "Escolha um layout inicial, dê um nome ao modelo e selecione o tipo de dispositivo.",

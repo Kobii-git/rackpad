@@ -1356,6 +1356,7 @@ export function RackStudioWorkspace({
                           }}
                         >
                           <DeviceName
+                            position={item.device.labelPosition}
                             name={item.device.hostname}
                             selected={selectedDeviceId === item.device.id}
                           />
@@ -1425,6 +1426,7 @@ export function RackStudioWorkspace({
                           }
                         />
                         <DeviceName
+                          position={item.device.labelPosition}
                           name={item.device.hostname}
                           selected={selectedDeviceId === item.device.id}
                         />

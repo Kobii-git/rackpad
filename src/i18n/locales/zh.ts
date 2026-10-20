@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Header color": "标题颜色",
+  "Device name position": "设备名称位置",
+  "Upper left": "左上",
+  "Upper right": "右上",
   "New device type": "新增设备类型",
   "Starting layout": "起始布局",
   "Choose a starting layout, then name your template and select its device type.": "选择起始布局，为模板命名并选择设备类型。",

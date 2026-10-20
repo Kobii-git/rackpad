@@ -150,3 +150,12 @@ Optional per-face `shape: "round"` metadata keeps schema-v1 templates and snapsh
 on square 1000-unit canvases. Missing shape retains rectangular rendering. The
 existing JSON storage and backup validators retain it without a SQLite migration;
 older binaries may discard the field when rewriting layouts.
+
+Schema 55 adds optional six-digit hex `rooms.headerColor` and `racks.headerColor`,
+and `devices.labelPosition` (`upper-left` or `upper-right`, default upper-right).
+Existing inventory retains theme headers and upper-right names. Lab-authorized
+create/edit APIs validate these values; logical and native recovery preserve them.
+Older logical backups default missing fields safely, and genuine schema-50–54
+native snapshots remain accepted for startup migration. The settings do not
+change physical layout snapshots, device geometry, ports, or cable anchors.
+Rollback requires the prior image with its paired pre-upgrade database.

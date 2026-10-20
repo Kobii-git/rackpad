@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Header color": "ヘッダーの色",
+  "Device name position": "デバイス名の位置",
+  "Upper left": "左上",
+  "Upper right": "右上",
   "New device type": "新しいデバイスの種類",
   "Starting layout": "初期レイアウト",
   "Choose a starting layout, then name your template and select its device type.": "初期レイアウトを選び、テンプレートに名前を付けてデバイスの種類を選択します。",

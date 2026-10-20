@@ -1,4 +1,5 @@
 import { isStackType, listStackMembers, stackHeight, assertStackDeviceEdit, syncStackHeight, unmountStack, stackChildren, validateStackChildren } from "../lib/device-stacks.js";
+import { optionalLabelPosition } from "../lib/presentation.js";
 import type { FastifyPluginAsync } from "fastify";
 import { db, parseRow } from "../db.js";
 import { writeAuditLogEntry } from "../lib/audit-log.js";
@@ -404,8 +405,8 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model,
          serial, managementIp, macAddress, status, placement, parentDeviceId, networkMode, roomId, cpuCores, memoryGb, storageGb, specs,
          startU, heightU, face, rackSlot, tags, notes, lastSeen,
-         rackMountKind, rackColumn, rackColumnSpan)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         rackMountKind, rackColumn, rackColumnSpan, labelPosition)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `);
     const insertPort = db.prepare(`
       INSERT INTO ports (id, deviceId, name, position, kind, speed, linkState, mode, vlanId, allowedVlanIds, description, face, virtualSwitchId, macAddress)
@@ -444,6 +445,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
         rackGeometry.rackMountKind,
         rackGeometry.rackColumn,
         rackGeometry.rackColumnSpan,
+        optionalLabelPosition(body) ?? "upper-right",
       );
 
       for (const port of template
@@ -971,6 +973,12 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
       }
       updates.push("snmpCredentialId = ?");
       values.push(snmpCredentialId);
+    }
+
+    const labelPosition = optionalLabelPosition(body);
+    if (labelPosition !== undefined) {
+      updates.push("labelPosition = ?");
+      values.push(labelPosition ?? "upper-right");
     }
 
     const simpleStringKeys = [

@@ -733,7 +733,7 @@ test("schema50 upgrades without changing existing ports and old logical backups 
   );
   const database = new Database(legacy);
   database.exec(
-    `DROP TRIGGER cable_guide_device_delete;
+    `ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -1010,7 +1010,7 @@ test("schema51 and schema53 upgrades preserve populated stacks, ports and cables
     const filename = path.join(directory, `release-upgrade-${version}.db`);
     await db.backup(filename);
     const legacy = new Database(filename);
-    legacy.exec("DROP TABLE deviceStackMemberLayouts");
+    legacy.exec("ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TABLE deviceStackMemberLayouts");
     if (version === 51) {
       legacy.exec(`
         DROP TABLE mcpTokens;
@@ -1047,12 +1047,12 @@ test("schema51 and schema53 upgrades preserve populated stacks, ports and cables
 test("schema54 migration is forward-only and rolls back its table when the version update fails",async()=>{
   for(const fail of [false,true]){
     const filename=path.join(directory,`member-migration-${fail}.db`);await db.backup(filename);const legacy=new Database(filename);
-    legacy.exec("DROP TABLE deviceStackMemberLayouts; UPDATE schemaVersion SET version=53");
+    legacy.exec("ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TABLE deviceStackMemberLayouts; UPDATE schemaVersion SET version=53");
     if(fail)legacy.exec("CREATE TRIGGER fail_schema54 BEFORE UPDATE ON schemaVersion WHEN NEW.version=54 BEGIN SELECT RAISE(ABORT,'fixture migration failure'); END");
     legacy.close();
     const run=()=>execFileSync(process.execPath,["--import","tsx","--input-type=module","-e","await import('./server/db.ts');"],{cwd:process.cwd(),env:{...process.env,DATABASE_PATH:filename},stdio:"pipe"});
     if(fail)assert.throws(run);else run();
-    const result=new Database(filename);try {assert.equal((result.prepare("SELECT version FROM schemaVersion").get() as {version:number}).version,fail?53:54);assert.equal(!!result.prepare("SELECT name FROM sqlite_master WHERE name='deviceStackMemberLayouts'").get(),!fail);}finally{result.close();}
+    const result=new Database(filename);try {assert.equal((result.prepare("SELECT version FROM schemaVersion").get() as {version:number}).version,fail?53:CURRENT_SCHEMA_VERSION);assert.equal(!!result.prepare("SELECT name FROM sqlite_master WHERE name='deviceStackMemberLayouts'").get(),!fail);}finally{result.close();}
   }
 });
 
