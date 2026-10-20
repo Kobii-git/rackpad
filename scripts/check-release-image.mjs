@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 const usage = "node scripts/check-release-image.mjs --image ghcr.io/kobii-git/rackpad@sha256:DIGEST|sha256:LOCAL_IMAGE_ID --previous-image ghcr.io/kobii-git/rackpad@sha256:DIGEST [--previous-schema 51|53] --platform linux/amd64|linux/arm64 --revision COMMIT_SHA";
 const options = {};
@@ -21,6 +22,13 @@ const previousImage = options["--previous-image"];
 const platform = options["--platform"];
 const revision = options["--revision"];
 const previousSchema = Number(options["--previous-schema"] ?? "53");
+// The runner has Node but no installed application dependencies. Read the
+// canonical declaration so new migrations cannot leave candidate smoke behind.
+const schemaSource = readFileSync(new URL("../server/schema-version.ts", import.meta.url), "utf8");
+const schemaMatch = schemaSource.match(/^export const CURRENT_SCHEMA_VERSION = ([1-9][0-9]*);\s*$/);
+assert.ok(schemaMatch, "Current schema declaration is invalid.");
+const currentSchema = Number(schemaMatch[1]);
+assert.ok(Number.isSafeInteger(currentSchema), "Current schema version is invalid.");
 assert.ok([51, 53].includes(previousSchema), "Previous schema must be 51 or 53.");
 const immutableImage = /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/;
 const localImage = /^sha256:[a-f0-9]{64}$/;
@@ -269,12 +277,12 @@ try {
 
   const freshVolume = createVolume("fresh");
   let app = start(image, freshVolume);
-  exercise(app, true, true, 54);
+  exercise(app, true, true, currentSchema);
   stop(app);
   app = start(image, freshVolume);
-  exercise(app, false, true, 54);
+  exercise(app, false, true, currentSchema);
   stop(app);
-  console.log(`Release image smoke ${platform}: fresh schema 54, login, inventory, templates, mixed-member layouts, HTTP monitoring and restart persistence passed.`);
+  console.log(`Release image smoke ${platform}: fresh schema ${currentSchema}, login, inventory, templates, mixed-member layouts, HTTP monitoring and restart persistence passed.`);
 
   const upgradeVolume = createVolume("upgrade");
   app = start(previousImage, upgradeVolume);
@@ -289,12 +297,12 @@ try {
   // The stopped copy stays paired with previousImage and the same synthetic config/key.
   copyStoppedFixture(upgradeVolume, snapshotVolume);
   app = start(image, upgradeVolume);
-  exercise(app, false, true, 54);
+  exercise(app, false, true, currentSchema);
   stop(app);
   app = start(image, upgradeVolume);
-  exercise(app, false, true, 54);
+  exercise(app, false, true, currentSchema);
   stop(app);
-  console.log(`Release image smoke ${platform}: actual schema ${previousSchema} image upgraded to 54; inventory, cables, monitor and applied layouts survived restart.`);
+  console.log(`Release image smoke ${platform}: actual schema ${previousSchema} image upgraded to ${currentSchema}; inventory, cables, monitor and applied layouts survived restart.`);
 
   const rollbackVolume = createVolume("rollback");
   copyStoppedFixture(snapshotVolume, rollbackVolume);

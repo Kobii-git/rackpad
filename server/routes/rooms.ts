@@ -1,3 +1,4 @@
+import { optionalHeaderColor } from '../lib/presentation.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import {
@@ -43,11 +44,12 @@ export const roomsRoutes: FastifyPluginAsync = async (app) => {
     const description = optionalString(body, 'description', { maxLength: 500 })
     const location = optionalString(body, 'location', { maxLength: 200 })
     const notes = optionalString(body, 'notes', { maxLength: 2000 })
+    const headerColor = optionalHeaderColor(body)
 
     db.prepare(`
-      INSERT INTO rooms (id, labId, name, description, location, notes)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(roomId, labId, name, description ?? null, location ?? null, notes ?? null)
+      INSERT INTO rooms (id, labId, name, description, location, notes, headerColor)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(roomId, labId, name, description ?? null, location ?? null, notes ?? null, headerColor ?? null)
 
     return reply.status(201).send(db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId))
   })
@@ -66,11 +68,13 @@ export const roomsRoutes: FastifyPluginAsync = async (app) => {
     const description = optionalString(body, 'description', { maxLength: 500 })
     const location = optionalString(body, 'location', { maxLength: 200 })
     const notes = optionalString(body, 'notes', { maxLength: 2000 })
+    const headerColor = optionalHeaderColor(body)
 
     if (name !== undefined) { updates.push('name = ?'); values.push(name) }
     if (description !== undefined) { updates.push('description = ?'); values.push(description) }
     if (location !== undefined) { updates.push('location = ?'); values.push(location) }
     if (notes !== undefined) { updates.push('notes = ?'); values.push(notes) }
+    if (headerColor !== undefined) { updates.push('headerColor = ?'); values.push(headerColor) }
 
     if (updates.length === 0) return reply.status(400).send({ error: 'No valid fields to update' })
 

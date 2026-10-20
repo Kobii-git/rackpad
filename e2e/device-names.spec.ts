@@ -411,3 +411,45 @@ test("zoom-aware device names cover Studio overviews elevations RTL and exports"
     path: testInfo.outputPath("device-names-studio.png"),
   });
 });
+
+
+test("per-device name placement follows the physical left corner across canvases and exports", async ({page, request}) => {
+  test.setTimeout(120_000);
+  const fixture = await setup(page, request);
+  for (const device of fixture.devices) device.labelPosition = "upper-left";
+  fixture.devices.find(device => device.hostname === "server-3")!.labelPosition = "upper-right";
+  await page.goto("/visualizer");
+  const layout = page.getByRole("combobox", {name: "Visualizer layout", exact: true});
+  for (const mode of ["grouped", "pyramid", "diagram", "physical", "rack"]) {
+    await layout.selectOption(mode === "physical" ? "diagram" : mode);
+    if (mode === "diagram" || mode === "physical")
+      await page.getByRole("combobox", {name: "Physical layout", exact: true}).selectOption(mode === "physical" ? "physical" : "compact");
+    const label = deviceName(page, mode === "grouped" || mode === "pyramid" ? "Ceiling access point" : fixture.devices[0]!.hostname);
+    await expect(label).toHaveAttribute("data-name-position", "upper-left");
+    const css = await label.evaluate(element => ({left: (element as HTMLElement).style.left, right: (element as HTMLElement).style.right, align: getComputedStyle(element).textAlign, pointer: getComputedStyle(element).pointerEvents}));
+    expect(css.left).not.toBe(""); expect(css.right).toBe(""); expect(css.align).toBe("left"); expect(css.pointer).toBe("none");
+    if (mode === "grouped" || mode === "pyramid") {
+      await label.dispatchEvent("wheel", {deltaY: -100, clientX: 800, clientY: 400, bubbles: true});
+    } else {
+      const zoomIn = mode === "diagram" || mode === "physical" ? page.locator(".react-flow__controls-zoomin") : page.getByRole("button", {name: "Zoom in", exact: true});
+      await zoomIn.click();
+    }
+    await expect.poll(async () => Math.abs((await metrics(label)).font - 12)).toBeLessThan(0.2);
+    await page.evaluate(() => {document.documentElement.dir = "rtl";});
+    await expect(label).toHaveCSS("text-align", "left");
+    await page.evaluate(() => {document.documentElement.dir = "ltr";});
+  }
+  await page.goto(`/racks?rackId=${fixture.rack.id}`);
+  await expect(deviceName(page, fixture.devices[0]!.hostname)).toHaveAttribute("data-name-position", "upper-left");
+  await expect(deviceName(page, "server-3")).toHaveAttribute("data-name-position", "upper-right");
+  await page.getByRole("button", {name: "Studio Beta", exact: true}).click();
+  const workspace = page.getByTestId("rack-studio-workspace");
+  const label = workspace.getByTestId("device-name").filter({hasText: fixture.devices[0]!.hostname}).first();
+  await expect(label).toHaveAttribute("data-name-position", "upper-left");
+  await expect(deviceName(page, "vertical-ups")).toHaveAttribute("data-name-position", "upper-left");
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", {name: "Download SVG", exact: true}).click();
+  const svg = await readFile((await (await download).path())!, "utf8");
+  expect(svg).toContain('data-device-name="true" text-anchor="start"');
+  expect(svg).toContain('data-device-name="true" text-anchor="end"');
+});

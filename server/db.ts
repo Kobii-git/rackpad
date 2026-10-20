@@ -1493,6 +1493,17 @@ const SCHEMA_MIGRATIONS = [
     `,
   },
 
+  {
+    version: 55,
+    sql: `
+      ALTER TABLE rooms ADD COLUMN headerColor TEXT CHECK (headerColor IS NULL OR
+        (length(headerColor) = 7 AND substr(headerColor, 1, 1) = '#' AND substr(headerColor, 2) NOT GLOB '*[^0-9a-fA-F]*'));
+      ALTER TABLE racks ADD COLUMN headerColor TEXT CHECK (headerColor IS NULL OR
+        (length(headerColor) = 7 AND substr(headerColor, 1, 1) = '#' AND substr(headerColor, 2) NOT GLOB '*[^0-9a-fA-F]*'));
+      ALTER TABLE devices ADD COLUMN labelPosition TEXT NOT NULL DEFAULT 'upper-right'
+        CHECK (labelPosition IN ('upper-left', 'upper-right'));
+    `,
+  },
 ] as const;
 
 const applySchema = db.transaction(() => {

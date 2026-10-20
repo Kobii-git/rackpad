@@ -4,6 +4,7 @@ import { restoredMonitorCommunity } from "../lib/security-migration.js";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { optionalHeaderColor, optionalLabelPosition } from "../lib/presentation.js";
 import type { FastifyPluginAsync } from "fastify";
 import {
   CURRENT_SCHEMA_VERSION,
@@ -1245,6 +1246,8 @@ const restoreBackupSnapshot = db.transaction(
     const rooms = normalizeArrayRecordArray(data.rooms ?? [], "data.rooms");
     const racks = normalizeArrayRecordArray(data.racks, "data.racks");
     const devices = normalizeArrayRecordArray(data.devices, "data.devices");
+    for (const row of [...rooms, ...racks]) optionalHeaderColor(row);
+    for (const row of devices) optionalLabelPosition(row);
     const virtualSwitches = normalizeArrayRecordArray(
       data.virtualSwitches ?? [],
       "data.virtualSwitches",
@@ -1694,15 +1697,15 @@ const restoreBackupSnapshot = db.transaction(
       "INSERT INTO labs (id, name, description, location) VALUES (?, ?, ?, ?)",
     );
     const insertRoom = db.prepare(
-      "INSERT INTO rooms (id, labId, name, description, location, notes) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO rooms (id, labId, name, description, location, notes, headerColor) VALUES (?, ?, ?, ?, ?, ?, ?)",
     );
     const insertRack = db.prepare(
-      "INSERT INTO racks (id, labId, name, totalU, description, location, notes, roomId, studioX, studioY) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO racks (id, labId, name, totalU, description, location, notes, roomId, studioX, studioY, headerColor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     );
     const insertDevice = db.prepare(`
     INSERT INTO devices
-      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, ignoreDuplicateMac, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, rackSlot, tags, notes, lastSeen, networkMode, snmpCredentialId, rackMountKind, rackColumn, rackColumnSpan, shelfX, shelfY, shelfWidth, shelfHeight, shelfOrientation, rackSide)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, ignoreDuplicateMac, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, rackSlot, tags, notes, lastSeen, networkMode, snmpCredentialId, rackMountKind, rackColumn, rackColumnSpan, shelfX, shelfY, shelfWidth, shelfHeight, shelfOrientation, rackSide, labelPosition)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const updateDeviceParent = db.prepare(`
     UPDATE devices
@@ -2097,6 +2100,7 @@ const restoreBackupSnapshot = db.transaction(
         row.description ?? null,
         row.location ?? null,
         row.notes ?? null,
+        optionalHeaderColor(row) ?? null,
       );
     }
     for (const row of racks) {
@@ -2111,6 +2115,7 @@ const restoreBackupSnapshot = db.transaction(
         row.roomId ?? null,
         row.studioX ?? null,
         row.studioY ?? null,
+        optionalHeaderColor(row) ?? null,
       );
     }
     const restoredRackRows = db
@@ -2283,6 +2288,7 @@ const restoreBackupSnapshot = db.transaction(
           (restoredShelfIndex === null ? null : restoredShelfGeometry!.height),
         row.shelfOrientation ?? 0,
         row.rackSide ?? null,
+        optionalLabelPosition(row) ?? "upper-right",
       );
     }
     for (const row of stackMembers) {

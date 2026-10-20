@@ -687,6 +687,7 @@ function normalizeDeviceChanges(
     "lastSeen",
   ] as const;
   const requiredKeys = [
+    "labelPosition",
     "hostname",
     "deviceType",
     "status",
@@ -2910,6 +2911,7 @@ export async function bulkUpdateCables(input: {
 }
 
 export interface CreateDeviceInput {
+  labelPosition?: Device["labelPosition"];
   hostname: string;
   deviceType: Device["deviceType"];
   displayName?: string;
@@ -2963,6 +2965,7 @@ export async function createDevice(input: CreateDeviceInput): Promise<Device> {
     hostname: trimmedHostname,
     deviceType: input.deviceType,
     displayName: input.displayName,
+    labelPosition: input.labelPosition,
     manufacturer: input.manufacturer,
     model: input.model,
     serial: input.serial,

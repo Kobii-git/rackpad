@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import YAML from "yaml";
 import { inspectSarif, prepareCodeqlReports, reviewSarif } from "./check-codeql-results.mjs";
 import { codeqlReviewProblems } from "./check-codeql-review.mjs";
@@ -462,4 +463,48 @@ test("pre-merge smoke builds unpublished immutable candidates and tests stable a
   assert(smoke.run.includes('--previous-image "$STABLE_IMAGE" --previous-schema 51'));
   assert(smoke.run.includes('--previous-image "$BETA_IMAGE" --previous-schema 53'));
   assert(!job.steps.some(step => step.uses?.startsWith("docker/login-action")));
+});
+
+
+test("candidate smoke follows current schema across migrations while retaining pinned recovery baselines", () => {
+  const source = readFileSync(new URL("./check-release-image.mjs", import.meta.url), "utf8")
+    .replace(/^import .*;\n/gm, "")
+    .replaceAll("import.meta.url", JSON.stringify("file:///rackpad-fixture/scripts/check-release-image.mjs"));
+  for (const currentSchema of [55, 56]) for (const previousSchema of [51, 53]) {
+    const exercises = [];
+    let nonce = 0;
+    runInNewContext(source, {
+      assert, URL,
+      process: {argv: ["node", "fixture.mjs", "--image", `sha256:${"a".repeat(64)}`,
+        "--previous-image", `ghcr.io/kobii-git/rackpad@sha256:${"b".repeat(64)}`,
+        "--previous-schema", String(previousSchema), "--platform", "linux/amd64", "--revision", "c".repeat(40)]},
+      console: {log() {}, error() {}},
+      randomUUID: () => `synthetic-${++nonce}`,
+      readFileSync: (url, encoding) => {
+        assert.equal(String(url), "file:///rackpad-fixture/server/schema-version.ts");
+        assert.equal(encoding, "utf8");
+        return `export const CURRENT_SCHEMA_VERSION = ${currentSchema};\n`;
+      },
+      // No Docker process, API call, database, or volume is created in this fixture.
+      spawnSync: (command, args, options) => {
+        assert.equal(command, "docker");
+        if (options.input?.startsWith("await (async function exerciseApi(")) {
+          const body = options.input;
+          const input = JSON.parse(body.slice(body.lastIndexOf("})(") + 3, -2));
+          exercises.push({schema: input.expectedSchema, features: input.features, create: input.create});
+        }
+        const stdout = args[0] === "info" ? "linux\n" : args[0] === "image" && args[1] === "inspect"
+          ? JSON.stringify([{Os: "linux", Architecture: "amd64", Config: {Labels: {"org.opencontainers.image.revision": "c".repeat(40)}}}]) : "";
+        return {status: 0, stdout, stderr: ""};
+      },
+    });
+    assert.deepEqual(exercises, [
+      {schema: currentSchema, features: true, create: true},
+      {schema: currentSchema, features: true, create: false},
+      {schema: previousSchema, features: false, create: true},
+      {schema: currentSchema, features: true, create: false},
+      {schema: currentSchema, features: true, create: false},
+      {schema: previousSchema, features: false, create: false},
+    ]);
+  }
 });

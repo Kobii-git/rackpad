@@ -145,6 +145,7 @@ export interface Lab {
 }
 
 export interface Room {
+  headerColor?: string | null;
   id: ID;
   labId: ID;
   name: string;
@@ -154,6 +155,7 @@ export interface Room {
 }
 
 export interface Rack {
+  headerColor?: string | null;
   id: ID;
   labId: ID;
   name: string;
@@ -182,6 +184,7 @@ export interface DeviceStackMember {
 }
 
 export interface Device {
+  labelPosition?: "upper-left" | "upper-right";
   stackMembers?: DeviceStackMember[];
   id: ID;
   labId: ID;

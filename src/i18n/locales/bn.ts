@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "Header color": "শিরোনামের রঙ",
+  "Device name position": "ডিভাইসের নামের অবস্থান",
+  "Upper left": "উপরে বামে",
+  "Upper right": "উপরে ডানে",
   "New device type": "নতুন ডিভাইসের ধরন",
   "Starting layout": "শুরুর বিন্যাস",
   "Choose a starting layout, then name your template and select its device type.": "একটি শুরুর বিন্যাস বেছে নিন, তারপর টেমপ্লেটের নাম দিন এবং ডিভাইসের ধরন নির্বাচন করুন।",

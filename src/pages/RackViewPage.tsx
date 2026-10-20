@@ -55,10 +55,13 @@ import { cn, statusLabel } from "@/lib/utils";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 
+import { HeaderColorInput } from "@/components/shared/HeaderColorInput";
+
 const UNRACKED_VIEW_ID = "__unracked__";
 const ROOM_VIEW_PREFIX = "__room__:";
 
 type RackForm = {
+  headerColor: string;
   name: string;
   totalU: string;
   description: string;
@@ -72,6 +75,7 @@ type RoomEditorMode = "closed" | "create" | "edit";
 type RackDisplayFace = RackFace | "both";
 
 type RoomForm = {
+  headerColor: string;
   name: string;
   description: string;
   location: string;
@@ -79,6 +83,7 @@ type RoomForm = {
 };
 
 const EMPTY_FORM: RackForm = {
+  headerColor: "",
   name: "",
   totalU: "42",
   description: "",
@@ -88,6 +93,7 @@ const EMPTY_FORM: RackForm = {
 };
 
 const EMPTY_ROOM_FORM: RoomForm = {
+  headerColor: "",
   name: "",
   description: "",
   location: "",
@@ -263,6 +269,7 @@ export default function RackViewPage() {
     if (editorMode !== "edit" || !rack) return;
     setRackForm({
       name: rack.name,
+      headerColor: rack.headerColor ?? "",
       totalU: String(rack.totalU),
       description: rack.description ?? "",
       location: rack.location ?? "",
@@ -275,6 +282,7 @@ export default function RackViewPage() {
     if (roomEditorMode !== "edit" || !viewingRoom) return;
     setRoomForm({
       name: viewingRoom.name,
+      headerColor: viewingRoom.headerColor ?? "",
       description: viewingRoom.description ?? "",
       location: viewingRoom.location ?? "",
       notes: viewingRoom.notes ?? "",
@@ -337,6 +345,7 @@ export default function RackViewPage() {
         const created = await createRackRecord({
           labId: activeLab.id,
           name: rackForm.name.trim(),
+          headerColor: rackForm.headerColor || null,
           totalU: Number.parseInt(rackForm.totalU, 10) || 42,
           description: rackForm.description.trim() || undefined,
           location: rackForm.location.trim() || undefined,
@@ -350,6 +359,7 @@ export default function RackViewPage() {
 
       if (!rack) return;
       await updateRackRecord(rack.id, {
+        headerColor: rackForm.headerColor || null,
         name: rackForm.name.trim(),
         totalU: Number.parseInt(rackForm.totalU, 10) || 42,
         description: rackForm.description.trim() || null,
@@ -373,6 +383,7 @@ export default function RackViewPage() {
         const created = await createRoomRecord({
           labId: activeLab.id,
           name: roomForm.name.trim(),
+          headerColor: roomForm.headerColor || null,
           description: roomForm.description.trim() || undefined,
           location: roomForm.location.trim() || undefined,
           notes: roomForm.notes.trim() || undefined,
@@ -384,6 +395,7 @@ export default function RackViewPage() {
 
       if (!viewingRoom) return;
       const updated = await updateRoomRecord(viewingRoom.id, {
+        headerColor: roomForm.headerColor || null,
         name: roomForm.name.trim(),
         description: roomForm.description.trim() || null,
         location: roomForm.location.trim() || null,
@@ -1548,6 +1560,7 @@ function RackEditorCard({
             />
           </Field>
         </div>
+        <HeaderColorInput value={rackForm.headerColor} onChange={(headerColor) => setRackForm((prev) => ({ ...prev, headerColor }))} />
         <Field label={t("Notes")}>
           <textarea
             rows={3}
@@ -1673,6 +1686,7 @@ function RoomEditorCard({
             placeholder={t("What lives here?")}
           />
         </Field>
+        <HeaderColorInput value={roomForm.headerColor} onChange={(headerColor) => setRoomForm((prev) => ({ ...prev, headerColor }))} />
         <Field label={t("Notes")}>
           <textarea
             rows={3}

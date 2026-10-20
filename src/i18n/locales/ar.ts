@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Header color": "لون الترويسة",
+  "Device name position": "موضع اسم الجهاز",
+  "Upper left": "أعلى اليسار",
+  "Upper right": "أعلى اليمين",
   "New device type": "نوع جهاز جديد",
   "Starting layout": "التخطيط الأولي",
   "Choose a starting layout, then name your template and select its device type.": "اختر تخطيطًا أوليًا، ثم سمّ القالب وحدد نوع الجهاز.",

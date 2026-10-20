@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { headerColorStyle } from "@/lib/presentation";
 import { DeviceName, DeviceNameZoom } from "@/components/rack/DeviceName";
 import { Link } from "react-router-dom";
 import {
@@ -1246,7 +1247,7 @@ export function RackCablingCanvas({
                   height: roomFrame.height,
                 }}
               >
-                <h2 className="flex h-[38px] items-center justify-between border-b border-[var(--border-muted)] px-3 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
+                <h2 data-testid="rack-cabling-room-header" style={headerColorStyle(roomFrame.room.headerColor)} className="flex h-[38px] items-center justify-between border-b border-[var(--border-muted)] px-3 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
                   <span>
                     {t("Room")} · {roomFrame.room.name}
                   </span>
@@ -1254,6 +1255,7 @@ export function RackCablingCanvas({
                     type="button"
                     data-rack-cabling-interactive="true"
                     data-testid="rack-cabling-room-drag-handle"
+                    style={{ color: roomFrame.room.headerColor ? "inherit" : undefined }}
                     aria-label={t("{value1}: {name}", {
                       value1: t("Room"),
                       name: roomFrame.room.name,
@@ -1336,6 +1338,8 @@ export function RackCablingCanvas({
                   <button
                     type="button"
                     data-cabling-selection-id={`rack:${rackFrame.rack.id}`}
+                    data-testid="rack-cabling-rack-header"
+                    style={headerColorStyle(rackFrame.rack.headerColor)}
                     aria-label={t("{value1}: {name}", {
                       value1: t("Rack"),
                       name: rackFrame.rack.name,
@@ -1347,15 +1351,15 @@ export function RackCablingCanvas({
                     }}
                   >
                     <div className="min-w-0">
-                      <div className="truncate font-mono text-[11px] font-semibold text-[var(--text-primary)]">
+                      <div style={{ color: rackFrame.rack.headerColor ? "inherit" : undefined }} className="truncate font-mono text-[11px] font-semibold text-[var(--text-primary)]">
                         {rackFrame.rack.name}
                       </div>
-                      <div className="truncate font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                      <div style={{ color: rackFrame.rack.headerColor ? "inherit" : undefined }} className="truncate font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
                         {rooms.find((room) => room.id === rackFrame.rack.roomId)
                           ?.name ?? t("Unknown")}
                       </div>
                     </div>
-                    <span className="font-mono text-[9px] text-[var(--text-tertiary)]">
+                    <span style={{ color: rackFrame.rack.headerColor ? "inherit" : undefined }} className="font-mono text-[9px] text-[var(--text-tertiary)]">
                       {rackFrame.rack.totalU}
                       {t("U")}
                     </span>
@@ -1492,6 +1496,7 @@ export function RackCablingCanvas({
                           }}
                         >
                           <DeviceName
+                            position={summary.device.labelPosition}
                             name={summary.device.hostname}
                             // Leave the scaled cable-count row clear below the name.
                             maxHeight={summary.height - 8 - 24}
@@ -1569,6 +1574,7 @@ export function RackCablingCanvas({
                         }}
                       >
                         <DeviceName
+                          position={card.device.labelPosition}
                           name={card.device.hostname}
                           selected={highlightedDeviceIds.has(card.device.id)}
                         />

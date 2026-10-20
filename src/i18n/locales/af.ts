@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "Header color": "Opskrifkleur",
+  "Device name position": "Toestelnaamposisie",
+  "Upper left": "Links bo",
+  "Upper right": "Regs bo",
   "New device type": "Nuwe toesteltipe",
   "Starting layout": "Beginuitleg",
   "Choose a starting layout, then name your template and select its device type.": "Kies ’n beginuitleg, gee jou sjabloon ’n naam en kies die toesteltipe.",

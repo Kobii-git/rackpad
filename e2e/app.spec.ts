@@ -5881,6 +5881,8 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
   request,
 }, testInfo) => {
   test.setTimeout(90_000);
+  // Fit the full workspace so screenshots do not resize the viewport between captures.
+  await page.setViewportSize({ width: 1280, height: 1800 });
   const headers = { Authorization: `Bearer ${token}` };
   const roomResponse = await request.post("/api/rooms", {
     headers,

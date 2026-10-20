@@ -5,6 +5,7 @@ export function deviceNameMetrics(
   zoom = 1,
   reservedLeft = 0,
   reservedRight = 0,
+  position: "upper-left" | "upper-right" = "upper-right",
 ) {
   const scale = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
   const availableWidth = Math.max(
@@ -17,7 +18,8 @@ export function deviceNameMetrics(
     lineHeight: `${12 / scale}px`,
     maxWidth: Math.min(180, availableWidth) / scale,
     top: 2 / scale,
-    right: reservedRight + 4 / scale,
+    left: position === "upper-left" ? reservedLeft + 4 / scale : undefined,
+    right: position === "upper-left" ? undefined : reservedRight + 4 / scale,
     padding: `${1 / scale}px ${2 / scale}px`,
   };
 }

@@ -104,6 +104,7 @@ interface DiagramDeviceData extends Record<string, unknown> {
   deviceType: string;
   health: VisualizerHealth;
   hostname: string;
+  labelPosition?: "upper-left" | "upper-right";
   connectionCount: number;
   portSummary: string;
   ports: DiagramPortData[];
@@ -694,6 +695,7 @@ function CompactDiagramDeviceCard({
         <div className="min-w-0 flex-1 pl-9 pt-4">
           <div className="flex min-w-0 items-center gap-2">
             <DeviceName
+              position={data.labelPosition}
               name={data.hostname}
               selected={selected}
               maxHeight={52}
@@ -809,6 +811,7 @@ function PhysicalDiagramDeviceCard({
         <div className="min-w-0 flex-1 pl-9 pt-4">
           <div className="flex min-w-0 items-center gap-2">
             <DeviceName
+              position={data.labelPosition}
               name={data.hostname}
               selected={selected}
               maxHeight={52}
@@ -1414,6 +1417,7 @@ function buildDiagramLayout(
           deviceType: node.device.deviceType,
           health: node.health,
           hostname: node.device.hostname,
+          labelPosition: node.device.labelPosition,
           connectionCount: connectionCountByDeviceId[node.device.id] ?? 0,
           portSummary: `${node.portSummary.linked}/${node.portSummary.total}`,
           ports: node.ports.map((port) => ({

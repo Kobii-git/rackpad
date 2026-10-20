@@ -357,7 +357,13 @@ function DeviceTile({
               />
             ))}
 
-          <DeviceName name={device.hostname} selected={selected} reservedLeft={heightU > 1 ? 84 : 24} tooltip={false} />
+          <DeviceName
+            position={device.labelPosition}
+            name={device.hostname}
+            selected={selected}
+            reservedLeft={heightU > 1 ? 84 : 24}
+            tooltip={false}
+          />
           <div
             className={cn(
               "relative z-10 min-w-0 flex-1 pt-4 leading-tight",

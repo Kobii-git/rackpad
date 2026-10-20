@@ -1,6 +1,10 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "Header color": "צבע כותרת",
+  "Device name position": "מיקום שם המכשיר",
+  "Upper left": "למעלה משמאל",
+  "Upper right": "למעלה מימין",
   "New device type": "סוג מכשיר חדש",
   "Starting layout": "פריסה התחלתית",
   "Choose a starting layout, then name your template and select its device type.": "בחרו פריסה התחלתית, תנו שם לתבנית ובחרו את סוג המכשיר שלה.",

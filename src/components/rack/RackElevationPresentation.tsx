@@ -241,6 +241,7 @@ export function RackElevationEquipmentFrame({
         </span>
       ) : null}
       <DeviceName
+        position={device.labelPosition}
         name={device.hostname}
         selected={selected}
         widthFraction={device.stackMembers ? 0.45 : 1}

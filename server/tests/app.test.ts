@@ -86,6 +86,100 @@ after(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
+test("presentation settings validate, persist, reset and retain lab write authorization", async () => {
+  const token = await bootstrapAdmin();
+  const headers = { authorization: `Bearer ${token}` };
+  const post = async (url: string, payload: Record<string, unknown>) => {
+    const response = await app.inject({ method: "POST", url, headers, payload });
+    assert.equal(response.statusCode, 201, response.body);
+    return readJson(response) as Record<string, unknown>;
+  };
+  const room = await post("/api/rooms", {labId: "lab_home", name: "Colors", headerColor: "#AABBCC"});
+  const rack = await post("/api/racks", {labId: "lab_home", name: "Colors", roomId: room.id});
+  const device = await post("/api/devices", {labId: "lab_home", hostname: "labels", deviceType: "server", labelPosition: "upper-left"});
+  assert.equal(room.headerColor, "#aabbcc");
+  assert.equal(rack.headerColor, null);
+  assert.equal(device.labelPosition, "upper-left");
+  const other = await post("/api/devices", {labId: "lab_home", hostname: "default-label", deviceType: "server"});
+  assert.equal(other.labelPosition, "upper-right");
+
+  const viewer = await createUserAndLogin(token, {username: "presentation-viewer", displayName: "Viewer", password: "presentation-viewer-password", role: "viewer"});
+  const editor = await createUserAndLogin(token, {username: "presentation-editor", displayName: "Editor", password: "presentation-editor-password", role: "editor"});
+  // A scoped editor can change presentation only in its granted lab.
+  await post("/api/labs", {id: "presentation-other", name: "Other"});
+  const foreignRoom = await post("/api/rooms", {labId: "presentation-other", name: "Other"});
+  const foreignRack = await post("/api/racks", {labId: "presentation-other", name: "Other"});
+  const foreignDevice = await post("/api/devices", {labId: "presentation-other", hostname: "other", deviceType: "server"});
+  db.prepare("DELETE FROM userLabAccess WHERE labId=? AND userId=(SELECT id FROM users WHERE username=?)").run("presentation-other", "presentation-editor");
+  for (const [url, key, good, foreign] of [
+    [`/api/rooms/${room.id}`, "headerColor", "#001122", `/api/rooms/${foreignRoom.id}`],
+    [`/api/racks/${rack.id}`, "headerColor", "#ffeeaa", `/api/racks/${foreignRack.id}`],
+    [`/api/devices/${device.id}`, "labelPosition", "upper-right", `/api/devices/${foreignDevice.id}`],
+  ]) {
+    const payload = {[key]: good};
+    assert.equal((await app.inject({method: "PATCH", url, payload})).statusCode, 401);
+    assert.equal((await app.inject({method: "PATCH", url, payload, headers: {authorization: `Bearer ${viewer}`}})).statusCode, 403);
+    assert.equal((await app.inject({method: "PATCH", url: foreign, payload, headers: {authorization: `Bearer ${editor}`}})).statusCode, 403);
+    const allowed = await app.inject({method: "PATCH", url, payload, headers: {authorization: `Bearer ${editor}`}});
+    assert.equal(allowed.statusCode, 200, allowed.body);
+    assert.equal(readJson(allowed)[key], good);
+    for (const invalid of ["<svg>", "red", "#123", "#abcdef00", 1, {}]) {
+      const bad = await app.inject({method: "PATCH", url, payload: {[key]: invalid}, headers});
+      assert.equal(bad.statusCode, 400, bad.body);
+    }
+    const read = await app.inject({method: "GET", url, headers});
+    assert.equal(readJson(read)[key], good);
+    const reset = await app.inject({method: "PATCH", url, payload: {[key]: null}, headers});
+    assert.equal(reset.statusCode, 200, reset.body);
+    assert.equal(readJson(reset)[key], key === "headerColor" ? null : "upper-right");
+  }
+  assert.equal((db.prepare("SELECT labelPosition FROM devices WHERE id=?").get(other.id) as {labelPosition: string}).labelPosition, "upper-right");
+  for (const url of ["/api/rooms", "/api/racks", "/api/devices"]) {
+    const invalid = await app.inject({method: "POST", url, headers, payload: {labId: "lab_home", name: "Bad", hostname: "bad", deviceType: "server", headerColor: "url(x)", labelPosition: "bottom"}});
+    assert.equal(invalid.statusCode, 400, invalid.body);
+  }
+});
+
+test("presentation settings round-trip logical backups and older backups reset safely", async () => {
+  const token = await bootstrapAdmin();
+  let headers = {authorization: `Bearer ${token}`};
+  db.prepare("INSERT INTO rooms (id, labId, name, headerColor) VALUES ('presentation-room', 'lab_home', 'Color room', '#123456')").run();
+  db.prepare("INSERT INTO racks (id, labId, name, totalU, roomId, headerColor) VALUES ('presentation-rack', 'lab_home', 'Color rack', 12, 'presentation-room', '#abcdef')").run();
+  const created = await app.inject({method: "POST", url: "/api/devices", headers, payload: {labId: "lab_home", hostname: "presentation-backup", deviceType: "server", labelPosition: "upper-left"}});
+  assert.equal(created.statusCode, 201, created.body);
+  const deviceId = readJson(created).id as string;
+  const exported = await app.inject({method: "GET", url: "/api/admin/export", headers});
+  assert.equal(exported.statusCode, 200, exported.body);
+  const snapshot = readJson(exported);
+  for (const [table, field, invalid] of [["rooms", "headerColor", "red"], ["racks", "headerColor", "#fff"], ["devices", "labelPosition", "bottom"]]) {
+    const bad = structuredClone(snapshot);
+    bad.data[table][0][field] = invalid;
+    const rejected = await app.inject({method: "POST", url: "/api/admin/restore", headers, payload: bad});
+    assert.equal(rejected.statusCode, 400, rejected.body);
+    assert.equal((db.prepare("SELECT headerColor FROM rooms WHERE id='presentation-room'").get() as {headerColor: string}).headerColor, "#123456");
+  }
+  const restore = async (payload: Record<string, unknown>) => {
+    const response = await app.inject({method: "POST", url: "/api/admin/restore", headers, payload});
+    assert.equal(response.statusCode, 200, response.body);
+    const login = await app.inject({method: "POST", url: "/api/auth/login", payload: {username: "admin", password: "super-secret-1"}});
+    assert.equal(login.statusCode, 200, login.body);
+    headers = {authorization: `Bearer ${readJson(login).token}`};
+  };
+  await restore(snapshot);
+  assert.equal((db.prepare("SELECT headerColor FROM rooms WHERE id='presentation-room'").get() as {headerColor: string}).headerColor, "#123456");
+  assert.equal((db.prepare("SELECT headerColor FROM racks WHERE id='presentation-rack'").get() as {headerColor: string}).headerColor, "#abcdef");
+  assert.equal((db.prepare("SELECT labelPosition FROM devices WHERE id=?").get(deviceId) as {labelPosition: string}).labelPosition, "upper-left");
+  const legacy = structuredClone(snapshot);
+  legacy.schemaVersion = 54;
+  for (const row of legacy.data.rooms) delete row.headerColor;
+  for (const row of legacy.data.racks) delete row.headerColor;
+  for (const row of legacy.data.devices) delete row.labelPosition;
+  await restore(legacy);
+  assert.equal((db.prepare("SELECT headerColor FROM rooms WHERE id='presentation-room'").get() as {headerColor: null}).headerColor, null);
+  assert.equal((db.prepare("SELECT headerColor FROM racks WHERE id='presentation-rack'").get() as {headerColor: null}).headerColor, null);
+  assert.equal((db.prepare("SELECT labelPosition FROM devices WHERE id=?").get(deviceId) as {labelPosition: string}).labelPosition, "upper-right");
+});
+
 test("bootstrap creates the first admin account and session", async () => {
   const statusRes = await app.inject({
     method: "GET",
@@ -10076,7 +10170,7 @@ test("Docker, monitor TLS, and duplicate MAC migrations default existing rows sa
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -10192,7 +10286,7 @@ test("storage topology migration upgrades a version-34 database without changing
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -10323,7 +10417,7 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;
@@ -10409,7 +10503,7 @@ test("integration migrations upgrade schema 35 and remap legacy mirror schedules
     ALTER TABLE portLinks DROP COLUMN label;
     ALTER TABLE portLinks DROP COLUMN visible;
     ALTER TABLE portLinks DROP COLUMN routeWaypoints;
-    DROP TRIGGER cable_guide_device_delete;
+    ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;
     ALTER TABLE portLinks DROP COLUMN routeMode;

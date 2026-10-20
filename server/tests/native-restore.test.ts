@@ -309,3 +309,27 @@ test("offline native restore leaves the active database and safety snapshot reco
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+
+test("offline native restore retains room and rack colors and per-device label position", async () => {
+  const directory = temporaryRestoreDirectory();
+  const active = path.join(directory, "active.db");
+  const source = path.join(directory, "source.db");
+  try {
+    fixture(active, "before");
+    fixture(source, "after");
+    const snapshot = new Database(source);
+    snapshot.exec(`INSERT INTO labs(id,name) VALUES ('presentation','Presentation');
+      INSERT INTO rooms(id,labId,name,headerColor) VALUES ('room','presentation','Room','#123456');
+      INSERT INTO racks(id,labId,name,totalU,roomId,headerColor) VALUES ('rack','presentation','Rack',12,'room','#abcdef');
+      INSERT INTO devices(id,labId,hostname,deviceType,labelPosition) VALUES ('device','presentation','Device','server','upper-left');`);
+    snapshot.close();
+    await restoreNativeBackup({source, active});
+    const restored = new Database(active, {readonly: true});
+    try {
+      assert.deepEqual(restored.prepare("SELECT headerColor FROM rooms WHERE id='room'").get(), {headerColor: "#123456"});
+      assert.deepEqual(restored.prepare("SELECT headerColor FROM racks WHERE id='rack'").get(), {headerColor: "#abcdef"});
+      assert.deepEqual(restored.prepare("SELECT labelPosition FROM devices WHERE id='device'").get(), {labelPosition: "upper-left"});
+    } finally { restored.close(); }
+  } finally { rmSync(directory, {recursive: true, force: true}); }
+});

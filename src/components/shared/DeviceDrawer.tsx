@@ -56,6 +56,7 @@ const STATUS_OPTIONS: DeviceStatus[] = [
 ];
 
 interface FormState {
+  labelPosition: NonNullable<Device["labelPosition"]>;
   hostname: string;
   displayName: string;
   deviceType: DeviceType;
@@ -99,6 +100,7 @@ function blankForm(defaults?: Partial<FormState>): FormState {
   return {
     hostname: "",
     displayName: "",
+    labelPosition: "upper-right",
     deviceType: "server",
     manufacturer: "",
     model: "",
@@ -144,6 +146,7 @@ function deviceToForm(device: Device): FormState {
   return {
     hostname: device.hostname,
     displayName: device.displayName ?? "",
+    labelPosition: device.labelPosition ?? "upper-right",
     deviceType: device.deviceType,
     manufacturer: device.manufacturer ?? "",
     model: device.model ?? "",
@@ -747,6 +750,7 @@ export function DeviceDrawer({
       const basePayload = {
         hostname: form.hostname.trim(),
         displayName: form.displayName.trim() || undefined,
+        labelPosition: form.labelPosition,
         deviceType: form.deviceType,
         manufacturer: form.manufacturer.trim() || undefined,
         model: form.model.trim() || undefined,
@@ -944,6 +948,12 @@ export function DeviceDrawer({
                       }
                       placeholder={t("e.g. Core Switch")}
                     />
+                  </Field>
+                  <Field label={t("Device name position")}>
+                    <Select ariaLabel={t("Device name position")} value={form.labelPosition} onChange={(value) => set("labelPosition", value as FormState["labelPosition"])}>
+                      <option value="upper-right">{t("Upper right")}</option>
+                      <option value="upper-left">{t("Upper left")}</option>
+                    </Select>
                   </Field>
                   <div className="block">
                     <span className="rk-field-label">{t("Device type")}</span>
@@ -1789,6 +1799,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function Select({
+  ariaLabel,
   value,
   onChange,
   children,
@@ -1798,9 +1809,11 @@ function Select({
   onChange: (value: string) => void;
   children: ReactNode;
   disabled?: boolean;
+  ariaLabel?: string;
 }) {
   return (
     <select
+      aria-label={ariaLabel}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       disabled={disabled}
