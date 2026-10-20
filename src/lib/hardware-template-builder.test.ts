@@ -2,11 +2,48 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createStarterTemplate,
+  templateToResolvedLayout,
+  createHardwareModule,
+  deleteModulePosition,
+  updateModulePosition,
+  templatePortBlocks,
+  deletePortBlock,
+  nextTemplatePartId,
   generatePortBlock,
   movePhysicalPortSlot,
   replacePortBlock,
   type PortBlockDefinition,
 } from "./hardware-template-builder";
+
+test("round starters retain both square faces, loose mounting and editable rear ports", () => {
+  const template = createStarterTemplate(
+    "round-device",
+    "ceiling-ap",
+    "Ceiling AP",
+  );
+  assert.equal(template.mountDefaults.kind, "loose");
+  assert.deepEqual(template.deviceTypes, ["ap"]);
+  assert.equal(template.modules.length, 0);
+  assert.equal(template.moduleSlots.length, 0);
+  for (const face of [template.front, template.rear]) {
+    assert.equal(face.shape, "round");
+    assert.equal(face.width, face.height);
+    assert.ok(!face.elements.some((element) => element.kind === "handle"));
+  }
+  const port = template.portSlots[0]!;
+  assert.equal(port.face, "rear");
+  assert.equal(port.connector, "rj45");
+  const moved = movePhysicalPortSlot(template, port.id, 600, 850);
+  assert.equal(moved.portSlots[0]!.y, 850);
+  const bounded = movePhysicalPortSlot(template, port.id, 2000, 2000);
+  assert.equal(bounded.portSlots[0]!.y + port.height, 1000);
+  assert.equal(bounded.portSlots[0]!.x + port.width, 1000);
+  const snapshot = templateToResolvedLayout(moved);
+  assert.equal(snapshot.faces.front.shape, "round");
+  assert.equal(snapshot.faces.rear.shape, "round");
+  assert.equal(createStarterTemplate("server-2u").front.shape, undefined);
+  assert.equal(createStarterTemplate("unknown").deviceTypes[0], "server");
+});
 
 test("port block generation is deterministic across supported numbering directions", () => {
   const base: PortBlockDefinition = {
@@ -102,7 +139,7 @@ test("patch-panel starter produces matching face-qualified front and rear blocks
   );
 });
 
-test("port-block replacement is face-aware and upgrades only the selected legacy face", () => {
+test("port-block replacement preserves existing identities while adding independent faces", () => {
   const legacyFront: PortBlockDefinition = {
     id: "ports",
     face: "front",
@@ -150,12 +187,11 @@ test("port-block replacement is face-aware and upgrades only the selected legacy
     updatedFront.portBlueprints.map((block) => [block.id, block.face]),
     [
       ["ports:rear", "rear"],
-      ["ports:front", "front"],
+      ["ports", "front"],
     ],
   );
   assert.equal(
-    updatedFront.portSlots.filter((slot) => slot.groupId === "ports:front")
-      .length,
+    updatedFront.portSlots.filter((slot) => slot.groupId === "ports").length,
     3,
   );
   assert.equal(
@@ -164,7 +200,7 @@ test("port-block replacement is face-aware and upgrades only the selected legacy
     2,
   );
   assert.equal(
-    updatedFront.portSlots.some((slot) => slot.groupId === "ports"),
+    updatedFront.portSlots.some((slot) => slot.groupId === "ports:front"),
     false,
   );
   assert.equal(new Set(updatedFront.portSlots.map((slot) => slot.id)).size, 5);
@@ -232,5 +268,197 @@ test("one-row 24-column patch blocks preserve their opposite face on repeated up
     assert.equal(new Set(updated.map((slot) => slot.y)).size, 1);
     assert.equal(new Set(updated.map((slot) => slot.x)).size, 24);
     assert.equal(new Set(template.portSlots.map((slot) => slot.id)).size, 48);
+  }
+});
+
+test("block editing retains identities and deletes only the selected face and group", () => {
+  const original = createStarterTemplate("patch-panel", "panel", "Panel");
+  const front = templatePortBlocks(original).find(
+    (block) => block.face === "front",
+  )!;
+  assert.ok(front);
+  const edited = replacePortBlock(original, { ...front, x: front.x + 5 });
+  assert.deepEqual(
+    edited.portSlots.map((slot) => slot.id).sort(),
+    original.portSlots.map((slot) => slot.id).sort(),
+  );
+  const id = nextTemplatePartId(
+    front.id,
+    templatePortBlocks(edited).map((block) => block.id),
+  );
+  const duplicate = replacePortBlock(edited, {
+    ...front,
+    id,
+    connector: "sfp",
+    count: 4,
+    columns: 4,
+  });
+  assert.equal(duplicate.portSlots.length, original.portSlots.length + 4);
+  assert.equal(
+    new Set(duplicate.portSlots.map((slot) => slot.id)).size,
+    duplicate.portSlots.length,
+  );
+  const removed = deletePortBlock(duplicate, { ...front, id });
+  assert.deepEqual(removed.portSlots, edited.portSlots);
+  assert.deepEqual(removed.rear, original.rear);
+});
+
+test("port-block geometry updates resize the generated layout independently of position", () => {
+  const block: PortBlockDefinition = {
+    id: "geometry",
+    face: "front",
+    connector: "rj45",
+    count: 4,
+    rows: 2,
+    columns: 2,
+    start: 1,
+    direction: "left-to-right",
+    x: 100,
+    y: 80,
+    width: 200,
+    height: 80,
+  };
+  const originalSlots = generatePortBlock(block);
+  const movedSlots = generatePortBlock({ ...block, x: block.x + 40 });
+  const resizedSlots = generatePortBlock({
+    ...block,
+    width: 100,
+    height: 160,
+  });
+
+  assert.equal(movedSlots[0]!.x - originalSlots[0]!.x, 40);
+  assert.ok(
+    resizedSlots[1]!.x - resizedSlots[0]!.x <
+      originalSlots[1]!.x - originalSlots[0]!.x,
+  );
+  assert.ok(
+    resizedSlots[2]!.y - resizedSlots[0]!.y >
+      originalSlots[2]!.y - originalSlots[0]!.y,
+  );
+});
+
+test("module positions control both faces and preserve module port identities while moving and resizing", () => {
+  const template = createStarterTemplate("mini-pc", "mini", "Mini");
+  const position = {
+    id: "front-module",
+    face: "front" as const,
+    x: 40,
+    y: 20,
+    width: 260,
+    height: 224,
+  };
+  const module = createHardwareModule(
+    "nic-front",
+    "NIC",
+    position.id,
+    "nic",
+    2,
+    position,
+  );
+  assert.equal(module.face, "front");
+  assert.ok(
+    module.portSlots.every(
+      (slot) =>
+        slot.face === "front" && slot.x >= position.x && slot.y >= position.y,
+    ),
+  );
+  const assigned = { ...template, moduleSlots: [position], modules: [module] };
+  assert.equal(deleteModulePosition(assigned, position.id), assigned);
+  const moved = updateModulePosition(assigned, {
+    ...position,
+    face: "rear",
+    x: 500,
+    y: 40,
+    width: 130,
+    height: 112,
+  });
+  assert.equal(moved.modules[0].face, "rear");
+  assert.deepEqual(
+    moved.modules[0].portSlots.map((slot) => slot.id),
+    module.portSlots.map((slot) => slot.id),
+  );
+  assert.ok(
+    moved.modules[0].portSlots.every(
+      (slot) =>
+        slot.face === "rear" && slot.x >= 500 && slot.x + slot.width <= 630,
+    ),
+  );
+  assert.deepEqual(moved.portSlots, template.portSlots);
+  assert.equal(
+    deleteModulePosition({ ...moved, modules: [] }, position.id).moduleSlots
+      .length,
+    0,
+  );
+});
+
+test("hardware modules support one through sixteen ports while fans create none", () => {
+  const position = {
+    id: "rear-module",
+    face: "rear" as const,
+    x: 10,
+    y: 10,
+    width: 240,
+    height: 120,
+  };
+  for (const count of [1, 3, 16]) {
+    const module = createHardwareModule(
+      `nic-${count}`,
+      "NIC",
+      position.id,
+      "nic",
+      count,
+      position,
+    );
+    assert.equal(module.portSlots.length, count);
+  }
+  const fan = createHardwareModule(
+    "fan-1",
+    "Fan",
+    position.id,
+    "fan",
+    16,
+    position,
+  );
+  assert.equal(fan.portSlots.length, 0);
+});
+
+test("repeated switch access and uplink edits preserve legacy block and port IDs", () => {
+  let template = createStarterTemplate(
+    "switch-24",
+    "stable-switch",
+    "Stable switch",
+  );
+  const originalIds = template.portSlots.map((slot) => slot.id).sort();
+  const originals = templatePortBlocks(template);
+  assert.deepEqual(
+    originals.map((block) => block.id),
+    ["ports", "uplinks"],
+  );
+  for (const original of originals) {
+    for (const offset of [10, 20]) {
+      const block = templatePortBlocks(template).find(
+        (entry) => entry.id === original.id && entry.face === original.face,
+      );
+      assert.ok(block, "selected block remains addressable after Update");
+      const unaffected = template.portSlots.filter(
+        (slot) => slot.groupId !== original.id,
+      );
+      template = replacePortBlock(template, {
+        ...block,
+        x: original.x + offset,
+      });
+      const updated = templatePortBlocks(template).find(
+        (entry) => entry.id === original.id,
+      );
+      assert.equal(updated?.x, original.x + offset);
+      assert.deepEqual(
+        template.portSlots.map((slot) => slot.id).sort(),
+        originalIds,
+      );
+      assert.deepEqual(
+        template.portSlots.filter((slot) => slot.groupId !== original.id),
+        unaffected,
+      );
+    }
   }
 });

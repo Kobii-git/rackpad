@@ -14,7 +14,23 @@ and stable roadmap gates pass; Docker is still the supported general path.
 
 Default Compose uses a read-only root filesystem, `/tmp` tmpfs,
 `no-new-privileges`, init, a healthcheck, and the `rackpad_data:/data` volume.
-The internal HTTP port is 3000 and the host mapping uses `RACKPAD_PORT`.
+Standard Compose keeps the internal HTTP port at 3000 and uses `RACKPAD_PORT`
+for the host mapping; host discovery sets the listening `PORT` from `RACKPAD_PORT`.
+Image and Compose healthchecks resolve `PORT` inside the container using the
+server's positive-safe-integer parsing and fallback to 3000. Custom internal
+ports require both `PORT` and the container-side mapping to agree. Existing
+Compose healthcheck overrides must be updated too; replacing the image alone
+does not replace them. See `INSTALL.md` for custom-port and older-image guidance.
+
+The image's default UID is 10001; its group ID is assigned at build time.
+Standard deployments can use Compose's service-level `user` override with a
+matching writable data directory. `PUID`/`PGID` are not runtime settings.
+Bind mounts keep host ownership, including existing database/WAL/SHM files;
+the app never creates the parent directory, remaps users, or changes ownership.
+Database-open/access failures include a path-free operator hint while retaining
+the original exception. Root host-discovery remains a separate explicit opt-in;
+switching identities requires an offline data/ownership review. `INSTALL.md`
+documents standard bind mounts and optional backup-directory ownership.
 
 The process enables the SNMP trap listener only when explicitly configured through
 `SNMP_TRAP_ENABLED=1` (the default is off), but normal
@@ -28,9 +44,17 @@ change that safer default without a product decision.
 including `RACKPAD_SECRET_KEY`, SNMP, OIDC, rate limits, queue limits, and
 background intervals, pass through every Compose variant. `npm run check:config`
 derives runtime names from server source and fails on example/manifest drift.
+It executes the image and Compose probe expressions with isolated HTTP stubs,
+checking port parsing against the server and retaining failure exit behavior.
 It also runs the installer against isolated download/daemon stubs with real
 Compose rendering. The installer preserves operator configuration and keys,
 recognizes generated manifests, and proposes custom-manifest updates for review.
+
+`test:docker:storage` builds a disposable production image and validates default
+and custom users, named volumes, Linux bind mounts, restart persistence, access
+failures and an isolated ownership correction. It uses only generated temporary
+data and publishes no ports. The explicit `--named-volume-only` mode is a limited
+Docker Desktop check and does not replace the full Linux ownership gate.
 
 `TRUST_PROXY` is disabled at `0` and otherwise names explicit controlled proxy
 IPs/CIDRs. Legacy hop counts, truthy aliases, and invalid values disable trust with
@@ -86,6 +110,11 @@ by default.
 - `beta` publishes prerelease testing builds using `-beta.N`.
 - `main` and stable tags publish stable/latest images after beta smoke testing.
 
+Image publication emits an immutable digest. The publication workflow verifies
+that exact image and revision on AMD64 and ARM64 with isolated fresh-install,
+schema-53 upgrade and paired rollback fixtures. GitHub Release creation depends
+on both smoke jobs as well as the preceding quality/security/build gates.
+
 Release preparation includes version and lockfile, changelog Added/Fixed/Changed
 sections as applicable, full validation, test notes, tag/channel review, and smoke
 testing. Push/tag/publish/deploy always requires explicit user authority.
@@ -96,3 +125,8 @@ One process and one SQLite volume imply single-instance operation. The public
 health endpoint is primarily liveness and currently includes trap receiver detail.
 No automatic volume backup, downgrade migration, readiness split, or metrics/APM
 is provided.
+
+Pull requests also build unpublished candidate images on AMD64 and ARM64 and
+verify fresh installs, actual stable schema-51 and beta schema-53 upgrades,
+restart persistence and paired rollback. Candidate images are addressed by local
+immutable image IDs; previous images remain pinned GHCR digests.

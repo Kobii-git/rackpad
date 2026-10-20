@@ -1,7 +1,7 @@
 import { buildRackStudioScene } from "./rack-studio-scene";
 import { buildCablingMapLines } from "./cabling-map";
 import { buildVisualizerModel, tracePorts } from "../pages/visualizer/model";
-import { rackCableFixture } from "../../e2e/fixtures/rack-cables";
+import { rackCableFixture, rackShelfCableFixture } from "../../e2e/fixtures/rack-cables";
 import {
   buildRackStudioCableRoutes,
   buildRackElevationCableRoutes,
@@ -87,7 +87,7 @@ test("24 adjacent patch cords use distinct reproducible cubic geometry and exact
   });
 });
 
-test("mixed routing enforces the 4U boundary, rack face, identity, handoff, and manual exclusions", () => {
+test("routing preserves face, identity, handoff, and manual exclusions across the full rack height", () => {
   const base = connection();
   const route = (input: CableRoutingInput) =>
     planPhysicalCableRoutes([input], context, "smooth")[0]!;
@@ -96,7 +96,6 @@ test("mixed routing enforces the 4U boundary, rack face, identity, handoff, and 
     "cubic",
   );
   for (const input of [
-    { ...base, to: { ...base.to!, y: 360.01 } },
     { ...base, to: { ...base.to!, rackId: "other" } },
     { ...base, to: { ...base.to!, deviceId: "panel" } },
     { ...base, to: undefined },
@@ -112,7 +111,7 @@ test("mixed routing enforces the 4U boundary, rack face, identity, handoff, and 
   assert.doesNotMatch(orthogonal.path, /[CQ]/);
 });
 
-test("curve clearance includes obstacles but excludes the endpoint shelf and opposite face", () => {
+test("elevation curves pass over intervening equipment on either face", () => {
   const base = connection();
   const blocker = {
     id: "blocker",
@@ -126,7 +125,7 @@ test("curve clearance includes obstacles but excludes the endpoint shelf and opp
       { ...context, obstacles: [blocker] },
       "smooth",
     )[0]!.geometry.kind,
-    "polyline",
+    "cubic",
   );
   assert.equal(
     planPhysicalCableRoutes(
@@ -732,4 +731,147 @@ test("manual mixed-face routes retain exact waypoints and saved routing authorit
   assert.equal(routes[0]!.geometry.kind, "polyline");
   assert.deepEqual(routes[0]!.points[1], { x: waypoint.x, y: waypoint.y });
   assert.match(routes[0]!.path, /L 30\.00 45\.00/);
+});
+
+
+test("reported shelf arrangement keeps 2U, 4U and 6U rear cables inside the rack in every elevation", () => {
+  const fixture = rackShelfCableFixture();
+  const before = JSON.stringify(fixture);
+  for (const face of ["front", "rear"] as const) {
+    const input = { ...fixture, racks: [fixture.rack], face, style: "smooth" as const };
+    const room = buildRackStudioCableRoutes(input);
+    const elevation = buildRackElevationCableRoutes({ ...input, rack: fixture.rack,
+      width: RACK_CABLING_BODY_WIDTH, unitHeight: RACK_CABLING_UNIT_HEIGHT });
+    const scene = buildRackCablingScene({ ...input, faceMode: face, rackOrder: [], looseExpanded: false });
+    const cabling = buildRackCablingRoutes({ ...input, scene });
+    for (const routes of [room, elevation.routes, cabling]) {
+      const sameFace = routes.filter(route => route.link.id.startsWith(`shelves-${face}-`));
+      assert.equal(sameFace.length, 3);
+      for (const route of sameFace) assert.equal(route.geometry.kind, "cubic");
+    }
+    const frame = scene.racks[0]!.faces[0]!;
+    for (const route of elevation.routes) {
+      const other = cabling.find(candidate => candidate.link.id === route.link.id)!;
+      assert.equal(other.path, renderCableGeometry(route.geometry, { x: frame.x, y: frame.y }));
+    }
+  }
+  assert.equal(JSON.stringify(fixture), before);
+});
+
+test("routing policy is independent of style and preserves inactive route data", () => {
+  const input = connection();
+  const otherRack = { id: "other", rect: { x: 1060, y: 20, width: 1000, height: 960 }, unitHeight: 40 };
+  const cross = { ...input, to: { ...input.to!, rackId: "other", x: 1200 }, manualPoints: [] };
+  const contextWithTwo = { ...context, width: 2100, racks: [...context.racks, otherRack] };
+  assert.equal(planPhysicalCableRoutes([{ ...cross, routeMode: "auto" }], contextWithTwo, "smooth")[0]!.geometry.kind, "polyline");
+  assert.equal(planPhysicalCableRoutes([{ ...cross, routeMode: "direct" }], contextWithTwo, "smooth")[0]!.geometry.kind, "cubic");
+  const managed = planPhysicalCableRoutes([{ ...input, routeMode: "managed" }], context, "smooth")[0]!;
+  assert.equal(managed.geometry.kind, "polyline");
+  const fixture = rackCableFixture("modes");
+  const point = { id: "w", roomId: fixture.room.id, face: "front" as const, x: 200, y: 250 };
+  for (const routeMode of ["auto", "direct", "managed", "manual"] as const) {
+    const link = { ...fixture.links[0]!, routeMode, routeWaypoints: [point] };
+    const before = JSON.stringify(link);
+    for (const style of ["smooth", "orthogonal"] as const) {
+      const route = buildRackStudioCableRoutes({ ...fixture, racks: [fixture.rack], face: "front", links: [link], style })[0]!;
+      assert.equal(route.manualPointIndexes.length, routeMode === "manual" ? 1 : 0);
+    }
+    assert.equal(JSON.stringify(link), before);
+  }
+});
+
+test("room-aware automatic routes stay inside one room and avoid unrelated rooms", () => {
+  const roomContext: RoutePlanningContext = {
+    width: 1000, height: 620,
+    rooms: [
+      { id: "left", rect: { x: 20, y: 100, width: 260, height: 300 } },
+      { id: "blocker", rect: { x: 370, y: 100, width: 260, height: 300 } },
+      { id: "right", rect: { x: 720, y: 100, width: 260, height: 300 } },
+    ],
+    racks: [
+      { id: "left-a", rect: { x: 60, y: 150, width: 80, height: 180 }, unitHeight: 10 },
+      { id: "left-b", rect: { x: 180, y: 150, width: 80, height: 180 }, unitHeight: 10 },
+      { id: "right-a", rect: { x: 760, y: 150, width: 80, height: 180 }, unitHeight: 10 },
+    ], obstacles: [],
+  };
+  const anchor = (portId: string, rackId: string, roomId: string, x: number, y: number) => ({
+    portId, deviceId: `device-${portId}`, roomId, rackId, face: "front" as const, rackFace: "front" as const, x, y,
+  });
+  const sameRoom = planPhysicalCableRoutes([{ id: "same-room",
+    from: anchor("a", "left-a", "left", 100, 200), to: anchor("b", "left-b", "left", 220, 260),
+    manualPoints: [], allowDirect: false }], roomContext, "orthogonal")[0]!;
+  assert.ok(sameRoom.points.every(point => point.x >= 20 && point.x <= 280 && point.y >= 100 && point.y <= 400));
+
+  const crossRoom = planPhysicalCableRoutes([{ id: "cross-room",
+    from: anchor("a", "left-a", "left", 100, 200), to: anchor("c", "right-a", "right", 800, 260),
+    manualPoints: [], allowDirect: false }], roomContext, "orthogonal")[0]!;
+  const blocker = roomContext.rooms![1]!.rect;
+  for (let index = 1; index < crossRoom.points.length; index += 1) {
+    const from = crossRoom.points[index - 1]!, to = crossRoom.points[index]!;
+    const crosses = from.x === to.x
+      ? from.x > blocker.x && from.x < blocker.x + blocker.width && Math.max(from.y, to.y) > blocker.y && Math.min(from.y, to.y) < blocker.y + blocker.height
+      : from.y > blocker.y && from.y < blocker.y + blocker.height && Math.max(from.x, to.x) > blocker.x && Math.min(from.x, to.x) < blocker.x + blocker.width;
+    assert.equal(crosses, false);
+  }
+});
+
+test("smooth managed guide legs share tangents and retain exact guide anchors", () => {
+  const base = connection();
+  const guide = { ...base.from, portId: "guide:brush:entry", deviceId: "brush", x: 340, y: 260 };
+  const input = { ...base, to: { ...base.to!, x: 620, y: 360 }, routeMode: "managed" as const, guidePoints: [guide] };
+  const smooth = planPhysicalCableRoutes([input], context, "smooth")[0]!;
+  assert.equal(smooth.geometry.kind, "segmented");
+  if (smooth.geometry.kind !== "segmented") return;
+  const [first, second] = smooth.geometry.segments;
+  assert.equal(first!.kind, "cubic"); assert.equal(second!.kind, "cubic");
+  if (first!.kind !== "cubic" || second!.kind !== "cubic") return;
+  assert.deepEqual(first!.to, guide); assert.deepEqual(second!.from, guide);
+  const incoming = { x: guide.x - first!.control2.x, y: guide.y - first!.control2.y };
+  const outgoing = { x: second!.control1.x - guide.x, y: second!.control1.y - guide.y };
+  assert.ok(Math.abs(incoming.x * outgoing.y - incoming.y * outgoing.x) < 1e-8);
+  assert.ok(incoming.x * outgoing.x + incoming.y * outgoing.y > 0);
+  for (const [from, control, to] of [[first!.from, first!.control1, first!.to], [first!.to, first!.control2, first!.from],
+    [second!.from, second!.control1, second!.to], [second!.to, second!.control2, second!.from]]) {
+    const controlLength = Math.hypot(control.x - from.x, control.y - from.y);
+    const segmentLength = Math.hypot(to.x - from.x, to.y - from.y);
+    assert.ok(controlLength <= 48 + 1e-8); assert.ok(controlLength <= segmentLength * 0.4 + 1e-8);
+  }
+  assert.equal(smooth.path, renderCableGeometry(smooth.geometry));
+  const secondGuide = { ...guide, portId: "guide:brush-two:entry", deviceId: "brush-two", x: 470, y: 300 };
+  const multiple = planPhysicalCableRoutes([{ ...input, guidePoints: [guide, secondGuide] }], context, "smooth")[0]!;
+  assert.equal(multiple.geometry.kind, "segmented");
+  if (multiple.geometry.kind === "segmented") {
+    assert.deepEqual(multiple.geometry.segments[0]?.kind === "cubic" ? multiple.geometry.segments[0].to : null, guide);
+    assert.deepEqual(multiple.geometry.segments[1]?.kind === "cubic" ? multiple.geometry.segments[1].from : null, guide);
+    assert.deepEqual(multiple.geometry.segments[1]?.kind === "cubic" ? multiple.geometry.segments[1].to : null, secondGuide);
+    assert.equal(multiple.path, renderCableGeometry(multiple.geometry));
+  }
+  const orthogonal = planPhysicalCableRoutes([input], context, "orthogonal")[0]!;
+  assert.equal(orthogonal.geometry.kind, "segmented");
+  if (orthogonal.geometry.kind === "segmented") assert.ok(orthogonal.geometry.segments.every(segment => segment.kind === "polyline"));
+});
+
+test("a brush passage remains one cable and follows device geometry on both faces", () => {
+  const fixture = rackShelfCableFixture();
+  const brush = fixture.devices.find(device => device.hostname.includes("Shelf")) ?? fixture.devices[4]!;
+  const mixed = fixture.links.find(link => link.id === "shelves-mixed") ?? fixture.links.at(-1)!;
+  const guide = { id: "brush", deviceId: brush.id, roomId: fixture.room.id, entryFace: "front" as const, exitFace: "rear" as const, x: 500, y: 500 };
+  const link = { ...mixed, routeMode: "managed" as const, routeGuides: [guide] };
+  const input = { ...fixture, racks: [fixture.rack], links: [link] };
+  const before = JSON.stringify(input);
+  for (const face of ["front", "rear", "both"] as const) {
+    const routes = buildRackStudioCableRoutes({ ...input, face });
+    assert.equal(routes.length, 1);
+    const route = routes[0]!;
+    assert.equal(route.geometry.kind, "segmented");
+    if (face !== "both") assert.match(route.path, / [CQ] /);
+    assert.ok(route.continuations.some(marker => marker.portId.startsWith("guide:brush:")));
+    assert.ok(route.continuations.every(marker => !marker.incomplete));
+    assert.ok(route.continuations.every(marker => [link.fromPortId, link.toPortId].includes(marker.destinationPortId)));
+    const moved = buildRackStudioCableRoutes({ ...input, face, devices: input.devices.map(device => device.id === brush.id ? { ...device, rackColumn: (device.rackColumn ?? 0) + 1 } : device) })[0]!;
+    assert.notEqual(moved.path, route.path);
+  }
+  const missing = buildRackStudioCableRoutes({ ...input, face: "both", layouts: input.layouts.filter(layout => layout.deviceId !== brush.id) })[0]!;
+  assert.ok(missing.continuations.some(marker => marker.incomplete));
+  assert.equal(JSON.stringify(input), before);
 });

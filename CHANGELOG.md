@@ -6,6 +6,264 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.4] - 2026-10-20
+
+### Added
+
+- Custom device types from the hardware-template editor and round access-point
+  starters with circular front/rear faces, editable ports and inherited behavior.
+- Independent stack-member templates, guided port blocks/module bays, artwork
+  layers, colors, resizing and draft undo/redo while preserving linked ports.
+- Saved cable routing with brush-panel guides and multi-room Rack Cabling.
+- Opt-in MCP inventory tools with scoped expiring tokens and reviewed create-only
+  proposals. MCP remains disabled by default.
+- Unpublished pre-merge AMD64/ARM64 image checks for fresh installation, upgrades
+  from stable schema 51 and beta schema 53, restart persistence and paired rollback.
+
+### Fixed
+
+- Device names retain 12 screen pixels while zooming across Visualizer, Racks and
+  Studio, with upper-right placement, accessible full names and stable exports.
+- Occupied rack placement is rejected atomically; legacy overlaps stay selectable
+  and recoverable without relocating inventory automatically.
+- Template face transfers, grids, copy feedback and editing preserve item/port
+  identity. Saving a template leaves applied device snapshots unchanged until Apply.
+- Container healthchecks honor the internal port; database access diagnostics
+  explain ownership requirements without changing host ownership automatically.
+
+### Changed
+
+- Promoted the 1.8.4 beta feature series with dependency updates and documented
+  non-root custom-user deployment. Native Proxmox LXC remains experimental.
+- Schema advances from stable 51 to 54. Back up the database/configuration/key
+  with the previous image; rollback requires restoring that complete pair.
+
+See the [stable release and upgrade notes](docs/releases/v1.8.4.md).
+
+## [1.8.4-beta.9] - 2026-10-13
+
+### Added
+
+- Independent physical layouts for stack members, with scoped preview/apply,
+  preserved port identities and cable links, and schema-54 backup recovery.
+- Chromium and Firefox feature acceptance with MCP explicitly enabled, plus a
+  Linux container gate for writable named volumes, bind mounts and custom users.
+- Published-image checks for both architectures, fresh installation, actual
+  schema-53 upgrade, API writes/monitoring and paired rollback before GitHub Release creation.
+
+### Fixed
+
+- Template copy feedback, artwork ordering, undo/redo, face transfers, module
+  grids, colours and resizing, with linked-port and mixed-stack regressions.
+- Database access failures now include a concise ownership/permissions hint
+  while preserving the original error. Bind-mount and custom-user guidance
+  explains the image identity and unsupported PUID/PGID variables.
+- Updated compatible dependencies, including patched shell-quote and
+  source-map-js, without restoring unused Recharts or numeric proxy trust.
+
+### Changed
+
+- Documented maintainer-only implementation while welcoming reports, testing
+  and feedback. Dependabot remains a source of suggestions; its PRs are not merged.
+- Renewed only the SNMP server-tree review pin after independent review and
+  explicit maintainer approval; the two protocol call sites and expiry are unchanged.
+
+Schema 54 is forward-only. Keep a protected database/configuration snapshot and
+the matching previous image before upgrading; rollback restores that pair.
+See the [beta.9 upgrade and acceptance notes](docs/releases/v1.8.4-beta.9.md).
+
+## [1.8.4-beta.8] - 2026-10-01
+
+### Added
+
+- Opt-in MCP inventory access in the existing server: scoped, expiring personal
+  tokens; paginated read tools; and create-only proposals that a person reviews
+  and applies in Rackpad. MCP remains disabled by default.
+
+### Fixed
+
+- Rack Studio and ordinary device editing share effective placement occupancy
+  for legacy and current records. Existing overlaps can be selected; conflicts
+  leave both devices unchanged. Rack-top placement remains intact during ordinary
+  edits and is labelled correctly in inventory and reports.
+- Visualizer Inspector distinguishes Manufacturer from discovery Vendor. Rack
+  Studio Inspector links to device details, and Rack Cabling shares trace image
+  preview plus SVG and PNG export with Grouped view.
+
+### Changed
+
+- Updated compatible dependencies and the rate-limit security fix; moved
+  Nodemailer, Lucide, and better-sqlite3 to individually vetted major versions;
+  removed unused Recharts; and updated CodeQL's setup-node action to v7.
+- Refreshed affected transitive dependencies to clear current npm advisories.
+- Renewed the exact SNMPv3 CodeQL evidence pin after independent review of
+  the changed server tree; the SNMP source and exception scope are unchanged.
+
+MCP adds forward-only schema 53. Take a protected pre-upgrade database snapshot
+and keep it with the prior image for rollback. MCP tokens are excluded from
+backups and are revoked by restore. See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.8.md).
+
+## [1.8.4-beta.7] - 2026-09-27
+
+### Fixed
+
+- Rack Studio and standard device updates now include legacy rack records in
+  occupied-slot checks, using the same normalized face and rack-slot geometry
+  as the preview. Conflicts still identify the occupant with a typed 409 and
+  leave both placements unchanged.
+- The Diagram Visualizer Inspector's Direct connections port lines now include
+  the missing space after “to”. Visible Links spacing remains correct.
+
+The beta.6 tag did not publish an image or GitHub Release because its CodeQL
+approval was pinned to the prior server tree. Beta.7 carries these fixes after
+the exact SNMPv3 review pin was renewed; the reviewed SNMP source is unchanged.
+
+See [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.7.md).
+
+## [1.8.4-beta.5] - 2026-09-24
+
+### Fixed
+
+- Legacy device placement saves now check the same 12-column occupied rack space
+  as Studio actions, reject conflicts with a typed 409, and leave both devices
+  unchanged. Studio also checks inspector saves before submitting them.
+- Smooth Managed guide legs bend on either face when a guide crosses from front
+  to rear, while retaining exact anchors and shared live/export geometry.
+- Focused Rack Cabling labels prefer space beside the selected endpoint, and
+  Visible Links shows a space between “to” and the destination port.
+
+See [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.5.md).
+The hardware-template editor from beta.4 remains open for tester confirmation.
+
+## [1.8.4-beta.4] - 2026-09-22
+
+### Fixed
+
+- Rack Studio keeps room-canvas rack selection authoritative after the initial
+  rack is applied. Occupied direct and rack-top placements are rejected by the
+  client and server without moving either device, with an accessible conflict
+  preview and typed `RACK_STUDIO_PLACEMENT_CONFLICT` response.
+- Hardware templates keep appearance creation with Bays and appearance, support
+  one to sixteen ports on port-bearing modules, keep fans portless, and let
+  module artwork select and move its containing module position.
+- Rack Cabling preserves selections through pan and zoom, limits automatic fit
+  to structural changes, and supports browser-local, per-lab locking of Manual
+  room layouts. Automatic routes stay within same-room bounds and avoid
+  unrelated rooms on cross-room paths.
+- Smooth Managed cables pass through each same-face guide with continuous,
+  bounded curves shared by live Rack Studio, Rack Cabling, SVG, and PNG output.
+  Orthogonal Managed routes remain right-angled.
+
+See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.4.md).
+Issues #164, #165, #166, #169, #170 and #171 remain open pending focused beta
+confirmation. Issue #139 is the completed umbrella for the original Rack Studio
+delivery; later remediation remains tracked by those focused issues.
+
+## [1.8.4-beta.3] - 2026-09-17
+
+### Fixed
+
+- Rack Studio's classic Racks/Rooms elevation honours normalized 12-column
+  placement on both faces, including full-, half- and quarter-width devices at
+  the same U. Loose equipment can be placed directly on a focused rack top.
+- Hardware-template appearance editing now offers every supported primitive,
+  supports direct preview positioning for appearance and module positions, and
+  regenerates port-block geometry when its width or height changes.
+- Rack Cabling persists loose-equipment expansion independently per room, keeps
+  the active cable, port or label selected while panning, and keeps cross-room
+  handoff labels at the originating room boundary. Selected rooms can now use
+  deterministic Auto, Hub & spoke, or browser-local Manual layouts without
+  changing inventory data.
+- Room-canvas rack selection now consistently updates the focused Rack Studio
+  elevation.
+
+See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.3.md).
+Issues #164, #165, #166, #167 and #169 remain open pending tester confirmation.
+
+## [1.8.4-beta.2] - 2026-09-16
+
+### Added
+
+- Rack Cabling can display any combination of rooms in ordered, named sections,
+  including complete routes between selected rooms and labelled handoffs to
+  rooms outside the current selection. The accessible room picker supports
+  individual selection, select all, clear, keyboard use and persisted choices.
+
+### Fixed
+
+- Place cable and handoff annotations deterministically without overlapping rack
+  or room headers, loose-equipment summaries, canvas edges or other labels. Dense
+  overflow moves to a labelled side rail with leaders.
+- Keep directly mounted half- and quarter-width equipment in its normalized
+  12-column span in Grouped view, including devices sharing the same U position
+  on either face and legacy left/right placements.
+- Preserve named presets and shorthand hexadecimal cable colours in Rack Studio
+  SVG and PNG exports while retaining safe category fallbacks for invalid CSS.
+
+See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.2.md).
+Issues #139, #165 and #166 remain open pending tester confirmation.
+
+## [1.8.4-beta.1]
+
+### Fixed
+
+- Container and Compose healthchecks resolve the container's configured `PORT`
+  with the same fallback as the server; host port mappings remain independent.
+  Existing user-defined healthcheck overrides must be updated separately.
+- Rack Cabling shares its rack-top band geometry across rails, U labels,
+  equipment and ports. Grouped topology includes rack-top equipment without
+  allocating rack U space.
+- Loose equipment retains individual cables and endpoint selection when expanded
+  or collapsed. Collapsed devices show one destination summary with a cable
+  count; focused details remain available with Labels disabled.
+
+### Added
+
+- Guided hardware-template controls for independent port blocks, module positions
+  on either face, and individual bay/appearance elements, with translated help
+  and worked examples. Template saves preserve existing device snapshots and
+  continue to use the preview/apply protections for linked ports.
+
+### Maintenance
+
+- Refreshed dependencies within compatible patch/minor ranges while preserving
+  the trusted-proxy parser and shipped security fixes.
+- Retained Chinese translation corrections and localized Front/Rear labels.
+- Prepared the quality workflow's setup-node v7 update separately.
+
+Studio remains opt-in. The classic rack view, pictures and current subtitle are
+unchanged. Major dependency upgrades, per-member stack templates, device skins
+and community template sharing remain deferred.
+
+## [1.8.4-beta.0] - 2026-09-11
+
+### Added
+
+- Saved Automatic, Direct, Managed and Manual cable routing modes, with ordered
+  device-relative brush-panel guides and opposite-endpoint focus.
+- Compact rack presentation and category-specific hardware starter artwork.
+- Schema 52 routing metadata, authorized guide validation and logical/native
+  backup support. Existing waypoint routes migrate to Manual.
+
+### Fixed
+
+- Keep rear-to-rear cables inside the rack across long spans and intervening
+  shelves, using the same direct curves as front-to-front patch cords.
+- Keep cable artwork above equipment while preserving usable port hit targets,
+  stable bindings, selection and tracing.
+- Remove guide references transactionally when their equipment is deleted or
+  leaves its declared room, while preserving the cable itself.
+
+### Changed
+
+- Share routing geometry and faceplate details across Studio, Rack Cabling and
+  SVG/PNG exports. Routing modes preserve inactive guides and manual waypoints.
+- Keep Studio opt-in and the classic view available. Revised template geometry
+  is adopted through preview/apply; existing device snapshots are preserved.
+
+See the [beta upgrade and acceptance notes](docs/releases/v1.8.4-beta.0.md).
+Issue #139 remains open pending tester confirmation on the published beta.
+
 ## [1.8.3] - 2026-09-09
 
 ### Added

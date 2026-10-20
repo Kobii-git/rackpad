@@ -14,7 +14,10 @@ import {
   rackStudioShowLabelsPreference,
   resolveRackStudioPortAnchor,
 } from "./rack-studio-cables";
-import { buildRackStudioSvg } from "./rack-studio-export";
+import {
+  buildRackStudioSvg,
+  safeRackStudioExportColor,
+} from "./rack-studio-export";
 import type {
   Device,
   DevicePhysicalLayout,
@@ -151,6 +154,7 @@ test("overlapping corridors receive unbounded stable lanes independent of input 
     );
     links.push({
       id: `lane-link-${String(index).padStart(2, "0")}`,
+      routeMode: "managed",
       fromPortId: fromPort.id,
       toPortId: toPort.id,
       visible: true,
@@ -254,7 +258,9 @@ test("cross-room endpoints become labeled canvas handoffs and hidden links stay 
   })[0]!;
   assert.equal(crossRoom.crossRoom, true);
   assert.equal(crossRoom.remoteRoomId, remoteRoom.id);
-  assert.equal(crossRoom.points.length, 3);
+  assert.equal(crossRoom.continuations.length, 1);
+  assert.equal(crossRoom.continuations[0]!.destinationPortId, portB.id);
+  assert.equal(crossRoom.continuations[0]!.destinationFace, "rear");
 
   const hidden = buildRackStudioCableRoutes({
     room,
@@ -280,6 +286,17 @@ test("connector compatibility and defaults distinguish network, optical, and pow
     color: "#22d3ee",
   });
   assert.equal(defaultCableMetadata(portA, power).cableType, "Power");
+});
+
+test("export colors normalize presets and shorthand hex without accepting unsafe CSS", () => {
+  assert.equal(safeRackStudioExportColor("blue", "#94a3b8"), "#4a78c4");
+  assert.equal(safeRackStudioExportColor("#0cf", "#94a3b8"), "#00ccff");
+  assert.equal(safeRackStudioExportColor("#12ABef", "#94a3b8"), "#12ABef");
+  assert.equal(
+    safeRackStudioExportColor("url(javascript:alert(1))", "#94a3b8"),
+    "#94a3b8",
+  );
+  assert.equal(safeRackStudioExportColor(undefined, "blue"), "#4a78c4");
 });
 
 test("room and focused-rack exports are deterministic, themed, and retain exact port labels", () => {
@@ -316,6 +333,19 @@ test("room and focused-rack exports are deterministic, themed, and retain exact 
     theme: "dark" as const,
     labels,
   };
+  const svgWithColor = (color: string | undefined) =>
+    buildRackStudioSvg({
+      ...input,
+      links: [{ ...link, color }],
+    }).svg;
+  assert.match(svgWithColor("blue"), /<path[^>]+stroke="#4a78c4"/);
+  assert.match(svgWithColor("#0cf"), /<path[^>]+stroke="#00ccff"/);
+  assert.match(svgWithColor("#12ABef"), /<path[^>]+stroke="#12ABef"/);
+  assert.match(svgWithColor(undefined), /<path[^>]+stroke="#22d3ee"/);
+  assert.match(
+    svgWithColor("url(javascript:alert(1))"),
+    /<path[^>]+stroke="#22d3ee"/,
+  );
   const roomImage = buildRackStudioSvg(input);
   assert.equal(roomImage.svg, buildRackStudioSvg(input).svg);
   assert.match(roomImage.svg, /data-theme="dark"/);
@@ -511,3 +541,21 @@ function multiPortLayout(
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
 }
+
+test("historical wrong-side endpoint fixture uses the exact face and connector slot in routing and export",()=>{
+  const front={...portA,id:"front-end",face:"front" as const};
+  const rear={...portB,id:"rear-end",face:"rear" as const};
+  const frontLayout=layout(serverA.id,front.id,80,260);frontLayout.snapshot.portSlots[0].face="front";
+  const rearLayout=layout(serverB.id,rear.id,820,260);
+  const cable={...link,fromPortId:front.id,toPortId:rear.id};
+  const input={room,face:"both" as const,devices:[serverA,serverB],racks:[rackA,rackB],layouts:[frontLayout,rearLayout],ports:[front,rear],links:[cable],style:"smooth" as const};
+  const route=buildRackStudioCableRoutes(input)[0];
+  const from=resolveRackStudioPortAnchor({port:front,devices:input.devices,racks:input.racks,layouts:input.layouts})!;
+  const to=resolveRackStudioPortAnchor({port:rear,devices:input.devices,racks:input.racks,layouts:input.layouts})!;
+  assert.equal(from.rackFace,"front");assert.equal(to.rackFace,"rear");
+  assert.equal(route.points[0].x,from.x);assert.equal(route.points[0].y,from.y);
+  assert.equal(route.points.at(-1)!.x,to.x);assert.equal(route.points.at(-1)!.y,to.y);
+  const labels={cable:"Cable",cables:"Cables",devices:"devices",front:"Front",rear:"Rear",room:"Room",rack:"Rack",legend:"Type",crossRoom:"Room",categories:{network:"Network",fiber:"Fiber",power:"Power",console:"Console",usb:"USB",storage:"Storage",other:"Other"}};
+  const exported=buildRackStudioSvg({...input,routeStyle:"smooth",theme:"dark",showLabels:true,labels});
+  assert.match(exported.svg,new RegExp(`M ${(from.x+60).toFixed(2)} ${(from.y+92).toFixed(2)}`));
+});

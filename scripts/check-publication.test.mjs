@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import YAML from "yaml";
 import { inspectSarif, prepareCodeqlReports, reviewSarif } from "./check-codeql-results.mjs";
+import { codeqlReviewProblems } from "./check-codeql-review.mjs";
 import { readSnmpReviewContext, SNMP_REVIEW } from "./codeql-snmp-review.mjs";
 
 const workflow = (name) => YAML.parse(readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), "utf8"));
@@ -118,7 +119,10 @@ test("each required check blocks image and release jobs on failure", () => {
   const { jobs } = workflow("docker-publish");
   assert.deepEqual(jobs.build.needs, ["quality", "codeql", "security"]);
   assert.equal(jobs.build.if, undefined, "must retain implicit success() prerequisite");
-  assert.equal(jobs.release.needs, "build");
+  assert.deepEqual(jobs.release.needs, ["build", "smoke"]);
+  assert.equal(jobs.smoke.needs, "build");
+  assert(!jobs.smoke.if.includes("always()"));
+  assert.deepEqual(jobs.smoke.strategy.matrix.platform, ["linux/amd64", "linux/arm64"]);
   assert(!jobs.release.if.includes("always()"));
   for (const failed of jobs.build.needs) {
     const states = Object.fromEntries(jobs.build.needs.map((name) => [name, name === failed ? "failure" : "success"]));
@@ -134,6 +138,7 @@ test("fork PRs cannot publish; scans retain transition, scheduled, and manual en
   assert.equal(build.with.push, "${{ github.event_name != 'pull_request' }}");
   assert(jobs.release.if.includes("github.event_name == 'push'"));
   assert(jobs.release.if.includes("refs/tags/v"));
+  assert.equal(jobs.smoke.if, "github.event_name == 'push'");
   assert(jobs.build.steps.find((step) => step.name === "Log in to GHCR").if.includes("!= 'pull_request'"));
   for (const name of ["codeql", "security-scan"]) {
     const triggers = workflow(name).on;
@@ -399,4 +404,62 @@ test("malformed findings cannot be removed to turn invalid raw evidence into val
     assert.equal(JSON.parse(readFileSync(path.join(directory, "review-summary.json"))).status, "blocked");
     assert.equal(readFileSync(file, "utf8"), bytes);
   }
+});
+
+test("CodeQL review preflight fails closed with specific bounded diagnostics", () => {
+  const valid = reviewedContext();
+  assert.deepEqual(codeqlReviewProblems(valid), []);
+  for (const [patch, message] of [
+    [{ clean: false }, "Server state is dirty"],
+    [{ serverTree: "a".repeat(40) }, "Committed server tree differs"],
+    [{ sourceSha256: "a".repeat(64) }, "SNMP source hash differs"],
+    [{ now: Date.parse(SNMP_REVIEW.expiresAt) }, "approval has expired"],
+    [{ now: NaN }, "time evidence is invalid"],
+    [{ now: -1 }, "time evidence is invalid"],
+    [{ serverTree: "malformed" }, "server-tree evidence is missing or malformed"],
+    [{ sourceSha256: null }, "source-hash evidence is missing or malformed"],
+  ]) assert(codeqlReviewProblems({ ...valid, ...patch }).some(problem => problem.includes(message)));
+  assert.equal(codeqlReviewProblems(undefined).length, 4);
+  const workflowText = readFileSync(new URL("../.github/workflows/quality.yml", import.meta.url), "utf8");
+  assert(workflowText.indexOf("npm run check:codeql-review") < workflowText.indexOf("npm ci"));
+});
+
+test("CodeQL preflight observes actual committed Git evidence and dirty server state", (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), "rackpad-codeql-preflight-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  git("init", "--initial-branch=fixture");
+  mkdirSync(path.join(root, "server/lib"), { recursive: true });
+  const source = path.join(root, SNMP_REVIEW.file);
+  writeFileSync(source, readFileSync(new URL(`../${SNMP_REVIEW.file}`, import.meta.url)));
+  git("add", "server");
+  git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "Fixture");
+  const actual = readSnmpReviewContext(root);
+  assert.equal(actual.clean, true);
+  assert.equal(actual.serverTree, git("rev-parse", "HEAD:server").trim());
+  assert.equal(actual.sourceSha256, SNMP_REVIEW.sourceSha256);
+  assert(codeqlReviewProblems(actual).some(problem => problem.includes("tree differs")));
+  writeFileSync(source, "changed source\n");
+  assert(codeqlReviewProblems(readSnmpReviewContext(root)).some(problem => problem.includes("dirty")));
+  git("add", "server");
+  git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "Changed");
+  assert(codeqlReviewProblems(readSnmpReviewContext(root)).some(problem => problem.includes("source hash differs")));
+});
+
+test("pre-merge smoke builds unpublished immutable candidates and tests stable and beta recovery", () => {
+  const job = workflow("docker-publish").jobs["candidate-smoke"];
+  assert.equal(job.if, "github.event_name == 'pull_request'");
+  assert.deepEqual(job.needs, ["quality", "codeql", "security"]);
+  assert.deepEqual(job.strategy.matrix.platform, ["linux/amd64", "linux/arm64"]);
+  assert.equal(job.permissions.packages, "read");
+  const build = job.steps.find(step => step.id === "candidate");
+  assert.equal(build.with.push, false);
+  assert.equal(build.with.load, true);
+  assert.equal(build.with.labels, "org.opencontainers.image.revision=${{ github.sha }}");
+  const smoke = job.steps.find(step => step.env?.CANDIDATE_IMAGE);
+  assert.equal(smoke.env.CANDIDATE_IMAGE, "${{ steps.candidate.outputs.imageid }}");
+  for (const key of ["STABLE_IMAGE", "BETA_IMAGE"]) assert.match(smoke.env[key], /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/);
+  assert(smoke.run.includes('--previous-image "$STABLE_IMAGE" --previous-schema 51'));
+  assert(smoke.run.includes('--previous-image "$BETA_IMAGE" --previous-schema 53'));
+  assert(!job.steps.some(step => step.uses?.startsWith("docker/login-action")));
 });

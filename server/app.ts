@@ -41,7 +41,11 @@ import {
   physicalLayoutsRoutes,
 } from "./routes/physical-layouts.js";
 import { rackStudioRoutes } from "./routes/rack-studio.js";
+import { mcpRoutes } from "./routes/mcp.js";
+import { mcpTokenRoutes } from "./routes/mcp-tokens.js";
+import { mcpProposalRoutes } from "./routes/mcp-proposals.js";
 import { getAuthToken, lookupSession, needsBootstrap } from "./lib/auth.js";
+import { lookupMcpToken } from "./lib/mcp-tokens.js";
 import { fetchUserLabAccess } from "./lib/lab-access.js";
 import { ValidationError } from "./lib/validation.js";
 import { normalizeSafeSubnetCidrs } from "./lib/subnet-integrity.js";
@@ -208,6 +212,7 @@ export async function createApp() {
   app.decorateRequest("authUser", null);
   app.decorateRequest("sessionId", null);
   app.decorateRequest("labAccess", null);
+  app.decorateRequest("mcpAuth", null);
   configureRouteAuthorization(app);
 
   if (!envFlag("RACKPAD_RATE_LIMIT_DISABLED")) {
@@ -382,6 +387,9 @@ export async function createApp() {
       ? ({ kind: "authenticated" } as const)
       : requestRouteAuthorization(req);
     if (authorization.kind === "public") return;
+    if (authorization.kind === "mcp-token" && !envFlag("MCP_ENABLED")) {
+      return reply.status(404).send({ error: "Not found." });
+    }
 
     if (needsBootstrap()) {
       return reply
@@ -395,6 +403,13 @@ export async function createApp() {
     const token = getAuthToken(req);
     if (!token) {
       return reply.status(401).send({ error: "Authentication required." });
+    }
+
+    if (authorization.kind === "mcp-token") {
+      const access = lookupMcpToken(token);
+      if (!access) return reply.status(401).send({ error: "MCP token expired or invalid." });
+      req.mcpAuth = access;
+      return;
     }
 
     const session = lookupSession(token);
@@ -451,6 +466,9 @@ export async function createApp() {
     prefix: "/api/physical-layouts",
   });
   await app.register(rackStudioRoutes, { prefix: "/api/rack-studio" });
+  await app.register(mcpTokenRoutes, { prefix: "/api/mcp-tokens" });
+  await app.register(mcpProposalRoutes, { prefix: "/api/mcp-proposals" });
+  await app.register(mcpRoutes, { prefix: "/api/mcp" });
 
   if (existsSync(DIST_DIR)) {
     await app.register(staticPlugin, {

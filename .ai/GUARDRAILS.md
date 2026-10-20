@@ -26,7 +26,7 @@ real check; “manual” is not a gate and must be reviewed honestly.
 - Backup change ⇒ run schema coverage, scoped-grant round trip, compatibility,
   and atomic rejection tests against a temporary database.
 - Enforcement: `npm run test:server` enumerates SQLite tables, permits only the
-  commented `schemaVersion`/`userSessions` exclusions, and tests round trips.
+  commented `schemaVersion`/`userSessions`/`mcpTokens` exclusions, and tests round trips.
 
 ## Outbound network access
 

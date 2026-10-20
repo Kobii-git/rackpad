@@ -1,5 +1,7 @@
 # Rackpad
 
+MCP inventory proposals are available as an opt-in beta feature. See [MCP operator guidance](docs/MCP.md).
+
 [![Latest tag](https://img.shields.io/github/v/tag/Kobii-git/rackpad?sort=semver&label=latest%20tag&color=2f81f7)](https://github.com/Kobii-git/rackpad/tags)
 [![Build](https://img.shields.io/github/actions/workflow/status/Kobii-git/rackpad/docker-publish.yml?branch=main&label=build)](https://github.com/Kobii-git/rackpad/actions/workflows/docker-publish.yml)
 [![Container](https://img.shields.io/badge/ghcr.io-rackpad-2496ed?logo=docker&logoColor=white)](https://github.com/Kobii-git/rackpad/pkgs/container/rackpad)
@@ -28,9 +30,10 @@ devices, ports, cables, Networks/IPAM, storage, Wi-Fi, compute, discovery,
 monitoring, documentation, images, integrations, reports, labs, and
 administration into one clean app.
 
-Stable: **v1.8.3**.
+This source targets stable release **v1.8.4**.
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm published artifacts.
-See the [release and upgrade notes](docs/releases/v1.8.3.md).
+See the [release and upgrade notes](docs/releases/v1.8.4.md).
+
 Docker is the supported deployment; native Proxmox LXC remains experimental.
 See the [changelog](./CHANGELOG.md); the latest-tag badge may show a prerelease.
 
@@ -44,7 +47,7 @@ Built with:
 - Docker support for a single-container deployment; first-party native Proxmox
   LXC support is in staged validation
 
-> **Development:** [Stacked switches](docs/STACKED_SWITCHES.md) add ordered members, labelled MACs, and member port assignments in the combined schema-51 candidate.
+[Stacked switches](docs/STACKED_SWITCHES.md) support ordered members, labelled MACs, port assignments and independent member templates.
 
 ## Highlights
 
@@ -66,6 +69,7 @@ Rackpad's public website is [rackpad.net](https://rackpad.net). The repo also
 contains the core material you need:
 
 - [Installation guide](./INSTALL.md)
+- [Docker bind mounts and custom users](./INSTALL.md#bind-mounts-and-container-users)
 - [Proxmox install notes](./docs/PROXMOX.md)
 - [Proxmox native LXC operations (pre-release)](./docs/PROXMOX_NATIVE_LXC.md)
 - [Hyper-V import guide](./docs/HYPERV_IMPORT.md)
@@ -365,7 +369,7 @@ OIDC users must reset passwords in the identity provider.
 
 Use the [installation guide](./INSTALL.md) for the canonical Linux, Windows,
 Proxmox, source-build, backup, update, and recovery procedures. Stable installations
-can pin `RACKPAD_TAG=1.8.3`; `latest` follows stable and `beta` follows testing.
+can pin `RACKPAD_TAG=1.8.4`; `latest` follows stable and `beta` follows testing.
 The normal deployment uses one hardened container and a persistent SQLite volume.
 
 ## Linux test deploy
@@ -378,7 +382,7 @@ requirements and the generic service example. Docker remains the recommended pat
 Follow the [version-specific proxy instructions](./INSTALL.md#reverse-proxy-and-tls).
 Older 1.8.0 uses controlled hop counts; stable 1.8.3 and 1.8.2 beta.4 onward require explicit
 proxy IPs/CIDRs. Terminate TLS at the proxy and restrict direct application access.
-Before upgrading, read the [1.8.3 upgrade precautions](./INSTALL.md#before-upgrading-to-183)
+Before upgrading, read the [1.8.4 upgrade precautions](./INSTALL.md#before-upgrading-to-184)
 for encryption-key retention, OIDC re-login, trap opt-in, and paired rollback.
 
 ## Native development note

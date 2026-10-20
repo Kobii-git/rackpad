@@ -54,14 +54,39 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
 - `Trace mode` lets you click two ports and highlights the documented L1 path between them.
 - `Rack cabling` switches to a read-only room view using the physical elevations
   and port anchors configured in Rack Studio.
-- The room selector scopes rack cabling to one room. `Front`, `Rear`, and `Both`
-  control which physical faces are visible.
-- `Smooth` automatically uses short curved patch cords between different devices
-  on the same rack face within 4U vertically, when no other equipment obstructs
-  the curve. Longer, obstructed, cross-rack, and handoff connections use gutters.
-  Rack Studio and Rack cabling share the route geometry; SVG/PNG exports retain
-  the same curve controls and exact port endpoints.
-- Automatic front-to-rear cables use short continuation stubs at their visible
+- The room selector scopes rack cabling to one or more rooms. `Front`, `Rear`,
+  and `Both` control which physical faces are visible. The room-layout control
+  offers **Auto** (ordered vertical sections), **Hub & spoke** (a selected room
+  centered among the remaining rooms), and **Manual** placement. Drag a room
+  header or use its arrow keys to nudge it; these room coordinates are personal
+  to the active browser and lab. Manual layouts can be locked to disable pointer
+  dragging and keyboard nudging. Switching to Auto or Hub & spoke, or using
+  Reset, clears the lock without changing inventory, ports, or cables.
+- `Smooth` draws readable curves across the available rack height. Cables may
+  cross shelves and equipment artwork. `Orthogonal` changes the drawing style
+  independently of the saved routing mode.
+- Selecting a cable, port, rack, or device does not fit or otherwise move the
+  viewport. Pan and zoom preserve the selection; only an unmoved background
+  click or `Esc` clears it. Explicit Fit may include visible annotations.
+- Cable routing modes are **Automatic** (direct on one rack face, managed between
+  racks), **Direct** (short visible same-face paths, including between racks),
+  **Managed** (ordered device guides and rack gutters), and **Manual** (saved
+  room-coordinate waypoints). Changing modes retains inactive guides and points.
+- In Studio's cable inspector, select **Managed**, add an installed brush panel
+  or cable manager, choose entry/exit faces, and place the guide on its preview.
+  Numeric X/Y controls use 0–1000 relative to that device face. Guides follow
+  device movement and rotation. A front/rear passage is one cable and adds no
+  ports, links, or trace hops. Smooth Managed routes pass through same-face
+  guide anchors with continuous curves; Orthogonal Managed routes retain
+  right-angle legs. Missing geometry displays **Incomplete route**.
+- Click the inspector's endpoint buttons or Rack Cabling's continuation markers
+  to reveal the opposite endpoint while keeping its cable selected. Matching
+  cable identifiers connect continuation markers in Both view.
+- **Compact** in Studio shows room racks side by side, quiets placement grids,
+  and uses thin cables. Editing reveals placement guides. Compact, cable style,
+  and label preferences are personal to this browser; SVG/PNG exports reproduce
+  the selected presentation, artwork and routing.
+- Front-to-rear cables without a documented guide passage use short continuation stubs at their visible
   ports. Selecting or hovering either segment labels both destinations with the
   device, port, and resolved rack face; `Labels` keeps these labels visible.
   Single-face views show the local stub and identify the hidden destination.
@@ -84,6 +109,12 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
 - Cable type filter limits the canvas to one cable type.
 - Type chips fade non-matching devices and unrelated cables.
 - Shift-click type chips to multi-select device types.
+- Device names stay at 12 screen pixels while zooming and sit at the upper-right
+  of the device. Long names truncate; hovering or focusing the device reveals
+  the full name. When a device is too small to fit readable text, its persistent
+  name is hidden; hover, keyboard focus or selection reveals it above the canvas.
+  Rack/room SVG and PNG names use the same corner with stable export sizing,
+  independent of the current viewport zoom.
 - Search matches hostnames, IPs, MACs from discovery, cable color, cable notes, and cable endpoints.
 - Click a device to isolate its direct neighborhood.
 - Click a cable to highlight both endpoints and inspect metadata.
@@ -132,6 +163,9 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
   Cross-room handoffs use the nearest canvas edge, hidden-face handoffs use the
   rack edge, and unavailable port positions attach to the affected fallback
   equipment.
+- Automatic same-room routes remain within their room section. Cross-room
+  routes use free space and avoid entering unrelated room rectangles; Direct
+  and Manual route semantics are unchanged.
 
 ## Link Aggregation
 
@@ -155,6 +189,14 @@ Each device card shows a compact port strip on the right edge:
 - Hover a port for name, kind, speed, link state, VLAN summary, bridge membership, and patched destination.
 - In trace mode, click a first port and then a second port to compute the documented path.
 
+## Sidebar widths
+
+Grouped and Rack Cabling desktop sidebars have a draggable separator. Each mode
+remembers its own width in this browser, between 320 and 640 pixels and limited
+by the available canvas space. Focus the separator and use Left/Right to adjust
+10 pixels, Shift+Left/Right for 40 pixels, or Home/End for the minimum/maximum.
+Mobile keeps the existing overlay inspector.
+
 ## Trace Mode
 
 Trace mode follows documented `PortLink` records across rooms, racks, loose
@@ -163,6 +205,14 @@ to a port in another room as long as each hop is documented as a cable or
 patch-panel handoff. Patch panels also bridge matching front/rear ports with
 the same port name and kind. This is read-only: it does not create cables or
 modify port records.
+
+The device/port picker is available whenever trace mode is on in Grouped and
+Rack Cabling, including in the mobile overlay before a canvas selection. Picker
+and canvas actions use the same trace handlers. Rack Cabling choices follow its
+room, face, and cable filter inspection scope, including eligible continuation
+endpoints. Scope changes clear invalid choices; an empty scope disables submit.
+Trace actions wrap below the heading so they remain reachable in narrow panels
+and translated interfaces.
 
 If no path exists, Rackpad shows that no documented path was found. Usually this
 means one or more cable links or patch-panel pass-through records are missing.

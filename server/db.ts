@@ -1,7 +1,7 @@
-import Database from "better-sqlite3";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createId } from "./lib/ids.js";
+import { openDatabase } from "./lib/open-database.js";
 import {
   buildAutoPhysicalLayout,
   portSetFingerprint,
@@ -22,10 +22,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const DB_PATH =
   process.env.DATABASE_PATH ?? path.resolve(__dirname, "../rackpad.db");
-export const db = new Database(DB_PATH);
-
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+export const db = openDatabase(DB_PATH);
 
 const BOOTSTRAP_SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS schemaVersion (
@@ -1426,6 +1423,76 @@ const SCHEMA_MIGRATIONS = [
       BEGIN SELECT RAISE(ABORT, 'Stack height is derived from its members.'); END;
     `,
   },
+  {
+    version: 52,
+    sql: `
+      ALTER TABLE portLinks ADD COLUMN routeMode TEXT NOT NULL DEFAULT 'auto'
+        CHECK (routeMode IN ('auto', 'direct', 'managed', 'manual'));
+      ALTER TABLE portLinks ADD COLUMN routeGuides TEXT NOT NULL DEFAULT '[]'
+        CHECK (json_valid(routeGuides) AND json_type(routeGuides) = 'array');
+      UPDATE portLinks SET routeMode = 'manual' WHERE json_array_length(routeWaypoints) > 0;
+      CREATE TRIGGER cable_guide_device_delete AFTER DELETE ON devices
+      BEGIN
+        UPDATE portLinks SET routeGuides = (
+          SELECT json_group_array(json(value)) FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') != OLD.id
+        ) WHERE EXISTS (SELECT 1 FROM json_each(portLinks.routeGuides) WHERE json_extract(value, '$.deviceId') = OLD.id);
+      END;
+      CREATE TRIGGER cable_guide_device_room AFTER UPDATE OF labId, roomId, rackId ON devices
+      BEGIN
+        UPDATE portLinks SET routeGuides = (
+          SELECT json_group_array(json(value)) FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') != NEW.id
+            OR (NEW.labId IS OLD.labId AND json_extract(value, '$.roomId') IS COALESCE((SELECT roomId FROM racks WHERE id = NEW.rackId), NEW.roomId))
+        ) WHERE EXISTS (SELECT 1 FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') = NEW.id
+            AND (NEW.labId IS NOT OLD.labId OR json_extract(value, '$.roomId') IS NOT COALESCE((SELECT roomId FROM racks WHERE id = NEW.rackId), NEW.roomId)));
+      END;
+      CREATE TRIGGER cable_guide_rack_room AFTER UPDATE OF roomId ON racks
+      WHEN NEW.roomId IS NOT OLD.roomId
+      BEGIN
+        UPDATE portLinks SET routeGuides = (
+          SELECT json_group_array(json(value)) FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') NOT IN (SELECT id FROM devices WHERE rackId = NEW.id)
+        ) WHERE EXISTS (SELECT 1 FROM json_each(portLinks.routeGuides)
+          WHERE json_extract(value, '$.deviceId') IN (SELECT id FROM devices WHERE rackId = NEW.id));
+      END;
+    `,
+  },
+  {
+    version: 53,
+    sql: `
+      CREATE TABLE IF NOT EXISTS mcpTokens (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 120),
+        tokenHash TEXT NOT NULL UNIQUE,
+        capability TEXT NOT NULL CHECK (capability IN ('read', 'write')),
+        labIds TEXT NOT NULL CHECK (json_valid(labIds) AND json_type(labIds) = 'array'),
+        createdAt TEXT NOT NULL,
+        expiresAt TEXT NOT NULL,
+        revokedAt TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_mcp_tokens_user ON mcpTokens(userId);
+    `,
+  },
+
+  {
+    version: 54,
+    sql: `
+      CREATE TABLE IF NOT EXISTS deviceStackMemberLayouts (
+        memberId TEXT PRIMARY KEY REFERENCES deviceStackMembers(id) ON DELETE CASCADE,
+        sourceTemplateId TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('accurate','generic-default','legacy-default','needs-mapping','invalid')),
+        snapshot TEXT NOT NULL CHECK (json_valid(snapshot)),
+        bindings TEXT NOT NULL CHECK (json_valid(bindings)),
+        portFingerprint TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+    `,
+  },
+
 ] as const;
 
 const applySchema = db.transaction(() => {

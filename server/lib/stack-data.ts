@@ -19,6 +19,7 @@ export interface StackMemberMac {
   macAddress: string;
 }
 export interface StackMember {
+  appliedLayout?: {sourceTemplateId: string; status: import("./physical-layout.js").PhysicalLayoutStatus} | null;
   id: string;
   deviceId: string;
   position: number;

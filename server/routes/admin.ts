@@ -1,3 +1,4 @@
+import { parseStackMemberLayout } from "../lib/stack-member-layout-data.js";
 import { validateStackIntegrity } from "../lib/stack-integrity.js";
 import { restoredMonitorCommunity } from "../lib/security-migration.js";
 import { readFileSync } from "node:fs";
@@ -62,7 +63,7 @@ import {
   type PhysicalLayoutStatus,
 } from "../lib/physical-layout.js";
 import { legacyShelfGeometry } from "../lib/legacy-shelf-geometry.js";
-import { parseCableRouteWaypoints } from "../lib/cable-routing.js";
+import { parseCableRouteWaypoints, parseCableRouteMode, parseCableRouteGuides, assertCableGuideReferences } from "../lib/cable-routing.js";
 import {
   assertRackStudioRackFootprint,
   calculateRackStudioCanvasBounds,
@@ -178,7 +179,7 @@ const exportBackupSnapshot = db.transaction(
           db
             .prepare("SELECT * FROM portLinks ORDER BY fromPortId, toPortId, id")
             .all() as Record<string, unknown>[]
-        ).map((row) => parseRow(row, ["routeWaypoints"])),
+        ).map((row) => parseRow(row, ["routeWaypoints", "routeGuides"])),
         portTemplates: (
           db
             .prepare("SELECT * FROM portTemplates ORDER BY name, id")
@@ -192,6 +193,7 @@ const exportBackupSnapshot = db.transaction(
         hardwareTemplateDefaults: db
           .prepare("SELECT * FROM hardwareTemplateDefaults ORDER BY deviceType")
           .all(),
+        deviceStackMemberLayouts: (db.prepare("SELECT * FROM deviceStackMemberLayouts ORDER BY memberId").all() as Record<string, unknown>[]).map(row => parseRow(row, ["snapshot", "bindings"])),
         deviceStackMembers: db.prepare("SELECT * FROM deviceStackMembers ORDER BY deviceId, position").all(),
         deviceStackMemberMacs: db.prepare("SELECT * FROM deviceStackMemberMacs ORDER BY memberId, macAddress").all(),
         devicePhysicalLayouts: (
@@ -850,6 +852,14 @@ function validateBackupNetworkIntegrity(input: {
 
     let routeWaypoints;
     try {
+      parseCableRouteMode(row.routeMode);
+      const guides = parseCableRouteGuides(parseBackupJson(row.routeGuides ?? [], "Backup cable route guides"));
+      assertCableGuideReferences(guides, [fromDevice.labId, toDevice.labId],
+        guideId => {
+          const target = input.devices.find(device => device.id === guideId);
+          const rack = target?.rackId ? input.racks.find(rack => rack.id === target.rackId) : undefined;
+          return target ? { labId: String(target.labId), roomId: rack?.roomId || target.roomId ? String(rack?.roomId || target.roomId) : null } : undefined;
+        }, guideRoomId => roomsById.get(guideRoomId));
       routeWaypoints = parseCableRouteWaypoints(
         parseBackupJson(
           row.routeWaypoints ?? [],
@@ -857,7 +867,7 @@ function validateBackupNetworkIntegrity(input: {
         ),
       );
     } catch {
-      invalid("Backup cable route waypoints are invalid.", "portLink", id);
+      invalid("Backup cable routing metadata is invalid.", "portLink", id);
     }
     for (const waypoint of routeWaypoints) {
       const room = roomsById.get(waypoint.roomId);
@@ -1240,6 +1250,7 @@ const restoreBackupSnapshot = db.transaction(
       "data.virtualSwitches",
     );
     const ports = normalizeArrayRecordArray(data.ports, "data.ports");
+    const memberLayouts = normalizeArrayRecordArray(data.deviceStackMemberLayouts ?? [], "data.deviceStackMemberLayouts");
     const stackMembers = normalizeArrayRecordArray(data.deviceStackMembers ?? [], "data.deviceStackMembers");
     const stackMacs = normalizeArrayRecordArray(data.deviceStackMemberMacs ?? [], "data.deviceStackMemberMacs");
     const portLinks = normalizeArrayRecordArray(
@@ -1580,6 +1591,14 @@ const restoreBackupSnapshot = db.transaction(
       ids.add(String(port.id ?? ""));
       backupPortsByDevice.set(deviceId, ids);
     }
+    const restoredMemberLayoutIds = new Set<string>();
+    for (const row of memberLayouts) {
+      const member = stackMembers.find(member => member.id === row.memberId);
+      if (!member || restoredMemberLayoutIds.has(String(row.memberId))) throw new ValidationError("Backup member layout references a missing or duplicate member.", 422, "BACKUP_INTEGRITY_INVALID");
+      try {parseStackMemberLayout(row, ports.filter(port => port.stackMemberId === row.memberId && port.deviceId === member.deviceId) as unknown as PhysicalLayoutPort[]);}
+      catch {throw new ValidationError("Backup contains an invalid member layout or port binding.", 422, "BACKUP_INTEGRITY_INVALID");}
+      restoredMemberLayoutIds.add(String(row.memberId));
+    }
     for (const row of devicePhysicalLayouts) {
       const deviceId = String(row.deviceId ?? "");
       if (!backupDeviceIds.has(deviceId)) {
@@ -1645,6 +1664,7 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM discoveryScanSchedules;
     DELETE FROM discoveredDevices;
     DELETE FROM portLinks;
+    DELETE FROM deviceStackMemberLayouts;
     DELETE FROM devicePhysicalLayouts;
     DELETE FROM ports;
     DELETE FROM deviceStackMemberMacs;
@@ -1704,8 +1724,8 @@ const restoreBackupSnapshot = db.transaction(
   `);
     const insertPortLink = db.prepare(
       `INSERT INTO portLinks
-        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints, routeMode, routeGuides)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const insertPortTemplate = db.prepare(`
     INSERT INTO portTemplates (id, name, description, deviceTypes, ports, createdAt, updatedAt)
@@ -2489,6 +2509,8 @@ const restoreBackupSnapshot = db.transaction(
         row.label ?? null,
         row.visible === false || row.visible === 0 ? 0 : 1,
         JSON.stringify(routeWaypoints),
+        parseCableRouteMode(row.routeMode, routeWaypoints),
+        JSON.stringify(parseCableRouteGuides(parseBackupJson(row.routeGuides ?? [], "Backup cable route guides"))),
       );
     }
     for (const row of portTemplates) {
@@ -2919,6 +2941,10 @@ const restoreBackupSnapshot = db.transaction(
           "BACKUP_INTEGRITY_INVALID",
         );
       }
+    }
+    for (const row of memberLayouts) {
+      const layout = parseStackMemberLayout(row);
+      db.prepare("INSERT INTO deviceStackMemberLayouts (memberId,sourceTemplateId,status,snapshot,bindings,portFingerprint,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?)").run(layout.memberId,layout.sourceTemplateId,layout.status,JSON.stringify(layout.snapshot),JSON.stringify(layout.bindings),layout.portFingerprint,layout.createdAt,layout.updatedAt);
     }
     validateStackIntegrity(db);
     const restoredAt = new Date().toISOString();

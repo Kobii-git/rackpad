@@ -12,7 +12,7 @@ process.env.OIDC_ENABLED = "0";
 process.env.RACKPAD_SECRET_KEY = "rackpad-studio-test-secret";
 
 const { createApp } = await import("../app.js");
-const { db } = await import("../db.js");
+const { CURRENT_SCHEMA_VERSION, db } = await import("../db.js");
 const { setBootstrapState } = await import("../lib/auth.js");
 const { rackStudioRoomCanvasBounds } =
   await import("../lib/rack-studio-canvas.js");
@@ -240,6 +240,82 @@ test("dense room bounds keep the last rack reachable and constrain full footprin
   assert.match(outside.body, /Rack Studio canvas/i);
 });
 
+test("occupied U rejects Studio and device writes for legacy rack metadata", async () => {
+  const token = await bootstrapAdmin();
+  const room = await createRoom(token, "Legacy placement room");
+  const rack = await createRack(token, room.id, "Legacy placement rack", 3);
+  const occupant = await createDevice(token, room.id, "legacy-occupant");
+  const mover = await createDevice(token, room.id, "rack-mover");
+  await applyStudioAction(token, {
+    kind: "device.place",
+    targetId: occupant.id,
+    expected: looseState(room.id),
+    next: directState(room.id, rack.id, 2, 1, 0, 12),
+  });
+  await applyStudioAction(token, {
+    kind: "device.place",
+    targetId: mover.id,
+    expected: looseState(room.id),
+    next: directState(room.id, rack.id, 1, 1, 0, 12),
+  });
+  const before = db.prepare("SELECT rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(mover.id);
+  for (const [placement, mountKind] of [["rack", "loose"], ["rack", "side"], ["shelf", "shelf"], ["rack", "missing-height"]] as const) {
+    db.prepare("UPDATE devices SET placement = ?, rackMountKind = ?, parentDeviceId = NULL, rackColumn = NULL, rackColumnSpan = NULL WHERE id = ?")
+      .run(placement, mountKind === "missing-height" ? "direct" : mountKind, occupant.id);
+    db.prepare("UPDATE devices SET heightU = ? WHERE id = ?").run(mountKind === "missing-height" ? null : 1, occupant.id);
+
+    const studio = await app.inject({
+      method: "POST",
+      url: "/api/rack-studio/actions",
+      headers: authHeaders(token),
+      payload: {
+        kind: "device.place",
+        targetId: mover.id,
+        expected: directState(room.id, rack.id, 1, 1, 0, 12),
+        next: directState(room.id, rack.id, 2, 1, 0, 12),
+      },
+    });
+    assert.equal(studio.statusCode, 409, studio.body);
+    assert.equal(json(studio).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
+    assert.equal(json(studio).conflictDeviceId, occupant.id);
+
+    const editor = await app.inject({
+      method: "PATCH",
+      url: `/api/devices/${mover.id}`,
+      headers: authHeaders(token),
+      payload: { placement: "rack", rackId: rack.id, startU: 2, heightU: 1, face: "front", rackSlot: "full" },
+    });
+    const bulk = await app.inject({method:"POST", url:"/api/devices/bulk", headers:authHeaders(token), payload:{deviceIds:[mover.id], changes:{placement:"rack", rackSlot:"full"}}});
+    // Revalidating the current position is safe, even with malformed occupants elsewhere.
+    assert.equal(bulk.statusCode, 200, bulk.body);
+    assert.equal(editor.statusCode, 409, editor.body);
+    assert.equal(json(editor).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
+    assert.equal(json(editor).conflictDeviceId, occupant.id);
+    assert.deepEqual(db.prepare("SELECT rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(mover.id), before);
+  }
+});
+
+test("bulk widening rejects missing-height legacy occupants atomically on each face", async () => {
+  const token = await bootstrapAdmin();
+  const room = await createRoom(token, "Bulk legacy");
+  const rack = await createRack(token, room.id, "Bulk legacy", 6);
+  const occupant = await createDevice(token, room.id, "bulk-occupant");
+  const mover = await createDevice(token, room.id, "bulk-mover");
+  const first = await createDevice(token, room.id, "bulk-first");
+  for (const face of ["front", "rear"]) {
+    db.prepare("UPDATE devices SET rackId = ?, placement = 'rack', startU = 2, heightU = NULL, face = ?, rackSlot = 'left', rackColumn = NULL, rackColumnSpan = NULL, rackMountKind = 'loose' WHERE id = ?").run(rack.id,face,occupant.id);
+    db.prepare("UPDATE devices SET rackId = ?, placement = 'rack', startU = 2, heightU = 1, face = ?, rackSlot = 'right', rackColumn = 6, rackColumnSpan = 6, rackMountKind = 'direct' WHERE id = ?").run(rack.id,face,mover.id);
+    db.prepare("UPDATE devices SET rackId = ?, placement = 'rack', startU = 4, heightU = 1, face = ?, rackSlot = 'right', rackColumn = 6, rackColumnSpan = 6, rackMountKind = 'direct' WHERE id = ?").run(rack.id,face,first.id);
+    const before = db.prepare("SELECT id, rackSlot, rackColumn, rackColumnSpan FROM devices ORDER BY id").all();
+    const response = await app.inject({method:"POST",url:"/api/devices/bulk",headers:authHeaders(token),payload:{deviceIds:[first.id,mover.id],changes:{rackSlot:"full"}}});
+    assert.equal(response.statusCode,409,response.body);
+    assert.equal(json(response).conflictDeviceId,occupant.id);
+    assert.deepEqual(db.prepare("SELECT id, rackSlot, rackColumn, rackColumnSpan FROM devices ORDER BY id").all(),before);
+    const opposite = await app.inject({method:"PATCH",url:`/api/devices/${mover.id}`,headers:authHeaders(token),payload:{face: face === "front" ? "rear" : "front", rackSlot:"full"}});
+    assert.equal(opposite.statusCode,200,opposite.body);
+  }
+});
+
 test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cross-lab validation", async () => {
   const adminToken = await bootstrapAdmin();
   const room = await createRoom(adminToken, "Placement room");
@@ -247,6 +323,7 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
   const first = await createDevice(adminToken, room.id, "third-a");
   const second = await createDevice(adminToken, room.id, "third-b");
   const third = await createDevice(adminToken, room.id, "third-conflict");
+  const thirdBeforeConflict = db.prepare("SELECT rackId, roomId, rackMountKind, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(third.id);
 
   const firstDirect = directState(room.id, rack.id, 2, 2, 0, 4);
   const secondDirect = directState(room.id, rack.id, 2, 2, 4, 4);
@@ -278,8 +355,35 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
       next: directState(room.id, rack.id, 2, 1, 3, 3),
     },
   });
-  assert.equal(overlap.statusCode, 400, overlap.body);
+  assert.equal(overlap.statusCode, 409, overlap.body);
   assert.match(overlap.body, /overlap/i);
+  assert.deepEqual({
+    code: json(overlap).code,
+    conflictDeviceId: json(overlap).conflictDeviceId,
+    conflictDeviceName: json(overlap).conflictDeviceName,
+    mountKind: json(overlap).mountKind,
+  }, {
+    code: "RACK_STUDIO_PLACEMENT_CONFLICT",
+    conflictDeviceId: first.id,
+    conflictDeviceName: "third-a",
+    mountKind: "direct",
+  });
+  assert.deepEqual(db.prepare("SELECT rackId, roomId, rackMountKind, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(third.id), thirdBeforeConflict);
+  const legacyOverlap = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${third.id}`,
+    headers: authHeaders(adminToken),
+    payload: { placement: "rack", rackId: rack.id, startU: 2, heightU: 1, face: "front", rackSlot: "left" },
+  });
+  assert.equal(legacyOverlap.statusCode, 409, legacyOverlap.body);
+  assert.equal(json(legacyOverlap).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
+  assert.deepEqual(db.prepare("SELECT rackId, roomId, rackMountKind, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(third.id), thirdBeforeConflict);
+  assert.deepEqual(db.prepare("SELECT rackId, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(first.id), {
+    rackId: rack.id,
+    startU: 2,
+    rackColumn: 0,
+    rackColumnSpan: 4,
+  });
 
   const overflow = await app.inject({
     method: "POST",
@@ -366,7 +470,7 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
       next: shelfState(room.id, rack.id, shelf.id, 100, 120, 120, 120, 0),
     },
   });
-  assert.equal(shelfOverlap.statusCode, 400, shelfOverlap.body);
+  assert.equal(shelfOverlap.statusCode, 409, shelfOverlap.body);
   assert.match(shelfOverlap.body, /overlap/i);
 
   const sideA = await createDevice(adminToken, room.id, "side-a", "pdu");
@@ -388,11 +492,12 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
       next: sideState(room.id, rack.id, "right"),
     },
   });
-  assert.equal(sideConflict.statusCode, 400, sideConflict.body);
+  assert.equal(sideConflict.statusCode, 409, sideConflict.body);
   assert.match(sideConflict.body, /side conflicts/i);
 
   const rackTopA = await createDevice(adminToken, room.id, "rack-top-a");
   const rackTopB = await createDevice(adminToken, room.id, "rack-top-b");
+  const rackTopBBeforeConflict = db.prepare("SELECT rackId, rackMountKind, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(rackTopB.id);
   const firstRackTop = rackTopState(room.id, rack.id, 0, 6);
   const rackTopPlaced = await applyStudioAction(adminToken, {
     kind: "device.place",
@@ -422,6 +527,23 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
       rackColumnSpan: 6,
     },
   );
+  const rackTopBeforeEdit = db.prepare("SELECT placement, roomId, rackId, rackMountKind, startU, heightU, face, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(rackTopA.id);
+  const metadataEdit = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${rackTopA.id}`,
+    headers: authHeaders(adminToken),
+    payload: { model: "Updated model" },
+  });
+  assert.equal(metadataEdit.statusCode, 200, metadataEdit.body);
+  assert.deepEqual(db.prepare("SELECT placement, roomId, rackId, rackMountKind, startU, heightU, face, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(rackTopA.id), rackTopBeforeEdit);
+  const ordinaryMove = await app.inject({
+    method: "PATCH",
+    url: `/api/devices/${rackTopA.id}`,
+    headers: authHeaders(adminToken),
+    payload: { placement: "room" },
+  });
+  assert.equal(ordinaryMove.statusCode, 409, ordinaryMove.body);
+  assert.deepEqual(db.prepare("SELECT placement, roomId, rackId, rackMountKind, startU, heightU, face, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(rackTopA.id), rackTopBeforeEdit);
   const rackTopOverlap = await app.inject({
     method: "POST",
     url: "/api/rack-studio/actions",
@@ -430,17 +552,23 @@ test("Studio placement supports 12-column, shelf, rotated, side, inverse, and cr
       kind: "device.place",
       targetId: rackTopB.id,
       expected: looseState(room.id),
-      next: { ...rackTopState(room.id, rack.id, 4, 4), face: "rear" },
+      next: rackTopState(room.id, rack.id, 4, 4),
     },
   });
-  assert.equal(rackTopOverlap.statusCode, 400, rackTopOverlap.body);
+  assert.equal(rackTopOverlap.statusCode, 409, rackTopOverlap.body);
   assert.match(rackTopOverlap.body, /rack-top position overlaps/i);
-  await applyStudioAction(adminToken, {
+  assert.equal(json(rackTopOverlap).code, "RACK_STUDIO_PLACEMENT_CONFLICT");
+  assert.equal(json(rackTopOverlap).conflictDeviceId, rackTopA.id);
+  assert.deepEqual(db.prepare("SELECT rackId, rackMountKind, startU, rackColumn, rackColumnSpan FROM devices WHERE id = ?").get(rackTopB.id), rackTopBBeforeConflict);
+  const oppositeRackTop = { ...rackTopState(room.id, rack.id, 0, 6), face: "rear" as const };
+  const oppositePlaced = await applyStudioAction(adminToken, {
     kind: "device.place",
     targetId: rackTopB.id,
     expected: looseState(room.id),
-    next: rackTopState(room.id, rack.id, 6, 6),
+    next: oppositeRackTop,
   });
+  assert.equal(oppositePlaced.device.face, "rear");
+  assert.equal(oppositePlaced.device.rackColumn, 0);
 
   const secondUndone = await applyStudioAction(adminToken, {
     kind: "device.place",
@@ -1127,3 +1255,135 @@ function authHeaders(token: string) {
 function json(response: { body: string }) {
   return JSON.parse(response.body);
 }
+
+test("saved routing modes and guides round-trip without changing connectivity", async () => {
+  const token = await bootstrapAdmin();
+  const room = await createRoom(token, "Routing room");
+  const rack = await createRack(token, room.id, "Guide rack", 12);
+  const a = await createDevice(token, room.id, "route-a");
+  const b = await createDevice(token, room.id, "route-b");
+  const guideDevice = await createDevice(token, room.id, "brush-panel", "blanking_panel");
+  const from = await createPort(token, a.id, "NIC", "front");
+  const to = await createPort(token, b.id, "NIC", "rear");
+  const guide = { id: "passage", deviceId: guideDevice.id, roomId: room.id, entryFace: "front", exitFace: "rear", x: 450, y: 600 };
+  const waypoints = [{ id: "old-point", roomId: room.id, face: "front", x: 40, y: 100 }];
+  const response = await app.inject({ method: "POST", url: "/api/port-links", headers: authHeaders(token), payload: { fromPortId: from.id, toPortId: to.id, routeMode: "managed", routeGuides: [guide], routeWaypoints: waypoints } });
+  assert.equal(response.statusCode, 201, response.body);
+  const link = json(response);
+  for (const routeMode of ["auto", "direct", "manual", "managed"]) {
+    const updated = await app.inject({ method: "PATCH", url: `/api/port-links/${link.id}`, headers: authHeaders(token), payload: { routeMode } });
+    assert.equal(updated.statusCode, 200, updated.body);
+    const read = await app.inject({ method: "GET", url: `/api/port-links/${link.id}`, headers: authHeaders(token) });
+    assert.equal(json(read).routeMode, routeMode);
+    assert.deepEqual(json(read).routeGuides, [guide]);
+    assert.deepEqual(json(read).routeWaypoints, waypoints);
+  }
+  const backup = await app.inject({ method: "GET", url: "/api/admin/export", headers: authHeaders(token) });
+  const snapshot = json(backup);
+  assert.equal(snapshot.schemaVersion, CURRENT_SCHEMA_VERSION);
+  assert.deepEqual(snapshot.data.portLinks[0].routeGuides, [guide]);
+  const bad = structuredClone(snapshot);
+  bad.data.portLinks[0].routeGuides[0].deviceId = "missing";
+  const rejected = await app.inject({ method: "POST", url: "/api/admin/restore", headers: authHeaders(token), payload: bad });
+  assert.equal(rejected.statusCode, 422, rejected.body);
+  assert.equal((db.prepare("SELECT COUNT(*) AS count FROM portLinks").get() as {count:number}).count, 1);
+  const restored = await app.inject({ method: "POST", url: "/api/admin/restore", headers: authHeaders(token), payload: snapshot });
+  assert.equal(restored.statusCode, 200, restored.body);
+  assert.deepEqual(JSON.parse((db.prepare("SELECT routeGuides FROM portLinks WHERE id=?").get(link.id) as {routeGuides:string}).routeGuides), [guide]);
+  // The inherited-room form must clean up when FK SET NULL runs after rack deletion.
+  db.prepare("UPDATE devices SET rackId=?, roomId=NULL WHERE id=?").run(rack.id, guideDevice.id);
+  assert.deepEqual(JSON.parse((db.prepare("SELECT routeGuides FROM portLinks").get() as {routeGuides:string}).routeGuides), [guide]);
+  assert.throws(() => db.transaction(() => { db.prepare("DELETE FROM devices WHERE id=?").run(guideDevice.id); throw new Error("rollback"); })(), /rollback/);
+  assert.deepEqual(JSON.parse((db.prepare("SELECT routeGuides FROM portLinks").get() as {routeGuides:string}).routeGuides), [guide]);
+  db.prepare("DELETE FROM racks WHERE id=?").run(rack.id);
+  assert.deepEqual(JSON.parse((db.prepare("SELECT routeGuides FROM portLinks").get() as {routeGuides:string}).routeGuides), []);
+  assert.deepEqual(db.prepare("SELECT fromPortId, toPortId FROM portLinks").get(), { fromPortId: from.id, toPortId: to.id });
+});
+
+test("routing metadata rejects invalid and unauthorized references atomically", async () => {
+  const token = await bootstrapAdmin();
+  const room = await createRoom(token, "Allowed room");
+  const otherRoom = await createRoom(token, "Wrong room");
+  const lab = await createLab(token, "Private lab");
+  const privateRoom = await createRoom(token, "Private room", lab.id);
+  const editor = await createUserAndLogin(token, { username: "guide-editor", password: "guide-editor-password", role: "editor" });
+  const viewer = await createUserAndLogin(token, { username: "guide-viewer", password: "guide-viewer-password", role: "viewer" });
+  const a = await createDevice(token, room.id, "guide-a");
+  const b = await createDevice(token, room.id, "guide-b");
+  const privateDevice = await createDevice(token, privateRoom.id, "private", "server", lab.id);
+  const from = await createPort(token, a.id, "NIC", "front");
+  const to = await createPort(token, b.id, "NIC", "rear");
+  const privatePort = await createPort(token, privateDevice.id, "NIC", "rear");
+  const payload = { fromPortId: from.id, toPortId: to.id };
+  const guide = { id: "guide", roomId: room.id, deviceId: a.id, entryFace: "front", exitFace: "rear", x: 500, y: 500 };
+  const created = await app.inject({ method: "POST", url: "/api/port-links", headers: authHeaders(editor), payload });
+  assert.equal(created.statusCode, 201, created.body);
+  const id = json(created).id;
+  assert.equal(json(created).routeMode, "auto");
+  for (const changes of [
+    { routeMode: "invalid" }, { routeMode: null }, { routeGuides: null },
+    { routeGuides: [{ ...guide, x: -1 }] }, { routeGuides: [{ ...guide, y: 1001 }] },
+    { routeGuides: [{ ...guide, exitFace: "side" }] }, { routeGuides: [{ ...guide, roomId: otherRoom.id }] },
+    { routeGuides: [{ ...guide, deviceId: "missing" }] },
+    { routeGuides: [{ ...guide, deviceId: privateDevice.id, roomId: privateRoom.id }] },
+    { routeGuides: [guide, guide] }, { routeGuides: Array.from({ length: 33 }, (_, i) => ({ ...guide, id: `g-${i}` })) },
+  ]) {
+    const result = await app.inject({ method: "PATCH", url: `/api/port-links/${id}`, headers: authHeaders(editor), payload: changes });
+    assert.equal(result.statusCode, 400, result.body);
+  }
+  const denied = await app.inject({ method: "PATCH", url: `/api/port-links/${id}`, headers: authHeaders(viewer), payload: { routeGuides: [guide] } });
+  assert.equal(denied.statusCode, 403, denied.body);
+  const spare = await createPort(token, b.id, "Spare", "rear");
+  const cross = await app.inject({ method: "POST", url: "/api/port-links", headers: authHeaders(token), payload: { fromPortId: spare.id, toPortId: privatePort.id } });
+  assert.equal(cross.statusCode, 201, cross.body);
+  const bulk = await app.inject({ method: "POST", url: "/api/port-links/bulk", headers: authHeaders(editor), payload: { linkIds: [id, json(cross).id], changes: { routeMode: "direct" } } });
+  assert.equal(bulk.statusCode, 403, bulk.body);
+  assert.equal((db.prepare("SELECT routeMode FROM portLinks WHERE id=?").get(id) as {routeMode:string}).routeMode, "auto");
+  const points = [{ id: "legacy", roomId: room.id, face: "front", x: 30, y: 200 }];
+  const legacy = await app.inject({ method: "PATCH", url: `/api/port-links/${id}`, headers: authHeaders(editor), payload: { routeWaypoints: points } });
+  assert.equal(legacy.statusCode, 200, legacy.body);
+  assert.equal(json(legacy).routeMode, "manual");
+  const success = await app.inject({ method: "POST", url: "/api/port-links/bulk", headers: authHeaders(editor), payload: { linkIds: [id], changes: { routeMode: "managed", routeGuides: [guide] } } });
+  assert.equal(success.statusCode, 200, success.body);
+  const read = await app.inject({ method: "GET", url: `/api/port-links/${id}`, headers: authHeaders(editor) });
+  assert.deepEqual(json(read).routeWaypoints, points);
+  assert.deepEqual(json(read).routeGuides, [guide]);
+});
+
+test("rack movement, reguiding and detachment use the rack physical room consistently", async () => {
+  const token = await bootstrapAdmin();
+  const oldRoom = await createRoom(token, "Old room");
+  const newRoom = await createRoom(token, "New room");
+  const rack = await createRack(token, oldRoom.id, "Moving rack", 12);
+  const a = await createDevice(token, oldRoom.id, "moving-a");
+  const b = await createDevice(token, oldRoom.id, "moving-b");
+  const brush = await createDevice(token, oldRoom.id, "moving-brush", "blanking_panel");
+  db.prepare("UPDATE devices SET rackId=? WHERE id=?").run(rack.id, brush.id);
+  const from = await createPort(token, a.id, "NIC", "front");
+  const to = await createPort(token, b.id, "NIC", "rear");
+  const guide = { id: "g", deviceId: brush.id, roomId: oldRoom.id, entryFace: "front", exitFace: "rear", x: 500, y: 500 };
+  const response = await app.inject({ method: "POST", url: "/api/port-links", headers: authHeaders(token), payload: { fromPortId: from.id, toPortId: to.id, routeMode: "managed", routeGuides: [guide] } });
+  assert.equal(response.statusCode, 201, response.body);
+  const id = json(response).id;
+  const moved = await app.inject({ method: "PATCH", url: `/api/racks/${rack.id}`, headers: authHeaders(token), payload: { roomId: newRoom.id } });
+  assert.equal(moved.statusCode, 200, moved.body);
+  const read = () => app.inject({ method: "GET", url: `/api/port-links/${id}`, headers: authHeaders(token) });
+  assert.deepEqual(json(await read()).routeGuides, []);
+  const reguided = await app.inject({ method: "PATCH", url: `/api/port-links/${id}`, headers: authHeaders(token), payload: { routeGuides: [{ ...guide, roomId: newRoom.id }] } });
+  assert.equal(reguided.statusCode, 200, reguided.body);
+  // The device still has an explicit old room. Detachment falls back to it.
+  db.prepare("DELETE FROM racks WHERE id=?").run(rack.id);
+  assert.deepEqual(json(await read()).routeGuides, []);
+  const edited = await app.inject({ method: "PATCH", url: `/api/port-links/${id}`, headers: authHeaders(token), payload: { label: "Still connected" } });
+  assert.equal(edited.statusCode, 200, edited.body);
+});
+
+test("legacy overlapping occupants remain readable and can be moved to free space without relocating their peer", async()=>{
+  const token=await bootstrapAdmin();const room=await createRoom(token,"Overlap recovery");const rack=await createRack(token,room.id,"Overlap recovery",8);
+  const first=await createDevice(token,room.id,"overlap-first");const second=await createDevice(token,room.id,"overlap-second");
+  for (const id of [first.id,second.id]) db.prepare("UPDATE devices SET rackId=?,placement='rack',rackMountKind='direct',startU=2,heightU=1,face='front',rackColumn=0,rackColumnSpan=12 WHERE id=?").run(rack.id,id);
+  const peer=db.prepare("SELECT * FROM devices WHERE id=?").get(first.id);
+  const read=await app.inject({method:"GET",url:`/api/devices/${second.id}`,headers:authHeaders(token)});assert.equal(read.statusCode,200);
+  const moved=await applyStudioAction(token,{kind:"device.place",targetId:second.id,expected:directState(room.id,rack.id,2,1,0,12),next:directState(room.id,rack.id,4,1,0,12)});
+  assert.equal(moved.device.startU,4);assert.deepEqual(db.prepare("SELECT * FROM devices WHERE id=?").get(first.id),peer);
+});

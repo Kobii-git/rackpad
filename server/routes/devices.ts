@@ -617,6 +617,9 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
           rackSlot !== undefined;
 
         if (placementFieldsChanging) {
+          if (existing.rackMountKind === "rack-top" || existing.rackMountKind === "side") {
+            throw new ValidationError("Move this device in Rack Studio before changing its placement.", 409);
+          }
           const nextPlacement =
             placement ??
             (roomId !== undefined
@@ -823,6 +826,10 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
       : null;
 
     const placementChanged = Object.entries({ rackId, startU, heightU, face, rackSlot, placement, parentDeviceId }).some(([key, value]) => value !== undefined && value !== device[key]);
+    if ((device.rackMountKind === "rack-top" || device.rackMountKind === "side") &&
+        (placementChanged || (roomId !== undefined && roomId !== device.roomId))) {
+      throw new ValidationError("Move this device in Rack Studio before changing its placement.", 409);
+    }
     if (placementChanged) {
       const parentDevice = resolveParentDevice(
         parentDeviceId === undefined

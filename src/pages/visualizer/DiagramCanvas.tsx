@@ -24,6 +24,7 @@ import "@xyflow/react/dist/style.css";
 import { AlertTriangle, ExternalLink, GitBranch, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { DeviceName, DeviceNameZoom } from "@/components/rack/DeviceName";
 import { PhysicalFaceplate } from "@/components/rack/PhysicalFaceplate";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { StatusDot } from "@/components/shared/StatusDot";
@@ -634,6 +635,15 @@ export function DiagramCanvas({
 }
 
 function DiagramDeviceCard(props: NodeProps<DiagramDeviceNode>) {
+  const zoom = useReactFlowStore((state) => state.transform[2]);
+  return (
+    <DeviceNameZoom zoom={zoom}>
+      <DiagramDeviceCardBody {...props} />
+    </DeviceNameZoom>
+  );
+}
+
+function DiagramDeviceCardBody(props: NodeProps<DiagramDeviceNode>) {
   if (
     props.data.nodeStyle === "physical" &&
     props.data.physicalLayout &&
@@ -660,6 +670,9 @@ function CompactDiagramDeviceCard({
           ? "border-[var(--accent-primary-border)] shadow-[var(--shadow-selected)]"
           : "border-[var(--border-default)]",
       )}
+      data-device-name-host
+      role="group"
+      aria-label={data.hostname}
       style={{ width: DEVICE_NODE_WIDTH, height: DEVICE_NODE_HEIGHT }}
       title={t("{hostname}{value2}", {
         hostname: data.hostname,
@@ -678,11 +691,14 @@ function CompactDiagramDeviceCard({
         >
           <DeviceTypeIcon type={data.deviceType} className="size-4" />
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 pl-9 pt-4">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-[13px] font-semibold text-[var(--text-primary)]">
-              {data.hostname}
-            </span>
+            <DeviceName
+              name={data.hostname}
+              selected={selected}
+              maxHeight={52}
+              reservedLeft={84}
+            />
             <StatusDot status={healthToDeviceStatus(data.health)} />
           </div>
           <div className="mt-0.5 truncate font-mono text-[9px] text-[var(--text-tertiary)]">
@@ -700,7 +716,7 @@ function CompactDiagramDeviceCard({
         </div>
         <Link
           to={`/devices/${data.deviceId}`}
-          className="nodrag nopan grid size-7 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--border-subtle)] text-[var(--text-tertiary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+          className="nodrag nopan absolute left-11 top-2.5 grid size-7 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--border-subtle)] text-[var(--text-tertiary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
           title={t("Open device")}
           onClick={(event) => event.stopPropagation()}
         >
@@ -761,6 +777,9 @@ function PhysicalDiagramDeviceCard({
   return (
     <div
       data-testid="visualizer-physical-node"
+      data-device-name-host
+      role="group"
+      aria-label={data.hostname}
       className={cn(
         "relative overflow-hidden rounded-[var(--radius-md)] border bg-[var(--surface-2)] text-left shadow-[0_16px_34px_rgb(0_0_0_/_0.22)] transition-colors",
         selected
@@ -787,11 +806,14 @@ function PhysicalDiagramDeviceCard({
         >
           <DeviceTypeIcon type={data.deviceType} className="size-4" />
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 pl-9 pt-4">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-[13px] font-semibold text-[var(--text-primary)]">
-              {data.hostname}
-            </span>
+            <DeviceName
+              name={data.hostname}
+              selected={selected}
+              maxHeight={52}
+              reservedLeft={84}
+            />
             <StatusDot status={healthToDeviceStatus(data.health)} />
           </div>
           <div
@@ -805,7 +827,7 @@ function PhysicalDiagramDeviceCard({
         </div>
         <Link
           to={`/devices/${data.deviceId}`}
-          className="nodrag nopan grid size-7 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--border-subtle)] text-[var(--text-tertiary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+          className="nodrag nopan absolute left-11 top-2.5 grid size-7 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--border-subtle)] text-[var(--text-tertiary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
           title={t("Open device")}
           onClick={(event) => event.stopPropagation()}
         >

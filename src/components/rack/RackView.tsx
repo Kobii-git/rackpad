@@ -1,3 +1,4 @@
+import { DeviceName } from "./DeviceName";
 import { useMemo, type CSSProperties } from "react";
 import { motion } from "motion/react";
 import type { Device, DeviceImage, Rack, RackFace } from "@/lib/types";
@@ -32,7 +33,8 @@ interface RackTile {
   device: Device;
   heightU: number;
   topOffsetU: number;
-  slot: NonNullable<Device["rackSlot"]>;
+  column: number;
+  columnSpan: number;
 }
 
 const DEVICE_ACCENT: Partial<Record<Device["deviceType"], string>> = {
@@ -57,7 +59,42 @@ function buildSlots(rack: Rack): Slot[] {
   return slots;
 }
 
-function buildTiles(rack: Rack, devices: Device[], face: RackFace): RackTile[] {
+export function resolveRackColumns(device: Device) {
+  const legacySpan =
+    device.rackSlot === "left" || device.rackSlot === "right" ? 6 : 12;
+  const requestedSpan = device.rackColumnSpan;
+  const columnSpan = Math.max(
+    1,
+    Math.min(
+      12,
+      Math.floor(
+        typeof requestedSpan === "number" && Number.isFinite(requestedSpan)
+          ? requestedSpan
+          : legacySpan,
+      ),
+    ),
+  );
+  const legacyColumn = device.rackSlot === "right" ? 6 : 0;
+  const requestedColumn = device.rackColumn;
+  const column = Math.max(
+    0,
+    Math.min(
+      12 - columnSpan,
+      Math.floor(
+        typeof requestedColumn === "number" && Number.isFinite(requestedColumn)
+          ? requestedColumn
+          : legacyColumn,
+      ),
+    ),
+  );
+  return { column, columnSpan };
+}
+
+export function buildRackTiles(
+  rack: Rack,
+  devices: Device[],
+  face: RackFace,
+): RackTile[] {
   return devices
     .filter(
       (device) => (device.face ?? "front") === face && device.startU != null,
@@ -69,13 +106,12 @@ function buildTiles(rack: Rack, devices: Device[], face: RackFace): RackTile[] {
         device,
         heightU,
         topOffsetU: Math.max(0, rack.totalU - topU),
-        slot: device.rackSlot ?? "full",
+        ...resolveRackColumns(device),
       };
     })
     .sort((a, b) => {
       if (a.topOffsetU !== b.topOffsetU) return a.topOffsetU - b.topOffsetU;
-      const slotOrder = { left: 0, full: 1, right: 2 };
-      return slotOrder[a.slot] - slotOrder[b.slot];
+      return a.column - b.column || a.device.id.localeCompare(b.device.id);
     });
 }
 
@@ -123,7 +159,7 @@ function RackFaceView({
   const { t } = useI18n();
   const slots = useMemo(() => buildSlots(rack), [rack]);
   const tiles = useMemo(
-    () => buildTiles(rack, devices, face),
+    () => buildRackTiles(rack, devices, face),
     [rack, devices, face],
   );
   const childDevicesByParent = useMemo(() => {
@@ -150,7 +186,7 @@ function RackFaceView({
       <div className="flex flex-col items-stretch overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-strong)] bg-[var(--surface-2)] shadow-[var(--shadow-card)]">
         <div className="flex items-center justify-between border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-1)_46%,transparent)] px-3 py-2">
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-            {rack.name} | {face}
+            {rack.name} | {t(face === "front" ? "Front" : "Rear")}
           </span>
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
             {rack.totalU}
@@ -227,28 +263,11 @@ function RackRail({ slots, side }: { slots: Slot[]; side: "left" | "right" }) {
 }
 
 function tileStyle(tile: RackTile): CSSProperties {
-  const base: CSSProperties = {
+  return {
     top: `calc(var(--u-height) * ${tile.topOffsetU} + 1px)`,
     height: `calc(var(--u-height) * ${tile.heightU} - 2px)`,
-  };
-  if (tile.slot === "left") {
-    return {
-      ...base,
-      left: 0,
-      width: "calc(50% - 2px)",
-    };
-  }
-  if (tile.slot === "right") {
-    return {
-      ...base,
-      left: "calc(50% + 2px)",
-      width: "calc(50% - 2px)",
-    };
-  }
-  return {
-    ...base,
-    left: 0,
-    right: 0,
+    left: `calc(${(tile.column / 12) * 100}% + 1px)`,
+    width: `calc(${(tile.columnSpan / 12) * 100}% - 2px)`,
   };
 }
 
@@ -284,6 +303,8 @@ function DeviceTile({
       <TooltipTrigger asChild>
         <motion.button
           data-testid="rack-device-tile"
+          data-device-name-host
+          aria-label={device.hostname}
           data-height-u={heightU}
           data-hostname={device.hostname}
           initial={{ opacity: 0, x: -4 }}
@@ -336,15 +357,13 @@ function DeviceTile({
               />
             ))}
 
+          <DeviceName name={device.hostname} selected={selected} reservedLeft={heightU > 1 ? 84 : 24} tooltip={false} />
           <div
             className={cn(
-              "relative z-10 min-w-0 flex-1 leading-tight",
+              "relative z-10 min-w-0 flex-1 pt-4 leading-tight",
               heightU > 1 ? "flex flex-col" : "flex items-center",
             )}
           >
-            <span className="truncate text-[13px] font-semibold tracking-normal text-[var(--text-primary)]">
-              {device.hostname}
-            </span>
             {heightU > 1 && (
               <span className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
                 {childDevices.length > 0
@@ -399,23 +418,28 @@ function DeviceTile({
 
           {physicalLayout?.effectiveStatus !== "accurate" && (
             <span
-              className="relative z-10 text-[var(--color-warning)]"
+              className="relative z-10 order-first text-[var(--color-warning)]"
               title={t("Needs attention")}
             >
               <AlertTriangle className="size-3.5" />
             </span>
           )}
 
-          <span className="relative z-10">
+          <span className="relative z-10 order-first inline-flex self-start mt-0.5">
             <StatusDot status={device.status} />
           </span>
         </motion.button>
       </TooltipTrigger>
       <TooltipContent side="right" className="max-w-xs">
         <div className="flex flex-col gap-1 text-[11px]">
-          <span className="font-medium">
+          <span className="break-all font-medium">
             {device.displayName ?? device.hostname}
           </span>
+          {device.displayName && device.displayName !== device.hostname && (
+            <span className="break-all font-mono text-[var(--text-tertiary)]">
+              {device.hostname}
+            </span>
+          )}
           <span className="text-[var(--text-tertiary)]">
             {[device.manufacturer, device.model].filter(Boolean).join(" ")}
           </span>

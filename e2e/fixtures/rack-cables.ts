@@ -104,3 +104,36 @@ export function rackCableFixture(
   }));
   return { room, rack, devices, ports, layouts, links, template };
 }
+
+
+/** Approximate public screenshot geometry, with synthetic inventory and links. */
+export function rackShelfCableFixture() {
+  const base = rackCableFixture("shelves");
+  const devices: Device[] = [
+    { ...base.devices[1]!, id: "shelves-switch", hostname: "shelf-switch", startU: 7, rackColumn: 7, rackColumnSpan: 4 },
+    ...[5, 3, 1].map(u => ({ ...base.devices[1]!, id: `shelves-server-${u}`, hostname: `server-${u}`,
+      deviceType: "server", startU: u, rackColumn: 6, rackColumnSpan: 5 })),
+    ...[6, 4, 2].map(u => ({ ...base.devices[0]!, id: `shelves-shelf-${u}`, hostname: `shelf-${u}`,
+      deviceType: "rack_shelf", startU: u, rackColumn: 7, rackColumnSpan: 4 })),
+    { ...base.devices[0]!, id: "shelves-top", hostname: "rack-top-switch", startU: undefined, rackMountKind: "rack-top", rackColumnSpan: 6 },
+    { ...base.devices[0]!, id: "shelves-parent", hostname: "vertical-shelf", startU: 1, heightU: 7, rackColumnSpan: 4, deviceType: "rack_shelf" },
+    { ...base.devices[1]!, id: "shelves-vertical", hostname: "vertical-ups", placement: "shelf", rackMountKind: "shelf",
+      parentDeviceId: "shelves-parent", startU: undefined, shelfX: 50, shelfY: 50, shelfWidth: 850, shelfHeight: 850,
+      shelfOrientation: 90, deviceType: "ups" },
+  ];
+  const ports = devices.flatMap(device => base.ports.filter(port => port.deviceId === base.devices[1]!.id)
+    .map(port => ({ ...port, id: `${device.id}-${port.face}-${port.position}`, deviceId: device.id })));
+  const layouts = devices.map(device => ({ ...base.layouts[1]!, deviceId: device.id,
+    snapshot: { ...base.layouts[1]!.snapshot, faces: templateToResolvedLayout(createStarterTemplate(
+      device.deviceType === "server" ? "server-1u" : device.deviceType === "rack_shelf" ? "shelf" : device.deviceType === "ups" ? "ups" : "switch-8",
+      `shelves-art-${device.id}`, device.hostname)).faces },
+    bindings: ports.filter(port => port.deviceId === device.id).map(port => ({portId: port.id,
+      slotId: base.layouts[1]!.bindings.find(binding => base.ports.find(p => p.id === binding.portId)?.position === port.position)!.slotId })) }));
+  const endpoint = (deviceId: string, face: RackFace, index: number) => ports.filter(port => port.deviceId === deviceId && port.face === face)[index]!.id;
+  const links: PortLink[] = (["front", "rear"] as const).flatMap(face => [5,3,1].map((u,index) => ({
+    id: `shelves-${face}-${u}`, fromPortId: endpoint("shelves-switch", face, index),
+    toPortId: endpoint(`shelves-server-${u}`, face, 0), color: ["#22c55e", "#60a5fa", "#eab308"][index], visible: true,
+  })));
+  links.push({ id: "shelves-mixed", fromPortId: endpoint("shelves-top", "front", 5), toPortId: endpoint("shelves-server-1", "rear", 5), color: "#c084fc" });
+  return { ...base, devices, ports, layouts, links };
+}

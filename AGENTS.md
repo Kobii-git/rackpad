@@ -31,6 +31,9 @@ the affected source and tests even when documentation appears complete.
 - Stage only task-related paths after reviewing the actual diff.
 - Do not commit, push, tag, merge, publish, release, or deploy without an
   explicit request covering that external action.
+- New implementation is maintainer-authored. Use outside issues and Dependabot
+  PRs as reports or suggestions; never merge or cherry-pick their commits.
+  Independently implement accepted fixes and preserve existing attribution.
 - Never touch real `*.db*` files or `rackpad-backup-*.json` during routine work.
 - Run destructive data behavior only against a temporary database outside the
   repository.

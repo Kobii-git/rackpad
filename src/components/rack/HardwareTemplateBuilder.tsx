@@ -1,3 +1,6 @@
+import { useTemplateHistory } from "@/lib/use-template-history";
+import { TemplateItemControls } from "./TemplateItemControls";
+import { updateTemplateItem, updateModuleGrid, type TemplateItem } from "@/lib/hardware-template-editing";
 import { useEffect, useMemo, useState } from "react";
 import {
   Boxes,
@@ -14,20 +17,25 @@ import {
   deviceTypeChainIncludes,
   deviceTypeLineage,
   localizedDeviceTypeIdLabel,
+  localizedDeviceTypeLabel,
 } from "@/lib/device-types";
 import {
   createHardwareModule,
+  deletePortBlock,
+  nextTemplatePartId,
+  templatePortBlocks,
   createStarterTemplate,
   HARDWARE_TEMPLATE_STARTERS,
   MODULE_PRIMITIVES,
   movePhysicalPortSlot,
   replacePortBlock,
   safeId,
+  updateModulePosition,
   type HardwareModulePrimitive,
   type PortBlockDefinition,
   type PortBlockDirection,
 } from "@/lib/hardware-template-builder";
-import { upsertPhysicalLayoutRecord, useStore } from "@/lib/store";
+import { createDeviceTypeRecord, upsertPhysicalLayoutRecord, useStore } from "@/lib/store";
 import type {
   DeviceTypeDefinition,
   HardwareTemplateDefault,
@@ -47,6 +55,7 @@ import {
   CardTitle,
 } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { TemplateStructureEditor } from "./TemplateStructureEditor";
 import { PhysicalPortSlotEditor } from "./PhysicalPortSlotEditor";
 
 const NEW_TEMPLATE = "__new_hardware_template__";
@@ -69,11 +78,13 @@ const EMPTY_BLOCK: PortBlockDefinition = {
 interface HardwareTemplateBuilderProps {
   selectedDeviceType?: string;
   deviceTypes: DeviceTypeDefinition[];
+  onDeviceTypeCreated?: (id: string) => void;
 }
 
 export function HardwareTemplateBuilder({
   selectedDeviceType,
   deviceTypes,
+  onDeviceTypeCreated,
 }: HardwareTemplateBuilderProps) {
   const { t } = useI18n();
   const devices = useStore((state) => state.devices);
@@ -81,12 +92,17 @@ export function HardwareTemplateBuilder({
   const [defaults, setDefaults] = useState<HardwareTemplateDefault[]>([]);
   const [selectedId, setSelectedId] = useState(NEW_TEMPLATE);
   const [starterId, setStarterId] = useState("server-2u");
-  const [draft, setDraft] = useState(() => createStarterTemplate("server-2u"));
   const [face, setFace] = useState<RackFace>("rear");
   const [selectedSlotId, setSelectedSlotId] = useState<string>();
+  const [selectedItem, setSelectedItem] = useState<TemplateItem>();
+  const [selectedElementId, setSelectedElementId] = useState("");
   const [block, setBlock] = useState<PortBlockDefinition>(EMPTY_BLOCK);
+  const [editingBlockKey, setEditingBlockKey] = useState("");
   const [modulePrimitive, setModulePrimitive] =
     useState<HardwareModulePrimitive>("nic");
+  const [modulePortCount, setModulePortCount] = useState(1);
+  const [moduleRows, setModuleRows] = useState(1);
+  const [moduleColumns, setModuleColumns] = useState(1);
   const [moduleSlotId, setModuleSlotId] = useState("rear-module-a");
   const [moduleIds, setModuleIds] = useState<string[]>([]);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
@@ -94,6 +110,52 @@ export function HardwareTemplateBuilder({
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [addingType, setAddingType] = useState(false);
+  const [customTypeName, setCustomTypeName] = useState("");
+  const [customTypeParent, setCustomTypeParent] = useState("other");
+  const [creatingType, setCreatingType] = useState(false);
+  const [typeError, setTypeError] = useState("");
+
+  const selection = { face, selectedSlotId, selectedItem, selectedElementId, moduleSlotId, moduleIds, editingBlockKey, block };
+  const history = useTemplateHistory(() => createStarterTemplate("server-2u"), selection, next => {
+    setFace(next.face); setSelectedSlotId(next.selectedSlotId); setSelectedItem(next.selectedItem);
+    setSelectedElementId(next.selectedElementId); setModuleSlotId(next.moduleSlotId); setModuleIds(next.moduleIds);
+    setEditingBlockKey(next.editingBlockKey); setBlock(next.block);
+  });
+  const { draft, setDraft } = history;
+  async function handleCreateDeviceType() {
+    if (creatingType || saving) return;
+    const label = customTypeName.trim();
+    if (!label) {
+      setTypeError(t("Device type name is required."));
+      return;
+    }
+    setCreatingType(true);
+    setTypeError("");
+    try {
+      const created = await createDeviceTypeRecord({
+        label,
+        parentType: customTypeParent,
+      });
+      setDraft((current) => ({ ...current, deviceTypes: [created.id] }));
+      onDeviceTypeCreated?.(created.id);
+      setAddingType(false);
+      setCustomTypeName("");
+    } catch (nextError) {
+      setTypeError(
+        nextError instanceof Error
+          ? nextError.message
+          : t("Failed to create device type."),
+      );
+    } finally {
+      setCreatingType(false);
+    }
+  }
+
+  const blocks = templatePortBlocks(draft);
+  const editingBlock = blocks.find(
+    (entry) => `${entry.face}:${entry.id}` === editingBlockKey,
+  );
 
   const selectedTemplate = templates.find(
     (template) => template.id === selectedId,
@@ -128,7 +190,7 @@ export function HardwareTemplateBuilder({
       ? currentDefault.deviceType
       : undefined;
 
-  async function refreshTemplates(preferredId?: string) {
+  async function refreshTemplates(preferredId?: string, preserveHistory = false) {
     const response = await api.getHardwareTemplates();
     setTemplates(response.templates);
     setDefaults(response.defaults);
@@ -138,7 +200,8 @@ export function HardwareTemplateBuilder({
       );
       if (preferred) {
         setSelectedId(preferred.id);
-        setDraft(structuredClone(preferred));
+        if (preserveHistory) history.saved(structuredClone(preferred));
+        else history.reset(structuredClone(preferred));
         setModuleSlotId(preferred.moduleSlots[0]?.id ?? "");
       }
     }
@@ -175,30 +238,38 @@ export function HardwareTemplateBuilder({
     setBulkPreviews([]);
   }, [selectedDeviceType, selectedId]);
 
+  useEffect(() => {setBulkPreviews([]);}, [draft]);
+
   function selectTemplate(id: string) {
+    setSelectedItem(undefined); setSelectedElementId(""); setSelectedSlotId(undefined);
+    setEditingBlockKey("");
+    setBlock(EMPTY_BLOCK);
     setSelectedId(id);
     setBulkPreviews([]);
     if (id === NEW_TEMPLATE) {
       const next = createStarterTemplate(starterId);
       if (selectedDeviceType) next.deviceTypes = [selectedDeviceType];
-      setDraft(next);
+      history.reset(next);
       setModuleSlotId(next.moduleSlots[0]?.id ?? "");
       return;
     }
     const template = templates.find((entry) => entry.id === id);
     if (template) {
-      setDraft(structuredClone(template));
+      history.reset(structuredClone(template));
       setModuleSlotId(template.moduleSlots[0]?.id ?? "");
       setModuleIds([]);
     }
   }
 
   function selectStarter(id: string) {
+    setSelectedItem(undefined); setSelectedElementId("");
+    setEditingBlockKey("");
+    setBlock(EMPTY_BLOCK);
     setStarterId(id);
     setSelectedId(NEW_TEMPLATE);
     const next = createStarterTemplate(id);
     if (selectedDeviceType) next.deviceTypes = [selectedDeviceType];
-    setDraft(next);
+    history.reset(next);
     setModuleSlotId(next.moduleSlots[0]?.id ?? "");
     setSelectedSlotId(undefined);
     setBulkPreviews([]);
@@ -218,7 +289,7 @@ export function HardwareTemplateBuilder({
         selectedTemplate && !selectedTemplate.builtIn
           ? await api.updateHardwareTemplate(selectedTemplate.id, normalized)
           : await api.createHardwareTemplate(normalized);
-      await refreshTemplates(saved.id);
+      await refreshTemplates(saved.id, true);
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -369,7 +440,17 @@ export function HardwareTemplateBuilder({
   );
 
   return (
-    <Card data-testid="hardware-template-builder">
+    <div
+      onFocusCapture={event => {if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) history.beginGesture();}}
+      onBlurCapture={event => {if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) history.finishGesture();}}
+      onKeyDownCapture={event => {
+        const target = event.target;
+        if (target instanceof HTMLElement && (target.closest("input, textarea, select") || target.isContentEditable)) return;
+        if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+        if (event.key.toLowerCase() === "z") {event.preventDefault(); if (event.shiftKey) history.redo(); else history.undo();}
+        else if (event.ctrlKey && event.key.toLowerCase() === "y") {event.preventDefault(); history.redo();}
+      }}
+    ><Card data-testid="hardware-template-builder">
       <CardHeader>
         <CardTitle>
           <CardLabel>{t("Hardware")}</CardLabel>
@@ -381,6 +462,10 @@ export function HardwareTemplateBuilder({
         </Badge>
       </CardHeader>
       <CardBody className="space-y-5">
+        {editable && <div className="flex gap-2">
+          <Button size="sm" variant="outline" disabled={!history.canUndo} onClick={history.undo}>{t("Undo")}</Button>
+          <Button size="sm" variant="outline" disabled={!history.canRedo} onClick={history.redo}>{t("Redo")}</Button>
+        </div>}
         {error && (
           <div
             role="alert"
@@ -396,6 +481,7 @@ export function HardwareTemplateBuilder({
               <select
                 className="rk-control h-8 w-full px-2.5 text-sm"
                 value={selectedId}
+                disabled={creatingType}
                 onChange={(event) => selectTemplate(event.target.value)}
               >
                 <option value={NEW_TEMPLATE}>{t("New template")}</option>
@@ -406,20 +492,32 @@ export function HardwareTemplateBuilder({
                 ))}
               </select>
             </Field>
-            <Field label={t("Type")}>
-              <select
-                data-testid="hardware-template-starter"
-                className="rk-control h-8 w-full px-2.5 text-sm"
-                value={starterId}
-                onChange={(event) => selectStarter(event.target.value)}
-              >
-                {HARDWARE_TEMPLATE_STARTERS.map((starter) => (
-                  <option key={starter.id} value={starter.id}>
-                    {starter.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            {selectedId === NEW_TEMPLATE && (
+              <>
+                <Field label={t("Starting layout")}>
+                  <select
+                    disabled={creatingType}
+                    data-testid="hardware-template-starter"
+                    className="rk-control h-8 w-full px-2.5 text-sm"
+                    value={starterId}
+                    onChange={(event) => selectStarter(event.target.value)}
+                  >
+                    {HARDWARE_TEMPLATE_STARTERS.map((starter) => (
+                      <option key={starter.id} value={starter.id}>
+                        {starter.shape === "round"
+                          ? t("Round device")
+                          : starter.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <p className="text-xs text-[var(--text-muted)]">
+                  {t(
+                    "Choose a starting layout, then name your template and select its device type.",
+                  )}
+                </p>
+              </>
+            )}
             <Field label={t("Name")}>
               <Input
                 disabled={!editable}
@@ -448,7 +546,7 @@ export function HardwareTemplateBuilder({
             <div className="grid grid-cols-2 gap-2">
               <Field label={t("Device type")}>
                 <select
-                  disabled={!editable}
+                  disabled={!editable || creatingType}
                   className="rk-control h-8 w-full px-2 text-sm"
                   value={draft.deviceTypes[0] ?? "other"}
                   onChange={(event) =>
@@ -460,7 +558,7 @@ export function HardwareTemplateBuilder({
                 >
                   {deviceTypes.map((type) => (
                     <option key={type.id} value={type.id}>
-                      {type.label}
+                      {localizedDeviceTypeLabel(type, t)}
                     </option>
                   ))}
                 </select>
@@ -484,12 +582,87 @@ export function HardwareTemplateBuilder({
                 />
               </Field>
             </div>
+            {editable && (
+              <div className="space-y-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={creatingType || saving}
+                  aria-expanded={addingType}
+                  onClick={() => {
+                    setAddingType((current) => !current);
+                    setCustomTypeParent("other");
+                    setTypeError("");
+                  }}
+                >
+                  <Plus />
+                  {t("New device type")}
+                </Button>
+                {addingType && (
+                  <form
+                    data-testid="template-device-type-form"
+                    className="space-y-2 rounded-[var(--radius-sm)] border border-[var(--border-default)] p-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleCreateDeviceType();
+                    }}
+                  >
+                    {typeError && (
+                      <p role="alert" className="text-xs text-[var(--danger)]">
+                        {typeError}
+                      </p>
+                    )}
+                    <Field label={t("Name")}>
+                      <Input
+                        autoFocus
+                        maxLength={80}
+                        value={customTypeName}
+                        disabled={creatingType || saving}
+                        onChange={(event) =>
+                          setCustomTypeName(event.target.value)
+                        }
+                      />
+                    </Field>
+                    <Field label={t("Parent")}>
+                      <select
+                        className="rk-control h-8 w-full px-2 text-sm"
+                        value={customTypeParent}
+                        disabled={creatingType || saving}
+                        onChange={(event) =>
+                          setCustomTypeParent(event.target.value)
+                        }
+                      >
+                        {deviceTypes.map((type) => (
+                            <option key={type.id} value={type.id}>
+                              {localizedDeviceTypeLabel(type, t)}
+                            </option>
+                          ))}
+                      </select>
+                    </Field>
+                    <div className="flex gap-2">
+                      <Button type="submit" size="sm" disabled={creatingType || saving}>
+                        {creatingType ? t("Adding...") : t("Create")}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={creatingType || saving}
+                        onClick={() => setAddingType(false)}
+                      >
+                        {t("Cancel")}
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               {editable && (
                 <Button
                   size="sm"
                   onClick={() => void handleSave()}
-                  disabled={saving}
+                  disabled={saving || creatingType}
                 >
                   <Save />
                   {saving ? t("Saving...") : t("Save template")}
@@ -500,7 +673,7 @@ export function HardwareTemplateBuilder({
                   size="sm"
                   variant="outline"
                   onClick={() => void handleDuplicate()}
-                  disabled={saving}
+                  disabled={saving || creatingType}
                 >
                   <Copy />
                   {t("Duplicate")}
@@ -511,7 +684,7 @@ export function HardwareTemplateBuilder({
                   size="sm"
                   variant="destructive"
                   onClick={() => void handleDelete()}
-                  disabled={saving}
+                  disabled={saving || creatingType}
                 >
                   <Trash2 />
                   {t("Delete")}
@@ -528,7 +701,7 @@ export function HardwareTemplateBuilder({
                       : "outline"
                   }
                   onClick={() => void handleDefault()}
-                  disabled={saving}
+                  disabled={saving || creatingType}
                 >
                   <Check />
                   {t("Apply template")}
@@ -538,7 +711,7 @@ export function HardwareTemplateBuilder({
                     size="sm"
                     variant="ghost"
                     onClick={() => void handleDefaultReset()}
-                    disabled={saving}
+                    disabled={saving || creatingType}
                   >
                     {t("Reset")}
                   </Button>
@@ -602,18 +775,76 @@ export function HardwareTemplateBuilder({
                     layout={draft}
                     face={previewFace}
                     selectedSlotId={selectedSlotId}
-                    onSelectSlot={setSelectedSlotId}
+                    selectedElementId={selectedElementId}
+                    selectedModuleSlotId={moduleSlotId}
+                    selectedItem={selectedItem}
+                    onEditStart={history.beginGesture}
+                    onEditCancel={history.cancelGesture}
+                    onEditEnd={history.finishGesture}
+                    onResizeItem={editable ? (item, dimensions) => {
+                      try {setDraft(updateTemplateItem(draft, item, dimensions)); setError("");} catch {setError(t("Could not update template item."));}
+                    } : undefined}
+                    onSelectSlot={(id) => {setSelectedSlotId(id); setSelectedItem({kind: "port",id,face:previewFace});}}
+                    onSelectElement={(elementId) => {
+                      setFace(previewFace);
+                      setSelectedElementId(elementId);
+                      setSelectedItem({kind: "element", id: elementId, face: previewFace});
+                    }}
+                    onSelectModuleSlot={(slotId) => {
+                      setFace(previewFace);
+                      setModuleSlotId(slotId);
+                      setSelectedItem({kind: "position", id: slotId, face: previewFace});
+                    }}
                     onMoveSlot={(slotId, x, y) =>
                       editable &&
                       setDraft((current) =>
                         movePhysicalPortSlot(current, slotId, x, y),
                       )
                     }
+                    onMoveElement={(elementId, x, y) =>
+                      editable &&
+                      setDraft((current) => ({
+                        ...current,
+                        [previewFace]: {
+                          ...current[previewFace],
+                          elements: current[previewFace].elements.map(
+                            (item) => {
+                              if (item.id !== elementId) return item;
+                              const radius = "radius" in item ? item.radius : 0;
+                              const maxX =
+                                "width" in item
+                                  ? current[previewFace].width - item.width
+                                  : current[previewFace].width - radius;
+                              const maxY =
+                                "height" in item
+                                  ? current[previewFace].height - item.height
+                                  : current[previewFace].height - radius;
+                              return {
+                                ...item,
+                                x: Math.max(radius, Math.min(maxX, x)),
+                                y: Math.max(radius, Math.min(maxY, y)),
+                              };
+                            },
+                          ),
+                        },
+                      }))
+                    }
+                    onMoveModuleSlot={(slotId, x, y) =>
+                      editable &&
+                      setDraft((current) => {
+                        const position = current.moduleSlots.find(
+                          (slot) => slot.id === slotId,
+                        );
+                        return position
+                          ? updateModulePosition(current, { ...position, x, y })
+                          : current;
+                      })
+                    }
                   />
                 </div>
               ))}
             </div>
-            {selectedSlot && (
+            {selectedSlot && editable && (
               <div className="grid gap-2 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3 sm:grid-cols-4">
                 <Field label={t("Port")}>
                   <Input
@@ -685,13 +916,57 @@ export function HardwareTemplateBuilder({
           </div>
         </div>
 
+        <p className="text-xs text-[var(--text-secondary)]">
+          {t(
+            "Try these examples: add separate RJ45 and SFP blocks; create a position on each face and add a module; duplicate a six-bay template and delete two bays.",
+          )}
+        </p>
+
         {editable && (
           <div className="grid gap-4 border-t border-[var(--border-default)] pt-5 xl:grid-cols-2">
-            <section className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3">
+            <section
+              data-testid="template-port-block-editor"
+              className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3"
+            >
               <div className="rk-kicker">{t("Port layout")}</div>
+              <p className="text-xs text-[var(--text-secondary)]">
+                {t(
+                  "Add creates a separate block. Select a block to update or duplicate it.",
+                )}
+              </p>
+              <label className="block text-xs">
+                {t("Port layout")}
+                <select
+                  data-testid="template-port-blocks"
+                  className="rk-control mt-1 w-full"
+                  value={editingBlock ? editingBlockKey : ""}
+                  onChange={(event) => {
+                    setEditingBlockKey(event.target.value);
+                    const selected = blocks.find(
+                      (entry) =>
+                        `${entry.face}:${entry.id}` === event.target.value,
+                    );
+                    setBlock(
+                      selected ? { ...selected } : { ...EMPTY_BLOCK, face },
+                    );
+                    if (selected) setFace(selected.face);
+                  }}
+                >
+                  <option value="">{t("New")}</option>
+                  {blocks.map((entry) => (
+                    <option
+                      key={`${entry.face}:${entry.id}`}
+                      value={`${entry.face}:${entry.id}`}
+                    >
+                      {entry.id} · {entry.connector}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <Field label={t("ID")}>
                   <Input
+                    disabled={Boolean(editingBlock)}
                     value={block.id}
                     onChange={(event) =>
                       setBlock((current) => ({
@@ -704,6 +979,7 @@ export function HardwareTemplateBuilder({
                 <Field label={t("Face")}>
                   <select
                     className="rk-control h-8 w-full px-2 text-sm"
+                    disabled={Boolean(editingBlock)}
                     value={block.face}
                     onChange={(event) =>
                       setBlock((current) => ({
@@ -773,7 +1049,7 @@ export function HardwareTemplateBuilder({
                     }
                   />
                 </Field>
-                <Field label={t("Height (U)")}>
+                <Field label={t("Rows")}>
                   <Input
                     type="number"
                     min={1}
@@ -824,21 +1100,108 @@ export function HardwareTemplateBuilder({
                   </select>
                 </Field>
               </div>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setDraft((current) => replacePortBlock(current, block));
-                  setFace(block.face);
-                }}
-              >
-                <Plus />
-                {t("Add or update port block")}
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                {(["x", "y", "width", "height"] as const).map((key) => (
+                  <Field
+                    key={key}
+                    label={
+                      key === "width"
+                        ? t("Width")
+                        : key === "height"
+                          ? t("Height")
+                          : t("{value1}: {name}", {
+                              value1: t("Position"),
+                              name: key.toUpperCase(),
+                            })
+                    }
+                  >
+                    <Input
+                      type="number"
+                      value={block[key]}
+                      onChange={(event) =>
+                        setBlock((current) => ({
+                          ...current,
+                          [key]: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const id = nextTemplatePartId(block.id, [
+                      ...draft.portSlots.map((slot) => slot.groupId ?? slot.id),
+                      ...blocks.map((entry) => entry.id),
+                    ]);
+                    const next = { ...block, id };
+                    try {setDraft(replacePortBlock(draft, next)); setError("");}
+                    catch {setError(t("Could not update template item.")); return;}
+                    setFace(next.face);
+                    setBlock({ ...next, id: `${id}:${next.face}` });
+                    setEditingBlockKey(`${next.face}:${id}:${next.face}`);
+                  }}
+                >
+                  {t("Add")}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!editingBlock}
+                  onClick={() => {
+                    try {setDraft(replacePortBlock(draft, block)); setError("");}
+                    catch {setError(t("Could not update template item.")); return;}
+                    setFace(block.face);
+                  }}
+                >
+                  {t("Update")}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!editingBlock}
+                  onClick={() => {
+                    if (!editingBlock) return;
+                    const id = nextTemplatePartId(
+                      editingBlock.id,
+                      blocks.map((entry) => entry.id),
+                    );
+                    try { setDraft(replacePortBlock(draft, { ...editingBlock, id })); setError(""); }
+                    catch { setError(t("Could not update template item.")); return; }
+                    setBlock({
+                      ...editingBlock,
+                      id: `${id}:${editingBlock.face}`,
+                    });
+                    setEditingBlockKey(
+                      `${editingBlock.face}:${id}:${editingBlock.face}`,
+                    );
+                  }}
+                >
+                  {t("Duplicate")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={!editingBlock}
+                  onClick={() => {
+                    if (!editingBlock) return;
+                    try { setDraft(deletePortBlock(draft, editingBlock)); setError(""); }
+                    catch { setError(t("Could not update template item.")); return; }
+                    setEditingBlockKey("");
+                    setBlock({ ...EMPTY_BLOCK, face });
+                  }}
+                >
+                  {t("Delete")}
+                </Button>
+              </div>
             </section>
 
-            <section className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3">
+            <section
+              data-testid="template-module-editor"
+              className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3"
+            >
               <div className="rk-kicker">{t("Hardware")}</div>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-4">
                 <Field label={t("Type")}>
                   <select
                     className="rk-control h-8 w-full px-2 text-sm"
@@ -869,28 +1232,49 @@ export function HardwareTemplateBuilder({
                     ))}
                   </select>
                 </Field>
+                {modulePrimitive === "fan" ? (
+                  <div />
+                ) : (
+                  <Field label={t("Ports")}>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={16}
+                      value={modulePortCount}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        if (Number.isFinite(value)) {
+                          const count = Math.max(1, Math.min(16, Math.round(value)));
+                          setModulePortCount(count);
+                          setModuleColumns(Math.ceil(count / moduleRows));
+                        }
+                      }}
+                    />
+                  </Field>
+                )}
+                {modulePrimitive !== "fan" && <>
+                  <Field label={t("Rows")}><Input type="number" min={1} max={16} value={moduleRows} onChange={event => setModuleRows(Number(event.target.value))} /></Field>
+                  <Field label={t("Columns")}><Input type="number" min={1} max={16} value={moduleColumns} onChange={event => setModuleColumns(Number(event.target.value))} /></Field>
+                </>}
                 <div className="flex items-end">
                   <Button
                     className="w-full"
                     size="sm"
-                    disabled={!moduleSlotId}
+                    disabled={
+                      !draft.moduleSlots.some(
+                        (slot) => slot.id === moduleSlotId,
+                      )
+                    }
                     onClick={() => {
-                      const id = safeId(
-                        `${modulePrimitive}-${draft.modules.length + 1}`,
+                      const id = nextTemplatePartId(
+                        modulePrimitive,
+                        draft.modules.map((module) => module.id),
                       );
-                      setDraft((current) => ({
-                        ...current,
-                        modules: [
-                          ...current.modules,
-                          createHardwareModule(
-                            id,
-                            modulePrimitive,
-                            moduleSlotId,
-                            modulePrimitive,
-                            modulePrimitive === "nic" ? 2 : 1,
-                          ),
-                        ],
-                      }));
+                      try {
+                        const module = createHardwareModule(id, modulePrimitive, moduleSlotId, modulePrimitive, modulePortCount, draft.moduleSlots.find(slot => slot.id === moduleSlotId));
+                        const next = updateModuleGrid({...draft, modules: [...draft.modules, module]}, id, modulePortCount, moduleRows, moduleColumns);
+                        setDraft(next); setSelectedItem({kind: "module", id, face: module.face}); setError("");
+                      } catch {setError(t("Could not update template item."));}
                     }}
                   >
                     <Plus />
@@ -912,6 +1296,20 @@ export function HardwareTemplateBuilder({
               </div>
             </section>
           </div>
+        )}
+
+        {editable && <TemplateItemControls draft={draft} selected={selectedItem} onSelect={item => {setSelectedItem(item); setFace(item.face); if (item.kind === "port") setSelectedSlotId(item.id); if (item.kind === "element") setSelectedElementId(item.id); if (item.kind === "position") setModuleSlotId(item.id);}} onChange={next => {setDraft(next); setBulkPreviews([]);}} />}
+        {editable && (
+          <TemplateStructureEditor
+            draft={draft}
+            setDraft={setDraft}
+            face={face}
+            setFace={setFace}
+            moduleSlotId={moduleSlotId}
+            setModuleSlotId={setModuleSlotId}
+            elementId={selectedElementId}
+            setElementId={id => {setSelectedElementId(id); setSelectedItem(id ? {kind: "element", id, face} : undefined);}}
+          />
         )}
 
         {selectedDeviceType &&
@@ -1026,7 +1424,7 @@ export function HardwareTemplateBuilder({
             </section>
           )}
       </CardBody>
-    </Card>
+    </Card></div>
   );
 }
 

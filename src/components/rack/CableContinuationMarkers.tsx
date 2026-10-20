@@ -15,6 +15,7 @@ export function CableContinuationMarkers({
   devices,
   showLabels,
   opacity = 1,
+  onRevealEndpoint,
 }: {
   markers: CableContinuationMarker[];
   linkId: string;
@@ -24,6 +25,7 @@ export function CableContinuationMarkers({
   devices: Device[];
   showLabels: boolean;
   opacity?: number;
+  onRevealEndpoint?: (portId: string, linkId: string) => void;
 }) {
   const { t } = useI18n();
   return markers.map((marker) => {
@@ -31,7 +33,7 @@ export function CableContinuationMarkers({
       front: t("Front"),
       rear: t("Rear"),
     });
-    const directionalLabel = `${cableLabel} · ↔ ${label}`;
+    const directionalLabel = `${cableLabel} [${linkId}] · ↔ ${label}${marker.incomplete ? ` · ${t("Incomplete route")}` : ""}`;
     return (
       <g
         key={marker.portId}
@@ -41,10 +43,16 @@ export function CableContinuationMarkers({
         data-destination-port-id={marker.destinationPortId}
         data-face={marker.face}
         data-destination-face={marker.destinationFace}
-        className="pointer-events-none"
+        className={onRevealEndpoint ? "pointer-events-auto cursor-pointer" : "pointer-events-none"}
+        role={onRevealEndpoint ? "button" : undefined}
+        tabIndex={onRevealEndpoint ? 0 : undefined}
+        aria-label={directionalLabel}
+        onClick={event => { event.stopPropagation(); onRevealEndpoint?.(marker.destinationPortId, linkId); }}
+        onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); onRevealEndpoint?.(marker.destinationPortId, linkId); } }}
         opacity={opacity}
       >
         <title>{directionalLabel}</title>
+        {onRevealEndpoint && <circle cx={marker.x} cy={marker.y} r={12} fill="transparent" />}
         <circle
           cx={marker.x}
           cy={marker.y}
@@ -53,7 +61,7 @@ export function CableContinuationMarkers({
           stroke={color}
           strokeWidth={Math.min(2, marker.radius * 0.65)}
         />
-        {showLabels && (
+        {(showLabels || marker.incomplete) && (
           <text
             x={marker.x + (marker.textAnchor === "start" ? 8 : -8)}
             y={marker.y - 6}

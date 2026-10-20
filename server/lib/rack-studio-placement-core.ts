@@ -63,6 +63,18 @@ interface RackRow {
   totalU: number;
 }
 
+export function placementConflict(
+  message: string,
+  conflict: Pick<RackStudioDeviceRow, "id" | "hostname">,
+  mountKind: RackStudioPlacementState["mountKind"],
+) {
+  return new ValidationError(message, 409, "RACK_STUDIO_PLACEMENT_CONFLICT", {
+    conflictDeviceId: conflict.id,
+    conflictDeviceName: conflict.hostname,
+    mountKind,
+  });
+}
+
 function rackSlotGeometry(row: RackStudioDeviceRow) {
   const column = row.rackColumn ?? (row.rackSlot === "right" ? 6 : 0);
   const columnSpan =
@@ -80,8 +92,10 @@ export function currentRackStudioPlacement(
     ? (row.rackMountKind as (typeof MOUNT_KINDS)[number])
     : "direct";
   const mountKind =
-    row.placement === "shelf"
+    row.placement === "shelf" && row.parentDeviceId
       ? "shelf"
+      : row.rackId && row.startU !== null
+        ? "direct"
       : storedMountKind === "side"
         ? "side"
         : storedMountKind === "rack-top" && row.rackId
@@ -98,7 +112,7 @@ export function currentRackStudioPlacement(
       rackId: row.rackId,
       parentDeviceId: null,
       startU: row.startU,
-      heightU: row.heightU,
+      heightU: row.heightU ?? 1,
       face: row.face === "rear" ? "rear" : "front",
       column: geometry.column,
       columnSpan: geometry.columnSpan,
@@ -370,18 +384,17 @@ export function createRackStudioPlacementResolver(
         SELECT *
         FROM devices
         WHERE rackId = ?
-          AND COALESCE(face, 'front') = ?
           AND startU IS NOT NULL
-          AND heightU IS NOT NULL
-          AND COALESCE(rackMountKind, 'direct') = 'direct'
           AND id != ?
       `,
       )
-      .all(rack.id, state.face, device.id) as RackStudioDeviceRow[];
+      .all(rack.id, device.id) as RackStudioDeviceRow[];
 
     for (const row of rows) {
       const existing = currentRackStudioPlacement(row);
       if (
+        existing.mountKind !== "direct" ||
+        existing.face !== state.face ||
         existing.startU === null ||
         existing.heightU === null ||
         existing.column === null ||
@@ -395,8 +408,10 @@ export function createRackStudioPlacementResolver(
         state.column < existing.column + existing.columnSpan &&
         state.column + state.columnSpan > existing.column;
       if (uOverlap && columnOverlap) {
-        throw new ValidationError(
+        throw placementConflict(
           `Rack position overlaps with ${row.hostname}.`,
+          row,
+          "direct",
         );
       }
     }
@@ -513,8 +528,10 @@ export function createRackStudioPlacementResolver(
         continue;
       }
       if (rectanglesOverlap(bounds, shelfBounds(existing))) {
-        throw new ValidationError(
+        throw placementConflict(
           `Shelf footprint overlaps with ${sibling.hostname}.`,
+          sibling,
+          "shelf",
         );
       }
     }
@@ -534,7 +551,7 @@ export function createRackStudioPlacementResolver(
     const conflict = db
       .prepare(
         `
-        SELECT hostname
+        SELECT id, hostname
         FROM devices
         WHERE rackId = ?
           AND COALESCE(face, 'front') = ?
@@ -545,10 +562,13 @@ export function createRackStudioPlacementResolver(
       `,
       )
       .get(rack.id, requested.face, requested.side, device.id) as
-      { hostname: string } | undefined;
+      | Pick<RackStudioDeviceRow, "id" | "hostname">
+      | undefined;
     if (conflict) {
-      throw new ValidationError(
+      throw placementConflict(
         `Rack side conflicts with ${conflict.hostname}.`,
+        conflict,
+        "side",
       );
     }
     return {
@@ -598,10 +618,11 @@ export function createRackStudioPlacementResolver(
         FROM devices
         WHERE rackId = ?
           AND rackMountKind = 'rack-top'
+          AND COALESCE(face, 'front') = ?
           AND id != ?
       `,
       )
-      .all(rack.id, device.id) as RackStudioDeviceRow[];
+      .all(rack.id, requested.face, device.id) as RackStudioDeviceRow[];
     for (const occupant of occupants) {
       const existing = currentRackStudioPlacement(occupant);
       if (existing.column === null || existing.columnSpan === null) continue;
@@ -609,8 +630,10 @@ export function createRackStudioPlacementResolver(
         requested.column < existing.column + existing.columnSpan &&
         requested.column + requested.columnSpan > existing.column
       ) {
-        throw new ValidationError(
+        throw placementConflict(
           `Rack-top position overlaps with ${occupant.hostname}.`,
+          occupant,
+          "rack-top",
         );
       }
     }

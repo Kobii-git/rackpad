@@ -1,3 +1,6 @@
+import { TracePicker } from "./TracePicker";
+import { SidebarResize, useSidebarWidth } from "./SidebarResize";
+import { rackFaceForPhysicalFace } from "@/lib/rack-studio-scene";
 import { CableContinuationMarkers } from "@/components/rack/CableContinuationMarkers";
 import {
   type Dispatch,
@@ -11,6 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { DeviceName, DeviceNameZoom } from "@/components/rack/DeviceName";
 import { Link } from "react-router-dom";
 import {
   Box,
@@ -18,6 +22,9 @@ import {
   ChevronDown,
   ChevronUp,
   Focus,
+  GripVertical,
+  Lock,
+  LockOpen,
   Minus,
   Plus,
   RotateCcw,
@@ -31,6 +38,11 @@ import {
 import { PhysicalFaceplate } from "@/components/rack/PhysicalFaceplate";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/Popover";
 import { useI18n } from "@/i18n";
 import { portSupportsPhysicalPatching } from "@/lib/rack-studio-cables";
 import type {
@@ -52,12 +64,18 @@ import {
   buildRackCablingRoutes,
   buildRackCablingScene,
   buildRackCablingScope,
+  layoutRackCablingAnnotations,
   layoutRackCablingHandoffLabels,
   rackCablingSelectionIsInScope,
   RACK_CABLING_UNIT_HEIGHT,
   type RackCablingEquipment,
+  type RackCablingAnnotationGeometry,
   type RackCablingHandoff,
   type RackCablingRouteStyle,
+  type RackCablingRoomLayout,
+  type RackCablingRoomLayoutMode,
+  type RackCablingRoomPosition,
+  DEFAULT_RACK_CABLING_ROOM_LAYOUT,
 } from "./rack-cabling";
 import type {
   TraceModeState,
@@ -67,14 +85,15 @@ import type {
   VisualizerRackFaceMode,
 } from "./types";
 import {
+  TraceSummary,
   VisualizerInspector,
   type VisualizerInspectionSelection,
 } from "./VisualizerCanvas";
 
 interface RackCablingCanvasProps {
   rooms: Room[];
-  roomId: string;
-  onRoomIdChange: (roomId: string) => void;
+  roomIds: string[];
+  onRoomIdsChange: (roomIds: string[]) => void;
   racks: Rack[];
   devices: Device[];
   layouts: DevicePhysicalLayout[];
@@ -83,6 +102,7 @@ interface RackCablingCanvasProps {
   model: VisualizerModel;
   rackOrder: string[];
   faceMode: VisualizerRackFaceMode;
+  onFaceModeChange: (face: VisualizerRackFaceMode) => void;
   cableType: string;
   healthOverlay: boolean;
   onToggleHealth: () => void;
@@ -90,8 +110,10 @@ interface RackCablingCanvasProps {
   onRouteStyleChange: (style: RackCablingRouteStyle) => void;
   showLabels: boolean;
   onShowLabelsChange: (show: boolean) => void;
-  looseExpanded: boolean;
-  onLooseExpandedChange: (expanded: boolean) => void;
+  looseExpandedRoomIds: ReadonlySet<string>;
+  onLooseExpandedChange: (roomId: string, expanded: boolean) => void;
+  roomLayout?: RackCablingRoomLayout;
+  onRoomLayoutChange: (layout: RackCablingRoomLayout) => void;
   traceMode: TraceModeState;
   setTraceMode: Dispatch<SetStateAction<TraceModeState>>;
 }
@@ -102,6 +124,16 @@ interface PanState {
   clientY: number;
   panX: number;
   panY: number;
+  moved: boolean;
+}
+
+interface RoomDragState {
+  pointerId: number;
+  roomId: string;
+  clientX: number;
+  clientY: number;
+  roomX: number;
+  roomY: number;
 }
 
 type RackCablingSelection = VisualizerInspectionSelection;
@@ -118,8 +150,8 @@ type RackCablingSearchResult =
 
 export function RackCablingCanvas({
   rooms,
-  roomId,
-  onRoomIdChange,
+  roomIds,
+  onRoomIdsChange,
   racks,
   devices,
   layouts,
@@ -128,6 +160,7 @@ export function RackCablingCanvas({
   model,
   rackOrder,
   faceMode,
+  onFaceModeChange,
   cableType,
   healthOverlay,
   onToggleHealth,
@@ -135,64 +168,163 @@ export function RackCablingCanvas({
   onRouteStyleChange,
   showLabels,
   onShowLabelsChange,
-  looseExpanded,
+  looseExpandedRoomIds,
   onLooseExpandedChange,
+  roomLayout,
+  onRoomLayoutChange,
   traceMode,
   setTraceMode,
 }: RackCablingCanvasProps) {
   const { t } = useI18n();
+  const sidebar = useSidebarWidth("rack", 352);
+  const [tracePanelClosed, setTracePanelClosed] = useState(false);
+  useEffect(() => { setTracePanelClosed(false); }, [traceMode.enabled]);
+  const [pendingReveal, setPendingReveal] = useState<{
+    portId: string;
+    cableId: string;
+  }>();
   const viewportRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const allRoomsCheckboxRef = useRef<HTMLInputElement>(null);
   const panRef = useRef<PanState | null>(null);
+  const roomDragRef = useRef<RoomDragState | null>(null);
   const autoFitRef = useRef(true);
-  const previousRoomIdRef = useRef(roomId);
+  const previousRoomIdsRef = useRef(roomIds.join("\u0000"));
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [search, setSearch] = useState("");
   const [selection, setSelection] = useState<RackCablingSelection>(null);
+  const [hoveredLooseDeviceId, setHoveredLooseDeviceId] = useState<
+    string | null
+  >(null);
   const [hoveredCableId, setHoveredCableId] = useState<string | null>(null);
   const [searchIndex, setSearchIndex] = useState(0);
-  const room = rooms.find((candidate) => candidate.id === roomId);
+  const looseExpandedRoomKey = [...looseExpandedRoomIds].sort().join("\u0000");
+  const effectiveRoomLayout = roomLayout ?? DEFAULT_RACK_CABLING_ROOM_LAYOUT;
+  const roomLayoutKey = `${effectiveRoomLayout.mode}\u0000${effectiveRoomLayout.hubRoomId ?? ""}\u0000${Object.entries(
+    effectiveRoomLayout.positions,
+  )
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([id, point]) => `${id}:${point.x}:${point.y}`)
+    .join("\u0000")}`;
+  const looseExpandedRoomIdSet = useMemo(
+    () =>
+      new Set(looseExpandedRoomKey ? looseExpandedRoomKey.split("\u0000") : []),
+    [looseExpandedRoomKey],
+  );
+  const selectedRooms = useMemo(() => {
+    const selected = new Set(roomIds);
+    return rooms.filter((room) => selected.has(room.id));
+  }, [roomIds, rooms]);
+  const roomSelectionKey = roomIds.join("\u0000");
+  const allRoomsSelected =
+    rooms.length > 0 && selectedRooms.length === rooms.length;
+  const roomPickerLabel =
+    selectedRooms.length === 0
+      ? `${t("Select")} ${t("Rooms")}`
+      : allRoomsSelected
+        ? `${t("All")} ${t("Rooms")}`
+        : selectedRooms.length === 1
+          ? selectedRooms[0]!.name
+          : `${selectedRooms.length} ${t("Rooms")}`;
+
+  useEffect(() => {
+    if (!allRoomsCheckboxRef.current) return;
+    allRoomsCheckboxRef.current.indeterminate =
+      selectedRooms.length > 0 && !allRoomsSelected;
+  }, [allRoomsSelected, selectedRooms.length]);
   const scene = useMemo(
     () =>
-      room
-        ? buildRackCablingScene({
-            room,
-            racks,
-            devices,
-            layouts,
-            ports,
-            faceMode,
-            rackOrder,
-            looseExpanded,
-          })
-        : null,
-    [room, racks, devices, layouts, ports, faceMode, rackOrder, looseExpanded],
+      buildRackCablingScene({
+        rooms: selectedRooms,
+        racks,
+        devices,
+        layouts,
+        ports,
+        faceMode,
+        rackOrder,
+        looseExpandedRoomIds: looseExpandedRoomIdSet,
+        roomLayout: effectiveRoomLayout,
+      }),
+    [
+      selectedRooms,
+      racks,
+      devices,
+      layouts,
+      ports,
+      faceMode,
+      rackOrder,
+      looseExpandedRoomIdSet,
+      effectiveRoomLayout,
+    ],
   );
   const routes = useMemo(
     () =>
-      scene
-        ? buildRackCablingRoutes({
-            scene,
-            rooms,
-            racks,
-            devices,
-            ports,
-            links: portLinks,
-            cableType,
-            style: routeStyle,
-          })
-        : [],
+      buildRackCablingRoutes({
+        scene,
+        rooms,
+        racks,
+        devices,
+        ports,
+        links: portLinks,
+        cableType,
+        style: routeStyle,
+      }),
     [scene, rooms, racks, devices, ports, portLinks, cableType, routeStyle],
   );
-  const handoffLabelGeometry = useMemo(
-    () => (scene ? layoutRackCablingHandoffLabels(scene, routes) : []),
-    [routes, scene],
+  const handoffLabel = useCallback(
+    (handoff: RackCablingHandoff) => {
+      const endpoint = `${handoff.deviceLabel} · ${handoff.portLabel}`;
+      if (handoff.reason === "cross-room") {
+        return t("{value1}: {name}", {
+          value1: t("Room"),
+          name: `${handoff.roomLabel ?? t("Unknown")} · ${endpoint}`,
+        });
+      }
+      if (handoff.reason === "hidden-face") {
+        return t("{value1}: {name}", {
+          value1: handoff.rackFace === "rear" ? t("Rear") : t("Front"),
+          name: endpoint,
+        });
+      }
+      if (handoff.reason === "loose-tray") {
+        return t("{value1}: {name}", {
+          value1: t("Loose gear"),
+          name: endpoint,
+        });
+      }
+      return t("{value1}: {name}", {
+        value1:
+          handoff.fallbackReason === "missing-layout"
+            ? `${t("Physical layout")} · ${t("Needs attention")}`
+            : t("Physical position unavailable"),
+        name: endpoint,
+      });
+    },
+    [t],
   );
-  const handoffLabelGeometryById = useMemo(
-    () => new Map(handoffLabelGeometry.map((entry) => [entry.id, entry])),
-    [handoffLabelGeometry],
-  );
+  const handoffLabels = useMemo(() => {
+    const context = document.createElement("canvas").getContext("2d");
+    if (context)
+      context.font = "9px ui-monospace, SFMono-Regular, Menlo, monospace";
+    const maxWidth = Math.max(40, (scene?.width ?? 600) / 3 - 24);
+    const measure = (value: string) =>
+      context?.measureText(value).width ?? value.length * 6;
+    return new Map<string, { full: string; text: string; width: number }>(
+      routes.flatMap((route) =>
+        route.handoffs.map((handoff) => {
+          const full = handoffLabel(handoff);
+          let text = full;
+          while (text.length > 1 && measure(text) > maxWidth)
+            text = text.slice(0, -2) + "…";
+          return [
+            `${route.link.id}:${handoff.endpoint}`,
+            { full, text, width: measure(text) },
+          ] as const;
+        }),
+      ),
+    );
+  }, [routes, scene, handoffLabel]);
   const scope = useMemo(
     () =>
       scene
@@ -215,6 +347,9 @@ export function RackCablingCanvas({
   const routeIds = scope.cableIds;
   const sceneDeviceIds = scope.deviceIds;
   const scenePortIds = scope.portIds;
+  useEffect(() => {
+    if (traceMode.firstPortId && !scenePortIds.has(traceMode.firstPortId)) setTraceMode({enabled: traceMode.enabled, firstPortId: null, result: null, message: null});
+  }, [scenePortIds, traceMode.firstPortId, traceMode.enabled, setTraceMode]);
   const visibleCables = useMemo(
     () =>
       routes.map((route): VisualizerCable => {
@@ -343,7 +478,7 @@ export function RackCablingCanvas({
         kind: "rack",
         id: entry.rack.id,
         label: entry.rack.name,
-        meta: room?.name ?? "",
+        meta: rooms.find((room) => room.id === entry.rack.roomId)?.name ?? "",
         score: 120,
       }));
     const portResults: RackCablingSearchResult[] = ports
@@ -371,7 +506,7 @@ export function RackCablingCanvas({
     model,
     normalizedSearch,
     ports,
-    room?.name,
+    rooms,
     scene,
     sceneDeviceIds,
     scenePortIds,
@@ -399,7 +534,154 @@ export function RackCablingCanvas({
     );
   }, [normalizedSearch, searchResults]);
 
+  const emphasizedRouteIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const route of routes) {
+      const selected =
+        selection?.kind === "cable" && selection.id === route.link.id;
+      const hovered = hoveredCableId === route.link.id;
+      const traced = Boolean(
+        traceMode.enabled && traceMode.result?.cableIds.has(route.link.id),
+      );
+      const focusedDeviceId =
+        hoveredLooseDeviceId ??
+        (selection?.kind === "device" ? selection.id : null);
+      const deviceSelected =
+        focusedDeviceId != null &&
+        [route.link.fromPortId, route.link.toPortId].some(
+          (portId) => model.portById[portId]?.deviceId === focusedDeviceId,
+        );
+      const portSelected =
+        selectedPortId === route.link.fromPortId ||
+        selectedPortId === route.link.toPortId;
+      const rackSelected =
+        selectedRackId != null &&
+        [route.from.rackId, route.to.rackId].includes(selectedRackId);
+      if (
+        selected ||
+        hovered ||
+        traced ||
+        deviceSelected ||
+        portSelected ||
+        rackSelected
+      ) {
+        ids.add(route.link.id);
+      }
+    }
+    return ids;
+  }, [
+    hoveredCableId,
+    hoveredLooseDeviceId,
+    model.portById,
+    routes,
+    selectedPortId,
+    selectedRackId,
+    selection,
+    traceMode.enabled,
+    traceMode.result,
+  ]);
+
+  const annotationLayout = useMemo(() => {
+    const handoffGeometry = new Map(
+      layoutRackCablingHandoffLabels(
+        scene,
+        routes,
+        new Map([...handoffLabels].map(([id, label]) => [id, label.width])),
+      ).map((entry) => [entry.id, entry]),
+    );
+    const inputs = routes.flatMap((route) => {
+      const emphasized = emphasizedRouteIds.has(route.link.id);
+      const selectedOrHovered =
+        (selection?.kind === "cable" && selection.id === route.link.id) ||
+        hoveredCableId === route.link.id;
+      const selectedEndpoint =
+        selectedPortId === route.link.fromPortId
+          ? route.from
+          : selectedPortId === route.link.toPortId
+            ? route.to
+            : null;
+      const traced = Boolean(
+        traceMode.enabled && traceMode.result?.cableIds.has(route.link.id),
+      );
+      const priority = selectedOrHovered || selectedEndpoint ? 0 : traced ? 1 : 2;
+      const result = [];
+      if (!route.continuations.length && (showLabels || emphasized)) {
+        result.push({
+          id: `cable:${route.link.id}`,
+          linkId: route.link.id,
+          kind: "cable" as const,
+          text: route.label,
+          priority,
+          anchor: selectedEndpoint ?? route.labelPoint,
+          geometry: route.geometry,
+          preferredPoint: selectedEndpoint ?? (selectedOrHovered ? route.from : undefined),
+        });
+      }
+      for (const handoff of route.handoffs) {
+        if (
+          !(showLabels || emphasized) ||
+          (handoff.reason === "loose-tray" && !emphasized) ||
+          (route.continuations.length > 0 && handoff.reason === "hidden-face")
+        ) {
+          continue;
+        }
+        const key = `${route.link.id}:${handoff.endpoint}`;
+        const anchor = handoff.endpoint === "from" ? route.from : route.to;
+        const preferred = handoffGeometry.get(key);
+        result.push({
+          id: `handoff:${key}`,
+          linkId: route.link.id,
+          kind: "handoff" as const,
+          text: handoffLabels.get(key)?.text ?? handoffLabel(handoff),
+          priority,
+          anchor,
+          preferredPoint: preferred
+            ? { x: preferred.x, y: preferred.y }
+            : anchor,
+        });
+      }
+      return result;
+    });
+    return layoutRackCablingAnnotations(scene, inputs);
+  }, [
+    emphasizedRouteIds,
+    handoffLabel,
+    handoffLabels,
+    hoveredCableId,
+    routes,
+    scene,
+    selection,
+    selectedPortId,
+    showLabels,
+    traceMode.enabled,
+    traceMode.result,
+  ]);
+  const annotationById = useMemo(
+    () =>
+      new Map(annotationLayout.annotations.map((entry) => [entry.id, entry])),
+    [annotationLayout.annotations],
+  );
+
   const applyFit = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !scene) return;
+    const bounds = viewport.getBoundingClientRect();
+    const nextZoom = Math.max(
+      0.28,
+      Math.min(
+        1.35,
+        (bounds.width - 56) / Math.max(1, annotationLayout.width),
+        (bounds.height - 56) / Math.max(1, annotationLayout.height),
+      ),
+    );
+    setZoom(nextZoom);
+    setPan({
+      x: (bounds.width - annotationLayout.width * nextZoom) / 2,
+      y: (bounds.height - annotationLayout.height * nextZoom) / 2,
+    });
+  }, [annotationLayout.height, annotationLayout.width, scene]);
+
+  const applyStructuralFit = useCallback(() => {
     const viewport = viewportRef.current;
     if (!viewport || !scene) return;
     const bounds = viewport.getBoundingClientRect();
@@ -444,29 +726,35 @@ export function RackCablingCanvas({
 
   useEffect(() => {
     autoFitRef.current = true;
-    const frame = window.requestAnimationFrame(applyFit);
+    const frame = window.requestAnimationFrame(applyStructuralFit);
     return () => window.cancelAnimationFrame(frame);
-  }, [applyFit, roomId, faceMode, looseExpanded]);
+  }, [
+    applyStructuralFit,
+    roomSelectionKey,
+    faceMode,
+    looseExpandedRoomKey,
+    roomLayoutKey,
+  ]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
-      if (autoFitRef.current) applyFit();
+      if (autoFitRef.current) applyStructuralFit();
     });
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [applyFit]);
+  }, [applyStructuralFit]);
 
   useEffect(() => {
     setSearchIndex(0);
   }, [search]);
 
   useEffect(() => {
-    if (previousRoomIdRef.current === roomId) return;
-    previousRoomIdRef.current = roomId;
-    setSelection(null);
+    if (previousRoomIdsRef.current === roomSelectionKey) return;
+    previousRoomIdsRef.current = roomSelectionKey;
     setHoveredCableId(null);
+    setHoveredLooseDeviceId(null);
     setTraceMode((current) =>
       current.enabled
         ? {
@@ -477,7 +765,7 @@ export function RackCablingCanvas({
           }
         : current,
     );
-  }, [roomId, setTraceMode, t]);
+  }, [roomSelectionKey, setTraceMode, t]);
 
   useEffect(() => {
     if (!rackCablingSelectionIsInScope(selection, scope)) setSelection(null);
@@ -495,6 +783,7 @@ export function RackCablingCanvas({
         event.preventDefault();
         setSelection(null);
         setHoveredCableId(null);
+        setHoveredLooseDeviceId(null);
         setSearch("");
         setTraceMode({
           enabled: false,
@@ -526,12 +815,94 @@ export function RackCablingCanvas({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [fitCanvas, onToggleHealth, resetView, setTraceMode, toggleTraceMode]);
 
+  function sceneRoomPositions() {
+    return Object.fromEntries(
+      scene.rooms.map((room) => [room.room.id, { x: room.x, y: room.y }]),
+    ) as Record<string, RackCablingRoomPosition>;
+  }
+
+  function changeRoomLayout(mode: RackCablingRoomLayoutMode) {
+    if (mode === "manual") {
+      onRoomLayoutChange({
+        mode,
+        hubRoomId: null,
+        positions: sceneRoomPositions(),
+        locked: false,
+      });
+      return;
+    }
+    onRoomLayoutChange({
+      mode,
+      hubRoomId:
+        mode === "hub"
+          ? selectedRooms.some(
+              (room) => room.id === effectiveRoomLayout.hubRoomId,
+            )
+            ? effectiveRoomLayout.hubRoomId
+            : (selectedRooms[0]?.id ?? null)
+          : null,
+      positions: effectiveRoomLayout.positions,
+      locked: false,
+    });
+  }
+
+  function updateManualRoomPosition(roomId: string, x: number, y: number) {
+    onRoomLayoutChange({
+      mode: "manual",
+      hubRoomId: null,
+      positions: {
+        ...sceneRoomPositions(),
+        ...effectiveRoomLayout.positions,
+        [roomId]: { x: Math.round(x), y: Math.round(y) },
+      },
+      locked: effectiveRoomLayout.locked,
+    });
+  }
+
+  function beginRoomDrag(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    roomId: string,
+  ) {
+    const room = scene.rooms.find((entry) => entry.room.id === roomId);
+    if (
+      !room ||
+      (effectiveRoomLayout.mode === "manual" && effectiveRoomLayout.locked)
+    )
+      return;
+    event.preventDefault();
+    event.stopPropagation();
+    autoFitRef.current = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    roomDragRef.current = {
+      pointerId: event.pointerId,
+      roomId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      roomX: room.x,
+      roomY: room.y,
+    };
+    if (effectiveRoomLayout.mode !== "manual") {
+      onRoomLayoutChange({
+        mode: "manual",
+        hubRoomId: null,
+        positions: sceneRoomPositions(),
+        locked: false,
+      });
+    }
+  }
+
+  function nudgeRoom(roomId: string, dx: number, dy: number) {
+    const room = scene.rooms.find((entry) => entry.room.id === roomId);
+    if (!room || effectiveRoomLayout.locked) return;
+    autoFitRef.current = false;
+    updateManualRoomPosition(roomId, room.x + dx, room.y + dy);
+  }
+
   function beginPan(event: ReactPointerEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;
     if (target.closest("[data-rack-cabling-interactive='true']")) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     autoFitRef.current = false;
-    setSelection(null);
     event.currentTarget.setPointerCapture(event.pointerId);
     panRef.current = {
       pointerId: event.pointerId,
@@ -539,21 +910,41 @@ export function RackCablingCanvas({
       clientY: event.clientY,
       panX: pan.x,
       panY: pan.y,
+      moved: false,
     };
   }
 
   function movePan(event: ReactPointerEvent<HTMLDivElement>) {
+    const draggingRoom = roomDragRef.current;
+    if (draggingRoom?.pointerId === event.pointerId) {
+      updateManualRoomPosition(
+        draggingRoom.roomId,
+        draggingRoom.roomX + (event.clientX - draggingRoom.clientX) / zoom,
+        draggingRoom.roomY + (event.clientY - draggingRoom.clientY) / zoom,
+      );
+      return;
+    }
     const active = panRef.current;
     if (!active || active.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - active.clientX;
+    const deltaY = event.clientY - active.clientY;
+    if (!active.moved && Math.hypot(deltaX, deltaY) < 4) return;
+    active.moved = true;
     setPan({
-      x: active.panX + event.clientX - active.clientX,
-      y: active.panY + event.clientY - active.clientY,
+      x: active.panX + deltaX,
+      y: active.panY + deltaY,
     });
   }
 
   function endPan(event: ReactPointerEvent<HTMLDivElement>) {
+    if (roomDragRef.current?.pointerId === event.pointerId) {
+      roomDragRef.current = null;
+      return;
+    }
     if (panRef.current?.pointerId !== event.pointerId) return;
+    const moved = panRef.current.moved;
     panRef.current = null;
+    if (!moved && event.type === "pointerup") setSelection(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -578,6 +969,36 @@ export function RackCablingCanvas({
       x: pointerX - worldX * nextZoom,
       y: pointerY - worldY * nextZoom,
     });
+  }
+
+  useEffect(() => {
+    if (!pendingReveal) return;
+    const anchor = scene?.anchors.find(
+      (anchor) => anchor.portId === pendingReveal.portId,
+    );
+    const viewport = viewportRef.current;
+    if (!anchor || !viewport) return;
+    const bounds = viewport.getBoundingClientRect();
+    autoFitRef.current = false;
+    setZoom(1);
+    setPan({ x: bounds.width / 2 - anchor.x, y: bounds.height / 2 - anchor.y });
+    setSelection({ kind: "cable", id: pendingReveal.cableId });
+    setPendingReveal(undefined);
+  }, [scene, pendingReveal]);
+
+  function revealEndpoint(portId: string, cableId: string) {
+    const port = ports.find((port) => port.id === portId);
+    const device = devices.find((device) => device.id === port?.deviceId);
+    if (!port || !device) return;
+    const roomId =
+      racks.find((rack) => rack.id === device.rackId)?.roomId ?? device.roomId;
+    if (roomId && !roomIds.includes(roomId)) {
+      onRoomIdsChange([...roomIds, roomId]);
+    }
+    onFaceModeChange(
+      rackFaceForPhysicalFace(device, port.face === "rear" ? "rear" : "front"),
+    );
+    setPendingReveal({ portId, cableId });
   }
 
   function selectDevice(deviceId: string) {
@@ -703,35 +1124,6 @@ export function RackCablingCanvas({
     }
   }
 
-  function handoffLabel(handoff: RackCablingHandoff) {
-    const endpoint = `${handoff.deviceLabel} · ${handoff.portLabel}`;
-    if (handoff.reason === "cross-room") {
-      return t("{value1}: {name}", {
-        value1: t("Room"),
-        name: `${handoff.roomLabel ?? t("Unknown")} · ${endpoint}`,
-      });
-    }
-    if (handoff.reason === "hidden-face") {
-      return t("{value1}: {name}", {
-        value1: handoff.rackFace === "rear" ? t("Rear") : t("Front"),
-        name: endpoint,
-      });
-    }
-    if (handoff.reason === "loose-tray") {
-      return t("{value1}: {name}", {
-        value1: t("Loose gear"),
-        name: endpoint,
-      });
-    }
-    return t("{value1}: {name}", {
-      value1:
-        handoff.fallbackReason === "missing-layout"
-          ? `${t("Physical layout")} · ${t("Needs attention")}`
-          : t("Physical position unavailable"),
-      name: endpoint,
-    });
-  }
-
   function selectTracePort(deviceId: string, portId: string) {
     if (!traceMode.enabled) return;
     if (!traceMode.firstPortId) {
@@ -770,7 +1162,7 @@ export function RackCablingCanvas({
     setSelection({ kind: "port", id: portId });
   }
 
-  if (!room || !scene) {
+  if (rooms.length === 0) {
     return (
       <div className="grid h-[calc(100vh-8.5rem)] min-h-[620px] place-items-center border-t border-[var(--border-subtle)] bg-grid">
         <div className="rk-panel max-w-sm rounded-[var(--radius-md)] p-6 text-center">
@@ -790,7 +1182,7 @@ export function RackCablingCanvas({
   }
 
   return (
-    <div className="relative grid h-[calc(100vh-8.5rem)] min-h-[620px] border-t border-[var(--border-subtle)] bg-[var(--surface-1)] xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div ref={sidebar.containerRef} style={{"--inspector-width": `${sidebar.width}px`} as React.CSSProperties} className="relative grid h-[calc(100vh-8.5rem)] min-h-[620px] border-t border-[var(--border-subtle)] bg-[var(--surface-1)] xl:grid-cols-[minmax(0,1fr)_var(--inspector-width)]">
       <div className="relative min-h-0 min-w-0 overflow-hidden border-r border-[var(--border-default)]">
         <div
           ref={viewportRef}
@@ -803,30 +1195,99 @@ export function RackCablingCanvas({
           onPointerCancel={endPan}
           onWheel={handleWheel}
         >
-          {scene.racks.length === 0 && !scene.looseTray && (
+          {selectedRooms.length === 0 && (
             <div className="rk-panel absolute left-1/2 top-1/2 z-[60] w-[min(22rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-[var(--radius-md)] p-6 text-center">
               <Cable className="mx-auto size-8 text-[var(--accent-primary)]" />
               <h2 className="mt-3 text-sm font-semibold text-[var(--text-primary)]">
-                {t("No racks assigned")}
+                {t("No room selected")}
               </h2>
               <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">
-                {t("Assign a rack to this room from the rack editor.")}
+                {t("Select all")} · {t("Rooms")}
               </p>
-              <Button asChild size="sm" className="mt-4">
-                <Link to="/racks">{t("Go to Racks")}</Link>
-              </Button>
             </div>
           )}
+          {selectedRooms.length > 0 &&
+            scene.racks.length === 0 &&
+            scene.looseTrays.length === 0 && (
+              <div className="rk-panel absolute left-1/2 top-1/2 z-[60] w-[min(22rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-[var(--radius-md)] p-6 text-center">
+                <Cable className="mx-auto size-8 text-[var(--accent-primary)]" />
+                <h2 className="mt-3 text-sm font-semibold text-[var(--text-primary)]">
+                  {t("No racks assigned")}
+                </h2>
+                <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">
+                  {t("Assign a rack to this room from the rack editor.")}
+                </p>
+                <Button asChild size="sm" className="mt-4">
+                  <Link to="/racks">{t("Go to Racks")}</Link>
+                </Button>
+              </div>
+            )}
           <div
             data-testid="rack-cabling-scene"
             className="absolute left-0 top-0"
             style={{
-              width: scene.width,
-              height: scene.height,
+              width: annotationLayout.width,
+              height: annotationLayout.height,
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transformOrigin: "top left",
             }}
           >
+            <DeviceNameZoom zoom={zoom}>
+            {scene.rooms.map((roomFrame) => (
+              <section
+                key={roomFrame.room.id}
+                data-testid="rack-cabling-room-section"
+                data-room-id={roomFrame.room.id}
+                className="pointer-events-none absolute rounded-[var(--radius-md)] border border-[var(--border-muted)] bg-[color-mix(in_srgb,var(--surface-2)_35%,transparent)]"
+                style={{
+                  left: roomFrame.x,
+                  top: roomFrame.y,
+                  width: roomFrame.width,
+                  height: roomFrame.height,
+                }}
+              >
+                <h2 className="flex h-[38px] items-center justify-between border-b border-[var(--border-muted)] px-3 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
+                  <span>
+                    {t("Room")} · {roomFrame.room.name}
+                  </span>
+                  <button
+                    type="button"
+                    data-rack-cabling-interactive="true"
+                    data-testid="rack-cabling-room-drag-handle"
+                    aria-label={t("{value1}: {name}", {
+                      value1: t("Room"),
+                      name: roomFrame.room.name,
+                    })}
+                    className="pointer-events-auto rounded p-1 text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-[var(--accent-primary)]"
+                    disabled={
+                      effectiveRoomLayout.mode === "manual" &&
+                      effectiveRoomLayout.locked
+                    }
+                    onPointerDown={(event) =>
+                      beginRoomDrag(event, roomFrame.room.id)
+                    }
+                    onKeyDown={(event) => {
+                      const step = event.shiftKey ? 80 : 24;
+                      const move =
+                        event.key === "ArrowLeft"
+                          ? [-step, 0]
+                          : event.key === "ArrowRight"
+                            ? [step, 0]
+                            : event.key === "ArrowUp"
+                              ? [0, -step]
+                              : event.key === "ArrowDown"
+                                ? [0, step]
+                                : null;
+                      if (!move) return;
+                      event.preventDefault();
+                      nudgeRoom(roomFrame.room.id, move[0], move[1]);
+                    }}
+                  >
+                    <GripVertical className="size-3.5" aria-hidden="true" />
+                  </button>
+                </h2>
+              </section>
+            ))}
             {scene.racks.map((rackFrame) => {
               const rackDevices = devices.filter(
                 (device) => device.rackId === rackFrame.rack.id,
@@ -890,7 +1351,8 @@ export function RackCablingCanvas({
                         {rackFrame.rack.name}
                       </div>
                       <div className="truncate font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                        {room.name}
+                        {rooms.find((room) => room.id === rackFrame.rack.roomId)
+                          ?.name ?? t("Unknown")}
                       </div>
                     </div>
                     <span className="font-mono text-[9px] text-[var(--text-tertiary)]">
@@ -927,150 +1389,232 @@ export function RackCablingCanvas({
               );
             })}
 
-            {scene.looseTray && (
-              <section
-                className="absolute rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-2)_90%,transparent)] shadow-[var(--shadow-card)]"
-                style={{
-                  left: scene.looseTray.x,
-                  top: scene.looseTray.y,
-                  width: scene.looseTray.width,
-                  height: scene.looseTray.height,
-                }}
-              >
-                <button
-                  type="button"
-                  data-rack-cabling-interactive="true"
-                  className="flex h-[42px] w-full items-center gap-2 border-b border-[var(--border-default)] px-3 text-left"
-                  onClick={() => onLooseExpandedChange(!looseExpanded)}
+            {scene.rooms.map((roomFrame) => {
+              const tray = roomFrame.looseTray;
+              if (!tray) return null;
+              return (
+                <section
+                  key={`loose:${roomFrame.room.id}`}
+                  data-testid="rack-cabling-loose-tray"
+                  data-room-id={roomFrame.room.id}
+                  className="absolute rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--surface-2)_90%,transparent)] shadow-[var(--shadow-card)]"
+                  style={{
+                    left: tray.x,
+                    top: tray.y,
+                    width: tray.width,
+                    height: tray.height,
+                  }}
                 >
-                  <Box className="size-4 text-[var(--accent-primary)]" />
-                  <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-primary)]">
-                    {t("Loose gear")}
-                  </span>
-                  <span className="text-[10px] text-[var(--text-tertiary)]">
-                    {scene.looseTray.deviceCount} {t("devices")}
-                  </span>
-                  {looseExpanded ? (
-                    <ChevronUp className="ml-auto size-4" />
-                  ) : (
-                    <ChevronDown className="ml-auto size-4" />
-                  )}
-                </button>
-                {!looseExpanded &&
-                  Array.from(
-                    new Map(
-                      scene.anchors
-                        .filter(
-                          (anchor) =>
-                            anchor.kind === "loose-handoff" && !anchor.rackId,
-                        )
-                        .map((anchor) => [anchor.deviceId, anchor]),
-                    ).values(),
-                  ).map((anchor) => {
-                    const device = devices.find(
-                      (candidate) => candidate.id === anchor.deviceId,
+                  <button
+                    type="button"
+                    data-rack-cabling-interactive="true"
+                    className="flex h-[42px] w-full items-center gap-2 border-b border-[var(--border-default)] px-3 text-left"
+                    onClick={() =>
+                      onLooseExpandedChange(roomFrame.room.id, !tray.expanded)
+                    }
+                  >
+                    <Box className="size-4 text-[var(--accent-primary)]" />
+                    <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-primary)]">
+                      {t("Loose gear")}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-tertiary)]">
+                      {tray.deviceCount} {t("devices")} · {roomFrame.room.name}
+                    </span>
+                    {tray.expanded ? (
+                      <ChevronUp className="ml-auto size-4" />
+                    ) : (
+                      <ChevronDown className="ml-auto size-4" />
+                    )}
+                  </button>
+                  {roomFrame.looseSummaries.map((summary) => {
+                    const connected = routes.filter((route) =>
+                      [
+                        model.portById[route.link.fromPortId]?.deviceId,
+                        model.portById[route.link.toPortId]?.deviceId,
+                      ].includes(summary.device.id),
                     );
+                    const details = connected
+                      .map((route) =>
+                        [route.link.fromPortId, route.link.toPortId]
+                          .map((id) => {
+                            const port = model.portById[id];
+                            return `${model.deviceById[port?.deviceId]?.hostname ?? t("Unknown")} · ${port?.name ?? "?"} · ${t(port?.face === "rear" ? "Rear" : "Front")}`;
+                          })
+                          .join(" → "),
+                      )
+                      .join("\n");
+                    const detailsVisible =
+                      hoveredLooseDeviceId === summary.device.id ||
+                      (selection?.kind === "device" &&
+                        selection.id === summary.device.id);
+                    const detailsId = `loose-details-${summary.device.id}`;
                     return (
-                      <span
-                        key={anchor.deviceId}
-                        className="absolute top-[45px] flex max-w-28 -translate-x-1/2 items-center gap-1 truncate font-mono text-[8px] text-[var(--text-secondary)]"
-                        style={{ left: anchor.x - scene.looseTray!.x }}
+                      <div
+                        key={summary.device.id}
+                        className="absolute z-50 min-w-0 focus-within:z-[60] hover:z-[60]"
+                        data-rack-cabling-interactive="true"
+                        style={{
+                          left: summary.x - tray.x + 4,
+                          top: summary.y - tray.y + 3,
+                          width: summary.width - 8,
+                          height: summary.height - 8,
+                        }}
+                        onMouseEnter={() =>
+                          setHoveredLooseDeviceId(summary.device.id)
+                        }
+                        onMouseLeave={() => setHoveredLooseDeviceId(null)}
+                        onFocus={() =>
+                          setHoveredLooseDeviceId(summary.device.id)
+                        }
+                        onBlur={(event) => {
+                          if (
+                            !event.currentTarget.contains(event.relatedTarget)
+                          )
+                            setHoveredLooseDeviceId(null);
+                        }}
                       >
-                        <span className="size-1.5 shrink-0 rounded-full bg-[var(--accent-primary)]" />
-                        {device?.hostname ?? anchor.deviceId}
-                      </span>
+                        <button
+                          type="button"
+                          data-testid="loose-device-summary"
+                          data-device-name-host
+                          data-cabling-selection-id={`device:${summary.device.id}`}
+                          className="relative h-full w-full min-w-0 overflow-hidden rounded border border-[var(--border-default)] bg-[var(--surface-1)] px-2 text-left text-[11px] focus-visible:outline-2 focus-visible:outline-[var(--accent-primary)]"
+                          aria-describedby={
+                            detailsVisible ? detailsId : undefined
+                          }
+                          aria-label={t("{value1}: {name}", {
+                            value1: summary.device.hostname,
+                            name: `${connected.length} ${t("Cables")}`,
+                          })}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            selectDevice(summary.device.id);
+                          }}
+                        >
+                          <DeviceName
+                            name={summary.device.hostname}
+                            // Leave the scaled cable-count row clear below the name.
+                            maxHeight={summary.height - 8 - 24}
+                            selected={selection?.kind === "device" && selection.id === summary.device.id}
+                          />
+                          <span className="absolute bottom-1 left-2 block text-[var(--text-secondary)]">
+                            {t("Cables")}: {connected.length}
+                          </span>
+                        </button>
+                        {detailsVisible && (
+                          <div
+                            id={detailsId}
+                            role="tooltip"
+                            tabIndex={0}
+                            data-testid="loose-device-details"
+                            className="absolute bottom-full mb-1 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border border-[var(--border-default)] bg-[var(--surface-1)] p-3 text-xs shadow-lg"
+                            style={{
+                              width: Math.min(400, scene.width - 32),
+                              left: Math.min(0, scene.width - summary.x - 416),
+                            }}
+                          >
+                            {details || summary.device.hostname}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
-                {scene.looseCards.map((card) => {
-                  const matches =
-                    !matchingDeviceIds || matchingDeviceIds.has(card.device.id);
-                  const health = model.nodesByDeviceId[card.device.id]?.health;
-                  return (
-                    <div
-                      key={card.device.id}
-                      role="group"
-                      aria-label={card.device.hostname}
-                      data-rack-cabling-interactive="true"
-                      className={cn(
-                        "absolute overflow-hidden rounded-[var(--radius-sm)] border bg-[var(--surface-1)] text-left",
-                        highlightedDeviceIds.has(card.device.id)
-                          ? "border-[var(--accent-primary)]"
-                          : "border-[var(--border-strong)]",
-                        !matches && "opacity-20",
-                        healthOverlay &&
-                          health === "online" &&
-                          "border-emerald-400",
-                        healthOverlay &&
-                          health === "warning" &&
-                          "border-amber-400",
-                        healthOverlay &&
-                          health === "offline" &&
-                          "border-red-400",
-                      )}
-                      style={{
-                        left: card.x - scene.looseTray!.x,
-                        top: card.y - scene.looseTray!.y,
-                        width: card.width,
-                        height: card.height,
-                      }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        selectDevice(card.device.id);
-                      }}
-                    >
-                      <button
-                        type="button"
+                  {roomFrame.looseCards.map((card) => {
+                    const matches =
+                      !matchingDeviceIds ||
+                      matchingDeviceIds.has(card.device.id);
+                    const health =
+                      model.nodesByDeviceId[card.device.id]?.health;
+                    return (
+                      <div
+                        key={card.device.id}
+                        role="group"
+                        aria-label={card.device.hostname}
+                        data-device-name-host
+                        tabIndex={0}
                         data-cabling-selection-id={`device:${card.device.id}`}
-                        className="absolute left-2 top-1.5 z-10 font-mono text-[9px] font-semibold text-[var(--text-primary)]"
+                        onKeyDown={(event) => {
+                          if (event.target === event.currentTarget &&
+                            (event.key === "Enter" || event.key === " ")) {
+                            event.preventDefault();
+                            selectDevice(card.device.id);
+                          }
+                        }}
+                        data-rack-cabling-interactive="true"
+                        className={cn(
+                          "absolute overflow-hidden rounded-[var(--radius-sm)] border bg-[var(--surface-1)] text-left",
+                          highlightedDeviceIds.has(card.device.id)
+                            ? "border-[var(--accent-primary)]"
+                            : "border-[var(--border-strong)]",
+                          !matches && "opacity-20",
+                          healthOverlay &&
+                            health === "online" &&
+                            "border-emerald-400",
+                          healthOverlay &&
+                            health === "warning" &&
+                            "border-amber-400",
+                          healthOverlay &&
+                            health === "offline" &&
+                            "border-red-400",
+                        )}
+                        style={{
+                          left: card.x - tray.x,
+                          top: card.y - tray.y,
+                          width: card.width,
+                          height: card.height,
+                        }}
                         onClick={(event) => {
                           event.stopPropagation();
                           selectDevice(card.device.id);
                         }}
                       >
-                        {card.device.hostname}
-                      </button>
-                      {card.layout ? (
-                        card.faces.map((face) => (
-                          <PhysicalFaceplate
-                            key={face.face}
-                            layout={card.layout!}
-                            face={face.face}
-                            ports={ports.filter(
-                              (port) => port.deviceId === card.device.id,
-                            )}
-                            linkedPortIds={linkedPortIds}
-                            selectedPortId={selectedPortId ?? undefined}
-                            compact
-                            detail="simplified"
-                            fit="stretch"
-                            onSelectPort={(portId) =>
-                              selectPort(card.device.id, portId)
-                            }
-                            className="absolute rounded-[2px] shadow-none"
-                            style={{
-                              left: face.x - card.x,
-                              top: face.y - card.y,
-                              width: face.width,
-                              height: face.height,
-                            }}
-                          />
-                        ))
-                      ) : (
-                        <span className="absolute inset-x-2 bottom-2 rounded border border-dashed border-[var(--color-warning)]/50 px-2 py-2 text-[9px] text-[var(--color-warning)]">
-                          {t("Physical layout")} · {t("Needs attention")}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </section>
-            )}
+                        <DeviceName
+                          name={card.device.hostname}
+                          selected={highlightedDeviceIds.has(card.device.id)}
+                        />
+                        {card.layout ? (
+                          card.faces.map((face) => (
+                            <PhysicalFaceplate
+                              key={face.face}
+                              layout={card.layout!}
+                              face={face.face}
+                              ports={ports.filter(
+                                (port) => port.deviceId === card.device.id,
+                              )}
+                              linkedPortIds={linkedPortIds}
+                              selectedPortId={selectedPortId ?? undefined}
+                              compact
+                              detail="simplified"
+                              fit="stretch"
+                              onSelectPort={(portId) =>
+                                selectPort(card.device.id, portId)
+                              }
+                              className="absolute rounded-[2px] shadow-none"
+                              style={{
+                                left: face.x - card.x,
+                                top: face.y - card.y,
+                                width: face.width,
+                                height: face.height,
+                              }}
+                            />
+                          ))
+                        ) : (
+                          <span className="absolute inset-x-2 bottom-2 rounded border border-dashed border-[var(--color-warning)]/50 px-2 py-2 text-[9px] text-[var(--color-warning)]">
+                            {t("Physical layout")} · {t("Needs attention")}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </section>
+              );
+            })}
 
             <svg
               className="pointer-events-none absolute inset-0 z-40 overflow-visible"
-              width={scene.width}
-              height={scene.height}
-              viewBox={`0 0 ${scene.width} ${scene.height}`}
+              width={annotationLayout.width}
+              height={annotationLayout.height}
+              viewBox={`0 0 ${annotationLayout.width} ${annotationLayout.height}`}
               aria-label={t("Cables")}
             >
               {routes.map((route) => {
@@ -1082,10 +1626,12 @@ export function RackCablingCanvas({
                   traceMode.result?.cableIds.has(route.link.id),
                 );
                 const deviceSelected =
-                  selection?.kind === "device" &&
+                  (selection?.kind === "device" ||
+                    hoveredLooseDeviceId !== null) &&
                   [route.link.fromPortId, route.link.toPortId].some(
                     (portId) =>
-                      model.portById[portId]?.deviceId === selection.id,
+                      model.portById[portId]?.deviceId ===
+                      (hoveredLooseDeviceId ?? selection?.id),
                   );
                 const portSelected =
                   selectedPortId === route.link.fromPortId ||
@@ -1123,12 +1669,21 @@ export function RackCablingCanvas({
                   ? model.deviceById[toPort.deviceId]
                   : undefined;
                 const cableAriaLabel = `${fromDevice?.hostname ?? t("Unknown")} ${fromPort?.name ?? "?"} ${t("to")} ${toDevice?.hostname ?? t("Unknown")} ${toPort?.name ?? "?"}`;
+                const cableAnnotation = annotationById.get(
+                  `cable:${route.link.id}`,
+                );
                 return (
                   <g key={route.link.id}>
                     <path
                       d={route.path}
                       data-testid="rack-cabling-cable"
                       data-cable-id={route.link.id}
+                      data-from-room={route.from.roomId}
+                      data-to-room={route.to.roomId}
+                      data-handoff-count={route.handoffs.length}
+                      data-handoff-reasons={route.handoffs
+                        .map((handoff) => handoff.reason)
+                        .join(",")}
                       data-cabling-selection-id={`cable:${route.link.id}`}
                       fill="none"
                       stroke="transparent"
@@ -1158,7 +1713,7 @@ export function RackCablingCanvas({
                       fill="none"
                       stroke={route.color}
                       strokeWidth={
-                        selected || traced ? 4.5 : emphasized ? 3.5 : 2.5
+                        selected || traced ? 2.6 : emphasized ? 2 : 1.35
                       }
                       strokeDasharray={
                         route.handoffs.length > 0 ? "8 5" : undefined
@@ -1170,12 +1725,11 @@ export function RackCablingCanvas({
                           ? 0.08
                           : anyFocus && !emphasized
                             ? 0.14
-                            : route.handoffs.length > 0 && !emphasized
-                              ? 0.34
-                              : 0.9
+                            : 0.9
                       }
                     />
                     <CableContinuationMarkers
+                      onRevealEndpoint={revealEndpoint}
                       markers={route.continuations}
                       linkId={route.link.id}
                       cableLabel={route.label}
@@ -1191,73 +1745,43 @@ export function RackCablingCanvas({
                             : 0.9
                       }
                     />
-                    {!route.continuations.length &&
-                      (showLabels || selected || hovered) && (
-                        <text
-                          data-testid="rack-cabling-cable-label"
-                          x={route.labelPoint.x}
-                          y={route.labelPoint.y - 7}
-                          textAnchor="middle"
-                          fill="var(--text-primary)"
-                          stroke="var(--surface-1)"
-                          strokeWidth={4}
-                          paintOrder="stroke"
-                          fontSize={9}
-                          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-                          className="pointer-events-none"
-                        >
-                          {route.label}
-                        </text>
-                      )}
+                    {cableAnnotation ? (
+                      <RackCablingAnnotation
+                        geometry={cableAnnotation}
+                        text={route.label}
+                        testId="rack-cabling-cable-label"
+                      />
+                    ) : null}
                     {route.handoffs
                       .filter(
                         (handoff) =>
-                          !route.continuations.length ||
-                          handoff.reason !== "hidden-face",
+                          (showLabels || emphasized) &&
+                          (handoff.reason !== "loose-tray" || emphasized) &&
+                          (!route.continuations.length ||
+                            handoff.reason !== "hidden-face"),
                       )
                       .map((handoff) => {
-                        const geometry = handoffLabelGeometryById.get(
-                          `${route.link.id}:${handoff.endpoint}`,
-                        );
+                        const key = `${route.link.id}:${handoff.endpoint}`;
+                        const geometry = annotationById.get(`handoff:${key}`);
                         if (!geometry) return null;
                         return (
-                          <g key={handoff.anchorPortId}>
-                            {geometry.leaderPath ? (
-                              <path
-                                d={geometry.leaderPath}
-                                fill="none"
-                                stroke="var(--text-tertiary)"
-                                strokeWidth={0.75}
-                                strokeDasharray="2 2"
-                                className="pointer-events-none"
-                              />
-                            ) : null}
-                            <text
-                              data-testid="rack-cabling-handoff-label"
-                              data-handoff-lane={geometry.lane}
-                              data-handoff-packing-column={
-                                geometry.packingColumn
-                              }
-                              x={geometry.x}
-                              y={geometry.y}
-                              textAnchor={geometry.textAnchor}
-                              fill="var(--text-primary)"
-                              stroke="var(--surface-1)"
-                              strokeWidth={4}
-                              paintOrder="stroke"
-                              fontSize={9}
-                              fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-                              className="pointer-events-none"
-                            >
-                              {handoffLabel(handoff)}
-                            </text>
-                          </g>
+                          <RackCablingAnnotation
+                            key={handoff.anchorPortId}
+                            geometry={geometry}
+                            text={
+                              handoffLabels.get(key)?.text ??
+                              handoffLabel(handoff)
+                            }
+                            title={handoffLabels.get(key)?.full}
+                            testId="rack-cabling-handoff-label"
+                          />
                         );
                       })}
                   </g>
                 );
               })}
             </svg>
+            </DeviceNameZoom>
           </div>
         </div>
 
@@ -1265,18 +1789,158 @@ export function RackCablingCanvas({
           data-rack-cabling-interactive="true"
           className="rk-panel absolute left-3 top-3 z-50 flex max-w-[calc(100%-1.5rem)] items-center gap-2 overflow-x-auto rounded-[var(--radius-md)] p-2 shadow-[var(--shadow-card)]"
         >
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-label={t("{value1}: {name}", {
+                  value1: t("Rooms"),
+                  name: roomPickerLabel,
+                })}
+                data-testid="rack-cabling-room-picker"
+                className="w-44 shrink-0 justify-between"
+              >
+                <span className="truncate">{roomPickerLabel}</span>
+                <ChevronDown className="size-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              className="w-64 space-y-1 p-2"
+              data-rack-cabling-interactive="true"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-[var(--border-default)] pb-2">
+                <label className="flex min-w-0 items-center gap-2 text-xs font-medium text-[var(--text-primary)]">
+                  <input
+                    ref={allRoomsCheckboxRef}
+                    type="checkbox"
+                    checked={allRoomsSelected}
+                    aria-label={t("Select all")}
+                    onChange={(event) =>
+                      onRoomIdsChange(
+                        event.target.checked
+                          ? rooms.map((room) => room.id)
+                          : [],
+                      )
+                    }
+                  />
+                  <span className="truncate">
+                    {t("Select all")} · {t("Rooms")}
+                  </span>
+                </label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={selectedRooms.length === 0}
+                  onClick={() => onRoomIdsChange([])}
+                >
+                  {t("Clear")}
+                </Button>
+              </div>
+              <div className="max-h-64 space-y-0.5 overflow-y-auto">
+                {rooms.map((entry) => (
+                  <label
+                    key={entry.id}
+                    className="flex items-center gap-2 rounded px-2 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
+                  >
+                    <input
+                      type="checkbox"
+                      data-room-id={entry.id}
+                      checked={roomIds.includes(entry.id)}
+                      onChange={(event) =>
+                        onRoomIdsChange(
+                          event.target.checked
+                            ? [...roomIds, entry.id]
+                            : roomIds.filter((id) => id !== entry.id),
+                        )
+                      }
+                    />
+                    <span className="truncate">{entry.name}</span>
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
           <select
-            aria-label={t("Room")}
-            value={roomId}
-            onChange={(event) => onRoomIdChange(event.target.value)}
-            className="rk-control h-8 w-44 shrink-0 px-2 text-xs text-[var(--text-primary)]"
+            aria-label={t("Layout")}
+            value={effectiveRoomLayout.mode}
+            data-testid="rack-cabling-room-layout"
+            onChange={(event) =>
+              changeRoomLayout(event.target.value as RackCablingRoomLayoutMode)
+            }
+            className="rk-control h-8 w-28 shrink-0 px-2 text-xs text-[var(--text-primary)]"
           >
-            {rooms.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.name}
-              </option>
-            ))}
+            <option value="auto">{t("Auto")}</option>
+            <option value="hub">{t("Hub & spoke")}</option>
+            <option value="manual">{t("Manual")}</option>
           </select>
+          {effectiveRoomLayout.mode === "hub" && (
+            <select
+              aria-label={t("Room")}
+              value={effectiveRoomLayout.hubRoomId ?? ""}
+              data-testid="rack-cabling-hub-room"
+              onChange={(event) =>
+                onRoomLayoutChange({
+                  ...effectiveRoomLayout,
+                  hubRoomId: event.target.value || null,
+                })
+              }
+              className="rk-control h-8 w-36 shrink-0 px-2 text-xs text-[var(--text-primary)]"
+            >
+              {selectedRooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {effectiveRoomLayout.mode === "manual" && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={
+                effectiveRoomLayout.locked
+                  ? t("Unlock layout")
+                  : t("Lock layout")
+              }
+              title={
+                effectiveRoomLayout.locked
+                  ? t("Unlock layout")
+                  : t("Lock layout")
+              }
+              data-testid="rack-cabling-layout-lock"
+              onClick={() =>
+                onRoomLayoutChange({
+                  ...effectiveRoomLayout,
+                  locked: !effectiveRoomLayout.locked,
+                })
+              }
+            >
+              {effectiveRoomLayout.locked ? (
+                <Lock className="size-3.5" />
+              ) : (
+                <LockOpen className="size-3.5" />
+              )}
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={t("Auto")}
+            title={t("Auto")}
+            onClick={() =>
+              onRoomLayoutChange({
+                ...DEFAULT_RACK_CABLING_ROOM_LAYOUT,
+              })
+            }
+          >
+            <RotateCcw className="size-3.5" />
+          </Button>
           <div className="relative w-44 shrink-0">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--text-tertiary)]" />
             <Input
@@ -1409,7 +2073,15 @@ export function RackCablingCanvas({
         </div>
       </div>
 
-      <aside className="hidden min-h-0 overflow-y-auto bg-[var(--surface-1)] p-3 xl:block">
+      <aside className="relative hidden min-h-0 bg-[var(--surface-1)] xl:block">
+        <SidebarResize sidebar={sidebar} />
+        <div className="h-full overflow-y-auto p-3">
+        {traceMode.enabled && <TracePicker showMessage={false} model={model} eligiblePortIds={scenePortIds} traceMode={traceMode} onTracePortSelect={selectTracePort} onClearTrace={() => setTraceMode({enabled: true, firstPortId: null, result: null, message: null})} />}
+        {traceMode.enabled && traceMode.result && (
+          <div className="mb-3">
+            <TraceSummary model={model} result={traceMode.result} />
+          </div>
+        )}
         <VisualizerInspector
           model={model}
           selection={selection}
@@ -1422,18 +2094,25 @@ export function RackCablingCanvas({
           racksById={racksById}
           roomsById={roomsById}
         />
+        </div>
       </aside>
-      {selection && (
+      {(selection || (traceMode.enabled && !tracePanelClosed)) && (
         <aside className="absolute bottom-16 right-3 z-[70] max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overflow-y-auto rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-1)] p-3 pt-12 shadow-[var(--shadow-card)] xl:hidden">
           <Button
             variant="ghost"
             size="icon"
             aria-label={t("Close")}
             className="absolute right-4 top-4"
-            onClick={closeInspector}
+            onClick={() => { closeInspector(); setTracePanelClosed(true); }}
           >
             <X />
           </Button>
+          {traceMode.enabled && <TracePicker showMessage={false} model={model} eligiblePortIds={scenePortIds} traceMode={traceMode} onTracePortSelect={selectTracePort} onClearTrace={() => setTraceMode({enabled: true, firstPortId: null, result: null, message: null})} />}
+          {traceMode.enabled && traceMode.result && (
+            <div className="mb-3">
+              <TraceSummary model={model} result={traceMode.result} />
+            </div>
+          )}
           <VisualizerInspector
             model={model}
             selection={selection}
@@ -1449,6 +2128,58 @@ export function RackCablingCanvas({
         </aside>
       )}
     </div>
+  );
+}
+
+function RackCablingAnnotation({
+  geometry,
+  text,
+  title,
+  testId,
+}: {
+  geometry: RackCablingAnnotationGeometry;
+  text: string;
+  title?: string;
+  testId: string;
+}) {
+  return (
+    <g
+      data-testid={testId}
+      data-annotation-id={geometry.id}
+      data-label-rail={geometry.inRail ? "true" : "false"}
+      className="pointer-events-none"
+    >
+      {geometry.leaderPath ? (
+        <path
+          d={geometry.leaderPath}
+          fill="none"
+          stroke="var(--text-tertiary)"
+          strokeWidth={0.75}
+          strokeDasharray="2 2"
+        />
+      ) : null}
+      <rect
+        x={geometry.x}
+        y={geometry.y}
+        width={geometry.width}
+        height={geometry.height}
+        rx={3}
+        fill="var(--surface-1)"
+        stroke="var(--border-default)"
+        strokeWidth={0.75}
+      />
+      <text
+        x={geometry.textX}
+        y={geometry.textY}
+        textAnchor="middle"
+        fill="var(--text-primary)"
+        fontSize={9}
+        fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+      >
+        {title ? <title>{title}</title> : null}
+        {text}
+      </text>
+    </g>
   );
 }
 
@@ -1487,7 +2218,11 @@ function RackFaceFrame({
 }) {
   const { t } = useI18n();
   return (
-    <div className="absolute inset-0">
+    <div
+      className="absolute inset-0"
+      data-testid="rack-cabling-face"
+      data-rack-face={frame.face}
+    >
       <span
         className="absolute -top-5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
         style={{ left: frame.x - originX }}
@@ -1505,7 +2240,7 @@ function RackFaceFrame({
         className="absolute bg-[var(--bg-shell)] shadow-[inset_0_0_30px_rgb(0_0_0_/_0.34)]"
         style={{
           left: frame.x - originX - 12,
-          top: frame.y - originY - 8,
+          top: frame.y + frame.rackOffsetY - originY - 8,
         }}
       >
         {frame.equipment.map((item) => (
@@ -1513,7 +2248,7 @@ function RackFaceFrame({
             key={item.id}
             item={item}
             originX={frame.x}
-            originY={frame.y}
+            originY={frame.y + frame.rackOffsetY}
             ports={ports}
             linkedPortIds={linkedPortIds}
             selectedPortId={selectedPortId}

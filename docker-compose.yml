@@ -22,6 +22,7 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-0}
       TRUSTED_HOSTS: ${TRUSTED_HOSTS:-}
       TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+      MCP_ENABLED: ${MCP_ENABLED:-0}
       RACKPAD_RATE_LIMIT_DISABLED: ${RACKPAD_RATE_LIMIT_DISABLED:-0}
       RACKPAD_RATE_LIMIT_MAX: ${RACKPAD_RATE_LIMIT_MAX:-600}
       RACKPAD_RATE_LIMIT_WINDOW: ${RACKPAD_RATE_LIMIT_WINDOW:-1 minute}
@@ -71,7 +72,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:3000/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))",
+          "const configuredPort = Number(process.env.PORT); const port = Number.isSafeInteger(configuredPort) && configuredPort > 0 ? configuredPort : 3000; fetch('http://127.0.0.1:' + port + '/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))",
         ]
       interval: 30s
       timeout: 5s

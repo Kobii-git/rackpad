@@ -1,6 +1,6 @@
 # Rackpad Installation Guide
 
-Current stable release: `v1.8.3`
+Current stable release: `v1.8.4` (prepared candidate; confirm publication below).
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm
 the immutable tag and published artifacts before installation.
 
@@ -19,7 +19,7 @@ without cloning the repo, or clone the repo and build it yourself.
 ## Main Branch Or Version Tag?
 
 - `main` is the stable source branch and is fine for cloning the latest stable code.
-- `RACKPAD_TAG=1.8.3` pins the Docker image to a known release. Git tags use
+- `RACKPAD_TAG=1.8.4` pins the Docker image to a known release. Git tags use
   the `v` prefix, but Docker image tags do not.
 - `RACKPAD_TAG=latest` follows the newest published stable GHCR image and is
   convenient for quick installs or test labs.
@@ -35,6 +35,25 @@ from `beta`; for a pinned version, use its matching `v`-prefixed Git tag. Keep t
 manifest and image version paired. The maintenance installer resolves `latest`
 to `main`, `beta` to `beta`, `dev` to `dev`, and complete version tags to matching
 Git tags; custom images use the stable manifest.
+
+## Before upgrading to 1.8.4
+
+- Stop writes and retain a protected, consistent pre-upgrade database/volume
+  snapshot, configuration, original `RACKPAD_SECRET_KEY` and matching old image.
+- Stable 1.8.3 uses schema 51. This release advances to schema 54: saved cable
+  routing (52), opt-in MCP tokens (53), and independent stack-member layouts (54).
+  Existing device snapshots remain unchanged until template preview/apply.
+- MCP remains disabled by default. Tokens are scoped, expire, and are excluded
+  from backups; restore revokes them. Review [MCP guidance](docs/MCP.md) before enabling it.
+- Bind mounts retain host ownership. A Compose `user: "UID:GID"` override needs
+  matching writable directory/file ownership; `PUID`/`PGID` are unsupported.
+- Verify administrator access, lab isolation, inventory, connected ports,
+  monitoring and data persistence after upgrading.
+- Migrations are forward-only. Rollback restores the old image with its paired
+  pre-upgrade database/configuration/key; never open schema-54 data with 1.8.3.
+
+See the [1.8.4 release notes](docs/releases/v1.8.4.md). For installations older
+than 1.8.3, also follow the security precautions below.
 
 ## Before upgrading to 1.8.3
 
@@ -94,7 +113,7 @@ TRUSTED_ORIGINS=
 Most users only change:
 
 - `RACKPAD_PORT`: host port to expose, default `3000`.
-- `RACKPAD_TAG`: release version to run, for example `1.8.3`, or `latest` for
+- `RACKPAD_TAG`: release version to run, for example `1.8.4`, or `latest` for
   the newest stable GHCR image.
 - `TRUST_PROXY`, `TRUSTED_HOSTS`, `TRUSTED_ORIGINS`: set these when using a reverse proxy.
 
@@ -106,6 +125,100 @@ not publish UDP 1162; add an explicit `1162:1162/udp` mapping only when external
 SNMP traps must reach Rackpad, or use the privileged host-discovery profile.
 
 Rackpad stores its SQLite database in the Docker volume `rackpad_data`.
+
+### Bind mounts and container users
+
+For standard Docker deployments, the image runs as non-root UID `10001`.
+The group ID is assigned when the image is built; do not assume it is `10001`.
+Docker bind mounts retain the host directory's ownership, so replacing the named
+volume with a host path requires preparing that directory, even on a fresh install.
+The image's build-time ownership of `/data` cannot change a mounted host directory.
+
+From your Compose project directory, inspect the configured service identity and
+prepare a **new, empty** data directory before replacing the mount:
+
+```bash
+rackpad_uid=$(docker compose run --rm --no-deps --entrypoint id rackpad -u)
+rackpad_gid=$(docker compose run --rm --no-deps --entrypoint id rackpad -g)
+sudo install -d -o "$rackpad_uid" -g "$rackpad_gid" -m 0700 /opt/rackpad/data
+```
+
+Replace the existing `/data` entry in the `rackpad` service, retaining the other
+settings. This long syntax refuses a missing host directory:
+
+```yaml
+volumes:
+  - type: bind
+    source: /opt/rackpad/data
+    target: /data
+    bind:
+      create_host_path: false
+```
+
+To use a different non-root identity, add `user` directly under the service,
+at the same indentation as `image` and `environment`:
+
+```yaml
+services:
+  rackpad:
+    user: "1000:1000"
+```
+
+Use your intended numeric UID and GID in place of `1000:1000`. With that setting
+in place, the identity commands above return the override. `PUID` and `PGID`
+environment variables are **not supported** and do not change the process user.
+Retain the read-only root filesystem, `/tmp` tmpfs and `no-new-privileges` settings.
+Custom users also need write access to any configured native-backup directory.
+
+For an existing installation, stop Rackpad and back up its data and configuration
+together before changing mounts or ownership. Changing to an empty host directory
+starts a separate empty installation; it does not move the named volume's data.
+Preserve or restore the existing database into the intended mount. The directory
+and existing `rackpad.db`, `rackpad.db-wal` and `rackpad.db-shm` files, when present,
+must be accessible to the selected identity. Never copy a live SQLite database or
+use world-writable permissions to work around access failures. Recreate the
+container after the configuration change and verify the existing inventory.
+
+These instructions cover standard Docker profiles on Linux. Rootless Docker,
+user-namespace remapping and network filesystems may require host-side ID or ACL
+configuration. The explicitly privileged host-discovery profile runs as root;
+see [discovery storage ownership](docs/DOCKER_DISCOVERY.md#storage-ownership)
+before switching between profiles.
+
+### Host and container HTTP ports
+
+With standard bridge networking, `RACKPAD_PORT=3006` publishes host port 3006
+to container port 3000 (`3006:3000`). Rackpad still listens on `PORT=3000`
+inside the container. This is the usual way to avoid a host-port conflict,
+including in Unraid: change the host port and leave the container port at 3000.
+
+If the internal listening port must also change, edit the existing `rackpad`
+service's `PORT` value and replace its HTTP port mapping together. For example,
+these entries use port 3006 on both sides (retain the other service settings):
+
+```yaml
+environment:
+  PORT: 3006
+ports:
+  - "3006:3006"
+```
+
+For a direct Docker or Unraid installation, likewise set the container
+environment variable `PORT=3006` and map host port 3006 to container port 3006.
+Changing only the mapping does not change the port where Rackpad listens.
+Host-discovery Compose uses host networking without a port mapping;
+`RACKPAD_PORT=3006` sets its listening `PORT` to 3006 directly.
+
+The image and Compose healthchecks in current source read `PORT` inside the
+container and use the server's numeric parsing and fallback to 3000. Published
+v1.8.3 images and their standard Compose manifests still probe port 3000. For
+those installations, use `3006:3000` with `PORT=3000`, or replace the container's
+healthcheck with the port-aware check from the current release Compose source.
+
+When updating an existing deployment, update any Compose or Unraid healthcheck
+override too: it takes precedence over the image's healthcheck, so replacing
+the image alone does not replace a hardcoded override. Recreate the container
+after changing its configuration, retaining its existing data volume.
 
 ### Native SQLite snapshots (optional)
 
@@ -130,11 +243,13 @@ the defaults are disabled, every 24 hours, with seven snapshots retained.
 Create-now, list, download, and delete operations are restricted to admins and
 to Rackpad-generated `rackpad-native-*.db` files in that directory.
 
-Create the host directory for Rackpad's fixed non-root UID and restrict it
-before mounting it:
+Create the host directory for the configured service identity and restrict it
+before mounting it (run these from the Compose project directory):
 
 ```bash
-sudo install -d -o 10001 -g 10001 -m 0700 /srv/rackpad-native
+rackpad_uid=$(docker compose run --rm --no-deps --entrypoint id rackpad -u)
+rackpad_gid=$(docker compose run --rm --no-deps --entrypoint id rackpad -g)
+sudo install -d -o "$rackpad_uid" -g "$rackpad_gid" -m 0700 /srv/rackpad-native
 ```
 
 Rackpad creates snapshot files with mode `0600`.
@@ -240,7 +355,7 @@ sudo docker compose up --build -d
 To build an exact release instead of current `main`:
 
 ```bash
-sudo git checkout v1.8.3
+sudo git checkout v1.8.4
 sudo docker compose up --build -d
 ```
 
@@ -619,6 +734,16 @@ Your final proxy hop should pass:
 - `X-Forwarded-For`
 
 ## Troubleshooting
+
+### Database access fails with a bind mount
+
+`SqliteError: unable to open database file`, a read-only database error, or the
+`Database access failed` startup hint can mean that the data directory is missing
+or inaccessible to the container user. Check the effective UID/GID and ownership
+of both the directory and existing SQLite files using the
+[bind-mount instructions](#bind-mounts-and-container-users). A fresh directory
+can have the wrong ownership too. Adding `PUID`/`PGID` does not fix it, and running
+the ordinary profile as root is unnecessary.
 
 ### Direct URLs return JSON errors
 

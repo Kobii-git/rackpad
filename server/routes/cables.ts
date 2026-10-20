@@ -3,6 +3,11 @@ import { db } from "../db.js";
 import { writeAuditLogEntry } from "../lib/audit-log.js";
 import {
   decodeCableRouteWaypoints,
+  decodeCableRouteGuides,
+  parseCableRouteGuides,
+  parseCableRouteMode,
+  assertCableGuideReferences,
+  type CableRouteGuide,
   isPhysicalCableEndpoint,
   parseCableRouteWaypoints,
   physicalConnectorPairIsUsual,
@@ -75,6 +80,8 @@ function serializeLinkRow(row: Record<string, unknown> | undefined) {
     ...row,
     visible: row.visible !== 0 && row.visible !== false,
     routeWaypoints: decodeCableRouteWaypoints(row.routeWaypoints),
+    routeMode: parseCableRouteMode(row.routeMode, decodeCableRouteWaypoints(row.routeWaypoints)),
+    routeGuides: decodeCableRouteGuides(row.routeGuides),
   };
 }
 
@@ -104,6 +111,13 @@ function assertWaypointRooms(
   for (const waypoint of waypoints) {
     assertRackStudioWaypointBounds(waypoint);
   }
+}
+
+function assertGuideReferences(guides: CableRouteGuide[], labIds: string[]) {
+  assertCableGuideReferences(guides, labIds,
+    id => db.prepare(`SELECT devices.labId, COALESCE(racks.roomId, devices.roomId) AS roomId
+      FROM devices LEFT JOIN racks ON racks.id = devices.rackId WHERE devices.id = ?`).get(id) as { labId: string; roomId: string | null } | undefined,
+    id => db.prepare("SELECT labId FROM rooms WHERE id = ?").get(id) as { labId: string } | undefined);
 }
 
 function assertPhysicalPair(
@@ -198,6 +212,8 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     const label = optionalString(body, "label", { maxLength: 120 });
     const visible = optionalBoolean(body, "visible");
     const routeWaypoints = parseCableRouteWaypoints(body.routeWaypoints);
+    const routeMode = parseCableRouteMode(body.routeMode, routeWaypoints);
+    const routeGuides = parseCableRouteGuides(body.routeGuides);
     const physicalMode = optionalBoolean(body, "physicalMode") === true;
     const confirmUnusual =
       optionalBoolean(body, "confirmUnusual") === true;
@@ -218,6 +234,7 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     if (!assertLabWrite(req, reply, fromPort.labId)) return;
     if (!assertLabWrite(req, reply, toPort.labId)) return;
     assertWaypointRooms(routeWaypoints, [fromPort.labId, toPort.labId]);
+    assertGuideReferences(routeGuides, [fromPort.labId, toPort.labId]);
     if (physicalMode) {
       assertPhysicalPair(fromPort, toPort, confirmUnusual);
     }
@@ -241,8 +258,8 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     db.transaction(() => {
       db.prepare(
         `INSERT INTO portLinks
-          (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints, routeMode, routeGuides)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         id,
         fromPortId,
@@ -254,6 +271,8 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
         label ?? null,
         visible === false ? 0 : 1,
         JSON.stringify(routeWaypoints),
+        routeMode,
+        JSON.stringify(routeGuides),
       );
 
       db.prepare(
@@ -294,6 +313,8 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       "label",
       "visible",
       "routeWaypoints",
+      "routeMode",
+      "routeGuides",
     ]);
     const unknownFields = Object.keys(changes).filter(
       (key) => !allowedFields.has(key),
@@ -318,6 +339,10 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     )
       ? parseCableRouteWaypoints(changes.routeWaypoints)
       : undefined;
+    const routeMode = changes.routeMode !== undefined || routeWaypoints !== undefined
+      ? parseCableRouteMode(changes.routeMode, routeWaypoints) : undefined;
+    const routeGuides = Object.prototype.hasOwnProperty.call(changes, "routeGuides")
+      ? parseCableRouteGuides(changes.routeGuides) : undefined;
     const updates: string[] = [];
     const values: unknown[] = [];
     if (cableType !== undefined) {
@@ -348,6 +373,14 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       updates.push("routeWaypoints = ?");
       values.push(JSON.stringify(routeWaypoints));
     }
+    if (routeMode !== undefined) {
+      updates.push("routeMode = ?");
+      values.push(routeMode);
+    }
+    if (routeGuides !== undefined) {
+      updates.push("routeGuides = ?");
+      values.push(JSON.stringify(routeGuides));
+    }
     if (updates.length === 0) {
       throw new ValidationError("No valid cable fields to update.");
     }
@@ -362,6 +395,7 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       if (routeWaypoints !== undefined) {
         assertWaypointRooms(routeWaypoints, [link.fromLabId, link.toLabId]);
       }
+      if (routeGuides !== undefined) assertGuideReferences(routeGuides, [link.fromLabId, link.toLabId]);
     }
 
     const updateLink = db.prepare(
@@ -399,6 +433,7 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
           fromPortId: string;
           toPortId: string;
           routeWaypoints: unknown;
+          routeGuides: unknown;
         }
       | undefined;
     const access = getLinkAccessRow(req.params.id);
@@ -426,6 +461,10 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     )
       ? parseCableRouteWaypoints(body.routeWaypoints)
       : undefined;
+    const routeMode = body.routeMode !== undefined || routeWaypoints !== undefined
+      ? parseCableRouteMode(body.routeMode, routeWaypoints) : undefined;
+    const routeGuides = Object.prototype.hasOwnProperty.call(body, "routeGuides")
+      ? parseCableRouteGuides(body.routeGuides) : undefined;
     const physicalMode = optionalBoolean(body, "physicalMode") === true;
     const confirmUnusual =
       optionalBoolean(body, "confirmUnusual") === true;
@@ -486,6 +525,7 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       routeWaypoints ?? decodeCableRouteWaypoints(existing.routeWaypoints),
       [nextFromPort.labId, nextToPort.labId],
     );
+    assertGuideReferences(routeGuides ?? decodeCableRouteGuides(existing.routeGuides), [nextFromPort.labId, nextToPort.labId]);
 
     if (fromPortId !== undefined) {
       updates.push("fromPortId = ?");
@@ -522,6 +562,14 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     if (routeWaypoints !== undefined) {
       updates.push("routeWaypoints = ?");
       values.push(JSON.stringify(routeWaypoints));
+    }
+    if (routeMode !== undefined) {
+      updates.push("routeMode = ?");
+      values.push(routeMode);
+    }
+    if (routeGuides !== undefined) {
+      updates.push("routeGuides = ?");
+      values.push(JSON.stringify(routeGuides));
     }
 
     if (updates.length === 0)

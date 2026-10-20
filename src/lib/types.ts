@@ -167,6 +167,7 @@ export interface Rack {
 }
 
 export interface DeviceStackMember {
+  appliedLayout?: {sourceTemplateId: string; status: PhysicalLayoutStatus} | null;
   id: ID;
   deviceId: ID;
   position: number;
@@ -288,6 +289,7 @@ export type PhysicalFacePrimitiveV1 =
   | {
       kind: "panel" | "handle" | "vent" | "bay" | "display" | "outlet";
       id: string;
+      color?: string;
       x: number;
       y: number;
       width: number;
@@ -297,6 +299,7 @@ export type PhysicalFacePrimitiveV1 =
   | {
       kind: "screw" | "indicator";
       id: string;
+      color?: string;
       x: number;
       y: number;
       radius: number;
@@ -305,21 +308,30 @@ export type PhysicalFacePrimitiveV1 =
   | {
       kind: "label";
       id: string;
+      color?: string;
       x: number;
       y: number;
       text: string;
       align?: "start" | "middle" | "end";
     };
 
+export interface ArtworkReference {
+  elementId: string;
+  moduleId?: string;
+}
+
 export interface FaceDefinitionV1 {
   schemaVersion: 1;
   width: 1000;
   height: number;
+  shape?: "round";
   elements: PhysicalFacePrimitiveV1[];
+  artworkOrder?: ArtworkReference[];
 }
 
 export interface PhysicalPortSlotV1 {
   id: string;
+  color?: string;
   face: RackFace;
   x: number;
   y: number;
@@ -397,6 +409,7 @@ export interface HardwareTemplateV1 {
 
 export interface HardwareModuleV1 {
   id: string;
+  portGrid?: { rows: number; columns: number };
   name: string;
   slotId: string;
   face: RackFace;
@@ -884,6 +897,21 @@ export interface PortLink {
   label?: string;
   visible?: boolean;
   routeWaypoints?: CableRouteWaypoint[];
+  routeMode?: CableRouteMode;
+  routeGuides?: CableRouteGuide[];
+}
+
+export type CableRouteMode = "auto" | "direct" | "managed" | "manual";
+
+/** Coordinates are normalized to 0–1000 on each physical device face. */
+export interface CableRouteGuide {
+  id: ID;
+  deviceId: ID;
+  roomId: ID;
+  entryFace: RackFace;
+  exitFace: RackFace;
+  x: number;
+  y: number;
 }
 
 export interface CableRouteWaypoint {
@@ -1337,4 +1365,22 @@ export interface RackOccupant {
   device: Device;
   startU: number;
   heightU: number;
+}
+
+export interface StackMemberLayoutPreview {
+  deviceId: string;
+  memberId: string;
+  templateId: string;
+  moduleIds: string[];
+  unassignedPortIds: string[];
+  heightU: number;
+  currentHeightU: number;
+  suggestedHeightU: number;
+  snapshot: ResolvedPhysicalLayoutV1;
+  bindings: PortBindingV1[];
+  conflicts: string[];
+  unmappedPortIds: string[];
+  linkedUnmappedPortIds: string[];
+  portsToCreate: Array<{slotId: string; name: string; kind: string; face: RackFace}>;
+  expectedFingerprint: string;
 }

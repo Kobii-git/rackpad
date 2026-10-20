@@ -1,3 +1,4 @@
+import { physicalFaceRect } from "./physical-face";
 import type {
   Device,
   DevicePhysicalLayout,
@@ -191,13 +192,14 @@ function addEquipmentFaces(input: {
   }
 }
 
-function portAnchorsForEquipment(
+export function portAnchorsForEquipment(
   equipment: RackStudioSceneEquipment[],
   ports: Port[],
 ) {
   const portById = new Map(ports.map((port) => [port.id, port]));
   const anchors: RackStudioScenePortAnchor[] = [];
   for (const item of equipment) {
+    const rect = physicalFaceRect(item.layout.snapshot.faces[item.physicalFace], item.rect);
     const faceHeight =
       item.layout.snapshot.faces[item.physicalFace].height || 1;
     for (const binding of item.layout.bindings) {
@@ -219,12 +221,12 @@ function portAnchorsForEquipment(
         physicalFace: item.physicalFace,
         x:
           item.rotation === 90
-            ? item.rect.x + (1 - v) * item.rect.width
-            : item.rect.x + u * item.rect.width,
+            ? rect.x + (1 - v) * rect.width
+            : rect.x + u * rect.width,
         y:
           item.rotation === 90
-            ? item.rect.y + u * item.rect.height
-            : item.rect.y + v * item.rect.height,
+            ? rect.y + u * rect.height
+            : rect.y + v * rect.height,
       });
     }
   }
@@ -409,6 +411,16 @@ export function buildRackStudioScene(input: {
   };
 }
 
+export function rackTopBandOffset(rackId: string, devices: Device[], unitHeight = 42) {
+  const height = devices.reduce((maximum, device) => {
+    const state = devicePlacementState(device);
+    return state.mountKind === "rack-top" && state.rackId === rackId
+      ? Math.max(maximum, (state.heightU ?? 1) * unitHeight - 2)
+      : maximum;
+  }, 0);
+  return height > 0 ? height + 12 : 0;
+}
+
 export function buildRackElevationScene(input: {
   rack: Rack;
   rackFace: RackFace;
@@ -423,13 +435,7 @@ export function buildRackElevationScene(input: {
   const rackDevices = input.devices.filter(
     (device) => device.rackId === input.rack.id,
   );
-  const rackTopHeight = rackDevices.reduce((maximum, device) => {
-    const state = devicePlacementState(device);
-    return state.mountKind === "rack-top"
-      ? Math.max(maximum, (state.heightU ?? 1) * unitHeight - 2)
-      : maximum;
-  }, 0);
-  const rackOffsetY = rackTopHeight > 0 ? rackTopHeight + 12 : 0;
+  const rackOffsetY = rackTopBandOffset(input.rack.id, rackDevices, unitHeight);
   const height = rackOffsetY + input.rack.totalU * unitHeight + 16;
   const layoutByDevice = new Map(
     input.layouts.map((layout) => [layout.deviceId, layout]),

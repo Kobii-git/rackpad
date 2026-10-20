@@ -1122,6 +1122,7 @@ function formatDevicePlacementLabel(
       .join(" | ");
   }
 
+  if (rack && device.rackMountKind === "rack-top") return `${rack.name} | Rack top`;
   if (rack && device.startU) {
     return `${rack.name} | U${device.startU}`;
   }

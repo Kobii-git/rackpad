@@ -6,6 +6,7 @@ import type {
   AuthSession,
   Device,
   DeviceStackMember,
+  StackMemberLayoutPreview,
   DeviceImage,
   DevicePlacement,
   DeviceService,
@@ -104,6 +105,33 @@ export class ApiError extends Error {
 }
 
 export type DevicePatch = Nullable<Omit<Device, "id" | "labId">>;
+
+export interface McpTokenRecord {
+  id: string;
+  name: string;
+  capability: "read" | "write";
+  labIds: string[];
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+}
+
+export interface McpProposalRecord {
+  id: string;
+  labId: string;
+  createdAt: string;
+  expiresAt: string;
+  reviewLink: string;
+  summary: {
+    labId: string;
+    racks: Array<{ id: string; name: string }>;
+    devices: Array<{ id: string; hostname: string; placement: string }>;
+    ports: Array<{ id: string; deviceId: string; name: string }>;
+    connections: Array<{ id: string; fromPortId: string; toPortId: string }>;
+    warnings: string[];
+  };
+  batch?: unknown;
+}
 
 export interface NetboxDeviceTypeImportPreview {
   parsed: {
@@ -227,6 +255,8 @@ export type PortLinkBulkPatch = Nullable<
     | "label"
     | "visible"
     | "routeWaypoints"
+    | "routeMode"
+    | "routeGuides"
   >
 >;
 export type PortLinkCreate = Omit<PortLink, "id"> & {
@@ -506,6 +536,24 @@ async function requestBlob(
 }
 
 export const api = {
+  listMcpTokens() {
+    return request<McpTokenRecord[]>("/mcp-tokens");
+  },
+  createMcpToken(input: { name: string; capability: "read" | "write"; labIds: string[]; expiresInDays: number }) {
+    return request<McpTokenRecord & { token: string }>("/mcp-tokens", { method: "POST", body: JSON.stringify(input) });
+  },
+  revokeMcpToken(id: string) {
+    return request<void>(`/mcp-tokens/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  listMcpProposals() {
+    return request<McpProposalRecord[]>("/mcp-proposals");
+  },
+  getMcpProposal(id: string) {
+    return request<McpProposalRecord>(`/mcp-proposals/${encodeURIComponent(id)}`);
+  },
+  applyMcpProposal(id: string) {
+    return request<{ summary: McpProposalRecord["summary"] }>(`/mcp-proposals/${encodeURIComponent(id)}/apply`, { method: "POST" });
+  },
   getAuthStatus() {
     return request<AuthStatus>("/auth/status");
   },
@@ -1043,6 +1091,15 @@ export const api = {
     });
   },
 
+  getStackMemberLayout(id: string, memberId: string) {
+    return request<{sourceTemplateId: string; snapshot: import("./types").ResolvedPhysicalLayoutV1; bindings: import("./types").PortBindingV1[]} | null>(`/devices/${id}/stack-members/${memberId}/physical-layout`);
+  },
+  previewStackMemberLayout(id: string, memberId: string, body: {templateId: string; moduleIds?: string[]; unassignedPortIds?: string[]; heightU?: number; bindings?: import("./types").PortBindingV1[]}) {
+    return request<StackMemberLayoutPreview>(`/devices/${id}/stack-members/${memberId}/physical-layout/preview`, {method: "POST", body: JSON.stringify(body)});
+  },
+  applyStackMemberLayout(preview: StackMemberLayoutPreview, approvedPortSlotIds: string[], acceptHeightChange: boolean) {
+    return request<{memberId: string; createdPortIds: string[]}>(`/devices/${preview.deviceId}/stack-members/${preview.memberId}/physical-layout/apply`, {method: "POST", body: JSON.stringify({...preview, approvedPortSlotIds, acceptHeightChange})});
+  },
   getStackMembers(id: string) {
     return request<DeviceStackMember[]>(`/devices/${id}/stack-members`);
   },

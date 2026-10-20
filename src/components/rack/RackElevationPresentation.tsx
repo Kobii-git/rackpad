@@ -8,6 +8,7 @@ import { useI18n } from "@/i18n";
 import type { Device, DevicePhysicalLayout, Port, RackFace } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PhysicalFaceplate } from "./PhysicalFaceplate";
+import { DeviceName } from "./DeviceName";
 
 interface RackElevationShellProps {
   totalU: number;
@@ -17,6 +18,7 @@ interface RackElevationShellProps {
   railY?: number;
   rowOffset?: number;
   showColumns?: boolean;
+  compact?: boolean;
   className?: string;
   style?: CSSProperties;
   children?: ReactNode;
@@ -29,7 +31,8 @@ export function RackElevationShell({
   railX = 14,
   railY = 8,
   rowOffset = railY,
-  showColumns = true,
+  showColumns = false,
+  compact = true,
   className,
   style,
   children,
@@ -38,11 +41,13 @@ export function RackElevationShell({
     <div
       className={cn(
         "relative border-[var(--border-strong)] bg-[var(--color-bg)] shadow-[inset_0_0_36px_rgb(0_0_0_/_0.35)]",
+        compact && "shadow-none",
         className,
       )}
       style={{
         ...(width == null ? {} : { width }),
         height: totalU * unitHeight + railY * 2,
+        borderColor: compact ? "color-mix(in srgb, var(--border-subtle) 45%, var(--surface-1))" : undefined,
         borderLeftWidth: railX,
         borderRightWidth: railX,
         borderTopWidth: railY,
@@ -56,8 +61,9 @@ export function RackElevationShell({
           return (
             <span
               key={u}
-              className="absolute inset-x-0 border-b border-[var(--border-muted)]"
+              className="absolute inset-x-0 border-b border-[var(--border-subtle)]"
               style={{
+                opacity: showColumns ? 1 : 0.35,
                 top: index * unitHeight + rowOffset,
                 height: unitHeight,
               }}
@@ -72,7 +78,7 @@ export function RackElevationShell({
                 Array.from({ length: 11 }, (_, column) => (
                   <span
                     key={column}
-                    className="absolute inset-y-0 border-r border-dashed border-[var(--border-muted)] opacity-50"
+                    className="absolute inset-y-0 border-r border-dashed border-[var(--border-subtle)] opacity-50"
                     style={{ left: `${((column + 1) / 12) * 100}%` }}
                   />
                 ))}
@@ -150,20 +156,19 @@ export function RackElevationEquipmentFrame({
   const heightRatio = rectHeight > 0 ? rectWidth / rectHeight : 1;
   const interactive = Boolean(onSelectDevice);
   const hasPortControls = Boolean(onSelectPort);
-  const hostnameClassName = cn(
-    "absolute top-0.5 z-10 truncate rounded bg-black/70 px-1 py-0.5 font-mono text-[7px] text-white",
-    device.stackMembers ? "right-1 max-w-[45%]" : "left-1 max-w-[80%]",
-  );
 
   return (
     <div
-      role={interactive ? (hasPortControls ? "group" : "button") : undefined}
-      tabIndex={interactive && !hasPortControls ? 0 : undefined}
+      data-device-name-host
+      role={
+        interactive ? (hasPortControls || children ? "group" : "button") : undefined
+      }
+      tabIndex={interactive ? 0 : undefined}
       aria-label={interactive ? device.hostname : undefined}
       data-rack-cabling-interactive={interactive ? "true" : undefined}
       data-rack-cabling-equipment={interactive ? "true" : undefined}
       data-highlighted={selected ? "true" : "false"}
-      data-cabling-selection-id={!hasPortControls ? selectionId : undefined}
+      data-cabling-selection-id={selectionId}
       data-testid={testId}
       className={cn(
         "absolute overflow-hidden rounded-[2px] border bg-[var(--surface-1)] text-left outline-none transition-[box-shadow,border-color,opacity]",
@@ -189,7 +194,10 @@ export function RackElevationEquipmentFrame({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
       onKeyDown={(event) => {
-        if (!hasPortControls && (event.key === "Enter" || event.key === " ")) {
+        if (
+          event.target === event.currentTarget &&
+          (event.key === "Enter" || event.key === " ")
+        ) {
           event.preventDefault();
           onSelectDevice?.(device.id);
         }
@@ -203,8 +211,8 @@ export function RackElevationEquipmentFrame({
           ports={ports}
           linkedPortIds={linkedPortIds}
           selectedPortId={selectedPortId}
-          compact
-          detail={detail}
+          compact={!selected && detail !== "full"}
+          detail={selected ? "full" : detail}
           fit="stretch"
           onSelectPort={
             onSelectPort
@@ -232,23 +240,11 @@ export function RackElevationEquipmentFrame({
           {configurationWarning}
         </span>
       ) : null}
-      {interactive && hasPortControls ? (
-        <button
-          type="button"
-          data-cabling-selection-id={selectionId}
-          className={hostnameClassName}
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelectDevice?.(device.id);
-          }}
-        >
-          {device.hostname}
-        </button>
-      ) : (
-        <span className={cn("pointer-events-none", hostnameClassName)}>
-          {device.hostname}
-        </span>
-      )}
+      <DeviceName
+        name={device.hostname}
+        selected={selected}
+        widthFraction={device.stackMembers ? 0.45 : 1}
+      />
       {children}
     </div>
   );

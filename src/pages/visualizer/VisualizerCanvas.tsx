@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { DeviceName, DeviceNameZoom } from "@/components/rack/DeviceName";
 import { Link } from "react-router-dom";
 import {
   Cable,
@@ -57,6 +58,8 @@ import type { Port, Rack, Room } from "@/lib/types";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 import { formatPortEndpointLabel } from "@/lib/utils";
+import { TracePicker } from "./TracePicker";
+import { SidebarResize, useSidebarWidth } from "./SidebarResize";
 import { useI18n } from "@/i18n";
 import { useStore } from "@/lib/store";
 import {
@@ -73,6 +76,7 @@ import {
 import {
   buildTraceImageSvg,
   downloadTraceImagePng,
+  downloadTraceImageSvg,
   type TraceImageExport,
   type TraceImageTheme,
 } from "./trace-image";
@@ -185,6 +189,7 @@ export function VisualizerCanvas({
   const [searchIndex, setSearchIndex] = useState(0);
   const [pulsedDeviceId, setPulsedDeviceId] = useState<string | null>(null);
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
+  const sidebar = useSidebarWidth("grouped", 416);
   const [nodeDrag, setNodeDrag] = useState<{
     deviceId: string;
     pointerId: number;
@@ -634,8 +639,9 @@ export function VisualizerCanvas({
   }
 
   return (
+    <DeviceNameZoom zoom={transform.scale}>
     <TooltipProvider>
-      <div className="flex min-h-0 flex-1 gap-4 overflow-y-auto px-4 py-4 xl:overflow-hidden xl:px-6 xl:py-5">
+      <div ref={sidebar.containerRef} className="flex min-h-0 flex-1 gap-4 overflow-y-auto px-4 py-4 xl:overflow-hidden xl:px-6 xl:py-5">
         <div className="flex min-h-[620px] min-w-0 flex-1 flex-col xl:min-h-0">
           <Card className="min-h-0 flex flex-1 flex-col">
             <CardHeader className="flex-col lg:flex-row">
@@ -840,11 +846,11 @@ export function VisualizerCanvas({
         </div>
 
         <aside
-          className={`hidden h-full min-h-0 shrink-0 flex-col overflow-hidden xl:flex ${
-            sidePanelCollapsed ? "w-12" : "w-[26rem]"
-          }`}
+          className="relative hidden h-full min-h-0 shrink-0 flex-col xl:flex"
+          style={{width: sidePanelCollapsed ? 48 : sidebar.width}}
         >
-          <div className="flex h-full min-h-0 flex-col gap-3">
+          {!sidePanelCollapsed && <SidebarResize sidebar={sidebar} />}
+          <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
             <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-1)] px-2 py-2">
               {!sidePanelCollapsed && (
                 <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
@@ -914,6 +920,7 @@ export function VisualizerCanvas({
         </aside>
       </div>
     </TooltipProvider>
+    </DeviceNameZoom>
   );
 
   function isCableActive(cable: VisualizerCable) {
@@ -1353,14 +1360,6 @@ function DeviceCard({
   const showSecondaryLabel = readableLabels
     ? node.height >= 48
     : !compactRackNode;
-  const readableNameStyle = readableLabels
-    ? {
-        display: "-webkit-box",
-        WebkitBoxOrient: "vertical" as const,
-        WebkitLineClamp: node.height >= 58 ? 2 : 1,
-        overflow: "hidden",
-      }
-    : undefined;
   const portReserve = nodePortReserve(node, {
     compact: compactRackNode,
     readable: readableLabels,
@@ -1368,6 +1367,8 @@ function DeviceCard({
   return (
     <div
       data-visualizer-interactive="true"
+      data-visualizer-device-id={node.device.id}
+      data-device-name-host
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -1407,6 +1408,11 @@ function DeviceCard({
         })}
         title={node.device.hostname}
       />
+      <DeviceName
+        name={node.device.hostname}
+        selected={selected}
+        reservedLeft={32}
+      />
       <span
         className="pointer-events-none absolute inset-y-1 left-1 z-10 w-0.5 rounded-full"
         style={{ background: stripe }}
@@ -1415,16 +1421,7 @@ function DeviceCard({
         <span className="shrink-0" style={{ color: node.typeColor }}>
           <DeviceTypeIcon type={node.device.deviceType} className="size-4" />
         </span>
-        <div className="min-w-0 flex-1">
-          <div
-            className={`font-semibold text-[var(--text-primary)] ${
-              readableLabels ? "text-[13px] leading-[1.15]" : "truncate text-xs"
-            }`}
-            style={readableNameStyle}
-            title={node.device.hostname}
-          >
-            {node.device.hostname}
-          </div>
+        <div className="min-w-0 flex-1 pt-4">
           {showSecondaryLabel && (
             <div className="truncate font-mono text-[9px] text-[var(--text-tertiary)]">
               {formatDeviceAddress(
@@ -2049,126 +2046,6 @@ function VisualizerSidePanel({
   );
 }
 
-function TracePicker({
-  model,
-  traceMode,
-  onTracePortSelect,
-  onClearTrace,
-}: {
-  model: VisualizerModel;
-  traceMode: TraceModeState;
-  onTracePortSelect: (deviceId: string, portId: string) => void;
-  onClearTrace: () => void;
-}) {
-  const { t } = useI18n();
-  const traceDevices = useMemo(
-    () =>
-      model.nodes
-        .filter(
-          (node) => (model.portsByDeviceId[node.device.id] ?? []).length > 0,
-        )
-        .sort((a, b) => a.device.hostname.localeCompare(b.device.hostname)),
-    [model],
-  );
-  const [deviceId, setDeviceId] = useState(traceDevices[0]?.device.id ?? "");
-  const devicePorts = useMemo(
-    () => (deviceId ? (model.portsByDeviceId[deviceId] ?? []) : []),
-    [deviceId, model.portsByDeviceId],
-  );
-  const [portId, setPortId] = useState(devicePorts[0]?.id ?? "");
-
-  useEffect(() => {
-    if (traceDevices.some((node) => node.device.id === deviceId)) return;
-    setDeviceId(traceDevices[0]?.device.id ?? "");
-  }, [deviceId, traceDevices]);
-
-  useEffect(() => {
-    if (devicePorts.some((port) => port.id === portId)) return;
-    setPortId(devicePorts[0]?.id ?? "");
-  }, [devicePorts, portId]);
-
-  const firstPort = traceMode.firstPortId
-    ? model.portById[traceMode.firstPortId]
-    : undefined;
-  const firstDevice = firstPort
-    ? model.deviceById[firstPort.deviceId]
-    : undefined;
-
-  return (
-    <Card className="shrink-0">
-      <CardHeader>
-        <CardTitle>
-          <CardLabel>{t("Trace")}</CardLabel>
-          <CardHeading>{t("Device and port")}</CardHeading>
-        </CardTitle>
-        {traceMode.firstPortId && (
-          <Button variant="ghost" size="sm" onClick={onClearTrace}>
-            {t("Reset")}
-          </Button>
-        )}
-      </CardHeader>
-      <CardBody className="space-y-3">
-        {firstPort && firstDevice && (
-          <div className="rounded-[var(--radius-sm)] border border-[var(--accent-primary-border)] bg-[var(--accent-primary)]/8 px-3 py-2">
-            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-              {t("Start port")}
-            </div>
-            <div className="mt-1 truncate text-xs text-[var(--text-primary)]">
-              {firstDevice.hostname} / {firstPort.name}
-            </div>
-          </div>
-        )}
-        <div className="grid grid-cols-2 gap-2">
-          <LayoutField label={t("Device")}>
-            <select
-              value={deviceId}
-              onChange={(event) => setDeviceId(event.target.value)}
-              className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
-              data-testid="trace-device-select"
-            >
-              {traceDevices.map((node) => (
-                <option key={node.device.id} value={node.device.id}>
-                  {node.device.hostname}
-                </option>
-              ))}
-            </select>
-          </LayoutField>
-          <LayoutField label={t("Port")}>
-            <select
-              value={portId}
-              onChange={(event) => setPortId(event.target.value)}
-              className="rk-control h-8 w-full px-2 text-xs text-[var(--text-primary)]"
-              data-testid="trace-port-select"
-            >
-              {devicePorts.map((port) => (
-                <option key={port.id} value={port.id}>
-                  {formatPortEndpointLabel(
-                    port,
-                    model.deviceById[port.deviceId],
-                  )}
-                </option>
-              ))}
-            </select>
-          </LayoutField>
-        </div>
-        <Button
-          size="sm"
-          className="w-full"
-          disabled={!deviceId || !portId}
-          onClick={() => onTracePortSelect(deviceId, portId)}
-          data-testid="trace-submit"
-        >
-          {traceMode.firstPortId ? t("Trace to port") : t("Set start port")}
-        </Button>
-        {traceMode.message && (
-          <div className="text-xs text-[var(--text-tertiary)]">
-            {traceMode.message}
-          </div>
-        )}
-      </CardBody>
-    </Card>
-  );
-}
 
 export type VisualizerInspectionSelection =
   | Exclude<VisualizerSelection, null>
@@ -2376,8 +2253,8 @@ export function VisualizerInspector({
                   {cable.fromDevice?.hostname ?? t("Unknown")} {t("to")}{" "}
                   {cable.toDevice?.hostname ?? t("Unknown")}
                 </div>
-                <Mono className="text-[10px] text-[var(--text-tertiary)]">
-                  {cable.fromPort?.name ?? "?"} {t("to")}
+                <Mono data-testid="visible-link-ports" className="text-[10px] text-[var(--text-tertiary)]">
+                  {cable.fromPort?.name ?? "?"} {t("to")}{" "}
                   {cable.toPort?.name ?? "?"}
                 </Mono>
               </div>
@@ -2521,10 +2398,8 @@ function DeviceInspector({
           label={t("Ports")}
           value={`${node.portSummary.linked}/${node.portSummary.total} ${t("linked")}`}
         />
-        <InfoBox
-          label={t("Vendor")}
-          value={node.vendor ?? node.device.manufacturer}
-        />
+        <InfoBox label={t("Manufacturer")} value={node.device.manufacturer} />
+        <InfoBox label={t("Vendor")} value={node.vendor} />
       </div>
       <div>
         <div className="rk-kicker mb-2">{t("Direct connections")}</div>
@@ -2550,8 +2425,8 @@ function DeviceInspector({
                   <span className="block truncate text-xs font-medium text-[var(--text-primary)]">
                     {neighbor.device.hostname}
                   </span>
-                  <Mono className="text-[10px] text-[var(--text-tertiary)]">
-                    {neighbor.port.name} {t("to")}
+                  <Mono data-testid="direct-connection-ports" className="text-[10px] text-[var(--text-tertiary)]">
+                    {neighbor.port.name} {t("to")}{" "}
                     {neighbor.peerPort.name}
                     {neighbor.link.cableLength
                       ? t("| {cableLength}", {
@@ -2626,7 +2501,7 @@ function CableInspector({
   );
 }
 
-function TraceSummary({
+export function TraceSummary({
   model,
   result,
 }: {
@@ -2740,9 +2615,18 @@ function TraceSummary({
     }
   }
 
+  function downloadSvg(traceImage?: TraceImageExport) {
+    setImageError(null);
+    try {
+      downloadTraceImageSvg(traceImage ?? buildTraceImage());
+    } catch {
+      setImageError(t("Something went wrong. Try again."));
+    }
+  }
+
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--accent-primary-border)] bg-[var(--accent-primary-soft)] p-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-3">
         <div>
           <div className="rk-kicker">{t("Trace hops")}</div>
           <div className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
@@ -2750,7 +2634,7 @@ function TraceSummary({
             {result.totalCableLengthLabel}
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="flex min-w-0 flex-wrap gap-2 [&>button]:h-auto [&>button]:min-h-8 [&>button]:max-w-full [&>button]:whitespace-normal">
           <Button
             variant="outline"
             size="sm"
@@ -2795,6 +2679,17 @@ function TraceSummary({
           >
             <Download className="size-3.5" />
             {preparingImage ? t("Preparing...") : t("Download image")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadSvg()}
+            disabled={!traceText}
+            aria-label={t("Download SVG")}
+            data-testid="trace-download-svg"
+          >
+            <Download className="size-3.5" />
+            {t("Download SVG")}
           </Button>
         </div>
       </div>
@@ -2877,6 +2772,15 @@ function TraceSummary({
                   >
                     <Download className="size-3.5" />
                     {preparingImage ? t("Preparing...") : t("Download image")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadSvg(activeImagePreview.traceImage)}
+                    data-testid="trace-preview-download-svg"
+                  >
+                    <Download className="size-3.5" />
+                    {t("Download SVG")}
                   </Button>
                   <Button
                     ref={previewCloseButtonRef}

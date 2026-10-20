@@ -5,7 +5,9 @@ import {
   automaticRackCanvasPosition,
   devicePlacementState,
   directPlacementState,
+  findRackStudioPlacementConflicts,
   rackTopPlacementState,
+  reconcileFocusedRackId,
   shelfPlacementBounds,
   validateDirectPlacementPreview,
   validateRackTopPlacementPreview,
@@ -23,6 +25,13 @@ test("automatic rack positions are deterministic and form a stable grid", () => 
   assert.deepEqual(automaticRackCanvasPosition(0), { x: 30, y: 34 });
   assert.deepEqual(automaticRackCanvasPosition(4), { x: 790, y: 34 });
   assert.deepEqual(automaticRackCanvasPosition(5), { x: 30, y: 326 });
+});
+
+test("focused rack keeps canvas selection until the external initial rack changes", () => {
+  const availableRackIds = ["rack-a", "rack-b", "rack-c"];
+  assert.equal(reconcileFocusedRackId({ currentRackId: "rack-b", initialRackId: "rack-a", previousInitialRackId: "rack-a", availableRackIds }), "rack-b");
+  assert.equal(reconcileFocusedRackId({ currentRackId: "rack-b", initialRackId: "rack-c", previousInitialRackId: "rack-a", availableRackIds }), "rack-c");
+  assert.equal(reconcileFocusedRackId({ currentRackId: "missing", initialRackId: "rack-a", previousInitialRackId: "rack-a", availableRackIds }), "rack-a");
 });
 
 test("12-column preview permits adjacent thirds and rejects intersections", () => {
@@ -58,14 +67,67 @@ test("12-column preview permits adjacent thirds and rejects intersections", () =
     { valid: true, reason: null },
   );
   const overlap = { ...adjacent, column: 3 };
-  assert.match(
-    validateDirectPlacementPreview({
+  const conflict = validateDirectPlacementPreview({
       targetDeviceId: "target",
       next: overlap,
       rack,
       devices: [existing],
-    }).reason ?? "",
-    /existing-third/,
+    });
+  assert.match(conflict.reason ?? "", /existing-third/);
+  assert.equal(conflict.conflictDeviceId, existing.id);
+  assert.equal(conflict.conflictDeviceName, existing.hostname);
+});
+
+test("direct preview uses legacy rack-slot geometry even with stale mount metadata", () => {
+  const occupant = device({
+    id: "legacy-occupant",
+    hostname: "legacy-occupant",
+    placement: "rack",
+    rackId: rack.id,
+    startU: 2,
+    heightU: 1,
+    face: "front",
+    rackSlot: "full",
+    rackMountKind: "loose",
+  });
+  for (const legacy of [occupant, { ...occupant, rackMountKind: "side" as const }, { ...occupant, placement: "shelf" as const, rackMountKind: "shelf" as const }]) {
+    const preview = validateDirectPlacementPreview({
+      targetDeviceId: "mover",
+      next: directPlacementState({
+        roomId: rack.roomId ?? null,
+        rackId: rack.id,
+        startU: 2,
+        heightU: 1,
+        face: "front",
+        column: 0,
+        columnSpan: 12,
+      }),
+      rack,
+      devices: [legacy],
+    });
+    assert.equal(preview.valid, false);
+    assert.equal(preview.conflictDeviceId, occupant.id);
+  }
+});
+
+test("existing overlaps remain selectable for both legacy and current placements", () => {
+  const first = device({
+    id: "first", hostname: "first", placement: "rack", rackId: rack.id,
+    startU: 2, heightU: 2, face: "front", rackSlot: "left",
+    rackMountKind: "loose",
+  });
+  const second = device({
+    id: "second", hostname: "second", placement: "rack", rackId: rack.id,
+    startU: 3, heightU: 1, face: "front", rackSlot: "left",
+    rackMountKind: "direct",
+  });
+  const rear = device({
+    ...second, id: "rear", hostname: "rear", face: "rear",
+  });
+  assert.deepEqual(
+    findRackStudioPlacementConflicts([first, second, rear], rack.id, "front")
+      .map(({ device, other }) => [device.id, other.id]),
+    [["first", "second"]],
   );
 });
 
@@ -130,14 +192,17 @@ test("rack-top placement reuses rack columns and rejects occupied surface ranges
     }),
     { valid: true, reason: null },
   );
-  assert.match(
-    validateRackTopPlacementPreview({
+  const conflict = validateRackTopPlacementPreview({
       targetDeviceId: "top-target",
-      next: { ...adjacent, column: 5 },
+      next: { ...adjacent, face: "rear", column: 5 },
       rack,
       devices: [existing],
-    }).reason ?? "",
-    /top-existing/,
+    });
+  assert.match(conflict.reason ?? "", /top-existing/);
+  assert.equal(conflict.conflictDeviceId, existing.id);
+  assert.deepEqual(
+    validateRackTopPlacementPreview({ targetDeviceId: "top-target", next: { ...adjacent, column: 0, face: "front" }, rack, devices: [existing] }),
+    { valid: true, reason: null },
   );
 });
 
@@ -151,3 +216,11 @@ function device(overrides: Partial<Device>): Device {
     ...overrides,
   };
 }
+
+test("legacy missing heights use the same occupied 1U footprint as the server", () => {
+  const existing = device({id:"missing-height", hostname:"Legacy occupant", rackId:rack.id, startU:4, heightU:undefined, rackMountKind:"side", placement:"rack", rackSlot:"left"});
+  assert.equal(devicePlacementState(existing).mountKind,"direct");
+  const next = directPlacementState({roomId:rack.roomId!,rackId:rack.id,startU:4,heightU:1,face:"front",column:0,columnSpan:6});
+  assert.equal(validateDirectPlacementPreview({targetDeviceId:"mover",next,rack,devices:[existing]}).conflictDeviceId,existing.id);
+  assert.equal(validateDirectPlacementPreview({targetDeviceId:"mover",next:{...next,face:"rear"},rack,devices:[existing]}).valid,true);
+});

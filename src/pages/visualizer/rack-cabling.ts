@@ -1,3 +1,4 @@
+import { physicalFaceRect } from "../../lib/physical-face";
 import type {
   Device,
   DevicePhysicalLayout,
@@ -14,6 +15,7 @@ import {
 } from "@/lib/rack-studio";
 import {
   buildRackElevationScene,
+  rackTopBandOffset,
   physicalFaceForRackFace,
   rackFaceForPhysicalFace,
   type RackStudioRect,
@@ -22,6 +24,9 @@ import {
   cableCategoryForPorts,
   defaultCableColor,
   planPhysicalCableRoutes,
+  cableRouteMode,
+  resolveCableGuidePoints,
+  projectCableWaypoints,
   cableGeometryLabelPoint,
   type CablePoint,
   type CableContinuationMarker,
@@ -32,6 +37,117 @@ import { normalizeColorToCss } from "@/lib/utils";
 import type { VisualizerRackFaceMode } from "./types";
 
 export type RackCablingRouteStyle = "smooth" | "orthogonal";
+
+export type RackCablingRoomLayoutMode = "auto" | "hub" | "manual";
+
+export interface RackCablingRoomPosition {
+  x: number;
+  y: number;
+}
+
+export interface RackCablingRoomLayout {
+  mode: RackCablingRoomLayoutMode;
+  hubRoomId: string | null;
+  positions: Record<string, RackCablingRoomPosition>;
+  locked: boolean;
+}
+
+export const DEFAULT_RACK_CABLING_ROOM_LAYOUT: RackCablingRoomLayout = {
+  mode: "auto",
+  hubRoomId: null,
+  positions: {},
+  locked: false,
+};
+
+export function parseRackCablingRoomLayout(
+  value: unknown,
+): RackCablingRoomLayout {
+  if (!value || typeof value !== "object") {
+    return { ...DEFAULT_RACK_CABLING_ROOM_LAYOUT };
+  }
+  const candidate = value as Partial<RackCablingRoomLayout>;
+  const mode =
+    candidate.mode === "hub" || candidate.mode === "manual"
+      ? candidate.mode
+      : "auto";
+  const positions =
+    candidate.positions && typeof candidate.positions === "object"
+      ? Object.fromEntries(
+          Object.entries(candidate.positions).filter(([, position]) => {
+            if (!position || typeof position !== "object") return false;
+            const point = position as Partial<RackCablingRoomPosition>;
+            return Number.isFinite(point.x) && Number.isFinite(point.y);
+          }),
+        ) as Record<string, RackCablingRoomPosition>
+      : {};
+  return {
+    mode,
+    hubRoomId:
+      typeof candidate.hubRoomId === "string" ? candidate.hubRoomId : null,
+    positions,
+    locked: mode === "manual" && candidate.locked === true,
+  };
+}
+
+export function reconcileRackCablingRoomLayout(input: {
+  layout: RackCablingRoomLayout;
+  availableRoomIds: string[];
+}): RackCablingRoomLayout {
+  const available = new Set(input.availableRoomIds);
+  const parsed = parseRackCablingRoomLayout(input.layout);
+  return {
+    ...parsed,
+    hubRoomId:
+      parsed.hubRoomId && available.has(parsed.hubRoomId)
+        ? parsed.hubRoomId
+        : null,
+    positions: Object.fromEntries(
+      Object.entries(parsed.positions).filter(([roomId]) => available.has(roomId)),
+    ),
+  };
+}
+
+export function parseRackCablingRoomSelection(
+  value: string | null,
+): string[] | null {
+  if (value == null) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (
+      !Array.isArray(parsed) ||
+      !parsed.every((entry) => typeof entry === "string")
+    ) {
+      return null;
+    }
+    return parsed.filter(
+      (entry, index) => parsed.indexOf(entry) === index,
+    ) as string[];
+  } catch {
+    return null;
+  }
+}
+
+export function reconcileRackCablingRoomSelection(input: {
+  selection: string[] | null;
+  legacyRoomId?: string | null;
+  availableRoomIds: string[];
+  preferredRoomId?: string | null;
+}) {
+  const available = new Set(input.availableRoomIds);
+  if (input.selection !== null) {
+    return input.selection.filter(
+      (id, index, values) => available.has(id) && values.indexOf(id) === index,
+    );
+  }
+  if (input.legacyRoomId && available.has(input.legacyRoomId)) {
+    return [input.legacyRoomId];
+  }
+  const preferred =
+    input.preferredRoomId && available.has(input.preferredRoomId)
+      ? input.preferredRoomId
+      : input.availableRoomIds[0];
+  return preferred ? [preferred] : [];
+}
 
 export type RackCablingFallbackReason =
   "missing-layout" | "unavailable-position";
@@ -51,6 +167,7 @@ export interface RackCablingEquipment {
 export interface RackCablingAnchor {
   portId: string;
   deviceId: string;
+  roomId: string;
   rackId: string | null;
   rackFace: RackFace;
   physicalFace: RackFace;
@@ -60,6 +177,7 @@ export interface RackCablingAnchor {
 }
 
 export interface RackCablingFaceFrame {
+  rackOffsetY: number;
   face: RackFace;
   x: number;
   y: number;
@@ -94,20 +212,51 @@ export interface RackCablingLooseCard {
   }>;
 }
 
-export interface RackCablingScene {
+export interface RackCablingLooseTray {
+  roomId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  expanded: boolean;
+  deviceCount: number;
+}
+
+export interface RackCablingRoomFrame {
   room: Room;
+  x: number;
+  y: number;
   width: number;
   height: number;
   racks: RackCablingRackFrame[];
   looseCards: RackCablingLooseCard[];
-  looseTray: {
+  looseSummaries: Array<{
+    device: Device;
     x: number;
     y: number;
     width: number;
     height: number;
-    expanded: boolean;
-    deviceCount: number;
-  } | null;
+  }>;
+  looseTray: RackCablingLooseTray | null;
+  equipment: RackCablingEquipment[];
+  anchors: RackCablingAnchor[];
+}
+
+export interface RackCablingScene {
+  looseSummaries: Array<{
+    device: Device;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>;
+  rooms: RackCablingRoomFrame[];
+  width: number;
+  height: number;
+  racks: RackCablingRackFrame[];
+  looseCards: RackCablingLooseCard[];
+  looseTray: RackCablingLooseTray | null;
+  looseTrays: RackCablingLooseTray[];
   equipment: RackCablingEquipment[];
   anchors: RackCablingAnchor[];
 }
@@ -168,11 +317,19 @@ export function buildRackCablingScope(
   return {
     rackIds: new Set(scene.racks.map((entry) => entry.rack.id)),
     deviceIds: new Set([
+      ...scene.looseSummaries.map((item) => item.device.id),
       ...scene.equipment.map((item) => item.device.id),
       ...scene.looseCards.map((item) => item.device.id),
+      ...routes.flatMap((route) =>
+        route.handoffs.map((handoff) => handoff.deviceId),
+      ),
       ...scene.anchors.map((anchor) => anchor.deviceId),
     ]),
     portIds: new Set([
+      ...routes.flatMap((route) => [
+        route.link.fromPortId,
+        route.link.toPortId,
+      ]),
       ...scene.anchors.map((anchor) => anchor.portId),
       ...scene.equipment.flatMap((item) =>
         item.fallbackReason && item.layout
@@ -216,6 +373,8 @@ const TRAY_HEADER_HEIGHT = 42;
 const LOOSE_CARD_WIDTH = 268;
 const LOOSE_CARD_GAP = 22;
 const LOOSE_FACE_HEIGHT = 58;
+const ROOM_SECTION_HEADER_HEIGHT = 38;
+const ROOM_SECTION_GAP = 64;
 
 function facesForMode(mode: VisualizerRackFaceMode): RackFace[] {
   return mode === "both" ? ["front", "rear"] : [mode];
@@ -240,16 +399,6 @@ function compareRacks(order: string[]) {
       left.id.localeCompare(right.id)
     );
   };
-}
-
-function rackTopOffset(rack: Rack, devices: Device[]) {
-  const height = devices.reduce((maximum, device) => {
-    const state = devicePlacementState(device);
-    return state.mountKind === "rack-top" && state.rackId === rack.id
-      ? Math.max(maximum, (state.heightU ?? 1) * RACK_CABLING_UNIT_HEIGHT - 2)
-      : maximum;
-  }, 0);
-  return height > 0 ? height + 12 : 0;
 }
 
 function fallbackRect(
@@ -419,7 +568,7 @@ function deviceRoomId(device: Device | undefined, rackById: Map<string, Rack>) {
   );
 }
 
-export function buildRackCablingScene(input: {
+function buildRackCablingRoomScene(input: {
   room: Room;
   racks: Rack[];
   devices: Device[];
@@ -428,7 +577,7 @@ export function buildRackCablingScene(input: {
   faceMode: VisualizerRackFaceMode;
   rackOrder?: string[];
   looseExpanded?: boolean;
-}): RackCablingScene {
+}): RackCablingRoomFrame {
   const roomRacks = input.racks
     .filter((rack) => rack.roomId === input.room.id)
     .sort(compareRacks(input.rackOrder ?? []));
@@ -451,9 +600,10 @@ export function buildRackCablingScene(input: {
   const faceList = facesForMode(input.faceMode);
   const rackBodyHeights = roomRacks.map(
     (rack) =>
-      rackTopOffset(
-        rack,
+      rackTopBandOffset(
+        rack.id,
         roomDevices.filter((device) => device.rackId === rack.id),
+        RACK_CABLING_UNIT_HEIGHT,
       ) +
       rack.totalU * RACK_CABLING_UNIT_HEIGHT +
       16,
@@ -483,7 +633,11 @@ export function buildRackCablingScene(input: {
     const rackDevices = roomDevices.filter(
       (candidate) => candidate.rackId === rack.id,
     );
-    const rackOffsetY = rackTopOffset(rack, rackDevices);
+    const rackOffsetY = rackTopBandOffset(
+      rack.id,
+      rackDevices,
+      RACK_CABLING_UNIT_HEIGHT,
+    );
     for (const device of rackDevices.filter(
       (candidate) => devicePlacementState(candidate).mountKind === "direct",
     )) {
@@ -565,6 +719,7 @@ export function buildRackCablingScene(input: {
           .map((anchor) => ({
             portId: anchor.portId,
             deviceId: anchor.deviceId,
+            roomId: input.room.id,
             rackId: rack.id,
             rackFace: anchor.rackFace,
             physicalFace: anchor.physicalFace,
@@ -574,6 +729,7 @@ export function buildRackCablingScene(input: {
           })),
       );
       faceFrames.push({
+        rackOffsetY,
         face,
         x: faceX,
         y: faceY,
@@ -609,6 +765,7 @@ export function buildRackCablingScene(input: {
   const looseExpanded = Boolean(input.looseExpanded);
   const trayY = CANVAS_PADDING + RACK_HEADER_HEIGHT + tallestBody + TRAY_GAP;
   const looseCards: RackCablingLooseCard[] = [];
+  const looseSummaries: RackCablingScene["looseSummaries"] = [];
   let trayHeight =
     looseDevices.length > 0 ? TRAY_HEADER_HEIGHT + (looseExpanded ? 0 : 26) : 0;
   if (looseDevices.length > 0 && looseExpanded) {
@@ -649,6 +806,7 @@ export function buildRackCablingScene(input: {
       if (layout) {
         for (const faceFrame of faces) {
           const definition = layout.snapshot.faces[faceFrame.face];
+          const rect = physicalFaceRect(definition, faceFrame);
           for (const binding of layout.bindings) {
             const slot = layout.snapshot.portSlots.find(
               (candidate) =>
@@ -659,16 +817,17 @@ export function buildRackCablingScene(input: {
             anchors.push({
               portId: binding.portId,
               deviceId: device.id,
+              roomId: input.room.id,
               rackId: null,
               rackFace: faceFrame.face,
               physicalFace: faceFrame.face,
               x:
-                faceFrame.x +
-                ((slot.x + slot.width / 2) / 1000) * faceFrame.width,
+                rect.x +
+                ((slot.x + slot.width / 2) / 1000) * rect.width,
               y:
-                faceFrame.y +
+                rect.y +
                 ((slot.y + slot.height / 2) / (definition.height || 1)) *
-                  faceFrame.height,
+                  rect.height,
               kind: "physical",
             });
           }
@@ -694,19 +853,40 @@ export function buildRackCablingScene(input: {
       list.push(port);
       portsByDeviceId.set(port.deviceId, list);
     }
+    const columns = Math.max(
+      1,
+      Math.floor((baseWidth - CANVAS_PADDING * 2) / 220),
+    );
+    const cellWidth = (baseWidth - CANVAS_PADDING * 2) / columns;
+    const rowHeight = 52;
+    trayHeight =
+      TRAY_HEADER_HEIGHT +
+      16 +
+      Math.ceil(looseDevices.length / columns) * rowHeight;
     looseDevices.forEach((device, deviceIndex) => {
+      const x = CANVAS_PADDING + (deviceIndex % columns) * cellWidth;
+      const y =
+        trayY +
+        TRAY_HEADER_HEIGHT +
+        8 +
+        Math.floor(deviceIndex / columns) * rowHeight;
+      looseSummaries.push({
+        device,
+        x,
+        y,
+        width: cellWidth,
+        height: rowHeight,
+      });
       for (const port of portsByDeviceId.get(device.id) ?? []) {
         anchors.push({
           portId: port.id,
           deviceId: device.id,
+          roomId: input.room.id,
           rackId: null,
           rackFace: port.face === "rear" ? "rear" : "front",
           physicalFace: port.face === "rear" ? "rear" : "front",
-          x:
-            CANVAS_PADDING +
-            ((deviceIndex + 1) / (looseDevices.length + 1)) *
-              (baseWidth - CANVAS_PADDING * 2),
-          y: trayY + TRAY_HEADER_HEIGHT + 13,
+          x: x + cellWidth / 2,
+          y,
           kind: "loose-handoff",
         });
       }
@@ -715,6 +895,8 @@ export function buildRackCablingScene(input: {
 
   return {
     room: input.room,
+    x: 0,
+    y: 0,
     width: baseWidth,
     height:
       looseDevices.length > 0
@@ -722,9 +904,11 @@ export function buildRackCablingScene(input: {
         : CANVAS_PADDING * 2 + RACK_HEADER_HEIGHT + tallestBody,
     racks: rackFrames,
     looseCards,
+    looseSummaries,
     looseTray:
       looseDevices.length > 0
         ? {
+            roomId: input.room.id,
             x: CANVAS_PADDING,
             y: trayY,
             width: baseWidth - CANVAS_PADDING * 2,
@@ -735,6 +919,288 @@ export function buildRackCablingScene(input: {
         : null,
     equipment,
     anchors,
+  };
+}
+
+function translateRect(rect: RackStudioRect, x: number, y: number) {
+  return { ...rect, x: rect.x + x, y: rect.y + y };
+}
+
+function translateRoomScene(
+  scene: RackCablingRoomFrame,
+  x: number,
+  y: number,
+  width: number,
+): RackCablingRoomFrame {
+  const contentY = y + ROOM_SECTION_HEADER_HEIGHT;
+  const racks = scene.racks.map((rack) => ({
+    ...rack,
+    x: rack.x + x,
+    y: rack.y + contentY,
+    faces: rack.faces.map((face) => ({
+      ...face,
+      x: face.x + x,
+      y: face.y + contentY,
+      equipment: face.equipment.map((item) => ({
+        ...item,
+        rect: translateRect(item.rect, x, contentY),
+      })),
+    })),
+  }));
+  const equipment = scene.equipment.map((item) => ({
+    ...item,
+    rect: translateRect(item.rect, x, contentY),
+  }));
+  const looseCards = scene.looseCards.map((card) => ({
+    ...card,
+    x: card.x + x,
+    y: card.y + contentY,
+    faces: card.faces.map((face) => ({
+      ...face,
+      x: face.x + x,
+      y: face.y + contentY,
+    })),
+  }));
+  const looseSummaries = scene.looseSummaries.map((summary) => ({
+    ...summary,
+    x: summary.x + x,
+    y: summary.y + contentY,
+  }));
+  const looseTray = scene.looseTray
+    ? {
+        ...scene.looseTray,
+        x: scene.looseTray.x + x,
+        y: scene.looseTray.y + contentY,
+      }
+    : null;
+  const anchors = scene.anchors.map((anchor) => ({
+    ...anchor,
+    x: anchor.x + x,
+    y: anchor.y + contentY,
+  }));
+  return {
+    ...scene,
+    x,
+    y,
+    width,
+    height: scene.height + ROOM_SECTION_HEADER_HEIGHT,
+    racks,
+    equipment,
+    looseCards,
+    looseSummaries,
+    looseTray,
+    anchors,
+  };
+}
+
+interface RoomScenePlacement {
+  scene: RackCablingRoomFrame;
+  x: number;
+  y: number;
+  width: number;
+}
+
+function intersects(
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number },
+) {
+  return !(
+    left.x + left.width <= right.x ||
+    right.x + right.width <= left.x ||
+    left.y + left.height <= right.y ||
+    right.y + right.height <= left.y
+  );
+}
+
+function autoRoomPlacements(roomScenes: RackCablingRoomFrame[]) {
+  const width = Math.max(760, ...roomScenes.map((scene) => scene.width));
+  let nextY = 0;
+  return roomScenes.map((scene) => {
+    const placement = { scene, x: 0, y: nextY, width };
+    nextY += scene.height + ROOM_SECTION_HEADER_HEIGHT + ROOM_SECTION_GAP;
+    return placement;
+  });
+}
+
+function hubRoomPlacements(
+  roomScenes: RackCablingRoomFrame[],
+  hubRoomId: string | null,
+): RoomScenePlacement[] {
+  if (roomScenes.length < 2) return autoRoomPlacements(roomScenes);
+  const hub =
+    roomScenes.find((scene) => scene.room.id === hubRoomId) ?? roomScenes[0]!;
+  const spokes = roomScenes.filter((scene) => scene !== hub);
+  const largestDimension = Math.max(
+    ...roomScenes.map((scene) =>
+      Math.max(scene.width, scene.height + ROOM_SECTION_HEADER_HEIGHT),
+    ),
+  );
+  const hubHeight = hub.height + ROOM_SECTION_HEADER_HEIGHT;
+  let radius = largestDimension + ROOM_SECTION_GAP * 2;
+  for (;;) {
+    const centerX = radius + hub.width / 2 + CANVAS_PADDING;
+    const centerY = radius + hubHeight / 2 + CANVAS_PADDING;
+    const next: RoomScenePlacement[] = [
+      { scene: hub, x: centerX - hub.width / 2, y: centerY - hubHeight / 2, width: hub.width },
+    ];
+    spokes.forEach((scene, index) => {
+      const angle = -Math.PI / 2 + (index * Math.PI * 2) / spokes.length;
+      const height = scene.height + ROOM_SECTION_HEADER_HEIGHT;
+      next.push({
+        scene,
+        x: centerX + Math.cos(angle) * radius - scene.width / 2,
+        y: centerY + Math.sin(angle) * radius - height / 2,
+        width: scene.width,
+      });
+    });
+    if (
+      next.every((placement, index) =>
+        next.slice(index + 1).every((other) =>
+          !intersects(
+            {
+              ...placement,
+              height: placement.scene.height + ROOM_SECTION_HEADER_HEIGHT,
+            },
+            {
+              ...other,
+              height: other.scene.height + ROOM_SECTION_HEADER_HEIGHT,
+            },
+          ),
+        ),
+      )
+    ) {
+      return next;
+    }
+    radius += Math.max(32, Math.round(largestDimension / 8));
+  }
+}
+
+function manualRoomPlacements(
+  roomScenes: RackCablingRoomFrame[],
+  positions: Record<string, RackCablingRoomPosition>,
+) {
+  const fallback = autoRoomPlacements(roomScenes);
+  const positioned = fallback.filter(
+    (placement) => positions[placement.scene.room.id],
+  );
+  let nextX = positioned.length
+    ? Math.max(
+        ...positioned.map(
+          (placement) =>
+            positions[placement.scene.room.id]!.x + placement.scene.width,
+        ),
+      ) + ROOM_SECTION_GAP
+    : 0;
+  const nextY = positioned.length
+    ? Math.min(
+        ...positioned.map((placement) => positions[placement.scene.room.id]!.y),
+      )
+    : 0;
+  return fallback.map((placement) => {
+    const point = positions[placement.scene.room.id];
+    if (point) {
+      return {
+        ...placement,
+        x: point.x,
+        y: point.y,
+        width: placement.scene.width,
+      };
+    }
+    const next = {
+      ...placement,
+      x: nextX,
+      y: nextY,
+      width: placement.scene.width,
+    };
+    nextX += placement.scene.width + ROOM_SECTION_GAP;
+    return next;
+  });
+}
+
+function normalizeRoomPlacements(placements: RoomScenePlacement[]) {
+  if (placements.length === 0) return placements;
+  const minX = Math.min(...placements.map((placement) => placement.x));
+  const minY = Math.min(...placements.map((placement) => placement.y));
+  const offsetX = minX < CANVAS_PADDING ? CANVAS_PADDING - minX : 0;
+  const offsetY = minY < CANVAS_PADDING ? CANVAS_PADDING - minY : 0;
+  return placements.map((placement) => ({
+    ...placement,
+    x: placement.x + offsetX,
+    y: placement.y + offsetY,
+  }));
+}
+
+export function buildRackCablingScene(input: {
+  rooms?: Room[];
+  room?: Room;
+  racks: Rack[];
+  devices: Device[];
+  layouts: DevicePhysicalLayout[];
+  ports: Port[];
+  faceMode: VisualizerRackFaceMode;
+  rackOrder?: string[];
+  looseExpanded?: boolean;
+  looseExpandedRoomIds?: ReadonlySet<string>;
+  roomLayout?: RackCablingRoomLayout;
+}): RackCablingScene {
+  const selectedRooms = [...(input.rooms ?? (input.room ? [input.room] : []))]
+    .filter(
+      (room, index, values) =>
+        values.findIndex((candidate) => candidate.id === room.id) === index,
+    )
+    .sort(
+      (left, right) =>
+        left.name.localeCompare(right.name, undefined, { numeric: true }) ||
+        left.id.localeCompare(right.id),
+    );
+  const roomScenes = selectedRooms.map((room) =>
+    buildRackCablingRoomScene({
+      ...input,
+      room,
+      looseExpanded:
+        input.looseExpandedRoomIds?.has(room.id) ?? input.looseExpanded,
+    }),
+  );
+  const layout = reconcileRackCablingRoomLayout({
+    layout: input.roomLayout ?? DEFAULT_RACK_CABLING_ROOM_LAYOUT,
+    availableRoomIds: selectedRooms.map((room) => room.id),
+  });
+  const rawPlacements =
+    layout.mode === "hub"
+      ? hubRoomPlacements(roomScenes, layout.hubRoomId)
+      : layout.mode === "manual"
+        ? manualRoomPlacements(roomScenes, layout.positions)
+        : autoRoomPlacements(roomScenes);
+  const placements =
+    layout.mode === "auto" ? rawPlacements : normalizeRoomPlacements(rawPlacements);
+  const rooms = placements.map((placement) =>
+    translateRoomScene(
+      placement.scene,
+      placement.x,
+      placement.y,
+      placement.width,
+    ),
+  );
+  const width = rooms.length
+    ? Math.max(...rooms.map((room) => room.x + room.width)) + CANVAS_PADDING
+    : Math.max(760, CANVAS_PADDING * 2);
+  const height = rooms.length
+    ? Math.max(...rooms.map((room) => room.y + room.height)) + CANVAS_PADDING
+    : Math.max(520, CANVAS_PADDING * 2);
+  const looseTrays = rooms.flatMap((room) =>
+    room.looseTray ? [room.looseTray] : [],
+  );
+  return {
+    rooms,
+    width,
+    height,
+    racks: rooms.flatMap((room) => room.racks),
+    looseCards: rooms.flatMap((room) => room.looseCards),
+    looseSummaries: rooms.flatMap((room) => room.looseSummaries),
+    looseTray: rooms.length === 1 ? (rooms[0]?.looseTray ?? null) : null,
+    looseTrays,
+    equipment: rooms.flatMap((room) => room.equipment),
+    anchors: rooms.flatMap((room) => room.anchors),
   };
 }
 
@@ -770,16 +1236,23 @@ function sceneEdgeHandoffAnchor(
   linkId: string,
   endpoint: "from" | "to",
 ): RackCablingAnchor {
-  const exitRight = local.x >= scene.width / 2;
+  const room =
+    scene.rooms.find((frame) => frame.room.id === local.roomId) ??
+    scene.rooms[0];
+  const left = room?.x ?? 0;
+  const right = left + (room?.width ?? scene.width);
+  const top = room?.y ?? 0;
+  const bottom = top + (room?.height ?? scene.height);
+  const exitRight = local.x >= (left + right) / 2;
   return {
     ...local,
     portId: `${linkId}:handoff:${endpoint}`,
     deviceId: `${linkId}:handoff:${endpoint}`,
     rackId: null,
-    x: exitRight ? scene.width - 8 : 8,
+    x: exitRight ? right - 8 : left + 8,
     y: Math.max(
-      18,
-      Math.min(scene.height - 18, local.y + stableHandoffLane(linkId) * 9),
+      top + 18,
+      Math.min(bottom - 18, local.y + stableHandoffLane(linkId) * 9),
     ),
     kind: "handoff",
   };
@@ -829,6 +1302,12 @@ function unavailableHandoffAnchor(input: {
   );
   const rect = equipment?.rect ?? looseCard;
   if (!rect) return undefined;
+  const roomId =
+    input.scene.rooms.find(
+      (room) =>
+        room.equipment.some((item) => item.device.id === input.deviceId) ||
+        room.looseCards.some((item) => item.device.id === input.deviceId),
+    )?.room.id ?? "";
   const centerX = rect.x + rect.width / 2;
   const centerY = rect.y + rect.height / 2;
   const exitLeft = input.peer
@@ -837,6 +1316,7 @@ function unavailableHandoffAnchor(input: {
   return {
     portId: `${input.linkId}:handoff:${input.endpoint}`,
     deviceId: input.deviceId,
+    roomId,
     rackId: equipment?.rackId ?? null,
     rackFace: equipment?.rackFace ?? input.physicalFace,
     physicalFace: input.physicalFace,
@@ -885,11 +1365,18 @@ function handoffLabelLane(input: {
 }) {
   const { scene, route, handoff, anchor } = input;
   if (handoff.reason === "cross-room") {
-    const side = anchor.x < scene.width / 2 ? "left" : "right";
+    const room = scene.rooms.find((frame) => frame.room.id === anchor.roomId);
+    const side = room && anchor.x < room.x + room.width / 2 ? "left" : "right";
     return {
-      lane: `scene-edge:${side}`,
-      x: side === "left" ? 12 : scene.width - 12,
-      textAnchor: side === "left" ? ("start" as const) : ("end" as const),
+      lane: `room-edge:${room?.room.id ?? anchor.roomId ?? "unknown"}:${side}`,
+      x: room
+        ? side === "left"
+          ? Math.max(12, room.x - 12)
+          : Math.min(scene.width - 12, room.x + room.width + 12)
+        : side === "left"
+          ? 12
+          : scene.width - 12,
+      textAnchor: side === "left" ? ("end" as const) : ("start" as const),
     };
   }
   if (handoff.reason === "hidden-face") {
@@ -949,6 +1436,7 @@ function handoffLabelLane(input: {
 export function layoutRackCablingHandoffLabels(
   scene: RackCablingScene,
   routes: RackCablingRoute[],
+  measuredWidths: ReadonlyMap<string, number> = new Map(),
 ): RackCablingHandoffLabelGeometry[] {
   const maxY = Math.max(HANDOFF_LABEL_MIN_Y, scene.height - 16);
   const entries = [...routes]
@@ -974,6 +1462,26 @@ export function layoutRackCablingHandoffLabels(
               : placement.x > (scene.width * 2) / 3
                 ? ("right" as const)
                 : ("center" as const);
+          const columnIndex =
+            packingColumn === "left" ? 0 : packingColumn === "center" ? 1 : 2;
+          const width =
+            measuredWidths.get(`${route.link.id}:${handoff.endpoint}`) ?? 0;
+          const leftExtent =
+            placement.textAnchor === "end"
+              ? width
+              : placement.textAnchor === "middle"
+                ? width / 2
+                : 0;
+          const rightExtent = width - leftExtent;
+          const boundedX = width
+            ? Math.max(
+                (columnIndex * scene.width) / 3 + 12 + leftExtent,
+                Math.min(
+                  ((columnIndex + 1) * scene.width) / 3 - 12 - rightExtent,
+                  placement.x,
+                ),
+              )
+            : placement.x;
           return {
             id: `${route.link.id}:${handoff.endpoint}`,
             linkId: route.link.id,
@@ -982,7 +1490,7 @@ export function layoutRackCablingHandoffLabels(
             packingColumn,
             anchorX: anchor.x,
             anchorY: anchor.y,
-            x: placement.x,
+            x: boundedX,
             desiredY: Math.max(
               HANDOFF_LABEL_MIN_Y,
               Math.min(maxY, anchor.y - 7),
@@ -1046,6 +1554,285 @@ export function layoutRackCablingHandoffLabels(
   return result.sort((left, right) => left.id.localeCompare(right.id));
 }
 
+export interface RackCablingAnnotationInput {
+  id: string;
+  linkId: string;
+  kind: "cable" | "handoff";
+  text: string;
+  priority: number;
+  anchor: CablePoint;
+  geometry?: CableRouteGeometry;
+  preferredPoint?: CablePoint;
+}
+
+export interface RackCablingAnnotationGeometry {
+  id: string;
+  linkId: string;
+  kind: "cable" | "handoff";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  textX: number;
+  textY: number;
+  leaderPath: string | null;
+  inRail: boolean;
+}
+
+export interface RackCablingAnnotationLayout {
+  annotations: RackCablingAnnotationGeometry[];
+  width: number;
+  height: number;
+}
+
+interface AnnotationRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function annotationRectsOverlap(left: AnnotationRect, right: AnnotationRect) {
+  const gap = 2;
+  return !(
+    left.x + left.width + gap <= right.x ||
+    right.x + right.width + gap <= left.x ||
+    left.y + left.height + gap <= right.y ||
+    right.y + right.height + gap <= left.y
+  );
+}
+
+function geometryPolyline(geometry: CableRouteGeometry): CablePoint[] {
+  if (geometry.kind === "segmented") {
+    return (
+      geometry.segments.map(geometryPolyline).sort((left, right) => {
+        const length = (points: CablePoint[]) =>
+          points
+            .slice(1)
+            .reduce(
+              (sum, point, index) =>
+                sum +
+                Math.hypot(
+                  point.x - points[index]!.x,
+                  point.y - points[index]!.y,
+                ),
+              0,
+            );
+        return length(right) - length(left);
+      })[0] ?? []
+    );
+  }
+  if (geometry.kind === "polyline") return geometry.points;
+  return Array.from({ length: 17 }, (_, index) => {
+    const t = index / 16;
+    const inverse = 1 - t;
+    return {
+      x:
+        inverse ** 3 * geometry.from.x +
+        3 * inverse ** 2 * t * geometry.control1.x +
+        3 * inverse * t ** 2 * geometry.control2.x +
+        t ** 3 * geometry.to.x,
+      y:
+        inverse ** 3 * geometry.from.y +
+        3 * inverse ** 2 * t * geometry.control1.y +
+        3 * inverse * t ** 2 * geometry.control2.y +
+        t ** 3 * geometry.to.y,
+    };
+  });
+}
+
+function pointAndTangentAt(geometry: CableRouteGeometry, fraction: number) {
+  const points = geometryPolyline(geometry);
+  if (points.length < 2) {
+    return { point: points[0] ?? { x: 0, y: 0 }, tangent: { x: 1, y: 0 } };
+  }
+  const lengths = points
+    .slice(1)
+    .map((point, index) =>
+      Math.hypot(point.x - points[index]!.x, point.y - points[index]!.y),
+    );
+  const target =
+    lengths.reduce((sum, length) => sum + length, 0) *
+    Math.max(0, Math.min(1, fraction));
+  let consumed = 0;
+  for (let index = 0; index < lengths.length; index += 1) {
+    const length = lengths[index]!;
+    if (consumed + length < target && index < lengths.length - 1) {
+      consumed += length;
+      continue;
+    }
+    const from = points[index]!;
+    const to = points[index + 1]!;
+    const ratio = length ? (target - consumed) / length : 0;
+    return {
+      point: {
+        x: from.x + (to.x - from.x) * ratio,
+        y: from.y + (to.y - from.y) * ratio,
+      },
+      tangent: {
+        x: length ? (to.x - from.x) / length : 1,
+        y: length ? (to.y - from.y) / length : 0,
+      },
+    };
+  }
+  return { point: points.at(-1)!, tangent: { x: 1, y: 0 } };
+}
+
+/**
+ * Places all visible Rack Cabling annotations in one deterministic pass. Labels
+ * prefer their cable or handoff, then move into a dedicated rail rather than
+ * becoming unreadable when the scene is dense.
+ */
+export function layoutRackCablingAnnotations(
+  scene: RackCablingScene,
+  inputs: RackCablingAnnotationInput[],
+): RackCablingAnnotationLayout {
+  const height = 18;
+  const blockers: AnnotationRect[] = [
+    ...scene.rooms.map((room) => ({
+      x: room.x,
+      y: room.y,
+      width: room.width,
+      height: ROOM_SECTION_HEADER_HEIGHT,
+    })),
+    ...scene.racks.map((rack) => ({
+      x: rack.x,
+      y: rack.y,
+      width: rack.width,
+      height: RACK_HEADER_HEIGHT,
+    })),
+    ...scene.looseTrays.map((tray) => ({
+      x: tray.x,
+      y: tray.y,
+      width: tray.width,
+      height: TRAY_HEADER_HEIGHT,
+    })),
+    ...scene.looseSummaries,
+    ...scene.looseCards,
+  ];
+  const placed: AnnotationRect[] = [];
+  const annotations: RackCablingAnnotationGeometry[] = [];
+  const rail: Array<{ input: RackCablingAnnotationInput; width: number }> = [];
+  const sorted = [...inputs].sort(
+    (left, right) =>
+      left.priority - right.priority || left.id.localeCompare(right.id),
+  );
+
+  for (const input of sorted) {
+    const width = Math.max(40, Math.min(240, input.text.length * 6 + 12));
+    const candidates: CablePoint[] = [];
+    if (input.priority === 0 && input.preferredPoint) {
+      const focus = input.preferredPoint;
+      const equipment = scene.equipment.find((item) =>
+        focus.x >= item.rect.x && focus.x <= item.rect.x + item.rect.width &&
+        focus.y >= item.rect.y && focus.y <= item.rect.y + item.rect.height,
+      );
+      if (equipment) {
+        candidates.push(
+          { x: equipment.rect.x - width / 2 - 8, y: focus.y },
+          { x: equipment.rect.x + equipment.rect.width + width / 2 + 8, y: focus.y },
+        );
+      }
+      for (const distance of [24, 40, 64]) {
+        candidates.push(
+          { x: focus.x, y: focus.y - distance },
+          { x: focus.x, y: focus.y + distance },
+          { x: focus.x - distance, y: focus.y },
+          { x: focus.x + distance, y: focus.y },
+        );
+      }
+    }
+    if (input.geometry) {
+      for (const fraction of [0.5, 0.35, 0.65]) {
+        const sample = pointAndTangentAt(input.geometry, fraction);
+        const normal = { x: -sample.tangent.y, y: sample.tangent.x };
+        for (const offset of [0, 16, -16, 32, -32]) {
+          candidates.push({
+            x: sample.point.x + normal.x * offset,
+            y: sample.point.y + normal.y * offset,
+          });
+        }
+      }
+    } else {
+      const preferred = input.preferredPoint ?? input.anchor;
+      for (const offset of [0, 16, -16, 32, -32]) {
+        candidates.push({ x: preferred.x, y: preferred.y + offset });
+      }
+    }
+    const candidate = candidates
+      .map((point) => ({
+        point,
+        rect: {
+          x: point.x - width / 2,
+          y: point.y - height / 2,
+          width,
+          height,
+        },
+      }))
+      .find(
+        ({ rect }) =>
+          rect.x >= 8 &&
+          rect.y >= 8 &&
+          rect.x + rect.width <= scene.width - 8 &&
+          rect.y + rect.height <= scene.height - 8 &&
+          !blockers.some((blocker) => annotationRectsOverlap(rect, blocker)) &&
+          (input.priority !== 0 || !input.preferredPoint ||
+            !scene.equipment.some((item) => annotationRectsOverlap(rect, item.rect))) &&
+          !placed.some((existing) => annotationRectsOverlap(rect, existing)),
+      );
+    if (!candidate) {
+      rail.push({ input, width });
+      continue;
+    }
+    placed.push(candidate.rect);
+    const moved = Math.hypot(
+      candidate.point.x - input.anchor.x,
+      candidate.point.y - input.anchor.y,
+    );
+    annotations.push({
+      id: input.id,
+      linkId: input.linkId,
+      kind: input.kind,
+      ...candidate.rect,
+      textX: candidate.rect.x + candidate.rect.width / 2,
+      textY: candidate.rect.y + 12,
+      leaderPath:
+        moved > 10
+          ? `M ${input.anchor.x.toFixed(2)} ${input.anchor.y.toFixed(2)} L ${candidate.point.x.toFixed(2)} ${candidate.point.y.toFixed(2)}`
+          : null,
+      inRail: false,
+    });
+  }
+
+  const railWidth = Math.max(0, ...rail.map((entry) => entry.width));
+  rail.forEach(({ input, width }, index) => {
+    const rect = {
+      x: scene.width + 16,
+      y: 8 + index * 20,
+      width,
+      height,
+    };
+    annotations.push({
+      id: input.id,
+      linkId: input.linkId,
+      kind: input.kind,
+      ...rect,
+      textX: rect.x + rect.width / 2,
+      textY: rect.y + 12,
+      leaderPath: `M ${input.anchor.x.toFixed(2)} ${input.anchor.y.toFixed(2)} L ${rect.x.toFixed(2)} ${(rect.y + rect.height / 2).toFixed(2)}`,
+      inRail: true,
+    });
+  });
+
+  return {
+    annotations: annotations.sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
+    width: rail.length ? scene.width + railWidth + 32 : scene.width,
+    height: Math.max(scene.height, rail.length ? 16 + rail.length * 20 : 0),
+  };
+}
+
 export function buildRackCablingRoutes(input: {
   scene: RackCablingScene;
   rooms?: Room[];
@@ -1065,7 +1852,12 @@ export function buildRackCablingRoutes(input: {
   );
   const rackById = new Map(input.racks.map((rack) => [rack.id, rack]));
   const roomById = new Map(
-    (input.rooms ?? [input.scene.room]).map((room) => [room.id, room]),
+    (input.rooms ?? input.scene.rooms.map((frame) => frame.room)).map(
+      (room) => [room.id, room],
+    ),
+  );
+  const selectedRoomIds = new Set(
+    input.scene.rooms.map((frame) => frame.room.id),
   );
   const routes: Array<
     Omit<RackCablingRoute, "geometry" | "path" | "labelPoint" | "continuations">
@@ -1096,8 +1888,8 @@ export function buildRackCablingRoutes(input: {
     const toDevice = toPort ? deviceById.get(toPort.deviceId) : undefined;
     const fromRoomId = deviceRoomId(fromDevice, rackById);
     const toRoomId = deviceRoomId(toDevice, rackById);
-    const fromLocal = fromRoomId === input.scene.room.id;
-    const toLocal = toRoomId === input.scene.room.id;
+    const fromLocal = Boolean(fromRoomId && selectedRoomIds.has(fromRoomId));
+    const toLocal = Boolean(toRoomId && selectedRoomIds.has(toRoomId));
     if (!fromLocal && !toLocal) continue;
     let from = anchorByPortId.get(link.fromPortId);
     let to = anchorByPortId.get(link.toPortId);
@@ -1175,6 +1967,51 @@ export function buildRackCablingRoutes(input: {
         addHandoff("to", "unavailable", to, toDevice, toPort, toRoomId);
       }
     }
+    const hiddenLooseAnchor = (
+      port: Port,
+      peer: RackCablingAnchor | undefined,
+    ) => {
+      const card = input.scene.looseCards.find(
+        (card) => card.device.id === port.deviceId,
+      );
+      if (!card) return undefined;
+      return {
+        rackFace: peer?.rackFace ?? card.faces[0]?.face ?? "front",
+        portId: port.id,
+        deviceId: port.deviceId,
+        roomId:
+          input.scene.rooms.find((room) =>
+            room.looseCards.some((item) => item.device.id === port.deviceId),
+          )?.room.id ?? "",
+        rackId: null,
+        x: card.x + card.width / 2,
+        y: card.y,
+        physicalFace:
+          port.face === "rear" ? ("rear" as const) : ("front" as const),
+        kind: "handoff" as const,
+      };
+    };
+    if (!from) {
+      const hidden = hiddenLooseAnchor(fromPort, to);
+      if (hidden) {
+        from = hidden;
+        addHandoff(
+          "from",
+          "hidden-face",
+          hidden,
+          fromDevice,
+          fromPort,
+          fromRoomId,
+        );
+      }
+    }
+    if (!to) {
+      const hidden = hiddenLooseAnchor(toPort, from);
+      if (hidden) {
+        to = hidden;
+        addHandoff("to", "hidden-face", hidden, toDevice, toPort, toRoomId);
+      }
+    }
     if (!from && to) {
       const rackFrame = fromDevice?.rackId
         ? input.scene.racks.find((entry) => entry.rack.id === fromDevice.rackId)
@@ -1227,9 +2064,57 @@ export function buildRackCablingRoutes(input: {
   }
   const anchor = (value: RackCablingAnchor): RackStudioCableAnchor => ({
     ...value,
-    roomId: input.scene.room.id,
     face: value.physicalFace,
   });
+  const rackFramesForRoom = (roomId: string | null) =>
+    input.scene.rooms
+      .find((frame) => frame.room.id === roomId)
+      ?.racks.flatMap((rack) =>
+        rack.faces.map((face) => ({
+          rackId: rack.rack.id,
+          face: face.face,
+          rect: {
+            x: face.x,
+            y: face.y + face.rackOffsetY + 8,
+            width: face.width,
+            height: rack.rack.totalU * RACK_CABLING_UNIT_HEIGHT,
+          },
+        })),
+      ) ?? [];
+  const roomFaces = (roomId: string | null) =>
+    input.scene.rooms
+      .find((frame) => frame.room.id === roomId)
+      ?.racks.flatMap((rack) => rack.faces.map((face) => face.face)) ?? [];
+  const guidePointsForRoute = (
+    route: (typeof routes)[number],
+    reverse: boolean,
+  ) => {
+    let guideIncomplete = false;
+    const guidePoints = (route.link.routeGuides ?? []).flatMap((guide) => {
+      const resolved = resolveCableGuidePoints({
+        link: { ...route.link, routeGuides: [guide] },
+        equipment: input.scene.equipment,
+        devices: input.devices,
+        roomId: guide.roomId,
+        faces: roomFaces(guide.roomId),
+      });
+      guideIncomplete ||= Boolean(resolved.guideIncomplete);
+      return resolved.guidePoints ?? [];
+    });
+    return {
+      guidePoints: reverse ? guidePoints.reverse() : guidePoints,
+      guideIncomplete,
+    };
+  };
+  const manualPointsForRoute = (route: (typeof routes)[number]) =>
+    (route.link.routeWaypoints ?? []).flatMap((point) =>
+      projectCableWaypoints(
+        { ...route.link, routeWaypoints: [point] },
+        input.racks,
+        rackFramesForRoom(point.roomId),
+        point.roomId,
+      ),
+    );
   const geometryById = new Map(
     planPhysicalCableRoutes(
       routes.map((route) => {
@@ -1238,23 +2123,36 @@ export function buildRackCablingRoutes(input: {
         );
         const local = hidden?.endpoint === "from" ? route.to : route.from;
         const continuation =
+          Boolean(route.from.rackId && route.to.rackId) &&
+          route.from.roomId === route.to.roomId &&
           hidden &&
           hidden.rackFace !== local.rackFace &&
-          !route.link.routeWaypoints?.length &&
+          (cableRouteMode(route.link) !== "manual" ||
+            !route.link.routeWaypoints?.length) &&
           route.handoffs.every((handoff) => handoff.reason === "hidden-face");
         return {
           id: route.link.id,
+          routeMode: cableRouteMode(route.link),
+          ...guidePointsForRoute(
+            route,
+            Boolean(continuation && local.portId !== route.link.fromPortId),
+          ),
           from: anchor(continuation ? local : route.from),
           to: continuation ? undefined : anchor(route.to),
           hiddenEndpoint: continuation
             ? { portId: hidden.portId, rackFace: hidden.rackFace }
             : undefined,
-          manualPoints: [],
+          manualPoints: manualPointsForRoute(route),
           allowContinuation:
-            !route.link.routeWaypoints?.length &&
+            Boolean(route.from.rackId && route.to.rackId) &&
+            route.from.roomId === route.to.roomId &&
+            (cableRouteMode(route.link) !== "manual" ||
+              !route.link.routeWaypoints?.length) &&
             route.handoffs.every((handoff) => handoff.reason === "hidden-face"),
           allowDirect:
-            route.handoffs.length === 0 && !route.link.routeWaypoints?.length,
+            route.handoffs.length === 0 &&
+            (cableRouteMode(route.link) !== "manual" ||
+              !route.link.routeWaypoints?.length),
         };
       }),
       {
@@ -1275,6 +2173,10 @@ export function buildRackCablingRoutes(input: {
           parentDeviceId: item.device.parentDeviceId,
           rect: item.rect,
         })),
+        rooms: input.scene.rooms.map((room) => ({
+          id: room.room.id,
+          rect: { x: room.x, y: room.y, width: room.width, height: room.height },
+        })),
       },
       input.style,
     ).map((route) => [route.id, route]),
@@ -1284,7 +2186,9 @@ export function buildRackCablingRoutes(input: {
     const hidden = route.handoffs.find(
       (handoff) => handoff.reason === "hidden-face",
     );
-    const marker = planned.continuations[0];
+    const marker = planned.continuations.find(
+      (marker) => marker.destinationPortId === hidden?.portId,
+    );
     return {
       ...route,
       ...(hidden && marker

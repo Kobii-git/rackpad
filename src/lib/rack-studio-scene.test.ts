@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { physicalFaceRect } from "./physical-face";
 import { buildRackStudioCableRoutes } from "./rack-studio-cables";
 import { buildRackStudioSvg } from "./rack-studio-export";
 import {
@@ -88,7 +89,7 @@ test("selected rack faces control exact anchors and hidden-face handoffs", () =>
   });
   assert.match(
     focusedFrontExport.svg,
-    /Cable · ↔ Rear · face-device · rear-port/,
+    /Cable \[face-link\] · ↔ Rear · face-device · rear-port/,
   );
   assert.match(
     focusedFrontExport.svg,
@@ -396,3 +397,94 @@ function exportLabels() {
     },
   };
 }
+
+test("physical SVG exports preserve custom colors and independently reject paint injection", () => {
+  const rack = rackFixture(0);
+  const device = deviceFixture("colored-device", rack.id, 10);
+  const port = portFixture("colored-port", device.id, "front");
+  const layout = layoutFixture(device.id, [port]);
+  layout.snapshot.faces.front.elements = [
+    {kind:"panel",id:"colored-panel",x:0,y:0,width:1000,height:300,color:"#123456"},
+    {kind:"indicator",id:"colored-light",x:20,y:20,radius:5,color:"#abcdef"},
+    {kind:"label",id:"colored-label",x:50,y:50,text:"Color & label",color:"#654321"},
+  ];
+  layout.snapshot.portSlots[0].color = "#aabbcc";
+  const input = {room, face:"front" as const, racks:[rack], devices:[device], layouts:[layout], ports:[port], links:[], showLabels:true, routeStyle:"smooth" as const, theme:"dark" as const, labels:exportLabels()};
+  for (const focusRackId of [undefined,rack.id]) {
+    const image = buildRackStudioSvg({...input,focusRackId});
+    for (const color of ["#123456","#abcdef","#654321","#aabbcc"]) assert.ok(image.svg.includes(`fill="${color}"`));
+    assert.ok(image.svg.includes("Color &amp; label"));
+  }
+  layout.snapshot.portSlots[0].color = 'url(https://example.invalid/paint)';
+  layout.snapshot.faces.front.elements[0].color = '#123456" onload="alert(1)';
+  const unsafe = buildRackStudioSvg(input);
+  assert.ok(!unsafe.svg.includes("example.invalid"));
+  assert.ok(!unsafe.svg.includes("onload="));
+});
+
+test("round faces share fitted bounds with rack and loose-device cable anchors", () => {
+  const face = {schemaVersion: 1 as const, width: 1000 as const, height: 1000, shape: "round" as const, elements: []};
+  assert.deepEqual(physicalFaceRect(face, {x: 10, y: 20, width: 200, height: 60}), {x: 80, y: 20, width: 60, height: 60});
+  assert.deepEqual(physicalFaceRect(face, {x: 10, y: 20, width: 60, height: 200}), {x: 10, y: 90, width: 60, height: 60});
+  const rack = rackFixture(0);
+  for (const mounted of [true, false]) {
+    const device = deviceFixture("round-ap", mounted ? rack.id : "", 10);
+    const port = portFixture("ap-port", device.id, "front");
+    const layout = layoutFixture(device.id, [port]);
+    layout.snapshot.faces = {front: face, rear: face};
+    layout.snapshot.portSlots[0]!.y = 680;
+    const scene = buildRackStudioScene({room, face: "front", racks: [rack], devices: [device], layouts: [layout], ports: [port]});
+    const item = scene.equipment[0]!;
+    const size = Math.min(item.rect.width, item.rect.height);
+    assert.equal(scene.portAnchors[0]!.x, item.rect.x + (item.rect.width-size)/2 + 0.144*size);
+    assert.equal(scene.portAnchors[0]!.y, item.rect.y + (item.rect.height-size)/2 + 0.701*size);
+  }
+});
+
+test("round artwork and ports export without stretching in room, compact and focused images", () => {
+  const rack = rackFixture(0);
+  const device = deviceFixture("round-ap", rack.id, 10);
+  const ports = [portFixture("ap-port-a", device.id, "front"), portFixture("ap-port-b", device.id, "front")];
+  const layout = layoutFixture(device.id, ports);
+  for (const face of ["front", "rear"] as const) layout.snapshot.faces[face] = {schemaVersion: 1, width: 1000, height: 1000, shape: "round", elements: []};
+  for (const slot of layout.snapshot.portSlots) slot.y = 680;
+  const input = {room, face: "front" as const, racks: [rack], devices: [device], layouts: [layout], ports,
+    links: [{id: "round-link", fromPortId: ports[0]!.id, toPortId: ports[1]!.id, visible: true, routeWaypoints: []}], showLabels: false, routeStyle: "orthogonal" as const, theme: "light" as const, labels: exportLabels()};
+  for (const options of [{}, {compact: true}, {focusRackId: rack.id}]) {
+    const image = buildRackStudioSvg({...input, ...options});
+    assert.match(image.svg, /data-device-shape="round"/);
+    const transform = image.svg.match(/<g transform="translate\(([\d.]+) ([\d.]+)\) scale\(([\d.e-]+) ([\d.e-]+)\)">/)!;
+    assert.ok(transform, "face artwork transform must be present");
+    assert.equal(Number(transform[3]), Number(transform[4]), "round artwork must use a uniform scale");
+    if ('focusRackId' in options) {
+      const route = image.svg.match(/<path d="M ([\d.]+) ([\d.]+)[^"]*" fill="none" stroke="[^"]*" stroke-width="3" stroke-linejoin="round"/)!;
+      assert.ok(route, "focused export must retain the cable");
+      const expectedX = Number(transform[1]) + 144 * Number(transform[3]);
+      const expectedY = Number(transform[2]) + 701 * Number(transform[4]);
+      assert.ok(Math.abs(Number(route[1])-expectedX)<0.02, `cable x ${route[1]} must meet port ${expectedX}`);
+      assert.ok(Math.abs(Number(route[2])-expectedY)<0.02, `cable y ${route[2]} must meet port ${expectedY}`);
+    }
+  }
+  const loose = {...device, placement: "room" as const, rackId: undefined, rackMountKind: "loose" as const};
+  assert.match(buildRackStudioSvg({...input, compact: true, devices: [loose]}).svg, /data-device-shape="round"/);
+});
+
+
+test("device export names use the upper-right corner and preserve complete escaped titles", () => {
+  const rack = rackFixture(0);
+  const device = deviceFixture("name-export", rack.id, 10);
+  device.hostname = "Long <host> & name";
+  const port = portFixture("name-port", device.id, "front");
+  const layout = layoutFixture(device.id, [port]);
+  for (const compact of [false, true]) for (const focusRackId of [undefined, rack.id]) {
+    const image = buildRackStudioSvg({room, racks: [rack], devices: [device], layouts: [layout], ports: [port], links: [], face: "front", showLabels: true, routeStyle: "smooth", theme: "dark", labels: exportLabels(), compact, focusRackId});
+    const name = image.svg.match(/<text data-device-name="true" text-anchor="end" x="([\d.]+)" y="([\d.]+)"[^>]*>(.*?)<title>(.*?)<\/title><\/text>/);
+    assert.ok(name);
+    assert.equal(name[3], "Long &lt;host&gt; &amp; name");
+    assert.equal(name[4], name[3]);
+    const group = image.svg.slice(0, name.index).split('data-device-id="name-export"').at(-1)!;
+    const body = group.match(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)"/)!;
+    assert.ok(body);
+    assert.ok(Math.abs(Number(name[1]) - (Number(body[1]) + Number(body[3]) - 3)) < 0.02);
+  }
+});
