@@ -6019,13 +6019,35 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
     expect(
       layout.snapshot.portSlots.some((slot) => slot.id === `slot:${portId}`),
     ).toBe(true);
+    await expect(assignment).toBeEnabled();
+    const memberFilter = workspace.getByRole("combobox", { name: "Member filter" });
+    await memberFilter.focus();
+    await expect(memberFilter).toBeFocused();
+    await workspace.scrollIntoViewIfNeeded();
+    // Let the save controls finish transitioning and commit their final frame.
+    await workspace.evaluate(async (element) => {
+      await document.fonts.ready;
+      await Promise.all(
+        element
+          .getAnimations({ subtree: true })
+          .map((animation) => animation.finished),
+      );
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+    });
+    await expect(workspace).toBeInViewport({ ratio: 1 });
+    // Focus is on a select, so no caret can blink. Preserve caret styles to avoid
+    // screenshot() repainting every input and the translucent rounded card borders.
     const firstCapture = await workspace.screenshot({
       path: testInfo.outputPath("stack-members.png"),
       animations: "disabled",
+      caret: "initial",
     });
     const secondCapture = await workspace.screenshot({
       path: testInfo.outputPath("stack-members-repeat.png"),
       animations: "disabled",
+      caret: "initial",
     });
     expect(firstCapture.equals(secondCapture)).toBe(true);
     const axe = await new AxeBuilder({ page })
