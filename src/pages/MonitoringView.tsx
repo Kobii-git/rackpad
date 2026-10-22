@@ -634,7 +634,7 @@ export default function MonitoringView() {
               size="sm"
               onClick={() => setLayout("cards")}
               className="h-8"
-              aria-label={t("Show monitor cards")}
+              aria-label={t("{value1}: {name}", { value1: t("Box"), name: t("Show monitor cards") })}
             >
               <LayoutGrid className="size-3.5" />
               {t("Box")}
@@ -644,7 +644,7 @@ export default function MonitoringView() {
               size="sm"
               onClick={() => setLayout("compact")}
               className="h-8"
-              aria-label={t("Show compact monitor rows")}
+              aria-label={t("{value1}: {name}", { value1: t("Compact"), name: t("Show compact monitor rows") })}
             >
               <List className="size-3.5" />
               {t("Compact")}

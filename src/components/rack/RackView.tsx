@@ -304,7 +304,6 @@ function DeviceTile({
         <motion.button
           data-testid="rack-device-tile"
           data-device-name-host
-          aria-label={device.hostname}
           data-height-u={heightU}
           data-hostname={device.hostname}
           initial={{ opacity: 0, x: -4 }}
@@ -363,7 +362,7 @@ function DeviceTile({
             selected={selected}
             reservedLeft={heightU > 1 ? 84 : 24}
             tooltip={false}
-          />
+          />{" "}
           <div
             className={cn(
               "relative z-10 min-w-0 flex-1 pt-4 leading-tight",

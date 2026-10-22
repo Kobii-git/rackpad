@@ -2593,9 +2593,10 @@ test("Rack Studio places rack-top equipment and supports keyboard undo and redo"
       .click();
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     const rackTopDevice = page.locator(
-      `[data-testid="rack-studio-rack-top-device"][aria-label="${hostname}"]`,
+      `[data-testid="rack-studio-rack-top-device"][data-hostname="${hostname}"]`,
     );
     await expect(rackTopDevice).toBeVisible();
+    await expect(rackTopDevice).toHaveAccessibleName(new RegExp(hostname));
     await rackTopDevice.focus();
     await rackTopDevice.press("ArrowRight");
     await expect
@@ -4045,7 +4046,7 @@ test("UI regression surfaces remain reachable and unclipped", async ({
     firewallMonitoring.getByRole("button", { name: "Check now" }),
   ).toBeDisabled();
   await expect(firewallMonitoring).not.toContainText("Last checked");
-  await page.getByRole("button", { name: "Show compact monitor rows" }).click();
+  await page.getByRole("button", { name: "Compact: Show compact monitor rows", exact: true }).click();
   const firewallMonitorRow = page.locator(
     '[data-testid="device-monitor-row"][data-device-id="d_fw"]',
   );
@@ -4624,7 +4625,7 @@ test("legacy enabled none monitors stay effectively disabled", async ({
   await expect(
     upsCard.getByRole("button", { name: "Check now" }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "Show compact monitor rows" }).click();
+  await page.getByRole("button", { name: "Compact: Show compact monitor rows", exact: true }).click();
   const upsRow = page.locator(
     '[data-testid="device-monitor-row"][data-device-id="d_ups"]',
   );
@@ -5968,7 +5969,7 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
     await expect(workspace.getByTestId("stack-member")).toHaveCount(2);
     await expect(workspace).toContainText("aa:bb:cc:dd:00:11");
     const up = workspace.getByRole("button", {
-      name: "Move Core B up",
+      name: "Move up: Core B",
       exact: true,
     });
     await up.focus();
@@ -6686,7 +6687,7 @@ test("mixed-model220-port stacks retain applied modules, front/rear targets and 
     const before=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();expect(before.bindings).toHaveLength(220);
     expect(before.bindings.map((binding:{portId:string})=>binding.portId).sort()).toEqual([...canonical].sort());
     await page.reload();await expect(first.getByRole("checkbox",{name:"Applied uplink module",exact:true})).toBeChecked();
-    await first.getByRole("button",{name:"Move Model 1 down",exact:true}).click();
+    await first.getByRole("button",{name:"Move down: Model 1",exact:true}).click();
     const after=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();
     expect(after.bindings).toEqual(expect.arrayContaining(before.bindings));
     await page.goto("/racks");await page.getByRole("button",{name:"Studio Beta",exact:true}).click();await page.getByRole("button",{name:new RegExp(`${room.name} 1R`)}).click();await page.getByRole("button",{name:"Both",exact:true}).click();await page.getByRole("button",{name:"Cables",exact:true}).click();

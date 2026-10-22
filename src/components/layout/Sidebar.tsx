@@ -100,14 +100,14 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
           rel="noopener noreferrer"
           aria-label={t("{value1}: {name}", {
             value1: t("Rackpad"),
-            name: APP_VERSION_TAG,
+            name: [APP_VERSION_TAG, APP_CHANNEL_LABEL].filter(Boolean).join(" "),
           })}
           className="ml-auto hidden shrink-0 flex-col items-end gap-1 xl:flex"
           data-testid="sidebar-version"
         >
           <span className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             {APP_VERSION_TAG}
-          </span>
+          </span>{" "}
           {APP_CHANNEL_LABEL && (
             <span
               className={cn(
@@ -128,16 +128,13 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
           type="button"
           onClick={() => setLabMenuOpen((value) => !value)}
           className="rk-panel-inset flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-2 py-2 text-left transition-[background-color,border-color,box-shadow] duration-150 hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] xl:justify-between xl:px-3"
-          aria-label={t("{value1}: {name}", {
-            value1: t("Lab"),
-            name: lab.name,
-          })}
+          aria-label={t("{value1}: {name}", { value1: t("Lab"), name: lab.name })}
         >
           <Building2 className="size-4 shrink-0 xl:hidden" />
           <div className="hidden min-w-0 flex-col leading-tight xl:flex">
             <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
               {t("Lab")}
-            </span>
+            </span>{" "}
             <span className="truncate text-sm font-medium text-[var(--text-primary)]">
               {lab.name}
             </span>
@@ -191,11 +188,11 @@ export function Sidebar({ onOpenSearch }: SidebarProps) {
       <button
         onClick={onOpenSearch}
         className="mx-2 mb-3 flex w-[calc(100%-1rem)] items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[rgb(255_255_255_/_0.012)] px-2 py-2 text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] xl:mx-3 xl:w-[calc(100%-1.5rem)] xl:justify-start xl:px-3"
-        aria-label={t("Search...")}
+        aria-label={t("{value1} {label}", { value1: t("Search..."), label: "Ctrl+K" })}
       >
         <Search className="size-3.5" />
-        <span className="hidden text-xs xl:inline">{t("Search...")}</span>
-        <kbd className="ml-auto hidden rounded-[6px] border border-[var(--border-default)] bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)] xl:inline">
+        <span className="hidden text-xs xl:inline">{t("Search...")}</span>{" "}
+        <kbd aria-hidden="true" className="ml-auto hidden rounded-[6px] border border-[var(--border-default)] bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)] xl:inline">
           Ctrl+K
         </kbd>
       </button>
