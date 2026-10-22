@@ -30,9 +30,10 @@ devices, ports, cables, Networks/IPAM, storage, Wi-Fi, compute, discovery,
 monitoring, documentation, images, integrations, reports, labs, and
 administration into one clean app.
 
-This source targets stable release **v1.8.5**.
+This branch prepares **v1.8.6-beta.0** for beta testing. Stable: **v1.8.5**.
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm published artifacts.
-See the [release and upgrade notes](docs/releases/v1.8.5.md).
+See the [beta test and upgrade notes](docs/releases/v1.8.6-beta.0.md) and
+[stable release notes](docs/releases/v1.8.5.md).
 
 Docker is the supported deployment; native Proxmox LXC remains experimental.
 See the [changelog](./CHANGELOG.md); the latest-tag badge may show a prerelease.

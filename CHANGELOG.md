@@ -6,6 +6,34 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.6-beta.0] - 2026-10-22
+
+### Added
+
+- Shared device details on hover and keyboard focus across classic racks, Studio
+  and every Visualizer layout, including available hostname, hardware, management
+  IP and MAC fields (#198).
+- Saved room/rack colors fill the Racks / Rooms navigation name-and-count rows,
+  with contrasting text and separate selection/focus indicators (#195).
+
+### Fixed
+
+- Accessible names include visible sidebar, monitoring and stack-control labels
+  with Axe 4.14; rack and Studio button names follow their content (#191).
+- Stack-member screenshot captures wait for final control frames and retain exact
+  image equality and all existing behavior assertions (#197).
+
+### Changed
+
+- Update the reviewed MCP, Fastify, Nodemailer, React, Lucide, Zod, accessibility,
+  browser and formatter dependencies through npm (#191).
+- Update CodeQL evidence uploads to actions/upload-artifact v7 while preserving
+  raw failure evidence, artifact paths and permissions (#192).
+- Node 22 remains the application runtime. Development accessibility tooling
+  requires Node 22.12 or newer within Node 22. Schema remains 55 relative to 1.8.5.
+
+See the [beta test and upgrade notes](docs/releases/v1.8.6-beta.0.md).
+
 ## [1.8.5] - 2026-10-20
 
 ### Added
