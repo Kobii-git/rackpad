@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -8,6 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { deviceNameMetrics } from "@/lib/device-name";
+import { DeviceSummary, type DeviceSummaryData } from "./DeviceSummary";
 
 const CanvasZoom = createContext(1);
 
@@ -24,6 +26,7 @@ export function DeviceNameZoom({
 /** Names stay upright; only the faceplate artwork inherits device rotation. */
 export function DeviceName({
   name,
+  summary,
   selected = false,
   tooltip = true,
   maxHeight,
@@ -33,6 +36,7 @@ export function DeviceName({
   position = "upper-right",
 }: {
   name: string;
+  summary?: DeviceSummaryData;
   selected?: boolean;
   /** Disable when the host already provides a richer portaled tooltip. */
   tooltip?: boolean;
@@ -43,10 +47,11 @@ export function DeviceName({
   position?: "upper-left" | "upper-right";
 }) {
   const zoom = useContext(CanvasZoom);
+  const tooltipId = useId();
   const ref = useRef<HTMLSpanElement>(null);
   const [bounds, setBounds] = useState({ width: 0, height: 0 });
   const [hovered, setHovered] = useState(false);
-  const [focused, setFocused] = useState(false);
+  const [focused, setFocused] = useState<HTMLElement | null>(null);
   const [point, setPoint] = useState({ x: 8, y: 8 });
   const tooltipRef = useRef<HTMLSpanElement>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -60,7 +65,26 @@ export function DeviceName({
   );
   const { visible, ...labelStyle } = metrics;
   const reveal =
-    tooltip && !dismissed && (hovered || focused || (selected && !visible));
+    tooltip && !dismissed && (hovered || Boolean(focused) || (selected && !visible));
+
+  useLayoutEffect(() => {
+    if (!reveal) return;
+    const host = ref.current?.closest<HTMLElement>("[data-device-name-host]");
+    if (!host) return;
+    const targets = new Set([host, ...(focused ? [focused] : [])]);
+    for (const target of targets) {
+      const previous = target.getAttribute("aria-describedby");
+      target.setAttribute("aria-describedby", [previous, tooltipId].filter(Boolean).join(" "));
+    }
+    return () => {
+      for (const target of targets) {
+        const remaining = target.getAttribute("aria-describedby")?.split(/\s+/)
+          .filter((id) => id !== tooltipId).join(" ");
+        if (remaining) target.setAttribute("aria-describedby", remaining);
+        else target.removeAttribute("aria-describedby");
+      }
+    };
+  }, [reveal, tooltipId, focused]);
 
   // Selection props may change as a side effect of Escape (ReactFlow).
   // Only a renewed user interaction may cancel an explicit dismissal.
@@ -95,14 +119,14 @@ export function DeviceName({
         !host.contains(event.relatedTarget)
       )
         setDismissed(false);
-      setFocused(true);
+      setFocused(event.target instanceof HTMLElement ? event.target : host);
     };
     const blur = (event: FocusEvent) => {
       if (
         !(event.relatedTarget instanceof Node) ||
         !host.contains(event.relatedTarget)
       )
-        setFocused(false);
+        setFocused(null);
     };
     const dismiss = (event: KeyboardEvent) => {
       if (event.key === "Escape") setDismissed(true);
@@ -173,7 +197,6 @@ export function DeviceName({
         data-testid="device-name"
         data-name-position={position}
         data-name-visible={visible}
-        title={name}
         className="absolute z-10 box-border block truncate rounded bg-black/70 font-mono font-semibold text-white"
         style={{
           ...labelStyle,
@@ -188,12 +211,13 @@ export function DeviceName({
         createPortal(
           <span
             ref={tooltipRef}
+            id={tooltipId}
             role="tooltip"
             data-testid="device-name-tooltip"
             className="pointer-events-none fixed z-[100] max-h-[calc(100vh-16px)] max-w-[min(320px,calc(100vw-16px))] overflow-hidden break-words rounded border border-[var(--border-strong)] bg-[var(--surface-1)] px-2 py-1 font-mono text-[12px] leading-4 text-[var(--text-primary)] shadow-lg"
             style={{ left: point.x, top: point.y }}
           >
-            {name}
+            {summary ? <DeviceSummary device={summary} /> : name}
           </span>,
           document.body,
         )}

@@ -36,6 +36,10 @@ async function setup(page: Page, request: APIRequestContext) {
   fixture.devices[0]!.hostname =
     "A very long switch hostname that must truncate without losing its accessible name";
   fixture.devices[0]!.displayName = "Workshop switch";
+  fixture.devices[0]!.manufacturer = "Example Networks";
+  fixture.devices[0]!.model = "Switch 24";
+  fixture.devices[0]!.managementIp = "192.0.2.42";
+  fixture.devices[0]!.macAddress = "02:00:00:00:00:42";
   const stack = fixture.devices.find(
     (device) => device.id === "shelves-server-5",
   )!;
@@ -268,7 +272,7 @@ test("zoom-aware device names retain screen size across all Visualizer modes", a
         await page.getByTestId("loose-device-summary").focus();
         await expect(
           page
-            .getByTestId("device-name-tooltip")
+            .getByTestId("loose-device-details")
             .filter({ hasText: "Ceiling access point" }),
         ).toBeVisible();
         await page.keyboard.press("Escape");
@@ -452,4 +456,69 @@ test("per-device name placement follows the physical left corner across canvases
   const svg = await readFile((await (await download).path())!, "utf8");
   expect(svg).toContain('data-device-name="true" text-anchor="start"');
   expect(svg).toContain('data-device-name="true" text-anchor="end"');
+});
+
+
+test("device hover details match classic racks across Studio and Visualizer modes", async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const fixture = await setup(page, request);
+  const device = fixture.devices[0]!;
+  const checkSummary = async (summary: Locator) => {
+    await expect(summary).toBeVisible();
+    for (const value of ["Workshop switch", device.hostname, "Example Networks Switch 24", "IP: 192.0.2.42", "MAC: 02:00:00:00:00:42"])
+      await expect(summary).toContainText(value);
+  };
+  await page.goto("/racks");
+  const classic = page.getByTestId("rack-device-tile").filter({ has: deviceName(page, device.hostname) }).first();
+  await classic.hover();
+  await checkSummary(page.getByRole("tooltip"));
+  await page.keyboard.press("Escape");
+  await classic.focus();
+  await checkSummary(page.getByRole("tooltip"));
+  await page.getByRole("button", { name: "Studio Beta", exact: true }).click();
+  await page.getByRole("button", { name: new RegExp(`${fixture.room.name} 1R`) }).click();
+  const studio = deviceName(page, device.hostname).locator("xpath=ancestor::*[@data-device-name-host][1]");
+  await studio.focus();
+  await checkSummary(page.getByTestId("device-name-tooltip"));
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("device-name-tooltip")).toHaveCount(0);
+
+  await page.goto("/visualizer");
+  const layout = page.getByRole("combobox", { name: "Visualizer layout", exact: true });
+  for (const mode of ["grouped", "pyramid", "diagram", "physical", "rack"]) {
+    await layout.selectOption(mode === "physical" ? "diagram" : mode);
+    const diagram = mode === "diagram" || mode === "physical";
+    if (diagram) await page.getByRole("combobox", { name: "Physical layout", exact: true }).selectOption(mode === "physical" ? "physical" : "compact");
+    const host = deviceName(page, device.hostname).locator("xpath=ancestor::*[@data-device-name-host][1]");
+    const focusTarget = diagram ? host.getByRole("link", { name: "Open device", exact: true })
+      : (mode === "grouped" || mode === "pyramid") ? host.getByRole("button", { name: `Select ${device.hostname}`, exact: true }) : host;
+    await focusTarget.focus();
+    const summary = page.getByTestId("device-name-tooltip").filter({ hasText: device.hostname }).first();
+    await checkSummary(summary);
+    await expect(focusTarget).toHaveAttribute("aria-describedby", new RegExp((await summary.getAttribute("id"))!));
+    await expect(summary).toHaveCSS("pointer-events", "none");
+    await expect(host).not.toHaveAttribute("title", device.hostname);
+    await page.keyboard.press("Escape");
+    await expect(summary).toHaveCount(0);
+    await focusTarget.blur();
+    await host.hover({ force: true });
+    await checkSummary(summary);
+    await page.keyboard.press("Escape");
+    await page.mouse.move(0, 0);
+  }
+  const loose = page.getByTestId("loose-device-summary");
+  await loose.focus();
+  const details = page.getByTestId("loose-device-details");
+  await expect(details).toContainText("Ceiling access point");
+  await expect(details).not.toContainText("IP:");
+  await expect(details).not.toContainText("MAC:");
+  await expect(page.getByTestId("device-name-tooltip")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(details).toHaveCount(0);
+  await loose.blur();
+  await page.mouse.move(0, 0);
+  await loose.hover();
+  await expect(details).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(details).toHaveCount(0);
 });

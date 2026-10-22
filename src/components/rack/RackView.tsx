@@ -1,8 +1,8 @@
 import { DeviceName } from "./DeviceName";
+import { DeviceSummary } from "./DeviceSummary";
 import { useMemo, type CSSProperties } from "react";
 import { motion } from "motion/react";
 import type { Device, DeviceImage, Rack, RackFace } from "@/lib/types";
-import { formatDeviceAddress } from "@/lib/network-labels";
 import { cn, statusColor, statusGlow } from "@/lib/utils";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
 import { StatusDot } from "@/components/shared/StatusDot";
@@ -438,23 +438,7 @@ function DeviceTile({
       </TooltipTrigger>
       <TooltipContent side="right" className="max-w-xs">
         <div className="flex flex-col gap-1 text-[11px]">
-          <span className="break-all font-medium">
-            {device.displayName ?? device.hostname}
-          </span>
-          {device.displayName && device.displayName !== device.hostname && (
-            <span className="break-all font-mono text-[var(--text-tertiary)]">
-              {device.hostname}
-            </span>
-          )}
-          <span className="text-[var(--text-tertiary)]">
-            {[device.manufacturer, device.model].filter(Boolean).join(" ")}
-          </span>
-          {formatDeviceAddress(device) && (
-            <span className="text-[var(--text-tertiary)]">
-              {t("mgmt:")}
-              {formatDeviceAddress(device)}
-            </span>
-          )}
+          <DeviceSummary device={device} />
           {(device.rackSlot ?? "full") !== "full" && (
             <span className="text-[var(--text-tertiary)]">
               {t("slot:")}

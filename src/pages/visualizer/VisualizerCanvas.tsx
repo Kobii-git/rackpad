@@ -1406,11 +1406,11 @@ function DeviceCard({
           value1: t("Select"),
           hostname: node.device.hostname,
         })}
-        title={node.device.hostname}
       />
       <DeviceName
         position={node.device.labelPosition}
         name={node.device.hostname}
+        summary={{ ...node.device, macAddress: node.macAddress }}
         selected={selected}
         reservedLeft={32}
       />

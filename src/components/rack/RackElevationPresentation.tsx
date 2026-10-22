@@ -180,7 +180,7 @@ export function RackElevationEquipmentFrame({
         className,
       )}
       style={style}
-      title={title ?? device.hostname}
+      title={title && title !== device.hostname ? title : undefined}
       onClick={
         onSelectDevice
           ? (event) => {
@@ -243,6 +243,7 @@ export function RackElevationEquipmentFrame({
       <DeviceName
         position={device.labelPosition}
         name={device.hostname}
+        summary={device}
         selected={selected}
         widthFraction={device.stackMembers ? 0.45 : 1}
       />

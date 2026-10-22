@@ -50,7 +50,8 @@ test("header colors and device label placement save through real inventory forms
   await page.addInitScript(
     ({ token, roomId }) => {
       localStorage.setItem("rackpad.auth.token", token);
-      localStorage.setItem("rackpad.language", "en");
+      if (!localStorage.getItem("rackpad.language"))
+        localStorage.setItem("rackpad.language", "en");
       localStorage.setItem(
         "rackpad.visualizer.rack-cabling-rooms",
         JSON.stringify([roomId]),
@@ -82,6 +83,68 @@ test("header colors and device label placement save through real inventory forms
             ).headerColor,
         )
         .toBe(color);
+    }
+    for (const theme of ["light", "dark"]) {
+      for (const [color, background, foreground] of [
+        ["#ffffff", "rgb(255, 255, 255)", "rgb(0, 0, 0)"],
+        ["#000000", "rgb(0, 0, 0)", "rgb(255, 255, 255)"],
+        ["#ff0000", "rgb(255, 0, 0)", "rgb(0, 0, 0)"],
+      ]) {
+        for (const [kind, id] of [
+          ["room", room.id],
+          ["rack", rack.id],
+        ]) {
+          const response = await request.patch(`/api/${kind}s/${id}`, {
+            headers,
+            data: { headerColor: color },
+          });
+          expect(response.ok(), await response.text()).toBeTruthy();
+        }
+        await page.evaluate(
+          ({ theme }) => {
+            localStorage.setItem("rackpad-theme", theme);
+            localStorage.setItem(
+              "rackpad.language",
+              theme === "dark" ? "ar" : "en",
+            );
+          },
+          { theme },
+        );
+        await page.goto(`/racks?rackId=${rack.id}`);
+        await expect(page.locator("html")).toHaveAttribute(
+          "dir",
+          theme === "dark" ? "rtl" : "ltr",
+        );
+        for (const kind of ["room", "rack"]) {
+          const row = page
+            .getByTestId(`${kind}-navigation-header`)
+            .filter({ hasText: `Color ${kind} ${suffix}` });
+          await expect(row).toHaveCSS("background-color", background);
+          for (const child of await row.locator(":scope > *").all())
+            await expect(child).toHaveCSS("color", foreground);
+          const button = row.locator("..");
+          await button.focus();
+          await expect(button).toBeFocused();
+          await expect(button).toHaveCSS("outline-style", "solid");
+          await button.click();
+          await expect(row).toHaveCSS("background-color", background);
+          await expect(button).not.toHaveCSS(
+            "border-left-color",
+            "rgba(0, 0, 0, 0)",
+          );
+        }
+      }
+    }
+    await page.evaluate(() => localStorage.setItem("rackpad.language", "en"));
+    for (const [kind, id, color] of [
+      ["room", room.id, "#ffffff"],
+      ["rack", rack.id, "#001122"],
+    ]) {
+      const response = await request.patch(`/api/${kind}s/${id}`, {
+        headers,
+        data: { headerColor: color },
+      });
+      expect(response.ok(), await response.text()).toBeTruthy();
     }
     await page.goto(`/devices/${device.id}`);
     await page
@@ -179,6 +242,12 @@ test("header colors and device label placement save through real inventory forms
             ).headerColor,
         )
         .toBeNull();
+      await page.reload();
+      await expect(
+        page
+          .getByTestId(`${kind}-navigation-header`)
+          .filter({ hasText: `Color ${kind} ${suffix}` }),
+      ).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     }
   } finally {
     await request.delete(`/api/devices/${device.id}`, { headers });

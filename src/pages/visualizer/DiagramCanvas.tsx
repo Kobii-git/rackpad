@@ -24,6 +24,7 @@ import "@xyflow/react/dist/style.css";
 import { AlertTriangle, ExternalLink, GitBranch, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import type { DeviceSummaryData } from "@/components/rack/DeviceSummary";
 import { DeviceName, DeviceNameZoom } from "@/components/rack/DeviceName";
 import { PhysicalFaceplate } from "@/components/rack/PhysicalFaceplate";
 import { DeviceTypeIcon } from "@/components/shared/DeviceTypeIcon";
@@ -100,6 +101,7 @@ interface DiagramPortData {
 
 interface DiagramDeviceData extends Record<string, unknown> {
   address: string;
+  summary: DeviceSummaryData;
   deviceId: string;
   deviceType: string;
   health: VisualizerHealth;
@@ -675,10 +677,6 @@ function CompactDiagramDeviceCard({
       role="group"
       aria-label={data.hostname}
       style={{ width: DEVICE_NODE_WIDTH, height: DEVICE_NODE_HEIGHT }}
-      title={t("{hostname}{value2}", {
-        hostname: data.hostname,
-        value2: data.address ? ` | ${data.address}` : "",
-      })}
     >
       <DiagramHandles />
       <span
@@ -697,6 +695,7 @@ function CompactDiagramDeviceCard({
             <DeviceName
               position={data.labelPosition}
               name={data.hostname}
+              summary={data.summary}
               selected={selected}
               maxHeight={52}
               reservedLeft={84}
@@ -789,10 +788,6 @@ function PhysicalDiagramDeviceCard({
           : "border-[var(--border-default)]",
       )}
       style={{ width: presentation.width, height: presentation.height }}
-      title={t("{hostname}{value2}", {
-        hostname: data.hostname,
-        value2: data.address ? ` | ${data.address}` : "",
-      })}
     >
       <span
         className="absolute inset-x-2 top-0 h-0.5 rounded-full"
@@ -813,6 +808,7 @@ function PhysicalDiagramDeviceCard({
             <DeviceName
               position={data.labelPosition}
               name={data.hostname}
+              summary={data.summary}
               selected={selected}
               maxHeight={52}
               reservedLeft={84}
@@ -1413,6 +1409,7 @@ function buildDiagramLayout(
         position,
         data: {
           address: formatNodeAddress(node, model, t),
+          summary: { ...node.device, macAddress: node.macAddress },
           deviceId: node.device.id,
           deviceType: node.device.deviceType,
           health: node.health,

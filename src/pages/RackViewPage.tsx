@@ -55,6 +55,7 @@ import { cn, statusLabel } from "@/lib/utils";
 import { formatDeviceAddress } from "@/lib/network-labels";
 import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 
+import { headerColorStyle } from "@/lib/presentation";
 import { HeaderColorInput } from "@/components/shared/HeaderColorInput";
 
 const UNRACKED_VIEW_ID = "__unracked__";
@@ -641,21 +642,39 @@ export default function RackViewPage() {
                       (device) => device.roomId === room.id,
                     ).length;
                     const isActive = viewingRoom?.id === room.id;
+                    const headerStyle = headerColorStyle(room.headerColor);
                     return (
                       <button
                         key={room.id}
                         onClick={() => selectRoomView(room.id)}
-                        className={`w-full border-l-2 px-4 py-2.5 text-left transition-colors ${
+                        className={`w-full border-l-2 px-4 py-2.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-accent)] ${
                           isActive
                             ? "border-[var(--color-accent)] bg-[var(--accent-primary-soft)]"
                             : "border-transparent hover:bg-[var(--surface-hover)]"
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono text-xs font-medium text-[var(--color-fg)]">
+                        <div
+                          data-testid="room-navigation-header"
+                          style={headerStyle}
+                          className={cn(
+                            "flex items-center justify-between gap-2",
+                            headerStyle && "-mx-4 -mt-2.5 mb-1 px-4 py-2",
+                          )}
+                        >
+                          <span
+                            style={
+                              headerStyle ? { color: "inherit" } : undefined
+                            }
+                            className="min-w-0 truncate font-mono text-xs font-medium text-[var(--color-fg)]"
+                          >
                             {room.name}
                           </span>
-                          <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
+                          <Mono
+                            style={
+                              headerStyle ? { color: "inherit" } : undefined
+                            }
+                            className="shrink-0 text-[10px] text-[var(--color-fg-subtle)]"
+                          >
                             {roomRackCount}
                             {t("R /")}
                             {roomDeviceCount}
@@ -679,21 +698,35 @@ export default function RackViewPage() {
                 );
                 const used = occupiedRackUnits(inRack);
                 const isActive = entry.id === rack?.id && !viewingUnracked;
+                const headerStyle = headerColorStyle(entry.headerColor);
                 return (
                   <button
                     key={entry.id}
                     onClick={() => selectRackView(entry.id)}
-                    className={`w-full border-l-2 px-4 py-2.5 text-left transition-colors ${
+                    className={`w-full border-l-2 px-4 py-2.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-accent)] ${
                       isActive
                         ? "border-[var(--color-accent)] bg-[var(--accent-primary-soft)]"
                         : "border-transparent hover:bg-[var(--surface-hover)]"
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-medium text-[var(--color-fg)]">
+                    <div
+                      data-testid="rack-navigation-header"
+                      style={headerStyle}
+                      className={cn(
+                        "flex items-center justify-between gap-2",
+                        headerStyle && "-mx-4 -mt-2.5 mb-1 px-4 py-2",
+                      )}
+                    >
+                      <span
+                        style={headerStyle ? { color: "inherit" } : undefined}
+                        className="min-w-0 truncate font-mono text-xs font-medium text-[var(--color-fg)]"
+                      >
                         {entry.name}
                       </span>
-                      <Mono className="text-[10px] text-[var(--color-fg-subtle)]">
+                      <Mono
+                        style={headerStyle ? { color: "inherit" } : undefined}
+                        className="shrink-0 text-[10px] text-[var(--color-fg-subtle)]"
+                      >
                         {used}/{entry.totalU}
                         {t("U")}
                       </Mono>

@@ -1358,6 +1358,7 @@ export function RackStudioWorkspace({
                           <DeviceName
                             position={item.device.labelPosition}
                             name={item.device.hostname}
+                            summary={item.device}
                             selected={selectedDeviceId === item.device.id}
                           />
                           <SceneFaceplate
@@ -1428,6 +1429,7 @@ export function RackStudioWorkspace({
                         <DeviceName
                           position={item.device.labelPosition}
                           name={item.device.hostname}
+                          summary={item.device}
                           selected={selectedDeviceId === item.device.id}
                         />
                       </button>

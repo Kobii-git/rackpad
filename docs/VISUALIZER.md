@@ -114,8 +114,9 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
   upper-left or upper-right corner for that device across every canvas, Racks and
   Studio, including SVG/PNG exports. This is shared inventory metadata, saved
   independently of templates and device rotation. Long names truncate; hovering
-  or focusing the device reveals
-  the full name. When a device is too small to fit readable text, its persistent
+  or focusing the device reveals its name, distinct hostname, manufacturer/model,
+  management IP and MAC when available, across classic racks, Studio and all
+  Visualizer layouts. Escape dismisses the details. When a device is too small to fit readable text, its persistent
   name is hidden; hover, keyboard focus or selection reveals it above the canvas.
   Rack/room SVG and PNG names use the same corner with stable export sizing,
   independent of the current viewport zoom.
@@ -252,8 +253,10 @@ calculated.
 ## Room and rack header colors
 
 In **Racks / Rooms**, edit a room or rack and choose **Header color**, then save.
-Rack Cabling fills that room or rack's entire header with the chosen color and
-uses black or white text for readable contrast. Each room and rack has its own
+Rack Cabling fills that room or rack's entire header with the chosen color.
+The Racks / Rooms navigation panel also colors the full name-and-count row;
+its descriptions and capacity bars retain their theme backgrounds. Both use
+black or white text for readable contrast. Each room and rack has its own
 setting; matching a cable color is optional and manual. **Reset**, followed by
 save, restores the theme's default header. Colors persist across reloads and
 logical/native backups. Viewing the canvas does not require write access;
