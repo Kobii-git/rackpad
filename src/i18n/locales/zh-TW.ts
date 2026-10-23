@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "ntfy topic URL": "ntfy主題網址",
+  "ntfy access token": "ntfy存取權杖",
+  "Delivered via {channels}.": "已透過{channels}傳送。",
+  "Failed channels: {channels}.": "失敗的管道：{channels}。",
+  "Check the ntfy topic URL, access token and encryption key.": "請檢查ntfy主題網址、存取權杖和加密金鑰。",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "無法傳送至ntfy。請檢查網址、網路存取和TLS憑證。",
+  "ntfy timed out. Try again later.": "ntfy逾時。請稍後重試。",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy拒絕了訊息。請檢查主題權限和身分驗證。",
+  "ntfy rate limit reached. Try again later.": "已達ntfy要求限制。請稍後重試。",
+  "Notification delivery failed. Check the configured channels.": "通知傳送失敗。請檢查已設定的管道。",
+
   "Check the SMTP host, sender and recipient settings.": "請檢查SMTP主機、寄件人和收件人設定。",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "無法連線SMTP。請檢查主機名稱、連接埠和網路存取。",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP逾時。請檢查網路存取和此連接埠的TLS模式。",

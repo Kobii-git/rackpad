@@ -167,3 +167,19 @@ do not create monitoring or listeners. Logical restore accepts older rows withou
 these fields and validates new endpoints before replacement. Native validation
 checks endpoint integrity and rejects pre-56 markers with the new columns.
 Rollback requires the previous image and its matching pre-upgrade database.
+
+
+Schema 57 adds `deviceMonitors.pendingAlertKind`, `pendingAlertAt` and
+`lastAlertAttemptAt`. Kind/time are paired, and attempt time belongs only to a
+pending event. Migration initializes all three to null. Logical/native recovery
+validates and preserves the state; older backups default it to empty. Any channel
+success clears the event and advances `lastAlertAt`; total failure retains it.
+New transitions supersede it, unknown observations defer it, and category changes
+clear inapplicable events. No historical pending event is inferred at upgrade.
+
+Alert settings include an ntfy topic URL and encrypted `ntfyTokenEnc`.
+Administration accepts an omitted/preserve, null/clear or nonempty/replace
+write-only `ntfyToken`, returning only `ntfyTokenConfigured`. Portable export and
+restore redact ntfy credential fields. Native backups retain ciphertext requiring
+the same `RACKPAD_SECRET_KEY`; other notification credential import semantics stay
+compatible.

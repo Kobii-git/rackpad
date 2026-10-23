@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "ntfy topic URL": "ntfy 주제 URL",
+  "ntfy access token": "ntfy 액세스 토큰",
+  "Delivered via {channels}.": "{channels}을(를) 통해 전송했습니다.",
+  "Failed channels: {channels}.": "실패한 채널: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "ntfy 주제 URL, 액세스 토큰 및 암호화 키를 확인하세요.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "ntfy로 전송할 수 없습니다. URL, 네트워크 접근 및 TLS 인증서를 확인하세요.",
+  "ntfy timed out. Try again later.": "ntfy 시간이 초과되었습니다. 나중에 다시 시도하세요.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy가 메시지를 거부했습니다. 주제 권한 및 인증을 확인하세요.",
+  "ntfy rate limit reached. Try again later.": "ntfy 요청 제한에 도달했습니다. 나중에 다시 시도하세요.",
+  "Notification delivery failed. Check the configured channels.": "알림 전송에 실패했습니다. 구성된 채널을 확인하세요.",
+
   "Check the SMTP host, sender and recipient settings.": "SMTP 호스트, 발신자 및 수신자 설정을 확인하세요.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "SMTP에 연결할 수 없습니다. 호스트 이름, 포트 및 네트워크 접근을 확인하세요.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP 시간이 초과되었습니다. 네트워크 접근 및 이 포트의 TLS 모드를 확인하세요.",

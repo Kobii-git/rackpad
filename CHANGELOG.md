@@ -6,6 +6,35 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.6-beta.1] - 2026-10-23
+
+### Added
+
+- Dedicated ntfy publishing with encrypted write-only access tokens, guarded
+  requests and localized administration controls (#202).
+- Persisted pending notification events, retry throttling and complete
+  per-channel outcomes. A successful channel counts as delivery; total failures
+  retry without losing outage/recovery identity (#199).
+- Actual schema-55 stable container upgrade coverage, preserving service
+  relationships and documented endpoints through restart and paired rollback.
+
+### Fixed
+
+- Failed notifications no longer advance successful-delivery timestamps or
+  suppress outage retries. New observations supersede stale async completions.
+- Repeated duplication of one hardware template creates independent copies
+  rather than conflicting with a fixed copy ID (#190).
+- Release guidance and its checked schema declaration match the migration.
+
+### Changed
+
+- Schema advances from stable 55 / prior beta 56 to 57. Retain a consistent
+  pre-upgrade snapshot with the previous image and configuration/key for rollback.
+- Portable exports redact ntfy tokens; native snapshots retain encrypted values.
+  Existing SMTP/Discord/Telegram credential import semantics remain compatible.
+
+See the [beta test and upgrade notes](docs/releases/v1.8.6-beta.1.md).
+
 ## [1.8.6-beta.0] - 2026-10-22
 
 ### Added

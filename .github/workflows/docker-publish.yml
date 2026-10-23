@@ -151,10 +151,12 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           # Immutable v1.8.3/schema-51 and beta/schema-53 baselines.
           STABLE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:6a4fce729eef6bf380cfcc5a9e2be3daad914686ff04c2f9b85904528a6cf94e
+          SCHEMA55_IMAGE: ghcr.io/kobii-git/rackpad@sha256:ea8076a73ee49e150abcf8326baf79cd79a8741499090f0111b164454e0ccbba
           BETA_IMAGE: ghcr.io/kobii-git/rackpad@sha256:42e503856315781bf2b8c640a8505687a07d7d3500534fa1ef767f1071c795c4
         run: |
           node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$STABLE_IMAGE" --previous-schema 51 --platform "$PLATFORM" --revision "$GITHUB_SHA"
           node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$BETA_IMAGE" --previous-schema 53 --platform "$PLATFORM" --revision "$GITHUB_SHA"
+          node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$SCHEMA55_IMAGE" --previous-schema 55 --platform "$PLATFORM" --revision "$GITHUB_SHA"
 
   smoke:
     needs: build
@@ -192,6 +194,7 @@ jobs:
           IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
           PLATFORM: ${{ matrix.platform }}
           # Immutable schema-53 beta baseline; never resolve a moving tag here.
+          SCHEMA55_IMAGE: ghcr.io/kobii-git/rackpad@sha256:ea8076a73ee49e150abcf8326baf79cd79a8741499090f0111b164454e0ccbba
           PREVIOUS_IMAGE: ghcr.io/kobii-git/rackpad@sha256:42e503856315781bf2b8c640a8505687a07d7d3500534fa1ef767f1071c795c4
         run: |
           image_name="${IMAGE_NAME,,}"
@@ -200,6 +203,7 @@ jobs:
             --previous-image "$PREVIOUS_IMAGE" \
             --platform "$PLATFORM" \
             --revision "$GITHUB_SHA"
+          node scripts/check-release-image.mjs --image "${REGISTRY}/${image_name}@${IMAGE_DIGEST}" --previous-image "$SCHEMA55_IMAGE" --previous-schema 55 --platform "$PLATFORM" --revision "$GITHUB_SHA"
 
   release:
     needs: [build, smoke]

@@ -41,7 +41,7 @@ test("schema 54 presentation upgrade preserves inventory and native recovery", (
       () => validateRackpadSqliteDatabase(legacy, "Forged fixture"),
       /inconsistent legacy presentation/,
     );
-    legacy.exec(`ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor;
+    legacy.exec(`ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor;
       ALTER TABLE racks DROP COLUMN headerColor;
       ALTER TABLE devices DROP COLUMN labelPosition;
       UPDATE schemaVersion SET version=54;

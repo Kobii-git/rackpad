@@ -1514,6 +1514,19 @@ const SCHEMA_MIGRATIONS = [
           (networkPort IS NOT NULL AND transportProtocol IS NOT NULL AND transportProtocol IN ('tcp', 'udp')));
     `,
   },
+  {
+    version: 57,
+    sql: `
+      ALTER TABLE deviceMonitors ADD COLUMN pendingAlertKind TEXT
+        CHECK (pendingAlertKind IS NULL OR pendingAlertKind IN ('down','recovery','repeat'));
+      ALTER TABLE deviceMonitors ADD COLUMN pendingAlertAt TEXT
+        CHECK ((pendingAlertKind IS NULL AND pendingAlertAt IS NULL) OR
+          (pendingAlertKind IS NOT NULL AND pendingAlertAt IS NOT NULL));
+      ALTER TABLE deviceMonitors ADD COLUMN lastAlertAttemptAt TEXT
+        CHECK (lastAlertAttemptAt IS NULL OR
+          (pendingAlertKind IS NOT NULL AND pendingAlertAt IS NOT NULL AND lastAlertAttemptAt >= pendingAlertAt));
+    `,
+  },
 ] as const;
 
 const applySchema = db.transaction(() => {

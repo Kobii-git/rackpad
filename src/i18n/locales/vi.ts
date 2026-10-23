@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "ntfy topic URL": "URL chủ đề ntfy",
+  "ntfy access token": "Mã truy cập ntfy",
+  "Delivered via {channels}.": "Đã gửi qua {channels}.",
+  "Failed channels: {channels}.": "Kênh bị lỗi: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "Kiểm tra URL chủ đề ntfy, mã truy cập và khóa mã hóa.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "Không thể gửi đến ntfy. Kiểm tra URL, truy cập mạng và chứng chỉ TLS.",
+  "ntfy timed out. Try again later.": "ntfy hết thời gian chờ. Hãy thử lại sau.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy từ chối tin nhắn. Kiểm tra quyền chủ đề và xác thực.",
+  "ntfy rate limit reached. Try again later.": "Đã đạt giới hạn yêu cầu ntfy. Hãy thử lại sau.",
+  "Notification delivery failed. Check the configured channels.": "Gửi thông báo thất bại. Kiểm tra các kênh đã cấu hình.",
+
   "Check the SMTP host, sender and recipient settings.": "Kiểm tra cài đặt máy chủ SMTP, người gửi và người nhận.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "Không thể kết nối SMTP. Kiểm tra tên máy chủ, cổng và quyền truy cập mạng.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP hết thời gian chờ. Kiểm tra truy cập mạng và chế độ TLS cho cổng này.",

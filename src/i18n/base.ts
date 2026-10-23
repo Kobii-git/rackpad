@@ -1,4 +1,15 @@
 export const en = {
+  "ntfy topic URL": "ntfy topic URL",
+  "ntfy access token": "ntfy access token",
+  "Delivered via {channels}.": "Delivered via {channels}.",
+  "Failed channels: {channels}.": "Failed channels: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "Check the ntfy topic URL, access token and encryption key.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.",
+  "ntfy timed out. Try again later.": "ntfy timed out. Try again later.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy rejected the message. Check topic permissions and authentication.",
+  "ntfy rate limit reached. Try again later.": "ntfy rate limit reached. Try again later.",
+  "Notification delivery failed. Check the configured channels.": "Notification delivery failed. Check the configured channels.",
+
   "Check the SMTP host, sender and recipient settings.": "Check the SMTP host, sender and recipient settings.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "Cannot connect to SMTP. Check the hostname, port and network access.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP timed out. Check network access and the TLS mode for this port.",

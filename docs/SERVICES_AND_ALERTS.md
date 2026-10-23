@@ -38,3 +38,29 @@ use sanitized categories instead of raw provider responses or credentials.
 Inspect the alert history and mail server logs for further troubleshooting; share
 only redacted evidence. A successful test confirms that configured delivery
 completed, not that an external recipient has read or received it in an inbox.
+
+
+## ntfy and channel outcomes
+
+Enter the complete **ntfy topic URL** in Admin → Alerting. An optional access
+token is encrypted with `RACKPAD_SECRET_KEY` and is never returned by the API.
+Omitting the token preserves it; entering a replacement changes it; Delete and
+Save clears it. Token-bearing URLs require HTTPS. Embedded credentials, query
+strings, fragments and redirects are refused. Self-hosted private LAN addresses
+remain subject to Rackpad's normal DNS-pinned destination checks.
+
+Test sends report successful channels and warn about failures. Any successful
+channel counts as delivery, so partial failures do not trigger duplicate messages
+to working channels. Total monitor-delivery failures remain pending across
+restart and retry through checks no faster than 60 seconds or the monitor
+interval, whichever is greater. A newer online/offline transition supersedes a
+pending event; unknown observations postpone it. Disabling notifications or an
+individual category clears the corresponding pending event.
+
+Only successful delivery advances the last-alert timestamp. Portable JSON
+backups preserve pending events but redact ntfy tokens; re-enter the token after
+restore. Native snapshots preserve ciphertext and require the matching secret
+key. A missing or unreadable key produces a sanitized channel failure. Messages
+are bounded to 4096 UTF-8 bytes, responses to 8192 bytes, and transport time to
+eight seconds (in addition to bounded DNS resolution). These limits do not
+confirm receipt on a subscriber's phone.

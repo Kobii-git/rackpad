@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const it = {
+  "ntfy topic URL": "URL dell’argomento ntfy",
+  "ntfy access token": "Token di accesso ntfy",
+  "Delivered via {channels}.": "Consegnato tramite {channels}.",
+  "Failed channels: {channels}.": "Canali non riusciti: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "Controlla l’URL dell’argomento ntfy, il token di accesso e la chiave di cifratura.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "Invio a ntfy impossibile. Controlla URL, accesso di rete e certificato TLS.",
+  "ntfy timed out. Try again later.": "Timeout di ntfy. Riprova più tardi.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy ha rifiutato il messaggio. Controlla autorizzazioni dell’argomento e autenticazione.",
+  "ntfy rate limit reached. Try again later.": "Limite di richieste ntfy raggiunto. Riprova più tardi.",
+  "Notification delivery failed. Check the configured channels.": "Invio della notifica non riuscito. Controlla i canali configurati.",
+
   "Check the SMTP host, sender and recipient settings.": "Controlla le impostazioni di host SMTP, mittente e destinatario.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "Connessione SMTP impossibile. Controlla host, porta e accesso alla rete.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "Timeout SMTP. Controlla accesso alla rete e modalità TLS per questa porta.",

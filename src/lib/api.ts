@@ -699,7 +699,7 @@ export const api = {
     });
   },
 
-  updateAlertSettings(body: AlertSettings) {
+  updateAlertSettings(body: AlertSettings & { ntfyToken?: string | null }) {
     return request<AlertSettings>("/admin/alert-settings", {
       method: "PUT",
       body: JSON.stringify(body),
@@ -709,7 +709,7 @@ export const api = {
   sendAlertSettingsTest() {
     return request<{
       delivered: boolean;
-      channels: Array<{ channel: string; delivered: boolean }>;
+      channels: Array<{ channel: string; delivered: boolean; code?: string }>;
     }>("/admin/alert-settings/test", {
       method: "POST",
     });

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createStarterTemplate,
+  hardwareTemplateCopyId,
   templateToResolvedLayout,
   createHardwareModule,
   deleteModulePosition,
@@ -461,4 +462,14 @@ test("repeated switch access and uplink edits preserve legacy block and port IDs
       );
     }
   }
+});
+
+
+test("persistent template-copy IDs are bounded and distinct without randomUUID", () => {
+  const id = "source-template-".repeat(12);
+  const first = hardwareTemplateCopyId(id);
+  const second = hardwareTemplateCopyId(id);
+  assert.ok(first.length <= 120);
+  assert.notEqual(first, second);
+  assert.match(first, /^[a-z0-9][a-z0-9_-]*$/);
 });

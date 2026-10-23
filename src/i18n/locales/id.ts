@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "ntfy topic URL": "URL topik ntfy",
+  "ntfy access token": "Token akses ntfy",
+  "Delivered via {channels}.": "Terkirim melalui {channels}.",
+  "Failed channels: {channels}.": "Kanal yang gagal: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "Periksa URL topik ntfy, token akses, dan kunci enkripsi.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "Tidak dapat mengirim ke ntfy. Periksa URL, akses jaringan, dan sertifikat TLS.",
+  "ntfy timed out. Try again later.": "Waktu ntfy habis. Coba lagi nanti.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy menolak pesan. Periksa izin topik dan autentikasi.",
+  "ntfy rate limit reached. Try again later.": "Batas permintaan ntfy tercapai. Coba lagi nanti.",
+  "Notification delivery failed. Check the configured channels.": "Pengiriman notifikasi gagal. Periksa kanal yang dikonfigurasi.",
+
   "Check the SMTP host, sender and recipient settings.": "Periksa pengaturan host SMTP, pengirim, dan penerima.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "Tidak dapat terhubung ke SMTP. Periksa nama host, port, dan akses jaringan.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "Waktu SMTP habis. Periksa akses jaringan dan mode TLS untuk port ini.",

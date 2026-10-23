@@ -4700,7 +4700,7 @@ test("localized Admin controls stay contained and alert counts pluralize", async
         "Envoyer le test",
         "Enregistrer les notifications",
       ],
-      channel: "Discord / Telegram / E-mail",
+      channel: "Alertes",
     },
     {
       language: "ar",
@@ -4714,7 +4714,7 @@ test("localized Admin controls stay contained and alert counts pluralize", async
         "إرسال الاختبار",
         "حفظ الإخطارات",
       ],
-      channel: "Discord / Telegram / البريد الإلكتروني",
+      channel: "التنبيهات",
     },
   ];
 
@@ -4729,7 +4729,7 @@ test("localized Admin controls stay contained and alert counts pluralize", async
     await expect
       .poll(() => page.evaluate(() => document.documentElement.dir))
       .toBe(mode.direction);
-    await expect(page.getByText(mode.channel, { exact: true })).toBeVisible();
+    await expect(page.getByText(mode.channel, { exact: true }).and(page.locator("span"))).toBeVisible();
 
     const rolePicker = page.getByTestId("admin-role-picker");
     await expect(rolePicker).toBeVisible();

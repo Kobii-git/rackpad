@@ -35,7 +35,7 @@ test("service endpoint schema55 upgrade, atomic failure, native validation and s
       () => validateRackpadSqliteDatabase(old, "Forged"),
       /inconsistent legacy service endpoint/,
     );
-    old.exec(`ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort;
+    old.exec(`ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort;
       INSERT INTO labs(id,name) VALUES ('lab','Lab');
       INSERT INTO devices(id,labId,hostname,deviceType) VALUES ('device','lab','Device','server');
       INSERT INTO deviceServices(id,deviceId,name,serviceType,createdAt,updatedAt) VALUES ('service','device','Web','http','now','now');`);

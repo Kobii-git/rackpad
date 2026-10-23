@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "ntfy topic URL": "ntfy বিষয়ের URL",
+  "ntfy access token": "ntfy অ্যাক্সেস টোকেন",
+  "Delivered via {channels}.": "{channels} দিয়ে পাঠানো হয়েছে।",
+  "Failed channels: {channels}.": "ব্যর্থ চ্যানেল: {channels}।",
+  "Check the ntfy topic URL, access token and encryption key.": "ntfy বিষয়ের URL, অ্যাক্সেস টোকেন ও এনক্রিপশন কী পরীক্ষা করুন।",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "ntfy-তে পাঠানো যাচ্ছে না। URL, নেটওয়ার্ক অ্যাক্সেস ও TLS সনদ পরীক্ষা করুন।",
+  "ntfy timed out. Try again later.": "ntfy-এর সময়সীমা পেরিয়েছে। পরে আবার চেষ্টা করুন।",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy বার্তা প্রত্যাখ্যান করেছে। বিষয়ের অনুমতি ও প্রমাণীকরণ পরীক্ষা করুন।",
+  "ntfy rate limit reached. Try again later.": "ntfy অনুরোধের সীমা পূর্ণ হয়েছে। পরে আবার চেষ্টা করুন।",
+  "Notification delivery failed. Check the configured channels.": "বিজ্ঞপ্তি পাঠানো ব্যর্থ হয়েছে। কনফিগার করা চ্যানেল পরীক্ষা করুন।",
+
   "Check the SMTP host, sender and recipient settings.": "SMTP হোস্ট, প্রেরক ও প্রাপকের সেটিংস পরীক্ষা করুন।",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "SMTP-তে সংযোগ করা যাচ্ছে না। হোস্টনাম, পোর্ট ও নেটওয়ার্ক অ্যাক্সেস পরীক্ষা করুন।",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP-এর সময়সীমা শেষ। নেটওয়ার্ক অ্যাক্সেস ও এই পোর্টের TLS মোড পরীক্ষা করুন।",

@@ -32,6 +32,7 @@ test("template naming makes built-in duplication and custom rename discoverable"
   request,
 }) => {
   const headers = await authenticate(page, request);
+  await page.addInitScript(() => Object.defineProperty(globalThis.crypto, "randomUUID", {value: undefined, configurable:true}));
   const templates = (
     await (await request.get("/api/hardware-templates", { headers })).json()
   ).templates as Array<{ id: string; name: string; builtIn: boolean }>;
@@ -80,6 +81,27 @@ test("template naming makes built-in duplication and custom rename discoverable"
       await (await request.get("/api/hardware-templates", { headers })).json()
     ).templates.find((item: { id: string }) => item.id === original.id);
     expect(unchanged.name).toBe(original.name);
+    await selector.selectOption(original.id);
+    const secondDuplicate = page.waitForResponse(response => response.request().method() === "POST" && response.url().includes("/duplicate"));
+    await builder.getByRole("button", { name: "Duplicate to customize", exact: true }).click();
+    const secondCopy = await (await secondDuplicate).json();
+    ids.push(secondCopy.id);
+    expect(secondCopy.id).not.toBe(copy.id);
+    expect(secondCopy.deviceTypes).toEqual(copy.deviceTypes);
+    await name.fill("Independent switch");
+    await builder.getByRole("button", { name: "Save template", exact: true }).click();
+    await page.reload();
+    await selector.selectOption(secondCopy.id);
+    await expect(name).toHaveValue("Independent switch");
+    await selector.selectOption(copy.id);
+    await expect(name).toHaveValue("5-port switch");
+    await selector.selectOption(original.id);
+    await page.route("**/api/hardware-templates/*/duplicate", route => route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ error: "Fixture duplicate conflict" }) }));
+    await builder.getByRole("button", { name: "Duplicate to customize", exact: true }).click();
+    await expect(builder.getByRole("alert")).toContainText("Fixture duplicate conflict");
+    await expect(selector).toHaveValue(original.id);
+    await expect(name).toHaveValue(original.name);
+    await page.unroute("**/api/hardware-templates/*/duplicate");
     await selector.selectOption("__new_hardware_template__");
     await builder
       .getByRole("combobox", { name: "Starting layout", exact: true })
@@ -277,4 +299,40 @@ test("SMTP diagnostics are localized and the TLS switch preserves the configured
       { exact: true },
     ),
   ).toHaveCount(0);
+});
+
+
+test("ntfy token is write-only and partial delivery warns without hiding success", async ({page, request}) => {
+  const headers = await authenticate(page, request);
+  try {
+    await page.goto("/admin");
+    const url = page.getByRole("textbox", {name: "ntfy topic URL", exact:true});
+    const token = page.getByLabel("ntfy access token", {exact:true});
+    await url.fill("https://ntfy.example.test/fixture");
+    await token.fill("synthetic-browser-private-token");
+    const saved = page.waitForResponse(response => response.request().method() === "PUT" && response.url().endsWith("/alert-settings"));
+    await page.getByRole("button", {name:"Save notifications",exact:true}).click();
+    const result=await (await saved).json();
+    expect(result.ntfyTokenConfigured).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("synthetic-browser-private-token");
+    await expect(token).toHaveValue("");
+    await page.reload();
+    await expect(token).toHaveValue("");
+    await expect(url).toHaveValue("https://ntfy.example.test/fixture");
+    await page.route("**/api/admin/alert-settings/test",route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({delivered:true,channels:[{channel:"email",delivered:true},{channel:"ntfy",delivered:false,code:"ntfy_rejection"}]})}));
+    await page.getByRole("button",{name:"Send test",exact:true}).click();
+    await expect(page.getByText("Delivered via email.",{exact:true})).toBeVisible();
+    await expect(page.getByRole("status")).toContainText("Failed channels: ntfy.");
+    await page.getByTestId("ntfy-settings").getByRole("button", {name:"Delete",exact:true}).click();
+    const cleared = page.waitForResponse(response => response.request().method() === "PUT" && response.url().endsWith("/alert-settings"));
+    await page.getByRole("button",{name:"Save notifications",exact:true}).click();
+    expect((await cleared).ok()).toBeTruthy();
+    await page.reload();
+    const configuration=await (await request.get("/api/admin/alert-settings",{headers})).json();
+    expect(configuration.ntfyTokenConfigured).toBe(false);
+    await expect(url).toHaveValue("https://ntfy.example.test/fixture");
+    expect((await new AxeBuilder({page}).include('[data-testid="ntfy-settings"]').analyze()).violations).toEqual([]);
+  } finally {
+    await request.put("/api/admin/alert-settings",{headers,data:{enabled:false,ntfyTopicUrl:null,ntfyToken:null}});
+  }
 });

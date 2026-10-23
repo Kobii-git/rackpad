@@ -296,6 +296,10 @@ function performPinnedRequest(
       input.protocol === "https:"
         ? https.request(requestOptions)
         : http.request(requestOptions);
+    // An inactivity timeout alone allows an endlessly streaming peer to hold
+    // a notification or monitor open. Bound the complete transport lifetime.
+    const deadline = setTimeout(() => request.destroy(new Error("Request timed out.")), options.timeoutMs);
+    request.once("close", () => clearTimeout(deadline));
     request.setTimeout(options.timeoutMs, () => {
       request.destroy(new Error("Request timed out."));
     });
@@ -304,6 +308,8 @@ function performPinnedRequest(
       const statusCode = response.statusCode ?? 0;
       const location = response.headers.location;
       if (!options.captureBody) {
+        response.once("error", reject);
+        response.once("aborted", () => reject(new Error("Response was aborted.")));
         response.resume();
         response.on("end", () =>
           resolve({ statusCode, location, headers: response.headers }),

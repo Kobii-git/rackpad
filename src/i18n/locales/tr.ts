@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "ntfy topic URL": "ntfy konu URL’si",
+  "ntfy access token": "ntfy erişim belirteci",
+  "Delivered via {channels}.": "{channels} üzerinden teslim edildi.",
+  "Failed channels: {channels}.": "Başarısız kanallar: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "ntfy konu URL’sini, erişim belirtecini ve şifreleme anahtarını kontrol edin.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "ntfy hizmetine gönderilemiyor. URL’yi, ağ erişimini ve TLS sertifikasını kontrol edin.",
+  "ntfy timed out. Try again later.": "ntfy zaman aşımına uğradı. Daha sonra tekrar deneyin.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy mesajı reddetti. Konu izinlerini ve kimlik doğrulamayı kontrol edin.",
+  "ntfy rate limit reached. Try again later.": "ntfy istek sınırına ulaşıldı. Daha sonra tekrar deneyin.",
+  "Notification delivery failed. Check the configured channels.": "Bildirim teslim edilemedi. Yapılandırılmış kanalları kontrol edin.",
+
   "Check the SMTP host, sender and recipient settings.": "SMTP sunucusu, gönderen ve alıcı ayarlarını kontrol edin.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "SMTP bağlantısı kurulamıyor. Sunucu adını, bağlantı noktasını ve ağ erişimini kontrol edin.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP zaman aşımına uğradı. Ağ erişimini ve bu bağlantı noktasının TLS modunu kontrol edin.",

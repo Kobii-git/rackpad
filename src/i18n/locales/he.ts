@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "ntfy topic URL": "כתובת נושא ntfy",
+  "ntfy access token": "אסימון גישה ל־ntfy",
+  "Delivered via {channels}.": "נמסר באמצעות {channels}.",
+  "Failed channels: {channels}.": "ערוצים שנכשלו: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "בדקו את כתובת נושא ntfy, אסימון הגישה ומפתח ההצפנה.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "לא ניתן לשלוח ל־ntfy. בדקו את הכתובת, הגישה לרשת ואישור TLS.",
+  "ntfy timed out. Try again later.": "תם זמן ההמתנה ל־ntfy. נסו שוב מאוחר יותר.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy דחה את ההודעה. בדקו הרשאות נושא ואימות.",
+  "ntfy rate limit reached. Try again later.": "הגעתם למגבלת הבקשות של ntfy. נסו שוב מאוחר יותר.",
+  "Notification delivery failed. Check the configured channels.": "מסירת ההתראה נכשלה. בדקו את הערוצים המוגדרים.",
+
   "Check the SMTP host, sender and recipient settings.": "יש לבדוק את הגדרות שרת SMTP, השולח והנמען.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "לא ניתן להתחבר ל־SMTP. יש לבדוק שם מארח, יציאה וגישה לרשת.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "זמן ההמתנה של SMTP הסתיים. יש לבדוק גישה לרשת ומצב TLS ליציאה זו.",

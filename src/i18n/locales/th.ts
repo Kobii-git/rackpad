@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "ntfy topic URL": "URL หัวข้อ ntfy",
+  "ntfy access token": "โทเค็นการเข้าถึง ntfy",
+  "Delivered via {channels}.": "ส่งผ่าน {channels} แล้ว",
+  "Failed channels: {channels}.": "ช่องทางที่ล้มเหลว: {channels}",
+  "Check the ntfy topic URL, access token and encryption key.": "ตรวจสอบ URL หัวข้อ ntfy โทเค็นการเข้าถึง และคีย์การเข้ารหัส",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "ส่งไปยัง ntfy ไม่ได้ ตรวจสอบ URL การเข้าถึงเครือข่าย และใบรับรอง TLS",
+  "ntfy timed out. Try again later.": "ntfy หมดเวลา ลองอีกครั้งในภายหลัง",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy ปฏิเสธข้อความ ตรวจสอบสิทธิ์หัวข้อและการยืนยันตัวตน",
+  "ntfy rate limit reached. Try again later.": "ถึงขีดจำกัดคำขอ ntfy แล้ว ลองอีกครั้งในภายหลัง",
+  "Notification delivery failed. Check the configured channels.": "ส่งการแจ้งเตือนไม่สำเร็จ ตรวจสอบช่องทางที่ตั้งค่าไว้",
+
   "Check the SMTP host, sender and recipient settings.": "ตรวจสอบการตั้งค่าโฮสต์ SMTP ผู้ส่ง และผู้รับ",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "เชื่อมต่อ SMTP ไม่ได้ ตรวจสอบชื่อโฮสต์ พอร์ต และการเข้าถึงเครือข่าย",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP หมดเวลา ตรวจสอบการเข้าถึงเครือข่ายและโหมด TLS สำหรับพอร์ตนี้",

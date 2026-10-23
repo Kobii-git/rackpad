@@ -1,6 +1,17 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "ntfy topic URL": "ntfy-onderwerp-URL",
+  "ntfy access token": "ntfy-toegangstoken",
+  "Delivered via {channels}.": "Afgelewer via {channels}.",
+  "Failed channels: {channels}.": "Mislukte kanale: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "Kontroleer die ntfy-onderwerp-URL, toegangstoken en enkripsiesleutel.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "Kan nie by ntfy aflewer nie. Kontroleer die URL, netwerktoegang en TLS-sertifikaat.",
+  "ntfy timed out. Try again later.": "ntfy het uitgetel. Probeer later weer.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy het die boodskap verwerp. Kontroleer onderwerptoestemmings en verifikasie.",
+  "ntfy rate limit reached. Try again later.": "ntfy se tempolimiet is bereik. Probeer later weer.",
+  "Notification delivery failed. Check the configured channels.": "Kennisgewingaflewering het misluk. Kontroleer die ingestelde kanale.",
+
   "Check the SMTP host, sender and recipient settings.": "Gaan die SMTP-gasheer-, sender- en ontvangerinstellings na.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "Kan nie aan SMTP koppel nie. Gaan die gasheernaam, poort en netwerktoegang na.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP het uitgetel. Gaan netwerktoegang en die TLS-modus vir hierdie poort na.",
