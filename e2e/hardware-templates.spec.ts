@@ -40,12 +40,12 @@ test("template starting layouts support inline custom types and round device per
       .selectOption("round-device");
     await expect(
       builder.getByText(
-        "Choose a starting layout, then name your template and select its device type.",
+        "Starting layouts provide geometry and a default name. Rename your template below.",
       ),
     ).toBeVisible();
     await expect(builder.locator('[data-device-shape="round"]')).toBeVisible();
     await builder
-      .getByRole("textbox", { name: "Name", exact: true })
+      .getByRole("textbox", { name: "Template name", exact: true })
       .fill(templateName);
     await builder
       .getByRole("button", { name: "New device type", exact: true })
@@ -53,7 +53,7 @@ test("template starting layouts support inline custom types and round device per
     const form = page.getByTestId("template-device-type-form");
     await expect(form.getByRole("combobox", {name: "Parent", exact: true})).toHaveValue("other");
     await form.getByRole("button", {name: "Cancel", exact: true}).click();
-    await expect(builder.getByRole("textbox", {name: "Name", exact: true})).toHaveValue(templateName);
+    await expect(builder.getByRole("textbox", {name: "Template name", exact: true})).toHaveValue(templateName);
     await builder.getByRole("button", {name: "New device type", exact: true}).click();
     await form.getByRole("button", { name: "Create", exact: true }).click();
     await expect(form.getByRole("alert")).toHaveText(
@@ -85,7 +85,7 @@ test("template starting layouts support inline custom types and round device per
       builder.getByRole("combobox", { name: "Device type", exact: true }),
     ).toHaveValue(typeId);
     await expect(
-      builder.getByRole("textbox", { name: "Name", exact: true }),
+      builder.getByRole("textbox", { name: "Template name", exact: true }),
     ).toHaveValue(templateName);
     await expect(builder.getByTestId("hardware-template-starter")).toHaveValue(
       "round-device",

@@ -12,7 +12,8 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { smtpErrorMessages } from "@/lib/smtp-errors";
 import {
   createUserAccount,
   deleteUserAccount,
@@ -558,9 +559,9 @@ export default function UsersPage() {
       const entries = await api.getAuditLog({ entityType: "Alert", limit: 40 });
       setAlertHistory(entries);
     } catch (err) {
-      setAlertError(
-        err instanceof Error ? err.message : "Failed to send test alert.",
-      );
+      const smtpMessage = err instanceof ApiError && err.code && Object.hasOwn(smtpErrorMessages, err.code)
+        ? smtpErrorMessages[err.code as keyof typeof smtpErrorMessages] : null;
+      setAlertError(smtpMessage ? t(smtpMessage) : err instanceof Error ? err.message : "Failed to send test alert.");
     } finally {
       setAlertTesting(false);
     }
@@ -1587,10 +1588,11 @@ export default function UsersPage() {
                         }
                         disabled={alertsLoading}
                       />
-                      {t("SSL/TLS")}
+                      {t("Implicit TLS")}
                     </label>
                   </div>
 
+                  <p className="mb-3 text-xs text-[var(--color-fg-subtle)]">{t("Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.")}</p>
                   <div className="grid gap-4 md:grid-cols-2">
                     <Field label={t("SMTP host")}>
                       <Input

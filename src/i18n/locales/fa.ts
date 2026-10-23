@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Check the SMTP host, sender and recipient settings.": "تنظیمات میزبان SMTP، فرستنده و گیرنده را بررسی کنید.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "اتصال به SMTP ممکن نیست. نام میزبان، درگاه و دسترسی شبکه را بررسی کنید.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "مهلت SMTP پایان یافت. دسترسی شبکه و حالت TLS این درگاه را بررسی کنید.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "تأیید TLS در SMTP ناموفق بود. گواهی، نام میزبان و حالت TLS را بررسی کنید.",
+  "SMTP authentication failed. Check the username and password.": "احراز هویت SMTP ناموفق بود. نام کاربری و گذرواژه را بررسی کنید.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP پیام را رد کرد. مجوزهای فرستنده و گیرنده را بررسی کنید.",
+  "SMTP delivery failed. Check the mail server configuration.": "تحویل SMTP ناموفق بود. پیکربندی سرور ایمیل را بررسی کنید.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "چیدمان‌های اولیه هندسه و نام پیش‌فرض را فراهم می‌کنند. نام قالب را در پایین تغییر دهید.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "قالب‌های داخلی فقط خواندنی هستند. برای تغییر نام و چیدمان یک نسخه ایجاد کنید.",
+  "Duplicate to customize": "تکثیر برای سفارشی‌سازی",
+  "Network port must be an integer from 1 to 65535.": "درگاه شبکه باید عدد صحیحی از 1 تا 65535 باشد.",
+  "Open service": "باز کردن سرویس",
+  "Physical port": "درگاه فیزیکی",
+  "Network port": "درگاه شبکه",
+  "Transport protocol": "پروتکل انتقال",
+  "Implicit TLS": "TLS ضمنی",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "برای درگاه 465 از TLS ضمنی استفاده کنید. برای STARTTLS (معمولاً درگاه 587) این گزینه را خاموش بگذارید. پیش از آزمایش ذخیره کنید.",
+
   "Header color": "رنگ سربرگ",
   "Device name position": "موقعیت نام دستگاه",
   "Upper left": "بالا چپ",

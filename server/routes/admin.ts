@@ -1,3 +1,5 @@
+import { SmtpDeliveryError } from '../lib/smtp-error.js';
+import { parseServiceEndpoint } from '../lib/service-endpoint.js';
 import { parseStackMemberLayout } from "../lib/stack-member-layout-data.js";
 import { validateStackIntegrity } from "../lib/stack-integrity.js";
 import { restoredMonitorCommunity } from "../lib/security-migration.js";
@@ -1384,7 +1386,7 @@ const restoreBackupSnapshot = db.transaction(
     const deviceServices = normalizeArrayRecordArray(
       data.deviceServices ?? [],
       "data.deviceServices",
-    );
+    ).map(row => Object.assign({}, row, parseServiceEndpoint(row)));
     const wifiControllers = normalizeArrayRecordArray(
       data.wifiControllers ?? [],
       "data.wifiControllers",
@@ -1923,8 +1925,8 @@ const restoreBackupSnapshot = db.transaction(
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertDeviceService = db.prepare(`
-    INSERT INTO deviceServices (id, deviceId, name, serviceType, ipAssignmentId, portId, vlanId, monitorId, url, notes, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO deviceServices (id, deviceId, name, serviceType, ipAssignmentId, portId, vlanId, monitorId, url, notes, networkPort, transportProtocol, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertWifiController = db.prepare(`
     INSERT INTO wifiControllers (id, labId, deviceId, name, vendor, model, managementIp, notes)
@@ -2848,6 +2850,8 @@ const restoreBackupSnapshot = db.transaction(
         row.monitorId ?? null,
         row.url ?? null,
         row.notes ?? null,
+        row.networkPort,
+        row.transportProtocol,
         row.createdAt ?? now,
         row.updatedAt ?? row.createdAt ?? now,
       );
@@ -3238,7 +3242,14 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/alert-settings/test", async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
-    return sendTestAlert(req.authUser.username);
+    try {
+      return await sendTestAlert(req.authUser.username);
+    } catch (error) {
+      if (error instanceof SmtpDeliveryError) {
+        return reply.status(500).send({ error: error.message, code: `smtp_${error.category}` });
+      }
+      throw error;
+    }
   });
 
   app.get("/export", async (req, reply) => {

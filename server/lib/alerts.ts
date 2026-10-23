@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import { SmtpDeliveryError, smtpDeliveryError } from './smtp-error.js'
 import { db } from '../db.js'
 import { createId } from './ids.js'
 import { getJsonSetting, putJsonSetting } from './app-settings.js'
@@ -106,6 +107,7 @@ export async function sendTestAlert(actor = 'system') {
       actor,
       summary: `Test alert failed: ${error instanceof Error ? truncate(error.message, 260) : 'Unknown error'}`,
     })
+    if (error instanceof SmtpDeliveryError) console.error('[rackpad] SMTP test failed', error.category)
     throw error
   }
 }
@@ -184,7 +186,7 @@ export async function sendMonitorTransitionAlert(
       actor: 'system',
       summary: `Alert delivery failed for ${payload.hostname} / ${payload.monitorName ?? payload.monitorType}: ${error instanceof Error ? truncate(error.message, 260) : 'Unknown error'}`,
     })
-    console.error('[rackpad] failed to send alert notification', error)
+    console.error('[rackpad] failed to send alert notification', error instanceof SmtpDeliveryError ? error.category : error)
     return null
   }
 }
@@ -241,6 +243,7 @@ async function dispatchAlert(settings: AlertSettings, message: string): Promise<
   }
 
   if (tasks.length === 0) {
+    if (settings.smtpHost || settings.smtpFrom || settings.smtpTo) throw new SmtpDeliveryError('configuration')
     throw new Error('Configure at least one notification target first.')
   }
 
@@ -286,36 +289,40 @@ async function sendTelegramAlert(botToken: string, chatId: string, text: string)
 }
 
 async function sendEmailAlert(settings: AlertSettings, text: string) {
-  if (!settings.smtpHost || !settings.smtpFrom || !settings.smtpTo) {
-    throw new Error('SMTP host, from, and recipient fields are required for email alerts.')
+  try {
+    if (!settings.smtpHost || !settings.smtpFrom || !settings.smtpTo) {
+      throw new SmtpDeliveryError('configuration')
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: settings.smtpHost,
+      port: settings.smtpPort ?? (settings.smtpSecure ? 465 : 587),
+      secure: settings.smtpSecure,
+      auth:
+        settings.smtpUsername || settings.smtpPassword
+          ? {
+              user: settings.smtpUsername ?? '',
+              pass: settings.smtpPassword ?? '',
+            }
+          : undefined,
+    })
+
+    const recipients = splitRecipients(settings.smtpTo)
+    if (recipients.length === 0) {
+      throw new SmtpDeliveryError('configuration')
+    }
+
+    await transporter.sendMail({
+      from: settings.smtpFrom,
+      to: recipients.join(', '),
+      subject: firstLine(text) ?? 'Rackpad alert',
+      text,
+    })
+
+    return { channel: 'email', delivered: true }
+  } catch (error) {
+    throw smtpDeliveryError(error)
   }
-
-  const transporter = nodemailer.createTransport({
-    host: settings.smtpHost,
-    port: settings.smtpPort ?? (settings.smtpSecure ? 465 : 587),
-    secure: settings.smtpSecure,
-    auth:
-      settings.smtpUsername || settings.smtpPassword
-        ? {
-            user: settings.smtpUsername ?? '',
-            pass: settings.smtpPassword ?? '',
-          }
-        : undefined,
-  })
-
-  const recipients = splitRecipients(settings.smtpTo)
-  if (recipients.length === 0) {
-    throw new Error('Add at least one SMTP recipient before sending email alerts.')
-  }
-
-  await transporter.sendMail({
-    from: settings.smtpFrom,
-    to: recipients.join(', '),
-    subject: firstLine(text) ?? 'Rackpad alert',
-    text,
-  })
-
-  return { channel: 'email', delivered: true }
 }
 
 function splitRecipients(value: string) {

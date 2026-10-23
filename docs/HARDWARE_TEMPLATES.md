@@ -6,8 +6,13 @@ replace the classic rack view or its reference pictures.
 
 ## Custom types and round devices
 
-For a new template, choose its **Starting layout**, then edit the name and device
-type. The starter selector is hidden after saving; selecting a starter begins a
+For a new template, choose its **Starting layout**, then edit **Template name**
+and device type. Starting layouts supply geometry and a default name; the name
+is editable. For example, name a customized switch template **5-port switch**.
+
+For an existing built-in, choose **Duplicate to customize**. The custom copy is
+selected and its name field receives focus. Rename it and choose **Save template**;
+the original built-in is unchanged. The starter selector is hidden after saving; selecting a starter begins a
 new draft rather than changing an existing saved template.
 
 Choose **New device type** beside the type controls to create a named type without

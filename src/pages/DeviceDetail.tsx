@@ -1,3 +1,4 @@
+import { serviceNavigationUrl } from "@/lib/service-url";
 import { StackMembersPanel } from "@/components/devices/StackMembersPanel";
 import { deviceTypeLineage } from "@/lib/device-types";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -210,6 +211,8 @@ const EMPTY_NETWORK_IP_FORM: NetworkIpForm = {
 };
 
 type ServiceForm = {
+  networkPort: string;
+  transportProtocol: "tcp" | "udp";
   name: string;
   serviceType: DeviceServiceType;
   ipAssignmentId: string;
@@ -235,6 +238,8 @@ const SERVICE_TYPES: DeviceServiceType[] = [
 ];
 
 const EMPTY_SERVICE_FORM: ServiceForm = {
+  networkPort: "",
+  transportProtocol: "tcp",
   name: "",
   serviceType: "app",
   ipAssignmentId: "",
@@ -1242,12 +1247,19 @@ export default function DeviceDetail() {
       return;
     }
 
+    const networkPort = serviceForm.networkPort.trim() === "" ? null : Number(serviceForm.networkPort);
+    if (networkPort !== null && (!Number.isInteger(networkPort) || networkPort < 1 || networkPort > 65535)) {
+      setServiceError(t("Network port must be an integer from 1 to 65535."));
+      return;
+    }
     setServiceSaving(true);
     setServiceError("");
     const payload = {
       deviceId: device.id,
       name,
       serviceType: serviceForm.serviceType,
+      networkPort,
+      transportProtocol: networkPort === null ? null : serviceForm.transportProtocol,
       ipAssignmentId: serviceForm.ipAssignmentId || null,
       portId: serviceForm.portId || null,
       vlanId: serviceForm.vlanId || null,
@@ -3040,7 +3052,7 @@ export default function DeviceDetail() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <CardLabel>{t("Service inventory")}</CardLabel>
+                  <p className="rk-kicker">{t("Service inventory")}</p>
                   <CardHeading>
                     {t("Applications and network services")}
                   </CardHeading>
@@ -3059,8 +3071,8 @@ export default function DeviceDetail() {
                       <EmptyState title={t("No services documented yet.")} />
                     ) : (
                       deviceServiceList.map((service) => (
+                        <div key={service.id} data-testid="service-summary">
                         <button
-                          key={service.id}
                           type="button"
                           onClick={() => setSelectedServiceId(service.id)}
                           className={[
@@ -3071,13 +3083,14 @@ export default function DeviceDetail() {
                           ].join(" ")}
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <div className="truncate text-sm font-medium text-[var(--color-fg)]">
+                            <div id={`service-name-${service.id}`} className="truncate text-sm font-medium text-[var(--color-fg)]">
                               {service.name}
                             </div>
                             <Badge tone="neutral">
                               {serviceTypeLabel(service.serviceType)}
                             </Badge>
                           </div>
+                          {service.networkPort != null && <div className="mt-1 text-sm font-mono">{service.transportProtocol?.toUpperCase()} {service.networkPort}</div>}
                           <div className="mt-1 text-xs text-[var(--color-fg-subtle)]">
                             {service.url ||
                               service.notes ||
@@ -3090,6 +3103,14 @@ export default function DeviceDetail() {
                               )}
                           </div>
                         </button>
+                        {serviceNavigationUrl(service.url) && (
+                          <a href={serviceNavigationUrl(service.url)!} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex rounded px-3 py-2 text-sm text-[var(--color-accent)] underline focus-visible:outline focus-visible:outline-2"
+                            aria-labelledby={`service-open-${service.id} service-name-${service.id}`}>
+                            <span id={`service-open-${service.id}`}>{t("Open service")}</span>
+                          </a>
+                        )}
+                        </div>
                       ))
                     )}
                   </div>
@@ -3162,7 +3183,7 @@ export default function DeviceDetail() {
                           ))}
                         </Select>
                       </Field>
-                      <Field label={t("Port")}>
+                      <Field label={t("Physical port")}>
                         <Select
                           value={serviceForm.portId}
                           disabled={!canManageMonitoring}
@@ -3209,6 +3230,19 @@ export default function DeviceDetail() {
                       </Field>
                     </div>
 
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field label={t("Network port")}>
+                        <Input type="number" min={1} max={65535} step={1}
+                          value={serviceForm.networkPort} disabled={!canManageMonitoring}
+                          onChange={event => setServiceForm(current => ({ ...current, networkPort: event.target.value, transportProtocol: event.target.value === "" ? "tcp" : current.transportProtocol }))} />
+                      </Field>
+                      <Field label={t("Transport protocol")}>
+                        <Select value={serviceForm.transportProtocol} disabled={!canManageMonitoring || !serviceForm.networkPort}
+                          onChange={value => setServiceField("transportProtocol", value as "tcp" | "udp")}>
+                          <option value="tcp">{t("TCP")}</option><option value="udp">{t("UDP")}</option>
+                        </Select>
+                      </Field>
+                    </div>
                     <Field label={t("URL")}>
                       <Input
                         value={serviceForm.url}
@@ -3633,6 +3667,8 @@ function SummaryPill({ label, value }: { label: string; value: string }) {
 
 function serviceToForm(service: DeviceService): ServiceForm {
   return {
+    networkPort: service.networkPort?.toString() ?? "",
+    transportProtocol: service.transportProtocol ?? "tcp",
     name: service.name,
     serviceType: service.serviceType,
     ipAssignmentId: service.ipAssignmentId ?? "",

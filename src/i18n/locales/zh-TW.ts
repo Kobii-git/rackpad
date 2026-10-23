@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "Check the SMTP host, sender and recipient settings.": "請檢查SMTP主機、寄件人和收件人設定。",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "無法連線SMTP。請檢查主機名稱、連接埠和網路存取。",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP逾時。請檢查網路存取和此連接埠的TLS模式。",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "SMTP TLS驗證失敗。請檢查憑證、主機名稱和TLS模式。",
+  "SMTP authentication failed. Check the username and password.": "SMTP身分驗證失敗。請檢查使用者名稱和密碼。",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP拒絕了郵件。請檢查寄件人和收件人權限。",
+  "SMTP delivery failed. Check the mail server configuration.": "SMTP傳遞失敗。請檢查郵件伺服器設定。",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "初始配置提供形狀和預設名稱。請在下方重新命名範本。",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "內建範本為唯讀。請複製後自訂名稱和配置。",
+  "Duplicate to customize": "複製以自訂",
+  "Network port must be an integer from 1 to 65535.": "網路連接埠必須是1到65535之間的整數。",
+  "Open service": "開啟服務",
+  "Physical port": "實體連接埠",
+  "Network port": "網路連接埠",
+  "Transport protocol": "傳輸協定",
+  "Implicit TLS": "隱式TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "連接埠465使用隱式TLS。對於STARTTLS（通常為連接埠587），請關閉此選項。測試前請儲存。",
+
   "Header color": "標頭顏色",
   "Device name position": "裝置名稱位置",
   "Upper left": "左上",

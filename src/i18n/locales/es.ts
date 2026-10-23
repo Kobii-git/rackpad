@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const es = {
+  "Check the SMTP host, sender and recipient settings.": "Revisa los ajustes del servidor SMTP, remitente y destinatario.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "No se puede conectar a SMTP. Revisa el servidor, puerto y acceso a la red.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP agotó el tiempo de espera. Revisa la red y el modo TLS de este puerto.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "Falló la verificación TLS de SMTP. Revisa el certificado, servidor y modo TLS.",
+  "SMTP authentication failed. Check the username and password.": "Falló la autenticación SMTP. Revisa el usuario y la contraseña.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP rechazó el mensaje. Revisa los permisos del remitente y destinatario.",
+  "SMTP delivery failed. Check the mail server configuration.": "Falló el envío SMTP. Revisa la configuración del servidor de correo.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "Los diseños iniciales aportan la geometría y un nombre predeterminado. Cambia el nombre de la plantilla abajo.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "Las plantillas integradas son de solo lectura. Duplícalas para personalizar el nombre y el diseño.",
+  "Duplicate to customize": "Duplicar para personalizar",
+  "Network port must be an integer from 1 to 65535.": "El puerto de red debe ser un entero entre 1 y 65535.",
+  "Open service": "Abrir servicio",
+  "Physical port": "Puerto físico",
+  "Network port": "Puerto de red",
+  "Transport protocol": "Protocolo de transporte",
+  "Implicit TLS": "TLS implícito",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "Usa TLS implícito para el puerto 465. Para STARTTLS (normalmente el puerto 587), déjalo desactivado. Guarda antes de probar.",
+
   "Header color": "Color del encabezado",
   "Device name position": "Posición del nombre del dispositivo",
   "Upper left": "Arriba a la izquierda",

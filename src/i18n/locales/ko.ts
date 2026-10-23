@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Check the SMTP host, sender and recipient settings.": "SMTP 호스트, 발신자 및 수신자 설정을 확인하세요.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "SMTP에 연결할 수 없습니다. 호스트 이름, 포트 및 네트워크 접근을 확인하세요.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP 시간이 초과되었습니다. 네트워크 접근 및 이 포트의 TLS 모드를 확인하세요.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "SMTP TLS 검증에 실패했습니다. 인증서, 호스트 이름 및 TLS 모드를 확인하세요.",
+  "SMTP authentication failed. Check the username and password.": "SMTP 인증에 실패했습니다. 사용자 이름과 비밀번호를 확인하세요.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP가 메시지를 거부했습니다. 발신자와 수신자 권한을 확인하세요.",
+  "SMTP delivery failed. Check the mail server configuration.": "SMTP 전송에 실패했습니다. 메일 서버 구성을 확인하세요.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "시작 레이아웃은 형태와 기본 이름을 제공합니다. 아래에서 템플릿 이름을 변경하세요.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "기본 제공 템플릿은 읽기 전용입니다. 복제하여 이름과 레이아웃을 변경하세요.",
+  "Duplicate to customize": "복제하여 사용자 지정",
+  "Network port must be an integer from 1 to 65535.": "네트워크 포트는 1에서 65535 사이의 정수여야 합니다.",
+  "Open service": "서비스 열기",
+  "Physical port": "물리 포트",
+  "Network port": "네트워크 포트",
+  "Transport protocol": "전송 프로토콜",
+  "Implicit TLS": "암시적 TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "포트 465에는 암시적 TLS를 사용하세요. STARTTLS(보통 포트 587)에서는 끄세요. 테스트 전에 저장하세요.",
+
   "Header color": "헤더 색상",
   "Device name position": "장치 이름 위치",
   "Upper left": "왼쪽 위",

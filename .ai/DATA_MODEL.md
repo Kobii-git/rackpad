@@ -159,3 +159,11 @@ Older logical backups default missing fields safely, and genuine schema-50–54
 native snapshots remain accepted for startup migration. The settings do not
 change physical layout snapshots, device geometry, ports, or cable anchors.
 Rollback requires the prior image with its paired pre-upgrade database.
+
+Schema 56 adds nullable `deviceServices.networkPort` (integer 1–65535) and
+`transportProtocol` (`tcp`/`udp`). Both are null when no network port is recorded.
+These document a service endpoint independently of the physical `portId`; they
+do not create monitoring or listeners. Logical restore accepts older rows without
+these fields and validates new endpoints before replacement. Native validation
+checks endpoint integrity and rejects pre-56 markers with the new columns.
+Rollback requires the previous image and its matching pre-upgrade database.

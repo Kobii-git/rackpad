@@ -82,6 +82,7 @@ contains the core material you need:
 - [Storage topology guide](./docs/STORAGE.md)
 - [Visualizer guide](./docs/VISUALIZER.md)
 - [OIDC login guide](./docs/OIDC.md)
+- [Service inventory and email alerts](./docs/SERVICES_AND_ALERTS.md)
 - [SNMP monitoring, traps & sync guide](./docs/SNMP.md)
 - [Discovery deployment (Proxmox/LXC/host networking)](./docs/DISCOVERY_DEPLOYMENT.md)
 - [Documentation and images guide](./docs/DOCUMENTATION.md)

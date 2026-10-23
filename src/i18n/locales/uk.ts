@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const uk = {
+  "Check the SMTP host, sender and recipient settings.": "Перевірте налаштування вузла SMTP, відправника й одержувача.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "Не вдалося підключитися до SMTP. Перевірте ім’я вузла, порт і доступ до мережі.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "Час очікування SMTP вичерпано. Перевірте доступ до мережі та режим TLS цього порту.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "Перевірка TLS SMTP не вдалася. Перевірте сертифікат, ім’я вузла та режим TLS.",
+  "SMTP authentication failed. Check the username and password.": "Помилка автентифікації SMTP. Перевірте ім’я користувача й пароль.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP відхилив повідомлення. Перевірте дозволи відправника й одержувача.",
+  "SMTP delivery failed. Check the mail server configuration.": "Доставка SMTP не вдалася. Перевірте конфігурацію поштового сервера.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "Початкові макети задають геометрію та типову назву. Перейменуйте шаблон нижче.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "Вбудовані шаблони доступні лише для читання. Створіть копію, щоб змінити назву й макет.",
+  "Duplicate to customize": "Створити копію для налаштування",
+  "Network port must be an integer from 1 to 65535.": "Мережевий порт має бути цілим числом від 1 до 65535.",
+  "Open service": "Відкрити службу",
+  "Physical port": "Фізичний порт",
+  "Network port": "Мережевий порт",
+  "Transport protocol": "Транспортний протокол",
+  "Implicit TLS": "Неявний TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "Використовуйте неявний TLS для порту 465. Для STARTTLS (зазвичай порт 587) залиште вимкненим. Збережіть перед перевіркою.",
+
   "Header color": "Колір заголовка",
   "Device name position": "Розташування назви пристрою",
   "Upper left": "Угорі ліворуч",

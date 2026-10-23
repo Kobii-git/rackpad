@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const nl = {
+  "Check the SMTP host, sender and recipient settings.": "Controleer de SMTP-host, afzender en ontvangerinstellingen.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "Kan geen verbinding maken met SMTP. Controleer hostnaam, poort en netwerktoegang.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP-time-out. Controleer netwerktoegang en de TLS-modus voor deze poort.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "SMTP-TLS-verificatie mislukt. Controleer certificaat, hostnaam en TLS-modus.",
+  "SMTP authentication failed. Check the username and password.": "SMTP-authenticatie mislukt. Controleer gebruikersnaam en wachtwoord.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP heeft het bericht geweigerd. Controleer afzender- en ontvangerrechten.",
+  "SMTP delivery failed. Check the mail server configuration.": "SMTP-bezorging mislukt. Controleer de configuratie van de mailserver.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "Startindelingen bieden geometrie en een standaardnaam. Hernoem uw sjabloon hieronder.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "Ingebouwde sjablonen zijn alleen-lezen. Dupliceer om de naam en indeling aan te passen.",
+  "Duplicate to customize": "Dupliceren om aan te passen",
+  "Network port must be an integer from 1 to 65535.": "De netwerkpoort moet een geheel getal van 1 tot 65535 zijn.",
+  "Open service": "Dienst openen",
+  "Physical port": "Fysieke poort",
+  "Network port": "Netwerkpoort",
+  "Transport protocol": "Transportprotocol",
+  "Implicit TLS": "Impliciete TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "Gebruik impliciete TLS voor poort 465. Laat dit uit voor STARTTLS (meestal poort 587). Sla op voordat u test.",
+
   "Header color": "Kopkleur",
   "Device name position": "Positie van apparaatnaam",
   "Upper left": "Linksboven",

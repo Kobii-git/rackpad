@@ -66,7 +66,7 @@ test("real MCP SDK client previews one lab batch and a person applies it once", 
   await db.backup(legacyPath);
   const legacy = new Database(legacyPath);
   try {
-    legacy.exec("ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TABLE deviceStackMemberLayouts; DROP TABLE mcpTokens; UPDATE schemaVersion SET version = 52");
+    legacy.exec("ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TABLE deviceStackMemberLayouts; DROP TABLE mcpTokens; UPDATE schemaVersion SET version = 52");
     assert.equal(validateRackpadSqliteDatabase(legacy, "Legacy snapshot"), 52);
   } finally { legacy.close(); }
   const address = await app.listen({ host: "127.0.0.1", port: 0 });

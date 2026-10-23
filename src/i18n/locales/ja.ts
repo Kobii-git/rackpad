@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Check the SMTP host, sender and recipient settings.": "SMTPホスト、送信者、受信者の設定を確認してください。",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "SMTPに接続できません。ホスト名、ポート、ネットワーク接続を確認してください。",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTPがタイムアウトしました。ネットワーク接続とこのポートのTLSモードを確認してください。",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "SMTPのTLS検証に失敗しました。証明書、ホスト名、TLSモードを確認してください。",
+  "SMTP authentication failed. Check the username and password.": "SMTP認証に失敗しました。ユーザー名とパスワードを確認してください。",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTPがメッセージを拒否しました。送信者と受信者の権限を確認してください。",
+  "SMTP delivery failed. Check the mail server configuration.": "SMTP配信に失敗しました。メールサーバーの設定を確認してください。",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "初期レイアウトには形状と既定の名前が含まれます。下でテンプレート名を変更してください。",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "組み込みテンプレートは読み取り専用です。複製して名前とレイアウトを変更してください。",
+  "Duplicate to customize": "複製してカスタマイズ",
+  "Network port must be an integer from 1 to 65535.": "ネットワークポートは1から65535までの整数にしてください。",
+  "Open service": "サービスを開く",
+  "Physical port": "物理ポート",
+  "Network port": "ネットワークポート",
+  "Transport protocol": "トランスポートプロトコル",
+  "Implicit TLS": "暗黙的TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "ポート465には暗黙的TLSを使用します。STARTTLS（通常ポート587）ではオフにしてください。テスト前に保存してください。",
+
   "Header color": "ヘッダーの色",
   "Device name position": "デバイス名の位置",
   "Upper left": "左上",

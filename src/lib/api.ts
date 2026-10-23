@@ -197,6 +197,8 @@ export type DeviceImagePatch = Nullable<Pick<DeviceImage, "label" | "notes">>;
 export type DeviceServicePatch = Nullable<
   Pick<
     DeviceService,
+    | "networkPort"
+    | "transportProtocol"
     | "deviceId"
     | "name"
     | "serviceType"

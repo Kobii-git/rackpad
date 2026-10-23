@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "Check the SMTP host, sender and recipient settings.": "Gaan die SMTP-gasheer-, sender- en ontvangerinstellings na.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "Kan nie aan SMTP koppel nie. Gaan die gasheernaam, poort en netwerktoegang na.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP het uitgetel. Gaan netwerktoegang en die TLS-modus vir hierdie poort na.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "SMTP TLS-verifikasie het misluk. Gaan die sertifikaat, gasheernaam en TLS-modus na.",
+  "SMTP authentication failed. Check the username and password.": "SMTP-stawing het misluk. Gaan die gebruikersnaam en wagwoord na.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP het die boodskap verwerp. Gaan sender- en ontvangertoestemmings na.",
+  "SMTP delivery failed. Check the mail server configuration.": "SMTP-aflewering het misluk. Gaan die posbedieneropstelling na.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "Beginuitlegte verskaf geometrie en ’n versteknaam. Hernoem jou sjabloon hieronder.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "Ingeboude sjablone is leesalleen. Dupliseer om die naam en uitleg aan te pas.",
+  "Duplicate to customize": "Dupliseer om aan te pas",
+  "Network port must be an integer from 1 to 65535.": "Netwerkpoort moet ’n heelgetal van 1 tot 65535 wees.",
+  "Open service": "Maak diens oop",
+  "Physical port": "Fisiese poort",
+  "Network port": "Netwerkpoort",
+  "Transport protocol": "Vervoerprotokol",
+  "Implicit TLS": "Implisiete TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "Gebruik implisiete TLS vir poort 465. Laat dit af vir STARTTLS (gewoonlik poort 587). Stoor voor toetsing.",
+
   "Header color": "Opskrifkleur",
   "Device name position": "Toestelnaamposisie",
   "Upper left": "Links bo",
