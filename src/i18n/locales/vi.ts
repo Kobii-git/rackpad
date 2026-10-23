@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Check the SMTP host, sender and recipient settings.": "Kiểm tra cài đặt máy chủ SMTP, người gửi và người nhận.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "Không thể kết nối SMTP. Kiểm tra tên máy chủ, cổng và quyền truy cập mạng.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP hết thời gian chờ. Kiểm tra truy cập mạng và chế độ TLS cho cổng này.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "Xác minh TLS của SMTP thất bại. Kiểm tra chứng chỉ, tên máy chủ và chế độ TLS.",
+  "SMTP authentication failed. Check the username and password.": "Xác thực SMTP thất bại. Kiểm tra tên người dùng và mật khẩu.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP từ chối thư. Kiểm tra quyền của người gửi và người nhận.",
+  "SMTP delivery failed. Check the mail server configuration.": "Gửi thư SMTP thất bại. Kiểm tra cấu hình máy chủ thư.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "Bố cục ban đầu cung cấp hình học và tên mặc định. Đổi tên mẫu bên dưới.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "Mẫu tích hợp chỉ đọc. Nhân bản để tùy chỉnh tên và bố cục.",
+  "Duplicate to customize": "Nhân bản để tùy chỉnh",
+  "Network port must be an integer from 1 to 65535.": "Cổng mạng phải là số nguyên từ 1 đến 65535.",
+  "Open service": "Mở dịch vụ",
+  "Physical port": "Cổng vật lý",
+  "Network port": "Cổng mạng",
+  "Transport protocol": "Giao thức truyền tải",
+  "Implicit TLS": "TLS ngầm định",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "Dùng TLS ngầm định cho cổng 465. Với STARTTLS (thường là cổng 587), hãy tắt tùy chọn này. Lưu trước khi thử.",
+
   "Header color": "Màu tiêu đề",
   "Device name position": "Vị trí tên thiết bị",
   "Upper left": "Trên cùng bên trái",

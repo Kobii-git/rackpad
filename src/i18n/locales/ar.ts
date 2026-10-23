@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Check the SMTP host, sender and recipient settings.": "تحقق من إعدادات مضيف SMTP والمرسل والمستلم.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "تعذر الاتصال بـ SMTP. تحقق من اسم المضيف والمنفذ والوصول إلى الشبكة.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "انتهت مهلة SMTP. تحقق من الوصول إلى الشبكة ووضع TLS لهذا المنفذ.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "فشل التحقق من TLS في SMTP. تحقق من الشهادة واسم المضيف ووضع TLS.",
+  "SMTP authentication failed. Check the username and password.": "فشلت مصادقة SMTP. تحقق من اسم المستخدم وكلمة المرور.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "رفض SMTP الرسالة. تحقق من أذونات المرسل والمستلم.",
+  "SMTP delivery failed. Check the mail server configuration.": "فشل تسليم SMTP. تحقق من إعداد خادم البريد.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "توفر التخطيطات الأولية الشكل واسمًا افتراضيًا. أعد تسمية القالب أدناه.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "القوالب المضمنة للقراءة فقط. انسخ القالب لتخصيص الاسم والتخطيط.",
+  "Duplicate to customize": "نسخ للتخصيص",
+  "Network port must be an integer from 1 to 65535.": "يجب أن يكون منفذ الشبكة عددًا صحيحًا من 1 إلى 65535.",
+  "Open service": "فتح الخدمة",
+  "Physical port": "المنفذ المادي",
+  "Network port": "منفذ الشبكة",
+  "Transport protocol": "بروتوكول النقل",
+  "Implicit TLS": "TLS ضمني",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "استخدم TLS الضمني للمنفذ 465. اتركه معطلًا مع STARTTLS (عادةً المنفذ 587). احفظ قبل الاختبار.",
+
   "Header color": "لون الترويسة",
   "Device name position": "موضع اسم الجهاز",
   "Upper left": "أعلى اليسار",

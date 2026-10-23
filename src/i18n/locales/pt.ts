@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const pt = {
+  "Check the SMTP host, sender and recipient settings.": "Verifique as configurações do host SMTP, remetente e destinatário.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "Não foi possível conectar ao SMTP. Verifique o host, a porta e o acesso à rede.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "O SMTP excedeu o tempo limite. Verifique a rede e o modo TLS desta porta.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "Falha na verificação TLS do SMTP. Verifique o certificado, o host e o modo TLS.",
+  "SMTP authentication failed. Check the username and password.": "Falha na autenticação SMTP. Verifique o usuário e a senha.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "O SMTP rejeitou a mensagem. Verifique as permissões do remetente e destinatário.",
+  "SMTP delivery failed. Check the mail server configuration.": "Falha na entrega SMTP. Verifique a configuração do servidor de e-mail.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "Os layouts iniciais fornecem geometria e um nome padrão. Renomeie seu modelo abaixo.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "Os modelos integrados são somente leitura. Duplique para personalizar o nome e o layout.",
+  "Duplicate to customize": "Duplicar para personalizar",
+  "Network port must be an integer from 1 to 65535.": "A porta de rede deve ser um número inteiro de 1 a 65535.",
+  "Open service": "Abrir serviço",
+  "Physical port": "Porta física",
+  "Network port": "Porta de rede",
+  "Transport protocol": "Protocolo de transporte",
+  "Implicit TLS": "TLS implícito",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "Use TLS implícito para a porta 465. Para STARTTLS (geralmente a porta 587), deixe desativado. Salve antes de testar.",
+
   "Header color": "Cor do cabeçalho",
   "Device name position": "Posição do nome do dispositivo",
   "Upper left": "Superior esquerdo",

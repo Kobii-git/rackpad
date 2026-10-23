@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "Check the SMTP host, sender and recipient settings.": "SMTP होस्ट, प्रेषक और प्राप्तकर्ता की सेटिंग जाँचें।",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "SMTP से कनेक्ट नहीं हो सका। होस्टनाम, पोर्ट और नेटवर्क पहुँच जाँचें।",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP का समय समाप्त हुआ। नेटवर्क पहुँच और इस पोर्ट का TLS मोड जाँचें।",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "SMTP TLS सत्यापन विफल हुआ। प्रमाणपत्र, होस्टनाम और TLS मोड जाँचें।",
+  "SMTP authentication failed. Check the username and password.": "SMTP प्रमाणीकरण विफल हुआ। उपयोगकर्ता नाम और पासवर्ड जाँचें।",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP ने संदेश अस्वीकार किया। प्रेषक और प्राप्तकर्ता की अनुमतियाँ जाँचें।",
+  "SMTP delivery failed. Check the mail server configuration.": "SMTP डिलीवरी विफल हुई। मेल सर्वर का कॉन्फ़िगरेशन जाँचें।",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "प्रारंभिक लेआउट ज्यामिति और एक डिफ़ॉल्ट नाम देते हैं। नीचे अपने टेम्पलेट का नाम बदलें।",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "अंतर्निहित टेम्पलेट केवल पढ़ने के लिए हैं। नाम और लेआउट बदलने के लिए प्रतिलिपि बनाएँ।",
+  "Duplicate to customize": "अनुकूलित करने के लिए प्रतिलिपि बनाएँ",
+  "Network port must be an integer from 1 to 65535.": "नेटवर्क पोर्ट 1 से 65535 तक पूर्णांक होना चाहिए।",
+  "Open service": "सेवा खोलें",
+  "Physical port": "भौतिक पोर्ट",
+  "Network port": "नेटवर्क पोर्ट",
+  "Transport protocol": "ट्रांसपोर्ट प्रोटोकॉल",
+  "Implicit TLS": "अंतर्निहित TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "पोर्ट 465 के लिए अंतर्निहित TLS का उपयोग करें। STARTTLS (आमतौर पर पोर्ट 587) के लिए इसे बंद रखें। परीक्षण से पहले सहेजें।",
+
   "Header color": "शीर्षक का रंग",
   "Device name position": "डिवाइस के नाम की स्थिति",
   "Upper left": "ऊपर बाएँ",

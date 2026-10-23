@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "Check the SMTP host, sender and recipient settings.": "יש לבדוק את הגדרות שרת SMTP, השולח והנמען.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "לא ניתן להתחבר ל־SMTP. יש לבדוק שם מארח, יציאה וגישה לרשת.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "זמן ההמתנה של SMTP הסתיים. יש לבדוק גישה לרשת ומצב TLS ליציאה זו.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "אימות TLS של SMTP נכשל. יש לבדוק אישור, שם מארח ומצב TLS.",
+  "SMTP authentication failed. Check the username and password.": "אימות SMTP נכשל. יש לבדוק שם משתמש וסיסמה.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP דחה את ההודעה. יש לבדוק הרשאות שולח ונמען.",
+  "SMTP delivery failed. Check the mail server configuration.": "שליחת SMTP נכשלה. יש לבדוק את תצורת שרת הדואר.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "פריסות התחלתיות מספקות גאומטריה ושם ברירת מחדל. אפשר לשנות את שם התבנית למטה.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "תבניות מובנות הן לקריאה בלבד. יש לשכפל כדי להתאים את השם והפריסה.",
+  "Duplicate to customize": "שכפול להתאמה אישית",
+  "Network port must be an integer from 1 to 65535.": "יציאת הרשת חייבת להיות מספר שלם מ־1 עד 65535.",
+  "Open service": "פתיחת שירות",
+  "Physical port": "יציאה פיזית",
+  "Network port": "יציאת רשת",
+  "Transport protocol": "פרוטוקול תעבורה",
+  "Implicit TLS": "TLS משתמע",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "יש להשתמש ב־TLS משתמע עבור יציאה 465. עבור STARTTLS (בדרך כלל יציאה 587), יש להשאיר כבוי. יש לשמור לפני הבדיקה.",
+
   "Header color": "צבע כותרת",
   "Device name position": "מיקום שם המכשיר",
   "Upper left": "למעלה משמאל",

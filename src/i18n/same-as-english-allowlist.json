@@ -1,4 +1,5 @@
 [
+  {"key": "UDP", "reason": "Technical transport protocol acronym"},
   {
     "key": "MCP",
     "reason": "Technical protocol acronym"

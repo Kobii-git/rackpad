@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const pl = {
+  "Check the SMTP host, sender and recipient settings.": "Sprawdź ustawienia hosta SMTP, nadawcy i odbiorcy.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "Nie można połączyć się z SMTP. Sprawdź nazwę hosta, port i dostęp do sieci.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "Przekroczono czas SMTP. Sprawdź dostęp do sieci i tryb TLS tego portu.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "Weryfikacja TLS SMTP nie powiodła się. Sprawdź certyfikat, nazwę hosta i tryb TLS.",
+  "SMTP authentication failed. Check the username and password.": "Uwierzytelnianie SMTP nie powiodło się. Sprawdź nazwę użytkownika i hasło.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP odrzucił wiadomość. Sprawdź uprawnienia nadawcy i odbiorcy.",
+  "SMTP delivery failed. Check the mail server configuration.": "Dostarczenie SMTP nie powiodło się. Sprawdź konfigurację serwera pocztowego.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "Układy początkowe zapewniają geometrię i domyślną nazwę. Zmień nazwę szablonu poniżej.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "Wbudowane szablony są tylko do odczytu. Powiel je, aby dostosować nazwę i układ.",
+  "Duplicate to customize": "Powiel, aby dostosować",
+  "Network port must be an integer from 1 to 65535.": "Port sieciowy musi być liczbą całkowitą od 1 do 65535.",
+  "Open service": "Otwórz usługę",
+  "Physical port": "Port fizyczny",
+  "Network port": "Port sieciowy",
+  "Transport protocol": "Protokół transportowy",
+  "Implicit TLS": "Niejawny TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "Użyj niejawnego TLS dla portu 465. Dla STARTTLS (zwykle port 587) pozostaw wyłączone. Zapisz przed testem.",
+
   "Header color": "Kolor nagłówka",
   "Device name position": "Pozycja nazwy urządzenia",
   "Upper left": "U góry po lewej",

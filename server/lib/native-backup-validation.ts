@@ -57,6 +57,8 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "notes",
     "createdAt",
     "updatedAt",
+    "networkPort",
+    "transportProtocol",
   ],
   devicePhysicalLayouts: [
     "deviceId",
@@ -605,6 +607,11 @@ export function validateRackpadSqliteDatabase(
         throw new RackpadSqliteValidationError(`${label} has inconsistent legacy presentation schema.`);
     }
   }
+  if (schema.version < 56) {
+    const columns = database.prepare('PRAGMA table_info(deviceServices)').all() as Array<{name: string}>;
+    if (columns.some(column => column.name === 'networkPort' || column.name === 'transportProtocol'))
+      throw new RackpadSqliteValidationError(`${label} has inconsistent legacy service endpoint schema.`);
+  }
   const missingSchema: string[] = [];
   for (const [table, requiredColumns] of Object.entries(
     CURRENT_RACKPAD_SCHEMA_COLUMNS,
@@ -624,6 +631,8 @@ export function validateRackpadSqliteDatabase(
       continue;
     }
     for (const column of requiredColumns) {
+      if (schema.version < 56 && table === "deviceServices" &&
+        (column === "networkPort" || column === "transportProtocol")) continue;
       if (schema.version < 55 && ((table === "devices" && column === "labelPosition") ||
         ((table === "rooms" || table === "racks") && column === "headerColor"))) continue;
       if (schema.version === 50 && table === "ports" && column === "stackMemberId") continue;
@@ -637,6 +646,13 @@ export function validateRackpadSqliteDatabase(
     );
   }
 
+  if (schema.version >= 56) {
+    const invalid = database.prepare(`SELECT id FROM deviceServices WHERE
+      (networkPort IS NULL AND transportProtocol IS NOT NULL) OR
+      (networkPort IS NOT NULL AND (typeof(networkPort) != 'integer' OR networkPort NOT BETWEEN 1 AND 65535 OR
+        transportProtocol IS NULL OR transportProtocol NOT IN ('tcp', 'udp'))) LIMIT 1`).get();
+    if (invalid) throw new RackpadSqliteValidationError(`${label} contains an invalid service network endpoint.`);
+  }
   if (schema.version >= 55) {
     try {
       for (const table of ["rooms", "racks"] as const)

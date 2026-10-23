@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Check the SMTP host, sender and recipient settings.": "SMTP sunucusu, gönderen ve alıcı ayarlarını kontrol edin.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "SMTP bağlantısı kurulamıyor. Sunucu adını, bağlantı noktasını ve ağ erişimini kontrol edin.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP zaman aşımına uğradı. Ağ erişimini ve bu bağlantı noktasının TLS modunu kontrol edin.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "SMTP TLS doğrulaması başarısız. Sertifikayı, sunucu adını ve TLS modunu kontrol edin.",
+  "SMTP authentication failed. Check the username and password.": "SMTP kimlik doğrulaması başarısız. Kullanıcı adını ve parolayı kontrol edin.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP iletiyi reddetti. Gönderen ve alıcı izinlerini kontrol edin.",
+  "SMTP delivery failed. Check the mail server configuration.": "SMTP teslimatı başarısız. Posta sunucusu yapılandırmasını kontrol edin.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "Başlangıç düzenleri geometri ve varsayılan bir ad sağlar. Şablonunuzu aşağıda yeniden adlandırın.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "Yerleşik şablonlar salt okunurdur. Adı ve düzeni özelleştirmek için çoğaltın.",
+  "Duplicate to customize": "Özelleştirmek için çoğalt",
+  "Network port must be an integer from 1 to 65535.": "Ağ bağlantı noktası 1 ile 65535 arasında bir tam sayı olmalıdır.",
+  "Open service": "Hizmeti aç",
+  "Physical port": "Fiziksel bağlantı noktası",
+  "Network port": "Ağ bağlantı noktası",
+  "Transport protocol": "Taşıma protokolü",
+  "Implicit TLS": "Örtük TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "465 bağlantı noktası için örtük TLS kullanın. STARTTLS (genellikle 587) için bunu kapalı bırakın. Test etmeden önce kaydedin.",
+
   "Header color": "Başlık rengi",
   "Device name position": "Cihaz adı konumu",
   "Upper left": "Sol üst",

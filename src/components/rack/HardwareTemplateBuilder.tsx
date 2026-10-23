@@ -1,7 +1,7 @@
 import { useTemplateHistory } from "@/lib/use-template-history";
 import { TemplateItemControls } from "./TemplateItemControls";
 import { updateTemplateItem, updateModuleGrid, type TemplateItem } from "@/lib/hardware-template-editing";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Boxes,
   Check,
@@ -87,6 +87,8 @@ export function HardwareTemplateBuilder({
   onDeviceTypeCreated,
 }: HardwareTemplateBuilderProps) {
   const { t } = useI18n();
+  const templateNameRef = useRef<HTMLInputElement>(null);
+  const focusCopyName = useRef<string | null>(null);
   const devices = useStore((state) => state.devices);
   const [templates, setTemplates] = useState<HardwareTemplateV1[]>([]);
   const [defaults, setDefaults] = useState<HardwareTemplateDefault[]>([]);
@@ -161,6 +163,13 @@ export function HardwareTemplateBuilder({
     (template) => template.id === selectedId,
   );
   const editable = !selectedTemplate?.builtIn;
+  useEffect(() => {
+    if (focusCopyName.current === selectedId && editable) {
+      templateNameRef.current?.focus();
+      templateNameRef.current?.select();
+      focusCopyName.current = null;
+    }
+  }, [selectedId, editable]);
   const compatibleDevices = useMemo(
     () =>
       selectedDeviceType
@@ -311,6 +320,7 @@ export function HardwareTemplateBuilder({
         id,
         name: `${selectedTemplate.name} copy`,
       });
+      focusCopyName.current = copy.id;
       await refreshTemplates(copy.id);
     } catch (nextError) {
       setError(
@@ -513,13 +523,14 @@ export function HardwareTemplateBuilder({
                 </Field>
                 <p className="text-xs text-[var(--text-muted)]">
                   {t(
-                    "Choose a starting layout, then name your template and select its device type.",
+                    "Starting layouts provide geometry and a default name. Rename your template below.",
                   )}
                 </p>
               </>
             )}
-            <Field label={t("Name")}>
+            <Field label={t("Template name")}>
               <Input
+                ref={templateNameRef}
                 disabled={!editable}
                 value={draft.name}
                 onChange={(event) =>
@@ -530,6 +541,7 @@ export function HardwareTemplateBuilder({
                 }
               />
             </Field>
+            {!editable && <p className="text-xs text-[var(--text-muted)]">{t("Built-in templates are read-only. Duplicate to customize the name and layout.")}</p>}
             <Field label={t("ID")}>
               <Input
                 disabled={Boolean(selectedTemplate)}
@@ -676,7 +688,7 @@ export function HardwareTemplateBuilder({
                   disabled={saving || creatingType}
                 >
                   <Copy />
-                  {t("Duplicate")}
+                  {selectedTemplate.builtIn ? t("Duplicate to customize") : t("Duplicate")}
                 </Button>
               )}
               {selectedTemplate && !selectedTemplate.builtIn && (

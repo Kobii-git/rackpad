@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "Check the SMTP host, sender and recipient settings.": "ตรวจสอบการตั้งค่าโฮสต์ SMTP ผู้ส่ง และผู้รับ",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "เชื่อมต่อ SMTP ไม่ได้ ตรวจสอบชื่อโฮสต์ พอร์ต และการเข้าถึงเครือข่าย",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP หมดเวลา ตรวจสอบการเข้าถึงเครือข่ายและโหมด TLS สำหรับพอร์ตนี้",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "การตรวจสอบ TLS ของ SMTP ล้มเหลว ตรวจสอบใบรับรอง ชื่อโฮสต์ และโหมด TLS",
+  "SMTP authentication failed. Check the username and password.": "การยืนยันตัวตน SMTP ล้มเหลว ตรวจสอบชื่อผู้ใช้และรหัสผ่าน",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP ปฏิเสธข้อความ ตรวจสอบสิทธิ์ของผู้ส่งและผู้รับ",
+  "SMTP delivery failed. Check the mail server configuration.": "การส่ง SMTP ล้มเหลว ตรวจสอบการกำหนดค่าเซิร์ฟเวอร์เมล",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "เค้าโครงเริ่มต้นให้รูปทรงและชื่อเริ่มต้น เปลี่ยนชื่อเทมเพลตด้านล่าง",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "เทมเพลตในตัวเป็นแบบอ่านอย่างเดียว ทำสำเนาเพื่อปรับชื่อและเค้าโครง",
+  "Duplicate to customize": "ทำสำเนาเพื่อปรับแต่ง",
+  "Network port must be an integer from 1 to 65535.": "พอร์ตเครือข่ายต้องเป็นจำนวนเต็มตั้งแต่ 1 ถึง 65535",
+  "Open service": "เปิดบริการ",
+  "Physical port": "พอร์ตจริง",
+  "Network port": "พอร์ตเครือข่าย",
+  "Transport protocol": "โพรโทคอลการขนส่ง",
+  "Implicit TLS": "TLS แบบโดยนัย",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "ใช้ TLS แบบโดยนัยสำหรับพอร์ต 465 สำหรับ STARTTLS (โดยทั่วไปคือพอร์ต 587) ให้ปิดตัวเลือกนี้ บันทึกก่อนทดสอบ",
+
   "Header color": "สีส่วนหัว",
   "Device name position": "ตำแหน่งชื่ออุปกรณ์",
   "Upper left": "ซ้ายบน",

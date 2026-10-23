@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const fr = {
+  "Check the SMTP host, sender and recipient settings.": "Vérifiez les paramètres du serveur SMTP, de l’expéditeur et du destinataire.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "Connexion SMTP impossible. Vérifiez le nom d’hôte, le port et l’accès réseau.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "Délai SMTP dépassé. Vérifiez l’accès réseau et le mode TLS de ce port.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "Échec de vérification TLS SMTP. Vérifiez le certificat, le nom d’hôte et le mode TLS.",
+  "SMTP authentication failed. Check the username and password.": "Échec d’authentification SMTP. Vérifiez le nom d’utilisateur et le mot de passe.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP a refusé le message. Vérifiez les autorisations de l’expéditeur et du destinataire.",
+  "SMTP delivery failed. Check the mail server configuration.": "Échec de livraison SMTP. Vérifiez la configuration du serveur de messagerie.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "Les dispositions initiales fournissent la géométrie et un nom par défaut. Renommez votre modèle ci-dessous.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "Les modèles intégrés sont en lecture seule. Dupliquez-les pour personnaliser le nom et la disposition.",
+  "Duplicate to customize": "Dupliquer pour personnaliser",
+  "Network port must be an integer from 1 to 65535.": "Le port réseau doit être un entier de 1 à 65535.",
+  "Open service": "Ouvrir le service",
+  "Physical port": "Port physique",
+  "Network port": "Port réseau",
+  "Transport protocol": "Protocole de transport",
+  "Implicit TLS": "TLS implicite",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "Utilisez TLS implicite pour le port 465. Pour STARTTLS (généralement le port 587), laissez cette option désactivée. Enregistrez avant de tester.",
+
   "Header color": "Couleur de l’en-tête",
   "Device name position": "Position du nom de l’appareil",
   "Upper left": "En haut à gauche",

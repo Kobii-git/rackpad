@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const it = {
+  "Check the SMTP host, sender and recipient settings.": "Controlla le impostazioni di host SMTP, mittente e destinatario.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "Connessione SMTP impossibile. Controlla host, porta e accesso alla rete.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "Timeout SMTP. Controlla accesso alla rete e modalità TLS per questa porta.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "Verifica TLS SMTP non riuscita. Controlla certificato, host e modalità TLS.",
+  "SMTP authentication failed. Check the username and password.": "Autenticazione SMTP non riuscita. Controlla nome utente e password.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP ha rifiutato il messaggio. Controlla i permessi di mittente e destinatario.",
+  "SMTP delivery failed. Check the mail server configuration.": "Invio SMTP non riuscito. Controlla la configurazione del server di posta.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "I layout iniziali forniscono geometria e nome predefinito. Rinomina il modello qui sotto.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "I modelli integrati sono di sola lettura. Duplicali per personalizzare nome e layout.",
+  "Duplicate to customize": "Duplica per personalizzare",
+  "Network port must be an integer from 1 to 65535.": "La porta di rete deve essere un intero da 1 a 65535.",
+  "Open service": "Apri servizio",
+  "Physical port": "Porta fisica",
+  "Network port": "Porta di rete",
+  "Transport protocol": "Protocollo di trasporto",
+  "Implicit TLS": "TLS implicito",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "Usa TLS implicito per la porta 465. Per STARTTLS (di solito porta 587), lascia disattivato. Salva prima di provare.",
+
   "Header color": "Colore dell’intestazione",
   "Device name position": "Posizione del nome del dispositivo",
   "Upper left": "In alto a sinistra",

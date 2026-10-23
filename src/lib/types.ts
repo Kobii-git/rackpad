@@ -996,6 +996,8 @@ export interface AdminIntegrityReport {
 }
 
 export interface DeviceService {
+  networkPort?: number | null;
+  transportProtocol?: "tcp" | "udp" | null;
   id: ID;
   deviceId: ID;
   name: string;

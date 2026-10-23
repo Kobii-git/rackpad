@@ -1504,6 +1504,16 @@ const SCHEMA_MIGRATIONS = [
         CHECK (labelPosition IN ('upper-left', 'upper-right'));
     `,
   },
+  {
+    version: 56,
+    sql: `
+      ALTER TABLE deviceServices ADD COLUMN networkPort INTEGER
+        CHECK (networkPort IS NULL OR (typeof(networkPort) = 'integer' AND networkPort BETWEEN 1 AND 65535));
+      ALTER TABLE deviceServices ADD COLUMN transportProtocol TEXT
+        CHECK ((networkPort IS NULL AND transportProtocol IS NULL) OR
+          (networkPort IS NOT NULL AND transportProtocol IS NOT NULL AND transportProtocol IN ('tcp', 'udp')));
+    `,
+  },
 ] as const;
 
 const applySchema = db.transaction(() => {

@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const de = {
+  "Check the SMTP host, sender and recipient settings.": "Prüfen Sie SMTP-Host, Absender und Empfänger.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "Keine SMTP-Verbindung. Prüfen Sie Hostname, Port und Netzwerkzugriff.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP-Zeitüberschreitung. Prüfen Sie Netzwerkzugriff und TLS-Modus für diesen Port.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "SMTP-TLS-Prüfung fehlgeschlagen. Prüfen Sie Zertifikat, Hostname und TLS-Modus.",
+  "SMTP authentication failed. Check the username and password.": "SMTP-Anmeldung fehlgeschlagen. Prüfen Sie Benutzername und Passwort.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP hat die Nachricht abgelehnt. Prüfen Sie Absender- und Empfängerberechtigungen.",
+  "SMTP delivery failed. Check the mail server configuration.": "SMTP-Zustellung fehlgeschlagen. Prüfen Sie die Mailserver-Konfiguration.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "Startlayouts liefern Geometrie und einen Standardnamen. Benennen Sie Ihre Vorlage unten um.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "Integrierte Vorlagen sind schreibgeschützt. Duplizieren Sie sie, um Name und Layout anzupassen.",
+  "Duplicate to customize": "Zum Anpassen duplizieren",
+  "Network port must be an integer from 1 to 65535.": "Der Netzwerkport muss eine ganze Zahl von 1 bis 65535 sein.",
+  "Open service": "Dienst öffnen",
+  "Physical port": "Physischer Port",
+  "Network port": "Netzwerkport",
+  "Transport protocol": "Transportprotokoll",
+  "Implicit TLS": "Implizites TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "Verwenden Sie implizites TLS für Port 465. Für STARTTLS (meist Port 587) deaktiviert lassen. Vor dem Test speichern.",
+
   "Header color": "Kopfzeilenfarbe",
   "Device name position": "Position des Gerätenamens",
   "Upper left": "Oben links",

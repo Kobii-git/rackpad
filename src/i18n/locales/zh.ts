@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Check the SMTP host, sender and recipient settings.": "请检查SMTP主机、发件人和收件人设置。",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "无法连接SMTP。请检查主机名、端口和网络访问。",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP超时。请检查网络访问和此端口的TLS模式。",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "SMTP TLS验证失败。请检查证书、主机名和TLS模式。",
+  "SMTP authentication failed. Check the username and password.": "SMTP身份验证失败。请检查用户名和密码。",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP拒绝了邮件。请检查发件人和收件人权限。",
+  "SMTP delivery failed. Check the mail server configuration.": "SMTP投递失败。请检查邮件服务器配置。",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "初始布局提供形状和默认名称。请在下方重命名模板。",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "内置模板为只读。请复制后自定义名称和布局。",
+  "Duplicate to customize": "复制以自定义",
+  "Network port must be an integer from 1 to 65535.": "网络端口必须是1到65535之间的整数。",
+  "Open service": "打开服务",
+  "Physical port": "物理端口",
+  "Network port": "网络端口",
+  "Transport protocol": "传输协议",
+  "Implicit TLS": "隐式TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "端口465使用隐式TLS。对于STARTTLS（通常为端口587），请关闭此选项。测试前请保存。",
+
   "Header color": "标题颜色",
   "Device name position": "设备名称位置",
   "Upper left": "左上",

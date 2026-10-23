@@ -5234,7 +5234,7 @@ test("patch-panel hardware templates author, apply, and render both faces", asyn
       .first()
       .fill(templateId);
     await builder
-      .getByRole("textbox", { name: "Name", exact: true })
+      .getByRole("textbox", { name: "Template name", exact: true })
       .fill(`E2E patch panel ${suffix}`);
     const saveTemplateResponse = page.waitForResponse(
       (response) =>

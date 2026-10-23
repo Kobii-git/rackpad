@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const ru = {
+  "Check the SMTP host, sender and recipient settings.": "Проверьте настройки узла SMTP, отправителя и получателя.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "Не удаётся подключиться к SMTP. Проверьте имя узла, порт и доступ к сети.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "Время ожидания SMTP истекло. Проверьте доступ к сети и режим TLS для этого порта.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "Проверка TLS SMTP не удалась. Проверьте сертификат, имя узла и режим TLS.",
+  "SMTP authentication failed. Check the username and password.": "Ошибка аутентификации SMTP. Проверьте имя пользователя и пароль.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP отклонил сообщение. Проверьте разрешения отправителя и получателя.",
+  "SMTP delivery failed. Check the mail server configuration.": "Доставка SMTP не удалась. Проверьте настройки почтового сервера.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "Начальные макеты задают геометрию и имя по умолчанию. Переименуйте шаблон ниже.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "Встроенные шаблоны доступны только для чтения. Создайте копию, чтобы изменить имя и макет.",
+  "Duplicate to customize": "Создать копию для настройки",
+  "Network port must be an integer from 1 to 65535.": "Сетевой порт должен быть целым числом от 1 до 65535.",
+  "Open service": "Открыть службу",
+  "Physical port": "Физический порт",
+  "Network port": "Сетевой порт",
+  "Transport protocol": "Транспортный протокол",
+  "Implicit TLS": "Неявный TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "Используйте неявный TLS для порта 465. Для STARTTLS (обычно порт 587) оставьте выключенным. Сохраните перед проверкой.",
+
   "Header color": "Цвет заголовка",
   "Device name position": "Положение имени устройства",
   "Upper left": "Сверху слева",

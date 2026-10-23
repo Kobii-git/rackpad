@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "Check the SMTP host, sender and recipient settings.": "SMTP হোস্ট, প্রেরক ও প্রাপকের সেটিংস পরীক্ষা করুন।",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "SMTP-তে সংযোগ করা যাচ্ছে না। হোস্টনাম, পোর্ট ও নেটওয়ার্ক অ্যাক্সেস পরীক্ষা করুন।",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP-এর সময়সীমা শেষ। নেটওয়ার্ক অ্যাক্সেস ও এই পোর্টের TLS মোড পরীক্ষা করুন।",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "SMTP TLS যাচাই ব্যর্থ। সার্টিফিকেট, হোস্টনাম ও TLS মোড পরীক্ষা করুন।",
+  "SMTP authentication failed. Check the username and password.": "SMTP প্রমাণীকরণ ব্যর্থ। ব্যবহারকারীর নাম ও পাসওয়ার্ড পরীক্ষা করুন।",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP বার্তাটি প্রত্যাখ্যান করেছে। প্রেরক ও প্রাপকের অনুমতি পরীক্ষা করুন।",
+  "SMTP delivery failed. Check the mail server configuration.": "SMTP বিতরণ ব্যর্থ। মেইল সার্ভারের কনফিগারেশন পরীক্ষা করুন।",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "প্রাথমিক বিন্যাসে জ্যামিতি ও একটি ডিফল্ট নাম থাকে। নিচে টেমপ্লেটের নাম বদলান।",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "বিল্ট-ইন টেমপ্লেট শুধু পড়া যায়। নাম ও বিন্যাস বদলাতে অনুলিপি করুন।",
+  "Duplicate to customize": "কাস্টমাইজ করতে অনুলিপি করুন",
+  "Network port must be an integer from 1 to 65535.": "নেটওয়ার্ক পোর্ট অবশ্যই 1 থেকে 65535 পর্যন্ত পূর্ণসংখ্যা হতে হবে।",
+  "Open service": "সেবা খুলুন",
+  "Physical port": "ভৌত পোর্ট",
+  "Network port": "নেটওয়ার্ক পোর্ট",
+  "Transport protocol": "পরিবহন প্রোটোকল",
+  "Implicit TLS": "অন্তর্নিহিত TLS",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "পোর্ট 465-এর জন্য অন্তর্নিহিত TLS ব্যবহার করুন। STARTTLS-এর জন্য (সাধারণত পোর্ট 587) এটি বন্ধ রাখুন। পরীক্ষার আগে সংরক্ষণ করুন।",
+
   "Header color": "শিরোনামের রঙ",
   "Device name position": "ডিভাইসের নামের অবস্থান",
   "Upper left": "উপরে বামে",

@@ -1,6 +1,26 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Check the SMTP host, sender and recipient settings.": "Periksa pengaturan host SMTP, pengirim, dan penerima.",
+  "Cannot connect to SMTP. Check the hostname, port and network access.": "Tidak dapat terhubung ke SMTP. Periksa nama host, port, dan akses jaringan.",
+  "SMTP timed out. Check network access and the TLS mode for this port.": "Waktu SMTP habis. Periksa akses jaringan dan mode TLS untuk port ini.",
+  "SMTP TLS verification failed. Check the certificate, hostname and TLS mode.": "Verifikasi TLS SMTP gagal. Periksa sertifikat, nama host, dan mode TLS.",
+  "SMTP authentication failed. Check the username and password.": "Autentikasi SMTP gagal. Periksa nama pengguna dan kata sandi.",
+  "SMTP rejected the message. Check sender and recipient permissions.": "SMTP menolak pesan. Periksa izin pengirim dan penerima.",
+  "SMTP delivery failed. Check the mail server configuration.": "Pengiriman SMTP gagal. Periksa konfigurasi server surat.",
+
+  "UDP": "UDP",
+  "Starting layouts provide geometry and a default name. Rename your template below.": "Tata letak awal menyediakan geometri dan nama bawaan. Ubah nama templat Anda di bawah.",
+  "Built-in templates are read-only. Duplicate to customize the name and layout.": "Templat bawaan hanya dapat dibaca. Duplikasikan untuk menyesuaikan nama dan tata letak.",
+  "Duplicate to customize": "Duplikasikan untuk menyesuaikan",
+  "Network port must be an integer from 1 to 65535.": "Port jaringan harus berupa bilangan bulat dari 1 hingga 65535.",
+  "Open service": "Buka layanan",
+  "Physical port": "Port fisik",
+  "Network port": "Port jaringan",
+  "Transport protocol": "Protokol transport",
+  "Implicit TLS": "TLS implisit",
+  "Use implicit TLS for port 465. For STARTTLS (usually port 587), leave this off. Save before testing.": "Gunakan TLS implisit untuk port 465. Untuk STARTTLS (biasanya port 587), biarkan nonaktif. Simpan sebelum menguji.",
+
   "Header color": "Warna header",
   "Device name position": "Posisi nama perangkat",
   "Upper left": "Kiri atas",
