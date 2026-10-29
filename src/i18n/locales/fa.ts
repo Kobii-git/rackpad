@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Import host adapters and guest NIC ports.": "آداپتورهای میزبان و درگاه‌های شبکه مهمان را وارد کنید.",
+  "Revoke": "لغو دسترسی",
+  "Revoked": "لغوشده",
+  "Expired": "منقضی‌شده",
+  "Enter a name and select at least one lab.": "یک نام وارد کنید و حداقل یک آزمایشگاه انتخاب کنید.",
+  "Hover details": "جزئیات اشاره‌گر",
+  "Host adapters": "آداپتورهای میزبان",
+  "Invalid IP address.": "نشانی IP نامعتبر است.",
+  "Document a subnet for this IP first.": "ابتدا یک زیرشبکه برای این IP ثبت کنید.",
+  "IP is already assigned to another device.": "این IP از قبل به دستگاه دیگری اختصاص دارد.",
+  "IP is not eligible for a DHCP reservation.": "این نشانی IP برای رزرو DHCP مجاز نیست.",
+  "Invalid host adapter.": "آداپتور میزبان نامعتبر است.",
+  "Ambiguous adapter match.": "تطبیق آداپتور مبهم است.",
+  "Skipped": "ردشده",
+  "Failed": "ناموفق",
+
+  "ntfy topic URL": "نشانی موضوع ntfy",
+  "ntfy access token": "توکن دسترسی ntfy",
+  "Delivered via {channels}.": "از طریق {channels} تحویل شد.",
+  "Failed channels: {channels}.": "کانال‌های ناموفق: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "نشانی موضوع ntfy، توکن دسترسی و کلید رمزگذاری را بررسی کنید.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "ارسال به ntfy ممکن نیست. نشانی، دسترسی شبکه و گواهی TLS را بررسی کنید.",
+  "ntfy timed out. Try again later.": "مهلت ntfy تمام شد. بعداً دوباره تلاش کنید.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy پیام را رد کرد. مجوزهای موضوع و احراز هویت را بررسی کنید.",
+  "ntfy rate limit reached. Try again later.": "محدودیت درخواست ntfy رسیده است. بعداً دوباره تلاش کنید.",
+  "Notification delivery failed. Check the configured channels.": "تحویل اعلان ناموفق بود. کانال‌های تنظیم‌شده را بررسی کنید.",
+
   "Check the SMTP host, sender and recipient settings.": "تنظیمات میزبان SMTP، فرستنده و گیرنده را بررسی کنید.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "اتصال به SMTP ممکن نیست. نام میزبان، درگاه و دسترسی شبکه را بررسی کنید.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "مهلت SMTP پایان یافت. دسترسی شبکه و حالت TLS این درگاه را بررسی کنید.",

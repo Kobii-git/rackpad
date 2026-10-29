@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "Import host adapters and guest NIC ports.": "นำเข้าอะแดปเตอร์โฮสต์และพอร์ต NIC ของผู้เยี่ยมชม",
+  "Revoke": "เพิกถอน",
+  "Revoked": "เพิกถอนแล้ว",
+  "Expired": "หมดอายุ",
+  "Enter a name and select at least one lab.": "ป้อนชื่อและเลือกอย่างน้อยหนึ่งแล็บ",
+  "Hover details": "รายละเอียดเมื่อชี้",
+  "Host adapters": "อะแดปเตอร์โฮสต์",
+  "Invalid IP address.": "ที่อยู่ IP ไม่ถูกต้อง",
+  "Document a subnet for this IP first.": "บันทึกซับเน็ตสำหรับ IP นี้ก่อน",
+  "IP is already assigned to another device.": "IP ถูกกำหนดให้กับอุปกรณ์อื่นแล้ว",
+  "IP is not eligible for a DHCP reservation.": "ที่อยู่ IP นี้ไม่สามารถใช้สำหรับการจอง DHCP ได้",
+  "Invalid host adapter.": "อะแดปเตอร์โฮสต์ไม่ถูกต้อง",
+  "Ambiguous adapter match.": "การจับคู่อะแดปเตอร์ไม่ชัดเจน",
+  "Skipped": "ข้ามแล้ว",
+  "Failed": "ล้มเหลว",
+
+  "ntfy topic URL": "URL หัวข้อ ntfy",
+  "ntfy access token": "โทเค็นการเข้าถึง ntfy",
+  "Delivered via {channels}.": "ส่งผ่าน {channels} แล้ว",
+  "Failed channels: {channels}.": "ช่องทางที่ล้มเหลว: {channels}",
+  "Check the ntfy topic URL, access token and encryption key.": "ตรวจสอบ URL หัวข้อ ntfy โทเค็นการเข้าถึง และคีย์การเข้ารหัส",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "ส่งไปยัง ntfy ไม่ได้ ตรวจสอบ URL การเข้าถึงเครือข่าย และใบรับรอง TLS",
+  "ntfy timed out. Try again later.": "ntfy หมดเวลา ลองอีกครั้งในภายหลัง",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy ปฏิเสธข้อความ ตรวจสอบสิทธิ์หัวข้อและการยืนยันตัวตน",
+  "ntfy rate limit reached. Try again later.": "ถึงขีดจำกัดคำขอ ntfy แล้ว ลองอีกครั้งในภายหลัง",
+  "Notification delivery failed. Check the configured channels.": "ส่งการแจ้งเตือนไม่สำเร็จ ตรวจสอบช่องทางที่ตั้งค่าไว้",
+
   "Check the SMTP host, sender and recipient settings.": "ตรวจสอบการตั้งค่าโฮสต์ SMTP ผู้ส่ง และผู้รับ",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "เชื่อมต่อ SMTP ไม่ได้ ตรวจสอบชื่อโฮสต์ พอร์ต และการเข้าถึงเครือข่าย",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP หมดเวลา ตรวจสอบการเข้าถึงเครือข่ายและโหมด TLS สำหรับพอร์ตนี้",

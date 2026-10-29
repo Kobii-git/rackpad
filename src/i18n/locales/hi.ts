@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "Import host adapters and guest NIC ports.": "होस्ट एडेप्टर और गेस्ट NIC पोर्ट आयात करें।",
+  "Revoke": "निरस्त करें",
+  "Revoked": "निरस्त",
+  "Expired": "समय समाप्त",
+  "Enter a name and select at least one lab.": "एक नाम दर्ज करें और कम से कम एक लैब चुनें।",
+  "Hover details": "होवर विवरण",
+  "Host adapters": "होस्ट एडेप्टर",
+  "Invalid IP address.": "अमान्य IP पता।",
+  "Document a subnet for this IP first.": "पहले इस IP के लिए एक सबनेट दर्ज करें।",
+  "IP is already assigned to another device.": "IP पहले से किसी अन्य डिवाइस को दिया गया है।",
+  "IP is not eligible for a DHCP reservation.": "यह IP पता DHCP आरक्षण के लिए पात्र नहीं है।",
+  "Invalid host adapter.": "अमान्य होस्ट एडेप्टर।",
+  "Ambiguous adapter match.": "एडेप्टर का मिलान अस्पष्ट है।",
+  "Skipped": "छोड़ा गया",
+  "Failed": "विफल",
+
+  "ntfy topic URL": "ntfy विषय URL",
+  "ntfy access token": "ntfy एक्सेस टोकन",
+  "Delivered via {channels}.": "{channels} से भेजा गया।",
+  "Failed channels: {channels}.": "विफल चैनल: {channels}।",
+  "Check the ntfy topic URL, access token and encryption key.": "ntfy विषय URL, एक्सेस टोकन और एन्क्रिप्शन कुंजी जाँचें।",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "ntfy को भेज नहीं सके। URL, नेटवर्क पहुँच और TLS प्रमाणपत्र जाँचें।",
+  "ntfy timed out. Try again later.": "ntfy का समय समाप्त हुआ। बाद में फिर कोशिश करें।",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy ने संदेश अस्वीकार किया। विषय अनुमतियाँ और प्रमाणीकरण जाँचें।",
+  "ntfy rate limit reached. Try again later.": "ntfy अनुरोध सीमा पूरी हुई। बाद में फिर कोशिश करें।",
+  "Notification delivery failed. Check the configured channels.": "सूचना भेजना विफल रहा। कॉन्फ़िगर किए गए चैनल जाँचें।",
+
   "Check the SMTP host, sender and recipient settings.": "SMTP होस्ट, प्रेषक और प्राप्तकर्ता की सेटिंग जाँचें।",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "SMTP से कनेक्ट नहीं हो सका। होस्टनाम, पोर्ट और नेटवर्क पहुँच जाँचें।",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP का समय समाप्त हुआ। नेटवर्क पहुँच और इस पोर्ट का TLS मोड जाँचें।",

@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Import host adapters and guest NIC ports.": "استورد محولات المضيف ومنافذ شبكة الضيوف.",
+  "Revoke": "إلغاء",
+  "Revoked": "ملغى",
+  "Expired": "منتهي الصلاحية",
+  "Enter a name and select at least one lab.": "أدخل اسمًا وحدد مختبرًا واحدًا على الأقل.",
+  "Hover details": "تفاصيل التمرير",
+  "Host adapters": "محولات المضيف",
+  "Invalid IP address.": "عنوان IP غير صالح.",
+  "Document a subnet for this IP first.": "وثّق شبكة فرعية لهذا العنوان أولاً.",
+  "IP is already assigned to another device.": "عنوان IP معين بالفعل لجهاز آخر.",
+  "IP is not eligible for a DHCP reservation.": "عنوان IP غير مؤهل لحجز DHCP.",
+  "Invalid host adapter.": "محول مضيف غير صالح.",
+  "Ambiguous adapter match.": "تطابق المحول غير واضح.",
+  "Skipped": "تم التخطي",
+  "Failed": "فشل",
+
+  "ntfy topic URL": "رابط موضوع ntfy",
+  "ntfy access token": "رمز وصول ntfy",
+  "Delivered via {channels}.": "تم التسليم عبر {channels}.",
+  "Failed channels: {channels}.": "القنوات التي فشلت: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "تحقق من رابط موضوع ntfy ورمز الوصول ومفتاح التشفير.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "تعذر الإرسال إلى ntfy. تحقق من الرابط والوصول إلى الشبكة وشهادة TLS.",
+  "ntfy timed out. Try again later.": "انتهت مهلة ntfy. حاول لاحقًا.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "رفض ntfy الرسالة. تحقق من أذونات الموضوع والمصادقة.",
+  "ntfy rate limit reached. Try again later.": "تم بلوغ حد طلبات ntfy. حاول لاحقًا.",
+  "Notification delivery failed. Check the configured channels.": "فشل تسليم الإشعار. تحقق من القنوات المهيأة.",
+
   "Check the SMTP host, sender and recipient settings.": "تحقق من إعدادات مضيف SMTP والمرسل والمستلم.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "تعذر الاتصال بـ SMTP. تحقق من اسم المضيف والمنفذ والوصول إلى الشبكة.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "انتهت مهلة SMTP. تحقق من الوصول إلى الشبكة ووضع TLS لهذا المنفذ.",

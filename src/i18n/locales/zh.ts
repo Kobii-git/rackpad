@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Import host adapters and guest NIC ports.": "导入主机适配器和客户机网卡端口。",
+  "Revoke": "撤销",
+  "Revoked": "已撤销",
+  "Expired": "已过期",
+  "Enter a name and select at least one lab.": "请输入名称并至少选择一个实验室。",
+  "Hover details": "悬停详情",
+  "Host adapters": "主机适配器",
+  "Invalid IP address.": "IP 地址无效。",
+  "Document a subnet for this IP first.": "请先登记此 IP 的子网。",
+  "IP is already assigned to another device.": "此 IP 已分配给其他设备。",
+  "IP is not eligible for a DHCP reservation.": "此 IP 地址不适用于 DHCP 保留。",
+  "Invalid host adapter.": "主机适配器无效。",
+  "Ambiguous adapter match.": "适配器匹配不明确。",
+  "Skipped": "已跳过",
+  "Failed": "失败",
+
+  "ntfy topic URL": "ntfy主题网址",
+  "ntfy access token": "ntfy访问令牌",
+  "Delivered via {channels}.": "已通过{channels}发送。",
+  "Failed channels: {channels}.": "失败的渠道：{channels}。",
+  "Check the ntfy topic URL, access token and encryption key.": "请检查ntfy主题网址、访问令牌和加密密钥。",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "无法发送到ntfy。请检查网址、网络访问和TLS证书。",
+  "ntfy timed out. Try again later.": "ntfy超时。请稍后重试。",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy拒绝了消息。请检查主题权限和身份验证。",
+  "ntfy rate limit reached. Try again later.": "已达到ntfy请求限制。请稍后重试。",
+  "Notification delivery failed. Check the configured channels.": "通知发送失败。请检查已配置的渠道。",
+
   "Check the SMTP host, sender and recipient settings.": "请检查SMTP主机、发件人和收件人设置。",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "无法连接SMTP。请检查主机名、端口和网络访问。",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP超时。请检查网络访问和此端口的TLS模式。",

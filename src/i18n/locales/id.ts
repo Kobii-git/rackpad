@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Import host adapters and guest NIC ports.": "Impor adaptor host dan port NIC tamu.",
+  "Revoke": "Cabut",
+  "Revoked": "Dicabut",
+  "Expired": "Kedaluwarsa",
+  "Enter a name and select at least one lab.": "Masukkan nama dan pilih setidaknya satu lab.",
+  "Hover details": "Detail saat diarahkan",
+  "Host adapters": "Adaptor host",
+  "Invalid IP address.": "Alamat IP tidak valid.",
+  "Document a subnet for this IP first.": "Dokumentasikan subnet untuk IP ini terlebih dahulu.",
+  "IP is already assigned to another device.": "IP sudah ditetapkan ke perangkat lain.",
+  "IP is not eligible for a DHCP reservation.": "Alamat IP ini tidak memenuhi syarat untuk reservasi DHCP.",
+  "Invalid host adapter.": "Adaptor host tidak valid.",
+  "Ambiguous adapter match.": "Pencocokan adaptor ambigu.",
+  "Skipped": "Dilewati",
+  "Failed": "Gagal",
+
+  "ntfy topic URL": "URL topik ntfy",
+  "ntfy access token": "Token akses ntfy",
+  "Delivered via {channels}.": "Terkirim melalui {channels}.",
+  "Failed channels: {channels}.": "Kanal yang gagal: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "Periksa URL topik ntfy, token akses, dan kunci enkripsi.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "Tidak dapat mengirim ke ntfy. Periksa URL, akses jaringan, dan sertifikat TLS.",
+  "ntfy timed out. Try again later.": "Waktu ntfy habis. Coba lagi nanti.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy menolak pesan. Periksa izin topik dan autentikasi.",
+  "ntfy rate limit reached. Try again later.": "Batas permintaan ntfy tercapai. Coba lagi nanti.",
+  "Notification delivery failed. Check the configured channels.": "Pengiriman notifikasi gagal. Periksa kanal yang dikonfigurasi.",
+
   "Check the SMTP host, sender and recipient settings.": "Periksa pengaturan host SMTP, pengirim, dan penerima.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "Tidak dapat terhubung ke SMTP. Periksa nama host, port, dan akses jaringan.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "Waktu SMTP habis. Periksa akses jaringan dan mode TLS untuk port ini.",

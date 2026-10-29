@@ -9,6 +9,7 @@ import YAML from "yaml";
 import { inspectSarif, prepareCodeqlReports, reviewSarif } from "./check-codeql-results.mjs";
 import { codeqlReviewProblems } from "./check-codeql-review.mjs";
 import { readSnmpReviewContext, SNMP_REVIEW } from "./codeql-snmp-review.mjs";
+import { assertPatchedImageRuntime } from "./image-runtime.mjs";
 
 const workflow = (name) => YAML.parse(readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), "utf8"));
 const sarif = (severity, results = [{ ruleId: "test-rule" }]) => ({
@@ -470,14 +471,15 @@ test("candidate smoke follows current schema across migrations while retaining p
   const source = readFileSync(new URL("./check-release-image.mjs", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "")
     .replaceAll("import.meta.url", JSON.stringify("file:///rackpad-fixture/scripts/check-release-image.mjs"));
-  for (const currentSchema of [55, 56]) for (const previousSchema of [51, 53]) {
+  for (const currentSchema of [55, 56, 57]) for (const previousSchema of [51, 53, 55]) for (const platform of ["linux/amd64", "linux/arm64"]) {
     const exercises = [];
+    const selectedImages = new Map();
     let nonce = 0;
     runInNewContext(source, {
-      assert, URL,
+      assert, URL, assertPatchedImageRuntime,
       process: {argv: ["node", "fixture.mjs", "--image", `sha256:${"a".repeat(64)}`,
         "--previous-image", `ghcr.io/kobii-git/rackpad@sha256:${"b".repeat(64)}`,
-        "--previous-schema", String(previousSchema), "--platform", "linux/amd64", "--revision", "c".repeat(40)]},
+        "--previous-schema", String(previousSchema), "--platform", platform, "--revision", "c".repeat(40)]},
       console: {log() {}, error() {}},
       randomUUID: () => `synthetic-${++nonce}`,
       readFileSync: (url, encoding) => {
@@ -488,13 +490,24 @@ test("candidate smoke follows current schema across migrations while retaining p
       // No Docker process, API call, database, or volume is created in this fixture.
       spawnSync: (command, args, options) => {
         assert.equal(command, "docker");
+        if (args[0] === "create") {
+          assert.equal(args[args.indexOf("--platform") + 1], platform);
+          assert.equal(args[args.indexOf("--network") + 1], "none");
+          selectedImages.set(args[2], `sha256:${(args.at(-2).startsWith("ghcr.io/") ? "e" : "d").repeat(64)}`);
+        }
+        if (args[0] === "image" && args[1] === "inspect") {
+          assert(!args.includes("--platform"), "image inspect must support older Docker CLIs");
+          assert([...selectedImages.values()].includes(args[2]), "inspect the selected container's image, not a multi-platform reference");
+        }
         if (options.input?.startsWith("await (async function exerciseApi(")) {
           const body = options.input;
           const input = JSON.parse(body.slice(body.lastIndexOf("})(") + 3, -2));
           exercises.push({schema: input.expectedSchema, features: input.features, create: input.create});
         }
-        const stdout = args[0] === "info" ? "linux\n" : args[0] === "image" && args[1] === "inspect"
-          ? JSON.stringify([{Os: "linux", Architecture: "amd64", Config: {Labels: {"org.opencontainers.image.revision": "c".repeat(40)}}}]) : "";
+        const stdout = args.includes("process.versions.node") ? "22.23.4\n" : args[0] === "info" ? "linux\n"
+          : args[0] === "inspect" ? `${selectedImages.get(args.at(-1))}\n`
+          : args[0] === "image" && args[1] === "inspect"
+            ? JSON.stringify([{Id: args[2], Os: "linux", Architecture: platform.split("/")[1], Config: {Labels: {"org.opencontainers.image.revision": "c".repeat(40)}}}]) : "";
         return {status: 0, stdout, stderr: ""};
       },
     });

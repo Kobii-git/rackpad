@@ -61,13 +61,13 @@ function fixtureOperation(code) {
     "--mount", `type=bind,src=${fixtureRoot},dst=/fixture`]);
 }
 
-function start(mount, user, environment = []) {
+function start(mount, user, environment = [], extraMounts = []) {
   const name = `${prefix}-${containers.length}`;
   containers.push(name);
   docker(["run", "-d", "--name", name, ...isolation, "--mount", mount,
     ...(user ? ["--user", user] : []),
     "-e", "OUI_AUTO_UPDATE=0", "-e", "SNMP_TRAP_ENABLED=0", "-e", "MCP_ENABLED=0",
-    ...environment, image]);
+    ...extraMounts.flatMap(value => ["--mount", value]), ...environment, image]);
   return name;
 }
 
@@ -107,16 +107,32 @@ function checkData(name, expectedUser, existing) {
   assert.equal(result.status, 0);
 }
 
-function exercise(label, mount, user, expectedUser) {
-  const first = start(mount, user);
+function exercise(label, mount, user, expectedUser, backupMount) {
+  const settings = backupMount ? ["-e", "RACKPAD_NATIVE_BACKUP_DIR=/backups"] : [];
+  const mounts = backupMount ? [backupMount] : [];
+  const first = start(mount, user, settings, mounts);
   waitHealthy(first);
   checkData(first, expectedUser, false);
+  if (backupMount) checkNativeBackup(first, false);
   docker(["stop", "-t", "10", first]);
-  const second = start(mount, user);
+  const second = start(mount, user, settings, mounts);
   waitHealthy(second);
   checkData(second, expectedUser, true);
+  if (backupMount) checkNativeBackup(second, true);
   docker(["stop", "-t", "10", second]);
   console.log(`Container storage: ${label}, health, writes and restart persistence passed.`);
+}
+
+function checkNativeBackup(name, existing, denied = false) {
+  docker(["exec", name, "node", "--input-type=module", "-e", `
+    import assert from 'node:assert/strict';
+    const {createNativeBackup,listNativeBackups} = await import('./dist-server/lib/native-backup.js');
+    try {
+      if (${existing}) assert.ok(listNativeBackups().length > 0, 'Native snapshot must survive restart');
+      if (${denied}) await assert.rejects(createNativeBackup('storage-fixture'));
+      else {await createNativeBackup('storage-fixture'); assert.ok(listNativeBackups().length > 0);}
+    } finally {(await import('./dist-server/db.js')).db.close();}
+  `]);
 }
 
 function expectAccessFailure(mount, user, environment = []) {
@@ -149,7 +165,7 @@ try {
     fixtureReady = true;
     const [uid, gid] = identity.split(":").map(Number);
     fixtureOperation(`
-      for (const [name, uid, gid] of [['default', ${uid}, ${gid}], ['custom', 1000, 1000], ['blocked', 0, 0], ['root-owned', 0, 0]]) {
+      for (const [name, uid, gid] of [['default', ${uid}, ${gid}], ['custom', 1000, 1000], ['blocked', 0, 0], ['root-owned', 0, 0], ['native', 1000, 1000], ['native-blocked', 0, 0], ['native-data', 1000, 1000]]) {
         const directory = '/fixture/' + name;
         fs.mkdirSync(directory, { mode: 0o700 });
         fs.chownSync(directory, uid, gid);
@@ -158,6 +174,11 @@ try {
     const mount = (name) => `type=bind,src=${path.join(fixtureRoot, name)},dst=/data`;
     exercise("default user with a bind mount", mount("default"), undefined, identity);
     exercise("custom user with a bind mount", mount("custom"), "1000:1000", "1000:1000");
+    exercise("custom user with native backups", mount("native-data"), "1000:1000", "1000:1000", `type=bind,src=${path.join(fixtureRoot,"native")},dst=/backups`);
+    const deniedNative = start(mount("custom"), "1000:1000", ["-e", "RACKPAD_NATIVE_BACKUP_DIR=/backups"], [`type=bind,src=${path.join(fixtureRoot,"native-blocked")},dst=/backups`]);
+    waitHealthy(deniedNative);
+    checkNativeBackup(deniedNative, false, true);
+    docker(["stop", "-t", "10", deniedNative]);
     expectAccessFailure(mount("blocked"));
     expectAccessFailure(mount("custom"), undefined, ["-e", "PUID=1000", "-e", "PGID=1000"]);
     // Rehearse a root-to-custom-user transition only in isolated fixture data.
@@ -183,7 +204,7 @@ try {
   if (fixtureRoot) {
     try {
       if (fixtureReady && imageReady) fixtureOperation(`
-        for (const name of ['default', 'custom', 'blocked', 'root-owned']) fs.rmSync('/fixture/' + name, { recursive: true, force: true });
+        for (const name of ['default', 'custom', 'blocked', 'root-owned', 'native', 'native-blocked', 'native-data']) fs.rmSync('/fixture/' + name, { recursive: true, force: true });
       `);
     } finally { rmSync(fixtureRoot, { recursive: true, force: true }); }
   }

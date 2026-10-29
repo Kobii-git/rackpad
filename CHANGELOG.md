@@ -6,6 +6,58 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.7-beta.0] - 2026-10-29
+
+### Added
+
+- Dedicated ntfy publishing with encrypted write-only access tokens, guarded
+  requests and localized administration controls (#202).
+- Persisted pending notification events, retry throttling and complete
+  per-channel outcomes. A successful channel counts as delivery; total failures
+  retry without losing outage/recovery identity (#199).
+- Actual schema-55 stable container upgrade coverage, preserving service
+  relationships and documented endpoints through restart and paired rollback.
+
+### Fixed
+
+- Pin every Docker Node stage to 22.23.4 and reject affected candidate runtimes
+  in image smoke validation (#206).
+- Revoked MCP tokens leave the active list, retain labelled history and allow
+  repeated creation; proposal-loading failures no longer block token refresh (#203).
+- Collector JSON imports stage host management IPs and adapters, preserve linked
+  ports on reimport, and report conflicts and partial failures (#208).
+- Passive-device hover details use hostname/type/display-name order and include
+  rack/U placement, with shared personal field preferences across canvases (#198).
+- Failed notifications no longer advance successful-delivery timestamps or
+  suppress outage retries. New observations supersede stale async completions.
+- Repeated duplication of one hardware template creates independent copies
+  with distinct IDs and available names, including without renaming the first copy (#190).
+- Host IP staging excludes gateway/DNS and technical addresses and respects
+  DHCP-zone eligibility before starting host writes (#208).
+- Release guidance and its checked schema declaration match the migration.
+
+### Changed
+
+- Independently apply the remaining reviewed dependency/tool maintenance updates,
+  including compatible MCP and transitive security patches.
+- Schema advances from stable 55 / prior beta 56 to 57. Retain a consistent
+  pre-upgrade snapshot with the previous image and configuration/key for rollback.
+- Portable exports redact ntfy tokens; native snapshots retain encrypted values.
+  Existing SMTP/Discord/Telegram credential import semantics remain compatible.
+
+See the [beta test and upgrade notes](docs/releases/v1.8.7-beta.0.md).
+
+## [1.8.6] - 2026-10-29
+
+### Fixed
+
+- Pin every Docker Node stage to 22.23.4 and reject affected candidate runtimes
+  in image smoke validation (#206).
+- Update compatible MCP, Fastify, Nodemailer, Zod and transitive dependencies
+  to address the advisories found during maintenance validation.
+
+See the [release and upgrade notes](docs/releases/v1.8.6.md).
+
 ## [1.8.6-beta.0] - 2026-10-22
 
 ### Added

@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const pl = {
+  "Import host adapters and guest NIC ports.": "Importuj karty hosta i porty sieciowe gości.",
+  "Revoke": "Unieważnij",
+  "Revoked": "Unieważniony",
+  "Expired": "Wygasły",
+  "Enter a name and select at least one lab.": "Wpisz nazwę i wybierz co najmniej jedno laboratorium.",
+  "Hover details": "Szczegóły po najechaniu",
+  "Host adapters": "Karty hosta",
+  "Invalid IP address.": "Nieprawidłowy adres IP.",
+  "Document a subnet for this IP first.": "Najpierw udokumentuj podsieć dla tego adresu IP.",
+  "IP is already assigned to another device.": "Adres IP jest już przypisany do innego urządzenia.",
+  "IP is not eligible for a DHCP reservation.": "Ten adres IP nie kwalifikuje się do rezerwacji DHCP.",
+  "Invalid host adapter.": "Nieprawidłowa karta hosta.",
+  "Ambiguous adapter match.": "Niejednoznaczne dopasowanie karty.",
+  "Skipped": "Pominięto",
+  "Failed": "Niepowodzenie",
+
+  "ntfy topic URL": "Adres URL tematu ntfy",
+  "ntfy access token": "Token dostępu ntfy",
+  "Delivered via {channels}.": "Dostarczono przez {channels}.",
+  "Failed channels: {channels}.": "Kanały z błędami: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "Sprawdź adres URL tematu ntfy, token dostępu i klucz szyfrowania.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "Nie można wysłać do ntfy. Sprawdź adres URL, dostęp do sieci i certyfikat TLS.",
+  "ntfy timed out. Try again later.": "Przekroczono limit czasu ntfy. Spróbuj później.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy odrzucił wiadomość. Sprawdź uprawnienia tematu i uwierzytelnianie.",
+  "ntfy rate limit reached. Try again later.": "Osiągnięto limit żądań ntfy. Spróbuj później.",
+  "Notification delivery failed. Check the configured channels.": "Nie udało się wysłać powiadomienia. Sprawdź skonfigurowane kanały.",
+
   "Check the SMTP host, sender and recipient settings.": "Sprawdź ustawienia hosta SMTP, nadawcy i odbiorcy.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "Nie można połączyć się z SMTP. Sprawdź nazwę hosta, port i dostęp do sieci.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "Przekroczono czas SMTP. Sprawdź dostęp do sieci i tryb TLS tego portu.",

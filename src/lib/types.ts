@@ -120,6 +120,8 @@ export interface NativeBackupStatus {
 }
 
 export interface AlertSettings {
+  ntfyTopicUrl: string | null;
+  ntfyTokenConfigured: boolean;
   enabled: boolean;
   notifyOnDown: boolean;
   notifyOnRecovery: boolean;
@@ -1110,6 +1112,9 @@ export interface DiscoveredSnmpInterface {
 }
 
 export interface DeviceMonitor {
+  pendingAlertKind?: "down" | "recovery" | "repeat" | null;
+  pendingAlertAt?: string | null;
+  lastAlertAttemptAt?: string | null;
   id: ID;
   deviceId: ID;
   name: string;

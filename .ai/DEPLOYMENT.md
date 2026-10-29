@@ -22,6 +22,11 @@ ports require both `PORT` and the container-side mapping to agree. Existing
 Compose healthcheck overrides must be updated too; replacing the image alone
 does not replace them. See `INSTALL.md` for custom-port and older-image guidance.
 
+All Docker Node stages use the patched Node 22.23.4 base. Candidate image smoke
+verifies the actual runtime is Node 22.23.4 or a newer Node 22 release, independently
+of the application revision. Historical upgrade/rollback fixtures are exempt from
+that candidate floor; rebuilding source does not update an already published image.
+
 The image's default UID is 10001; its group ID is assigned at build time.
 Standard deployments can use Compose's service-level `user` override with a
 matching writable data directory. `PUID`/`PGID` are not runtime settings.
@@ -112,7 +117,7 @@ by default.
 
 Image publication emits an immutable digest. The publication workflow verifies
 that exact image and revision on AMD64 and ARM64 with isolated fresh-install,
-schema-53 upgrade and paired rollback fixtures. GitHub Release creation depends
+schema-53/schema-55 upgrades and paired rollback fixtures. GitHub Release creation depends
 on both smoke jobs as well as the preceding quality/security/build gates.
 
 Release preparation includes version and lockfile, changelog Added/Fixed/Changed
@@ -127,6 +132,6 @@ No automatic volume backup, downgrade migration, readiness split, or metrics/APM
 is provided.
 
 Pull requests also build unpublished candidate images on AMD64 and ARM64 and
-verify fresh installs, actual stable schema-51 and beta schema-53 upgrades,
+verify fresh installs, actual stable schema-51/schema-55 and beta schema-53 upgrades,
 restart persistence and paired rollback. Candidate images are addressed by local
 immutable image IDs; previous images remain pinned GHCR digests.

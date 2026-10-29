@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const it = {
+  "Import host adapters and guest NIC ports.": "Importa adattatori host e porte di rete guest.",
+  "Revoke": "Revoca",
+  "Revoked": "Revocato",
+  "Expired": "Scaduto",
+  "Enter a name and select at least one lab.": "Inserisci un nome e seleziona almeno un laboratorio.",
+  "Hover details": "Dettagli al passaggio",
+  "Host adapters": "Adattatori host",
+  "Invalid IP address.": "Indirizzo IP non valido.",
+  "Document a subnet for this IP first.": "Documenta prima una sottorete per questo IP.",
+  "IP is already assigned to another device.": "L’IP è già assegnato a un altro dispositivo.",
+  "IP is not eligible for a DHCP reservation.": "L’indirizzo IP non è idoneo per una prenotazione DHCP.",
+  "Invalid host adapter.": "Adattatore host non valido.",
+  "Ambiguous adapter match.": "Corrispondenza dell’adattatore ambigua.",
+  "Skipped": "Ignorato",
+  "Failed": "Non riuscito",
+
+  "ntfy topic URL": "URL dell’argomento ntfy",
+  "ntfy access token": "Token di accesso ntfy",
+  "Delivered via {channels}.": "Consegnato tramite {channels}.",
+  "Failed channels: {channels}.": "Canali non riusciti: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "Controlla l’URL dell’argomento ntfy, il token di accesso e la chiave di cifratura.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "Invio a ntfy impossibile. Controlla URL, accesso di rete e certificato TLS.",
+  "ntfy timed out. Try again later.": "Timeout di ntfy. Riprova più tardi.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy ha rifiutato il messaggio. Controlla autorizzazioni dell’argomento e autenticazione.",
+  "ntfy rate limit reached. Try again later.": "Limite di richieste ntfy raggiunto. Riprova più tardi.",
+  "Notification delivery failed. Check the configured channels.": "Invio della notifica non riuscito. Controlla i canali configurati.",
+
   "Check the SMTP host, sender and recipient settings.": "Controlla le impostazioni di host SMTP, mittente e destinatario.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "Connessione SMTP impossibile. Controlla host, porta e accesso alla rete.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "Timeout SMTP. Controlla accesso alla rete e modalità TLS per questa porta.",

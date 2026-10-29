@@ -1,3 +1,6 @@
+import { parsePendingAlertState } from '../lib/notification-state.js';
+import { invalidateMonitorObservations } from '../lib/monitoring.js';
+import { NotificationDeliveryError } from '../lib/notification-delivery.js';
 import { SmtpDeliveryError } from '../lib/smtp-error.js';
 import { parseServiceEndpoint } from '../lib/service-endpoint.js';
 import { parseStackMemberLayout } from "../lib/stack-member-layout-data.js";
@@ -21,6 +24,7 @@ import {
   loadAlertSettings,
   saveAlertSettings,
   sendTestAlert,
+  invalidateNotificationAttempts,
 } from "../lib/alerts.js";
 import { createId } from "../lib/ids.js";
 import {
@@ -109,6 +113,8 @@ const REDACTED_ALERT_SETTING_FIELDS = [
   "discordWebhookUrl",
   "telegramBotToken",
   "smtpPassword",
+  "ntfyTokenEnc",
+  "ntfyToken",
 ] as const;
 
 function readAppVersion() {
@@ -126,7 +132,7 @@ function createBackupFilename(exportedAt: string) {
   return `rackpad-backup-${exportedAt.replace(/[:.]/g, "-").replace("T", "_").replace("Z", "")}.json`;
 }
 
-function sanitizeBackupAppSettings(rows: Record<string, unknown>[]) {
+function sanitizeBackupAppSettings(rows: Record<string, unknown>[], restoring = false) {
   return rows.map((row) => {
     if (row.key !== "alertSettings" || typeof row.value !== "string") {
       return row;
@@ -134,8 +140,8 @@ function sanitizeBackupAppSettings(rows: Record<string, unknown>[]) {
 
     try {
       const parsed = JSON.parse(row.value) as Record<string, unknown>;
-      const next = { ...DEFAULT_ALERT_SETTINGS, ...parsed };
-      for (const key of REDACTED_ALERT_SETTING_FIELDS) {
+      const next: Record<string, unknown> = { ...DEFAULT_ALERT_SETTINGS, ...parsed, ntfyTokenConfigured: false };
+      for (const key of restoring ? ["ntfyTokenEnc", "ntfyToken"] : REDACTED_ALERT_SETTING_FIELDS) {
         next[key] = null;
       }
       return {
@@ -143,7 +149,7 @@ function sanitizeBackupAppSettings(rows: Record<string, unknown>[]) {
         value: JSON.stringify(next),
       };
     } catch {
-      return row;
+      throw new ValidationError("Invalid notification settings in backup.");
     }
   });
 }
@@ -1362,7 +1368,7 @@ const restoreBackupSnapshot = db.transaction(
     const deviceMonitors = normalizeArrayRecordArray(
       data.deviceMonitors,
       "data.deviceMonitors",
-    );
+    ).map(row => Object.assign({}, row, parsePendingAlertState(row)));
     const dockerImportSources = normalizeArrayRecordArray(
       data.dockerImportSources ?? [],
       "data.dockerImportSources",
@@ -1411,10 +1417,10 @@ const restoreBackupSnapshot = db.transaction(
       data.wifiClientAssociations ?? [],
       "data.wifiClientAssociations",
     );
-    const appSettings = normalizeArrayRecordArray(
+    const appSettings = sanitizeBackupAppSettings(normalizeArrayRecordArray(
       data.appSettings ?? [],
       "data.appSettings",
-    );
+    ), true);
 
     if (users.length === 0) {
       throw new ValidationError(
@@ -1892,9 +1898,12 @@ const restoreBackupSnapshot = db.transaction(
       lastCheckAt,
       lastAlertAt,
       lastResult,
-      lastMessage
+      lastMessage,
+      pendingAlertKind,
+      pendingAlertAt,
+      lastAlertAttemptAt
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertSnmpCredential = db.prepare(`
     INSERT INTO snmpCredentials (
@@ -2835,6 +2844,9 @@ const restoreBackupSnapshot = db.transaction(
         row.lastAlertAt ?? null,
         row.lastResult ?? null,
         row.lastMessage ?? null,
+        row.pendingAlertKind,
+        row.pendingAlertAt,
+        row.lastAlertAttemptAt,
       );
     }
     for (const row of deviceServices) {
@@ -3194,6 +3206,8 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     if (!requireAdmin(req, reply)) return;
     const body = asObject(req.body);
     const saved = saveAlertSettings({
+      ntfyTopicUrl: optionalString(body, "ntfyTopicUrl", { maxLength: 1000 }),
+      ntfyToken: optionalString(body, "ntfyToken", { maxLength: 1024, allowEmpty: true }),
       enabled: optionalBoolean(body, "enabled") ?? false,
       notifyOnDown: optionalBoolean(body, "notifyOnDown") ?? true,
       notifyOnRecovery: optionalBoolean(body, "notifyOnRecovery") ?? true,
@@ -3245,8 +3259,10 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     try {
       return await sendTestAlert(req.authUser.username);
     } catch (error) {
-      if (error instanceof SmtpDeliveryError) {
-        return reply.status(500).send({ error: error.message, code: `smtp_${error.category}` });
+      if (error instanceof SmtpDeliveryError || error instanceof NotificationDeliveryError) {
+        return reply.status(500).send({ error: error.message,
+          code: error instanceof SmtpDeliveryError ? `smtp_${error.category}` : error.code,
+          channels: 'channels' in error ? error.channels : undefined });
       }
       throw error;
     }
@@ -3273,6 +3289,9 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.post("/restore", async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     const snapshot = asObject(req.body);
-    return reply.send(restoreBackupSnapshot(snapshot, req.authUser.username));
+    const restored = restoreBackupSnapshot(snapshot, req.authUser.username);
+    invalidateNotificationAttempts();
+    invalidateMonitorObservations();
+    return reply.send(restored);
   });
 };

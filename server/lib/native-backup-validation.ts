@@ -1,3 +1,4 @@
+import { parsePendingAlertState, PENDING_ALERT_FIELDS } from './notification-state.js';
 import { optionalHeaderColor, optionalLabelPosition } from "./presentation.js";
 import { parseCableRouteMode, decodeCableRouteGuides, assertCableGuideReferences } from "./cable-routing.js";
 import { validateStackIntegrity } from "./stack-integrity.js";
@@ -43,6 +44,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "snmpCredentialId",
     "ignoreTlsErrors",
     "snmpCommunityEnc",
+    ...PENDING_ALERT_FIELDS,
   ],
   deviceServices: [
     "id",
@@ -612,6 +614,11 @@ export function validateRackpadSqliteDatabase(
     if (columns.some(column => column.name === 'networkPort' || column.name === 'transportProtocol'))
       throw new RackpadSqliteValidationError(`${label} has inconsistent legacy service endpoint schema.`);
   }
+  if (schema.version < 57) {
+    const columns = database.prepare('PRAGMA table_info(deviceMonitors)').all() as Array<{name: string}>;
+    if (columns.some(column => PENDING_ALERT_FIELDS.some(field => field === column.name)))
+      throw new RackpadSqliteValidationError(`${label} has inconsistent legacy notification schema.`);
+  }
   const missingSchema: string[] = [];
   for (const [table, requiredColumns] of Object.entries(
     CURRENT_RACKPAD_SCHEMA_COLUMNS,
@@ -631,6 +638,7 @@ export function validateRackpadSqliteDatabase(
       continue;
     }
     for (const column of requiredColumns) {
+      if (schema.version < 57 && table === 'deviceMonitors' && PENDING_ALERT_FIELDS.some(field => field === column)) continue;
       if (schema.version < 56 && table === "deviceServices" &&
         (column === "networkPort" || column === "transportProtocol")) continue;
       if (schema.version < 55 && ((table === "devices" && column === "labelPosition") ||
@@ -646,6 +654,12 @@ export function validateRackpadSqliteDatabase(
     );
   }
 
+  if (schema.version >= 57) {
+    try {
+      for (const row of database.prepare('SELECT pendingAlertKind,pendingAlertAt,lastAlertAttemptAt FROM deviceMonitors').all() as Record<string, unknown>[])
+        parsePendingAlertState(row);
+    } catch { throw new RackpadSqliteValidationError(`${label} contains invalid pending notification state.`); }
+  }
   if (schema.version >= 56) {
     const invalid = database.prepare(`SELECT id FROM deviceServices WHERE
       (networkPort IS NULL AND transportProtocol IS NOT NULL) OR

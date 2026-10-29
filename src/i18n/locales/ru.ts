@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const ru = {
+  "Import host adapters and guest NIC ports.": "Импортируйте адаптеры хоста и сетевые порты гостей.",
+  "Revoke": "Отозвать",
+  "Revoked": "Отозван",
+  "Expired": "Истёк",
+  "Enter a name and select at least one lab.": "Введите имя и выберите хотя бы одну лабораторию.",
+  "Hover details": "Сведения при наведении",
+  "Host adapters": "Адаптеры хоста",
+  "Invalid IP address.": "Недопустимый IP-адрес.",
+  "Document a subnet for this IP first.": "Сначала добавьте подсеть для этого IP.",
+  "IP is already assigned to another device.": "IP уже назначен другому устройству.",
+  "IP is not eligible for a DHCP reservation.": "Этот IP-адрес нельзя использовать для резервирования DHCP.",
+  "Invalid host adapter.": "Недопустимый адаптер хоста.",
+  "Ambiguous adapter match.": "Неоднозначное сопоставление адаптера.",
+  "Skipped": "Пропущено",
+  "Failed": "Ошибка",
+
+  "ntfy topic URL": "URL темы ntfy",
+  "ntfy access token": "Токен доступа ntfy",
+  "Delivered via {channels}.": "Доставлено через {channels}.",
+  "Failed channels: {channels}.": "Каналы с ошибками: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "Проверьте URL темы ntfy, токен доступа и ключ шифрования.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "Не удалось отправить в ntfy. Проверьте URL, доступ к сети и сертификат TLS.",
+  "ntfy timed out. Try again later.": "Время ожидания ntfy истекло. Повторите позже.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy отклонил сообщение. Проверьте права темы и аутентификацию.",
+  "ntfy rate limit reached. Try again later.": "Достигнут лимит запросов ntfy. Повторите позже.",
+  "Notification delivery failed. Check the configured channels.": "Не удалось доставить уведомление. Проверьте настроенные каналы.",
+
   "Check the SMTP host, sender and recipient settings.": "Проверьте настройки узла SMTP, отправителя и получателя.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "Не удаётся подключиться к SMTP. Проверьте имя узла, порт и доступ к сети.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "Время ожидания SMTP истекло. Проверьте доступ к сети и режим TLS для этого порта.",

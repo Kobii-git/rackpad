@@ -114,9 +114,13 @@ rooms, IPAM subnets, monitor targets, and cables first for the richest view.
   upper-left or upper-right corner for that device across every canvas, Racks and
   Studio, including SVG/PNG exports. This is shared inventory metadata, saved
   independently of templates and device rotation. Long names truncate; hovering
-  or focusing the device reveals its name, distinct hostname, manufacturer/model,
-  management IP and MAC when available, across classic racks, Studio and all
-  Visualizer layouts. Escape dismisses the details. When a device is too small to fit readable text, its persistent
+  or focusing the device reveals its hostname, device type, distinct display name,
+  manufacturer, model, management IP, MAC and placement when available, across
+  classic racks, Studio and all Visualizer layouts. Rack placement includes start U.
+  **Hover details** in the Racks / Rooms and Visualizer actions selects the fields,
+  including optional specs. Preferences belong to the signed-in user in this browser;
+  Reset restores defaults. Unavailable browser storage keeps changes in memory.
+  Long specs are limited to a short plain-text summary. Escape dismisses the details. When a device is too small to fit readable text, its persistent
   name is hidden; hover, keyboard focus or selection reveals it above the canvas.
   Rack/room SVG and PNG names use the same corner with stable export sizing,
   independent of the current viewport zoom.

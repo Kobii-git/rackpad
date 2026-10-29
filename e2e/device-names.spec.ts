@@ -465,7 +465,7 @@ test("device hover details match classic racks across Studio and Visualizer mode
   const device = fixture.devices[0]!;
   const checkSummary = async (summary: Locator) => {
     await expect(summary).toBeVisible();
-    for (const value of ["Workshop switch", device.hostname, "Example Networks Switch 24", "IP: 192.0.2.42", "MAC: 02:00:00:00:00:42"])
+    for (const value of ["Workshop switch", device.hostname, "Example Networks", "Switch 24", "IP: 192.0.2.42", "MAC: 02:00:00:00:00:42"])
       await expect(summary).toContainText(value);
   };
   await page.goto("/racks");
@@ -521,4 +521,46 @@ test("device hover details match classic racks across Studio and Visualizer mode
   await expect(details).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(details).toHaveCount(0);
+});
+
+test("device hover details order and personal field preferences include passive devices", async ({ page, request }) => {
+  const fixture = await setup(page, request);
+  const device = fixture.devices[0]!;
+  device.deviceType = "brush_panel";
+  device.specs = "Passive brush panel fixture";
+  await page.goto("/racks");
+  const classic = page.getByTestId("rack-device-tile").filter({ has: deviceName(page, device.hostname) }).first();
+  await classic.hover();
+  const summary = page.getByTestId("device-summary").first();
+  await expect(summary.locator("[data-summary-field]").first()).toHaveText(device.hostname);
+  await expect(summary.locator('[data-summary-field="deviceType"]')).toHaveText("Brush panel");
+  await expect(summary.locator('[data-summary-field="placement"]')).toHaveText(`${fixture.rack.name} | U${device.startU}`);
+  await expect(summary.locator('[data-summary-field="startU"]')).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Hover details", exact: true }).click();
+  const settings = page.getByRole("dialog", { name: "Hover details", exact: true });
+  await settings.getByRole("checkbox", { name: "IP", exact: true }).uncheck();
+  await settings.getByRole("checkbox", { name: "Specs", exact: true }).check();
+  await page.keyboard.press("Escape");
+  await classic.hover();
+  await expect(summary.locator('[data-summary-field="managementIp"]')).toHaveCount(0);
+  await expect(summary.locator('[data-summary-field="specs"]')).toHaveText(device.specs!);
+  await page.reload();
+  await classic.hover();
+  await expect(summary.locator('[data-summary-field="managementIp"]')).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.goto("/visualizer");
+  await page.getByRole("button", { name: "Hover details", exact: true }).click();
+  await expect(settings.getByRole("checkbox", { name: "IP", exact: true })).not.toBeChecked();
+  await settings.getByRole("button", { name: "Reset", exact: true }).click();
+  await expect(settings.getByRole("checkbox", { name: "IP", exact: true })).toBeChecked();
+  await expect(settings.getByRole("checkbox", { name: "Specs", exact: true })).not.toBeChecked();
+  await page.screenshot({ path: test.info().outputPath("hover-details-preferences.png") });
+  await page.keyboard.press("Escape");
+  // A blocked storage API must leave the in-memory controls usable.
+  await page.evaluate(() => { Storage.prototype.setItem = () => { throw new Error("Fixture blocked storage"); }; });
+  await page.getByRole("button", { name: "Hover details", exact: true }).click();
+  await settings.getByRole("checkbox", { name: "MAC", exact: true }).uncheck();
+  await expect(settings.getByRole("checkbox", { name: "MAC", exact: true })).not.toBeChecked();
+  await page.keyboard.press("Escape");
 });

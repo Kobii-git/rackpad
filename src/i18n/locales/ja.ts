@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Import host adapters and guest NIC ports.": "ホストアダプターとゲストのNICポートをインポートします。",
+  "Revoke": "取り消す",
+  "Revoked": "取り消し済み",
+  "Expired": "期限切れ",
+  "Enter a name and select at least one lab.": "名前を入力し、ラボを1つ以上選択してください。",
+  "Hover details": "ホバー時の詳細",
+  "Host adapters": "ホストアダプター",
+  "Invalid IP address.": "IPアドレスが無効です。",
+  "Document a subnet for this IP first.": "先にこのIPのサブネットを登録してください。",
+  "IP is already assigned to another device.": "このIPは別のデバイスに割り当て済みです。",
+  "IP is not eligible for a DHCP reservation.": "このIPアドレスはDHCP予約に使用できません。",
+  "Invalid host adapter.": "ホストアダプターが無効です。",
+  "Ambiguous adapter match.": "アダプターの対応が不明確です。",
+  "Skipped": "スキップ済み",
+  "Failed": "失敗",
+
+  "ntfy topic URL": "ntfyトピックURL",
+  "ntfy access token": "ntfyアクセストークン",
+  "Delivered via {channels}.": "{channels} 経由で配信しました。",
+  "Failed channels: {channels}.": "失敗したチャネル: {channels}。",
+  "Check the ntfy topic URL, access token and encryption key.": "ntfyトピックURL、アクセストークン、暗号化キーを確認してください。",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "ntfyに配信できません。URL、ネットワーク接続、TLS証明書を確認してください。",
+  "ntfy timed out. Try again later.": "ntfyがタイムアウトしました。後でもう一度お試しください。",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfyがメッセージを拒否しました。トピック権限と認証を確認してください。",
+  "ntfy rate limit reached. Try again later.": "ntfyのリクエスト制限に達しました。後でもう一度お試しください。",
+  "Notification delivery failed. Check the configured channels.": "通知の配信に失敗しました。設定したチャネルを確認してください。",
+
   "Check the SMTP host, sender and recipient settings.": "SMTPホスト、送信者、受信者の設定を確認してください。",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "SMTPに接続できません。ホスト名、ポート、ネットワーク接続を確認してください。",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTPがタイムアウトしました。ネットワーク接続とこのポートのTLSモードを確認してください。",

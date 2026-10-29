@@ -103,3 +103,14 @@ bounded where supported. SNMPv3 MD5/SHA1 rationale stays inline in
 the exact file hash, unchanged server tree and automated expiry; raw CodeQL
 analysis remains available. They do not justify weak hashes elsewhere or automatic
 renewal of the reviewed source/expiry policy.
+
+
+## Notification delivery
+
+ntfy topic publishing uses DNS-pinned guarded HTTP/S with redirects disabled,
+verified TLS, bounded response bytes and an absolute transport deadline. Tokens
+are write-only, encrypted with the existing secret key, require HTTPS, and never
+appear in public settings or portable backups. Native snapshots retain the
+ciphertext and require the matching key. Channel diagnostics use allowlisted
+categories; never include provider response bodies or authorization headers.
+A partial channel success counts as delivery, with failures reported separately.

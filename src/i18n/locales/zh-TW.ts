@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "Import host adapters and guest NIC ports.": "匯入主機介面卡和客體網卡連接埠。",
+  "Revoke": "撤銷",
+  "Revoked": "已撤銷",
+  "Expired": "已過期",
+  "Enter a name and select at least one lab.": "請輸入名稱並至少選擇一個實驗室。",
+  "Hover details": "懸停詳細資料",
+  "Host adapters": "主機介面卡",
+  "Invalid IP address.": "IP 位址無效。",
+  "Document a subnet for this IP first.": "請先登錄此 IP 的子網路。",
+  "IP is already assigned to another device.": "此 IP 已指派給其他裝置。",
+  "IP is not eligible for a DHCP reservation.": "此 IP 位址不適用於 DHCP 保留。",
+  "Invalid host adapter.": "主機介面卡無效。",
+  "Ambiguous adapter match.": "介面卡配對不明確。",
+  "Skipped": "已略過",
+  "Failed": "失敗",
+
+  "ntfy topic URL": "ntfy主題網址",
+  "ntfy access token": "ntfy存取權杖",
+  "Delivered via {channels}.": "已透過{channels}傳送。",
+  "Failed channels: {channels}.": "失敗的管道：{channels}。",
+  "Check the ntfy topic URL, access token and encryption key.": "請檢查ntfy主題網址、存取權杖和加密金鑰。",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "無法傳送至ntfy。請檢查網址、網路存取和TLS憑證。",
+  "ntfy timed out. Try again later.": "ntfy逾時。請稍後重試。",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy拒絕了訊息。請檢查主題權限和身分驗證。",
+  "ntfy rate limit reached. Try again later.": "已達ntfy要求限制。請稍後重試。",
+  "Notification delivery failed. Check the configured channels.": "通知傳送失敗。請檢查已設定的管道。",
+
   "Check the SMTP host, sender and recipient settings.": "請檢查SMTP主機、寄件人和收件人設定。",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "無法連線SMTP。請檢查主機名稱、連接埠和網路存取。",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP逾時。請檢查網路存取和此連接埠的TLS模式。",

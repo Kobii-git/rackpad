@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Import host adapters and guest NIC ports.": "호스트 어댑터와 게스트 NIC 포트를 가져옵니다.",
+  "Revoke": "철회",
+  "Revoked": "철회됨",
+  "Expired": "만료됨",
+  "Enter a name and select at least one lab.": "이름을 입력하고 하나 이상의 랩을 선택하세요.",
+  "Hover details": "마우스 오버 세부 정보",
+  "Host adapters": "호스트 어댑터",
+  "Invalid IP address.": "잘못된 IP 주소입니다.",
+  "Document a subnet for this IP first.": "먼저 이 IP의 서브넷을 등록하세요.",
+  "IP is already assigned to another device.": "IP가 이미 다른 장치에 할당되어 있습니다.",
+  "IP is not eligible for a DHCP reservation.": "이 IP 주소는 DHCP 예약에 사용할 수 없습니다.",
+  "Invalid host adapter.": "잘못된 호스트 어댑터입니다.",
+  "Ambiguous adapter match.": "어댑터 일치가 모호합니다.",
+  "Skipped": "건너뜀",
+  "Failed": "실패",
+
+  "ntfy topic URL": "ntfy 주제 URL",
+  "ntfy access token": "ntfy 액세스 토큰",
+  "Delivered via {channels}.": "{channels}을(를) 통해 전송했습니다.",
+  "Failed channels: {channels}.": "실패한 채널: {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "ntfy 주제 URL, 액세스 토큰 및 암호화 키를 확인하세요.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "ntfy로 전송할 수 없습니다. URL, 네트워크 접근 및 TLS 인증서를 확인하세요.",
+  "ntfy timed out. Try again later.": "ntfy 시간이 초과되었습니다. 나중에 다시 시도하세요.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy가 메시지를 거부했습니다. 주제 권한 및 인증을 확인하세요.",
+  "ntfy rate limit reached. Try again later.": "ntfy 요청 제한에 도달했습니다. 나중에 다시 시도하세요.",
+  "Notification delivery failed. Check the configured channels.": "알림 전송에 실패했습니다. 구성된 채널을 확인하세요.",
+
   "Check the SMTP host, sender and recipient settings.": "SMTP 호스트, 발신자 및 수신자 설정을 확인하세요.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "SMTP에 연결할 수 없습니다. 호스트 이름, 포트 및 네트워크 접근을 확인하세요.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "SMTP 시간이 초과되었습니다. 네트워크 접근 및 이 포트의 TLS 모드를 확인하세요.",

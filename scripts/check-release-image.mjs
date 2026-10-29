@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { assertPatchedImageRuntime } from "./image-runtime.mjs";
 
-const usage = "node scripts/check-release-image.mjs --image ghcr.io/kobii-git/rackpad@sha256:DIGEST|sha256:LOCAL_IMAGE_ID --previous-image ghcr.io/kobii-git/rackpad@sha256:DIGEST [--previous-schema 51|53] --platform linux/amd64|linux/arm64 --revision COMMIT_SHA";
+const usage = "node scripts/check-release-image.mjs --image ghcr.io/kobii-git/rackpad@sha256:DIGEST|sha256:LOCAL_IMAGE_ID --previous-image ghcr.io/kobii-git/rackpad@sha256:DIGEST [--previous-schema 51|53|55] --platform linux/amd64|linux/arm64 --revision COMMIT_SHA";
 const options = {};
 const args = process.argv.slice(2);
 if (args.length === 1 && args[0] === "--help") {
@@ -29,7 +30,7 @@ const schemaMatch = schemaSource.match(/^export const CURRENT_SCHEMA_VERSION = (
 assert.ok(schemaMatch, "Current schema declaration is invalid.");
 const currentSchema = Number(schemaMatch[1]);
 assert.ok(Number.isSafeInteger(currentSchema), "Current schema version is invalid.");
-assert.ok([51, 53].includes(previousSchema), "Previous schema must be 51 or 53.");
+assert.ok([51, 53, 55].includes(previousSchema), "Previous schema must be 51, 53 or 55.");
 const immutableImage = /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/;
 const localImage = /^sha256:[a-f0-9]{64}$/;
 assert.ok(immutableImage.test(image ?? "") || localImage.test(image ?? ""), "Candidate must be an immutable Rackpad GHCR digest or local image ID.");
@@ -176,7 +177,8 @@ async function exerciseApi({ credentials, nonce, create, features, expectedSchem
     const peerPort = await call("POST", "/api/ports", { deviceId: peer.id, name: "Peer port", kind: "rj45", face: "front" }, 201);
     const cable = await call("POST", "/api/port-links", { fromPortId: portIds[0], toPortId: peerPort.id }, 201);
     const monitor = await call("POST", "/api/device-monitors", { deviceId: stack.id, name: "Fixture HTTP", type: "http", target: "release-smoke-peer", port: 8787, path: "/health", intervalMs: 86_400_000, enabled: true });
-    state = { nonce, labId: lab.id, roomId: room.id, rackId: rack.id, stackId: stack.id, peerId: peer.id, memberIds, portIds, peerPortId: peerPort.id, templateIds, cableId: cable.id, monitorId: monitor.id, features: false };
+    const service = await call("POST", "/api/device-services", { deviceId: peer.id, name: "Release service", serviceType: "custom", portId: peerPort.id, monitorId: monitor.id, url: "https://service.example.test:8443/" }, 201);
+    state = { serviceId: service.id, serviceEndpoint: false, nonce, labId: lab.id, roomId: room.id, rackId: rack.id, stackId: stack.id, peerId: peer.id, memberIds, portIds, peerPortId: peerPort.id, templateIds, cableId: cable.id, monitorId: monitor.id, features: false };
     fs.writeFileSync("/data/.release-smoke.json", JSON.stringify(state), { mode: 0o600 });
   } else {
     state = JSON.parse(fs.readFileSync("/data/.release-smoke.json", "utf8"));
@@ -208,6 +210,21 @@ async function exerciseApi({ credentials, nonce, create, features, expectedSchem
   assert.equal(monitor.lastResult, "online", "The production monitor must reach only the isolated HTTP fixture.");
   assert.ok(monitor.lastCheckAt);
   assert.equal((await call("GET", `/api/device-monitors?deviceId=${state.stackId}`)).find(row => row.id === state.monitorId).lastResult, "online");
+
+  const service = await call("GET", `/api/device-services/${state.serviceId}`);
+  assert.equal(service.portId, state.peerPortId);
+  assert.equal(service.monitorId, state.monitorId);
+  assert.equal(service.url, "https://service.example.test:8443/");
+  if (features && !state.serviceEndpoint) {
+    await call("PATCH", `/api/device-services/${state.serviceId}`, { networkPort: 8443, transportProtocol: "tcp" });
+    state.serviceEndpoint = true;
+    fs.writeFileSync("/data/.release-smoke.json", JSON.stringify(state), { mode: 0o600 });
+  }
+  if (state.serviceEndpoint) {
+    const endpoint = await call("GET", `/api/device-services/${state.serviceId}`);
+    assert.equal(endpoint.networkPort, 8443);
+    assert.equal(endpoint.transportProtocol, "tcp");
+  }
 
   if (features && !state.features) {
     for (let index = 0; index < state.memberIds.length; index++) {
@@ -257,10 +274,23 @@ try {
   assert.equal(docker(["info", "--format", "{{.OSType}}"] ).stdout.trim(), "linux");
   for (const reference of new Set([image, previousImage])) {
     if (!localImage.test(reference)) docker(["pull", "--platform", platform, reference], { timeout: 600_000 });
-    const details = JSON.parse(docker(["image", "inspect", reference]).stdout)[0];
+    // Resolve the platform through a never-started container. Older Docker CLIs
+    // lack image-inspect --platform, and inspecting a multi-platform reference
+    // without selection can report the host architecture instead of the fixture.
+    const name = `${prefix}-inspect-${containers.length}`;
+    containers.push(name);
+    docker(["create", "--name", name, ...isolation, "--network", "none", "--entrypoint", "node", reference, "--version"]);
+    const selectedImage = docker(["inspect", "--format", "{{.Image}}", name]).stdout.trim();
+    assert.match(selectedImage, localImage, "Selected container must resolve to an immutable image ID.");
+    const details = JSON.parse(docker(["image", "inspect", selectedImage]).stdout)[0];
+    assert.equal(details.Id, selectedImage);
     assert.equal(`${details.Os}/${details.Architecture}`, platform);
     if (reference === image) assert.equal(details.Config.Labels["org.opencontainers.image.revision"], revision);
   }
+  // Check only the candidate; historical baselines remain isolated recovery fixtures.
+  const runtime = docker(["run", "--rm", ...isolation, "--network", "none", "--entrypoint", "node", image, "--print", "process.versions.node"]).stdout.trim();
+  assertPatchedImageRuntime(runtime);
+  console.log(`Release image smoke ${platform}: candidate Node ${runtime}.`);
   docker(["network", "create", "--internal", "--label", `rackpad.release-smoke=${nonce}`, network]);
   networkCreated = true;
   const peer = `${prefix}-http`;

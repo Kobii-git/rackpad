@@ -1,6 +1,33 @@
 import type { TranslationMap } from "../base";
 
 export const fr = {
+  "Import host adapters and guest NIC ports.": "Importez les adaptateurs de l’hôte et les ports réseau des invités.",
+  "Revoke": "Révoquer",
+  "Revoked": "Révoqué",
+  "Expired": "Expiré",
+  "Enter a name and select at least one lab.": "Saisissez un nom et sélectionnez au moins un laboratoire.",
+  "Hover details": "Détails au survol",
+  "Host adapters": "Adaptateurs de l’hôte",
+  "Invalid IP address.": "Adresse IP non valide.",
+  "Document a subnet for this IP first.": "Documentez d’abord un sous-réseau pour cette IP.",
+  "IP is already assigned to another device.": "Cette IP est déjà attribuée à un autre appareil.",
+  "IP is not eligible for a DHCP reservation.": "Cette adresse IP ne peut pas être réservée par DHCP.",
+  "Invalid host adapter.": "Adaptateur de l’hôte non valide.",
+  "Ambiguous adapter match.": "Correspondance d’adaptateur ambiguë.",
+  "Skipped": "Ignoré",
+  "Failed": "Échec",
+
+  "ntfy topic URL": "URL du sujet ntfy",
+  "ntfy access token": "Jeton d’accès ntfy",
+  "Delivered via {channels}.": "Transmis via {channels}.",
+  "Failed channels: {channels}.": "Canaux en échec : {channels}.",
+  "Check the ntfy topic URL, access token and encryption key.": "Vérifiez l’URL du sujet ntfy, le jeton d’accès et la clé de chiffrement.",
+  "Cannot deliver to ntfy. Check the URL, network access and TLS certificate.": "Envoi vers ntfy impossible. Vérifiez l’URL, l’accès réseau et le certificat TLS.",
+  "ntfy timed out. Try again later.": "Délai ntfy dépassé. Réessayez plus tard.",
+  "ntfy rejected the message. Check topic permissions and authentication.": "ntfy a rejeté le message. Vérifiez les autorisations du sujet et l’authentification.",
+  "ntfy rate limit reached. Try again later.": "Limite de requêtes ntfy atteinte. Réessayez plus tard.",
+  "Notification delivery failed. Check the configured channels.": "Échec d’envoi de la notification. Vérifiez les canaux configurés.",
+
   "Check the SMTP host, sender and recipient settings.": "Vérifiez les paramètres du serveur SMTP, de l’expéditeur et du destinataire.",
   "Cannot connect to SMTP. Check the hostname, port and network access.": "Connexion SMTP impossible. Vérifiez le nom d’hôte, le port et l’accès réseau.",
   "SMTP timed out. Check network access and the TLS mode for this port.": "Délai SMTP dépassé. Vérifiez l’accès réseau et le mode TLS de ce port.",

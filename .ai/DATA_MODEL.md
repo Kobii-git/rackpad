@@ -59,8 +59,9 @@ schema-coverage decisions.
 
 `server/routes/admin.ts` exports `rackpad-backup-v1` with app and schema versions.
 Every application table must appear under `data` or be on the test’s short,
-commented exclusion list. Only `schemaVersion` metadata and ephemeral
-`userSessions` are excluded. Sessions are deliberately invalidated on restore.
+commented exclusion list. `schemaVersion` metadata, ephemeral `userSessions`
+and personal `mcpTokens` are excluded. Sessions and MCP tokens are deliberately
+invalidated on restore.
 
 Restore validates format/integrity, rejects snapshots from a newer schema,
 deletes and re-inserts inside one transaction, restores `userLabAccess` only
@@ -167,3 +168,19 @@ do not create monitoring or listeners. Logical restore accepts older rows withou
 these fields and validates new endpoints before replacement. Native validation
 checks endpoint integrity and rejects pre-56 markers with the new columns.
 Rollback requires the previous image and its matching pre-upgrade database.
+
+
+Schema 57 adds `deviceMonitors.pendingAlertKind`, `pendingAlertAt` and
+`lastAlertAttemptAt`. Kind/time are paired, and attempt time belongs only to a
+pending event. Migration initializes all three to null. Logical/native recovery
+validates and preserves the state; older backups default it to empty. Any channel
+success clears the event and advances `lastAlertAt`; total failure retains it.
+New transitions supersede it, unknown observations defer it, and category changes
+clear inapplicable events. No historical pending event is inferred at upgrade.
+
+Alert settings include an ntfy topic URL and encrypted `ntfyTokenEnc`.
+Administration accepts an omitted/preserve, null/clear or nonempty/replace
+write-only `ntfyToken`, returning only `ntfyTokenConfigured`. Portable export and
+restore redact ntfy credential fields. Native backups retain ciphertext requiring
+the same `RACKPAD_SECRET_KEY`; other notification credential import semantics stay
+compatible.
