@@ -6,6 +6,17 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.6] - 2026-10-29
+
+### Fixed
+
+- Pin every Docker Node stage to 22.23.4 and reject affected candidate runtimes
+  in image smoke validation (#206).
+- Update compatible MCP, Fastify, Nodemailer, Zod and transitive dependencies
+  to address the advisories found during maintenance validation.
+
+See the [release and upgrade notes](docs/releases/v1.8.6.md).
+
 ## [1.8.5] - 2026-10-20
 
 ### Added

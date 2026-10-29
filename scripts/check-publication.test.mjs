@@ -9,6 +9,7 @@ import YAML from "yaml";
 import { inspectSarif, prepareCodeqlReports, reviewSarif } from "./check-codeql-results.mjs";
 import { codeqlReviewProblems } from "./check-codeql-review.mjs";
 import { readSnmpReviewContext, SNMP_REVIEW } from "./codeql-snmp-review.mjs";
+import { assertPatchedImageRuntime } from "./image-runtime.mjs";
 
 const workflow = (name) => YAML.parse(readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), "utf8"));
 const sarif = (severity, results = [{ ruleId: "test-rule" }]) => ({
@@ -474,7 +475,7 @@ test("candidate smoke follows current schema across migrations while retaining p
     const exercises = [];
     let nonce = 0;
     runInNewContext(source, {
-      assert, URL,
+      assert, URL, assertPatchedImageRuntime,
       process: {argv: ["node", "fixture.mjs", "--image", `sha256:${"a".repeat(64)}`,
         "--previous-image", `ghcr.io/kobii-git/rackpad@sha256:${"b".repeat(64)}`,
         "--previous-schema", String(previousSchema), "--platform", "linux/amd64", "--revision", "c".repeat(40)]},
@@ -493,7 +494,7 @@ test("candidate smoke follows current schema across migrations while retaining p
           const input = JSON.parse(body.slice(body.lastIndexOf("})(") + 3, -2));
           exercises.push({schema: input.expectedSchema, features: input.features, create: input.create});
         }
-        const stdout = args[0] === "info" ? "linux\n" : args[0] === "image" && args[1] === "inspect"
+        const stdout = args.includes("process.versions.node") ? "22.23.4\n" : args[0] === "info" ? "linux\n" : args[0] === "image" && args[1] === "inspect"
           ? JSON.stringify([{Os: "linux", Architecture: "amd64", Config: {Labels: {"org.opencontainers.image.revision": "c".repeat(40)}}}]) : "";
         return {status: 0, stdout, stderr: ""};
       },
