@@ -274,7 +274,16 @@ try {
   assert.equal(docker(["info", "--format", "{{.OSType}}"] ).stdout.trim(), "linux");
   for (const reference of new Set([image, previousImage])) {
     if (!localImage.test(reference)) docker(["pull", "--platform", platform, reference], { timeout: 600_000 });
-    const details = JSON.parse(docker(["image", "inspect", "--platform", platform, reference]).stdout)[0];
+    // Resolve the platform through a never-started container. Older Docker CLIs
+    // lack image-inspect --platform, and inspecting a multi-platform reference
+    // without selection can report the host architecture instead of the fixture.
+    const name = `${prefix}-inspect-${containers.length}`;
+    containers.push(name);
+    docker(["create", "--name", name, ...isolation, "--network", "none", "--entrypoint", "node", reference, "--version"]);
+    const selectedImage = docker(["inspect", "--format", "{{.Image}}", name]).stdout.trim();
+    assert.match(selectedImage, localImage, "Selected container must resolve to an immutable image ID.");
+    const details = JSON.parse(docker(["image", "inspect", selectedImage]).stdout)[0];
+    assert.equal(details.Id, selectedImage);
     assert.equal(`${details.Os}/${details.Architecture}`, platform);
     if (reference === image) assert.equal(details.Config.Labels["org.opencontainers.image.revision"], revision);
   }
