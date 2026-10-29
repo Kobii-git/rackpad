@@ -11,6 +11,7 @@ export const vi = {
   "Invalid IP address.": "Địa chỉ IP không hợp lệ.",
   "Document a subnet for this IP first.": "Hãy ghi nhận mạng con cho IP này trước.",
   "IP is already assigned to another device.": "IP đã được gán cho thiết bị khác.",
+  "IP is not eligible for a DHCP reservation.": "Địa chỉ IP này không đủ điều kiện để đặt trước DHCP.",
   "Invalid host adapter.": "Bộ điều hợp máy chủ không hợp lệ.",
   "Ambiguous adapter match.": "Kết quả khớp bộ điều hợp không rõ ràng.",
   "Skipped": "Đã bỏ qua",

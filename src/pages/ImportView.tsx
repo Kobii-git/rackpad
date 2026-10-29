@@ -58,6 +58,8 @@ const HOST_IP_ERRORS = {
   invalid: "Invalid IP address.",
   subnet: "Document a subnet for this IP first.",
   conflict: "IP is already assigned to another device.",
+  reserved: "IPAM technical address",
+  allocation: "IP is not eligible for a DHCP reservation.",
 } as const;
 
 type ImportProvider = "hyperv" | "proxmox";
@@ -703,7 +705,7 @@ export default function ImportView() {
     setPayload(parsed);
     const existing = findExistingHost(parsed, devicesByHostname);
     setHostDraft({ ...hostToDraft(parsed, provider), managementIp: defaultHostIp(
-      collectedHostIps(parsed.host?.hostIpAddresses, parsed.hostAdapters ?? []), subnets, ipAssignments, existing,
+      collectedHostIps(parsed.host?.hostIpAddresses, parsed.hostAdapters ?? []), subnets, ipAssignments, existing, scopes, ipZones,
     ) });
     setVmDrafts(parsed.vms.map((vm, index) => vmToDraft(vm, index, provider)));
     setParseError("");
@@ -867,7 +869,7 @@ export default function ImportView() {
       if (!current) return current;
       if (changes.targetDeviceId && payload) {
         const existing = changes.targetDeviceId === AUTO_HOST_TARGET ? findExistingHost(payload, devicesByHostname) : devicesById[changes.targetDeviceId];
-        return { ...current, ...changes, managementIp: defaultHostIp(collectedHostIps(payload.host?.hostIpAddresses, payload.hostAdapters ?? []), subnets, ipAssignments, existing) };
+        return { ...current, ...changes, managementIp: defaultHostIp(collectedHostIps(payload.host?.hostIpAddresses, payload.hostAdapters ?? []), subnets, ipAssignments, existing, scopes, ipZones) };
       }
       return { ...current, ...changes };
     });
@@ -1296,6 +1298,8 @@ function HostPreview({
   const ports = useStore(state => state.ports);
   const subnets = useStore(state => state.subnets);
   const assignments = useStore(state => state.ipAssignments);
+  const scopes = useStore(state => state.scopes);
+  const zones = useStore(state => state.ipZones);
   const provider = providerForPayload(payload);
   const copy = PROVIDER_COPY[provider];
   const host = payload.host;
@@ -1445,7 +1449,7 @@ function HostPreview({
             onChange={event => onChange({ managementIp: event.target.value })}>
             <option value="">{t("None")}</option>
             {candidates.map(ip => {
-              const problem = hostIpProblem(ip, subnets, assignments, target?.id);
+              const problem = hostIpProblem(ip, subnets, assignments, target?.id, scopes, zones);
               const label = problem ? `${ip} (${t(HOST_IP_ERRORS[problem])})` : ip;
               return <option key={ip} value={ip} disabled={Boolean(problem)}>{label}</option>;
             })}
@@ -1972,7 +1976,7 @@ async function upsertHost(
     selected ?? context.devicesByHostname[hostname.toLowerCase()];
   const specs = hostSpecs(host, sourceDraft);
   const candidateIp = context.importIps ? sourceDraft.managementIp.trim() : "";
-  const problem = candidateIp ? hostIpProblem(candidateIp, context.subnets, context.ipAssignments, existing?.id) : null;
+  const problem = candidateIp ? hostIpProblem(candidateIp, context.subnets, context.ipAssignments, existing?.id, context.scopes, context.ipZones) : null;
   if (problem) context.log.push(`${context.t("Skipped")} ${candidateIp}: ${context.t(HOST_IP_ERRORS[problem])}`);
   const managementIp = candidateIp && !problem ? candidateIp : undefined;
   const subnet = managementIp ? findSubnetForIp(context.subnets, managementIp) : undefined;

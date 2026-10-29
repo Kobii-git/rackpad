@@ -31,7 +31,9 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Failed notifications no longer advance successful-delivery timestamps or
   suppress outage retries. New observations supersede stale async completions.
 - Repeated duplication of one hardware template creates independent copies
-  rather than conflicting with a fixed copy ID (#190).
+  with distinct IDs and available names, including without renaming the first copy (#190).
+- Host IP staging excludes gateway/DNS and technical addresses and respects
+  DHCP-zone eligibility before starting host writes (#208).
 - Release guidance and its checked schema declaration match the migration.
 
 ### Changed

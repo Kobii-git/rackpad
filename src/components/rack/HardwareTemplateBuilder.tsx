@@ -31,6 +31,7 @@ import {
   replacePortBlock,
   safeId,
   hardwareTemplateCopyId,
+  hardwareTemplateCopyName,
   updateModulePosition,
   type HardwareModulePrimitive,
   type PortBlockDefinition,
@@ -319,7 +320,7 @@ export function HardwareTemplateBuilder({
       const id = hardwareTemplateCopyId(selectedTemplate.id);
       const copy = await api.duplicateHardwareTemplate(selectedTemplate.id, {
         id,
-        name: `${selectedTemplate.name} copy`,
+        name: hardwareTemplateCopyName(selectedTemplate.name, templates),
       });
       focusCopyName.current = copy.id;
       await refreshTemplates(copy.id);

@@ -1,4 +1,4 @@
-import type { Device, IpAssignment, Port, Subnet } from "./types";
+import type { Device, DhcpScope, IpAssignment, IpZone, Port, Subnet } from "./types";
 import { canonicalMacAddress } from "./network-labels";
 import { cidrBounds, cidrContainsIp, ipToInt } from "./utils";
 
@@ -39,6 +39,8 @@ export function hostIpProblem(
   subnets: Subnet[],
   assignments: IpAssignment[],
   deviceId?: string,
+  scopes: DhcpScope[] = [],
+  zones: IpZone[] = [],
 ) {
   if (!collectedHostIps([ip], []).includes(ip)) return "invalid" as const;
   const subnet = subnets.find((subnet) => {
@@ -56,6 +58,11 @@ export function hostIpProblem(
     }
   });
   if (!subnet) return "subnet" as const;
+  const subnetScopes = scopes.filter(scope => scope.subnetId === subnet.id);
+  if ([subnet, ...subnetScopes].some(network => network.gateway === ip || network.dnsServers?.includes(ip)) ||
+      assignments.some(assignment => assignment.subnetId === subnet.id && assignment.ipAddress === ip &&
+        (assignment.assignmentType === "reserved" || assignment.assignmentType === "infrastructure")))
+    return "reserved" as const;
   if (
     assignments.some(
       (assignment) =>
@@ -65,6 +72,14 @@ export function hostIpProblem(
     )
   )
     return "conflict" as const;
+  const value = ipToInt(ip);
+  const contains = (range: { startIp: string; endIp: string }) => value >= ipToInt(range.startIp) && value <= ipToInt(range.endIp);
+  const subnetZones = zones.filter(zone => zone.subnetId === subnet.id);
+  const containingZones = subnetZones.filter(contains);
+  if (subnetScopes.some(contains) && !containingZones.some(zone => zone.kind === "static") &&
+      (subnetZones.some(zone => zone.kind === "dhcp") || containingZones.length > 0) &&
+      !containingZones.some(zone => zone.kind === "dhcp"))
+    return "allocation" as const;
   return null;
 }
 
@@ -73,10 +88,12 @@ export function defaultHostIp(
   subnets: Subnet[],
   assignments: IpAssignment[],
   existing?: Device | null,
+  scopes: DhcpScope[] = [],
+  zones: IpZone[] = [],
 ) {
   if (existing?.managementIp) return existing.managementIp;
   const eligible = candidates.filter(
-    (ip) => !hostIpProblem(ip, subnets, assignments, existing?.id),
+    (ip) => !hostIpProblem(ip, subnets, assignments, existing?.id, scopes, zones),
   );
   return eligible.length === 1 ? eligible[0] : "";
 }

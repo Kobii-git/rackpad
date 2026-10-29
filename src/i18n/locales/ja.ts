@@ -11,6 +11,7 @@ export const ja = {
   "Invalid IP address.": "IPアドレスが無効です。",
   "Document a subnet for this IP first.": "先にこのIPのサブネットを登録してください。",
   "IP is already assigned to another device.": "このIPは別のデバイスに割り当て済みです。",
+  "IP is not eligible for a DHCP reservation.": "このIPアドレスはDHCP予約に使用できません。",
   "Invalid host adapter.": "ホストアダプターが無効です。",
   "Ambiguous adapter match.": "アダプターの対応が不明確です。",
   "Skipped": "スキップ済み",

@@ -11,6 +11,7 @@ export const af = {
   "Invalid IP address.": "Ongeldige IP-adres.",
   "Document a subnet for this IP first.": "Dokumenteer eers ’n subnet vir hierdie IP.",
   "IP is already assigned to another device.": "IP is reeds aan ’n ander toestel toegeken.",
+  "IP is not eligible for a DHCP reservation.": "IP kom nie vir ’n DHCP-reservering in aanmerking nie.",
   "Invalid host adapter.": "Ongeldige gasheeradapter.",
   "Ambiguous adapter match.": "Onduidelike adapterpassing.",
   "Skipped": "Oorgeslaan",

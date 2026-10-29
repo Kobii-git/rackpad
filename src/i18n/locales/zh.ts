@@ -11,6 +11,7 @@ export const zh = {
   "Invalid IP address.": "IP 地址无效。",
   "Document a subnet for this IP first.": "请先登记此 IP 的子网。",
   "IP is already assigned to another device.": "此 IP 已分配给其他设备。",
+  "IP is not eligible for a DHCP reservation.": "此 IP 地址不适用于 DHCP 保留。",
   "Invalid host adapter.": "主机适配器无效。",
   "Ambiguous adapter match.": "适配器匹配不明确。",
   "Skipped": "已跳过",

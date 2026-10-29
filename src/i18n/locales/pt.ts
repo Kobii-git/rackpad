@@ -11,6 +11,7 @@ export const pt = {
   "Invalid IP address.": "Endereço IP inválido.",
   "Document a subnet for this IP first.": "Documente primeiro uma sub-rede para este IP.",
   "IP is already assigned to another device.": "O IP já está atribuído a outro dispositivo.",
+  "IP is not eligible for a DHCP reservation.": "Este endereço IP não é elegível para uma reserva DHCP.",
   "Invalid host adapter.": "Adaptador do anfitrião inválido.",
   "Ambiguous adapter match.": "Correspondência de adaptador ambígua.",
   "Skipped": "Ignorado",

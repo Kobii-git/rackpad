@@ -11,6 +11,7 @@ export const de = {
   "Invalid IP address.": "Ungültige IP-Adresse.",
   "Document a subnet for this IP first.": "Dokumentieren Sie zuerst ein Subnetz für diese IP.",
   "IP is already assigned to another device.": "Die IP ist bereits einem anderen Gerät zugewiesen.",
+  "IP is not eligible for a DHCP reservation.": "Die IP-Adresse ist für eine DHCP-Reservierung nicht zulässig.",
   "Invalid host adapter.": "Ungültiger Hostadapter.",
   "Ambiguous adapter match.": "Mehrdeutige Adapterzuordnung.",
   "Skipped": "Übersprungen",

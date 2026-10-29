@@ -11,6 +11,7 @@ export const fa = {
   "Invalid IP address.": "نشانی IP نامعتبر است.",
   "Document a subnet for this IP first.": "ابتدا یک زیرشبکه برای این IP ثبت کنید.",
   "IP is already assigned to another device.": "این IP از قبل به دستگاه دیگری اختصاص دارد.",
+  "IP is not eligible for a DHCP reservation.": "این نشانی IP برای رزرو DHCP مجاز نیست.",
   "Invalid host adapter.": "آداپتور میزبان نامعتبر است.",
   "Ambiguous adapter match.": "تطبیق آداپتور مبهم است.",
   "Skipped": "ردشده",

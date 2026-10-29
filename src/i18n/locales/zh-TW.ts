@@ -11,6 +11,7 @@ export const zhTW = {
   "Invalid IP address.": "IP 位址無效。",
   "Document a subnet for this IP first.": "請先登錄此 IP 的子網路。",
   "IP is already assigned to another device.": "此 IP 已指派給其他裝置。",
+  "IP is not eligible for a DHCP reservation.": "此 IP 位址不適用於 DHCP 保留。",
   "Invalid host adapter.": "主機介面卡無效。",
   "Ambiguous adapter match.": "介面卡配對不明確。",
   "Skipped": "已略過",

@@ -586,6 +586,15 @@ export function hardwareTemplateCopyId(sourceId: string) {
   return safeId(`${sourceId.slice(0, 70)}-copy-${suffix}`);
 }
 
+export function hardwareTemplateCopyName(sourceName: string, templates: Pick<HardwareTemplateV1, "name">[]) {
+  const used = new Set(templates.map(template => template.name.toLowerCase()));
+  for (let number = 1; ; number++) {
+    const suffix = number === 1 ? " copy" : ` copy ${number}`;
+    const name = `${sourceName.trim().slice(0, 120 - suffix.length).trimEnd()}${suffix}`;
+    if (!used.has(name.toLowerCase())) return name;
+  }
+}
+
 export function safeId(value: string) {
   const normalized = value
     .trim()

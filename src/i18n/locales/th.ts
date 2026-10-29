@@ -11,6 +11,7 @@ export const th = {
   "Invalid IP address.": "ที่อยู่ IP ไม่ถูกต้อง",
   "Document a subnet for this IP first.": "บันทึกซับเน็ตสำหรับ IP นี้ก่อน",
   "IP is already assigned to another device.": "IP ถูกกำหนดให้กับอุปกรณ์อื่นแล้ว",
+  "IP is not eligible for a DHCP reservation.": "ที่อยู่ IP นี้ไม่สามารถใช้สำหรับการจอง DHCP ได้",
   "Invalid host adapter.": "อะแดปเตอร์โฮสต์ไม่ถูกต้อง",
   "Ambiguous adapter match.": "การจับคู่อะแดปเตอร์ไม่ชัดเจน",
   "Skipped": "ข้ามแล้ว",

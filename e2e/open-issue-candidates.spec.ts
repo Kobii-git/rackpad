@@ -69,6 +69,15 @@ test("template naming makes built-in duplication and custom rename discoverable"
     ids.push(copy.id);
     await expect(name).toBeFocused();
     await expect(name).toBeEnabled();
+    await selector.selectOption(original.id);
+    const secondDuplicate = page.waitForResponse(response => response.request().method() === "POST" && response.url().includes("/duplicate"));
+    await builder.getByRole("button", { name: "Duplicate to customize", exact: true }).click();
+    const secondCopy = await (await secondDuplicate).json();
+    ids.push(secondCopy.id);
+    expect(secondCopy.id).not.toBe(copy.id);
+    expect(secondCopy.name.toLowerCase()).not.toBe(copy.name.toLowerCase());
+    expect(secondCopy.deviceTypes).toEqual(copy.deviceTypes);
+    await selector.selectOption(copy.id);
     await name.fill("5-port switch");
     await builder
       .getByRole("button", { name: "Save template", exact: true })
@@ -81,13 +90,7 @@ test("template naming makes built-in duplication and custom rename discoverable"
       await (await request.get("/api/hardware-templates", { headers })).json()
     ).templates.find((item: { id: string }) => item.id === original.id);
     expect(unchanged.name).toBe(original.name);
-    await selector.selectOption(original.id);
-    const secondDuplicate = page.waitForResponse(response => response.request().method() === "POST" && response.url().includes("/duplicate"));
-    await builder.getByRole("button", { name: "Duplicate to customize", exact: true }).click();
-    const secondCopy = await (await secondDuplicate).json();
-    ids.push(secondCopy.id);
-    expect(secondCopy.id).not.toBe(copy.id);
-    expect(secondCopy.deviceTypes).toEqual(copy.deviceTypes);
+    await selector.selectOption(secondCopy.id);
     await name.fill("Independent switch");
     await builder.getByRole("button", { name: "Save template", exact: true }).click();
     await page.reload();
@@ -476,6 +479,52 @@ test("host networking respects import switches and reports blocked IPs and parti
     expect(await (await request.get(`/api/ports?deviceId=${host.id}`, { headers })).json()).toMatchObject([{ name: "ok0" }]);
   } finally {
     if (hostId) await request.delete(`/api/devices/${hostId}`, { headers });
+    await request.delete(`/api/subnets/${subnet.id}`, { headers });
+  }
+});
+
+test("host networking skips technical management IPs while retaining hosts adapters and guests", async ({ page, request }) => {
+  const headers = await authenticate(page, request);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const response = await request.post("/api/subnets", { headers, data: { labId: "lab_home", cidr: "10.234.70.0/24", name: "Technical host addresses", gateway: "10.234.70.1", dnsServers: ["10.234.70.2"] } });
+  expect(response.ok()).toBeTruthy();
+  const subnet = await response.json();
+  const hostname = `technical-host-${Date.now()}`;
+  const guestname = `${hostname}-guest`;
+  const payload = { schema: "rackpad.proxmox.inventory.v1", provider: "proxmox", host: { computerName: hostname, hostIpAddresses: ["10.234.70.1", "10.234.70.2"] }, hostAdapters: [{ name: "eno1", status: "up" }], switches: [],
+    vms: [{ id: "qemu/970", vmid: 970, kind: "qemu", name: guestname, state: "running", processorCount: 2, memoryStartupGb: 2, storageGb: 20, networkAdapters: [] }] };
+  const ids: string[] = [];
+  try {
+    await page.goto("/imports");
+    const upload = () => page.getByLabel("Choose import JSON").setInputFiles({ name: "technical-host.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(payload)) });
+    await upload();
+    const management = page.getByRole("combobox", { name: "Management IP", exact: true });
+    await expect(management).toHaveValue("");
+    for (const ip of ["10.234.70.1", "10.234.70.2"])
+      await expect(management.getByRole("option", { name: `${ip} (IPAM technical address)`, exact: true })).toHaveAttribute("disabled", "");
+    const importButton = page.getByRole("button", { name: "Import selected", exact: true });
+    await importButton.click();
+    await expect(importButton).toBeEnabled();
+    const devices = await (await request.get("/api/devices?labId=lab_home", { headers })).json() as Array<{ id: string; hostname: string; managementIp: string | null; parentDeviceId: string | null }>;
+    const host = devices.find(device => device.hostname === hostname)!;
+    const guest = devices.find(device => device.hostname === guestname)!;
+    expect(host).toBeTruthy();
+    expect(guest).toBeTruthy();
+    ids.push(host.id, guest.id);
+    expect(host.managementIp).toBeFalsy();
+    expect(guest.parentDeviceId).toBe(host.id);
+    expect(await (await request.get(`/api/ports?deviceId=${host.id}`, { headers })).json()).toMatchObject([{ name: "eno1" }]);
+    const update = await request.patch(`/api/devices/${host.id}`, { headers, data: { managementIp: "10.234.70.10" } });
+    expect(update.ok()).toBeTruthy();
+    await page.reload();
+    await upload();
+    await expect(management).toHaveValue("10.234.70.10");
+    await importButton.click();
+    await expect(importButton).toBeEnabled();
+    expect((await (await request.get(`/api/devices/${host.id}`, { headers })).json()).managementIp).toBe("10.234.70.10");
+    expect(await (await request.get(`/api/ports?deviceId=${host.id}`, { headers })).json()).toHaveLength(1);
+  } finally {
+    for (const id of ids.reverse()) await request.delete(`/api/devices/${id}`, { headers });
     await request.delete(`/api/subnets/${subnet.id}`, { headers });
   }
 });

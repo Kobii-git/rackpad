@@ -11,6 +11,7 @@ export const hi = {
   "Invalid IP address.": "अमान्य IP पता।",
   "Document a subnet for this IP first.": "पहले इस IP के लिए एक सबनेट दर्ज करें।",
   "IP is already assigned to another device.": "IP पहले से किसी अन्य डिवाइस को दिया गया है।",
+  "IP is not eligible for a DHCP reservation.": "यह IP पता DHCP आरक्षण के लिए पात्र नहीं है।",
   "Invalid host adapter.": "अमान्य होस्ट एडेप्टर।",
   "Ambiguous adapter match.": "एडेप्टर का मिलान अस्पष्ट है।",
   "Skipped": "छोड़ा गया",

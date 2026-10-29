@@ -11,6 +11,7 @@ export const bn = {
   "Invalid IP address.": "অবৈধ IP ঠিকানা।",
   "Document a subnet for this IP first.": "প্রথমে এই IP-এর জন্য একটি সাবনেট নথিভুক্ত করুন।",
   "IP is already assigned to another device.": "IP ইতিমধ্যে অন্য ডিভাইসে বরাদ্দ করা হয়েছে।",
+  "IP is not eligible for a DHCP reservation.": "এই IP ঠিকানাটি DHCP সংরক্ষণের উপযুক্ত নয়।",
   "Invalid host adapter.": "অবৈধ হোস্ট অ্যাডাপ্টার।",
   "Ambiguous adapter match.": "অ্যাডাপ্টারের মিল অস্পষ্ট।",
   "Skipped": "বাদ দেওয়া হয়েছে",

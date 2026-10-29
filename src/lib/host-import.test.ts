@@ -6,7 +6,7 @@ import {
   hostIpProblem,
   planHostAdapters,
 } from "./host-import";
-import type { Device, IpAssignment, Port, Subnet } from "./types";
+import type { Device, DhcpScope, IpAssignment, IpZone, Port, Subnet } from "./types";
 
 const subnets: Subnet[] = [
   {
@@ -85,4 +85,27 @@ test("host adapter matching preserves identities and connector choices without m
     "other",
   );
   assert.equal(planHostAdapters([{ name: "" }], [], [])[0].problem, "invalid");
+});
+
+test("host IP staging excludes gateway, DNS and technical addresses before any host write", () => {
+  const network = [{ ...subnets[0], gateway: "10.0.0.1", dnsServers: ["10.0.0.2"] }];
+  const scopes = [{ id: "scope", subnetId: "s", name: "DHCP", startIp: "10.0.0.100", endIp: "10.0.0.200", gateway: "10.0.0.3", dnsServers: ["10.0.0.4"] }] as DhcpScope[];
+  for (const ip of ["10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4"]) {
+    assert.equal(hostIpProblem(ip, network, [], undefined, scopes), "reserved");
+    assert.equal(defaultHostIp([ip], network, [], undefined, scopes), "");
+  }
+  const technical = [{ subnetId: "s", ipAddress: "10.0.0.5", deviceId: "host", assignmentType: "reserved" }] as IpAssignment[];
+  assert.equal(hostIpProblem("10.0.0.5", network, technical, "host", scopes), "reserved");
+  assert.equal(defaultHostIp(["10.0.0.1", "10.0.0.6"], network, [], undefined, scopes), "10.0.0.6");
+});
+
+test("host IP staging follows DHCP-zone and static-zone eligibility", () => {
+  const scopes = [{ id: "scope", subnetId: "s", name: "DHCP", startIp: "10.0.0.100", endIp: "10.0.0.200" }] as DhcpScope[];
+  const zones = [{ id: "dhcp", subnetId: "s", kind: "dhcp", startIp: "10.0.0.120", endIp: "10.0.0.150" },
+    { id: "static", subnetId: "s", kind: "static", startIp: "10.0.0.160", endIp: "10.0.0.170" }] as IpZone[];
+  assert.equal(hostIpProblem("10.0.0.110", subnets, [], undefined, scopes, zones), "allocation");
+  assert.equal(defaultHostIp(["10.0.0.110"], subnets, [], undefined, scopes, zones), "");
+  for (const ip of ["10.0.0.130", "10.0.0.165", "10.0.0.90"])
+    assert.equal(hostIpProblem(ip, subnets, [], undefined, scopes, zones), null);
+  assert.equal(hostIpProblem("10.0.0.110", subnets, [], undefined, scopes), null);
 });

@@ -11,6 +11,7 @@ export const tr = {
   "Invalid IP address.": "Geçersiz IP adresi.",
   "Document a subnet for this IP first.": "Önce bu IP için bir alt ağ kaydedin.",
   "IP is already assigned to another device.": "IP zaten başka bir aygıta atanmış.",
+  "IP is not eligible for a DHCP reservation.": "Bu IP adresi DHCP rezervasyonu için uygun değil.",
   "Invalid host adapter.": "Geçersiz ana makine bağdaştırıcısı.",
   "Ambiguous adapter match.": "Belirsiz bağdaştırıcı eşleşmesi.",
   "Skipped": "Atlandı",

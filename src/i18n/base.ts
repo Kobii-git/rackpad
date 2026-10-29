@@ -9,6 +9,7 @@ export const en = {
   "Invalid IP address.": "Invalid IP address.",
   "Document a subnet for this IP first.": "Document a subnet for this IP first.",
   "IP is already assigned to another device.": "IP is already assigned to another device.",
+  "IP is not eligible for a DHCP reservation.": "IP is not eligible for a DHCP reservation.",
   "Invalid host adapter.": "Invalid host adapter.",
   "Ambiguous adapter match.": "Ambiguous adapter match.",
   "Skipped": "Skipped",

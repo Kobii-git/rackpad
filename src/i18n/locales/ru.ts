@@ -11,6 +11,7 @@ export const ru = {
   "Invalid IP address.": "Недопустимый IP-адрес.",
   "Document a subnet for this IP first.": "Сначала добавьте подсеть для этого IP.",
   "IP is already assigned to another device.": "IP уже назначен другому устройству.",
+  "IP is not eligible for a DHCP reservation.": "Этот IP-адрес нельзя использовать для резервирования DHCP.",
   "Invalid host adapter.": "Недопустимый адаптер хоста.",
   "Ambiguous adapter match.": "Неоднозначное сопоставление адаптера.",
   "Skipped": "Пропущено",

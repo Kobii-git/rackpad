@@ -113,7 +113,9 @@ keeps its management IP; a new host preselects an address only when one eligible
 candidate is unambiguous. Choose the address before importing when several exist.
 Addresses need a healthy documented subnet and must not belong to another device;
 blocked choices explain the reason. DHCP scopes and static zones keep the normal
-IPAM rules. None leaves an existing management address unchanged.
+IPAM rules. Gateway/DNS and reserved/infrastructure addresses cannot be selected
+as normal host management assignments; DHCP candidates must meet the documented
+DHCP-zone rules. None leaves an existing management address unchanged.
 
 With **Host record** and **Ports** enabled, select the host adapters to import.
 Matching interface names update existing ports without replacing their IDs,

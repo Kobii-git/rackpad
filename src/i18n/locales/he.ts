@@ -11,6 +11,7 @@ export const he = {
   "Invalid IP address.": "כתובת IP לא תקינה.",
   "Document a subnet for this IP first.": "יש לתעד תחילה רשת משנה עבור כתובת זו.",
   "IP is already assigned to another device.": "כתובת ה-IP כבר משויכת להתקן אחר.",
+  "IP is not eligible for a DHCP reservation.": "כתובת ה-IP אינה מתאימה לשמירת DHCP.",
   "Invalid host adapter.": "מתאם מארח לא תקין.",
   "Ambiguous adapter match.": "התאמת המתאם אינה חד-משמעית.",
   "Skipped": "דולג",

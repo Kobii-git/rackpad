@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createStarterTemplate,
   hardwareTemplateCopyId,
+  hardwareTemplateCopyName,
   templateToResolvedLayout,
   createHardwareModule,
   deleteModulePosition,
@@ -472,4 +473,14 @@ test("persistent template-copy IDs are bounded and distinct without randomUUID",
   assert.ok(first.length <= 120);
   assert.notEqual(first, second);
   assert.match(first, /^[a-z0-9][a-z0-9_-]*$/);
+});
+
+test("template-copy names avoid case-insensitive collisions and retain the API length limit", () => {
+  assert.equal(hardwareTemplateCopyName("Switch", []), "Switch copy");
+  assert.equal(hardwareTemplateCopyName("Switch", [{ name: "SWITCH COPY" }, { name: "Switch copy 3" }]), "Switch copy 2");
+  const first = hardwareTemplateCopyName("x".repeat(120), []);
+  const second = hardwareTemplateCopyName("x".repeat(120), [{ name: first }]);
+  assert.equal(first.length, 120);
+  assert.equal(second.length, 120);
+  assert.notEqual(second, first);
 });

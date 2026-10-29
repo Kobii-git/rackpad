@@ -11,6 +11,7 @@ export const ar = {
   "Invalid IP address.": "عنوان IP غير صالح.",
   "Document a subnet for this IP first.": "وثّق شبكة فرعية لهذا العنوان أولاً.",
   "IP is already assigned to another device.": "عنوان IP معين بالفعل لجهاز آخر.",
+  "IP is not eligible for a DHCP reservation.": "عنوان IP غير مؤهل لحجز DHCP.",
   "Invalid host adapter.": "محول مضيف غير صالح.",
   "Ambiguous adapter match.": "تطابق المحول غير واضح.",
   "Skipped": "تم التخطي",

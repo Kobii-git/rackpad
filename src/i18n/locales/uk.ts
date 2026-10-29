@@ -11,6 +11,7 @@ export const uk = {
   "Invalid IP address.": "Недійсна IP-адреса.",
   "Document a subnet for this IP first.": "Спочатку задокументуйте підмережу для цієї IP-адреси.",
   "IP is already assigned to another device.": "IP уже призначено іншому пристрою.",
+  "IP is not eligible for a DHCP reservation.": "Цю IP-адресу не можна використати для резервування DHCP.",
   "Invalid host adapter.": "Недійсний адаптер хоста.",
   "Ambiguous adapter match.": "Неоднозначна відповідність адаптера.",
   "Skipped": "Пропущено",

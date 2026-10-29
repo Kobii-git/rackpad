@@ -11,6 +11,7 @@ export const ko = {
   "Invalid IP address.": "잘못된 IP 주소입니다.",
   "Document a subnet for this IP first.": "먼저 이 IP의 서브넷을 등록하세요.",
   "IP is already assigned to another device.": "IP가 이미 다른 장치에 할당되어 있습니다.",
+  "IP is not eligible for a DHCP reservation.": "이 IP 주소는 DHCP 예약에 사용할 수 없습니다.",
   "Invalid host adapter.": "잘못된 호스트 어댑터입니다.",
   "Ambiguous adapter match.": "어댑터 일치가 모호합니다.",
   "Skipped": "건너뜀",

@@ -11,6 +11,7 @@ export const id = {
   "Invalid IP address.": "Alamat IP tidak valid.",
   "Document a subnet for this IP first.": "Dokumentasikan subnet untuk IP ini terlebih dahulu.",
   "IP is already assigned to another device.": "IP sudah ditetapkan ke perangkat lain.",
+  "IP is not eligible for a DHCP reservation.": "Alamat IP ini tidak memenuhi syarat untuk reservasi DHCP.",
   "Invalid host adapter.": "Adaptor host tidak valid.",
   "Ambiguous adapter match.": "Pencocokan adaptor ambigu.",
   "Skipped": "Dilewati",
