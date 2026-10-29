@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const nl = {
+  "Import host adapters and guest NIC ports.": "Importeer hostadapters en NIC-poorten van gasten.",
+  "Revoke": "Intrekken",
+  "Revoked": "Ingetrokken",
+  "Expired": "Verlopen",
+  "Enter a name and select at least one lab.": "Voer een naam in en selecteer ten minste één lab.",
+  "Hover details": "Details bij aanwijzen",
+  "Host adapters": "Hostadapters",
+  "Invalid IP address.": "Ongeldig IP-adres.",
+  "Document a subnet for this IP first.": "Documenteer eerst een subnet voor dit IP.",
+  "IP is already assigned to another device.": "Het IP is al toegewezen aan een ander apparaat.",
+  "Invalid host adapter.": "Ongeldige hostadapter.",
+  "Ambiguous adapter match.": "Onduidelijke adapterkoppeling.",
+  "Skipped": "Overgeslagen",
+  "Failed": "Mislukt",
+
   "ntfy topic URL": "ntfy-onderwerp-URL",
   "ntfy access token": "ntfy-toegangstoken",
   "Delivered via {channels}.": "Afgeleverd via {channels}.",

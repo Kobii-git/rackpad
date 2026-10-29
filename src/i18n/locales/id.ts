@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Import host adapters and guest NIC ports.": "Impor adaptor host dan port NIC tamu.",
+  "Revoke": "Cabut",
+  "Revoked": "Dicabut",
+  "Expired": "Kedaluwarsa",
+  "Enter a name and select at least one lab.": "Masukkan nama dan pilih setidaknya satu lab.",
+  "Hover details": "Detail saat diarahkan",
+  "Host adapters": "Adaptor host",
+  "Invalid IP address.": "Alamat IP tidak valid.",
+  "Document a subnet for this IP first.": "Dokumentasikan subnet untuk IP ini terlebih dahulu.",
+  "IP is already assigned to another device.": "IP sudah ditetapkan ke perangkat lain.",
+  "Invalid host adapter.": "Adaptor host tidak valid.",
+  "Ambiguous adapter match.": "Pencocokan adaptor ambigu.",
+  "Skipped": "Dilewati",
+  "Failed": "Gagal",
+
   "ntfy topic URL": "URL topik ntfy",
   "ntfy access token": "Token akses ntfy",
   "Delivered via {channels}.": "Terkirim melalui {channels}.",

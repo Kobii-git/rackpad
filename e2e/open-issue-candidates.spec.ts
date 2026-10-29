@@ -336,3 +336,146 @@ test("ntfy token is write-only and partial delivery warns without hiding success
     await request.put("/api/admin/alert-settings",{headers,data:{enabled:false,ntfyTopicUrl:null,ntfyToken:null}});
   }
 });
+
+test("MCP token UI revokes, creates again and survives failed refreshes", async ({ page, request }) => {
+  const headers = await authenticate(page, request);
+  await page.goto("/mcp");
+  const name = page.getByRole("textbox", { name: "Name", exact: true });
+  const create = page.getByRole("button", { name: "Create", exact: true });
+  const tokenName = `Token lifecycle ${Date.now()}`;
+  const ids: string[] = [];
+  try {
+    await name.fill(tokenName);
+    await page.getByRole("checkbox", { name: "Home Lab", exact: true }).check();
+    for (let iteration = 0; iteration < 2; iteration++) {
+      const response = page.waitForResponse(response => response.url().endsWith("/api/mcp-tokens") && response.request().method() === "POST");
+      await create.click();
+      const issued = await (await response).json();
+      ids.push(issued.id);
+      await expect(page.getByTestId("mcp-issued-token")).toBeVisible();
+      const row = page.getByTestId("mcp-token-row").filter({ hasText: tokenName });
+      await row.getByRole("button", { name: "Revoke", exact: true }).click();
+      await expect(row).toHaveCount(0);
+      await expect(page.getByTestId("mcp-issued-token")).toHaveCount(0);
+      const denied = await request.post("/api/mcp", { headers: { authorization: `Bearer ${issued.token}`, "content-type": "application/json" }, data: { jsonrpc: "2.0", id: 1, method: "ping" } });
+      expect(denied.status()).toBe(process.env.MCP_ENABLED === "1" ? 401 : 404);
+      await name.fill(tokenName);
+      await expect(create).toBeEnabled();
+    }
+    await page.reload();
+    await expect(page.getByTestId("mcp-token-row").filter({ hasText: tokenName })).toHaveCount(0);
+    await page.getByRole("checkbox", { name: "History", exact: true }).check();
+    const history = page.getByTestId("mcp-token-row").filter({ hasText: tokenName });
+    await expect(history).toHaveCount(2);
+    await expect(history.first()).toContainText("Revoked");
+    await page.route("**/api/mcp-proposals", route => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "Fixture proposals failure" }) }));
+    await page.route("**/api/mcp-tokens", route => route.request().method() === "POST" ? route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "Fixture creation failure" }) }) : route.continue());
+    await name.fill(`${tokenName} replacement`);
+    await page.getByRole("checkbox", { name: "Home Lab", exact: true }).check();
+    await create.click();
+    await expect(page.getByRole("alert")).toContainText("Fixture creation failure");
+    await expect(create).toBeEnabled();
+    await page.unroute("**/api/mcp-tokens");
+    const replacementResponse = page.waitForResponse(response => response.url().endsWith("/api/mcp-tokens") && response.request().method() === "POST");
+    await create.click();
+    const replacement = await (await replacementResponse).json();
+    ids.push(replacement.id);
+    await expect(page.getByTestId("mcp-token-row").filter({ hasText: `${tokenName} replacement` })).toHaveCount(1);
+  } finally {
+    for (const id of ids) await request.delete(`/api/mcp-tokens/${id}`, { headers });
+  }
+});
+
+test("host networking imports management IP and adapters idempotently without changing cables", async ({ page, request }) => {
+  const headers = await authenticate(page, request);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const suffix = Date.now();
+  const subnet = await request.post("/api/subnets", { headers, data: { labId: "lab_home", cidr: "10.234.50.0/24", name: `Host import ${suffix}` } });
+  expect(subnet.ok()).toBeTruthy();
+  const subnetId = (await subnet.json()).id;
+  const host = await (await request.post("/api/devices", { headers, data: { labId: "lab_home", hostname: `pve-import-${suffix}`, deviceType: "server" } })).json();
+  const peer = await (await request.post("/api/devices", { headers, data: { labId: "lab_home", hostname: `peer-${suffix}`, deviceType: "switch" } })).json();
+  const original = await (await request.post("/api/ports", { headers, data: { deviceId: host.id, name: "eno1", kind: "sfp_plus", macAddress: "02:00:00:00:55:01", position: 1 } })).json();
+  const peerPort = await (await request.post("/api/ports", { headers, data: { deviceId: peer.id, name: "test", kind: "sfp_plus", position: 1 } })).json();
+  const linkResponse = await request.post("/api/port-links", { headers, data: { fromPortId: original.id, toPortId: peerPort.id } });
+  expect(linkResponse.ok(), await linkResponse.text()).toBeTruthy();
+  const link = await linkResponse.json();
+  const payload = { schema: "rackpad.proxmox.inventory.v1", provider: "proxmox", host: { computerName: host.hostname, hostIpAddresses: ["10.234.50.5"] }, switches: [{ name: "vmbr0", kind: "external" }], hostAdapters: [
+    { name: "eno1", macAddress: "02:00:00:00:55:01", status: "UP", linkSpeed: "10000 Mb/s", ipAddresses: [] },
+    { name: "vmbr0", macAddress: "02:00:00:00:55:01", status: "UP", ipAddresses: ["10.234.50.5"] },
+  ], vms: [] };
+  try {
+    await page.goto("/imports");
+    await page.getByLabel("Choose import JSON").setInputFiles({ name: "proxmox.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(payload)) });
+    await expect(page.getByRole("combobox", { name: "Management IP", exact: true })).toHaveValue("10.234.50.5");
+    await expect(page.getByTestId("host-adapter-preview").getByRole("checkbox")).toHaveCount(2);
+    for (let iteration = 0; iteration < 2; iteration++) {
+      await page.getByRole("button", { name: "Import selected", exact: true }).click();
+      await expect(page.getByRole("button", { name: "Import selected", exact: true })).toBeEnabled();
+      await expect.poll(async () => (await (await request.get(`/api/devices/${host.id}`, { headers })).json()).managementIp).toBe("10.234.50.5");
+      const ports = await (await request.get(`/api/ports?deviceId=${host.id}`, { headers })).json() as Array<{ id: string; name: string; kind: string; macAddress: string }>;
+      expect(ports).toHaveLength(2);
+      expect(ports.find(port => port.name === "eno1")).toMatchObject({ id: original.id, kind: "sfp_plus", macAddress: "02:00:00:00:55:01" });
+      expect(ports.find(port => port.name === "vmbr0")?.kind).toBe("virtual");
+      expect((await (await request.get("/api/port-links", { headers })).json()).find((item: { id: string }) => item.id === link.id)).toMatchObject({ fromPortId: original.id, toPortId: peerPort.id });
+      await page.reload();
+      await page.getByLabel("Choose import JSON").setInputFiles({ name: "proxmox.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(payload)) });
+    }
+    const conflicting = { ...payload, hostAdapters: [{ ...payload.hostAdapters[0], macAddress: "02:00:00:00:55:09" }, payload.hostAdapters[1]] };
+    await page.getByLabel("Choose import JSON").setInputFiles({ name: "conflict.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(conflicting)) });
+    await expect(page.getByTestId("host-adapter-preview")).toContainText("Ambiguous adapter match.");
+    await page.getByRole("button", { name: "Import selected", exact: true }).click();
+    await expect(page.getByText(/Skipped.*eno1: Ambiguous adapter match/)).toBeVisible();
+  } finally {
+    await request.delete(`/api/port-links/${link.id}`, { headers });
+    await request.delete(`/api/devices/${host.id}`, { headers });
+    await request.delete(`/api/devices/${peer.id}`, { headers });
+    await request.delete(`/api/subnets/${subnetId}`, { headers });
+  }
+});
+
+test("host networking respects import switches and reports blocked IPs and partial port failures", async ({ page, request }) => {
+  const headers = await authenticate(page, request);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const subnetResponse = await request.post("/api/subnets", { headers, data: { labId: "lab_home", cidr: "10.234.60.0/24", name: "Host network choices" } });
+  expect(subnetResponse.ok()).toBeTruthy();
+  const subnet = await subnetResponse.json();
+  const hostname = `hyperv-import-${Date.now()}`;
+  const payload = { schema: "rackpad.hyperv.inventory.v1", provider: "hyperv", host: { computerName: hostname, hostIpAddresses: ["10.234.60.5", "10.234.60.6", "10.235.99.5"] }, hostAdapters: [{ name: "failed0", status: "up" }, { name: "ok0", status: "up" }], switches: [], vms: [] };
+  let hostId: string | undefined;
+  try {
+    await page.goto("/imports");
+    await page.getByLabel("Choose import JSON").setInputFiles({ name: "hyperv.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(payload)) });
+    const management = page.getByRole("combobox", { name: "Management IP", exact: true });
+    await expect(management).toHaveValue("");
+    await expect(management.getByRole("option", { name: /10.235.99.5.*Document a subnet/ })).toHaveAttribute("disabled", "");
+    await management.selectOption("10.234.60.5");
+    const importButton = page.getByRole("button", { name: "Import selected", exact: true });
+    await page.getByRole("checkbox", { name: /^Host record/ }).uncheck();
+    await importButton.click();
+    await expect(importButton).toBeEnabled();
+    expect((await (await request.get("/api/devices?labId=lab_home", { headers })).json()).some((device: { hostname: string }) => device.hostname === hostname)).toBe(false);
+    await page.getByRole("checkbox", { name: /^Host record/ }).check();
+    await page.getByRole("checkbox", { name: /^IPs Set management/ }).uncheck();
+    await page.getByRole("checkbox", { name: /^Ports Import host/ }).uncheck();
+    await importButton.click();
+    await expect(importButton).toBeEnabled();
+    const host = (await (await request.get("/api/devices?labId=lab_home", { headers })).json()).find((device: { hostname: string }) => device.hostname === hostname);
+    expect(host).toBeTruthy();
+    hostId = host.id;
+    expect(host.managementIp).toBeFalsy();
+    expect(await (await request.get(`/api/ports?deviceId=${host.id}`, { headers })).json()).toHaveLength(0);
+    await page.getByRole("checkbox", { name: /^IPs Set management/ }).check();
+    await page.getByRole("checkbox", { name: /^Ports Import host/ }).check();
+    await page.route("**/api/ports", route => route.request().method() === "POST" && route.request().postDataJSON()?.name === "failed0"
+      ? route.fulfill({ status: 503, json: { error: "Fixture port unavailable" } }) : route.continue());
+    await importButton.click();
+    await expect(page.getByText(/Failed.*failed0: Fixture port unavailable/)).toBeVisible();
+    await expect(importButton).toBeEnabled();
+    expect((await (await request.get(`/api/devices/${host.id}`, { headers })).json()).managementIp).toBe("10.234.60.5");
+    expect(await (await request.get(`/api/ports?deviceId=${host.id}`, { headers })).json()).toMatchObject([{ name: "ok0" }]);
+  } finally {
+    if (hostId) await request.delete(`/api/devices/${hostId}`, { headers });
+    await request.delete(`/api/subnets/${subnet.id}`, { headers });
+  }
+});

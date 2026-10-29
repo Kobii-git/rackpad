@@ -14,6 +14,7 @@ import {
 import { DeviceDrawer } from "@/components/shared/DeviceDrawer";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ReferenceImageGallery } from "@/components/shared/ReferenceImageGallery";
+import { HoverDetailsSettings } from "@/components/rack/HoverDetailsSettings";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
 import { RackView } from "@/components/rack/RackView";
@@ -482,8 +483,9 @@ export default function RackViewPage() {
       <TopBar
         subtitle={activeLab.name}
         title={t("Racks / Rooms")}
-        actions={
-          canEdit ? (
+        actions={<>
+          <HoverDetailsSettings />
+          {canEdit ? (
             <>
               <Button
                 variant="outline"
@@ -548,7 +550,8 @@ export default function RackViewPage() {
               </Button>
             </>
           ) : undefined
-        }
+          }
+        </>}
       />
 
       {showEmptyState ? (

@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Import host adapters and guest NIC ports.": "ホストアダプターとゲストのNICポートをインポートします。",
+  "Revoke": "取り消す",
+  "Revoked": "取り消し済み",
+  "Expired": "期限切れ",
+  "Enter a name and select at least one lab.": "名前を入力し、ラボを1つ以上選択してください。",
+  "Hover details": "ホバー時の詳細",
+  "Host adapters": "ホストアダプター",
+  "Invalid IP address.": "IPアドレスが無効です。",
+  "Document a subnet for this IP first.": "先にこのIPのサブネットを登録してください。",
+  "IP is already assigned to another device.": "このIPは別のデバイスに割り当て済みです。",
+  "Invalid host adapter.": "ホストアダプターが無効です。",
+  "Ambiguous adapter match.": "アダプターの対応が不明確です。",
+  "Skipped": "スキップ済み",
+  "Failed": "失敗",
+
   "ntfy topic URL": "ntfyトピックURL",
   "ntfy access token": "ntfyアクセストークン",
   "Delivered via {channels}.": "{channels} 経由で配信しました。",

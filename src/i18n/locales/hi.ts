@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "Import host adapters and guest NIC ports.": "होस्ट एडेप्टर और गेस्ट NIC पोर्ट आयात करें।",
+  "Revoke": "निरस्त करें",
+  "Revoked": "निरस्त",
+  "Expired": "समय समाप्त",
+  "Enter a name and select at least one lab.": "एक नाम दर्ज करें और कम से कम एक लैब चुनें।",
+  "Hover details": "होवर विवरण",
+  "Host adapters": "होस्ट एडेप्टर",
+  "Invalid IP address.": "अमान्य IP पता।",
+  "Document a subnet for this IP first.": "पहले इस IP के लिए एक सबनेट दर्ज करें।",
+  "IP is already assigned to another device.": "IP पहले से किसी अन्य डिवाइस को दिया गया है।",
+  "Invalid host adapter.": "अमान्य होस्ट एडेप्टर।",
+  "Ambiguous adapter match.": "एडेप्टर का मिलान अस्पष्ट है।",
+  "Skipped": "छोड़ा गया",
+  "Failed": "विफल",
+
   "ntfy topic URL": "ntfy विषय URL",
   "ntfy access token": "ntfy एक्सेस टोकन",
   "Delivered via {channels}.": "{channels} से भेजा गया।",

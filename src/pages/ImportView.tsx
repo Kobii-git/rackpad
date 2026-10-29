@@ -52,6 +52,14 @@ import type {
 import { cidrBounds, cidrContainsIp, cn, ipToInt } from "@/lib/utils";
 import { localizedDeviceTypeIdLabel } from "@/lib/device-types";
 
+import { collectedHostIps, defaultHostIp, hostIpProblem, planHostAdapters, type HostNetworkAdapter } from "@/lib/host-import";
+
+const HOST_IP_ERRORS = {
+  invalid: "Invalid IP address.",
+  subnet: "Document a subnet for this IP first.",
+  conflict: "IP is already assigned to another device.",
+} as const;
+
 type ImportProvider = "hyperv" | "proxmox";
 
 interface HyperVPayload {
@@ -88,14 +96,7 @@ interface HyperVHost {
   statusError?: string | null;
 }
 
-interface HyperVHostAdapter {
-  name?: string;
-  interfaceDescription?: string;
-  macAddress?: string;
-  status?: string;
-  linkSpeed?: string;
-  ipAddresses?: string[];
-}
+type HyperVHostAdapter = HostNetworkAdapter;
 
 interface HyperVSwitch {
   id?: string;
@@ -205,6 +206,8 @@ interface VmDraft {
 }
 
 interface HostDraft {
+  managementIp: string;
+  adapterIndexes: number[];
   targetDeviceId: string;
   hostname: string;
   displayName: string;
@@ -692,9 +695,16 @@ export default function ImportView() {
         "This file does not look like a Rackpad Hyper-V or Proxmox inventory export.",
       );
     }
+    if (parsed.hostAdapters !== undefined && (!Array.isArray(parsed.hostAdapters) || parsed.hostAdapters.some(adapter =>
+      !adapter || typeof adapter !== "object" || [adapter.name, adapter.interfaceDescription, adapter.macAddress, adapter.status, adapter.linkSpeed].some(value => value != null && typeof value !== "string")))) {
+      throw new Error(t("Invalid host adapter."));
+    }
     const provider = providerForPayload(parsed);
     setPayload(parsed);
-    setHostDraft(hostToDraft(parsed, provider));
+    const existing = findExistingHost(parsed, devicesByHostname);
+    setHostDraft({ ...hostToDraft(parsed, provider), managementIp: defaultHostIp(
+      collectedHostIps(parsed.host?.hostIpAddresses, parsed.hostAdapters ?? []), subnets, ipAssignments, existing,
+    ) });
     setVmDrafts(parsed.vms.map((vm, index) => vmToDraft(vm, index, provider)));
     setParseError("");
     setImportLog([]);
@@ -720,12 +730,40 @@ export default function ImportView() {
         ? await upsertHost(payload, hostDraft, {
             devicesByHostname,
             devicesById,
-            log,
+            log, subnets, ipAssignments, scopes, ipZones, importIps: options.ips, t,
           })
         : resolveHostTarget(payload, hostDraft, {
             devicesByHostname,
             devicesById,
           });
+
+      if (options.host && options.ports && hostDevice) {
+        const plans = planHostAdapters(payload.hostAdapters ?? [], localPortsByDeviceId[hostDevice.id] ?? [], (payload.switches ?? []).map(item => item.name ?? ""));
+        for (const plan of plans) {
+          if (!hostDraft?.adapterIndexes.includes(plan.index)) continue;
+          const label = `${hostDevice.hostname}:${plan.name || plan.index + 1}`;
+          if (plan.problem) {
+            log.push(`${t("Skipped")} ${label}: ${t(plan.problem === "invalid" ? "Invalid host adapter." : "Ambiguous adapter match.")}`);
+            continue;
+          }
+          try {
+            const adapter = payload.hostAdapters![plan.index];
+            const description = [plan.existing?.description, adapter.interfaceDescription,
+              ...(Array.isArray(adapter.ipAddresses) ? adapter.ipAddresses.filter(ip => typeof ip === "string") : [])];
+            const additions = description.slice(1).filter((value): value is string => Boolean(value));
+            let combined = plan.existing?.description ?? "";
+            for (const detail of additions) {
+              if (!combined.split(" | ").includes(detail)) combined = [combined, detail].filter(Boolean).join(" | ").slice(0, 500);
+            }
+            const changes = { ...plan.changes, description: combined };
+            const written = plan.existing ? await updatePort(plan.existing.id, changes)
+              : await createPortRecord({ deviceId: hostDevice.id, position: nextPortPosition(localPortsByDeviceId[hostDevice.id] ?? []), mode: "access", ...changes });
+            if (!written) throw new Error(t("Unknown port"));
+            localPortsByDeviceId[hostDevice.id] = [...(localPortsByDeviceId[hostDevice.id] ?? []).filter(port => port.id !== written.id), written];
+            log.push(`${t(plan.existing ? "Update" : "Created")} ${label}`);
+          } catch (error) { log.push(`${t("Failed")} ${label}: ${error instanceof Error ? error.message : t("Error")}`); }
+        }
+      }
 
       const vlanMap = await ensureVlans({
         enabled: options.vlans,
@@ -825,7 +863,14 @@ export default function ImportView() {
   }
 
   function setHostDraftValue(changes: Partial<HostDraft>) {
-    setHostDraft((current) => (current ? { ...current, ...changes } : current));
+    setHostDraft(current => {
+      if (!current) return current;
+      if (changes.targetDeviceId && payload) {
+        const existing = changes.targetDeviceId === AUTO_HOST_TARGET ? findExistingHost(payload, devicesByHostname) : devicesById[changes.targetDeviceId];
+        return { ...current, ...changes, managementIp: defaultHostIp(collectedHostIps(payload.host?.hostIpAddresses, payload.hostAdapters ?? []), subnets, ipAssignments, existing) };
+      }
+      return { ...current, ...changes };
+    });
   }
 
   return (
@@ -1000,10 +1045,10 @@ export default function ImportView() {
                         />
                         <span>
                           <span className="block text-sm font-medium text-[var(--text-primary)]">
-                            {copy.title}
+                            {key === "ports" ? t("Ports") : copy.title}
                           </span>
                           <span className="mt-1 block text-xs text-[var(--text-tertiary)]">
-                            {copy.description}
+                            {key === "ports" ? t("Import host adapters and guest NIC ports.") : copy.description}
                           </span>
                         </span>
                       </label>
@@ -1018,6 +1063,8 @@ export default function ImportView() {
                     devices={devices}
                     devicesByHostname={devicesByHostname}
                     hostRecordEnabled={options.host}
+                    importIps={options.ips}
+                    importPorts={options.ports}
                     onChange={setHostDraftValue}
                     payload={payload}
                     value={hostDraft}
@@ -1092,8 +1139,8 @@ const CATEGORY_COPY: Record<
     description: "Create Hyper-V switches or Proxmox bridge records.",
   },
   ports: {
-    title: "Virtual ports",
-    description: "Create guest NIC ports with switch and VLAN metadata.",
+    title: "Ports",
+    description: "Import host adapters and guest NIC ports.",
   },
   vlans: {
     title: "VLANs",
@@ -1229,6 +1276,8 @@ function HostPreview({
   devices,
   devicesByHostname,
   hostRecordEnabled,
+  importIps,
+  importPorts,
   onChange,
   payload,
   value,
@@ -1236,12 +1285,17 @@ function HostPreview({
   devices: Device[];
   devicesByHostname: Record<string, Device>;
   hostRecordEnabled: boolean;
+  importIps: boolean;
+  importPorts: boolean;
   onChange: (changes: Partial<HostDraft>) => void;
   payload: HyperVPayload;
   value: HostDraft | null;
 }) {
   const { t } = useI18n();
   const deviceTypes = useStore((state) => state.deviceTypes);
+  const ports = useStore(state => state.ports);
+  const subnets = useStore(state => state.subnets);
+  const assignments = useStore(state => state.ipAssignments);
   const provider = providerForPayload(payload);
   const copy = PROVIDER_COPY[provider];
   const host = payload.host;
@@ -1253,6 +1307,10 @@ function HostPreview({
   const hostCandidates = devices.filter(
     (device) => !isWorkloadDeviceType(device.deviceType),
   );
+  const target = selected ?? matched;
+  const candidates = collectedHostIps(host?.hostIpAddresses, payload.hostAdapters ?? []);
+  if (target?.managementIp && !candidates.includes(target.managementIp)) candidates.unshift(target.managementIp);
+  const adapterPlans = planHostAdapters(payload.hostAdapters ?? [], ports.filter(port => port.deviceId === target?.id), (payload.switches ?? []).map(item => item.name ?? ""));
   const targetLabel = selected
     ? `Selected existing: ${selected.hostname}`
     : matched
@@ -1381,6 +1439,26 @@ function HostPreview({
             onChange={(event) => onChange({ notes: event.target.value })}
           />
         </Field>
+
+        <Field label={t("Management IP")}>
+          <select className="rk-control w-full" disabled={!hostRecordEnabled || !importIps} value={value?.managementIp ?? ""}
+            onChange={event => onChange({ managementIp: event.target.value })}>
+            <option value="">{t("None")}</option>
+            {candidates.map(ip => {
+              const problem = hostIpProblem(ip, subnets, assignments, target?.id);
+              const label = problem ? `${ip} (${t(HOST_IP_ERRORS[problem])})` : ip;
+              return <option key={ip} value={ip} disabled={Boolean(problem)}>{label}</option>;
+            })}
+          </select>
+        </Field>
+        <fieldset disabled={!hostRecordEnabled || !importPorts} className="space-y-2" data-testid="host-adapter-preview">
+          <legend className="text-sm font-semibold">{t("Host adapters")}</legend>
+          {adapterPlans.map(plan => <label key={plan.index} className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={value?.adapterIndexes.includes(plan.index) ?? false}
+              onChange={event => onChange({ adapterIndexes: event.target.checked ? [...(value?.adapterIndexes ?? []), plan.index] : (value?.adapterIndexes ?? []).filter(index => index !== plan.index) })} />
+            <span>{plan.name || t("Unknown")} · {plan.problem ? t(plan.problem === "invalid" ? "Invalid host adapter." : "Ambiguous adapter match.") : t(plan.existing ? "Update" : "Create")}</span>
+          </label>)}
+        </fieldset>
 
         <InfoRow label={t("Collected FQDN")} value={host?.fqdn} />
         {provider === "proxmox" && (
@@ -1760,6 +1838,8 @@ function hostToDraft(
 
   return {
     targetDeviceId: AUTO_HOST_TARGET,
+    managementIp: "",
+    adapterIndexes: (payload.hostAdapters ?? []).map((_, index) => index),
     hostname,
     displayName: host?.computerName || hostname,
     manufacturer: host?.manufacturer ?? "",
@@ -1865,6 +1945,12 @@ async function upsertHost(
     devicesByHostname: Record<string, Device>;
     devicesById: Record<string, Device>;
     log: string[];
+    subnets: Subnet[];
+    ipAssignments: IpAssignment[];
+    scopes: DhcpScope[];
+    ipZones: IpZone[];
+    importIps: boolean;
+    t: ReturnType<typeof useI18n>["t"];
   },
 ) {
   const provider = providerForPayload(payload);
@@ -1885,9 +1971,17 @@ async function upsertHost(
   const existing =
     selected ?? context.devicesByHostname[hostname.toLowerCase()];
   const specs = hostSpecs(host, sourceDraft);
+  const candidateIp = context.importIps ? sourceDraft.managementIp.trim() : "";
+  const problem = candidateIp ? hostIpProblem(candidateIp, context.subnets, context.ipAssignments, existing?.id) : null;
+  if (problem) context.log.push(`${context.t("Skipped")} ${candidateIp}: ${context.t(HOST_IP_ERRORS[problem])}`);
+  const managementIp = candidateIp && !problem ? candidateIp : undefined;
+  const subnet = managementIp ? findSubnetForIp(context.subnets, managementIp) : undefined;
+  const scope = subnet && managementIp ? findDhcpScopeForIp(context.scopes, context.ipZones, subnet.id, managementIp) : undefined;
+  const networking = managementIp ? { managementIp, ipAllocationMode: scope ? "dhcp-reservation" as const : "static" as const, dhcpScopeId: scope?.id ?? null } : {};
 
   if (existing) {
     const updated = await updateDevice(existing.id, {
+      ...networking,
       hostname,
       deviceType: "server",
       displayName:
@@ -1908,6 +2002,7 @@ async function upsertHost(
   }
 
   const created = await createDevice({
+    ...networking,
     hostname,
     displayName: sourceDraft.displayName.trim() || hostname,
     deviceType: "server",

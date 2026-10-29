@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Import host adapters and guest NIC ports.": "Nhập bộ điều hợp máy chủ và cổng NIC của máy khách.",
+  "Revoke": "Thu hồi",
+  "Revoked": "Đã thu hồi",
+  "Expired": "Hết hạn",
+  "Enter a name and select at least one lab.": "Nhập tên và chọn ít nhất một phòng lab.",
+  "Hover details": "Chi tiết khi di chuột",
+  "Host adapters": "Bộ điều hợp máy chủ",
+  "Invalid IP address.": "Địa chỉ IP không hợp lệ.",
+  "Document a subnet for this IP first.": "Hãy ghi nhận mạng con cho IP này trước.",
+  "IP is already assigned to another device.": "IP đã được gán cho thiết bị khác.",
+  "Invalid host adapter.": "Bộ điều hợp máy chủ không hợp lệ.",
+  "Ambiguous adapter match.": "Kết quả khớp bộ điều hợp không rõ ràng.",
+  "Skipped": "Đã bỏ qua",
+  "Failed": "Thất bại",
+
   "ntfy topic URL": "URL chủ đề ntfy",
   "ntfy access token": "Mã truy cập ntfy",
   "Delivered via {channels}.": "Đã gửi qua {channels}.",

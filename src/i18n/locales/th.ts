@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "Import host adapters and guest NIC ports.": "นำเข้าอะแดปเตอร์โฮสต์และพอร์ต NIC ของผู้เยี่ยมชม",
+  "Revoke": "เพิกถอน",
+  "Revoked": "เพิกถอนแล้ว",
+  "Expired": "หมดอายุ",
+  "Enter a name and select at least one lab.": "ป้อนชื่อและเลือกอย่างน้อยหนึ่งแล็บ",
+  "Hover details": "รายละเอียดเมื่อชี้",
+  "Host adapters": "อะแดปเตอร์โฮสต์",
+  "Invalid IP address.": "ที่อยู่ IP ไม่ถูกต้อง",
+  "Document a subnet for this IP first.": "บันทึกซับเน็ตสำหรับ IP นี้ก่อน",
+  "IP is already assigned to another device.": "IP ถูกกำหนดให้กับอุปกรณ์อื่นแล้ว",
+  "Invalid host adapter.": "อะแดปเตอร์โฮสต์ไม่ถูกต้อง",
+  "Ambiguous adapter match.": "การจับคู่อะแดปเตอร์ไม่ชัดเจน",
+  "Skipped": "ข้ามแล้ว",
+  "Failed": "ล้มเหลว",
+
   "ntfy topic URL": "URL หัวข้อ ntfy",
   "ntfy access token": "โทเค็นการเข้าถึง ntfy",
   "Delivered via {channels}.": "ส่งผ่าน {channels} แล้ว",

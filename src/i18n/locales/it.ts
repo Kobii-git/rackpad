@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const it = {
+  "Import host adapters and guest NIC ports.": "Importa adattatori host e porte di rete guest.",
+  "Revoke": "Revoca",
+  "Revoked": "Revocato",
+  "Expired": "Scaduto",
+  "Enter a name and select at least one lab.": "Inserisci un nome e seleziona almeno un laboratorio.",
+  "Hover details": "Dettagli al passaggio",
+  "Host adapters": "Adattatori host",
+  "Invalid IP address.": "Indirizzo IP non valido.",
+  "Document a subnet for this IP first.": "Documenta prima una sottorete per questo IP.",
+  "IP is already assigned to another device.": "L’IP è già assegnato a un altro dispositivo.",
+  "Invalid host adapter.": "Adattatore host non valido.",
+  "Ambiguous adapter match.": "Corrispondenza dell’adattatore ambigua.",
+  "Skipped": "Ignorato",
+  "Failed": "Non riuscito",
+
   "ntfy topic URL": "URL dell’argomento ntfy",
   "ntfy access token": "Token di accesso ntfy",
   "Delivered via {channels}.": "Consegnato tramite {channels}.",

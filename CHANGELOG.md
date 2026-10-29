@@ -6,7 +6,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
-## [1.8.6-beta.1] - 2026-10-23
+## [1.8.7-beta.0] - 2026-10-29
 
 ### Added
 
@@ -20,6 +20,14 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Fixed
 
+- Pin every Docker Node stage to 22.23.4 and reject affected candidate runtimes
+  in image smoke validation (#206).
+- Revoked MCP tokens leave the active list, retain labelled history and allow
+  repeated creation; proposal-loading failures no longer block token refresh (#203).
+- Collector JSON imports stage host management IPs and adapters, preserve linked
+  ports on reimport, and report conflicts and partial failures (#208).
+- Passive-device hover details use hostname/type/display-name order and include
+  rack/U placement, with shared personal field preferences across canvases (#198).
 - Failed notifications no longer advance successful-delivery timestamps or
   suppress outage retries. New observations supersede stale async completions.
 - Repeated duplication of one hardware template creates independent copies
@@ -28,12 +36,14 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Changed
 
+- Independently apply the remaining reviewed dependency/tool maintenance updates,
+  including compatible MCP and transitive security patches.
 - Schema advances from stable 55 / prior beta 56 to 57. Retain a consistent
   pre-upgrade snapshot with the previous image and configuration/key for rollback.
 - Portable exports redact ntfy tokens; native snapshots retain encrypted values.
   Existing SMTP/Discord/Telegram credential import semantics remain compatible.
 
-See the [beta test and upgrade notes](docs/releases/v1.8.6-beta.1.md).
+See the [beta test and upgrade notes](docs/releases/v1.8.7-beta.0.md).
 
 ## [1.8.6-beta.0] - 2026-10-22
 

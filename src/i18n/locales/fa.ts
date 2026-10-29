@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Import host adapters and guest NIC ports.": "آداپتورهای میزبان و درگاه‌های شبکه مهمان را وارد کنید.",
+  "Revoke": "لغو دسترسی",
+  "Revoked": "لغوشده",
+  "Expired": "منقضی‌شده",
+  "Enter a name and select at least one lab.": "یک نام وارد کنید و حداقل یک آزمایشگاه انتخاب کنید.",
+  "Hover details": "جزئیات اشاره‌گر",
+  "Host adapters": "آداپتورهای میزبان",
+  "Invalid IP address.": "نشانی IP نامعتبر است.",
+  "Document a subnet for this IP first.": "ابتدا یک زیرشبکه برای این IP ثبت کنید.",
+  "IP is already assigned to another device.": "این IP از قبل به دستگاه دیگری اختصاص دارد.",
+  "Invalid host adapter.": "آداپتور میزبان نامعتبر است.",
+  "Ambiguous adapter match.": "تطبیق آداپتور مبهم است.",
+  "Skipped": "ردشده",
+  "Failed": "ناموفق",
+
   "ntfy topic URL": "نشانی موضوع ntfy",
   "ntfy access token": "توکن دسترسی ntfy",
   "Delivered via {channels}.": "از طریق {channels} تحویل شد.",

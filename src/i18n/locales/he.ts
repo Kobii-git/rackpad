@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "Import host adapters and guest NIC ports.": "ייבוא מתאמי מארח ויציאות רשת של אורחים.",
+  "Revoke": "ביטול גישה",
+  "Revoked": "הגישה בוטלה",
+  "Expired": "פג תוקף",
+  "Enter a name and select at least one lab.": "יש להזין שם ולבחור מעבדה אחת לפחות.",
+  "Hover details": "פרטים בריחוף",
+  "Host adapters": "מתאמי המארח",
+  "Invalid IP address.": "כתובת IP לא תקינה.",
+  "Document a subnet for this IP first.": "יש לתעד תחילה רשת משנה עבור כתובת זו.",
+  "IP is already assigned to another device.": "כתובת ה-IP כבר משויכת להתקן אחר.",
+  "Invalid host adapter.": "מתאם מארח לא תקין.",
+  "Ambiguous adapter match.": "התאמת המתאם אינה חד-משמעית.",
+  "Skipped": "דולג",
+  "Failed": "נכשל",
+
   "ntfy topic URL": "כתובת נושא ntfy",
   "ntfy access token": "אסימון גישה ל־ntfy",
   "Delivered via {channels}.": "נמסר באמצעות {channels}.",

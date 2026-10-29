@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const ru = {
+  "Import host adapters and guest NIC ports.": "Импортируйте адаптеры хоста и сетевые порты гостей.",
+  "Revoke": "Отозвать",
+  "Revoked": "Отозван",
+  "Expired": "Истёк",
+  "Enter a name and select at least one lab.": "Введите имя и выберите хотя бы одну лабораторию.",
+  "Hover details": "Сведения при наведении",
+  "Host adapters": "Адаптеры хоста",
+  "Invalid IP address.": "Недопустимый IP-адрес.",
+  "Document a subnet for this IP first.": "Сначала добавьте подсеть для этого IP.",
+  "IP is already assigned to another device.": "IP уже назначен другому устройству.",
+  "Invalid host adapter.": "Недопустимый адаптер хоста.",
+  "Ambiguous adapter match.": "Неоднозначное сопоставление адаптера.",
+  "Skipped": "Пропущено",
+  "Failed": "Ошибка",
+
   "ntfy topic URL": "URL темы ntfy",
   "ntfy access token": "Токен доступа ntfy",
   "Delivered via {channels}.": "Доставлено через {channels}.",

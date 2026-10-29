@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Import host adapters and guest NIC ports.": "호스트 어댑터와 게스트 NIC 포트를 가져옵니다.",
+  "Revoke": "철회",
+  "Revoked": "철회됨",
+  "Expired": "만료됨",
+  "Enter a name and select at least one lab.": "이름을 입력하고 하나 이상의 랩을 선택하세요.",
+  "Hover details": "마우스 오버 세부 정보",
+  "Host adapters": "호스트 어댑터",
+  "Invalid IP address.": "잘못된 IP 주소입니다.",
+  "Document a subnet for this IP first.": "먼저 이 IP의 서브넷을 등록하세요.",
+  "IP is already assigned to another device.": "IP가 이미 다른 장치에 할당되어 있습니다.",
+  "Invalid host adapter.": "잘못된 호스트 어댑터입니다.",
+  "Ambiguous adapter match.": "어댑터 일치가 모호합니다.",
+  "Skipped": "건너뜀",
+  "Failed": "실패",
+
   "ntfy topic URL": "ntfy 주제 URL",
   "ntfy access token": "ntfy 액세스 토큰",
   "Delivered via {channels}.": "{channels}을(를) 통해 전송했습니다.",

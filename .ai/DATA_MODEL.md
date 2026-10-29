@@ -59,8 +59,9 @@ schema-coverage decisions.
 
 `server/routes/admin.ts` exports `rackpad-backup-v1` with app and schema versions.
 Every application table must appear under `data` or be on the test’s short,
-commented exclusion list. Only `schemaVersion` metadata and ephemeral
-`userSessions` are excluded. Sessions are deliberately invalidated on restore.
+commented exclusion list. `schemaVersion` metadata, ephemeral `userSessions`
+and personal `mcpTokens` are excluded. Sessions and MCP tokens are deliberately
+invalidated on restore.
 
 Restore validates format/integrity, rejects snapshots from a newer schema,
 deletes and re-inserts inside one transaction, restores `userLabAccess` only

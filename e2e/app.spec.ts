@@ -6452,7 +6452,7 @@ test("MCP token UI shows credentials once and reviews an SDK proposal", async ({
     await client.close();
     if (rackId) await request.delete(`/api/racks/${rackId}`, { headers });
   }
-  await page.getByText(tokenName, { exact: false }).locator("..").getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByText(tokenName, { exact: false }).locator("..").getByRole("button", { name: "Revoke", exact: true }).click();
   const revoked = await request.post("/api/mcp", {
     headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
     data: { jsonrpc: "2.0", id: 1, method: "ping" },

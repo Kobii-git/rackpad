@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Import host adapters and guest NIC ports.": "导入主机适配器和客户机网卡端口。",
+  "Revoke": "撤销",
+  "Revoked": "已撤销",
+  "Expired": "已过期",
+  "Enter a name and select at least one lab.": "请输入名称并至少选择一个实验室。",
+  "Hover details": "悬停详情",
+  "Host adapters": "主机适配器",
+  "Invalid IP address.": "IP 地址无效。",
+  "Document a subnet for this IP first.": "请先登记此 IP 的子网。",
+  "IP is already assigned to another device.": "此 IP 已分配给其他设备。",
+  "Invalid host adapter.": "主机适配器无效。",
+  "Ambiguous adapter match.": "适配器匹配不明确。",
+  "Skipped": "已跳过",
+  "Failed": "失败",
+
   "ntfy topic URL": "ntfy主题网址",
   "ntfy access token": "ntfy访问令牌",
   "Delivered via {channels}.": "已通过{channels}发送。",

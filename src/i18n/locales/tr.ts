@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Import host adapters and guest NIC ports.": "Ana makine bağdaştırıcılarını ve konuk NIC bağlantı noktalarını içe aktarın.",
+  "Revoke": "İptal et",
+  "Revoked": "İptal edildi",
+  "Expired": "Süresi doldu",
+  "Enter a name and select at least one lab.": "Bir ad girin ve en az bir laboratuvar seçin.",
+  "Hover details": "Üzerine gelince ayrıntılar",
+  "Host adapters": "Ana makine bağdaştırıcıları",
+  "Invalid IP address.": "Geçersiz IP adresi.",
+  "Document a subnet for this IP first.": "Önce bu IP için bir alt ağ kaydedin.",
+  "IP is already assigned to another device.": "IP zaten başka bir aygıta atanmış.",
+  "Invalid host adapter.": "Geçersiz ana makine bağdaştırıcısı.",
+  "Ambiguous adapter match.": "Belirsiz bağdaştırıcı eşleşmesi.",
+  "Skipped": "Atlandı",
+  "Failed": "Başarısız",
+
   "ntfy topic URL": "ntfy konu URL’si",
   "ntfy access token": "ntfy erişim belirteci",
   "Delivered via {channels}.": "{channels} üzerinden teslim edildi.",

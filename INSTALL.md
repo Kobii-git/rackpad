@@ -801,10 +801,15 @@ build tools.
 
 ## Native Node deploy
 
-For manually managed deployments, install Node 22 and native build prerequisites,
+For manually managed deployments, install Node 22.23.4 or a newer Node 22 release
+and native build prerequisites,
 run `npm ci`, `npm run build`, then `npm start`. Configure `HOST`, `PORT`,
 `DATABASE_PATH`, and the existing encryption key through a protected environment
 file. Create the data directory with ownership for the service user.
+
+Native deployments must update their installed Node runtime separately to receive
+the Brotli security fix. Updating Rackpad's source or Docker base does not update
+the host runtime; verify `node --version` under the service account.
 
 The root [rackpad.service](rackpad.service) is a generic systemd example to adapt
 for a manual installation. The managed native Proxmox helper installs its own

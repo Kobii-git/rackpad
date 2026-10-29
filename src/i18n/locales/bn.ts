@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "Import host adapters and guest NIC ports.": "হোস্ট অ্যাডাপ্টার এবং গেস্ট NIC পোর্ট আমদানি করুন।",
+  "Revoke": "প্রত্যাহার করুন",
+  "Revoked": "প্রত্যাহার করা হয়েছে",
+  "Expired": "মেয়াদোত্তীর্ণ",
+  "Enter a name and select at least one lab.": "একটি নাম লিখুন এবং অন্তত একটি ল্যাব নির্বাচন করুন।",
+  "Hover details": "হোভার বিবরণ",
+  "Host adapters": "হোস্ট অ্যাডাপ্টার",
+  "Invalid IP address.": "অবৈধ IP ঠিকানা।",
+  "Document a subnet for this IP first.": "প্রথমে এই IP-এর জন্য একটি সাবনেট নথিভুক্ত করুন।",
+  "IP is already assigned to another device.": "IP ইতিমধ্যে অন্য ডিভাইসে বরাদ্দ করা হয়েছে।",
+  "Invalid host adapter.": "অবৈধ হোস্ট অ্যাডাপ্টার।",
+  "Ambiguous adapter match.": "অ্যাডাপ্টারের মিল অস্পষ্ট।",
+  "Skipped": "বাদ দেওয়া হয়েছে",
+  "Failed": "ব্যর্থ",
+
   "ntfy topic URL": "ntfy বিষয়ের URL",
   "ntfy access token": "ntfy অ্যাক্সেস টোকেন",
   "Delivered via {channels}.": "{channels} দিয়ে পাঠানো হয়েছে।",

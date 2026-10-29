@@ -7,6 +7,7 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
+import { HoverDetailsSettings } from "@/components/rack/HoverDetailsSettings";
 import { TopBar } from "@/components/layout/TopBar";
 import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/Button";
@@ -530,6 +531,7 @@ export default function VisualizerView() {
         }
         actions={
           <div className="flex items-center gap-2">
+            <HoverDetailsSettings />
             <select
               value={layoutMode}
               onChange={(event) => {

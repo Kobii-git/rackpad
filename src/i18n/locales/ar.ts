@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Import host adapters and guest NIC ports.": "استورد محولات المضيف ومنافذ شبكة الضيوف.",
+  "Revoke": "إلغاء",
+  "Revoked": "ملغى",
+  "Expired": "منتهي الصلاحية",
+  "Enter a name and select at least one lab.": "أدخل اسمًا وحدد مختبرًا واحدًا على الأقل.",
+  "Hover details": "تفاصيل التمرير",
+  "Host adapters": "محولات المضيف",
+  "Invalid IP address.": "عنوان IP غير صالح.",
+  "Document a subnet for this IP first.": "وثّق شبكة فرعية لهذا العنوان أولاً.",
+  "IP is already assigned to another device.": "عنوان IP معين بالفعل لجهاز آخر.",
+  "Invalid host adapter.": "محول مضيف غير صالح.",
+  "Ambiguous adapter match.": "تطابق المحول غير واضح.",
+  "Skipped": "تم التخطي",
+  "Failed": "فشل",
+
   "ntfy topic URL": "رابط موضوع ntfy",
   "ntfy access token": "رمز وصول ntfy",
   "Delivered via {channels}.": "تم التسليم عبر {channels}.",

@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "Import host adapters and guest NIC ports.": "Voer gasheeradapters en gas-NIC-poorte in.",
+  "Revoke": "Herroep",
+  "Revoked": "Herroepte",
+  "Expired": "Verval",
+  "Enter a name and select at least one lab.": "Voer ’n naam in en kies minstens een laboratorium.",
+  "Hover details": "Sweefbesonderhede",
+  "Host adapters": "Gasheeradapters",
+  "Invalid IP address.": "Ongeldige IP-adres.",
+  "Document a subnet for this IP first.": "Dokumenteer eers ’n subnet vir hierdie IP.",
+  "IP is already assigned to another device.": "IP is reeds aan ’n ander toestel toegeken.",
+  "Invalid host adapter.": "Ongeldige gasheeradapter.",
+  "Ambiguous adapter match.": "Onduidelike adapterpassing.",
+  "Skipped": "Oorgeslaan",
+  "Failed": "Misluk",
+
   "ntfy topic URL": "ntfy-onderwerp-URL",
   "ntfy access token": "ntfy-toegangstoken",
   "Delivered via {channels}.": "Afgelewer via {channels}.",

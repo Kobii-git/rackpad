@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "Import host adapters and guest NIC ports.": "匯入主機介面卡和客體網卡連接埠。",
+  "Revoke": "撤銷",
+  "Revoked": "已撤銷",
+  "Expired": "已過期",
+  "Enter a name and select at least one lab.": "請輸入名稱並至少選擇一個實驗室。",
+  "Hover details": "懸停詳細資料",
+  "Host adapters": "主機介面卡",
+  "Invalid IP address.": "IP 位址無效。",
+  "Document a subnet for this IP first.": "請先登錄此 IP 的子網路。",
+  "IP is already assigned to another device.": "此 IP 已指派給其他裝置。",
+  "Invalid host adapter.": "主機介面卡無效。",
+  "Ambiguous adapter match.": "介面卡配對不明確。",
+  "Skipped": "已略過",
+  "Failed": "失敗",
+
   "ntfy topic URL": "ntfy主題網址",
   "ntfy access token": "ntfy存取權杖",
   "Delivered via {channels}.": "已透過{channels}傳送。",
