@@ -22,6 +22,11 @@ ports require both `PORT` and the container-side mapping to agree. Existing
 Compose healthcheck overrides must be updated too; replacing the image alone
 does not replace them. See `INSTALL.md` for custom-port and older-image guidance.
 
+All Docker Node stages use the patched Node 22.23.4 base. Candidate image smoke
+verifies the actual runtime is Node 22.23.4 or a newer Node 22 release, independently
+of the application revision. Historical upgrade/rollback fixtures are exempt from
+that candidate floor; rebuilding source does not update an already published image.
+
 The image's default UID is 10001; its group ID is assigned at build time.
 Standard deployments can use Compose's service-level `user` override with a
 matching writable data directory. `PUID`/`PGID` are not runtime settings.

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { assertPatchedImageRuntime } from "./image-runtime.mjs";
 
 const usage = "node scripts/check-release-image.mjs --image ghcr.io/kobii-git/rackpad@sha256:DIGEST|sha256:LOCAL_IMAGE_ID --previous-image ghcr.io/kobii-git/rackpad@sha256:DIGEST [--previous-schema 51|53] --platform linux/amd64|linux/arm64 --revision COMMIT_SHA";
 const options = {};
@@ -261,6 +262,10 @@ try {
     assert.equal(`${details.Os}/${details.Architecture}`, platform);
     if (reference === image) assert.equal(details.Config.Labels["org.opencontainers.image.revision"], revision);
   }
+  // Check only the candidate; historical baselines remain isolated recovery fixtures.
+  const runtime = docker(["run", "--rm", ...isolation, "--network", "none", "--entrypoint", "node", image, "--print", "process.versions.node"]).stdout.trim();
+  assertPatchedImageRuntime(runtime);
+  console.log(`Release image smoke ${platform}: candidate Node ${runtime}.`);
   docker(["network", "create", "--internal", "--label", `rackpad.release-smoke=${nonce}`, network]);
   networkCreated = true;
   const peer = `${prefix}-http`;

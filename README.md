@@ -30,9 +30,9 @@ devices, ports, cables, Networks/IPAM, storage, Wi-Fi, compute, discovery,
 monitoring, documentation, images, integrations, reports, labs, and
 administration into one clean app.
 
-This source targets stable release **v1.8.5**.
+This source targets stable release **v1.8.6**.
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm published artifacts.
-See the [release and upgrade notes](docs/releases/v1.8.5.md).
+See the [release and upgrade notes](docs/releases/v1.8.6.md).
 
 Docker is the supported deployment; native Proxmox LXC remains experimental.
 See the [changelog](./CHANGELOG.md); the latest-tag badge may show a prerelease.
@@ -369,7 +369,7 @@ OIDC users must reset passwords in the identity provider.
 
 Use the [installation guide](./INSTALL.md) for the canonical Linux, Windows,
 Proxmox, source-build, backup, update, and recovery procedures. Stable installations
-can pin `RACKPAD_TAG=1.8.5`; `latest` follows stable and `beta` follows testing.
+can pin `RACKPAD_TAG=1.8.6`; `latest` follows stable and `beta` follows testing.
 The normal deployment uses one hardened container and a persistent SQLite volume.
 
 ## Linux test deploy
@@ -382,7 +382,7 @@ requirements and the generic service example. Docker remains the recommended pat
 Follow the [version-specific proxy instructions](./INSTALL.md#reverse-proxy-and-tls).
 Older 1.8.0 uses controlled hop counts; stable 1.8.3 and 1.8.2 beta.4 onward require explicit
 proxy IPs/CIDRs. Terminate TLS at the proxy and restrict direct application access.
-Before upgrading, read the [1.8.5 upgrade precautions](./INSTALL.md#before-upgrading-to-185)
+Before upgrading, read the [1.8.6 upgrade precautions](./INSTALL.md#before-upgrading-to-186)
 for encryption-key retention, OIDC re-login, trap opt-in, and paired rollback.
 
 ## Native development note

@@ -1,6 +1,6 @@
 # Rackpad Installation Guide
 
-Current stable release: `v1.8.5` (confirm publication below).
+Current stable release: `v1.8.6` (confirm publication below).
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm
 the immutable tag and published artifacts before installation.
 
@@ -19,7 +19,7 @@ without cloning the repo, or clone the repo and build it yourself.
 ## Main Branch Or Version Tag?
 
 - `main` is the stable source branch and is fine for cloning the latest stable code.
-- `RACKPAD_TAG=1.8.5` pins the Docker image to a known release. Git tags use
+- `RACKPAD_TAG=1.8.6` pins the Docker image to a known release. Git tags use
   the `v` prefix, but Docker image tags do not.
 - `RACKPAD_TAG=latest` follows the newest published stable GHCR image and is
   convenient for quick installs or test labs.
@@ -35,6 +35,16 @@ from `beta`; for a pinned version, use its matching `v`-prefixed Git tag. Keep t
 manifest and image version paired. The maintenance installer resolves `latest`
 to `main`, `beta` to `beta`, `dev` to `dev`, and complete version tags to matching
 Git tags; custom images use the stable manifest.
+
+## Before upgrading to 1.8.6
+
+Version 1.8.6 pins the production image to patched Node 22.23.4 and updates
+compatible security dependencies. Schema remains 55; existing configuration,
+authentication and storage behavior are unchanged. Older published images retain
+their original runtime until replaced. Native deployments must update Node
+separately. See the [1.8.6 release notes](docs/releases/v1.8.6.md) and retain a
+consistent database/configuration/key snapshot with the previous image.
+Installations upgrading from older releases must also follow the precautions below.
 
 ## Before upgrading to 1.8.5
 
@@ -127,7 +137,7 @@ TRUSTED_ORIGINS=
 Most users only change:
 
 - `RACKPAD_PORT`: host port to expose, default `3000`.
-- `RACKPAD_TAG`: release version to run, for example `1.8.5`, or `latest` for
+- `RACKPAD_TAG`: release version to run, for example `1.8.6`, or `latest` for
   the newest stable GHCR image.
 - `TRUST_PROXY`, `TRUSTED_HOSTS`, `TRUSTED_ORIGINS`: set these when using a reverse proxy.
 
@@ -369,7 +379,7 @@ sudo docker compose up --build -d
 To build an exact release instead of current `main`:
 
 ```bash
-sudo git checkout v1.8.5
+sudo git checkout v1.8.6
 sudo docker compose up --build -d
 ```
 
@@ -801,10 +811,15 @@ build tools.
 
 ## Native Node deploy
 
-For manually managed deployments, install Node 22 and native build prerequisites,
+For manually managed deployments, install Node 22.23.4 or a newer Node 22 release
+and native build prerequisites,
 run `npm ci`, `npm run build`, then `npm start`. Configure `HOST`, `PORT`,
 `DATABASE_PATH`, and the existing encryption key through a protected environment
 file. Create the data directory with ownership for the service user.
+
+Native deployments must update their installed Node runtime separately to receive
+the Brotli security fix. Updating Rackpad's source or Docker base does not update
+the host runtime; verify `node --version` under the service account.
 
 The root [rackpad.service](rackpad.service) is a generic systemd example to adapt
 for a manual installation. The managed native Proxmox helper installs its own
