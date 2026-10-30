@@ -6,6 +6,22 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.7-beta.1] - Unreleased
+
+### Fixed
+
+- Preserve lab-scoped audit history after inventory deletion, record deletion
+  events atomically on the server, and retain scopes through recovery (#211).
+- Report disabled notification settings clearly, retain sanitized failed-test
+  history, and keep history-refresh errors separate from delivery results (#199, #202).
+
+### Changed
+
+- Schema 58 stores audit ownership independently of deleted inventory. Keep the
+  previous image with its pre-upgrade database snapshot for rollback.
+
+See the [beta test and upgrade notes](docs/releases/v1.8.7-beta.1.md).
+
 ## [1.8.7-beta.0] - 2026-10-29
 
 ### Added

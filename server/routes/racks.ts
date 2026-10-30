@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import { isStackType, validateStackPlacement, unmountStack } from '../lib/device-stacks.js'
 import { optionalHeaderColor } from '../lib/presentation.js'
 import type { FastifyPluginAsync } from 'fastify'
@@ -104,7 +105,7 @@ export const racksRoutes: FastifyPluginAsync = async (app) => {
     return db.prepare('SELECT * FROM racks WHERE id = ?').get(req.params.id)
   })
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "Rack", entityId: req.params.id, action: "rack.delete" }, () => {
     const row = db.prepare('SELECT * FROM racks WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
     if (!assertLabWriteFromRow(req, reply, row)) return
     const removeRack = db.transaction(() => {
@@ -114,6 +115,6 @@ export const racksRoutes: FastifyPluginAsync = async (app) => {
       db.prepare('DELETE FROM racks WHERE id = ?').run(req.params.id)
     })
     removeRack()
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 }

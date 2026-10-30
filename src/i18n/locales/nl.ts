@@ -26,6 +26,7 @@ export const nl = {
   "ntfy timed out. Try again later.": "Time-out bij ntfy. Probeer het later opnieuw.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy heeft het bericht geweigerd. Controleer onderwerprechten en authenticatie.",
   "ntfy rate limit reached. Try again later.": "ntfy-aanvraaglimiet bereikt. Probeer het later opnieuw.",
+  "Enable notifications before sending a test alert.": "Schakel meldingen in voordat u een testwaarschuwing verstuurt.",
   "Notification delivery failed. Check the configured channels.": "Melding verzenden mislukt. Controleer de ingestelde kanalen.",
 
   "Check the SMTP host, sender and recipient settings.": "Controleer de SMTP-host, afzender en ontvangerinstellingen.",

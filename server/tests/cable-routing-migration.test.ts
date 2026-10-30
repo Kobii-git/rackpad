@@ -35,7 +35,7 @@ test("schema 51 upgrades routing metadata, validates native backups, and cleans 
     migrate();
     const legacy = new Database(file);
     legacy.pragma("foreign_keys=ON");
-    legacy.exec(`ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete; DROP TRIGGER cable_guide_device_room; DROP TRIGGER cable_guide_rack_room;
+    legacy.exec(`ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition; DROP TRIGGER cable_guide_device_delete; DROP TRIGGER cable_guide_device_room; DROP TRIGGER cable_guide_rack_room;
       DROP TABLE deviceStackMemberLayouts; ALTER TABLE portLinks DROP COLUMN routeMode; ALTER TABLE portLinks DROP COLUMN routeGuides; UPDATE schemaVersion SET version=51;
       INSERT INTO labs(id,name) VALUES ('test','Test');
       INSERT INTO rooms(id,labId,name) VALUES ('room','test','Room');

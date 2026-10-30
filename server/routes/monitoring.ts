@@ -1,3 +1,5 @@
+import { writeAuditLogEntry } from '../lib/audit-log.js';
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
 import { db } from '../db.js'
 import { requireAuth } from '../lib/auth.js'
@@ -497,7 +499,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     return listMonitors(String(current.deviceId)).find((monitor) => monitor.id === req.params.id) ?? null
   })
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "DeviceMonitor", entityId: req.params.id, action: "monitor.delete" }, () => {
     if (!requireAuth(req, reply)) return
 
     const existing = db.prepare('SELECT id, deviceId FROM deviceMonitors WHERE id = ?').get(req.params.id) as { id: string; deviceId: string } | undefined
@@ -509,8 +511,8 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
 
     db.prepare('DELETE FROM deviceMonitors WHERE id = ?').run(req.params.id)
     reconcileDeviceMonitorRollup(existing.deviceId)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 
   app.post('/run', async (req, reply) => {
     if (!requireAuth(req, reply)) return
@@ -703,16 +705,5 @@ function writeMonitorAudit(
   entityId: string,
   summary: string,
 ) {
-  db.prepare(`
-    INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    createId('a'),
-    new Date().toISOString(),
-    actor,
-    action,
-    'Device',
-    entityId,
-    summary,
-  )
+  writeAuditLogEntry({ user: actor, action, entityType: 'Device', entityId, summary })
 }

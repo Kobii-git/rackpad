@@ -52,8 +52,9 @@ data boundaries as application code even when they are not shipped at runtime.
 3. Browser requests pass host/origin and typed route authorization; public and
    admin access is central while lab access is resolved by handlers before SQL.
 4. Domain mutations use parameterized SQL and transactions where multi-row
-   atomicity matters; audit coverage is mixed server/client and is activity
-   history rather than a tamper-evident ledger.
+   atomicity matters. Inventory deletion events are server-written in the same
+   transaction, with durable lab ownership. Other audit coverage is mixed
+   server/client; this is activity history rather than a tamper-evident ledger.
 5. Outbound monitor, alert, Docker, and controller HTTP flows pass through the
    DNS-pinned network guard.
 6. `/data/rackpad.db` is the normal persistent state; images are stored in SQLite.

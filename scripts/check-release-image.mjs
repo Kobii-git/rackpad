@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { assertPatchedImageRuntime } from "./image-runtime.mjs";
 
-const usage = "node scripts/check-release-image.mjs --image ghcr.io/kobii-git/rackpad@sha256:DIGEST|sha256:LOCAL_IMAGE_ID --previous-image ghcr.io/kobii-git/rackpad@sha256:DIGEST [--previous-schema 51|53|55] --platform linux/amd64|linux/arm64 --revision COMMIT_SHA";
+const usage = "node scripts/check-release-image.mjs --image ghcr.io/kobii-git/rackpad@sha256:DIGEST|sha256:LOCAL_IMAGE_ID --previous-image ghcr.io/kobii-git/rackpad@sha256:DIGEST [--previous-schema 51|53|55|57] --platform linux/amd64|linux/arm64 --revision COMMIT_SHA";
 const options = {};
 const args = process.argv.slice(2);
 if (args.length === 1 && args[0] === "--help") {
@@ -30,7 +30,7 @@ const schemaMatch = schemaSource.match(/^export const CURRENT_SCHEMA_VERSION = (
 assert.ok(schemaMatch, "Current schema declaration is invalid.");
 const currentSchema = Number(schemaMatch[1]);
 assert.ok(Number.isSafeInteger(currentSchema), "Current schema version is invalid.");
-assert.ok([51, 53, 55].includes(previousSchema), "Previous schema must be 51, 53 or 55.");
+assert.ok([51, 53, 55, 57].includes(previousSchema), "Previous schema must be 51, 53, 55 or 57.");
 const immutableImage = /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/;
 const localImage = /^sha256:[a-f0-9]{64}$/;
 assert.ok(immutableImage.test(image ?? "") || localImage.test(image ?? ""), "Candidate must be an immutable Rackpad GHCR digest or local image ID.");
@@ -179,6 +179,12 @@ async function exerciseApi({ credentials, nonce, create, features, expectedSchem
     const monitor = await call("POST", "/api/device-monitors", { deviceId: stack.id, name: "Fixture HTTP", type: "http", target: "release-smoke-peer", port: 8787, path: "/health", intervalMs: 86_400_000, enabled: true });
     const service = await call("POST", "/api/device-services", { deviceId: peer.id, name: "Release service", serviceType: "custom", portId: peerPort.id, monitorId: monitor.id, url: "https://service.example.test:8443/" }, 201);
     state = { serviceId: service.id, serviceEndpoint: false, nonce, labId: lab.id, roomId: room.id, rackId: rack.id, stackId: stack.id, peerId: peer.id, memberIds, portIds, peerPortId: peerPort.id, templateIds, cableId: cable.id, monitorId: monitor.id, features: false };
+    if (expectedSchema >= 57) {
+      const subject = await call("POST", "/api/devices", { labId: lab.id, hostname: "audit-delete-fixture", deviceType: "other" }, 201);
+      const known = await call("POST", "/api/audit", { action: "fixture.audit", entityType: "Device", entityId: subject.id, summary: "Disposable pre-upgrade history" }, 201);
+      const unknown = await call("POST", "/api/audit", { action: "fixture.audit", entityType: "Device", entityId: "missing-release-fixture", summary: "Disposable unresolved history" }, 201);
+      state.audit = { subjectId: subject.id, knownId: known.id, unknownId: unknown.id, deleted: false };
+    }
     fs.writeFileSync("/data/.release-smoke.json", JSON.stringify(state), { mode: 0o600 });
   } else {
     state = JSON.parse(fs.readFileSync("/data/.release-smoke.json", "utf8"));
@@ -257,6 +263,28 @@ async function exerciseApi({ credentials, nonce, create, features, expectedSchem
     assert.ok(composed.snapshot.portSlots.some(slot => slot.face === "front"));
     assert.ok(composed.snapshot.portSlots.some(slot => slot.face === "rear"));
     assert.deepEqual((await call("GET", `/api/devices/${state.stackId}/stack-members`)).map(member => member.id), [...state.memberIds].reverse());
+  }
+  if (state.audit) {
+    const known = await call("GET", `/api/audit?entityType=Device&entityId=${state.audit.subjectId}`);
+    assert.ok(known.some(row => row.id === state.audit.knownId), "Pre-upgrade audit history must survive.");
+    const unknown = await call("GET", "/api/audit?entityType=Device&entityId=missing-release-fixture");
+    assert.ok(unknown.some(row => row.id === state.audit.unknownId));
+    if (expectedSchema >= 58) {
+      assert.deepEqual(known.find(row => row.id === state.audit.knownId).labIds, [state.labId]);
+      assert.equal(unknown.find(row => row.id === state.audit.unknownId).labIds, null);
+      if (!state.audit.deleted) {
+        await call("DELETE", `/api/devices/${state.audit.subjectId}`, undefined, 204);
+        state.audit.deleted = true;
+        fs.writeFileSync("/data/.release-smoke.json", JSON.stringify(state), { mode: 0o600 });
+      }
+      const history = await call("GET", `/api/audit?entityType=Device&entityId=${state.audit.subjectId}`);
+      assert.ok(history.some(row => row.id === state.audit.knownId));
+      assert.ok(history.some(row => row.action === "device.delete"));
+      assert.ok(history.every(row => JSON.stringify(row.labIds) === JSON.stringify([state.labId])));
+    } else {
+      // Paired rollback uses the untouched old database, including the live subject.
+      assert.equal((await call("GET", `/api/devices/${state.audit.subjectId}`)).hostname, "audit-delete-fixture");
+    }
   }
   const database = new Database("/data/rackpad.db", { readonly: true, fileMustExist: true });
   try {

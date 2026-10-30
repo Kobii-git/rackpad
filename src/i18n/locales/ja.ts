@@ -26,6 +26,7 @@ export const ja = {
   "ntfy timed out. Try again later.": "ntfyがタイムアウトしました。後でもう一度お試しください。",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfyがメッセージを拒否しました。トピック権限と認証を確認してください。",
   "ntfy rate limit reached. Try again later.": "ntfyのリクエスト制限に達しました。後でもう一度お試しください。",
+  "Enable notifications before sending a test alert.": "テストアラートを送信する前に通知を有効にしてください。",
   "Notification delivery failed. Check the configured channels.": "通知の配信に失敗しました。設定したチャネルを確認してください。",
 
   "Check the SMTP host, sender and recipient settings.": "SMTPホスト、送信者、受信者の設定を確認してください。",

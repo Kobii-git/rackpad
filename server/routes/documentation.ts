@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import {
@@ -184,7 +185,7 @@ export const documentationRoutes: FastifyPluginAsync = async (app) => {
       .get(req.params.id);
   });
 
-  app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/:id", (req, reply) => withAuditedDeletion(req, reply, { entityType: "DocumentationPage", entityId: req.params.id, action: "documentation.delete" }, () => {
     const row = db
       .prepare("SELECT * FROM documentationPages WHERE id = ?")
       .get(req.params.id) as Record<string, unknown> | undefined;
@@ -192,8 +193,8 @@ export const documentationRoutes: FastifyPluginAsync = async (app) => {
     db.prepare("DELETE FROM documentationPages WHERE id = ?").run(
       req.params.id,
     );
-    return reply.status(204).send();
-  });
+    return true as const;
+  }));
 
   app.post<{ Params: { pageId: string } }>(
     "/:pageId/device-links",
@@ -238,7 +239,7 @@ export const documentationRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { pageId: string; deviceId: string } }>(
     "/:pageId/device-links/:deviceId",
-    async (req, reply) => {
+    (req, reply) => withAuditedDeletion(req, reply, { entityType: "DocumentationPage", entityId: req.params.pageId, action: "documentation.device.unlink", summary: `Unlinked documentation page ${req.params.pageId} from device ${req.params.deviceId}` }, () => {
       const page = db
         .prepare("SELECT * FROM documentationPages WHERE id = ?")
         .get(req.params.pageId) as Record<string, unknown> | undefined;
@@ -252,7 +253,7 @@ export const documentationRoutes: FastifyPluginAsync = async (app) => {
       if (result.changes === 0) {
         return reply.status(404).send({ error: "Documentation link not found." });
       }
-      return reply.status(204).send();
-    },
+      return true as const;
+    }),
   );
 };

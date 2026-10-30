@@ -26,6 +26,7 @@ export const he = {
   "ntfy timed out. Try again later.": "תם זמן ההמתנה ל־ntfy. נסו שוב מאוחר יותר.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy דחה את ההודעה. בדקו הרשאות נושא ואימות.",
   "ntfy rate limit reached. Try again later.": "הגעתם למגבלת הבקשות של ntfy. נסו שוב מאוחר יותר.",
+  "Enable notifications before sending a test alert.": "יש להפעיל התראות לפני שליחת התראת בדיקה.",
   "Notification delivery failed. Check the configured channels.": "מסירת ההתראה נכשלה. בדקו את הערוצים המוגדרים.",
 
   "Check the SMTP host, sender and recipient settings.": "יש לבדוק את הגדרות שרת SMTP, השולח והנמען.",

@@ -460,9 +460,11 @@ test("pre-merge smoke builds unpublished immutable candidates and tests stable a
   assert.equal(build.with.labels, "org.opencontainers.image.revision=${{ github.sha }}");
   const smoke = job.steps.find(step => step.env?.CANDIDATE_IMAGE);
   assert.equal(smoke.env.CANDIDATE_IMAGE, "${{ steps.candidate.outputs.imageid }}");
-  for (const key of ["STABLE_IMAGE", "BETA_IMAGE"]) assert.match(smoke.env[key], /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/);
+  for (const key of ["STABLE_IMAGE", "BETA_IMAGE", "SCHEMA55_IMAGE", "SCHEMA57_IMAGE"]) assert.match(smoke.env[key], /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/);
   assert(smoke.run.includes('--previous-image "$STABLE_IMAGE" --previous-schema 51'));
   assert(smoke.run.includes('--previous-image "$BETA_IMAGE" --previous-schema 53'));
+  assert(smoke.run.includes('--previous-image "$SCHEMA57_IMAGE" --previous-schema 57'));
+  assert.equal(smoke.env.SCHEMA57_IMAGE, "ghcr.io/kobii-git/rackpad@sha256:a9652c980a17ae0ce4638492402d1cab54f876a3b6901bd8cf906eed18889ff5");
   assert(!job.steps.some(step => step.uses?.startsWith("docker/login-action")));
 });
 
@@ -471,7 +473,7 @@ test("candidate smoke follows current schema across migrations while retaining p
   const source = readFileSync(new URL("./check-release-image.mjs", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "")
     .replaceAll("import.meta.url", JSON.stringify("file:///rackpad-fixture/scripts/check-release-image.mjs"));
-  for (const currentSchema of [55, 56, 57]) for (const previousSchema of [51, 53, 55]) for (const platform of ["linux/amd64", "linux/arm64"]) {
+  for (const currentSchema of [58, 59, 60]) for (const previousSchema of [51, 53, 55, 57]) for (const platform of ["linux/amd64", "linux/arm64"]) {
     const exercises = [];
     const selectedImages = new Map();
     let nonce = 0;

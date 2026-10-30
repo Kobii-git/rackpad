@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import {
@@ -90,12 +91,12 @@ export const vlansRoutes: FastifyPluginAsync = async (app) => {
     return db.prepare('SELECT * FROM vlanRanges WHERE id = ?').get(req.params.id)
   })
 
-  app.delete<{ Params: { id: string } }>('/ranges/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/ranges/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "VlanRange", entityId: req.params.id, action: "vlan.range.delete" }, () => {
     const row = db.prepare('SELECT * FROM vlanRanges WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
     if (!assertLabWriteFromRow(req, reply, row)) return
     db.prepare('DELETE FROM vlanRanges WHERE id = ?').run(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const row = db.prepare('SELECT * FROM vlans WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
@@ -143,10 +144,10 @@ export const vlansRoutes: FastifyPluginAsync = async (app) => {
     return db.prepare('SELECT * FROM vlans WHERE id = ?').get(req.params.id)
   })
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "Vlan", entityId: req.params.id, action: "vlan.delete" }, () => {
     const row = db.prepare('SELECT * FROM vlans WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
     if (!assertLabWriteFromRow(req, reply, row)) return
     db.prepare('DELETE FROM vlans WHERE id = ?').run(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 }

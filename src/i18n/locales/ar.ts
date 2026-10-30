@@ -26,6 +26,7 @@ export const ar = {
   "ntfy timed out. Try again later.": "انتهت مهلة ntfy. حاول لاحقًا.",
   "ntfy rejected the message. Check topic permissions and authentication.": "رفض ntfy الرسالة. تحقق من أذونات الموضوع والمصادقة.",
   "ntfy rate limit reached. Try again later.": "تم بلوغ حد طلبات ntfy. حاول لاحقًا.",
+  "Enable notifications before sending a test alert.": "فعّل الإشعارات قبل إرسال تنبيه اختباري.",
   "Notification delivery failed. Check the configured channels.": "فشل تسليم الإشعار. تحقق من القنوات المهيأة.",
 
   "Check the SMTP host, sender and recipient settings.": "تحقق من إعدادات مضيف SMTP والمرسل والمستلم.",

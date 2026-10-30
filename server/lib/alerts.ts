@@ -113,11 +113,10 @@ export const saveAlertSettings = db.transaction((value: Partial<AlertSettings> &
 
 export async function sendTestAlert(actor = 'system') {
   const settings = loadStoredAlertSettings()
-  if (!settings.enabled) {
-    throw new Error('Enable notifications before sending a test alert.')
-  }
-
   try {
+    if (!settings.enabled) {
+      throw new NotificationDeliveryError('notification_disabled')
+    }
     const result = await dispatchAlert(
       settings,
       [
@@ -136,13 +135,15 @@ export async function sendTestAlert(actor = 'system') {
 
     return result
   } catch (error) {
+    const failure = error instanceof SmtpDeliveryError || error instanceof NotificationDeliveryError
+      ? error : new NotificationDeliveryError('notification_delivery')
     recordAlertAudit({
       action: 'alert.error',
       actor,
-      summary: `Test alert failed: ${error instanceof Error ? truncate(error.message, 260) : 'Unknown error'}`,
+      summary: `Test alert failed: ${failure.message}`,
     })
-    if (error instanceof SmtpDeliveryError) console.error('[rackpad] SMTP test failed', error.category)
-    throw error
+    console.error('[rackpad] notification test failed', failure instanceof SmtpDeliveryError ? `smtp_${failure.category}` : failure.code)
+    throw failure
   }
 }
 

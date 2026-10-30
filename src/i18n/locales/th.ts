@@ -26,6 +26,7 @@ export const th = {
   "ntfy timed out. Try again later.": "ntfy หมดเวลา ลองอีกครั้งในภายหลัง",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy ปฏิเสธข้อความ ตรวจสอบสิทธิ์หัวข้อและการยืนยันตัวตน",
   "ntfy rate limit reached. Try again later.": "ถึงขีดจำกัดคำขอ ntfy แล้ว ลองอีกครั้งในภายหลัง",
+  "Enable notifications before sending a test alert.": "เปิดใช้งานการแจ้งเตือนก่อนส่งการแจ้งเตือนทดสอบ",
   "Notification delivery failed. Check the configured channels.": "ส่งการแจ้งเตือนไม่สำเร็จ ตรวจสอบช่องทางที่ตั้งค่าไว้",
 
   "Check the SMTP host, sender and recipient settings.": "ตรวจสอบการตั้งค่าโฮสต์ SMTP ผู้ส่ง และผู้รับ",

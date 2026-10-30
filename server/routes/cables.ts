@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import { writeAuditLogEntry } from "../lib/audit-log.js";
@@ -613,7 +614,7 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
     );
   });
 
-  app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/:id", (req, reply) => withAuditedDeletion(req, reply, { entityType: "PortLink", entityId: req.params.id, action: "port.unlink" }, () => {
     const link = db
       .prepare("SELECT * FROM portLinks WHERE id = ?")
       .get(req.params.id) as
@@ -649,6 +650,6 @@ export const cablesRoutes: FastifyPluginAsync = async (app) => {
       });
     })();
 
-    return reply.status(204).send();
-  });
+    return true as const;
+  }));
 };
