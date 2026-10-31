@@ -125,6 +125,7 @@ define({ kind: "admin", denialMessage: "Administrator access is required." }, [
 ]);
 
 define({ kind: "lab-read" }, [
+  "GET /api/references/:reference",
   "GET /api/device-images",
   "GET /api/device-images/:id",
   "GET /api/device-monitors",
@@ -184,6 +185,7 @@ define({ kind: "lab-read" }, [
 ]);
 
 define({ kind: "lab-write" }, [
+  "POST /api/references/:kind/:id",
   "DELETE /api/device-images/:id",
   "DELETE /api/device-monitors/:id",
   "DELETE /api/device-services/:id",

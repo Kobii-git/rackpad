@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from 'fastify'
 import { db, parseRow } from '../db.js'
 import {
@@ -452,7 +453,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     return parseSubnet(row)
   })
 
-  app.delete<{ Params: { id: string } }>('/subnets/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/subnets/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "Subnet", entityId: req.params.id, action: "subnet.delete" }, () => {
     const row = db.prepare('SELECT * FROM subnets WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
     if (!assertLabWriteFromRow(req, reply, row)) return
     const integrity = getSubnetIntegrity({
@@ -465,8 +466,8 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(403).send({ error: 'Administrator access is required to delete a conflicted subnet.' })
     }
     db.prepare('DELETE FROM subnets WHERE id = ?').run(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 
   app.post('/networks', async (req, reply) => {
     const body = asObject(req.body)
@@ -707,7 +708,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     return parseScope(row)
   })
 
-  app.delete<{ Params: { id: string } }>('/dhcp-scopes/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/dhcp-scopes/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "DhcpScope", entityId: req.params.id, action: "dhcp.scope.delete" }, () => {
     const row = db.prepare(`
       SELECT dhcpScopes.id, dhcpScopes.subnetId, subnets.labId
       FROM dhcpScopes
@@ -721,8 +722,8 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     )
     if (!assertLabWriteFromRow(req, reply, row)) return
     db.prepare('DELETE FROM dhcpScopes WHERE id = ?').run(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 
   app.get<{ Querystring: { subnetId?: string; labId?: string } }>('/ip-zones', async (req, reply) => {
     if (!req.authUser) {
@@ -817,7 +818,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     return db.prepare('SELECT * FROM ipZones WHERE id = ?').get(req.params.id)
   })
 
-  app.delete<{ Params: { id: string } }>('/ip-zones/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/ip-zones/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "IpZone", entityId: req.params.id, action: "ip.zone.delete" }, () => {
     const row = db.prepare(`
       SELECT ipZones.id, ipZones.subnetId, subnets.labId
       FROM ipZones
@@ -831,8 +832,8 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     )
     if (!assertLabWriteFromRow(req, reply, row)) return
     db.prepare('DELETE FROM ipZones WHERE id = ?').run(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 
   app.get<{ Querystring: { subnetId?: string; deviceId?: string; labId?: string } }>('/ip-assignments', async (req, reply) => {
     if (!req.authUser) {
@@ -1023,7 +1024,7 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     return serializeAssignmentWithIntegrity(updated, updatedSubnet.labId, isGlobalAdmin(req.authUser))
   })
 
-  app.delete<{ Params: { id: string } }>('/ip-assignments/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/ip-assignments/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "IpAssignment", entityId: req.params.id, action: "ip.release" }, () => {
     const row = getAssignmentLabRow(req.params.id)
     if (!assertLabReadFromRow(req, reply, row)) return
 
@@ -1052,6 +1053,6 @@ export const ipamRoutes: FastifyPluginAsync = async (app) => {
     })
 
     deleteAssignment(req.params.id, assignment?.deviceId, assignment?.ipAddress ?? '', assignment?.labId ?? '')
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 }

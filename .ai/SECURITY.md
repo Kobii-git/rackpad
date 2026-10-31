@@ -114,3 +114,11 @@ appear in public settings or portable backups. Native snapshots retain the
 ciphertext and require the matching key. Channel diagnostics use allowlisted
 categories; never include provider response bodies or authorization headers.
 A partial channel success counts as delivery, with failures reported separately.
+
+## Audit history ownership
+
+Audit lab scopes are server-derived snapshots. Client-provided scopes are ignored.
+Unscoped history is admin-only; entity-specific non-admin reads require current
+read permission for every captured lab, including both cable endpoints. Global
+listing remains admin-only. Deleted subjects do not remove event ownership, and
+revoked grants immediately remove access to their historical events.

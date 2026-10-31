@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const it = {
+  "Hide Disabled Ports": "Nascondi porte disabilitate",
+  "Find reference": "Trova riferimento",
+  "Generate references": "Genera riferimenti",
+  "Print labels": "Stampa etichette",
+
   "Import host adapters and guest NIC ports.": "Importa adattatori host e porte di rete guest.",
   "Revoke": "Revoca",
   "Revoked": "Revocato",
@@ -26,6 +31,7 @@ export const it = {
   "ntfy timed out. Try again later.": "Timeout di ntfy. Riprova più tardi.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy ha rifiutato il messaggio. Controlla autorizzazioni dell’argomento e autenticazione.",
   "ntfy rate limit reached. Try again later.": "Limite di richieste ntfy raggiunto. Riprova più tardi.",
+  "Enable notifications before sending a test alert.": "Abilita le notifiche prima di inviare un avviso di prova.",
   "Notification delivery failed. Check the configured channels.": "Invio della notifica non riuscito. Controlla i canali configurati.",
 
   "Check the SMTP host, sender and recipient settings.": "Controlla le impostazioni di host SMTP, mittente e destinatario.",

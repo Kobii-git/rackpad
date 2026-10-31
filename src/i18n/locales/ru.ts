@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const ru = {
+  "Hide Disabled Ports": "Скрыть отключённые порты",
+  "Find reference": "Найти идентификатор",
+  "Generate references": "Создать идентификаторы",
+  "Print labels": "Печать этикеток",
+
   "Import host adapters and guest NIC ports.": "Импортируйте адаптеры хоста и сетевые порты гостей.",
   "Revoke": "Отозвать",
   "Revoked": "Отозван",
@@ -26,6 +31,7 @@ export const ru = {
   "ntfy timed out. Try again later.": "Время ожидания ntfy истекло. Повторите позже.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy отклонил сообщение. Проверьте права темы и аутентификацию.",
   "ntfy rate limit reached. Try again later.": "Достигнут лимит запросов ntfy. Повторите позже.",
+  "Enable notifications before sending a test alert.": "Включите уведомления перед отправкой тестового оповещения.",
   "Notification delivery failed. Check the configured channels.": "Не удалось доставить уведомление. Проверьте настроенные каналы.",
 
   "Check the SMTP host, sender and recipient settings.": "Проверьте настройки узла SMTP, отправителя и получателя.",

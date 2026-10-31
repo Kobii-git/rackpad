@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Hide Disabled Ports": "隐藏已禁用端口",
+  "Find reference": "查找引用",
+  "Generate references": "生成引用",
+  "Print labels": "打印标签",
+
   "Import host adapters and guest NIC ports.": "导入主机适配器和客户机网卡端口。",
   "Revoke": "撤销",
   "Revoked": "已撤销",
@@ -26,6 +31,7 @@ export const zh = {
   "ntfy timed out. Try again later.": "ntfy超时。请稍后重试。",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy拒绝了消息。请检查主题权限和身份验证。",
   "ntfy rate limit reached. Try again later.": "已达到ntfy请求限制。请稍后重试。",
+  "Enable notifications before sending a test alert.": "发送测试警报前，请先启用通知。",
   "Notification delivery failed. Check the configured channels.": "通知发送失败。请检查已配置的渠道。",
 
   "Check the SMTP host, sender and recipient settings.": "请检查SMTP主机、发件人和收件人设置。",

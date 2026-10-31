@@ -1,13 +1,15 @@
+import { validatePublicReferenceRows } from "./public-references.js";
 import { parsePendingAlertState, PENDING_ALERT_FIELDS } from './notification-state.js';
 import { optionalHeaderColor, optionalLabelPosition } from "./presentation.js";
 import { parseCableRouteMode, decodeCableRouteGuides, assertCableGuideReferences } from "./cable-routing.js";
 import { validateStackIntegrity } from "./stack-integrity.js";
 import type Database from "better-sqlite3";
+import { parseAuditLabIds } from "./audit-scope.js";
 import { CURRENT_SCHEMA_VERSION } from "../schema-version.js";
 
 export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
   appSettings: ["key", "value", "updatedAt"],
-  auditLog: ["id", "ts", "user", "action", "entityType", "entityId", "summary"],
+  auditLog: ["id", "ts", "user", "action", "entityType", "entityId", "summary", "labIds"],
   deviceImages: [
     "id",
     "deviceId",
@@ -115,6 +117,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "shelfOrientation",
     "rackSide",
     "labelPosition",
+    "publicReference",
   ],
   dhcpScopes: [
     "id",
@@ -328,6 +331,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "routeWaypoints",
     "routeMode",
     "routeGuides",
+    "publicReference",
   ],
   portTemplates: [
     "id",
@@ -619,6 +623,12 @@ export function validateRackpadSqliteDatabase(
     if (columns.some(column => PENDING_ALERT_FIELDS.some(field => field === column.name)))
       throw new RackpadSqliteValidationError(`${label} has inconsistent legacy notification schema.`);
   }
+  if (schema.version < 58 && (database.prepare("PRAGMA table_info(auditLog)").all() as Array<{ name: string }>).some(column => column.name === "labIds"))
+    throw new RackpadSqliteValidationError(`${label} has inconsistent legacy audit schema.`);
+  if (schema.version < 59) for (const table of ["devices", "portLinks"]) {
+    if ((database.prepare(`PRAGMA table_info(${table})`).all() as Array<{name: string}>).some(column => column.name === "publicReference"))
+      throw new RackpadSqliteValidationError(`${label} has inconsistent legacy reference schema.`);
+  }
   const missingSchema: string[] = [];
   for (const [table, requiredColumns] of Object.entries(
     CURRENT_RACKPAD_SCHEMA_COLUMNS,
@@ -638,6 +648,8 @@ export function validateRackpadSqliteDatabase(
       continue;
     }
     for (const column of requiredColumns) {
+      if (schema.version < 59 && column === "publicReference" && (table === "devices" || table === "portLinks")) continue;
+      if (schema.version < 58 && table === 'auditLog' && column === 'labIds') continue;
       if (schema.version < 57 && table === 'deviceMonitors' && PENDING_ALERT_FIELDS.some(field => field === column)) continue;
       if (schema.version < 56 && table === "deviceServices" &&
         (column === "networkPort" || column === "transportProtocol")) continue;
@@ -654,6 +666,17 @@ export function validateRackpadSqliteDatabase(
     );
   }
 
+  if (schema.version >= 59) {
+    try {
+      validatePublicReferenceRows(database.prepare("SELECT publicReference FROM devices").all() as Record<string, unknown>[], "device");
+      validatePublicReferenceRows(database.prepare("SELECT publicReference FROM portLinks").all() as Record<string, unknown>[], "cable");
+    } catch { throw new RackpadSqliteValidationError(`${label} contains invalid public references.`); }
+  }
+  if (schema.version >= 58) {
+    try {
+      for (const row of database.prepare("SELECT labIds FROM auditLog").all() as Array<{ labIds: unknown }>) parseAuditLabIds(row.labIds);
+    } catch { throw new RackpadSqliteValidationError(`${label} contains invalid audit lab scope.`); }
+  }
   if (schema.version >= 57) {
     try {
       for (const row of database.prepare('SELECT pendingAlertKind,pendingAlertAt,lastAlertAttemptAt FROM deviceMonitors').all() as Record<string, unknown>[])

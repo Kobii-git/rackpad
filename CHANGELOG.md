@@ -4,7 +4,32 @@ All notable Rackpad changes should be recorded here.
 
 Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
+## 1.9.0-beta.0 (candidate)
+
+- Add disabled-port filtering to cable creation and explicitly assigned checked device/cable references with authenticated lookup and printable labels (#212, #213).
+- Schema 59 preserves references through recovery; rollback requires a paired pre-upgrade snapshot.
+
+### Fixed
+
+- Stage management IPs and actual host interfaces in Proxmox API imports while preserving existing manual inventory (#208).
+
 ## [Unreleased]
+
+## [1.8.7-beta.1] - Unreleased
+
+### Fixed
+
+- Preserve lab-scoped audit history after inventory deletion, record deletion
+  events atomically on the server, and retain scopes through recovery (#211).
+- Report disabled notification settings clearly, retain sanitized failed-test
+  history, and keep history-refresh errors separate from delivery results (#199, #202).
+
+### Changed
+
+- Schema 58 stores audit ownership independently of deleted inventory. Keep the
+  previous image with its pre-upgrade database snapshot for rollback.
+
+See the [beta test and upgrade notes](docs/releases/v1.8.7-beta.1.md).
 
 ## [1.8.7-beta.0] - 2026-10-29
 

@@ -1,3 +1,4 @@
+import { CURRENT_SCHEMA_VERSION } from "../schema-version.js";
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, copyFileSync } from 'node:fs'
@@ -17,7 +18,7 @@ test('schema56 upgrade is atomic, creates no historical events, and resumes pers
   try {
     child()
     const legacy = new Database(file)
-    legacy.exec(`ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt;
+    legacy.exec(`DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt;
       ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind;
       UPDATE schemaVersion SET version=56;
       INSERT INTO labs(id,name) VALUES('lab','Fixture');
@@ -34,7 +35,7 @@ test('schema56 upgrade is atomic, creates no historical events, and resumes pers
     copyFileSync(file, snapshot)
     child(); child()
     const migrated = new Database(file)
-    assert.equal(validateRackpadSqliteDatabase(migrated, 'Migrated'), 57)
+    assert.equal(validateRackpadSqliteDatabase(migrated, 'Migrated'), CURRENT_SCHEMA_VERSION)
     assert.deepEqual(migrated.prepare('SELECT pendingAlertKind,pendingAlertAt,lastAlertAttemptAt FROM deviceMonitors').get(),
       { pendingAlertKind: null, pendingAlertAt: null, lastAlertAttemptAt: null })
     migrated.close()
@@ -42,7 +43,7 @@ test('schema56 upgrade is atomic, creates no historical events, and resumes pers
       saveAlertSettings({enabled:true,ntfyTopicUrl:'https://ntfy.example.test/topic',ntfyToken:'synthetic-restart-token'});
       db.prepare("UPDATE deviceMonitors SET pendingAlertKind='down',pendingAlertAt='2026-10-23T11:00:00.000Z',lastAlertAttemptAt='2026-10-23T11:00:00.000Z'").run();db.close();`)
     const native = new Database(file, { readonly: true })
-    assert.equal(validateRackpadSqliteDatabase(native, 'Native'), 57)
+    assert.equal(validateRackpadSqliteDatabase(native, 'Native'), CURRENT_SCHEMA_VERSION)
     const settings = JSON.parse((native.prepare("SELECT value FROM appSettings WHERE key='alertSettings'").get() as { value: string }).value)
     assert.ok(settings.ntfyTokenEnc.startsWith('enc:v1:'))
     assert.ok(!settings.ntfyTokenEnc.includes('synthetic-restart-token'))

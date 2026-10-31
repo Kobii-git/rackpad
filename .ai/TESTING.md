@@ -43,11 +43,21 @@ ownership, custom-user overrides and persistence using disposable resources.
 After image publication, `test:release:smoke` pulls the immutable build digest on
 both AMD64 and ARM64, checks its revision, exercises authenticated API writes,
 templates/member layouts and HTTP monitoring, and upgrades a disposable copy from
-the pinned schema-53 image. It verifies restart persistence and restores a
+the pinned schema-53/55/57 images. It verifies restart persistence and restores a
 separate pre-upgrade snapshot with the previous image. Both architecture jobs
 must pass before GitHub Release creation.
+
+The AMD64 candidate job also runs real Mailpit and ntfy containers against the
+production API. It checks saved settings and restart persistence, STARTTLS and
+SMTPS delivery, SMTP authentication and certificate-hostname failures, ntfy
+HTTPS delivery and revoked tokens, and safe diagnostics. Services use an
+internal Docker bridge, disposable memory-backed volumes and a temporary trusted
+CA; no host ports or TLS bypass are used. This proves server-level interoperability, not
+delivery to a reporter's mailbox, mobile client or external provider account.
 Image smoke requires a Docker client/daemon supporting API 1.49+ for explicit
 platform-specific inspection when multiple baseline variants are cached locally.
+Candidate and published-image smoke jobs install current stable Docker with the
+containerd image store and fail a capability preflight before image work.
 
 Run the bundled-font browser preflight before the long browser matrix; install
 dependencies within the worktree so Vite can serve font assets. Workflow lint and
@@ -59,6 +69,13 @@ database. The server suite already sets `DATABASE_PATH` under the OS temp
 directory; do not point tests at a working-tree or deployment database.
 
 Pull requests also build unpublished candidate images on AMD64 and ARM64 and
-verify fresh installs, actual stable schema-51/schema-55 and beta schema-53 upgrades,
+verify fresh installs, actual stable schema-51/schema-55 and beta schema-53/schema-57 upgrades,
 restart persistence and paired rollback. Candidate images are addressed by local
 immutable image IDs; previous images remain pinned GHCR digests.
+The smoke CLI also accepts schemas 58–62 up to the current schema, including
+equal-schema upgrades. Production API fixtures seed references from schema 59,
+floorplan images/markers from 60 and latest readings/bindings/disabled monitors
+from 61, plus supported provider credentials/options. Before each standalone
+publication, add the verified immediately preceding published-image pin and run
+these persistence/restart/paired-rollback cases on both Linux architectures;
+schema acceptance or mocked orchestration alone is not upgrade evidence.
