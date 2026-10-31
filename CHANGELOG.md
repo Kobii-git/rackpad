@@ -9,6 +9,10 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Add disabled-port filtering to cable creation and explicitly assigned checked device/cable references with authenticated lookup and printable labels (#212, #213).
 - Schema 59 preserves references through recovery; rollback requires a paired pre-upgrade snapshot.
 
+### Fixed
+
+- Stage management IPs and actual host interfaces in Proxmox API imports while preserving existing manual inventory (#208).
+
 ## [Unreleased]
 
 ## [1.8.7-beta.1] - Unreleased
