@@ -509,8 +509,8 @@ test("candidate smoke follows current schema across migrations while retaining p
           selectedImages.set(args[2], `sha256:${(args.at(-2).startsWith("ghcr.io/") ? "e" : "d").repeat(64)}`);
         }
         if (args[0] === "image" && args[1] === "inspect") {
-          assert(!args.includes("--platform"), "image inspect must support older Docker CLIs");
-          assert([...selectedImages.values()].includes(args[2]), "inspect the selected container's image, not a multi-platform reference");
+          assert.equal(args[args.indexOf("--platform")+1],platform,"inspect the selected architecture even when both variants are cached");
+          assert([...selectedImages.values()].includes(args.at(-1)), "inspect the selected container's image, not a multi-platform reference");
         }
         if (options.input?.startsWith("await (async function exerciseApi(")) {
           const body = options.input;
@@ -520,7 +520,7 @@ test("candidate smoke follows current schema across migrations while retaining p
         const stdout = args.includes("process.versions.node") ? "22.23.4\n" : args[0] === "info" ? "linux\n"
           : args[0] === "inspect" ? `${selectedImages.get(args.at(-1))}\n`
           : args[0] === "image" && args[1] === "inspect"
-            ? JSON.stringify([{Id: args[2], Os: "linux", Architecture: platform.split("/")[1], Config: {Labels: {"org.opencontainers.image.revision": "c".repeat(40)}}}]) : "";
+            ? JSON.stringify([{Id: `sha256:${"f".repeat(64)}`, Os: "linux", Architecture: platform.split("/")[1], Config: {Labels: {"org.opencontainers.image.revision": "c".repeat(40)}}}]) : "";
         return {status: 0, stdout, stderr: ""};
       },
     });
