@@ -4,7 +4,7 @@ All notable Rackpad changes should be recorded here.
 
 Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
-## 1.9.0-beta.2 (candidate)
+## 1.9.0-beta.2
 
 - Add read-only Uptime Kuma Prometheus inventory and latest external readings.
 - Add explicit same-lab record bindings, opt-in external monitors and polling
@@ -12,12 +12,12 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Preserve schema-61 settings, bindings, latest readings and mappings in logical
   and native recovery; require fresh observations after restart or restore.
 
-## 1.9.0-beta.1 (candidate)
+## 1.9.0-beta.1
 
 - Add room floorplans using selected room reference images and normalized rack/device markers, keyboard/drag editing, zoom and viewer navigation (#214).
 - Schema 60 keeps floorplans separate from inventory and Rack Studio; transactional room-move/deletion pruning and validated recovery preserve ownership.
 
-## 1.9.0-beta.0 (candidate)
+## 1.9.0-beta.0
 
 - Add disabled-port filtering to cable creation and explicitly assigned checked device/cable references with authenticated lookup and printable labels (#212, #213).
 - Schema 59 preserves references through recovery; rollback requires a paired pre-upgrade snapshot.
@@ -28,7 +28,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
-## [1.8.7-beta.1] - Unreleased
+## [1.8.7-beta.1]
 
 ### Fixed
 
