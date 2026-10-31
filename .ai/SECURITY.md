@@ -147,3 +147,13 @@ Redfish follows GET-only same-origin service/resource links, bounded pagination,
 and fixed capability links; it never follows Actions or emits mutation requests.
 Advertised metric timestamps remain observation times. Neither transport adds an
 inbound listener, host network requirement or root requirement.
+
+Home Assistant uses an encrypted bearer access token for GET states and an
+outbound WebSocket authentication exchange. The typed command allowlist contains
+only device/entity registry reads. WebSocket DNS is pinned to a validated numeric
+address while retaining the original Host, TLS SNI and certificate hostname check.
+Redirects, compression and automatic pong responses are disabled; bounded control
+responses, messages, fragments and payloads share the collection deadline. TLS or
+network failures fail collection rather than falling back silently. Explicit
+registry permission/capability denial permits entity-only readings with a warning.
+Neither provider attributes nor registry configuration URLs become request targets.

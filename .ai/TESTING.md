@@ -72,7 +72,12 @@ schema acceptance or mocked orchestration alone is not upgrade evidence.
 
 Standalone health regressions include `external-health*.test.ts`,
 `host-health.test.ts`, `power-health.test.ts`, `power-providers.test.ts` and
-`integration-options-migration.test.ts`; browser cases live in
+`integration-options-migration.test.ts`, `home-assistant.test.ts` and
+`home-assistant-health.test.ts`; browser cases live in
 `e2e/standalone-features.spec.ts`. Protocol/API fixtures are synthetic and do not
 prove acceptance against user installations. New native transports also require
 independent review and clean Linux image/network acceptance before publication.
+Home Assistant fixtures cover registry denial, stable grouping, read-command
+allowlisting, frame/control bounds, cancellation, original-host TLS verification,
+explicit adoption, scoped access and encrypted recovery. They do not establish
+compatibility with a particular Home Assistant account or installation.

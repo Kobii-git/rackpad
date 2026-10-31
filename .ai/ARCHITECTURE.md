@@ -86,3 +86,10 @@ explicit binding. PatchMon identities use stable host IDs. Adapter warnings are
 bounded in the existing connection summary; provider timestamps remain observation
 times, so successful collection does not freshen old PatchMon agent reports.
 Numeric Glances readings carry unknown health rather than invented thresholds.
+
+Home Assistant reads REST states, then performs authentication and exactly two
+WebSocket registry-list requests. Registry IDs stabilize grouping and entity keys;
+restricted registry access falls back to explicitly identified entity records
+with a grouping warning. It never subscribes, invokes services, changes state or
+connects to MQTT/radio protocols. Latest readings and provider inventory are
+bounded to 10,000 entries; preview adoption retains its existing 500-device cap.

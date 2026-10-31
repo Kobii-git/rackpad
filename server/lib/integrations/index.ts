@@ -1,3 +1,4 @@
+import { homeAssistantIntegrationClient } from "./providers/home-assistant.js";
 import { redfishIntegrationClient } from "./providers/redfish.js";
 import { nutIntegrationClient } from "./providers/nut.js";
 import { glancesIntegrationClient } from "./providers/glances.js";
@@ -17,6 +18,7 @@ registerIntegrationClient(uptimeKumaIntegrationClient);
 registerIntegrationClient(glancesIntegrationClient);
 registerIntegrationClient(nutIntegrationClient);
 registerIntegrationClient(redfishIntegrationClient);
+registerIntegrationClient(homeAssistantIntegrationClient);
 registerIntegrationClient(patchmonIntegrationClient);
 registerIntegrationClient(dockhandIntegrationClient);
 registerIntegrationClient(omadaIntegrationClient);

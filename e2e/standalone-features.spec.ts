@@ -649,3 +649,30 @@ test("standalone power health keeps NUT encryption opt-in explicit and Redfish r
  await page.getByRole("button",{name:/Add Redfish$/}).click();await expect(plaintext).toHaveCount(0);await expect(page.getByLabel("Username",{exact:true})).toBeVisible();await expect(page.getByRole("checkbox",{name:"Verify TLS certificate",exact:true})).toBeChecked();
  const accessibility=await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa"]).analyze();expect(accessibility.violations).toEqual([]);
 });
+
+test("standalone Home Assistant keeps bearer credentials private and shows restricted registry limitations",async({page,request})=>{
+ const {lab,headers}=await fixture(page,request);
+ await page.goto("/imports");await page.getByRole("tab",{name:"Integrations",exact:true}).click();
+ await page.getByRole("button",{name:/Add Home Assistant$/}).click();
+ await expect(page.getByLabel("Username",{exact:true})).toHaveCount(0);
+ await expect(page.getByRole("checkbox",{name:"Allow unencrypted NUT transport",exact:true})).toHaveCount(0);
+ await expect(page.getByRole("checkbox",{name:"Verify TLS certificate",exact:true})).toBeChecked();
+ await page.getByLabel("Name",{exact:true}).fill("Browser Home Assistant");
+ await page.getByLabel("Controller URL",{exact:true}).fill("https://home-assistant.example");
+ await page.getByLabel("API key",{exact:true}).fill("synthetic-browser-ha-token");
+ await page.getByRole("button",{name:"Add connection",exact:true}).click();
+ await expect(page.getByText("Browser Home Assistant",{exact:true})).toBeVisible();
+ const connections=await (await request.get(`/api/integrations/connections?labId=${lab.id}`,{headers})).json();
+ const connection=connections.find((row:{name:string})=>row.name==="Browser Home Assistant");
+ expect(connection.authKind).toBe("api-key");expect(connection.hasSecret).toBe(true);expect(connection.healthPollingEnabled).toBe(false);expect(JSON.stringify(connection)).not.toContain("synthetic-browser-ha-token");
+ const view:import("../src/lib/types").ExternalHealthView={sourceIdentity:"a".repeat(64),pollingEnabled:false,intervalSeconds:60,lastCheckedAt:null,error:null,bindings:[],monitors:[],warnings:["Home Assistant registry access is unavailable; entity-only inventory is shown."],readings:[{providerRecordId:"entity:synthetic",recordName:"MQTT temperature",key:"state",label:"Temperature",value:21.5,unit:"°C",health:"unknown",reportedHealth:"unknown",observedAt:new Date().toISOString(),stale:false,collectionError:null}]};
+ await page.route(`**/api/integrations/connections/${connection.id}/readings`,route=>route.fulfill({json:view}));
+ await page.goto(`/external-health?connectionId=${connection.id}`);
+ await expect(page.getByText(view.warnings![0],{exact:true})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"MQTT temperature",exact:true})).toBeVisible();
+ await expect(page.getByRole("cell",{name:"21.5 °C",exact:true})).toBeVisible();
+ await expect(page.getByRole("checkbox",{name:"Polling",exact:true})).not.toBeChecked();
+ await expect(page.getByRole("button",{name:"Create monitor",exact:true})).toHaveCount(0);
+ const polling=page.getByRole("checkbox",{name:"Polling",exact:true});await polling.focus();await page.keyboard.press("Space");await expect(polling).toBeChecked();
+ const accessibility=await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa"]).analyze();expect(accessibility.violations).toEqual([]);
+});

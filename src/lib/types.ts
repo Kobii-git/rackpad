@@ -593,7 +593,7 @@ export interface SnmpSyncApplyResult {
 }
 
 export type IntegrationProvider =
-  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand" | "uptime-kuma" | "glances" | "patchmon" | "nut" | "redfish";
+  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand" | "uptime-kuma" | "glances" | "patchmon" | "nut" | "redfish" | "home-assistant";
 
 export type IntegrationAuthKind =
   | "anonymous"
