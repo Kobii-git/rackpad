@@ -4,7 +4,7 @@ All notable Rackpad changes should be recorded here.
 
 Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
-## 1.9.0-beta.4 (candidate)
+## 1.9.0-beta.4
 
 - Add read-only NUT UPS inventory and health with pinned native TCP, STARTTLS
   before credentials, bounded framing and an explicit unencrypted-transport opt-in.
@@ -13,7 +13,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Append schema 62 for strictly validated provider connection options with atomic
   logical/native recovery and compatible encrypted-transport defaults.
 
-## 1.9.0-beta.3 (candidate)
+## 1.9.0-beta.3
 
 - Add Glances API v4 host inventory and CPU, memory, filesystem, network and
   sensor readings through read-only plugin endpoints.
@@ -22,7 +22,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Add PatchMon scoped `host:get` inventory/package summaries, preserving agent
   observation times and unknown health for stale or pending reports.
 
-## 1.9.0-beta.2 (candidate)
+## 1.9.0-beta.2
 
 - Add read-only Uptime Kuma Prometheus inventory and latest external readings.
 - Add explicit same-lab record bindings, opt-in external monitors and polling
@@ -30,12 +30,12 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 - Preserve schema-61 settings, bindings, latest readings and mappings in logical
   and native recovery; require fresh observations after restart or restore.
 
-## 1.9.0-beta.1 (candidate)
+## 1.9.0-beta.1
 
 - Add room floorplans using selected room reference images and normalized rack/device markers, keyboard/drag editing, zoom and viewer navigation (#214).
 - Schema 60 keeps floorplans separate from inventory and Rack Studio; transactional room-move/deletion pruning and validated recovery preserve ownership.
 
-## 1.9.0-beta.0 (candidate)
+## 1.9.0-beta.0
 
 - Add disabled-port filtering to cable creation and explicitly assigned checked device/cable references with authenticated lookup and printable labels (#212, #213).
 - Schema 59 preserves references through recovery; rollback requires a paired pre-upgrade snapshot.
@@ -46,7 +46,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
-## [1.8.7-beta.1] - Unreleased
+## [1.8.7-beta.1]
 
 ### Fixed
 
