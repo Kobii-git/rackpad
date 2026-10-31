@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { CURRENT_SCHEMA_VERSION } from "../schema-version.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -400,5 +401,5 @@ test("unknown ownership stays admin-only and logical recovery preserves deleted 
       .map((row: { labIds: string[] }) => row.labIds),
     [["a"], ["a"]],
   );
-  assert.equal(validateRackpadSqliteDatabase(db, "Fixture"), 58);
+  assert.equal(validateRackpadSqliteDatabase(db, "Fixture"), CURRENT_SCHEMA_VERSION);
 });

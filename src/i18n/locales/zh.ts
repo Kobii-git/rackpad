@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Hide Disabled Ports": "隐藏已禁用端口",
+  "Find reference": "查找引用",
+  "Generate references": "生成引用",
+  "Print labels": "打印标签",
+
   "Import host adapters and guest NIC ports.": "导入主机适配器和客户机网卡端口。",
   "Revoke": "撤销",
   "Revoked": "已撤销",

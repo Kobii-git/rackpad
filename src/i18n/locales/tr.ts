@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Hide Disabled Ports": "Devre dışı bağlantı noktalarını gizle",
+  "Find reference": "Referans bul",
+  "Generate references": "Referans oluştur",
+  "Print labels": "Etiketleri yazdır",
+
   "Import host adapters and guest NIC ports.": "Ana makine bağdaştırıcılarını ve konuk NIC bağlantı noktalarını içe aktarın.",
   "Revoke": "İptal et",
   "Revoked": "İptal edildi",

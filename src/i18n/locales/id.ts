@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Hide Disabled Ports": "Sembunyikan port nonaktif",
+  "Find reference": "Cari referensi",
+  "Generate references": "Buat referensi",
+  "Print labels": "Cetak label",
+
   "Import host adapters and guest NIC ports.": "Impor adaptor host dan port NIC tamu.",
   "Revoke": "Cabut",
   "Revoked": "Dicabut",

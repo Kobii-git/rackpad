@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "Hide Disabled Ports": "隱藏停用的連接埠",
+  "Find reference": "尋找參照",
+  "Generate references": "產生參照",
+  "Print labels": "列印標籤",
+
   "Import host adapters and guest NIC ports.": "匯入主機介面卡和客體網卡連接埠。",
   "Revoke": "撤銷",
   "Revoked": "已撤銷",

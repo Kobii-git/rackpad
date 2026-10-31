@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Hide Disabled Ports": "إخفاء المنافذ المعطلة",
+  "Find reference": "البحث عن مرجع",
+  "Generate references": "إنشاء المراجع",
+  "Print labels": "طباعة الملصقات",
+
   "Import host adapters and guest NIC ports.": "استورد محولات المضيف ومنافذ شبكة الضيوف.",
   "Revoke": "إلغاء",
   "Revoked": "ملغى",

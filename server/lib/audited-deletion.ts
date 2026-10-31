@@ -17,6 +17,9 @@ export function withAuditedDeletion(
 ) {
   const result = db.transaction(() => {
     const labIds = resolveAuditLabIds(db, subject.entityType, subject.entityId);
+    const referenceTable = subject.entityType === "Device" ? "devices" : subject.entityType === "PortLink" ? "portLinks" : null;
+    const publicReference = referenceTable ? (db.prepare(`SELECT publicReference FROM ${referenceTable} WHERE id=?`).get(subject.entityId) as { publicReference: string | null } | undefined)?.publicReference : null;
+    const suffix = publicReference ? ` [${publicReference}]` : "";
     const previousIds = new Set(
       (
         db
@@ -38,8 +41,9 @@ export function withAuditedDeletion(
     ).filter((row) => !previousIds.has(row.id));
     if (written.length) {
       for (const row of written)
-        db.prepare("UPDATE auditLog SET labIds = ? WHERE id = ?").run(
+        db.prepare("UPDATE auditLog SET labIds = ?, summary = summary || ? WHERE id = ?").run(
           labIds === null ? null : JSON.stringify(labIds),
+          suffix,
           row.id,
         );
     } else if (labIds !== null) {
@@ -47,8 +51,8 @@ export function withAuditedDeletion(
         user: req.authUser.username,
         ...subject,
         summary:
-          subject.summary ??
-          `Deleted ${subject.entityType} ${subject.entityId}`,
+          (subject.summary ??
+          `Deleted ${subject.entityType} ${subject.entityId}`) + suffix,
         labIds,
       });
     }

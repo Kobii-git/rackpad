@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { assertPatchedImageRuntime } from "./image-runtime.mjs";
 
-const usage = "node scripts/check-release-image.mjs --image ghcr.io/kobii-git/rackpad@sha256:DIGEST|sha256:LOCAL_IMAGE_ID --previous-image ghcr.io/kobii-git/rackpad@sha256:DIGEST [--previous-schema 51|53|55|57] --platform linux/amd64|linux/arm64 --revision COMMIT_SHA";
+const usage = "node scripts/check-release-image.mjs --image ghcr.io/kobii-git/rackpad@sha256:DIGEST|sha256:LOCAL_IMAGE_ID --previous-image ghcr.io/kobii-git/rackpad@sha256:DIGEST [--previous-schema 51|53|55|57|58|59|60|61|62] --platform linux/amd64|linux/arm64 --revision COMMIT_SHA";
 const options = {};
 const args = process.argv.slice(2);
 if (args.length === 1 && args[0] === "--help") {
@@ -31,7 +31,8 @@ const schemaMatch = schemaSource.match(/^export const CURRENT_SCHEMA_VERSION = (
 assert.ok(schemaMatch, "Current schema declaration is invalid.");
 const currentSchema = Number(schemaMatch[1]);
 assert.ok(Number.isSafeInteger(currentSchema), "Current schema version is invalid.");
-assert.ok([51, 53, 55, 57].includes(previousSchema), "Previous schema must be 51, 53, 55 or 57.");
+assert.ok([51, 53, 55, 57, 58, 59, 60, 61, 62].includes(previousSchema), "Previous schema must be a supported published baseline or standalone schema 58–62.");
+assert.ok(previousSchema <= currentSchema, "Previous schema cannot be newer than the candidate.");
 const immutableImage = /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/;
 const localImage = /^sha256:[a-f0-9]{64}$/;
 assert.ok(immutableImage.test(image ?? "") || localImage.test(image ?? ""), "Candidate must be an immutable Rackpad GHCR digest or local image ID.");
@@ -152,7 +153,7 @@ try {
   const peer = `${prefix}-http`;
   containers.push(peer);
   docker(["run", "-d", "--name", peer, ...isolation, "--network", network, "--network-alias", "release-smoke-peer", image,
-    "node", "--input-type=module", "-e", "import http from 'node:http'; http.createServer((req,res)=>{res.writeHead(req.url==='/health'?200:404,{'content-type':'text/plain'});res.end('fixture');}).listen(8787,'0.0.0.0');"]);
+    "node", "--input-type=module", "-e", "import http from 'node:http'; http.createServer((req,res)=>{const ok=req.url==='/health'||req.url==='/metrics';res.writeHead(ok?200:404,{'content-type':'text/plain'});res.end(req.url==='/metrics'?'monitor_status{monitor_id=\"1\",monitor_name=\"Release service\"} 1\\n':'fixture');}).listen(8787,'0.0.0.0');"]);
   execNode(peer, async () => {
     for (let attempt = 0; attempt < 30; attempt++) {
       try { if ((await fetch("http://127.0.0.1:8787/health", { signal: AbortSignal.timeout(500) })).ok) return; } catch { /* Wait for the isolated peer. */ }

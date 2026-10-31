@@ -164,6 +164,80 @@ export async function exerciseApi({ credentials, nonce, create, features, expect
       assert.equal((await call("GET", `/api/devices/${state.audit.subjectId}`)).hostname, "audit-delete-fixture");
     }
   }
+  // Seed each feature only when supported by the actual image. The stopped
+  // pre-upgrade copy therefore contains the preceding release's real records.
+  if (expectedSchema >= 59) {
+    if (!state.references) state.references = {
+      device: (await call("POST", `/api/references/device/${state.peerId}`, {})).publicReference,
+      cable: (await call("POST", `/api/references/cable/${state.cableId}`, {})).publicReference,
+    };
+    for (const [kind, id] of [["device", state.peerId], ["cable", state.cableId]]) {
+      assert.equal((await call("POST", `/api/references/${kind}/${id}`, {})).publicReference, state.references[kind]);
+      const found = await call("GET", `/api/references/${state.references[kind].toUpperCase()}`);
+      assert.equal(found.kind, kind); assert.equal(found.id, id);
+    }
+  }
+  if (expectedSchema >= 60) {
+    if (!state.floorplan) {
+      const background = await call("POST", "/api/reference-images", {
+        entityType: "room", entityId: state.roomId, label: "Release floorplan",
+        fileName: "fixture.png", mimeType: "image/png",
+        dataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+yZuoAAAAASUVORK5CYII=",
+      }, 201);
+      const plan = await call("PUT", `/api/floorplans/${state.roomId}`, {revision: 0, backgroundImageId: background.id});
+      const placed = await call("POST", `/api/floorplans/${state.roomId}/markers`, {revision: plan.revision, deviceId: state.peerId, x: 0.25, y: 0.75, label: "Release marker"});
+      state.floorplan = {backgroundImageId: background.id, markerId: placed.markers[0].id};
+    }
+    const plan = await call("GET", `/api/floorplans/${state.roomId}`);
+    assert.equal(plan.backgroundImageId, state.floorplan.backgroundImageId);
+    assert.ok(plan.background?.dataUrl?.startsWith("data:image/png;base64,"));
+    const marker = plan.markers.find(row => row.id === state.floorplan.markerId);
+    assert.ok(marker); assert.equal(marker.deviceId, state.peerId);
+    assert.equal(marker.x, 0.25); assert.equal(marker.y, 0.75);
+  }
+  if (expectedSchema >= 61) {
+    const hadExternal = Boolean(state.external);
+    if (!state.external) {
+      const connection = await call("POST", "/api/integrations/connections", {labId: state.labId, provider: "uptime-kuma", name: "Release Kuma", baseUrl: "http://release-smoke-peer:8787", authKind: "api-key", authSecret: credentials.password}, 201);
+      const endpoint = `/api/integrations/connections/${connection.id}`;
+      const readings = await call("POST", `${endpoint}/refresh`, {});
+      assert.ok(readings.readings.some(row => row.providerRecordId === "monitor:1" && row.key === "status"));
+      const bound = await call("POST", `${endpoint}/bindings`, {providerRecordId: "monitor:1", deviceId: state.peerId, sourceIdentity: readings.sourceIdentity});
+      const binding = bound.bindings.find(row => row.providerRecordId === "monitor:1");
+      const mapped = await call("POST", `${endpoint}/external-monitors`, {bindingId: binding.id, readingKey: "status"});
+      state.external = {connectionId: connection.id, bindingId: binding.id, monitorId: mapped.monitors[0].id};
+    }
+    const view = await call("GET", `/api/integrations/connections/${state.external.connectionId}/readings`);
+    assert.equal(view.pollingEnabled, false); assert.equal(view.intervalSeconds, 60);
+    assert.ok(view.readings.some(row => row.providerRecordId === "monitor:1" && row.key === "status" && row.value === "up"));
+    assert.ok(view.bindings.some(row => row.id === state.external.bindingId && row.deviceId === state.peerId));
+    const monitor = view.monitors.find(row => row.id === state.external.monitorId);
+    assert.ok(monitor); assert.equal(monitor.enabled, false); assert.equal(monitor.alertOnDegraded, false);
+    if (hadExternal) {
+      const cached = view.readings.find(row => row.providerRecordId === "monitor:1" && row.key === "status");
+      assert.equal(cached.health, "unknown"); assert.equal(cached.collectionError, "refresh_required");
+      const refreshed = await call("POST", `/api/integrations/connections/${state.external.connectionId}/refresh`, {});
+      assert.ok(refreshed.readings.some(row => row.providerRecordId === "monitor:1" && row.key === "status" && row.health === "healthy" && row.collectionError === null));
+    }
+    const providers = await call("GET", "/api/integrations/providers");
+    state.providerConnections ??= {};
+    for (const provider of ["glances", "patchmon", "nut", "redfish", "home-assistant"]) {
+      if (!providers.some(row => row.id === provider)) continue;
+      if (!state.providerConnections[provider]) {
+        const authKind = provider === "patchmon" ? "key-secret" : ["nut", "redfish"].includes(provider) ? "username-password" : "api-key";
+        const connection = await call("POST", "/api/integrations/connections", {labId: state.labId, provider, name: `Release ${provider}`, baseUrl: provider === "nut" ? "nut://release-smoke-peer:3493" : "https://provider.example.test", authKind, authId: "fixture-reader", authSecret: credentials.password, ...(provider === "nut" ? {options: {allowUnencrypted: true}} : {})}, 201);
+        state.providerConnections[provider] = connection.id;
+      }
+    }
+    const connections = await call("GET", `/api/integrations/connections?labId=${state.labId}`);
+    for (const id of [state.external.connectionId, ...Object.values(state.providerConnections)]) {
+      const connection = connections.find(row => row.id === id);
+      assert.ok(connection); assert.equal(connection.hasSecret, true); assert.equal(connection.healthPollingEnabled, false);
+      assert.ok(!JSON.stringify(connection).includes(credentials.password), "Connection credentials must remain write-only.");
+      if (connection.provider === "nut") assert.deepEqual(connection.options, {allowUnencrypted: true});
+    }
+  }
+  fs.writeFileSync(stateFile, JSON.stringify(state), {mode: 0o600});
   const database = new Database(`${dataDirectory}/rackpad.db`, { readonly: true, fileMustExist: true });
   try {
     assert.equal(database.prepare("SELECT version FROM schemaVersion WHERE id=1").get().version, expectedSchema);

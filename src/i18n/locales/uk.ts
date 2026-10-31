@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const uk = {
+  "Hide Disabled Ports": "Приховати вимкнені порти",
+  "Find reference": "Знайти ідентифікатор",
+  "Generate references": "Створити ідентифікатори",
+  "Print labels": "Друк етикеток",
+
   "Import host adapters and guest NIC ports.": "Імпортуйте адаптери хоста та мережеві порти гостей.",
   "Revoke": "Відкликати",
   "Revoked": "Відкликано",

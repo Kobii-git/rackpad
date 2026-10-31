@@ -1,3 +1,4 @@
+import { validatePublicReferenceRows } from "../lib/public-references.js";
 import { backfillAuditScopes, parseAuditLabIds } from "../lib/audit-scope.js";
 import { parsePendingAlertState } from '../lib/notification-state.js';
 import { invalidateMonitorObservations } from '../lib/monitoring.js';
@@ -1598,6 +1599,8 @@ const restoreBackupSnapshot = db.transaction(
       }
       restoredDefaultDeviceTypes.add(deviceType);
     }
+    validatePublicReferenceRows(devices, "device");
+    validatePublicReferenceRows(portLinks, "cable");
     const backupDeviceIds = new Set(devices.map((row) => String(row.id ?? "")));
     const backupPortsByDevice = new Map<string, Set<string>>();
     for (const port of ports) {
@@ -1716,8 +1719,8 @@ const restoreBackupSnapshot = db.transaction(
     );
     const insertDevice = db.prepare(`
     INSERT INTO devices
-      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, ignoreDuplicateMac, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, rackSlot, tags, notes, lastSeen, networkMode, snmpCredentialId, rackMountKind, rackColumn, rackColumnSpan, shelfX, shelfY, shelfWidth, shelfHeight, shelfOrientation, rackSide, labelPosition)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, ignoreDuplicateMac, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, rackSlot, tags, notes, lastSeen, networkMode, snmpCredentialId, rackMountKind, rackColumn, rackColumnSpan, shelfX, shelfY, shelfWidth, shelfHeight, shelfOrientation, rackSide, labelPosition, publicReference)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const updateDeviceParent = db.prepare(`
     UPDATE devices
@@ -1739,8 +1742,8 @@ const restoreBackupSnapshot = db.transaction(
   `);
     const insertPortLink = db.prepare(
       `INSERT INTO portLinks
-        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints, routeMode, routeGuides)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints, routeMode, routeGuides, publicReference)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const insertPortTemplate = db.prepare(`
     INSERT INTO portTemplates (id, name, description, deviceTypes, ports, createdAt, updatedAt)
@@ -2304,6 +2307,7 @@ const restoreBackupSnapshot = db.transaction(
         row.shelfOrientation ?? 0,
         row.rackSide ?? null,
         optionalLabelPosition(row) ?? "upper-right",
+        row.publicReference ?? null,
       );
     }
     for (const row of stackMembers) {
@@ -2532,6 +2536,7 @@ const restoreBackupSnapshot = db.transaction(
         JSON.stringify(routeWaypoints),
         parseCableRouteMode(row.routeMode, routeWaypoints),
         JSON.stringify(parseCableRouteGuides(parseBackupJson(row.routeGuides ?? [], "Backup cable route guides"))),
+        row.publicReference ?? null,
       );
     }
     for (const row of portTemplates) {

@@ -186,6 +186,7 @@ export interface DeviceStackMember {
 }
 
 export interface Device {
+  publicReference?: string | null;
   labelPosition?: "upper-left" | "upper-right";
   stackMembers?: DeviceStackMember[];
   id: ID;
@@ -892,6 +893,7 @@ export interface VirtualSwitch {
 }
 
 export interface PortLink {
+  publicReference?: string | null;
   id: ID;
   fromPortId: ID;
   toPortId: ID;
