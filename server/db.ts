@@ -1575,13 +1575,13 @@ const SCHEMA_MIGRATIONS = [
       CREATE INDEX idx_floorplanMarkers_room ON roomFloorplanMarkers(roomId);
       CREATE TRIGGER floorplan_background_revision AFTER UPDATE OF backgroundImageId ON roomFloorplans
         WHEN NEW.backgroundImageId IS NOT OLD.backgroundImageId BEGIN
-        UPDATE roomFloorplans SET revision=revision+1,updatedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE roomId=NEW.roomId; END;
+        UPDATE roomFloorplans SET revision=CASE WHEN revision=2147483647 THEN 0 ELSE revision+1 END,updatedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE roomId=NEW.roomId; END;
       CREATE TRIGGER floorplan_marker_insert AFTER INSERT ON roomFloorplanMarkers BEGIN
-        UPDATE roomFloorplans SET revision=revision+1,updatedAt=NEW.updatedAt WHERE roomId=NEW.roomId; END;
+        UPDATE roomFloorplans SET revision=CASE WHEN revision=2147483647 THEN 0 ELSE revision+1 END,updatedAt=NEW.updatedAt WHERE roomId=NEW.roomId; END;
       CREATE TRIGGER floorplan_marker_update AFTER UPDATE ON roomFloorplanMarkers BEGIN
-        UPDATE roomFloorplans SET revision=revision+1,updatedAt=NEW.updatedAt WHERE roomId=NEW.roomId; END;
+        UPDATE roomFloorplans SET revision=CASE WHEN revision=2147483647 THEN 0 ELSE revision+1 END,updatedAt=NEW.updatedAt WHERE roomId=NEW.roomId; END;
       CREATE TRIGGER floorplan_marker_delete AFTER DELETE ON roomFloorplanMarkers BEGIN
-        UPDATE roomFloorplans SET revision=revision+1,updatedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE roomId=OLD.roomId; END;
+        UPDATE roomFloorplans SET revision=CASE WHEN revision=2147483647 THEN 0 ELSE revision+1 END,updatedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE roomId=OLD.roomId; END;
       CREATE TRIGGER floorplan_device_room AFTER UPDATE OF roomId,rackId,labId ON devices BEGIN
         DELETE FROM roomFloorplanMarkers WHERE deviceId=NEW.id AND NOT EXISTS (
           SELECT 1 FROM rooms WHERE rooms.id=roomFloorplanMarkers.roomId AND rooms.labId=NEW.labId

@@ -364,4 +364,44 @@ test("selection no-ops preserve revision and maximum valid revisions round-trip"
   assert.equal(restored.statusCode, 200, restored.body);
   headers = await login();
   assert.equal((await read()).json().revision, 2147483647);
+  const edited = await app.inject({method: "PATCH", url: `/api/floorplans/room/markers/${id}`, headers,
+    payload: {revision: 2147483647, x: 0.25}});
+  assert.equal(edited.statusCode, 200, edited.body);
+  assert.equal(edited.json().revision, 0);
+  const stale = await app.inject({method: "PATCH", url: `/api/floorplans/room/markers/${id}`, headers,
+    payload: {revision: 2147483647, x: 0.75}});
+  assert.equal(stale.statusCode, 409, stale.body);
+  db.exec("UPDATE roomFloorplans SET revision=2147483647 WHERE roomId='room'");
+  assert.equal((await put({revision: 2147483647, backgroundImageId: "image"})).revision, 0);
+  db.exec("UPDATE roomFloorplans SET revision=2147483647 WHERE roomId='room'");
+  const added = await add({revision: 2147483647, rackId: "rack"});
+  assert.equal(added.revision, 0);
+  db.exec("UPDATE roomFloorplans SET revision=2147483647 WHERE roomId='room'");
+  const removed = await app.inject({method: "DELETE", url: `/api/floorplans/room/markers/${added.markers.find((row: {rackId: string}) => row.rackId === "rack").id}`, headers,
+    payload: {revision: 2147483647}});
+  assert.equal(removed.statusCode, 200, removed.body);
+  assert.equal(removed.json().revision, 0);
 });
+
+for (const action of ["move-device", "delete-device", "move-rack"] as const) {
+  test(`restored maximum revision permits ${action} and atomic marker cleanup`, async () => {
+    let plan = await add({revision: 0, deviceId: "device"});
+    plan = await add({revision: plan.revision, deviceId: "mounted"});
+    plan = await add({revision: plan.revision, rackId: "rack"});
+    const snapshot = (await app.inject({method: "GET", url: "/api/admin/export", headers})).json();
+    snapshot.data.roomFloorplans[0].revision = action === "move-rack" ? 2147483646 : 2147483647;
+    const restored = await app.inject({method: "POST", url: "/api/admin/restore", headers, payload: snapshot});
+    assert.equal(restored.statusCode, 200, restored.body);
+    headers = await login();
+    assert.equal(validateRackpadSqliteDatabase(db, "Restored maximum"), CURRENT_SCHEMA_VERSION);
+    const response = action === "delete-device"
+      ? await app.inject({method: "DELETE", url: "/api/devices/device", headers})
+      : await app.inject({method: "PATCH", url: action === "move-rack" ? "/api/racks/rack" : "/api/devices/device", headers,
+          payload: {roomId: "other"}});
+    assert.equal(response.statusCode, action === "delete-device" ? 204 : 200, response.body);
+    const current = (await read()).json();
+    assert.equal(current.markers.length, action === "move-rack" ? 1 : 2);
+    assert.equal(current.revision, 0);
+    assert.equal(db.pragma("quick_check", {simple: true}), "ok");
+  });
+}
