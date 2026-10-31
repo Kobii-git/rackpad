@@ -54,6 +54,15 @@ HTTPS delivery and revoked tokens, and safe diagnostics. Services use an
 internal Docker bridge, disposable memory-backed volumes and a temporary trusted
 CA; no host ports or TLS bypass are used. This proves server-level interoperability, not
 delivery to a reporter's mailbox, mobile client or external provider account.
+Health candidates also run a pinned real Uptime Kuma service with an actual
+HTTP monitor and API key. Stopping its private target must change the collected
+status from healthy to unhealthy without replacing a binding. When Glances is
+implemented in the candidate, its real v4 Basic/JWT authentication, finite CPU
+and memory values, explicit bindings, rejected credentials and unavailable
+source are checked too. These services use private networking, non-root read-only
+containers and temporary memory-backed data. This checks container-level API
+interoperability; physical-host accuracy and provider HTTPS remain separate.
+
 Image smoke requires a Docker client/daemon supporting API 1.49+ for explicit
 platform-specific inspection when multiple baseline variants are cached locally.
 
