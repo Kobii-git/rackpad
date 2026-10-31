@@ -448,6 +448,38 @@ test("CodeQL preflight observes actual committed Git evidence and dirty server s
   assert(codeqlReviewProblems(readSnmpReviewContext(root)).some(problem => problem.includes("source hash differs")));
 });
 
+test("image smoke installs and verifies platform-aware Docker before image work", () => {
+  for (const name of ["candidate-smoke", "smoke"]) {
+    const steps = workflow("docker-publish").jobs[name].steps;
+    const setup = steps.findIndex(step => step.uses === "docker/setup-docker-action@v5");
+    const preflight = steps.findIndex(step => step.run === "node scripts/check-docker-platform.mjs");
+    const qemu = steps.findIndex(step => step.uses?.startsWith("docker/setup-qemu-action@"));
+    assert.ok(setup >= 0 && setup < preflight && preflight < qemu);
+    assert.equal(steps[setup].with.version, "latest");
+    assert.equal(steps[setup].with.channel, "stable");
+    assert.equal(steps[setup].with["tcp-port"], undefined);
+    assert.equal(JSON.parse(steps[setup].with["daemon-config"]).features["containerd-snapshotter"], true);
+    assert.equal(steps[preflight]["continue-on-error"], undefined);
+  }
+  const source = readFileSync(new URL("./check-docker-platform.mjs", import.meta.url), "utf8")
+    .replace(/^import .*;\n/gm, "");
+  const run = (help, versions, failed = false) => runInNewContext(source, {
+    assert, console: {log() {}},
+    execFileSync: (command, args) => {
+      assert.equal(command, "docker");
+      if (failed) throw new Error("Synthetic daemon failure");
+      return args[0] === "version" ? versions : help;
+    },
+  });
+  run("--platform string", "1.49 1.49");
+  run("--platform string", "1.54 1.54");
+  assert.throws(() => run("no platform option", "1.54 1.54"), /must support --platform/);
+  for (const versions of ["1.48 1.54", "1.54 1.48", "1.54", "invalid", "1.54 1.54 extra"]) {
+    assert.throws(() => run("--platform string", versions), /API|versions/);
+  }
+  assert.throws(() => run("--platform string", "1.54 1.54", true), /could not inspect/);
+});
+
 test("pre-merge smoke builds unpublished immutable candidates and tests stable and beta recovery", () => {
   const job = workflow("docker-publish").jobs["candidate-smoke"];
   assert.equal(job.if, "github.event_name == 'pull_request'");

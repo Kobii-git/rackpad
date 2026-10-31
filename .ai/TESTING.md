@@ -48,6 +48,8 @@ separate pre-upgrade snapshot with the previous image. Both architecture jobs
 must pass before GitHub Release creation.
 Platform-specific image inspection requires Docker Engine/API 1.49 or newer,
 including when both architecture variants of an immutable digest are cached.
+Candidate and published-image smoke jobs install current stable Docker with the
+containerd image store and fail a capability preflight before image work.
 
 Run the bundled-font browser preflight before the long browser matrix; install
 dependencies within the worktree so Vite can serve font assets. Workflow lint and
