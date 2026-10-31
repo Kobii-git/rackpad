@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "Floorplan": "房間平面圖",
+  "Zoom": "縮放",
+  "Add marker": "新增標記",
+  "Replace the background and keep marker positions?": "更換背景並保留標記位置？",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "使用方向鍵移動所選標記。按住 Shift 可加大移動幅度。",
+  "No floorplan background selected.": "尚未選取平面圖背景。",
+  "Floorplan changed. Reload before applying this edit.": "平面圖已變更。套用此編輯前請重新載入。",
+
   "Hide Disabled Ports": "隱藏停用的連接埠",
   "Find reference": "尋找參照",
   "Generate references": "產生參照",

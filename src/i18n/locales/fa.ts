@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Floorplan": "نقشه طبقه",
+  "Zoom": "بزرگ‌نمایی",
+  "Add marker": "افزودن نشانگر",
+  "Replace the background and keep marker positions?": "پس‌زمینه جایگزین شود و جای نشانگرها حفظ شود؟",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "برای جابه‌جایی نشانگر انتخاب‌شده از کلیدهای جهت استفاده کنید. برای گام‌های بزرگ‌تر Shift را نگه دارید.",
+  "No floorplan background selected.": "پس‌زمینه‌ای برای نقشه طبقه انتخاب نشده است.",
+  "Floorplan changed. Reload before applying this edit.": "نقشه طبقه تغییر کرده است. پیش از اعمال این ویرایش دوباره بارگذاری کنید.",
+
   "Hide Disabled Ports": "پنهان کردن درگاه‌های غیرفعال",
   "Find reference": "یافتن مرجع",
   "Generate references": "تولید مرجع‌ها",

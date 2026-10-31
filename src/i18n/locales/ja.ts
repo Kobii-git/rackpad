@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Floorplan": "フロアプラン",
+  "Zoom": "拡大率",
+  "Add marker": "マーカーを追加",
+  "Replace the background and keep marker positions?": "背景を置き換えてマーカーの位置を保持しますか？",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "矢印キーで選択したマーカーを移動します。Shiftキーを押すと移動幅が大きくなります。",
+  "No floorplan background selected.": "フロアプランの背景が選択されていません。",
+  "Floorplan changed. Reload before applying this edit.": "フロアプランが変更されました。編集を適用する前に再読み込みしてください。",
+
   "Hide Disabled Ports": "無効なポートを非表示",
   "Find reference": "参照を検索",
   "Generate references": "参照を生成",

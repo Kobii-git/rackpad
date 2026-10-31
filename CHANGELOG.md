@@ -4,6 +4,11 @@ All notable Rackpad changes should be recorded here.
 
 Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
+## 1.9.0-beta.1 (candidate)
+
+- Add room floorplans using selected room reference images and normalized rack/device markers, keyboard/drag editing, zoom and viewer navigation (#214).
+- Schema 60 keeps floorplans separate from inventory and Rack Studio; transactional room-move/deletion pruning and validated recovery preserve ownership.
+
 ## 1.9.0-beta.0 (candidate)
 
 - Add disabled-port filtering to cable creation and explicitly assigned checked device/cable references with authenticated lookup and printable labels (#212, #213).

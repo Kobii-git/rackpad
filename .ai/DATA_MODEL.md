@@ -203,3 +203,11 @@ references are immutable, do not replace primary keys, and are not backfilled.
 Authenticated lookup checks all current subject lab grants. Logical/native
 recovery validate canonical type/checksum/uniqueness; assignment/deletion audits
 retain the reference. Rollback needs the pre-upgrade database/configuration/key.
+
+Schema 60 adds `roomFloorplans` and `roomFloorplanMarkers`, independent of Rack
+Studio and inventory geometry. Explicit backgrounds reference room images;
+normalized markers reference one room-owned rack or device. Whole-room revisions
+reject stale writes. Inventory room moves/deletion transactionally prune invalid
+markers and advance the revision. Background deletion clears the selection while
+preserving markers. Logical/native recovery validates ownership and coordinates;
+rollback requires the preceding binary and paired pre-upgrade snapshot.

@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Floorplan": "Denah ruangan",
+  "Zoom": "Perbesaran",
+  "Add marker": "Tambah penanda",
+  "Replace the background and keep marker positions?": "Ganti latar belakang dan pertahankan posisi penanda?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Gunakan tombol panah untuk memindahkan penanda terpilih. Tahan Shift untuk langkah lebih besar.",
+  "No floorplan background selected.": "Belum ada latar belakang denah yang dipilih.",
+  "Floorplan changed. Reload before applying this edit.": "Denah berubah. Muat ulang sebelum menerapkan suntingan ini.",
+
   "Hide Disabled Ports": "Sembunyikan port nonaktif",
   "Find reference": "Cari referensi",
   "Generate references": "Buat referensi",

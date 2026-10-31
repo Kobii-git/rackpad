@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const es = {
+  "Floorplan": "Plano de planta",
+  "Zoom": "Ampliación",
+  "Add marker": "Añadir marcador",
+  "Replace the background and keep marker positions?": "¿Reemplazar el fondo y conservar las posiciones de los marcadores?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Use las flechas para mover el marcador seleccionado. Mantenga Mayús para dar pasos mayores.",
+  "No floorplan background selected.": "No se ha seleccionado un fondo del plano.",
+  "Floorplan changed. Reload before applying this edit.": "El plano ha cambiado. Recargue antes de aplicar esta edición.",
+
   "Hide Disabled Ports": "Ocultar puertos deshabilitados",
   "Find reference": "Buscar referencia",
   "Generate references": "Generar referencias",

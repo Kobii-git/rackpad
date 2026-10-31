@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Floorplan": "평면도",
+  "Zoom": "확대 비율",
+  "Add marker": "마커 추가",
+  "Replace the background and keep marker positions?": "배경을 교체하고 마커 위치를 유지할까요?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "화살표 키로 선택한 마커를 이동합니다. Shift를 누르면 더 크게 이동합니다.",
+  "No floorplan background selected.": "선택한 평면도 배경이 없습니다.",
+  "Floorplan changed. Reload before applying this edit.": "평면도가 변경되었습니다. 이 편집을 적용하기 전에 새로 고치세요.",
+
   "Hide Disabled Ports": "비활성 포트 숨기기",
   "Find reference": "참조 찾기",
   "Generate references": "참조 생성",

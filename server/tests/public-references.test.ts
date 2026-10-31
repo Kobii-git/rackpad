@@ -1,3 +1,4 @@
+import { CURRENT_SCHEMA_VERSION } from "../schema-version.js";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
@@ -202,7 +203,7 @@ test("logical/native recovery retains references and atomically rejects bad chec
     ).publicReference,
     cable,
   );
-  assert.equal(validateRackpadSqliteDatabase(db, "Current"), 59);
+  assert.equal(validateRackpadSqliteDatabase(db, "Current"), CURRENT_SCHEMA_VERSION);
   const login = await app.inject({
     method: "POST",
     url: "/api/auth/login",

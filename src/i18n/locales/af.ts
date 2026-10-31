@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "Floorplan": "Vloerplan",
+  "Zoom": "Zoem",
+  "Add marker": "Voeg merker by",
+  "Replace the background and keep marker positions?": "Vervang die agtergrond en behou merkerposisies?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Gebruik pyltjies om die gekose merker te skuif. Hou Shift in vir groter stappe.",
+  "No floorplan background selected.": "Geen vloerplanagtergrond gekies nie.",
+  "Floorplan changed. Reload before applying this edit.": "Die vloerplan het verander. Herlaai voordat jy hierdie wysiging toepas.",
+
   "Hide Disabled Ports": "Versteek gedeaktiveerde poorte",
   "Find reference": "Vind verwysing",
   "Generate references": "Genereer verwysings",

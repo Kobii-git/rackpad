@@ -1,3 +1,4 @@
+import { validateFloorplanRows } from "../lib/floorplans.js";
 import { validatePublicReferenceRows } from "../lib/public-references.js";
 import { backfillAuditScopes, parseAuditLabIds } from "../lib/audit-scope.js";
 import { parsePendingAlertState } from '../lib/notification-state.js';
@@ -303,6 +304,8 @@ const exportBackupSnapshot = db.transaction(
             "SELECT * FROM referenceImages ORDER BY entityType, entityId, face, createdAt DESC, id",
           )
           .all(),
+        roomFloorplans: db.prepare("SELECT * FROM roomFloorplans ORDER BY roomId").all(),
+        roomFloorplanMarkers: db.prepare("SELECT * FROM roomFloorplanMarkers ORDER BY id").all(),
         auditLog: db
           .prepare("SELECT * FROM auditLog ORDER BY ts DESC, id DESC")
           .all(),
@@ -1252,6 +1255,8 @@ const restoreBackupSnapshot = db.transaction(
 
     const legacySecurity = Number(snapshot.schemaVersion ?? 0) < 50;
     const data = asObject(snapshot.data);
+    const roomFloorplans = normalizeArrayRecordArray(data.roomFloorplans ?? [], "data.roomFloorplans");
+    const roomFloorplanMarkers = normalizeArrayRecordArray(data.roomFloorplanMarkers ?? [], "data.roomFloorplanMarkers");
     const labs = normalizeArrayRecordArray(data.labs, "data.labs");
     const rooms = normalizeArrayRecordArray(data.rooms ?? [], "data.rooms");
     const racks = normalizeArrayRecordArray(data.racks, "data.racks");
@@ -1599,6 +1604,7 @@ const restoreBackupSnapshot = db.transaction(
       }
       restoredDefaultDeviceTypes.add(deviceType);
     }
+    validateFloorplanRows({ rooms, racks, devices, referenceImages, roomFloorplans, roomFloorplanMarkers });
     validatePublicReferenceRows(devices, "device");
     validatePublicReferenceRows(portLinks, "cable");
     const backupDeviceIds = new Set(devices.map((row) => String(row.id ?? "")));
@@ -1671,6 +1677,8 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM snmpCredentials;
     DELETE FROM appSettings;
     DELETE FROM auditLog;
+    DELETE FROM roomFloorplans;
+    DELETE FROM roomFloorplanMarkers;
     DELETE FROM referenceImages;
     DELETE FROM deviceImages;
     DELETE FROM documentationDeviceLinks;
@@ -2803,6 +2811,10 @@ const restoreBackupSnapshot = db.transaction(
         row.updatedAt ?? row.createdAt ?? now,
       );
     }
+    for (const row of roomFloorplans) db.prepare("INSERT INTO roomFloorplans(roomId,backgroundImageId,revision,updatedAt) VALUES(?,?,?,?)").run(row.roomId,row.backgroundImageId ?? null,0,row.updatedAt);
+    for (const row of roomFloorplanMarkers) db.prepare("INSERT INTO roomFloorplanMarkers(id,roomId,deviceId,rackId,x,y,label,updatedAt) VALUES(?,?,?,?,?,?,?,?)").run(row.id,row.roomId,row.deviceId ?? null,row.rackId ?? null,row.x,row.y,row.label ?? null,row.updatedAt);
+    // Marker insertion advances revisions; a restore retains the snapshot revision.
+    for (const row of roomFloorplans) db.prepare("UPDATE roomFloorplans SET revision=?,updatedAt=? WHERE roomId=?").run(row.revision,row.updatedAt,row.roomId);
     for (const row of deviceImages) {
       const now = new Date().toISOString();
       insertDeviceImage.run(
@@ -3011,6 +3023,8 @@ const restoreBackupSnapshot = db.transaction(
         documentationDeviceLinks: documentationDeviceLinks.length,
         deviceImages: deviceImages.length,
         referenceImages: referenceImages.length,
+        roomFloorplans: roomFloorplans.length,
+        roomFloorplanMarkers: roomFloorplanMarkers.length,
         deviceServices: deviceServices.length,
         portTemplates: portTemplates.length,
         hardwareTemplates: hardwareTemplates.length,

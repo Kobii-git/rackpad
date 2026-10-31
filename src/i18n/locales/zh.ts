@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Floorplan": "房间平面图",
+  "Zoom": "缩放",
+  "Add marker": "添加标记",
+  "Replace the background and keep marker positions?": "更换背景并保留标记位置？",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "使用方向键移动所选标记。按住 Shift 可加大移动幅度。",
+  "No floorplan background selected.": "尚未选择平面图背景。",
+  "Floorplan changed. Reload before applying this edit.": "平面图已更改。应用此编辑前请重新加载。",
+
   "Hide Disabled Ports": "隐藏已禁用端口",
   "Find reference": "查找引用",
   "Generate references": "生成引用",

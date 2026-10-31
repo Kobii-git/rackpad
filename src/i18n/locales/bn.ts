@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "Floorplan": "মেঝের নকশা",
+  "Zoom": "জুম",
+  "Add marker": "চিহ্ন যোগ করুন",
+  "Replace the background and keep marker positions?": "চিহ্নের অবস্থান রেখে পটভূমি বদলাবেন?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "নির্বাচিত চিহ্ন সরাতে তীরচিহ্নের কী ব্যবহার করুন। বড় ধাপের জন্য Shift ধরে রাখুন।",
+  "No floorplan background selected.": "মেঝের নকশার পটভূমি নির্বাচন করা হয়নি।",
+  "Floorplan changed. Reload before applying this edit.": "মেঝের নকশা বদলেছে। এই পরিবর্তন প্রয়োগের আগে আবার লোড করুন।",
+
   "Hide Disabled Ports": "নিষ্ক্রিয় পোর্ট লুকান",
   "Find reference": "রেফারেন্স খুঁজুন",
   "Generate references": "রেফারেন্স তৈরি করুন",
