@@ -161,6 +161,13 @@ jobs:
           node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$SCHEMA55_IMAGE" --previous-schema 55 --platform "$PLATFORM" --revision "$GITHUB_SHA"
           node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$SCHEMA57_IMAGE" --previous-schema 57 --platform "$PLATFORM" --revision "$GITHUB_SHA"
 
+      - name: Real SMTP and ntfy acceptance
+        if: matrix.platform == 'linux/amd64'
+        env:
+          CANDIDATE_IMAGE: ${{ steps.candidate.outputs.imageid }}
+          PLATFORM: ${{ matrix.platform }}
+        run: node scripts/check-notification-containers.mjs --image "$CANDIDATE_IMAGE" --platform "$PLATFORM"
+
   smoke:
     needs: build
     if: github.event_name == 'push'
