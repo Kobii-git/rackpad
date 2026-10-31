@@ -2419,8 +2419,8 @@ test("Rack Studio rejects an occupied drag without hiding or moving either devic
     await page.getByRole("button", { name: "Studio Beta", exact: true }).click();
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     const elevation = page.locator(`[data-rack-elevation-id="${rackId}"]`);
-    const left = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-left-${suffix}"]`);
-    const right = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-right-${suffix}"]`);
+    const left = elevation.locator(`[data-testid="rack-studio-device"][data-hostname="conflict-left-${suffix}"]`);
+    const right = elevation.locator(`[data-testid="rack-studio-device"][data-hostname="conflict-right-${suffix}"]`);
     await expect(left).toBeVisible(); await expect(right).toBeVisible();
     const box = await left.boundingBox();
     const rackWidth = await left.evaluate(element => element.parentElement!.getBoundingClientRect().width);
@@ -2439,8 +2439,8 @@ test("Rack Studio rejects an occupied drag without hiding or moving either devic
         return ((await response.json()) as { rackColumn?: number }).rackColumn;
       }).toBe(expectedColumn);
     }
-    const lower = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-lower-${suffix}"]`);
-    const upper = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-upper-${suffix}"]`);
+    const lower = elevation.locator(`[data-testid="rack-studio-device"][data-hostname="conflict-lower-${suffix}"]`);
+    const upper = elevation.locator(`[data-testid="rack-studio-device"][data-hostname="conflict-upper-${suffix}"]`);
     const positionHandle = lower.getByRole("button", { name: `Position: conflict-lower-${suffix}` });
     await positionHandle.hover();
     const dragStartBox = await positionHandle.boundingBox();
@@ -2593,7 +2593,7 @@ test("Rack Studio places rack-top equipment and supports keyboard undo and redo"
       .click();
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     const rackTopDevice = page.locator(
-      `[data-testid="rack-studio-rack-top-device"][aria-label="${hostname}"]`,
+      `[data-testid="rack-studio-rack-top-device"][data-hostname="${hostname}"]`,
     );
     await expect(rackTopDevice).toBeVisible();
     await rackTopDevice.focus();
@@ -2675,7 +2675,7 @@ test("Rack Studio places rack-top equipment and supports keyboard undo and redo"
       localStorage.setItem("rackpad.visualizer.rack-cabling-room", "room_lab");
     });
     await page.goto("/visualizer");
-    const topEquipment = page.locator(`[data-testid="rack-cabling-equipment"][aria-label="${hostname}"]`).first();
+    const topEquipment = page.locator(`[data-testid="rack-cabling-equipment"][data-hostname="${hostname}"]`).first();
     await expect(topEquipment).toBeVisible();
     const geometry = await topEquipment.evaluate(element => {
       const box = element.getBoundingClientRect();
@@ -2950,15 +2950,15 @@ test("all primary routes load without document overflow in both demo labs", asyn
 
   for (const labName of ["Home Lab", "Studio / Office"]) {
     const labButton = page.getByRole("button", {
-      name: new RegExp(`Lab: ${labName}`),
+      name: new RegExp(`Lab ${labName}`),
     });
     if (!(await labButton.count())) {
-      await page.getByRole("button", { name: /^Lab:/ }).click();
+      await page.getByRole("button", { name: /^Lab / }).click();
       await page
         .getByRole("button", { name: new RegExp(`^${labName}`) })
         .click();
       await expect(
-        page.getByRole("button", { name: new RegExp(`Lab: ${labName}`) }),
+        page.getByRole("button", { name: new RegExp(`Lab ${labName}`) }),
       ).toBeVisible();
     }
 
@@ -5968,7 +5968,7 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
     await expect(workspace.getByTestId("stack-member")).toHaveCount(2);
     await expect(workspace).toContainText("aa:bb:cc:dd:00:11");
     const up = workspace.getByRole("button", {
-      name: "Move Core B up",
+      name: "Move up: Core B",
       exact: true,
     });
     await up.focus();
@@ -6019,13 +6019,27 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
     expect(
       layout.snapshot.portSlots.some((slot) => slot.id === `slot:${portId}`),
     ).toBe(true);
+    await expect(assignment).toBeEnabled();
+    const memberFilter = workspace.getByRole("combobox", { name: "Member filter" });
+    await memberFilter.focus();
+    await expect(memberFilter).toBeFocused();
+    await workspace.scrollIntoViewIfNeeded();
+    await workspace.evaluate(async (element) => {
+      await document.fonts.ready;
+      await Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished));
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    });
+    await expect(workspace).toBeInViewport({ ratio: 1 });
+    // The focused select has no blinking caret. Keep input styles stable during capture.
     const firstCapture = await workspace.screenshot({
       path: testInfo.outputPath("stack-members.png"),
       animations: "disabled",
+      caret: "initial",
     });
     const secondCapture = await workspace.screenshot({
       path: testInfo.outputPath("stack-members-repeat.png"),
       animations: "disabled",
+      caret: "initial",
     });
     expect(firstCapture.equals(secondCapture)).toBe(true);
     const axe = await new AxeBuilder({ page })
@@ -6664,7 +6678,7 @@ test("mixed-model220-port stacks retain applied modules, front/rear targets and 
     const before=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();expect(before.bindings).toHaveLength(220);
     expect(before.bindings.map((binding:{portId:string})=>binding.portId).sort()).toEqual([...canonical].sort());
     await page.reload();await expect(first.getByRole("checkbox",{name:"Applied uplink module",exact:true})).toBeChecked();
-    await first.getByRole("button",{name:"Move Model 1 down",exact:true}).click();
+    await first.getByRole("button",{name:"Move down: Model 1",exact:true}).click();
     const after=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();
     expect(after.bindings).toEqual(expect.arrayContaining(before.bindings));
     await page.goto("/racks");await page.getByRole("button",{name:"Studio Beta",exact:true}).click();await page.getByRole("button",{name:new RegExp(`${room.name} 1R`)}).click();await page.getByRole("button",{name:"Both",exact:true}).click();await page.getByRole("button",{name:"Cables",exact:true}).click();
