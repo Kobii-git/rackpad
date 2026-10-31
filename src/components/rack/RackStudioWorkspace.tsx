@@ -371,7 +371,7 @@ export function RackStudioWorkspace({
     if (!device) return;
     const frame = window.requestAnimationFrame(() => {
       const element = document.querySelector<HTMLElement>(
-        `[data-rack-elevation-id="${CSS.escape(device.rackId ?? "")}"] [aria-label="${CSS.escape(device.hostname)}"]`,
+        `[data-rack-elevation-id="${CSS.escape(device.rackId ?? "")}"] [data-hostname="${CSS.escape(device.hostname)}"]`,
       );
       element?.scrollIntoView({ block: "nearest", inline: "nearest" });
       element?.focus({ preventScroll: true });

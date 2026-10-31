@@ -2419,8 +2419,8 @@ test("Rack Studio rejects an occupied drag without hiding or moving either devic
     await page.getByRole("button", { name: "Studio Beta", exact: true }).click();
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     const elevation = page.locator(`[data-rack-elevation-id="${rackId}"]`);
-    const left = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-left-${suffix}"]`);
-    const right = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-right-${suffix}"]`);
+    const left = elevation.locator(`[data-testid="rack-studio-device"][data-hostname="conflict-left-${suffix}"]`);
+    const right = elevation.locator(`[data-testid="rack-studio-device"][data-hostname="conflict-right-${suffix}"]`);
     await expect(left).toBeVisible(); await expect(right).toBeVisible();
     const box = await left.boundingBox();
     const rackWidth = await left.evaluate(element => element.parentElement!.getBoundingClientRect().width);
@@ -2439,8 +2439,8 @@ test("Rack Studio rejects an occupied drag without hiding or moving either devic
         return ((await response.json()) as { rackColumn?: number }).rackColumn;
       }).toBe(expectedColumn);
     }
-    const lower = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-lower-${suffix}"]`);
-    const upper = elevation.locator(`[data-testid="rack-studio-device"][aria-label="conflict-upper-${suffix}"]`);
+    const lower = elevation.locator(`[data-testid="rack-studio-device"][data-hostname="conflict-lower-${suffix}"]`);
+    const upper = elevation.locator(`[data-testid="rack-studio-device"][data-hostname="conflict-upper-${suffix}"]`);
     const positionHandle = lower.getByRole("button", { name: `Position: conflict-lower-${suffix}` });
     await positionHandle.hover();
     const dragStartBox = await positionHandle.boundingBox();
@@ -2593,7 +2593,7 @@ test("Rack Studio places rack-top equipment and supports keyboard undo and redo"
       .click();
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     const rackTopDevice = page.locator(
-      `[data-testid="rack-studio-rack-top-device"][aria-label="${hostname}"]`,
+      `[data-testid="rack-studio-rack-top-device"][data-hostname="${hostname}"]`,
     );
     await expect(rackTopDevice).toBeVisible();
     await rackTopDevice.focus();
@@ -2675,7 +2675,7 @@ test("Rack Studio places rack-top equipment and supports keyboard undo and redo"
       localStorage.setItem("rackpad.visualizer.rack-cabling-room", "room_lab");
     });
     await page.goto("/visualizer");
-    const topEquipment = page.locator(`[data-testid="rack-cabling-equipment"][aria-label="${hostname}"]`).first();
+    const topEquipment = page.locator(`[data-testid="rack-cabling-equipment"][data-hostname="${hostname}"]`).first();
     await expect(topEquipment).toBeVisible();
     const geometry = await topEquipment.evaluate(element => {
       const box = element.getBoundingClientRect();
@@ -2950,15 +2950,15 @@ test("all primary routes load without document overflow in both demo labs", asyn
 
   for (const labName of ["Home Lab", "Studio / Office"]) {
     const labButton = page.getByRole("button", {
-      name: new RegExp(`Lab: ${labName}`),
+      name: new RegExp(`Lab ${labName}`),
     });
     if (!(await labButton.count())) {
-      await page.getByRole("button", { name: /^Lab:/ }).click();
+      await page.getByRole("button", { name: /^Lab / }).click();
       await page
         .getByRole("button", { name: new RegExp(`^${labName}`) })
         .click();
       await expect(
-        page.getByRole("button", { name: new RegExp(`Lab: ${labName}`) }),
+        page.getByRole("button", { name: new RegExp(`Lab ${labName}`) }),
       ).toBeVisible();
     }
 
