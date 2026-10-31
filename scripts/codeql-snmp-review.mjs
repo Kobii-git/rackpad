@@ -11,7 +11,7 @@ export const SNMP_REVIEW = Object.freeze({
   file: "server/lib/snmp-v3.ts",
   sourceSha256: "4029cff16fe59c2120322cf3340bc543564bd44f12835b57f20f27c2e35b3e63",
   // Independently reviewed for v1.8.7-beta.1; exception scope and expiry are unchanged.
-  serverTree: "52348555054697db45231a148d16127c5c82cf08",
+  serverTree: "12c1e7e934fdfea47c47c5e3a303ecc3f9b030f6",
   owner: "@Kobii-git",
   expiresAt: "2026-11-30T00:00:00.000Z",
   rationale: "RFC 3414 A.2 requires MD5/SHA1 for configured SNMP interoperability; credential storage is separately encrypted.",
