@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import {
@@ -182,12 +183,12 @@ export const referenceImagesRoutes: FastifyPluginAsync = async (app) => {
       .get(req.params.id);
   });
 
-  app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/:id", (req, reply) => withAuditedDeletion(req, reply, { entityType: "ReferenceImage", entityId: req.params.id, action: "reference.image.delete" }, () => {
     const row = db
       .prepare("SELECT * FROM referenceImages WHERE id = ?")
       .get(req.params.id) as Record<string, unknown> | undefined;
     if (!assertLabWriteFromRow(req, reply, row)) return;
     db.prepare("DELETE FROM referenceImages WHERE id = ?").run(req.params.id);
-    return reply.status(204).send();
-  });
+    return true as const;
+  }));
 };

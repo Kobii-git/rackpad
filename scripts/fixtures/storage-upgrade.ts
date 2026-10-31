@@ -12,10 +12,29 @@ assert.equal(
 );
 const { db } = await import("../../server/db.js");
 try {
+  // Remove the later health schema as well: this fixture must reconstruct
+  // schema 50 rather than merely lowering its version marker.
+  const connectionColumns = db.prepare("PRAGMA table_info(integrationConnections)").all() as {name: string}[];
+  if (connectionColumns.some(row => row.name === "healthPollingEnabled")) {
+    db.exec(`
+      DROP TRIGGER external_binding_delete;
+      DROP TRIGGER external_binding_update;
+      DROP TRIGGER external_binding_detach;
+      DROP TRIGGER external_device_lab;
+      DROP TABLE externalMonitorMappings;
+      DROP TABLE integrationRecordBindings;
+      DROP TABLE integrationLatestReadings;
+      ALTER TABLE integrationConnections DROP COLUMN healthPollingEnabled;
+      ALTER TABLE integrationConnections DROP COLUMN healthIntervalSeconds;
+      ALTER TABLE integrationConnections DROP COLUMN healthLastCheckedAt;
+      ALTER TABLE integrationConnections DROP COLUMN healthLastError;
+    `);
+  }
+  if (connectionColumns.some(row => row.name === "options")) db.exec("ALTER TABLE integrationConnections DROP COLUMN options");
   // Reconstruct schema 50 exactly as the migration suite does, before creating
   // any stack data. The application under test must actually run migration 51.
   db.exec(`
-    ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition;
+    DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind; ALTER TABLE deviceServices DROP COLUMN transportProtocol; ALTER TABLE deviceServices DROP COLUMN networkPort; ALTER TABLE rooms DROP COLUMN headerColor; ALTER TABLE racks DROP COLUMN headerColor; ALTER TABLE devices DROP COLUMN labelPosition;
     DROP TRIGGER cable_guide_device_delete;
     DROP TRIGGER cable_guide_device_room;
     DROP TRIGGER cable_guide_rack_room;

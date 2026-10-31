@@ -1,6 +1,36 @@
 import type { TranslationMap } from "../base";
 
 export const pl = {
+  "Allow unencrypted NUT transport": "Zezwól na nieszyfrowany transport NUT",
+
+  "External health": "Stan zewnętrzny",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Odczyty wpływają na stan i alerty wyłącznie przez jawnie włączone monitory.",
+  "Unhealthy": "Nieprawidłowy",
+  "Read-only inventory and external health.": "Inwentarz tylko do odczytu i stan zewnętrzny.",
+  "Polling": "Odpytywanie",
+  "Interval (seconds)": "Interwał (sekundy)",
+  "Select device": "Wybierz urządzenie",
+  "Bind device": "Powiąż urządzenie",
+  "Unbind": "Usuń powiązanie",
+  "Value": "Wartość",
+  "Last checked": "Ostatnia kontrola",
+  "Stale": "Nieaktualny",
+  "Alert on degraded": "Alert przy pogorszeniu",
+  "Create monitor": "Utwórz monitor",
+
+  "Floorplan": "Plan pomieszczenia",
+  "Zoom": "Powiększenie",
+  "Add marker": "Dodaj znacznik",
+  "Replace the background and keep marker positions?": "Zastąpić tło i zachować pozycje znaczników?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Użyj strzałek, aby przesunąć wybrany znacznik. Przytrzymaj Shift, aby zwiększyć krok.",
+  "No floorplan background selected.": "Nie wybrano tła planu.",
+  "Floorplan changed. Reload before applying this edit.": "Plan został zmieniony. Odśwież go przed zastosowaniem tej edycji.",
+
+  "Hide Disabled Ports": "Ukryj wyłączone porty",
+  "Find reference": "Znajdź identyfikator",
+  "Generate references": "Wygeneruj identyfikatory",
+  "Print labels": "Drukuj etykiety",
+
   "Import host adapters and guest NIC ports.": "Importuj karty hosta i porty sieciowe gości.",
   "Revoke": "Unieważnij",
   "Revoked": "Unieważniony",
@@ -26,6 +56,7 @@ export const pl = {
   "ntfy timed out. Try again later.": "Przekroczono limit czasu ntfy. Spróbuj później.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy odrzucił wiadomość. Sprawdź uprawnienia tematu i uwierzytelnianie.",
   "ntfy rate limit reached. Try again later.": "Osiągnięto limit żądań ntfy. Spróbuj później.",
+  "Enable notifications before sending a test alert.": "Włącz powiadomienia przed wysłaniem alertu testowego.",
   "Notification delivery failed. Check the configured channels.": "Nie udało się wysłać powiadomienia. Sprawdź skonfigurowane kanały.",
 
   "Check the SMTP host, sender and recipient settings.": "Sprawdź ustawienia hosta SMTP, nadawcy i odbiorcy.",

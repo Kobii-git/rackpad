@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.8.7-beta.0",
+  "version": "1.9.0-beta.5",
   "private": true,
   "type": "module",
   "engines": {
@@ -60,6 +60,7 @@
     "@radix-ui/react-slot": "^1.5.0",
     "@radix-ui/react-tabs": "^1.2.1",
     "@radix-ui/react-tooltip": "^1.4.1",
+    "@scure/base": "2.4.0",
     "@xyflow/react": "^12.12.0",
     "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.1",
@@ -75,6 +76,7 @@
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.4",
     "tailwind-merge": "^2.6.0",
+    "ws": "8.22.0",
     "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },
@@ -88,6 +90,7 @@
     "@types/node": "^22.20.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/ws": "8.18.2",
     "@vitejs/plugin-react": "^6.1.2",
     "ajv": "8.20.0",
     "ajv-draft-04": "1.0.0",

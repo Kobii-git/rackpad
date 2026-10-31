@@ -21,8 +21,11 @@ separately.
 | Browser/accessibility | `test:e2e` | Environment-heavy; required by full CI/release |
 | Feature acceptance | `test:e2e:acceptance` | Chromium/Firefox editor, stack, cabling and placement regressions with MCP explicitly enabled |
 | Container storage | `test:docker:storage` | Linux Docker image smoke for named volumes, bind ownership, custom users and restart persistence |
-| Published image verification | `test:release:smoke` | Explicit image/previous-image digests, platform and revision; fresh install, real schema-51/53/55 upgrades, API writes/monitoring, restart and paired rollback |
+| Published image verification | `test:release:smoke` | Explicit image/previous-image digests, platform and revision; fresh install, real schema-51/53/55/57 upgrades, API writes/monitoring, restart and paired rollback |
+| Notification provider acceptance | `node scripts/check-notification-containers.mjs --help` | Built candidate image ID and platform; real Mailpit STARTTLS/SMTPS and ntfy HTTPS/token delivery, saved settings/restart and negative diagnostics; AMD64 candidate CI |
+| Host provider acceptance | `node scripts/check-host-provider-containers.mjs --help` | Built candidate image ID and platform; real Kuma metrics/status transitions and Glances Basic/JWT when available, saved connections, bindings and safe failures; AMD64 candidate CI |
 | Documentation screenshots | `screenshots:update` | Isolated deterministic 1920×1200 capture; outside normal E2E discovery |
+| Home Assistant collector acceptance | `node scripts/check-home-assistant-container.mjs --help` | Built candidate image ID, revision and platform; actual REST/WebSocket collector authentication, demo registry grouping/rename and state normalization; AMD64 candidate CI |
 | Screenshot determinism | `screenshots:check` | Two isolated captures with manifest and bounded pixel comparison; failures retain temporary captures for diagnosis; required after application checks in the reusable quality workflow |
 | Non-browser tests | `test` | Canonical local aggregation |
 | All tests | `test:full` | Canonical environment-heavy aggregation |

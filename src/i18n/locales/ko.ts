@@ -1,6 +1,36 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Allow unencrypted NUT transport": "암호화되지 않은 NUT 통신 허용",
+
+  "External health": "외부 상태",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "측정값은 명시적으로 활성화한 모니터를 통해서만 상태와 알림에 영향을 줍니다.",
+  "Unhealthy": "비정상",
+  "Read-only inventory and external health.": "읽기 전용 인벤토리 및 외부 상태.",
+  "Polling": "주기적 조회",
+  "Interval (seconds)": "간격 (초)",
+  "Select device": "장치 선택",
+  "Bind device": "장치 연결",
+  "Unbind": "연결 해제",
+  "Value": "값",
+  "Last checked": "마지막 확인",
+  "Stale": "오래됨",
+  "Alert on degraded": "성능 저하 시 알림",
+  "Create monitor": "모니터 생성",
+
+  "Floorplan": "평면도",
+  "Zoom": "확대 비율",
+  "Add marker": "마커 추가",
+  "Replace the background and keep marker positions?": "배경을 교체하고 마커 위치를 유지할까요?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "화살표 키로 선택한 마커를 이동합니다. Shift를 누르면 더 크게 이동합니다.",
+  "No floorplan background selected.": "선택한 평면도 배경이 없습니다.",
+  "Floorplan changed. Reload before applying this edit.": "평면도가 변경되었습니다. 이 편집을 적용하기 전에 새로 고치세요.",
+
+  "Hide Disabled Ports": "비활성 포트 숨기기",
+  "Find reference": "참조 찾기",
+  "Generate references": "참조 생성",
+  "Print labels": "레이블 인쇄",
+
   "Import host adapters and guest NIC ports.": "호스트 어댑터와 게스트 NIC 포트를 가져옵니다.",
   "Revoke": "철회",
   "Revoked": "철회됨",
@@ -26,6 +56,7 @@ export const ko = {
   "ntfy timed out. Try again later.": "ntfy 시간이 초과되었습니다. 나중에 다시 시도하세요.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy가 메시지를 거부했습니다. 주제 권한 및 인증을 확인하세요.",
   "ntfy rate limit reached. Try again later.": "ntfy 요청 제한에 도달했습니다. 나중에 다시 시도하세요.",
+  "Enable notifications before sending a test alert.": "테스트 알림을 보내기 전에 알림을 활성화하세요.",
   "Notification delivery failed. Check the configured channels.": "알림 전송에 실패했습니다. 구성된 채널을 확인하세요.",
 
   "Check the SMTP host, sender and recipient settings.": "SMTP 호스트, 발신자 및 수신자 설정을 확인하세요.",

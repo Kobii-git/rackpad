@@ -8,7 +8,7 @@ const directory = mkdtempSync(path.join(os.tmpdir(), 'rackpad-notifications-'))
 process.env.DATABASE_PATH = path.join(directory, 'fixture.db')
 process.env.NODE_ENV = 'test'
 process.env.RACKPAD_SECRET_KEY = 'synthetic-notification-key'
-const { db } = await import('../db.js')
+const { db, CURRENT_SCHEMA_VERSION } = await import('../db.js')
 const { saveAlertSettings, loadAlertSettings, DEFAULT_ALERT_SETTINGS, sendTestAlert, sendMonitorTransitionAlert, invalidateNotificationAttempts } = await import('../lib/alerts.js')
 const { recordMonitorResult, runMonitorCheck } = await import('../lib/monitoring.js')
 const { setNetworkHostLookupForTests, setPinnedRequestTransportForTests } = await import('../lib/net-guard.js')
@@ -201,7 +201,7 @@ test('pending state validation rejects malformed kinds, timestamps and pairs', (
     { pendingAlertKind: null, pendingAlertAt: at }, { pendingAlertKind: 'down', pendingAlertAt: 'not-a-date' },
     { pendingAlertKind: 'down', pendingAlertAt: at, lastAlertAttemptAt: new Date(start - 1).toISOString() }])
     assert.throws(() => parsePendingAlertState(bad), /Invalid pending/)
-  assert.equal(validateRackpadSqliteDatabase(db, 'Fixture'), 57)
+  assert.equal(validateRackpadSqliteDatabase(db, 'Fixture'), CURRENT_SCHEMA_VERSION)
 })
 
 test('notification settings and category cancellation commit atomically', async context => {

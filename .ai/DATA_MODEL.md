@@ -184,3 +184,45 @@ write-only `ntfyToken`, returning only `ntfyTokenConfigured`. Portable export an
 restore redact ntfy credential fields. Native backups retain ciphertext requiring
 the same `RACKPAD_SECRET_KEY`; other notification credential import semantics stay
 compatible.
+
+Schema 58 adds nullable JSON `auditLog.labIds` and an entity-history index. Scope
+is captured by server audit writers and remains independent of later inventory
+moves/deletion. The migration backfills history whose entities still resolve;
+already-deleted or unknown subjects remain unscoped and admin-only. Deletion
+handlers use synchronous transactions which capture the subject's scope before
+cascading writes and commit the deletion event with the mutation. Previously
+stored descendant scopes survive unchanged; unknown scopes are never reassigned
+when an entity ID is reused.
+Logical/native recovery validates and retains scope, including deleted lab IDs;
+older logical snapshots backfill only resolvable subjects. Rollback requires the
+previous binary/image with its paired pre-upgrade database snapshot.
+
+Schema 59 adds nullable unique `publicReference` fields to devices and cables.
+Explicit assignment uses 80 random bits with Bech32m and rpd/rpc prefixes;
+references are immutable, do not replace primary keys, and are not backfilled.
+Authenticated lookup checks all current subject lab grants. Logical/native
+recovery validate canonical type/checksum/uniqueness; assignment/deletion audits
+retain the reference. Rollback needs the pre-upgrade database/configuration/key.
+
+Schema 60 adds `roomFloorplans` and `roomFloorplanMarkers`, independent of Rack
+Studio and inventory geometry. Explicit backgrounds reference room images;
+normalized markers reference one room-owned rack or device. Whole-room revisions
+reject stale writes. Inventory room moves/deletion transactionally prune invalid
+markers and advance the revision. Background deletion clears the selection while
+preserving markers. Logical/native recovery validates ownership and coordinates;
+rollback requires the preceding binary and paired pre-upgrade snapshot.
+
+Schema 61 adds four `integrationConnections` health polling/status fields,
+`integrationRecordBindings`, `integrationLatestReadings` and
+`externalMonitorMappings`. Latest values are bounded to 10,000 per connection;
+there is no telemetry history. Stable provider identities bind explicitly to
+same-lab inventory. Deletion, rebinding or lab movement disables and detaches
+invalid external monitor mappings transactionally. Recovery validates scalar
+readings, capabilities, ownership, mapping types and uniqueness before replacing
+data, and marks restored readings refresh-required. Missing legacy fields default
+to disabled polling (60-second interval) and empty new tables.
+
+Schema 62 appends `integrationConnections.options`, a JSON object defaulting to
+`{}`. Only NUT accepts `allowUnencrypted` (boolean); all other option keys/providers
+are rejected in routes and recovery. Option changes invalidate outstanding health
+and preview completions. Genuine schema-61 snapshots remain valid for migration.

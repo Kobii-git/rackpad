@@ -1,6 +1,36 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Allow unencrypted NUT transport": "Izinkan transportasi NUT tanpa enkripsi",
+
+  "External health": "Kesehatan eksternal",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Pembacaan hanya memengaruhi kesehatan dan peringatan melalui monitor yang diaktifkan secara eksplisit.",
+  "Unhealthy": "Tidak sehat",
+  "Read-only inventory and external health.": "Inventaris hanya baca dan kesehatan eksternal.",
+  "Polling": "Pengambilan berkala",
+  "Interval (seconds)": "Interval (detik)",
+  "Select device": "Pilih perangkat",
+  "Bind device": "Tautkan perangkat",
+  "Unbind": "Lepas tautan",
+  "Value": "Nilai",
+  "Last checked": "Terakhir diperiksa",
+  "Stale": "Kedaluwarsa",
+  "Alert on degraded": "Peringatkan saat menurun",
+  "Create monitor": "Buat monitor",
+
+  "Floorplan": "Denah ruangan",
+  "Zoom": "Perbesaran",
+  "Add marker": "Tambah penanda",
+  "Replace the background and keep marker positions?": "Ganti latar belakang dan pertahankan posisi penanda?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Gunakan tombol panah untuk memindahkan penanda terpilih. Tahan Shift untuk langkah lebih besar.",
+  "No floorplan background selected.": "Belum ada latar belakang denah yang dipilih.",
+  "Floorplan changed. Reload before applying this edit.": "Denah berubah. Muat ulang sebelum menerapkan suntingan ini.",
+
+  "Hide Disabled Ports": "Sembunyikan port nonaktif",
+  "Find reference": "Cari referensi",
+  "Generate references": "Buat referensi",
+  "Print labels": "Cetak label",
+
   "Import host adapters and guest NIC ports.": "Impor adaptor host dan port NIC tamu.",
   "Revoke": "Cabut",
   "Revoked": "Dicabut",
@@ -26,6 +56,7 @@ export const id = {
   "ntfy timed out. Try again later.": "Waktu ntfy habis. Coba lagi nanti.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy menolak pesan. Periksa izin topik dan autentikasi.",
   "ntfy rate limit reached. Try again later.": "Batas permintaan ntfy tercapai. Coba lagi nanti.",
+  "Enable notifications before sending a test alert.": "Aktifkan notifikasi sebelum mengirim peringatan uji.",
   "Notification delivery failed. Check the configured channels.": "Pengiriman notifikasi gagal. Periksa kanal yang dikonfigurasi.",
 
   "Check the SMTP host, sender and recipient settings.": "Periksa pengaturan host SMTP, pengirim, dan penerima.",

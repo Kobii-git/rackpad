@@ -1,3 +1,4 @@
+import type { ExternalHealthView } from "./types";
 import type {
   AlertSettings,
   AdminIntegrityReport,
@@ -55,6 +56,7 @@ import type {
   ReferenceImage,
   ReferenceImageEntityType,
   Room,
+  RoomFloorplan,
   SnmpCredential,
   SnmpSyncApplyResult,
   SnmpSyncPreview,
@@ -537,7 +539,37 @@ async function requestBlob(
   };
 }
 
+export interface ReferenceLookupResult {
+  kind: "device" | "cable";
+  id: string;
+  publicReference: string;
+  labIds: string[];
+  label: string;
+  endpoints: Array<{ portId: string; portName: string; deviceId: string; hostname: string; labId: string }>;
+}
+
 export const api = {
+  getFloorplan(roomId: string) {
+    return request<RoomFloorplan>(`/floorplans/${encodeURIComponent(roomId)}`);
+  },
+  setFloorplanBackground(roomId: string, input: { revision: number; backgroundImageId: string | null; confirmBackgroundChange?: boolean }) {
+    return request<RoomFloorplan>(`/floorplans/${encodeURIComponent(roomId)}`, { method: "PUT", body: JSON.stringify(input) });
+  },
+  addFloorplanMarker(roomId: string, input: { revision: number; deviceId?: string; rackId?: string; x?: number; y?: number; label?: string }) {
+    return request<RoomFloorplan>(`/floorplans/${encodeURIComponent(roomId)}/markers`, { method: "POST", body: JSON.stringify(input) });
+  },
+  updateFloorplanMarker(roomId: string, id: string, input: { revision: number; x?: number; y?: number; label?: string | null }) {
+    return request<RoomFloorplan>(`/floorplans/${encodeURIComponent(roomId)}/markers/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+  },
+  deleteFloorplanMarker(roomId: string, id: string, revision: number) {
+    return request<RoomFloorplan>(`/floorplans/${encodeURIComponent(roomId)}/markers/${encodeURIComponent(id)}`, { method: "DELETE", body: JSON.stringify({ revision }) });
+  },
+  lookupReference(reference: string) {
+    return request<ReferenceLookupResult>(`/references/${encodeURIComponent(reference)}`);
+  },
+  generateReference(kind: "device" | "cable", id: string) {
+    return request<{ kind: "device" | "cable"; id: string; publicReference: string }>(`/references/${kind}/${encodeURIComponent(id)}`, { method: "POST" });
+  },
   listMcpTokens() {
     return request<McpTokenRecord[]>("/mcp-tokens");
   },
@@ -1952,6 +1984,7 @@ export const api = {
     provider: IntegrationConnection["provider"];
     name: string;
     baseUrl: string;
+    options?: IntegrationConnection["options"];
     authKind?: IntegrationConnection["authKind"];
     authId?: string;
     authSecret: string;
@@ -1980,6 +2013,7 @@ export const api = {
     labId?: string;
     provider?: IntegrationConnection["provider"];
     baseUrl?: string;
+    options?: IntegrationConnection["options"];
     authKind?: IntegrationConnection["authKind"];
     authId?: string;
     authSecret?: string;
@@ -2000,6 +2034,7 @@ export const api = {
     body: Partial<{
       name: string;
       baseUrl: string;
+      options: NonNullable<IntegrationConnection["options"]>;
       authKind: IntegrationConnection["authKind"];
       authId: string | null;
       authSecret: string;
@@ -2038,6 +2073,13 @@ export const api = {
     }>(`/integrations/connections/${id}/test`, { method: "POST" });
   },
 
+  getExternalHealth(id: ID) { return request<ExternalHealthView>(`/integrations/connections/${id}/readings`); },
+  refreshExternalHealth(id: ID) { return request<ExternalHealthView>(`/integrations/connections/${id}/refresh`,{method:"POST"}); },
+  setExternalPolling(id: ID, enabled: boolean, intervalSeconds: number) { return request<ExternalHealthView>(`/integrations/connections/${id}/health-polling`,{method:"PUT",body:JSON.stringify({enabled,intervalSeconds})}); },
+  bindExternalRecord(id: ID, body: {providerRecordId:string;deviceId:string;sourceIdentity:string;expectedDeviceId?:string}) { return request<ExternalHealthView>(`/integrations/connections/${id}/bindings`,{method:"POST",body:JSON.stringify(body)}); },
+  unbindExternalRecord(id: ID, bindingId: string, expectedDeviceId: string) { return request<ExternalHealthView>(`/integrations/connections/${id}/bindings/${bindingId}`,{method:"DELETE",body:JSON.stringify({expectedDeviceId})}); },
+  createExternalMonitor(id: ID,bindingId:string,readingKey:string) { return request<ExternalHealthView>(`/integrations/connections/${id}/external-monitors`,{method:"POST",body:JSON.stringify({bindingId,readingKey,enabled:false,alertOnDegraded:false})}); },
+  updateExternalMonitor(id: ID,monitorId:string,body:{enabled?:boolean;alertOnDegraded?:boolean}) { return request<ExternalHealthView>(`/integrations/connections/${id}/external-monitors/${monitorId}`,{method:"PATCH",body:JSON.stringify(body)}); },
   pullIntegrationInventory(id: ID, body?: { mode?: IntegrationAutoSyncMode }) {
     return request<IntegrationInventoryResponse>(
       `/integrations/connections/${id}/inventory`,

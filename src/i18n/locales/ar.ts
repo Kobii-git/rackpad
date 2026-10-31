@@ -1,6 +1,36 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Allow unencrypted NUT transport": "السماح بنقل NUT غير المشفر",
+
+  "External health": "الصحة الخارجية",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "تؤثر القراءات على الصحة والتنبيهات فقط عبر أدوات المراقبة المفعلة صراحةً.",
+  "Unhealthy": "غير سليم",
+  "Read-only inventory and external health.": "مخزون للقراءة فقط وصحة خارجية.",
+  "Polling": "استقصاء",
+  "Interval (seconds)": "الفاصل (ثوانٍ)",
+  "Select device": "اختر جهازًا",
+  "Bind device": "اربط الجهاز",
+  "Unbind": "إلغاء الربط",
+  "Value": "القيمة",
+  "Last checked": "آخر فحص",
+  "Stale": "قديمة",
+  "Alert on degraded": "تنبيه عند التدهور",
+  "Create monitor": "إنشاء مراقبة",
+
+  "Floorplan": "مخطط الطابق",
+  "Zoom": "تكبير",
+  "Add marker": "إضافة علامة",
+  "Replace the background and keep marker positions?": "استبدال الخلفية مع الاحتفاظ بمواضع العلامات؟",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "استخدم مفاتيح الأسهم لتحريك العلامة المحددة. اضغط مع الاستمرار على Shift لخطوات أكبر.",
+  "No floorplan background selected.": "لم تُحدَّد خلفية لمخطط الطابق.",
+  "Floorplan changed. Reload before applying this edit.": "تغير مخطط الطابق. أعد التحميل قبل تطبيق هذا التعديل.",
+
+  "Hide Disabled Ports": "إخفاء المنافذ المعطلة",
+  "Find reference": "البحث عن مرجع",
+  "Generate references": "إنشاء المراجع",
+  "Print labels": "طباعة الملصقات",
+
   "Import host adapters and guest NIC ports.": "استورد محولات المضيف ومنافذ شبكة الضيوف.",
   "Revoke": "إلغاء",
   "Revoked": "ملغى",
@@ -26,6 +56,7 @@ export const ar = {
   "ntfy timed out. Try again later.": "انتهت مهلة ntfy. حاول لاحقًا.",
   "ntfy rejected the message. Check topic permissions and authentication.": "رفض ntfy الرسالة. تحقق من أذونات الموضوع والمصادقة.",
   "ntfy rate limit reached. Try again later.": "تم بلوغ حد طلبات ntfy. حاول لاحقًا.",
+  "Enable notifications before sending a test alert.": "فعّل الإشعارات قبل إرسال تنبيه اختباري.",
   "Notification delivery failed. Check the configured channels.": "فشل تسليم الإشعار. تحقق من القنوات المهيأة.",
 
   "Check the SMTP host, sender and recipient settings.": "تحقق من إعدادات مضيف SMTP والمرسل والمستلم.",

@@ -1,13 +1,21 @@
+import type { IntegrationConnectionOptions } from "./options.js";
 export const INTEGRATION_PROVIDERS = [
   "proxmox",
   "unifi",
   "omada",
   "opnsense",
   "dockhand",
+  "uptime-kuma",
+  "glances",
+  "patchmon",
+  "nut",
+  "redfish",
+  "home-assistant",
 ] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
 
 export const INTEGRATION_AUTH_KINDS = [
+  "anonymous",
   "api-token",
   "api-key",
   "username-password",
@@ -45,12 +53,19 @@ export interface IntegrationProviderInfo {
   authKinds: IntegrationAuthKind[];
   defaultAuthKind: IntegrationAuthKind;
   scopeKind: IntegrationScopeKind | null;
+  capabilities: { inventory: boolean; health: boolean };
 }
 
 export const INTEGRATION_PROVIDER_INFO: Record<
   IntegrationProvider,
   IntegrationProviderInfo
 > = {
+  "home-assistant":{id:"home-assistant",label:"Home Assistant",vendor:"Home Assistant",authKinds:["api-key"],defaultAuthKind:"api-key",scopeKind:null,capabilities:{inventory:true,health:true}},
+  nut:{id:"nut",label:"NUT",vendor:"NUT",authKinds:["username-password"],defaultAuthKind:"username-password",scopeKind:null,capabilities:{inventory:true,health:true}},
+  redfish:{id:"redfish",label:"Redfish",vendor:"DMTF",authKinds:["username-password"],defaultAuthKind:"username-password",scopeKind:null,capabilities:{inventory:true,health:true}},
+  glances: {id:"glances",label:"Glances",vendor:"Glances",authKinds:["username-password","api-key","anonymous"],defaultAuthKind:"username-password",scopeKind:null,capabilities:{inventory:true,health:true}},
+  patchmon: {id:"patchmon",label:"PatchMon",vendor:"PatchMon",authKinds:["key-secret"],defaultAuthKind:"key-secret",scopeKind:null,capabilities:{inventory:true,health:true}},
+  "uptime-kuma": { id: "uptime-kuma", label: "Uptime Kuma", vendor: "Uptime Kuma", authKinds: ["api-key", "username-password"], defaultAuthKind: "api-key", scopeKind: null, capabilities: { inventory: true, health: true } },
   proxmox: {
     id: "proxmox",
     label: "Proxmox VE",
@@ -58,6 +73,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     authKinds: ["api-token"],
     defaultAuthKind: "api-token",
     scopeKind: "nodes",
+    capabilities: { inventory: true, health: false },
   },
   unifi: {
     id: "unifi",
@@ -66,6 +82,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     authKinds: ["api-key", "username-password"],
     defaultAuthKind: "api-key",
     scopeKind: "sites",
+    capabilities: { inventory: true, health: false },
   },
   omada: {
     id: "omada",
@@ -74,6 +91,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     authKinds: ["client-credentials"],
     defaultAuthKind: "client-credentials",
     scopeKind: "sites",
+    capabilities: { inventory: true, health: false },
   },
   opnsense: {
     id: "opnsense",
@@ -82,6 +100,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     authKinds: ["key-secret"],
     defaultAuthKind: "key-secret",
     scopeKind: null,
+    capabilities: { inventory: true, health: false },
   },
   dockhand: {
     id: "dockhand",
@@ -90,10 +109,12 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     authKinds: ["api-key"],
     defaultAuthKind: "api-key",
     scopeKind: "environments",
+    capabilities: { inventory: true, health: false },
   },
 };
 
 export interface IntegrationConnectionPublic {
+  options?: IntegrationConnectionOptions;
   id: string;
   labId: string;
   provider: IntegrationProvider;
@@ -130,9 +151,14 @@ export interface IntegrationConnectionPublic {
   lastAutoSyncMessage: string | null;
   createdAt: string;
   updatedAt: string;
+  healthPollingEnabled: boolean;
+  healthIntervalSeconds: number;
+  healthLastCheckedAt: string | null;
+  healthLastError: string | null;
 }
 
 export interface IntegrationConnectionSecrets {
+  options?: IntegrationConnectionOptions;
   id: string;
   labId: string;
   provider: IntegrationProvider;

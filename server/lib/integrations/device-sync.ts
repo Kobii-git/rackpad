@@ -1,10 +1,12 @@
+import { INTEGRATION_PROVIDER_INFO, type IntegrationProvider } from "./types.js";
+import { externalSourceIdentity } from "./external-health.js";
 import { deviceTypeBase } from "../device-types.js";
 import { db } from "../../db.js";
 import { createHash } from "node:crypto";
 import { cidrContainsHostIp } from "../ip-cidr.js";
 import { createId } from "../ids.js";
 import { initializeDevicePhysicalLayout } from "../device-physical-layout.js";
-import { ensureIpv4 } from "../validation.js";
+import { ensureIpv4, ValidationError } from "../validation.js";
 import {
   INTEGRATION_PORT_KINDS,
   type IntegrationImportableDevice,
@@ -18,6 +20,7 @@ const IMPORTABLE_DEVICE_TYPES = [
   "router",
   "firewall",
   "ap",
+  "ups",
   "server",
   "vm",
   "container",
@@ -53,9 +56,15 @@ function sanitizeVlanNumber(value: unknown): number | null {
 export function sanitizeImportableDevices(
   value: unknown,
   warnings: string[] = [],
+  preserveProviderRecordIds = false,
 ): IntegrationImportableDevice[] {
   if (!Array.isArray(value)) return [];
   const devices: IntegrationImportableDevice[] = [];
+  const stableIds = new Set<string>();
+  if (preserveProviderRecordIds && value.length > 500)
+    warnings.push(
+      "Inventory preview is limited to 500 records. Additional records were not adopted.",
+    );
   for (const [deviceIndex, entry] of value.slice(0, 500).entries()) {
     if (!entry || typeof entry !== "object") continue;
     const row = entry as Record<string, unknown>;
@@ -116,7 +125,9 @@ export function sanitizeImportableDevices(
                     ...new Set(
                       port.ipAddresses
                         .slice(0, 16)
-                        .map((entry) => sanitizeIpv4(entry, warnings, `${name}/${portName}`))
+                        .map((entry) =>
+                          sanitizeIpv4(entry, warnings, `${name}/${portName}`),
+                        )
                         .filter((entry): entry is string => Boolean(entry)),
                     ),
                   ]
@@ -125,12 +136,30 @@ export function sanitizeImportableDevices(
           ];
         })
       : [];
+    let stableId: string | undefined;
+    if (preserveProviderRecordIds) {
+      if (
+        typeof row.providerRecordId !== "string" ||
+        !row.providerRecordId ||
+        row.providerRecordId.length > 200 ||
+        [...row.providerRecordId].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) ||
+        stableIds.has(row.providerRecordId)
+      )
+        throw new ValidationError(
+          "Provider records require unique stable identifiers.",
+          502,
+        );
+      stableId = row.providerRecordId;
+      stableIds.add(stableId);
+    }
     devices.push({
-      providerRecordId: providerRecordId(
-        "device",
-        [deviceType, name, row.macAddress, row.serial, row.parentName],
-        deviceIndex,
-      ),
+      providerRecordId:
+        stableId ??
+        providerRecordId(
+          "device",
+          [deviceType, name, row.macAddress, row.serial, row.parentName],
+          deviceIndex,
+        ),
       name,
       deviceType: deviceType as IntegrationImportableDevice["deviceType"],
       model: text(row.model, 120) || null,
@@ -633,6 +662,7 @@ function classifyDevice(
 function classifyIntegrationDevices(
   labId: string,
   importableDevices: IntegrationImportableDevice[],
+  connectionId?: string,
 ) {
   const existing = existingLabDevices(labId);
   const indexed = importableDevices
@@ -649,14 +679,7 @@ function classifyIntegrationDevices(
   const physicalDevices = indexed
     .filter(({ source }) => !isGuestType(source.deviceType))
     .map(({ source, index }) =>
-      classifyDevice(
-        source,
-        index,
-        existing,
-        macCounts,
-        scopeCounts,
-        [],
-      ),
+      classifyDevice(source, index, existing, macCounts, scopeCounts, []),
     );
   const guestDevices = indexed
     .filter(({ source }) => isGuestType(source.deviceType))
@@ -670,6 +693,32 @@ function classifyIntegrationDevices(
         physicalDevices,
       ),
     );
+  if (connectionId) {
+    const bindings = db
+      .prepare(
+        "SELECT b.providerRecordId,b.deviceId FROM integrationRecordBindings b JOIN integrationConnections c ON c.id=b.connectionId WHERE b.connectionId=? AND c.labId=?",
+      )
+      .all(connectionId, labId) as Array<{
+      providerRecordId: string;
+      deviceId: string;
+    }>;
+    for (const entry of [...physicalDevices, ...guestDevices]) {
+      const binding = bindings.find(
+        (row) => row.providerRecordId === entry.source.providerRecordId,
+      );
+      const target =
+        binding && existing.find((row) => row.id === binding.deviceId);
+      if (target)
+        entry.diff = {
+          ...entry.diff,
+          action: "exists",
+          existingId: target.id,
+          existingHostname: target.hostname,
+          reason: "Provider record is already explicitly bound.",
+          proposedUpdates: [],
+        };
+    }
+  }
   return {
     existing,
     physicalDevices,
@@ -683,6 +732,7 @@ function classifyIntegrationDevices(
 // then hostname/display name) and left untouched; only missing records
 // are offered for creation.
 export function buildIntegrationDeviceSyncPlan(input: {
+  connectionId?: string;
   labId: string;
   importableDevices: IntegrationImportableDevice[];
   wifi: IntegrationWifiInventory | null;
@@ -691,6 +741,7 @@ export function buildIntegrationDeviceSyncPlan(input: {
   const classified = classifyIntegrationDevices(
     input.labId,
     input.importableDevices,
+    input.connectionId,
   );
   const devices = classified.devices.map(({ diff }) => diff);
 
@@ -711,7 +762,11 @@ export function buildIntegrationDeviceSyncPlan(input: {
       ssids.push({
         providerRecordId:
           ssid.providerRecordId ??
-          providerRecordId("ssid", [input.wifi.controllerName, name], ssids.length),
+          providerRecordId(
+            "ssid",
+            [input.wifi.controllerName, name],
+            ssids.length,
+          ),
         action: existingSsids.has(name.toLowerCase()) ? "exists" : "create",
         name,
         vlanNumber: ssid.vlanNumber ?? null,
@@ -790,6 +845,7 @@ export function buildIntegrationDeviceSyncPlan(input: {
 }
 
 export function applyIntegrationDeviceSync(input: {
+  bindingConnectionId?: string;
   labId: string;
   importableDevices: IntegrationImportableDevice[];
   wifi: IntegrationWifiInventory | null;
@@ -837,8 +893,10 @@ export function applyIntegrationDeviceSync(input: {
     const classification = classifyIntegrationDevices(
       input.labId,
       input.importableDevices,
+      input.bindingConnectionId,
     );
     const currentPlan = buildIntegrationDeviceSyncPlan({
+      connectionId: input.bindingConnectionId,
       labId: input.labId,
       importableDevices: input.importableDevices,
       wifi: input.wifi,
@@ -923,9 +981,7 @@ export function applyIntegrationDeviceSync(input: {
       );
     }
 
-    const resolveClassifiedHostId = (
-      value: string | null | undefined,
-    ) => {
+    const resolveClassifiedHostId = (value: string | null | undefined) => {
       const resolution = resolveHost(
         value,
         classification.physicalDevices,
@@ -997,7 +1053,7 @@ export function applyIntegrationDeviceSync(input: {
         device.serial,
         device.ipAddress,
         canonicalMacAddress(device.macAddress),
-        device.online == null
+        input.bindingConnectionId || device.online == null
           ? "unknown"
           : device.online
             ? "online"
@@ -1015,7 +1071,7 @@ export function applyIntegrationDeviceSync(input: {
         null,
         null,
         null,
-        device.online ? now : null,
+        !input.bindingConnectionId && device.online ? now : null,
       );
       existing.push({
         id: deviceId,
@@ -1025,6 +1081,29 @@ export function applyIntegrationDeviceSync(input: {
         deviceType: device.deviceType,
         parentDeviceId,
       });
+      if (input.bindingConnectionId) {
+        const connection = db
+          .prepare(
+            "SELECT * FROM integrationConnections WHERE id=? AND labId=?",
+          )
+          .get(input.bindingConnectionId, input.labId) as
+          Record<string, unknown> | undefined;
+        if (!connection)
+          throw new ValidationError(
+            "Integration connection changed before adoption.",
+            409,
+          );
+        db.prepare(
+          "INSERT INTO integrationRecordBindings(id,connectionId,providerRecordId,deviceId,sourceIdentity,updatedAt) VALUES(?,?,?,?,?,?)",
+        ).run(
+          createId("irb"),
+          input.bindingConnectionId,
+          diff.providerRecordId,
+          deviceId,
+          externalSourceIdentity(connection),
+          now,
+        );
+      }
       createdDeviceIdByProviderRecordId.set(diff.providerRecordId, deviceId);
       result.createdDeviceIds.push(deviceId);
       if (device.deviceType === "ap") apDeviceIds.push(deviceId);
@@ -1285,6 +1364,7 @@ function matchesApDevice(
 // gateway toggle (they are the gateway in OPNsense setups).
 export function filterImportableDevicesForConnection(
   connection: {
+    provider?: IntegrationProvider;
     syncSwitches: boolean;
     syncGateways: boolean;
     syncAccessPoints: boolean;
@@ -1294,7 +1374,8 @@ export function filterImportableDevicesForConnection(
   devices: IntegrationImportableDevice[],
 ): IntegrationImportableDevice[] {
   return devices.filter((device) => {
-    if (deviceTypeBase(device.deviceType) === "switch") return connection.syncSwitches;
+    if (deviceTypeBase(device.deviceType) === "switch")
+      return connection.syncSwitches;
     if (device.deviceType === "router" || device.deviceType === "firewall") {
       return connection.syncGateways;
     }
@@ -1303,6 +1384,7 @@ export function filterImportableDevicesForConnection(
     if (device.deviceType === "vm" || device.deviceType === "container") {
       return connection.syncGuests;
     }
+    if (connection.provider && INTEGRATION_PROVIDER_INFO[connection.provider].capabilities.health) return connection.syncHosts;
     return true;
   });
 }

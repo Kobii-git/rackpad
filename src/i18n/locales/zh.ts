@@ -1,6 +1,36 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Allow unencrypted NUT transport": "允许未加密的NUT传输",
+
+  "External health": "外部健康状态",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "读数仅通过明确启用的监控影响健康状态和警报。",
+  "Unhealthy": "不健康",
+  "Read-only inventory and external health.": "只读库存与外部健康状态。",
+  "Polling": "轮询",
+  "Interval (seconds)": "间隔（秒）",
+  "Select device": "选择设备",
+  "Bind device": "绑定设备",
+  "Unbind": "解除绑定",
+  "Value": "数值",
+  "Last checked": "上次检查",
+  "Stale": "过期",
+  "Alert on degraded": "状态降级时警报",
+  "Create monitor": "创建监控",
+
+  "Floorplan": "房间平面图",
+  "Zoom": "缩放",
+  "Add marker": "添加标记",
+  "Replace the background and keep marker positions?": "更换背景并保留标记位置？",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "使用方向键移动所选标记。按住 Shift 可加大移动幅度。",
+  "No floorplan background selected.": "尚未选择平面图背景。",
+  "Floorplan changed. Reload before applying this edit.": "平面图已更改。应用此编辑前请重新加载。",
+
+  "Hide Disabled Ports": "隐藏已禁用端口",
+  "Find reference": "查找引用",
+  "Generate references": "生成引用",
+  "Print labels": "打印标签",
+
   "Import host adapters and guest NIC ports.": "导入主机适配器和客户机网卡端口。",
   "Revoke": "撤销",
   "Revoked": "已撤销",
@@ -26,6 +56,7 @@ export const zh = {
   "ntfy timed out. Try again later.": "ntfy超时。请稍后重试。",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy拒绝了消息。请检查主题权限和身份验证。",
   "ntfy rate limit reached. Try again later.": "已达到ntfy请求限制。请稍后重试。",
+  "Enable notifications before sending a test alert.": "发送测试警报前，请先启用通知。",
   "Notification delivery failed. Check the configured channels.": "通知发送失败。请检查已配置的渠道。",
 
   "Check the SMTP host, sender and recipient settings.": "请检查SMTP主机、发件人和收件人设置。",

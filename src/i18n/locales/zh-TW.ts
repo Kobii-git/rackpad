@@ -1,6 +1,36 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "Allow unencrypted NUT transport": "允許未加密的NUT傳輸",
+
+  "External health": "外部健康狀態",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "讀數僅透過明確啟用的監控影響健康狀態和警報。",
+  "Unhealthy": "不健康",
+  "Read-only inventory and external health.": "唯讀庫存與外部健康狀態。",
+  "Polling": "輪詢",
+  "Interval (seconds)": "間隔（秒）",
+  "Select device": "選取裝置",
+  "Bind device": "綁定裝置",
+  "Unbind": "解除綁定",
+  "Value": "數值",
+  "Last checked": "上次檢查",
+  "Stale": "過期",
+  "Alert on degraded": "狀態降級時警報",
+  "Create monitor": "建立監控",
+
+  "Floorplan": "房間平面圖",
+  "Zoom": "縮放",
+  "Add marker": "新增標記",
+  "Replace the background and keep marker positions?": "更換背景並保留標記位置？",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "使用方向鍵移動所選標記。按住 Shift 可加大移動幅度。",
+  "No floorplan background selected.": "尚未選取平面圖背景。",
+  "Floorplan changed. Reload before applying this edit.": "平面圖已變更。套用此編輯前請重新載入。",
+
+  "Hide Disabled Ports": "隱藏停用的連接埠",
+  "Find reference": "尋找參照",
+  "Generate references": "產生參照",
+  "Print labels": "列印標籤",
+
   "Import host adapters and guest NIC ports.": "匯入主機介面卡和客體網卡連接埠。",
   "Revoke": "撤銷",
   "Revoked": "已撤銷",
@@ -26,6 +56,7 @@ export const zhTW = {
   "ntfy timed out. Try again later.": "ntfy逾時。請稍後重試。",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy拒絕了訊息。請檢查主題權限和身分驗證。",
   "ntfy rate limit reached. Try again later.": "已達ntfy要求限制。請稍後重試。",
+  "Enable notifications before sending a test alert.": "傳送測試警報前，請先啟用通知。",
   "Notification delivery failed. Check the configured channels.": "通知傳送失敗。請檢查已設定的管道。",
 
   "Check the SMTP host, sender and recipient settings.": "請檢查SMTP主機、寄件人和收件人設定。",

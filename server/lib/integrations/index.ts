@@ -1,3 +1,9 @@
+import { homeAssistantIntegrationClient } from "./providers/home-assistant.js";
+import { redfishIntegrationClient } from "./providers/redfish.js";
+import { nutIntegrationClient } from "./providers/nut.js";
+import { glancesIntegrationClient } from "./providers/glances.js";
+import { patchmonIntegrationClient } from "./providers/patchmon.js";
+import { uptimeKumaIntegrationClient } from "./providers/uptime-kuma.js";
 import {
   getIntegrationClient,
   registerIntegrationClient,
@@ -8,6 +14,12 @@ import { opnsenseIntegrationClient } from "./providers/opnsense.js";
 import { proxmoxIntegrationClient } from "./providers/proxmox.js";
 import { unifiIntegrationClient } from "./providers/unifi.js";
 
+registerIntegrationClient(uptimeKumaIntegrationClient);
+registerIntegrationClient(glancesIntegrationClient);
+registerIntegrationClient(nutIntegrationClient);
+registerIntegrationClient(redfishIntegrationClient);
+registerIntegrationClient(homeAssistantIntegrationClient);
+registerIntegrationClient(patchmonIntegrationClient);
 registerIntegrationClient(dockhandIntegrationClient);
 registerIntegrationClient(omadaIntegrationClient);
 registerIntegrationClient(opnsenseIntegrationClient);
