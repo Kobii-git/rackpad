@@ -4,6 +4,7 @@ export const INTEGRATION_PROVIDERS = [
   "omada",
   "opnsense",
   "dockhand",
+  "uptime-kuma",
 ] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
 
@@ -45,12 +46,14 @@ export interface IntegrationProviderInfo {
   authKinds: IntegrationAuthKind[];
   defaultAuthKind: IntegrationAuthKind;
   scopeKind: IntegrationScopeKind | null;
+  capabilities: { inventory: boolean; health: boolean };
 }
 
 export const INTEGRATION_PROVIDER_INFO: Record<
   IntegrationProvider,
   IntegrationProviderInfo
 > = {
+  "uptime-kuma": { id: "uptime-kuma", label: "Uptime Kuma", vendor: "Uptime Kuma", authKinds: ["api-key", "username-password"], defaultAuthKind: "api-key", scopeKind: null, capabilities: { inventory: true, health: true } },
   proxmox: {
     id: "proxmox",
     label: "Proxmox VE",
@@ -58,6 +61,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     authKinds: ["api-token"],
     defaultAuthKind: "api-token",
     scopeKind: "nodes",
+    capabilities: { inventory: true, health: false },
   },
   unifi: {
     id: "unifi",
@@ -66,6 +70,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     authKinds: ["api-key", "username-password"],
     defaultAuthKind: "api-key",
     scopeKind: "sites",
+    capabilities: { inventory: true, health: false },
   },
   omada: {
     id: "omada",
@@ -74,6 +79,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     authKinds: ["client-credentials"],
     defaultAuthKind: "client-credentials",
     scopeKind: "sites",
+    capabilities: { inventory: true, health: false },
   },
   opnsense: {
     id: "opnsense",
@@ -82,6 +88,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     authKinds: ["key-secret"],
     defaultAuthKind: "key-secret",
     scopeKind: null,
+    capabilities: { inventory: true, health: false },
   },
   dockhand: {
     id: "dockhand",
@@ -90,6 +97,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
     authKinds: ["api-key"],
     defaultAuthKind: "api-key",
     scopeKind: "environments",
+    capabilities: { inventory: true, health: false },
   },
 };
 
@@ -130,6 +138,10 @@ export interface IntegrationConnectionPublic {
   lastAutoSyncMessage: string | null;
   createdAt: string;
   updatedAt: string;
+  healthPollingEnabled: boolean;
+  healthIntervalSeconds: number;
+  healthLastCheckedAt: string | null;
+  healthLastError: string | null;
 }
 
 export interface IntegrationConnectionSecrets {

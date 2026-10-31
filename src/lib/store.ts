@@ -595,6 +595,9 @@ function filterAuditForLab(
 ) {
   return sortAudit(
     entries.filter((entry) => {
+      // Scoped snapshots outlive inventory and do not follow a moved entity.
+      if (entry.labIds !== undefined)
+        return entry.labIds?.includes(context.labId) ?? false;
       switch (entry.entityType) {
         case "Lab":
           return entry.entityId === context.labId;
@@ -826,6 +829,31 @@ function findManagementAssignment(
       : undefined) ??
     (candidates.length === 1 ? candidates[0] : undefined)
   );
+}
+
+let auditHistoryRequest = 0;
+async function refreshAuditHistory() {
+  const labId = state.lab.id;
+  const userId = state.currentUser?.id;
+  const request = ++auditHistoryRequest;
+  try {
+    const entries = await api.getAuditLog({ limit: 500 });
+    if (
+      state.lab.id !== labId ||
+      state.currentUser?.id !== userId ||
+      request !== auditHistoryRequest
+    )
+      return;
+    setState((prev) => ({
+      ...prev,
+      auditLog: sortAudit(
+        entries.filter((entry) => entry.labIds?.includes(labId)),
+      ),
+    }));
+  } catch (error) {
+    // An already successful deletion must not be reported as failed by a history refresh.
+    console.error("Failed to refresh audit history", error);
+  }
 }
 
 async function recordAudit(
@@ -1621,6 +1649,17 @@ export function upsertPhysicalLayoutRecord(layout: DevicePhysicalLayout) {
   }));
 }
 
+export async function generateInventoryReference(kind: "device" | "cable", id: string) {
+  const actorId = state.currentUser?.id;
+  const result = await api.generateReference(kind, id);
+  if (state.currentUser?.id === actorId) setState(prev => ({ ...prev,
+    devices: kind === "device" ? prev.devices.map(row => row.id === id ? { ...row, publicReference: result.publicReference } : row) : prev.devices,
+    portLinks: kind === "cable" ? prev.portLinks.map(row => row.id === id ? { ...row, publicReference: result.publicReference } : row) : prev.portLinks,
+  }));
+  await refreshAuditHistory();
+  return result;
+}
+
 export async function selectLab(labId: string): Promise<void> {
   if (labId === state.lab.id) return;
   const selectedLab = state.labs.find((lab) => lab.id === labId);
@@ -1694,7 +1733,7 @@ export async function deleteLabRecord(id: string): Promise<void> {
     await loadAll(true, nextLab.id);
   }
 
-  void recordAudit("lab.delete", "Lab", id, `Deleted lab ${lab.name}`);
+  await refreshAuditHistory();
 }
 
 export async function downloadAdminBackup(): Promise<string> {
@@ -1961,12 +2000,9 @@ export async function updateRoomRecord(
 }
 
 export async function deleteRoomRecord(id: string): Promise<void> {
-  const room = state.rooms.find((entry) => entry.id === id);
   await api.deleteRoom(id);
   await loadAll(true);
-  if (room) {
-    void recordAudit("room.delete", "Room", id, `Deleted room ${room.name}`);
-  }
+  await refreshAuditHistory();
 }
 
 async function refreshCableGuideReferences(deviceIds: string[]) {
@@ -2013,12 +2049,9 @@ export async function applyRackStudioAction(
 }
 
 export async function deleteRackRecord(id: string): Promise<void> {
-  const rack = state.racks.find((entry) => entry.id === id);
   await api.deleteRack(id);
   await loadAll(true);
-  if (rack) {
-    void recordAudit("rack.delete", "Rack", id, `Deleted rack ${rack.name}`);
-  }
+  await refreshAuditHistory();
 }
 
 export async function createVirtualSwitchRecord(input: {
@@ -2098,13 +2131,7 @@ export async function deleteVirtualSwitchRecord(id: string): Promise<boolean> {
     ),
   }));
 
-  void recordAudit(
-    "virtual.switch.delete",
-    "VirtualSwitch",
-    id,
-    `Deleted virtual switch ${existing.name}`,
-  );
-
+  await refreshAuditHistory();
   return true;
 }
 
@@ -2167,17 +2194,9 @@ export async function createPortRecord(input: Omit<Port, "id">): Promise<Port> {
 }
 
 export async function deletePortRecord(id: string): Promise<void> {
-  const port = state.ports.find((entry) => entry.id === id);
   await api.deletePort(id);
   await loadAll(true);
-  if (port) {
-    void recordAudit(
-      "port.delete",
-      "Port",
-      id,
-      `Deleted port ${port.name} from ${state.devices.find((device) => device.id === port.deviceId)?.hostname ?? port.deviceId}`,
-    );
-  }
+  await refreshAuditHistory();
 }
 
 export async function createPortTemplateRecord(
@@ -2299,20 +2318,12 @@ export async function updatePortTemplateRecord(
 }
 
 export async function deletePortTemplateRecord(id: string): Promise<void> {
-  const existing = state.portTemplates.find((template) => template.id === id);
   await api.deletePortTemplate(id);
   setState((prev) => ({
     ...prev,
     portTemplates: removeById(prev.portTemplates, id),
   }));
-  if (existing) {
-    void recordAudit(
-      "port.template.delete",
-      "PortTemplate",
-      id,
-      `Deleted port template ${existing.name}`,
-    );
-  }
+  await refreshAuditHistory();
 }
 
 export async function createDeviceTypeRecord(input: {
@@ -2373,6 +2384,7 @@ export async function deleteDeviceTypeRecord(id: string): Promise<void> {
       ),
     ),
   }));
+  await refreshAuditHistory();
 }
 
 export async function createDriveBayTemplateRecord(
@@ -2428,6 +2440,7 @@ export async function deleteDriveBayTemplateRecord(id: string): Promise<void> {
     ...prev,
     driveBayTemplates: removeById(prev.driveBayTemplates, id),
   }));
+  await refreshAuditHistory();
 }
 
 export async function applyDriveBayTemplateRecord(
@@ -2483,6 +2496,7 @@ export async function deleteDriveSlotRecord(id: string): Promise<void> {
     ...prev,
     driveSlots: removeById(prev.driveSlots, id),
   }));
+  await refreshAuditHistory();
 }
 
 function reconcileDriveSlotAssignment(slots: DriveSlot[], drive: StorageDrive) {
@@ -2560,6 +2574,7 @@ export async function deleteStorageDriveRecord(id: string): Promise<void> {
       slot.driveId === id ? { ...slot, driveId: null } : slot,
     ),
   }));
+  await refreshAuditHistory();
 }
 
 function reconcilePoolDriveAssignments(
@@ -2662,6 +2677,7 @@ export async function deleteStoragePoolRecord(id: string): Promise<void> {
       ),
     ),
   }));
+  await refreshAuditHistory();
 }
 
 export interface CreateCableInput {
@@ -2806,12 +2822,8 @@ export async function deletePortAggregate(id: string): Promise<void> {
         ),
     ),
   }));
-  void recordAudit(
-    "port.aggregate.delete",
-    "Port",
-    id,
-    "Deleted aggregate port",
-  );
+
+  await refreshAuditHistory();
 }
 
 export async function deleteCable(id: string): Promise<boolean> {
@@ -2837,6 +2849,7 @@ export async function deleteCable(id: string): Promise<boolean> {
     ),
   }));
 
+  await refreshAuditHistory();
   return true;
 }
 
@@ -3307,13 +3320,7 @@ export async function deleteDevice(id: string): Promise<boolean> {
     ),
   }));
 
-  void recordAudit(
-    "device.delete",
-    "Device",
-    id,
-    `Deleted device ${device.hostname}`,
-  );
-
+  await refreshAuditHistory();
   return true;
 }
 
@@ -3384,13 +3391,7 @@ export async function deleteDocumentationPageRecord(
     documentationPages: removeById(prev.documentationPages, id),
   }));
 
-  void recordAudit(
-    "documentation.delete",
-    "DocumentationPage",
-    id,
-    `Deleted documentation page ${existing.title}`,
-  );
-
+  await refreshAuditHistory();
   return true;
 }
 
@@ -3406,6 +3407,7 @@ export async function unlinkDocumentationDeviceRecord(
   deviceId: string,
 ) {
   await api.unlinkDocumentationDevice(pageId, deviceId);
+  await refreshAuditHistory();
 }
 
 export async function importDockerContainerRecord(input: {
@@ -3519,13 +3521,7 @@ export async function deleteDeviceImageRecord(id: string): Promise<boolean> {
     deviceImages: removeById(prev.deviceImages, id),
   }));
 
-  void recordAudit(
-    "device.image.delete",
-    "DeviceImage",
-    id,
-    `Deleted image ${existing.label}`,
-  );
-
+  await refreshAuditHistory();
   return true;
 }
 
@@ -3590,13 +3586,7 @@ export async function deleteDeviceServiceRecord(id: string): Promise<boolean> {
     deviceServices: removeById(prev.deviceServices, id),
   }));
 
-  void recordAudit(
-    "device.service.delete",
-    "DeviceService",
-    id,
-    `Deleted service ${existing.name}`,
-  );
-
+  await refreshAuditHistory();
   return true;
 }
 
@@ -3673,13 +3663,7 @@ export async function deleteReferenceImageRecord(id: string): Promise<boolean> {
     referenceImages: removeById(prev.referenceImages, id),
   }));
 
-  void recordAudit(
-    "reference.image.delete",
-    "ReferenceImage",
-    id,
-    `Deleted ${existing.entityType} image ${existing.label}`,
-  );
-
+  await refreshAuditHistory();
   return true;
 }
 
@@ -3910,13 +3894,7 @@ export async function deleteVlan(id: string): Promise<boolean> {
     ),
   }));
 
-  void recordAudit(
-    "vlan.delete",
-    "Vlan",
-    id,
-    `Deleted VLAN ${vlan.vlanId} (${vlan.name})`,
-  );
-
+  await refreshAuditHistory();
   return true;
 }
 
@@ -3956,20 +3934,12 @@ export async function updateVlanRangeRecord(
 }
 
 export async function deleteVlanRangeRecord(id: string): Promise<void> {
-  const range = state.vlanRanges.find((entry) => entry.id === id);
   await api.deleteVlanRange(id);
   setState((prev) => ({
     ...prev,
     vlanRanges: removeById(prev.vlanRanges, id),
   }));
-  if (range) {
-    void recordAudit(
-      "vlan.range.delete",
-      "VlanRange",
-      id,
-      `Deleted VLAN range ${range.name}`,
-    );
-  }
+  await refreshAuditHistory();
 }
 
 export async function createSubnetRecord(
@@ -4039,17 +4009,9 @@ export async function updateSubnetRecord(
 }
 
 export async function deleteSubnetRecord(id: string): Promise<void> {
-  const subnet = state.subnets.find((entry) => entry.id === id);
   await api.deleteSubnet(id);
   await loadAll(true);
-  if (subnet) {
-    void recordAudit(
-      "subnet.delete",
-      "Subnet",
-      id,
-      `Deleted subnet ${subnet.cidr}`,
-    );
-  }
+  await refreshAuditHistory();
 }
 
 export async function createDhcpScopeRecord(
@@ -4088,20 +4050,12 @@ export async function updateDhcpScopeRecord(
 }
 
 export async function deleteDhcpScopeRecord(id: string): Promise<void> {
-  const scope = state.scopes.find((entry) => entry.id === id);
   await api.deleteDhcpScope(id);
   setState((prev) => ({
     ...prev,
     scopes: removeById(prev.scopes, id),
   }));
-  if (scope) {
-    void recordAudit(
-      "dhcp.scope.delete",
-      "DhcpScope",
-      id,
-      `Deleted DHCP scope ${scope.name}`,
-    );
-  }
+  await refreshAuditHistory();
 }
 
 export async function createIpZoneRecord(
@@ -4145,20 +4099,12 @@ export async function updateIpZoneRecord(
 }
 
 export async function deleteIpZoneRecord(id: string): Promise<void> {
-  const zone = state.ipZones.find((entry) => entry.id === id);
   await api.deleteIpZone(id);
   setState((prev) => ({
     ...prev,
     ipZones: removeById(prev.ipZones, id),
   }));
-  if (zone) {
-    void recordAudit(
-      "ip.zone.delete",
-      "IpZone",
-      id,
-      `Deleted ${zone.kind} zone ${zone.startIp}-${zone.endIp}`,
-    );
-  }
+  await refreshAuditHistory();
 }
 
 export async function createUserAccount(input: {
@@ -4203,20 +4149,12 @@ export async function updateUserAccount(
 }
 
 export async function deleteUserAccount(id: string): Promise<void> {
-  const user = state.users.find((entry) => entry.id === id);
   await api.deleteUser(id);
   setState((prev) => ({
     ...prev,
     users: removeById(prev.users, id),
   }));
-  if (user) {
-    void recordAudit(
-      "user.delete",
-      "User",
-      id,
-      `Deleted user ${user.username}`,
-    );
-  }
+  await refreshAuditHistory();
 }
 
 export async function createDeviceMonitorConfig(
@@ -4278,12 +4216,8 @@ export async function deleteDeviceMonitorConfig(id: string): Promise<boolean> {
     deviceMonitors: removeById(prev.deviceMonitors, id),
     devices: replaceById(prev.devices, device, sortDevices),
   }));
-  void recordAudit(
-    "monitor.delete",
-    "DeviceMonitor",
-    id,
-    `Removed monitor ${existing.name} from ${state.devices.find((entry) => entry.id === existing.deviceId)?.hostname ?? existing.deviceId}`,
-  );
+
+  await refreshAuditHistory();
   return true;
 }
 
@@ -4481,22 +4415,12 @@ export async function runDiscoveryScanScheduleNow(
 export async function deleteDiscoveryScanScheduleRecord(
   id: string,
 ): Promise<void> {
-  const existing = state.discoveryScanSchedules.find(
-    (schedule) => schedule.id === id,
-  );
   await api.deleteDiscoveryScanSchedule(id);
   setState((prev) => ({
     ...prev,
     discoveryScanSchedules: removeById(prev.discoveryScanSchedules, id),
   }));
-  if (existing) {
-    void recordAudit(
-      "discovery.schedule.delete",
-      "DiscoveryScanSchedule",
-      id,
-      `Removed discovery schedule for ${existing.cidr}`,
-    );
-  }
+  await refreshAuditHistory();
 }
 
 export async function updateDiscoveredDeviceRecord(
@@ -4522,20 +4446,12 @@ export async function updateDiscoveredDeviceRecord(
 }
 
 export async function deleteDiscoveredDeviceRecord(id: string): Promise<void> {
-  const existing = state.discoveredDevices.find((device) => device.id === id);
   await api.deleteDiscoveredDevice(id);
   setState((prev) => ({
     ...prev,
     discoveredDevices: removeById(prev.discoveredDevices, id),
   }));
-  if (existing) {
-    void recordAudit(
-      "discovery.delete",
-      "DiscoveredDevice",
-      id,
-      `Removed discovered device ${existing.hostname ?? existing.ipAddress}`,
-    );
-  }
+  await refreshAuditHistory();
 }
 
 export async function createWifiControllerRecord(
@@ -4568,19 +4484,9 @@ export async function updateWifiControllerRecord(
 }
 
 export async function deleteWifiControllerRecord(id: string): Promise<void> {
-  const existing = state.wifiControllers.find(
-    (controller) => controller.id === id,
-  );
   await api.deleteWifiController(id);
   await loadAll(true);
-  if (existing) {
-    void recordAudit(
-      "wifi.controller.delete",
-      "WifiController",
-      id,
-      `Deleted WiFi controller ${existing.name}`,
-    );
-  }
+  await refreshAuditHistory();
 }
 
 export async function createWifiSsidRecord(
@@ -4613,17 +4519,9 @@ export async function updateWifiSsidRecord(
 }
 
 export async function deleteWifiSsidRecord(id: string): Promise<void> {
-  const existing = state.wifiSsids.find((ssid) => ssid.id === id);
   await api.deleteWifiSsid(id);
   await loadAll(true);
-  if (existing) {
-    void recordAudit(
-      "wifi.ssid.delete",
-      "WifiSsid",
-      id,
-      `Deleted WiFi SSID ${existing.name}`,
-    );
-  }
+  await refreshAuditHistory();
 }
 
 export async function saveWifiAccessPointRecord(
@@ -4673,17 +4571,9 @@ export async function updateWifiRadioRecord(
 }
 
 export async function deleteWifiRadioRecord(id: string): Promise<void> {
-  const existing = state.wifiRadios.find((radio) => radio.id === id);
   await api.deleteWifiRadio(id);
   await loadAll(true);
-  if (existing) {
-    void recordAudit(
-      "wifi.radio.delete",
-      "WifiRadio",
-      id,
-      `Deleted WiFi radio ${existing.slotName}`,
-    );
-  }
+  await refreshAuditHistory();
 }
 
 export async function saveWifiClientAssociationRecord(
@@ -4736,19 +4626,7 @@ export async function saveWifiClientAssociationRecord(
 export async function deleteWifiClientAssociationRecord(
   clientDeviceId: string,
 ): Promise<void> {
-  const existing = state.wifiClientAssociations.find(
-    (association) => association.clientDeviceId === clientDeviceId,
-  );
-  const client = state.devices.find((entry) => entry.id === clientDeviceId);
   await api.deleteWifiClientAssociation(clientDeviceId);
   await loadAll(true);
-  if (existing) {
-    const ap = state.devices.find((entry) => entry.id === existing.apDeviceId);
-    void recordAudit(
-      "wifi.client.unlink",
-      "WifiClientAssociation",
-      clientDeviceId,
-      `Removed WiFi link between ${client?.hostname ?? clientDeviceId} and ${ap?.hostname ?? existing.apDeviceId}`,
-    );
-  }
+  await refreshAuditHistory();
 }

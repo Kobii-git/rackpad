@@ -1,6 +1,34 @@
 import type { TranslationMap } from "../base";
 
 export const nl = {
+  "External health": "Externe gezondheid",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Metingen beïnvloeden gezondheid en meldingen alleen via expliciet ingeschakelde monitors.",
+  "Unhealthy": "Ongezond",
+  "Read-only inventory and external health.": "Alleen-lezen inventaris en externe gezondheid.",
+  "Polling": "Periodiek ophalen",
+  "Interval (seconds)": "Interval (seconden)",
+  "Select device": "Apparaat selecteren",
+  "Bind device": "Apparaat koppelen",
+  "Unbind": "Ontkoppelen",
+  "Value": "Waarde",
+  "Last checked": "Laatst gecontroleerd",
+  "Stale": "Verouderd",
+  "Alert on degraded": "Waarschuw bij verslechtering",
+  "Create monitor": "Monitor maken",
+
+  "Floorplan": "Plattegrond",
+  "Zoom": "Vergroting",
+  "Add marker": "Markering toevoegen",
+  "Replace the background and keep marker positions?": "Achtergrond vervangen en markeringsposities behouden?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Gebruik de pijltjestoetsen om de geselecteerde markering te verplaatsen. Houd Shift ingedrukt voor grotere stappen.",
+  "No floorplan background selected.": "Geen plattegrondachtergrond geselecteerd.",
+  "Floorplan changed. Reload before applying this edit.": "De plattegrond is gewijzigd. Herlaad voordat u deze bewerking toepast.",
+
+  "Hide Disabled Ports": "Uitgeschakelde poorten verbergen",
+  "Find reference": "Verwijzing zoeken",
+  "Generate references": "Verwijzingen genereren",
+  "Print labels": "Etiketten afdrukken",
+
   "Import host adapters and guest NIC ports.": "Importeer hostadapters en NIC-poorten van gasten.",
   "Revoke": "Intrekken",
   "Revoked": "Ingetrokken",
@@ -26,6 +54,7 @@ export const nl = {
   "ntfy timed out. Try again later.": "Time-out bij ntfy. Probeer het later opnieuw.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy heeft het bericht geweigerd. Controleer onderwerprechten en authenticatie.",
   "ntfy rate limit reached. Try again later.": "ntfy-aanvraaglimiet bereikt. Probeer het later opnieuw.",
+  "Enable notifications before sending a test alert.": "Schakel meldingen in voordat u een testwaarschuwing verstuurt.",
   "Notification delivery failed. Check the configured channels.": "Melding verzenden mislukt. Controleer de ingestelde kanalen.",
 
   "Check the SMTP host, sender and recipient settings.": "Controleer de SMTP-host, afzender en ontvangerinstellingen.",

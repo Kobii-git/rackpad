@@ -1,6 +1,34 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "External health": "बाहरी स्वास्थ्य",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "रीडिंग केवल स्पष्ट रूप से सक्षम मॉनिटर के माध्यम से स्वास्थ्य और अलर्ट को प्रभावित करती हैं।",
+  "Unhealthy": "अस्वस्थ",
+  "Read-only inventory and external health.": "केवल पढ़ने योग्य इन्वेंटरी और बाहरी स्वास्थ्य।",
+  "Polling": "पोलिंग",
+  "Interval (seconds)": "अंतराल (सेकंड)",
+  "Select device": "डिवाइस चुनें",
+  "Bind device": "डिवाइस जोड़ें",
+  "Unbind": "लिंक हटाएँ",
+  "Value": "मान",
+  "Last checked": "अंतिम जाँच",
+  "Stale": "पुराना",
+  "Alert on degraded": "गिरावट पर चेतावनी",
+  "Create monitor": "मॉनिटर बनाएँ",
+
+  "Floorplan": "तल योजना",
+  "Zoom": "ज़ूम",
+  "Add marker": "चिह्न जोड़ें",
+  "Replace the background and keep marker positions?": "पृष्ठभूमि बदलें और चिह्नों के स्थान बनाए रखें?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "चुने गए चिह्न को खिसकाने के लिए तीर कुंजियों का उपयोग करें। बड़े चरणों के लिए Shift दबाए रखें।",
+  "No floorplan background selected.": "तल योजना की कोई पृष्ठभूमि नहीं चुनी गई है।",
+  "Floorplan changed. Reload before applying this edit.": "तल योजना बदल गई है। यह संपादन लागू करने से पहले फिर लोड करें।",
+
+  "Hide Disabled Ports": "अक्षम पोर्ट छिपाएँ",
+  "Find reference": "संदर्भ खोजें",
+  "Generate references": "संदर्भ बनाएँ",
+  "Print labels": "लेबल प्रिंट करें",
+
   "Import host adapters and guest NIC ports.": "होस्ट एडेप्टर और गेस्ट NIC पोर्ट आयात करें।",
   "Revoke": "निरस्त करें",
   "Revoked": "निरस्त",
@@ -26,6 +54,7 @@ export const hi = {
   "ntfy timed out. Try again later.": "ntfy का समय समाप्त हुआ। बाद में फिर कोशिश करें।",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy ने संदेश अस्वीकार किया। विषय अनुमतियाँ और प्रमाणीकरण जाँचें।",
   "ntfy rate limit reached. Try again later.": "ntfy अनुरोध सीमा पूरी हुई। बाद में फिर कोशिश करें।",
+  "Enable notifications before sending a test alert.": "परीक्षण अलर्ट भेजने से पहले सूचनाएँ सक्षम करें।",
   "Notification delivery failed. Check the configured channels.": "सूचना भेजना विफल रहा। कॉन्फ़िगर किए गए चैनल जाँचें।",
 
   "Check the SMTP host, sender and recipient settings.": "SMTP होस्ट, प्रेषक और प्राप्तकर्ता की सेटिंग जाँचें।",

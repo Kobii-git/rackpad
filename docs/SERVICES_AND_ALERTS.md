@@ -26,7 +26,11 @@ snapshot, rather than opening the migrated database in an older version.
 In **Admin → Alerting**, enter the mail provider's hostname, port, sender,
 recipients and credentials when required. Enable **Implicit TLS** for a provider
 using TLS immediately on connection, usually port 465. Leave it off for STARTTLS,
-usually port 587. The switch does not rewrite the port. Save before sending a test.
+usually port 587. The switch does not rewrite the port. Check **Enable
+notifications**, then **Save notifications** before sending a test. Send test uses
+the saved configuration; unsaved edits do not change its behavior. A disabled
+saved configuration produces a clear diagnostic and a failed-test history entry
+without contacting a provider.
 
 TLS certificate verification stays enabled. Use the certificate's hostname and
 ensure the server provides a trusted certificate chain. Do not disable

@@ -11,6 +11,7 @@ export interface IntegrationHttpRequest {
   method?: "GET" | "POST";
   headers?: Record<string, string>;
   body?: string;
+  deadlineMs?: number;
   timeoutMs?: number;
   verifyTls?: boolean;
 }
@@ -114,6 +115,7 @@ async function performIntegrationHttpRequest(
   const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const response = await requestPinnedUrlWithBody(request.url, {
     timeoutMs,
+    deadlineMs:request.deadlineMs,
     maxRedirects: 3,
     maxResponseBytes: MAX_RESPONSE_BYTES,
     method: request.method ?? "GET",

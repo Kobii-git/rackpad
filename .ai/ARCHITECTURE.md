@@ -52,8 +52,9 @@ data boundaries as application code even when they are not shipped at runtime.
 3. Browser requests pass host/origin and typed route authorization; public and
    admin access is central while lab access is resolved by handlers before SQL.
 4. Domain mutations use parameterized SQL and transactions where multi-row
-   atomicity matters; audit coverage is mixed server/client and is activity
-   history rather than a tamper-evident ledger.
+   atomicity matters. Inventory deletion events are server-written in the same
+   transaction, with durable lab ownership. Other audit coverage is mixed
+   server/client; this is activity history rather than a tamper-evident ledger.
 5. Outbound monitor, alert, Docker, and controller HTTP flows pass through the
    DNS-pinned network guard.
 6. `/data/rackpad.db` is the normal persistent state; images are stored in SQLite.
@@ -71,3 +72,11 @@ data boundaries as application code even when they are not shipped at runtime.
   trust to root, host networking, and network capabilities.
 - SQLite contains topology, accounts, sessions, hashes, encrypted integration
   secrets, audit rows, and embedded images; treat it and all exports as sensitive.
+
+Health-capable providers use guarded read-only collectors with per-connection
+configuration/epoch checks and a shared bounded latest-reading cache. Inventory
+uses explicit preview/adoption or record bindings; collection does not imply
+adoption or health participation. External monitors read this cache through the
+existing monitoring/notification engine. Polling is independently opt-in and
+health providers cannot use automatic inventory-adoption schedules. Uptime Kuma
+uses authenticated `/metrics` with stable monitor IDs, never its control API.

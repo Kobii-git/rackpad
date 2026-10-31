@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import { optionalHeaderColor } from '../lib/presentation.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
@@ -83,7 +84,7 @@ export const roomsRoutes: FastifyPluginAsync = async (app) => {
     return db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.id)
   })
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "Room", entityId: req.params.id, action: "room.delete" }, () => {
     const row = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.id) as
       | Record<string, unknown>
       | undefined
@@ -94,6 +95,6 @@ export const roomsRoutes: FastifyPluginAsync = async (app) => {
       db.prepare('DELETE FROM rooms WHERE id = ?').run(req.params.id)
     })
     removeRoom()
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 }
