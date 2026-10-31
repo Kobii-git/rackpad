@@ -126,6 +126,15 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 22
+      - name: Set up platform-aware Docker
+        uses: docker/setup-docker-action@v5
+        with:
+          version: latest
+          channel: stable
+          daemon-config: |
+            {"features":{"containerd-snapshotter":true}}
+      - name: Verify Docker platform inspection support
+        run: node scripts/check-docker-platform.mjs
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
       - name: Set up Docker Buildx
@@ -196,6 +205,15 @@ jobs:
         with:
           node-version: 22
 
+      - name: Set up platform-aware Docker
+        uses: docker/setup-docker-action@v5
+        with:
+          version: latest
+          channel: stable
+          daemon-config: |
+            {"features":{"containerd-snapshotter":true}}
+      - name: Verify Docker platform inspection support
+        run: node scripts/check-docker-platform.mjs
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 

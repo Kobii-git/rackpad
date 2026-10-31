@@ -65,6 +65,8 @@ interoperability; physical-host accuracy and provider HTTPS remain separate.
 
 Image smoke requires a Docker client/daemon supporting API 1.49+ for explicit
 platform-specific inspection when multiple baseline variants are cached locally.
+Candidate and published-image smoke jobs install current stable Docker with the
+containerd image store and fail a capability preflight before image work.
 
 Run the bundled-font browser preflight before the long browser matrix; install
 dependencies within the worktree so Vite can serve font assets. Workflow lint and
