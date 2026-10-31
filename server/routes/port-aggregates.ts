@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from "fastify";
 import { db, parseRow } from "../db.js";
 import { assertLabWrite, assertLabWriteFromRow } from "../lib/lab-access.js";
@@ -233,7 +234,7 @@ export const portAggregatesRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(aggregatePayload(req.params.id));
   });
 
-  app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/:id", (req, reply) => withAuditedDeletion(req, reply, { entityType: "Port", entityId: req.params.id, action: "port.aggregate.delete" }, () => {
     const existing = getAggregatePortRow(req.params.id);
     if (!assertLabWriteFromRow(req, reply, existing)) return;
     if (portHasCable(req.params.id)) {
@@ -250,6 +251,6 @@ export const portAggregatesRoutes: FastifyPluginAsync = async (app) => {
     });
 
     removeAggregate();
-    return reply.status(204).send();
-  });
+    return true as const;
+  }));
 };

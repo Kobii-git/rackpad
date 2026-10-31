@@ -1,4 +1,34 @@
 export const en = {
+  "Allow unencrypted NUT transport": "Allow unencrypted NUT transport",
+
+  "External health": "External health",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Readings affect health and alerts only through explicitly enabled monitors.",
+  "Unhealthy": "Unhealthy",
+  "Read-only inventory and external health.": "Read-only inventory and external health.",
+  "Polling": "Polling",
+  "Interval (seconds)": "Interval (seconds)",
+  "Select device": "Select device",
+  "Bind device": "Bind device",
+  "Unbind": "Unbind",
+  "Value": "Value",
+  "Last checked": "Last checked",
+  "Stale": "Stale",
+  "Alert on degraded": "Alert on degraded",
+  "Create monitor": "Create monitor",
+
+  "Floorplan": "Floorplan",
+  "Zoom": "Zoom",
+  "Add marker": "Add marker",
+  "Replace the background and keep marker positions?": "Replace the background and keep marker positions?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Use arrow keys to move the selected marker. Hold Shift for larger steps.",
+  "No floorplan background selected.": "No floorplan background selected.",
+  "Floorplan changed. Reload before applying this edit.": "Floorplan changed. Reload before applying this edit.",
+
+  "Hide Disabled Ports": "Hide Disabled Ports",
+  "Find reference": "Find reference",
+  "Generate references": "Generate references",
+  "Print labels": "Print labels",
+
   "Import host adapters and guest NIC ports.": "Import host adapters and guest NIC ports.",
   "Revoke": "Revoke",
   "Revoked": "Revoked",
@@ -24,6 +54,7 @@ export const en = {
   "ntfy timed out. Try again later.": "ntfy timed out. Try again later.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy rejected the message. Check topic permissions and authentication.",
   "ntfy rate limit reached. Try again later.": "ntfy rate limit reached. Try again later.",
+  "Enable notifications before sending a test alert.": "Enable notifications before sending a test alert.",
   "Notification delivery failed. Check the configured channels.": "Notification delivery failed. Check the configured channels.",
 
   "Check the SMTP host, sender and recipient settings.": "Check the SMTP host, sender and recipient settings.",

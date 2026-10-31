@@ -1,6 +1,36 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "Allow unencrypted NUT transport": "อนุญาตการส่งข้อมูล NUT ที่ไม่เข้ารหัส",
+
+  "External health": "สถานะภายนอก",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "ค่าที่อ่านได้จะมีผลต่อสถานะและการแจ้งเตือนผ่านตัวตรวจสอบที่เปิดใช้อย่างชัดเจนเท่านั้น",
+  "Unhealthy": "ผิดปกติ",
+  "Read-only inventory and external health.": "รายการอุปกรณ์แบบอ่านอย่างเดียวและสถานะภายนอก",
+  "Polling": "การสำรวจ",
+  "Interval (seconds)": "ช่วงเวลา (วินาที)",
+  "Select device": "เลือกอุปกรณ์",
+  "Bind device": "เชื่อมโยงอุปกรณ์",
+  "Unbind": "ยกเลิกการเชื่อมโยง",
+  "Value": "ค่า",
+  "Last checked": "ตรวจสอบล่าสุด",
+  "Stale": "ล้าสมัย",
+  "Alert on degraded": "แจ้งเตือนเมื่อเสื่อมลง",
+  "Create monitor": "สร้างตัวตรวจสอบ",
+
+  "Floorplan": "แผนผังห้อง",
+  "Zoom": "การขยาย",
+  "Add marker": "เพิ่มหมุด",
+  "Replace the background and keep marker positions?": "เปลี่ยนพื้นหลังและเก็บตำแหน่งหมุดไว้หรือไม่?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "ใช้ปุ่มลูกศรเพื่อย้ายหมุดที่เลือก กด Shift ค้างไว้เพื่อเลื่อนครั้งละมากขึ้น",
+  "No floorplan background selected.": "ยังไม่ได้เลือกพื้นหลังแผนผังห้อง",
+  "Floorplan changed. Reload before applying this edit.": "แผนผังห้องเปลี่ยนแล้ว โหลดใหม่ก่อนใช้การแก้ไขนี้",
+
+  "Hide Disabled Ports": "ซ่อนพอร์ตที่ปิดใช้งาน",
+  "Find reference": "ค้นหารหัสอ้างอิง",
+  "Generate references": "สร้างรหัสอ้างอิง",
+  "Print labels": "พิมพ์ป้ายกำกับ",
+
   "Import host adapters and guest NIC ports.": "นำเข้าอะแดปเตอร์โฮสต์และพอร์ต NIC ของผู้เยี่ยมชม",
   "Revoke": "เพิกถอน",
   "Revoked": "เพิกถอนแล้ว",
@@ -26,6 +56,7 @@ export const th = {
   "ntfy timed out. Try again later.": "ntfy หมดเวลา ลองอีกครั้งในภายหลัง",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy ปฏิเสธข้อความ ตรวจสอบสิทธิ์หัวข้อและการยืนยันตัวตน",
   "ntfy rate limit reached. Try again later.": "ถึงขีดจำกัดคำขอ ntfy แล้ว ลองอีกครั้งในภายหลัง",
+  "Enable notifications before sending a test alert.": "เปิดใช้งานการแจ้งเตือนก่อนส่งการแจ้งเตือนทดสอบ",
   "Notification delivery failed. Check the configured channels.": "ส่งการแจ้งเตือนไม่สำเร็จ ตรวจสอบช่องทางที่ตั้งค่าไว้",
 
   "Check the SMTP host, sender and recipient settings.": "ตรวจสอบการตั้งค่าโฮสต์ SMTP ผู้ส่ง และผู้รับ",

@@ -5,6 +5,7 @@ export interface NotificationChannelResult {
 }
 
 export const NOTIFICATION_ERRORS = {
+  notification_disabled: 'Enable notifications before sending a test alert.',
   ntfy_configuration: 'Check the ntfy topic URL, access token and encryption key.',
   ntfy_connection: 'Cannot deliver to ntfy. Check the URL, network access and TLS certificate.',
   ntfy_timeout: 'ntfy timed out. Try again later.',

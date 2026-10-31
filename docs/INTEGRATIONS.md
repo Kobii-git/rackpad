@@ -62,6 +62,18 @@ controllers stay reviewable.
   (from the guest agent or container interfaces). Templates are skipped,
   and OVS setups work: bridges are derived from their member ports when
   the node does not list the OVSBridge rows themselves.
+  Host API imports also stage the node's IPv4 management address and actual
+  network interfaces, including physical ports and virtual bridge/bond/VLAN
+  interfaces. The default-gateway interface is preferred, then active interfaces
+  and a stable name order. Missing MAC/speed/link metadata stays unknown; the
+  API does not guarantee the collector's complete live hardware data. Synthetic
+  OVS bridges remain virtual switches and do not invent host adapter ports.
+  Physical Ethernet ports start as RJ45; review their connector media in inventory
+  when the API does not identify it.
+  Matching existing devices remain unchanged under the merge-only contract,
+  including manual connector choices, port IDs and cables. Previously imported
+  hosts are not automatically enriched; review and add their missing fields
+  explicitly in inventory. API permission failures remain visible in the preview.
   The offline `collect-proxmox.sh` upload on the Imports tab remains for
   hosts Rackpad cannot reach.
 

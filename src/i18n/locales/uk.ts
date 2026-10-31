@@ -1,6 +1,36 @@
 import type { TranslationMap } from "../base";
 
 export const uk = {
+  "Allow unencrypted NUT transport": "Дозволити незашифроване з’єднання NUT",
+
+  "External health": "Зовнішній стан",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Показники впливають на стан і сповіщення лише через явно увімкнені монітори.",
+  "Unhealthy": "Несправний",
+  "Read-only inventory and external health.": "Інвентаризація лише для читання та зовнішній стан.",
+  "Polling": "Опитування",
+  "Interval (seconds)": "Інтервал (секунди)",
+  "Select device": "Вибрати пристрій",
+  "Bind device": "Прив’язати пристрій",
+  "Unbind": "Відв’язати",
+  "Value": "Значення",
+  "Last checked": "Остання перевірка",
+  "Stale": "Застаріле",
+  "Alert on degraded": "Сповіщати про погіршення",
+  "Create monitor": "Створити монітор",
+
+  "Floorplan": "План приміщення",
+  "Zoom": "Масштабування",
+  "Add marker": "Додати маркер",
+  "Replace the background and keep marker positions?": "Замінити тло й зберегти позиції маркерів?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Використовуйте стрілки для переміщення вибраного маркера. Утримуйте Shift для більшого кроку.",
+  "No floorplan background selected.": "Тло плану приміщення не вибрано.",
+  "Floorplan changed. Reload before applying this edit.": "План приміщення змінився. Перезавантажте його перед застосуванням правки.",
+
+  "Hide Disabled Ports": "Приховати вимкнені порти",
+  "Find reference": "Знайти ідентифікатор",
+  "Generate references": "Створити ідентифікатори",
+  "Print labels": "Друк етикеток",
+
   "Import host adapters and guest NIC ports.": "Імпортуйте адаптери хоста та мережеві порти гостей.",
   "Revoke": "Відкликати",
   "Revoked": "Відкликано",
@@ -26,6 +56,7 @@ export const uk = {
   "ntfy timed out. Try again later.": "Час очікування ntfy минув. Спробуйте пізніше.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy відхилив повідомлення. Перевірте дозволи теми та автентифікацію.",
   "ntfy rate limit reached. Try again later.": "Досягнуто ліміту запитів ntfy. Спробуйте пізніше.",
+  "Enable notifications before sending a test alert.": "Увімкніть сповіщення перед надсиланням тестового сигналу.",
   "Notification delivery failed. Check the configured channels.": "Не вдалося доставити сповіщення. Перевірте налаштовані канали.",
 
   "Check the SMTP host, sender and recipient settings.": "Перевірте налаштування вузла SMTP, відправника й одержувача.",

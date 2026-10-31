@@ -1,6 +1,36 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Allow unencrypted NUT transport": "Şifrelenmemiş NUT aktarımına izin ver",
+
+  "External health": "Harici sağlık",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Okumalar yalnızca açıkça etkinleştirilmiş izleyiciler aracılığıyla sağlık ve uyarıları etkiler.",
+  "Unhealthy": "Sağlıksız",
+  "Read-only inventory and external health.": "Salt okunur envanter ve harici sağlık.",
+  "Polling": "Yoklama",
+  "Interval (seconds)": "Aralık (saniye)",
+  "Select device": "Cihaz seç",
+  "Bind device": "Cihazı bağla",
+  "Unbind": "Bağlantıyı kaldır",
+  "Value": "Değer",
+  "Last checked": "Son kontrol",
+  "Stale": "Güncelliğini yitirmiş",
+  "Alert on degraded": "Bozulmada uyar",
+  "Create monitor": "İzleyici oluştur",
+
+  "Floorplan": "Oda planı",
+  "Zoom": "Yakınlaştırma",
+  "Add marker": "İşaret ekle",
+  "Replace the background and keep marker positions?": "Arka plan değiştirilsin ve işaret konumları korunsun mu?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Seçili işareti taşımak için ok tuşlarını kullanın. Daha büyük adımlar için Shift tuşunu basılı tutun.",
+  "No floorplan background selected.": "Oda planı arka planı seçilmedi.",
+  "Floorplan changed. Reload before applying this edit.": "Oda planı değişti. Bu düzenlemeyi uygulamadan önce yeniden yükleyin.",
+
+  "Hide Disabled Ports": "Devre dışı bağlantı noktalarını gizle",
+  "Find reference": "Referans bul",
+  "Generate references": "Referans oluştur",
+  "Print labels": "Etiketleri yazdır",
+
   "Import host adapters and guest NIC ports.": "Ana makine bağdaştırıcılarını ve konuk NIC bağlantı noktalarını içe aktarın.",
   "Revoke": "İptal et",
   "Revoked": "İptal edildi",
@@ -26,6 +56,7 @@ export const tr = {
   "ntfy timed out. Try again later.": "ntfy zaman aşımına uğradı. Daha sonra tekrar deneyin.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy mesajı reddetti. Konu izinlerini ve kimlik doğrulamayı kontrol edin.",
   "ntfy rate limit reached. Try again later.": "ntfy istek sınırına ulaşıldı. Daha sonra tekrar deneyin.",
+  "Enable notifications before sending a test alert.": "Test uyarısı göndermeden önce bildirimleri etkinleştirin.",
   "Notification delivery failed. Check the configured channels.": "Bildirim teslim edilemedi. Yapılandırılmış kanalları kontrol edin.",
 
   "Check the SMTP host, sender and recipient settings.": "SMTP sunucusu, gönderen ve alıcı ayarlarını kontrol edin.",

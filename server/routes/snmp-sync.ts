@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
 import { requireAdmin, requireAuth } from '../lib/auth.js'
@@ -207,11 +208,11 @@ export const snmpSyncRoutes: FastifyPluginAsync = async (app) => {
     return parseSchedule(db.prepare('SELECT * FROM snmpSyncSchedules WHERE id = ?').get(req.params.id) as Record<string, unknown>)
   })
 
-  app.delete<{ Params: { id: string } }>('/schedules/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/schedules/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "SnmpSyncSchedule", entityId: req.params.id, action: "snmp.schedule.delete" }, () => {
     if (!requireAdmin(req, reply)) return
     const result = db.prepare('DELETE FROM snmpSyncSchedules WHERE id = ?').run(req.params.id)
-    return result.changes ? reply.status(204).send() : reply.status(404).send({ error: 'SNMP sync schedule not found.' })
-  })
+    return result.changes ? true as const : reply.status(404).send({ error: 'SNMP sync schedule not found.' })
+  }))
 }
 
 export async function runSnmpSyncSchedule(scheduleId: string) {

@@ -1,6 +1,36 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Allow unencrypted NUT transport": "Cho phép truyền NUT không mã hóa",
+
+  "External health": "Sức khỏe bên ngoài",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Số liệu chỉ ảnh hưởng đến sức khỏe và cảnh báo qua các bộ giám sát được bật rõ ràng.",
+  "Unhealthy": "Không tốt",
+  "Read-only inventory and external health.": "Kiểm kê chỉ đọc và sức khỏe bên ngoài.",
+  "Polling": "Thăm dò",
+  "Interval (seconds)": "Khoảng thời gian (giây)",
+  "Select device": "Chọn thiết bị",
+  "Bind device": "Liên kết thiết bị",
+  "Unbind": "Hủy liên kết",
+  "Value": "Giá trị",
+  "Last checked": "Kiểm tra gần nhất",
+  "Stale": "Cũ",
+  "Alert on degraded": "Cảnh báo khi suy giảm",
+  "Create monitor": "Tạo bộ giám sát",
+
+  "Floorplan": "Sơ đồ phòng",
+  "Zoom": "Thu phóng",
+  "Add marker": "Thêm điểm đánh dấu",
+  "Replace the background and keep marker positions?": "Thay nền và giữ vị trí các điểm đánh dấu?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Dùng phím mũi tên để di chuyển điểm đã chọn. Giữ Shift để di chuyển bước lớn hơn.",
+  "No floorplan background selected.": "Chưa chọn nền sơ đồ phòng.",
+  "Floorplan changed. Reload before applying this edit.": "Sơ đồ phòng đã thay đổi. Tải lại trước khi áp dụng chỉnh sửa này.",
+
+  "Hide Disabled Ports": "Ẩn cổng đã vô hiệu hóa",
+  "Find reference": "Tìm mã tham chiếu",
+  "Generate references": "Tạo mã tham chiếu",
+  "Print labels": "In nhãn",
+
   "Import host adapters and guest NIC ports.": "Nhập bộ điều hợp máy chủ và cổng NIC của máy khách.",
   "Revoke": "Thu hồi",
   "Revoked": "Đã thu hồi",
@@ -26,6 +56,7 @@ export const vi = {
   "ntfy timed out. Try again later.": "ntfy hết thời gian chờ. Hãy thử lại sau.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy từ chối tin nhắn. Kiểm tra quyền chủ đề và xác thực.",
   "ntfy rate limit reached. Try again later.": "Đã đạt giới hạn yêu cầu ntfy. Hãy thử lại sau.",
+  "Enable notifications before sending a test alert.": "Bật thông báo trước khi gửi cảnh báo thử nghiệm.",
   "Notification delivery failed. Check the configured channels.": "Gửi thông báo thất bại. Kiểm tra các kênh đã cấu hình.",
 
   "Check the SMTP host, sender and recipient settings.": "Kiểm tra cài đặt máy chủ SMTP, người gửi và người nhận.",

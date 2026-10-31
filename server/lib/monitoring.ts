@@ -1,3 +1,5 @@
+import { probeObservations } from "./monitor-observations.js";
+import { externalMonitorResult } from "./integrations/external-health.js";
 import { spawn } from 'node:child_process'
 import net from 'node:net'
 import { db } from '../db.js'
@@ -15,7 +17,7 @@ import {
   type SnmpMatchMode,
 } from './snmp-match.js'
 
-export const MONITOR_TYPES = ['none', 'icmp', 'tcp', 'http', 'https', 'snmp'] as const
+export const MONITOR_TYPES = ['none', 'icmp', 'tcp', 'http', 'https', 'snmp', 'external'] as const
 export type MonitorType = (typeof MONITOR_TYPES)[number]
 export { SNMP_VERSIONS, type SnmpVersion, SNMP_MATCH_MODES, type SnmpMatchMode }
 export type MonitorResult = { result: 'online' | 'offline' | 'unknown'; message: string }
@@ -47,7 +49,7 @@ export interface DeviceMonitor extends PendingAlertState {
   lastMessage?: string | null
 }
 
-const probeObservations = new Map<string, number>()
+
 let nextObservation = 0
 export function invalidateMonitorObservations() { probeObservations.clear() }
 
@@ -280,6 +282,7 @@ function refreshDeviceMonitorRollup(deviceId: string, currentStatus: string | un
 }
 
 async function executeCheck(monitor: DeviceMonitor) {
+  if (monitor.type === 'external') return externalMonitorResult(monitor.id);
   try {
     if (!monitor.target) {
       return { result: 'unknown' as const, message: 'No target configured.' }

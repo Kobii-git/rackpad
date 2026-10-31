@@ -1,6 +1,36 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "Allow unencrypted NUT transport": "אפשר תעבורת NUT ללא הצפנה",
+
+  "External health": "תקינות חיצונית",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "הקריאות משפיעות על התקינות וההתראות רק דרך מנטרים שהופעלו במפורש.",
+  "Unhealthy": "לא תקין",
+  "Read-only inventory and external health.": "מלאי לקריאה בלבד ותקינות חיצונית.",
+  "Polling": "תשאול",
+  "Interval (seconds)": "מרווח (שניות)",
+  "Select device": "בחירת התקן",
+  "Bind device": "קישור התקן",
+  "Unbind": "ביטול קישור",
+  "Value": "ערך",
+  "Last checked": "בדיקה אחרונה",
+  "Stale": "מיושן",
+  "Alert on degraded": "התראה בהידרדרות",
+  "Create monitor": "יצירת מנטר",
+
+  "Floorplan": "תוכנית קומה",
+  "Zoom": "הגדלה",
+  "Add marker": "הוספת סמן",
+  "Replace the background and keep marker positions?": "להחליף את הרקע ולשמור על מיקומי הסמנים?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "השתמשו בחצים להזזת הסמן שנבחר. החזיקו Shift לצעדים גדולים יותר.",
+  "No floorplan background selected.": "לא נבחר רקע לתוכנית הקומה.",
+  "Floorplan changed. Reload before applying this edit.": "תוכנית הקומה השתנתה. יש לטעון מחדש לפני החלת העריכה.",
+
+  "Hide Disabled Ports": "הסתר יציאות מושבתות",
+  "Find reference": "חיפוש מזהה ייחוס",
+  "Generate references": "יצירת מזהי ייחוס",
+  "Print labels": "הדפסת תוויות",
+
   "Import host adapters and guest NIC ports.": "ייבוא מתאמי מארח ויציאות רשת של אורחים.",
   "Revoke": "ביטול גישה",
   "Revoked": "הגישה בוטלה",
@@ -26,6 +56,7 @@ export const he = {
   "ntfy timed out. Try again later.": "תם זמן ההמתנה ל־ntfy. נסו שוב מאוחר יותר.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy דחה את ההודעה. בדקו הרשאות נושא ואימות.",
   "ntfy rate limit reached. Try again later.": "הגעתם למגבלת הבקשות של ntfy. נסו שוב מאוחר יותר.",
+  "Enable notifications before sending a test alert.": "יש להפעיל התראות לפני שליחת התראת בדיקה.",
   "Notification delivery failed. Check the configured channels.": "מסירת ההתראה נכשלה. בדקו את הערוצים המוגדרים.",
 
   "Check the SMTP host, sender and recipient settings.": "יש לבדוק את הגדרות שרת SMTP, השולח והנמען.",

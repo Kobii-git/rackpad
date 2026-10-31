@@ -1,6 +1,36 @@
 import type { TranslationMap } from "../base";
 
 export const es = {
+  "Allow unencrypted NUT transport": "Permitir transporte NUT sin cifrar",
+
+  "External health": "Estado externo",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Las lecturas solo afectan al estado y las alertas mediante monitores habilitados explícitamente.",
+  "Unhealthy": "En mal estado",
+  "Read-only inventory and external health.": "Inventario de solo lectura y estado externo.",
+  "Polling": "Sondeo",
+  "Interval (seconds)": "Intervalo (segundos)",
+  "Select device": "Seleccionar dispositivo",
+  "Bind device": "Vincular dispositivo",
+  "Unbind": "Desvincular",
+  "Value": "Valor",
+  "Last checked": "Última comprobación",
+  "Stale": "Obsoleto",
+  "Alert on degraded": "Alertar por degradación",
+  "Create monitor": "Crear monitor",
+
+  "Floorplan": "Plano de planta",
+  "Zoom": "Ampliación",
+  "Add marker": "Añadir marcador",
+  "Replace the background and keep marker positions?": "¿Reemplazar el fondo y conservar las posiciones de los marcadores?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Use las flechas para mover el marcador seleccionado. Mantenga Mayús para dar pasos mayores.",
+  "No floorplan background selected.": "No se ha seleccionado un fondo del plano.",
+  "Floorplan changed. Reload before applying this edit.": "El plano ha cambiado. Recargue antes de aplicar esta edición.",
+
+  "Hide Disabled Ports": "Ocultar puertos deshabilitados",
+  "Find reference": "Buscar referencia",
+  "Generate references": "Generar referencias",
+  "Print labels": "Imprimir etiquetas",
+
   "Import host adapters and guest NIC ports.": "Importe adaptadores del host y puertos NIC de invitados.",
   "Revoke": "Revocar",
   "Revoked": "Revocado",
@@ -26,6 +56,7 @@ export const es = {
   "ntfy timed out. Try again later.": "ntfy agotó el tiempo de espera. Inténtelo más tarde.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy rechazó el mensaje. Compruebe los permisos del tema y la autenticación.",
   "ntfy rate limit reached. Try again later.": "Se alcanzó el límite de solicitudes de ntfy. Inténtelo más tarde.",
+  "Enable notifications before sending a test alert.": "Active las notificaciones antes de enviar una alerta de prueba.",
   "Notification delivery failed. Check the configured channels.": "No se pudo enviar la notificación. Compruebe los canales configurados.",
 
   "Check the SMTP host, sender and recipient settings.": "Revisa los ajustes del servidor SMTP, remitente y destinatario.",
