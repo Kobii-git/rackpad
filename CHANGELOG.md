@@ -4,7 +4,7 @@ All notable Rackpad changes should be recorded here.
 
 Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
-## 1.9.0-beta.0 (candidate)
+## 1.9.0-beta.0
 
 - Add disabled-port filtering to cable creation and explicitly assigned checked device/cable references with authenticated lookup and printable labels (#212, #213).
 - Schema 59 preserves references through recovery; rollback requires a paired pre-upgrade snapshot.
@@ -15,7 +15,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
-## [1.8.7-beta.1] - Unreleased
+## [1.8.7-beta.1]
 
 ### Fixed
 
