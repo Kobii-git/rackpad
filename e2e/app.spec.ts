@@ -5968,7 +5968,7 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
     await expect(workspace.getByTestId("stack-member")).toHaveCount(2);
     await expect(workspace).toContainText("aa:bb:cc:dd:00:11");
     const up = workspace.getByRole("button", {
-      name: "Move Core B up",
+      name: "Move up: Core B",
       exact: true,
     });
     await up.focus();
@@ -6019,13 +6019,27 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
     expect(
       layout.snapshot.portSlots.some((slot) => slot.id === `slot:${portId}`),
     ).toBe(true);
+    await expect(assignment).toBeEnabled();
+    const memberFilter = workspace.getByRole("combobox", { name: "Member filter" });
+    await memberFilter.focus();
+    await expect(memberFilter).toBeFocused();
+    await workspace.scrollIntoViewIfNeeded();
+    await workspace.evaluate(async (element) => {
+      await document.fonts.ready;
+      await Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished));
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    });
+    await expect(workspace).toBeInViewport({ ratio: 1 });
+    // The focused select has no blinking caret. Keep input styles stable during capture.
     const firstCapture = await workspace.screenshot({
       path: testInfo.outputPath("stack-members.png"),
       animations: "disabled",
+      caret: "initial",
     });
     const secondCapture = await workspace.screenshot({
       path: testInfo.outputPath("stack-members-repeat.png"),
       animations: "disabled",
+      caret: "initial",
     });
     expect(firstCapture.equals(secondCapture)).toBe(true);
     const axe = await new AxeBuilder({ page })
@@ -6664,7 +6678,7 @@ test("mixed-model220-port stacks retain applied modules, front/rear targets and 
     const before=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();expect(before.bindings).toHaveLength(220);
     expect(before.bindings.map((binding:{portId:string})=>binding.portId).sort()).toEqual([...canonical].sort());
     await page.reload();await expect(first.getByRole("checkbox",{name:"Applied uplink module",exact:true})).toBeChecked();
-    await first.getByRole("button",{name:"Move Model 1 down",exact:true}).click();
+    await first.getByRole("button",{name:"Move down: Model 1",exact:true}).click();
     const after=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();
     expect(after.bindings).toEqual(expect.arrayContaining(before.bindings));
     await page.goto("/racks");await page.getByRole("button",{name:"Studio Beta",exact:true}).click();await page.getByRole("button",{name:new RegExp(`${room.name} 1R`)}).click();await page.getByRole("button",{name:"Both",exact:true}).click();await page.getByRole("button",{name:"Cables",exact:true}).click();
