@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Hide Disabled Ports": "無効なポートを非表示",
+  "Find reference": "参照を検索",
+  "Generate references": "参照を生成",
+  "Print labels": "ラベルを印刷",
+
   "Import host adapters and guest NIC ports.": "ホストアダプターとゲストのNICポートをインポートします。",
   "Revoke": "取り消す",
   "Revoked": "取り消し済み",

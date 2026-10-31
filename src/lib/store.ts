@@ -1649,6 +1649,17 @@ export function upsertPhysicalLayoutRecord(layout: DevicePhysicalLayout) {
   }));
 }
 
+export async function generateInventoryReference(kind: "device" | "cable", id: string) {
+  const actorId = state.currentUser?.id;
+  const result = await api.generateReference(kind, id);
+  if (state.currentUser?.id === actorId) setState(prev => ({ ...prev,
+    devices: kind === "device" ? prev.devices.map(row => row.id === id ? { ...row, publicReference: result.publicReference } : row) : prev.devices,
+    portLinks: kind === "cable" ? prev.portLinks.map(row => row.id === id ? { ...row, publicReference: result.publicReference } : row) : prev.portLinks,
+  }));
+  await refreshAuditHistory();
+  return result;
+}
+
 export async function selectLab(labId: string): Promise<void> {
   if (labId === state.lab.id) return;
   const selectedLab = state.labs.find((lab) => lab.id === labId);

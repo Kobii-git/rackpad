@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "Hide Disabled Ports": "ซ่อนพอร์ตที่ปิดใช้งาน",
+  "Find reference": "ค้นหารหัสอ้างอิง",
+  "Generate references": "สร้างรหัสอ้างอิง",
+  "Print labels": "พิมพ์ป้ายกำกับ",
+
   "Import host adapters and guest NIC ports.": "นำเข้าอะแดปเตอร์โฮสต์และพอร์ต NIC ของผู้เยี่ยมชม",
   "Revoke": "เพิกถอน",
   "Revoked": "เพิกถอนแล้ว",

@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "Hide Disabled Ports": "Versteek gedeaktiveerde poorte",
+  "Find reference": "Vind verwysing",
+  "Generate references": "Genereer verwysings",
+  "Print labels": "Druk etikette",
+
   "Import host adapters and guest NIC ports.": "Voer gasheeradapters en gas-NIC-poorte in.",
   "Revoke": "Herroep",
   "Revoked": "Herroepte",

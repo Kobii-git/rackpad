@@ -1537,6 +1537,21 @@ const SCHEMA_MIGRATIONS = [
     `,
     run: () => backfillAuditScopes(db),
   },
+  {
+    version: 59,
+    sql: `
+      ALTER TABLE devices ADD COLUMN publicReference TEXT CHECK(publicReference IS NULL OR (length(publicReference)=26 AND publicReference GLOB 'rpd1*'));
+      ALTER TABLE portLinks ADD COLUMN publicReference TEXT CHECK(publicReference IS NULL OR (length(publicReference)=26 AND publicReference GLOB 'rpc1*'));
+      CREATE UNIQUE INDEX idx_devices_publicReference ON devices(publicReference) WHERE publicReference IS NOT NULL;
+      CREATE UNIQUE INDEX idx_portLinks_publicReference ON portLinks(publicReference) WHERE publicReference IS NOT NULL;
+      CREATE TRIGGER device_reference_immutable BEFORE UPDATE OF publicReference ON devices
+        WHEN OLD.publicReference IS NOT NULL AND NEW.publicReference IS NOT OLD.publicReference
+        BEGIN SELECT RAISE(ABORT,'Device reference is immutable'); END;
+      CREATE TRIGGER cable_reference_immutable BEFORE UPDATE OF publicReference ON portLinks
+        WHEN OLD.publicReference IS NOT NULL AND NEW.publicReference IS NOT OLD.publicReference
+        BEGIN SELECT RAISE(ABORT,'Cable reference is immutable'); END;
+    `,
+  },
 ] as const;
 
 const applySchema = db.transaction(() => {

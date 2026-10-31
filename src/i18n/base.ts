@@ -1,4 +1,9 @@
 export const en = {
+  "Hide Disabled Ports": "Hide Disabled Ports",
+  "Find reference": "Find reference",
+  "Generate references": "Generate references",
+  "Print labels": "Print labels",
+
   "Import host adapters and guest NIC ports.": "Import host adapters and guest NIC ports.",
   "Revoke": "Revoke",
   "Revoked": "Revoked",

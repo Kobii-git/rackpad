@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Hide Disabled Ports": "Ẩn cổng đã vô hiệu hóa",
+  "Find reference": "Tìm mã tham chiếu",
+  "Generate references": "Tạo mã tham chiếu",
+  "Print labels": "In nhãn",
+
   "Import host adapters and guest NIC ports.": "Nhập bộ điều hợp máy chủ và cổng NIC của máy khách.",
   "Revoke": "Thu hồi",
   "Revoked": "Đã thu hồi",

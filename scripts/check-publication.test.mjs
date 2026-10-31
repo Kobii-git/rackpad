@@ -502,11 +502,35 @@ test("pre-merge smoke builds unpublished immutable candidates and tests stable a
 });
 
 
+test("feature beta image checks retain the immediate published predecessor in both jobs", () => {
+  const version = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+  const expectedSchema = {
+    "1.9.0-beta.0": "58",
+    "1.9.0-beta.1": "59",
+    "1.9.0-beta.2": "60",
+    "1.9.0-beta.3": "61",
+    "1.9.0-beta.4": "61",
+    "1.9.0-beta.5": "62",
+  }[version];
+  assert.ok(expectedSchema, "review the immediate published predecessor when preparing a new version");
+  const { jobs } = workflow("docker-publish");
+  let precedingImage;
+  for (const name of ["candidate-smoke", "smoke"]) {
+    const step = jobs[name].steps.find(item => item.env?.PRECEDING_RELEASE_IMAGE);
+    assert.ok(step, `${name} must exercise the immediate published release`);
+    assert.match(step.env.PRECEDING_RELEASE_IMAGE, /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/);
+    assert.equal(step.env.PRECEDING_RELEASE_SCHEMA, expectedSchema);
+    assert.ok(step.run.includes('--previous-image "$PRECEDING_RELEASE_IMAGE" --previous-schema "$PRECEDING_RELEASE_SCHEMA"'));
+    if (precedingImage) assert.equal(step.env.PRECEDING_RELEASE_IMAGE, precedingImage);
+    precedingImage = step.env.PRECEDING_RELEASE_IMAGE;
+  }
+});
+
 test("candidate smoke follows current schema across migrations while retaining pinned recovery baselines", () => {
   const source = readFileSync(new URL("./check-release-image.mjs", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "")
     .replaceAll("import.meta.url", JSON.stringify("file:///rackpad-fixture/scripts/check-release-image.mjs"));
-  for (const currentSchema of [58, 59, 60]) for (const previousSchema of [51, 53, 55, 57]) for (const platform of ["linux/amd64", "linux/arm64"]) {
+  for (const currentSchema of [58, 59, 60, 61, 62]) for (const previousSchema of [51, 53, 55, 57, 58, 59, 60, 61, 62].filter(value => value <= currentSchema)) for (const platform of ["linux/amd64", "linux/arm64"]) {
     const exercises = [];
     const selectedImages = new Map();
     let nonce = 0;
@@ -525,6 +549,16 @@ test("candidate smoke follows current schema across migrations while retaining p
       // No Docker process, API call, database, or volume is created in this fixture.
       spawnSync: (command, args, options) => {
         assert.equal(command, "docker");
+        if (args[0] === "run" && args.includes("-e") && args.at(-1).includes("monitor_status")) {
+          let handler;
+          runInNewContext(args.at(-1).replace("import http from 'node:http';", ""), {
+            http: {createServer(callback) { handler = callback; return {listen(port, host) {assert.equal(port, 8787); assert.equal(host, "0.0.0.0");}};}},
+          });
+          let status, body;
+          handler({url: "/metrics"}, {writeHead(code) {status = code;}, end(value) {body = value;}});
+          assert.equal(status, 200);
+          assert.equal(body, 'monitor_status{monitor_id="1",monitor_name="Release service"} 1\n');
+        }
         if (args[0] === "create") {
           assert.equal(args[args.indexOf("--platform") + 1], platform);
           assert.equal(args[args.indexOf("--network") + 1], "none");
@@ -554,5 +588,21 @@ test("candidate smoke follows current schema across migrations while retaining p
       {schema: currentSchema, features: true, create: false},
       {schema: previousSchema, features: false, create: false},
     ]);
+  }
+});
+
+test("candidate smoke rejects unsupported and newer predecessor schemas before Docker runs", () => {
+  const source = readFileSync(new URL("./check-release-image.mjs", import.meta.url), "utf8")
+    .replace(/^import .*;\n/gm, "")
+    .replaceAll("import.meta.url", JSON.stringify("file:///rackpad-fixture/scripts/check-release-image.mjs"));
+  for (const previousSchema of [56, 59, 63]) {
+    assert.throws(() => runInNewContext(source, {
+      assert, URL,
+      process: {argv: ["node", "fixture.mjs", "--image", `sha256:${"a".repeat(64)}`,
+        "--previous-image", `ghcr.io/kobii-git/rackpad@sha256:${"b".repeat(64)}`,
+        "--previous-schema", String(previousSchema), "--platform", "linux/amd64", "--revision", "c".repeat(40)]},
+      readFileSync: () => "export const CURRENT_SCHEMA_VERSION = 58;\n",
+      spawnSync: () => assert.fail("Invalid schemas must not start Docker."),
+    }), /Previous schema/);
   }
 });

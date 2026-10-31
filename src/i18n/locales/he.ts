@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "Hide Disabled Ports": "הסתר יציאות מושבתות",
+  "Find reference": "חיפוש מזהה ייחוס",
+  "Generate references": "יצירת מזהי ייחוס",
+  "Print labels": "הדפסת תוויות",
+
   "Import host adapters and guest NIC ports.": "ייבוא מתאמי מארח ויציאות רשת של אורחים.",
   "Revoke": "ביטול גישה",
   "Revoked": "הגישה בוטלה",

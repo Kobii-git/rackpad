@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Hide Disabled Ports": "پنهان کردن درگاه‌های غیرفعال",
+  "Find reference": "یافتن مرجع",
+  "Generate references": "تولید مرجع‌ها",
+  "Print labels": "چاپ برچسب‌ها",
+
   "Import host adapters and guest NIC ports.": "آداپتورهای میزبان و درگاه‌های شبکه مهمان را وارد کنید.",
   "Revoke": "لغو دسترسی",
   "Revoked": "لغوشده",

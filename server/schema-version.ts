@@ -1,1 +1,1 @@
-export const CURRENT_SCHEMA_VERSION = 58;
+export const CURRENT_SCHEMA_VERSION = 59;

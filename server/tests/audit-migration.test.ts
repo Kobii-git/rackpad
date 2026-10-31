@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import Database from "better-sqlite3";
+import { CURRENT_SCHEMA_VERSION } from "../schema-version.js";
 import { validateRackpadSqliteDatabase } from "../lib/native-backup-validation.js";
 
 test("schema57 audit upgrade is atomic, retains unknown history, survives restart and paired rollback", () => {
@@ -32,7 +33,7 @@ test("schema57 audit upgrade is atomic, retains unknown history, survives restar
   try {
     child();
     const old = new Database(file);
-    old.exec(`ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX idx_auditLog_entity; UPDATE schemaVersion SET version=57;
+    old.exec(`DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX idx_auditLog_entity; UPDATE schemaVersion SET version=57;
       INSERT INTO labs(id,name) VALUES('lab','Fixture');
       INSERT INTO devices(id,labId,hostname,deviceType) VALUES('device','lab','fixture','server');
       INSERT INTO auditLog(id,ts,user,action,entityType,entityId,summary) VALUES
@@ -64,7 +65,7 @@ test("schema57 audit upgrade is atomic, retains unknown history, survives restar
     child();
     child();
     const current = new Database(file);
-    assert.equal(validateRackpadSqliteDatabase(current, "Current"), 58);
+    assert.equal(validateRackpadSqliteDatabase(current, "Current"), CURRENT_SCHEMA_VERSION);
     assert.deepEqual(
       current.prepare("SELECT id,labIds FROM auditLog ORDER BY id").all(),
       [
@@ -73,7 +74,7 @@ test("schema57 audit upgrade is atomic, retains unknown history, survives restar
       ],
     );
     current.prepare("DELETE FROM devices WHERE id='device'").run();
-    assert.equal(validateRackpadSqliteDatabase(current, "Native"), 58);
+    assert.equal(validateRackpadSqliteDatabase(current, "Native"), CURRENT_SCHEMA_VERSION);
     assert.equal(
       (
         current

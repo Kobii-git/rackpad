@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "Hide Disabled Ports": "নিষ্ক্রিয় পোর্ট লুকান",
+  "Find reference": "রেফারেন্স খুঁজুন",
+  "Generate references": "রেফারেন্স তৈরি করুন",
+  "Print labels": "লেবেল মুদ্রণ করুন",
+
   "Import host adapters and guest NIC ports.": "হোস্ট অ্যাডাপ্টার এবং গেস্ট NIC পোর্ট আমদানি করুন।",
   "Revoke": "প্রত্যাহার করুন",
   "Revoked": "প্রত্যাহার করা হয়েছে",

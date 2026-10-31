@@ -1,6 +1,11 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Hide Disabled Ports": "비활성 포트 숨기기",
+  "Find reference": "참조 찾기",
+  "Generate references": "참조 생성",
+  "Print labels": "레이블 인쇄",
+
   "Import host adapters and guest NIC ports.": "호스트 어댑터와 게스트 NIC 포트를 가져옵니다.",
   "Revoke": "철회",
   "Revoked": "철회됨",

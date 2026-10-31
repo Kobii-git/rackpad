@@ -537,7 +537,22 @@ async function requestBlob(
   };
 }
 
+export interface ReferenceLookupResult {
+  kind: "device" | "cable";
+  id: string;
+  publicReference: string;
+  labIds: string[];
+  label: string;
+  endpoints: Array<{ portId: string; portName: string; deviceId: string; hostname: string; labId: string }>;
+}
+
 export const api = {
+  lookupReference(reference: string) {
+    return request<ReferenceLookupResult>(`/references/${encodeURIComponent(reference)}`);
+  },
+  generateReference(kind: "device" | "cable", id: string) {
+    return request<{ kind: "device" | "cable"; id: string; publicReference: string }>(`/references/${kind}/${encodeURIComponent(id)}`, { method: "POST" });
+  },
   listMcpTokens() {
     return request<McpTokenRecord[]>("/mcp-tokens");
   },

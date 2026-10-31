@@ -72,3 +72,10 @@ Pull requests also build unpublished candidate images on AMD64 and ARM64 and
 verify fresh installs, actual stable schema-51/schema-55 and beta schema-53/schema-57 upgrades,
 restart persistence and paired rollback. Candidate images are addressed by local
 immutable image IDs; previous images remain pinned GHCR digests.
+The smoke CLI also accepts schemas 58–62 up to the current schema, including
+equal-schema upgrades. Production API fixtures seed references from schema 59,
+floorplan images/markers from 60 and latest readings/bindings/disabled monitors
+from 61, plus supported provider credentials/options. Before each standalone
+publication, add the verified immediately preceding published-image pin and run
+these persistence/restart/paired-rollback cases on both Linux architectures;
+schema acceptance or mocked orchestration alone is not upgrade evidence.

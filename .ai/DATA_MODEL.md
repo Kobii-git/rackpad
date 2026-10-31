@@ -196,3 +196,10 @@ when an entity ID is reused.
 Logical/native recovery validates and retains scope, including deleted lab IDs;
 older logical snapshots backfill only resolvable subjects. Rollback requires the
 previous binary/image with its paired pre-upgrade database snapshot.
+
+Schema 59 adds nullable unique `publicReference` fields to devices and cables.
+Explicit assignment uses 80 random bits with Bech32m and rpd/rpc prefixes;
+references are immutable, do not replace primary keys, and are not backfilled.
+Authenticated lookup checks all current subject lab grants. Logical/native
+recovery validate canonical type/checksum/uniqueness; assignment/deletion audits
+retain the reference. Rollback needs the pre-upgrade database/configuration/key.
