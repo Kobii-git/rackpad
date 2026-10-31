@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const de = {
+  "Floorplan": "Grundriss",
+  "Zoom": "Vergrößerung",
+  "Add marker": "Markierung hinzufügen",
+  "Replace the background and keep marker positions?": "Hintergrund ersetzen und Markierungspositionen beibehalten?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Verschieben Sie die ausgewählte Markierung mit den Pfeiltasten. Halten Sie für größere Schritte die Umschalttaste gedrückt.",
+  "No floorplan background selected.": "Kein Grundrisshintergrund ausgewählt.",
+  "Floorplan changed. Reload before applying this edit.": "Der Grundriss wurde geändert. Laden Sie ihn vor dem Anwenden dieser Änderung neu.",
+
   "Hide Disabled Ports": "Deaktivierte Ports ausblenden",
   "Find reference": "Referenz suchen",
   "Generate references": "Referenzen erzeugen",

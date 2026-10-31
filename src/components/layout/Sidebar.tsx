@@ -40,6 +40,7 @@ const baseNavItems = [
   { to: "/imports", icon: UploadCloud, label: "Imports" },
   { to: "/monitoring", icon: Activity, label: "Monitoring" },
   { to: "/ports", icon: Cable, label: "Ports" },
+  { to: "/floorplans", icon: Building2, label: "Floorplan" },
   { to: "/labels", icon: Tags, label: "Labels" },
   { to: "/cables", icon: Workflow, label: "Cables" },
   { to: "/networks", icon: Network, label: "Networks" },

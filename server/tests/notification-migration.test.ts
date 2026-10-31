@@ -18,7 +18,7 @@ test('schema56 upgrade is atomic, creates no historical events, and resumes pers
   try {
     child()
     const legacy = new Database(file)
-    legacy.exec(`DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt;
+    legacy.exec(`DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX IF EXISTS idx_auditLog_entity; ALTER TABLE deviceMonitors DROP COLUMN lastAlertAttemptAt;
       ALTER TABLE deviceMonitors DROP COLUMN pendingAlertAt; ALTER TABLE deviceMonitors DROP COLUMN pendingAlertKind;
       UPDATE schemaVersion SET version=56;
       INSERT INTO labs(id,name) VALUES('lab','Fixture');

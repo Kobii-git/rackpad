@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Floorplan": "مخطط الطابق",
+  "Zoom": "تكبير",
+  "Add marker": "إضافة علامة",
+  "Replace the background and keep marker positions?": "استبدال الخلفية مع الاحتفاظ بمواضع العلامات؟",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "استخدم مفاتيح الأسهم لتحريك العلامة المحددة. اضغط مع الاستمرار على Shift لخطوات أكبر.",
+  "No floorplan background selected.": "لم تُحدَّد خلفية لمخطط الطابق.",
+  "Floorplan changed. Reload before applying this edit.": "تغير مخطط الطابق. أعد التحميل قبل تطبيق هذا التعديل.",
+
   "Hide Disabled Ports": "إخفاء المنافذ المعطلة",
   "Find reference": "البحث عن مرجع",
   "Generate references": "إنشاء المراجع",

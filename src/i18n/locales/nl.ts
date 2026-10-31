@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const nl = {
+  "Floorplan": "Plattegrond",
+  "Zoom": "Vergroting",
+  "Add marker": "Markering toevoegen",
+  "Replace the background and keep marker positions?": "Achtergrond vervangen en markeringsposities behouden?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Gebruik de pijltjestoetsen om de geselecteerde markering te verplaatsen. Houd Shift ingedrukt voor grotere stappen.",
+  "No floorplan background selected.": "Geen plattegrondachtergrond geselecteerd.",
+  "Floorplan changed. Reload before applying this edit.": "De plattegrond is gewijzigd. Herlaad voordat u deze bewerking toepast.",
+
   "Hide Disabled Ports": "Uitgeschakelde poorten verbergen",
   "Find reference": "Verwijzing zoeken",
   "Generate references": "Verwijzingen genereren",

@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const fr = {
+  "Floorplan": "Plan de salle",
+  "Zoom": "Grossissement",
+  "Add marker": "Ajouter un repère",
+  "Replace the background and keep marker positions?": "Remplacer le fond et conserver les positions des repères ?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Utilisez les flèches pour déplacer le repère sélectionné. Maintenez Maj pour des pas plus grands.",
+  "No floorplan background selected.": "Aucun fond de plan sélectionné.",
+  "Floorplan changed. Reload before applying this edit.": "Le plan a changé. Rechargez-le avant d’appliquer cette modification.",
+
   "Hide Disabled Ports": "Masquer les ports désactivés",
   "Find reference": "Rechercher une référence",
   "Generate references": "Générer des références",

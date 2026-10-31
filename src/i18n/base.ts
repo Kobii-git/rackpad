@@ -1,4 +1,12 @@
 export const en = {
+  "Floorplan": "Floorplan",
+  "Zoom": "Zoom",
+  "Add marker": "Add marker",
+  "Replace the background and keep marker positions?": "Replace the background and keep marker positions?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Use arrow keys to move the selected marker. Hold Shift for larger steps.",
+  "No floorplan background selected.": "No floorplan background selected.",
+  "Floorplan changed. Reload before applying this edit.": "Floorplan changed. Reload before applying this edit.",
+
   "Hide Disabled Ports": "Hide Disabled Ports",
   "Find reference": "Find reference",
   "Generate references": "Generate references",

@@ -1,3 +1,4 @@
+import { validateStoredFloorplans } from "./floorplans.js";
 import { validatePublicReferenceRows } from "./public-references.js";
 import { parsePendingAlertState, PENDING_ALERT_FIELDS } from './notification-state.js';
 import { optionalHeaderColor, optionalLabelPosition } from "./presentation.js";
@@ -390,6 +391,8 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "updatedAt",
   ],
   rooms: ["id", "labId", "name", "description", "location", "notes", "headerColor"],
+  roomFloorplans: ["roomId", "backgroundImageId", "revision", "updatedAt"],
+  roomFloorplanMarkers: ["id", "roomId", "deviceId", "rackId", "x", "y", "label", "updatedAt"],
   schemaVersion: ["id", "version", "updatedAt"],
   snmpCredentials: [
     "id",
@@ -629,10 +632,12 @@ export function validateRackpadSqliteDatabase(
     if ((database.prepare(`PRAGMA table_info(${table})`).all() as Array<{name: string}>).some(column => column.name === "publicReference"))
       throw new RackpadSqliteValidationError(`${label} has inconsistent legacy reference schema.`);
   }
+  if (schema.version < 60 && database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('roomFloorplans','roomFloorplanMarkers')").get()) throw new RackpadSqliteValidationError(`${label} has inconsistent legacy floorplan schema.`);
   const missingSchema: string[] = [];
   for (const [table, requiredColumns] of Object.entries(
     CURRENT_RACKPAD_SCHEMA_COLUMNS,
   )) {
+    if (schema.version < 60 && (table === "roomFloorplans" || table === "roomFloorplanMarkers")) continue;
     if (schema.version === 50 && (table === "deviceStackMembers" || table === "deviceStackMemberMacs")) continue;
     if (schema.version < 53 && table === "mcpTokens") continue;
     if (schema.version < 54 && table === "deviceStackMemberLayouts") continue;
@@ -666,6 +671,10 @@ export function validateRackpadSqliteDatabase(
     );
   }
 
+  if (schema.version >= 60) {
+    try { validateStoredFloorplans(database); }
+    catch { throw new RackpadSqliteValidationError(`${label} contains invalid room floorplans.`); }
+  }
   if (schema.version >= 59) {
     try {
       validatePublicReferenceRows(database.prepare("SELECT publicReference FROM devices").all() as Record<string, unknown>[], "device");

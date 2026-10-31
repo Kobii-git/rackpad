@@ -1397,3 +1397,23 @@ export interface StackMemberLayoutPreview {
   portsToCreate: Array<{slotId: string; name: string; kind: string; face: RackFace}>;
   expectedFingerprint: string;
 }
+
+export interface RoomFloorplanMarker {
+  id: string;
+  roomId: string;
+  deviceId: string | null;
+  rackId: string | null;
+  x: number;
+  y: number;
+  label: string | null;
+  name: string;
+  updatedAt: string;
+}
+export interface RoomFloorplan {
+  roomId: string;
+  backgroundImageId: string | null;
+  revision: number;
+  updatedAt: string | null;
+  background: ReferenceImage | null;
+  markers: RoomFloorplanMarker[];
+}

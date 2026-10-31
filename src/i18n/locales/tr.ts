@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Floorplan": "Oda planı",
+  "Zoom": "Yakınlaştırma",
+  "Add marker": "İşaret ekle",
+  "Replace the background and keep marker positions?": "Arka plan değiştirilsin ve işaret konumları korunsun mu?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Seçili işareti taşımak için ok tuşlarını kullanın. Daha büyük adımlar için Shift tuşunu basılı tutun.",
+  "No floorplan background selected.": "Oda planı arka planı seçilmedi.",
+  "Floorplan changed. Reload before applying this edit.": "Oda planı değişti. Bu düzenlemeyi uygulamadan önce yeniden yükleyin.",
+
   "Hide Disabled Ports": "Devre dışı bağlantı noktalarını gizle",
   "Find reference": "Referans bul",
   "Generate references": "Referans oluştur",

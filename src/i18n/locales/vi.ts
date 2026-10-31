@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Floorplan": "Sơ đồ phòng",
+  "Zoom": "Thu phóng",
+  "Add marker": "Thêm điểm đánh dấu",
+  "Replace the background and keep marker positions?": "Thay nền và giữ vị trí các điểm đánh dấu?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Dùng phím mũi tên để di chuyển điểm đã chọn. Giữ Shift để di chuyển bước lớn hơn.",
+  "No floorplan background selected.": "Chưa chọn nền sơ đồ phòng.",
+  "Floorplan changed. Reload before applying this edit.": "Sơ đồ phòng đã thay đổi. Tải lại trước khi áp dụng chỉnh sửa này.",
+
   "Hide Disabled Ports": "Ẩn cổng đã vô hiệu hóa",
   "Find reference": "Tìm mã tham chiếu",
   "Generate references": "Tạo mã tham chiếu",

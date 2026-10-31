@@ -33,7 +33,7 @@ test("schema57 audit upgrade is atomic, retains unknown history, survives restar
   try {
     child();
     const old = new Database(file);
-    old.exec(`DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX idx_auditLog_entity; UPDATE schemaVersion SET version=57;
+    old.exec(`DROP TRIGGER floorplan_background_revision; DROP TRIGGER floorplan_marker_insert; DROP TRIGGER floorplan_marker_update; DROP TRIGGER floorplan_marker_delete; DROP TRIGGER floorplan_device_room; DROP TRIGGER floorplan_rack_room; DROP TABLE roomFloorplanMarkers; DROP TABLE roomFloorplans; DROP TRIGGER device_reference_immutable; DROP TRIGGER cable_reference_immutable; DROP INDEX idx_devices_publicReference; DROP INDEX idx_portLinks_publicReference; ALTER TABLE devices DROP COLUMN publicReference; ALTER TABLE portLinks DROP COLUMN publicReference; ALTER TABLE auditLog DROP COLUMN labIds; DROP INDEX idx_auditLog_entity; UPDATE schemaVersion SET version=57;
       INSERT INTO labs(id,name) VALUES('lab','Fixture');
       INSERT INTO devices(id,labId,hostname,deviceType) VALUES('device','lab','fixture','server');
       INSERT INTO auditLog(id,ts,user,action,entityType,entityId,summary) VALUES

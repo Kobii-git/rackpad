@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const uk = {
+  "Floorplan": "План приміщення",
+  "Zoom": "Масштабування",
+  "Add marker": "Додати маркер",
+  "Replace the background and keep marker positions?": "Замінити тло й зберегти позиції маркерів?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Використовуйте стрілки для переміщення вибраного маркера. Утримуйте Shift для більшого кроку.",
+  "No floorplan background selected.": "Тло плану приміщення не вибрано.",
+  "Floorplan changed. Reload before applying this edit.": "План приміщення змінився. Перезавантажте його перед застосуванням правки.",
+
   "Hide Disabled Ports": "Приховати вимкнені порти",
   "Find reference": "Знайти ідентифікатор",
   "Generate references": "Створити ідентифікатори",

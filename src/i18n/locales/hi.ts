@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "Floorplan": "तल योजना",
+  "Zoom": "ज़ूम",
+  "Add marker": "चिह्न जोड़ें",
+  "Replace the background and keep marker positions?": "पृष्ठभूमि बदलें और चिह्नों के स्थान बनाए रखें?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "चुने गए चिह्न को खिसकाने के लिए तीर कुंजियों का उपयोग करें। बड़े चरणों के लिए Shift दबाए रखें।",
+  "No floorplan background selected.": "तल योजना की कोई पृष्ठभूमि नहीं चुनी गई है।",
+  "Floorplan changed. Reload before applying this edit.": "तल योजना बदल गई है। यह संपादन लागू करने से पहले फिर लोड करें।",
+
   "Hide Disabled Ports": "अक्षम पोर्ट छिपाएँ",
   "Find reference": "संदर्भ खोजें",
   "Generate references": "संदर्भ बनाएँ",

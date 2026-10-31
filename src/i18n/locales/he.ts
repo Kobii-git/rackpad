@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "Floorplan": "תוכנית קומה",
+  "Zoom": "הגדלה",
+  "Add marker": "הוספת סמן",
+  "Replace the background and keep marker positions?": "להחליף את הרקע ולשמור על מיקומי הסמנים?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "השתמשו בחצים להזזת הסמן שנבחר. החזיקו Shift לצעדים גדולים יותר.",
+  "No floorplan background selected.": "לא נבחר רקע לתוכנית הקומה.",
+  "Floorplan changed. Reload before applying this edit.": "תוכנית הקומה השתנתה. יש לטעון מחדש לפני החלת העריכה.",
+
   "Hide Disabled Ports": "הסתר יציאות מושבתות",
   "Find reference": "חיפוש מזהה ייחוס",
   "Generate references": "יצירת מזהי ייחוס",

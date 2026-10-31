@@ -1,6 +1,14 @@
 import type { TranslationMap } from "../base";
 
 export const ru = {
+  "Floorplan": "План помещения",
+  "Zoom": "Масштаб",
+  "Add marker": "Добавить маркер",
+  "Replace the background and keep marker positions?": "Заменить фон и сохранить позиции маркеров?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Используйте стрелки для перемещения выбранного маркера. Удерживайте Shift для увеличенного шага.",
+  "No floorplan background selected.": "Фон плана помещения не выбран.",
+  "Floorplan changed. Reload before applying this edit.": "План помещения изменён. Перезагрузите его перед применением правки.",
+
   "Hide Disabled Ports": "Скрыть отключённые порты",
   "Find reference": "Найти идентификатор",
   "Generate references": "Создать идентификаторы",
