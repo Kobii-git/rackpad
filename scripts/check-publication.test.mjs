@@ -495,7 +495,7 @@ test("candidate smoke follows current schema across migrations while retaining p
           exercises.push({schema: input.expectedSchema, features: input.features, create: input.create});
         }
         const stdout = args.includes("process.versions.node") ? "22.23.4\n" : args[0] === "info" ? "linux\n" : args[0] === "image" && args[1] === "inspect"
-          ? JSON.stringify([{Os: "linux", Architecture: "amd64", Config: {Labels: {"org.opencontainers.image.revision": "c".repeat(40)}}}]) : "";
+          ? JSON.stringify([{Os: "linux", Architecture: args.includes("--platform") ? args[args.indexOf("--platform")+1].split("/")[1] : "arm64", Config: {Labels: {"org.opencontainers.image.revision": "c".repeat(40)}}}]) : "";
         return {status: 0, stdout, stderr: ""};
       },
     });
