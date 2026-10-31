@@ -1,4 +1,17 @@
 export const en = {
+  "Floorplan": "Floorplan",
+  "Zoom": "Zoom",
+  "Add marker": "Add marker",
+  "Replace the background and keep marker positions?": "Replace the background and keep marker positions?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Use arrow keys to move the selected marker. Hold Shift for larger steps.",
+  "No floorplan background selected.": "No floorplan background selected.",
+  "Floorplan changed. Reload before applying this edit.": "Floorplan changed. Reload before applying this edit.",
+
+  "Hide Disabled Ports": "Hide Disabled Ports",
+  "Find reference": "Find reference",
+  "Generate references": "Generate references",
+  "Print labels": "Print labels",
+
   "Import host adapters and guest NIC ports.": "Import host adapters and guest NIC ports.",
   "Revoke": "Revoke",
   "Revoked": "Revoked",
@@ -24,6 +37,7 @@ export const en = {
   "ntfy timed out. Try again later.": "ntfy timed out. Try again later.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy rejected the message. Check topic permissions and authentication.",
   "ntfy rate limit reached. Try again later.": "ntfy rate limit reached. Try again later.",
+  "Enable notifications before sending a test alert.": "Enable notifications before sending a test alert.",
   "Notification delivery failed. Check the configured channels.": "Notification delivery failed. Check the configured channels.",
 
   "Check the SMTP host, sender and recipient settings.": "Check the SMTP host, sender and recipient settings.",

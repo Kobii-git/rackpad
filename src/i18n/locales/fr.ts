@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const fr = {
+  "Floorplan": "Plan de salle",
+  "Zoom": "Grossissement",
+  "Add marker": "Ajouter un repère",
+  "Replace the background and keep marker positions?": "Remplacer le fond et conserver les positions des repères ?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Utilisez les flèches pour déplacer le repère sélectionné. Maintenez Maj pour des pas plus grands.",
+  "No floorplan background selected.": "Aucun fond de plan sélectionné.",
+  "Floorplan changed. Reload before applying this edit.": "Le plan a changé. Rechargez-le avant d’appliquer cette modification.",
+
+  "Hide Disabled Ports": "Masquer les ports désactivés",
+  "Find reference": "Rechercher une référence",
+  "Generate references": "Générer des références",
+  "Print labels": "Imprimer les étiquettes",
+
   "Import host adapters and guest NIC ports.": "Importez les adaptateurs de l’hôte et les ports réseau des invités.",
   "Revoke": "Révoquer",
   "Revoked": "Révoqué",
@@ -26,6 +39,7 @@ export const fr = {
   "ntfy timed out. Try again later.": "Délai ntfy dépassé. Réessayez plus tard.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy a rejeté le message. Vérifiez les autorisations du sujet et l’authentification.",
   "ntfy rate limit reached. Try again later.": "Limite de requêtes ntfy atteinte. Réessayez plus tard.",
+  "Enable notifications before sending a test alert.": "Activez les notifications avant d’envoyer une alerte de test.",
   "Notification delivery failed. Check the configured channels.": "Échec d’envoi de la notification. Vérifiez les canaux configurés.",
 
   "Check the SMTP host, sender and recipient settings.": "Vérifiez les paramètres du serveur SMTP, de l’expéditeur et du destinataire.",

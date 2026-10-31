@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Floorplan": "نقشه طبقه",
+  "Zoom": "بزرگ‌نمایی",
+  "Add marker": "افزودن نشانگر",
+  "Replace the background and keep marker positions?": "پس‌زمینه جایگزین شود و جای نشانگرها حفظ شود؟",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "برای جابه‌جایی نشانگر انتخاب‌شده از کلیدهای جهت استفاده کنید. برای گام‌های بزرگ‌تر Shift را نگه دارید.",
+  "No floorplan background selected.": "پس‌زمینه‌ای برای نقشه طبقه انتخاب نشده است.",
+  "Floorplan changed. Reload before applying this edit.": "نقشه طبقه تغییر کرده است. پیش از اعمال این ویرایش دوباره بارگذاری کنید.",
+
+  "Hide Disabled Ports": "پنهان کردن درگاه‌های غیرفعال",
+  "Find reference": "یافتن مرجع",
+  "Generate references": "تولید مرجع‌ها",
+  "Print labels": "چاپ برچسب‌ها",
+
   "Import host adapters and guest NIC ports.": "آداپتورهای میزبان و درگاه‌های شبکه مهمان را وارد کنید.",
   "Revoke": "لغو دسترسی",
   "Revoked": "لغوشده",
@@ -26,6 +39,7 @@ export const fa = {
   "ntfy timed out. Try again later.": "مهلت ntfy تمام شد. بعداً دوباره تلاش کنید.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy پیام را رد کرد. مجوزهای موضوع و احراز هویت را بررسی کنید.",
   "ntfy rate limit reached. Try again later.": "محدودیت درخواست ntfy رسیده است. بعداً دوباره تلاش کنید.",
+  "Enable notifications before sending a test alert.": "پیش از ارسال هشدار آزمایشی، اعلان‌ها را فعال کنید.",
   "Notification delivery failed. Check the configured channels.": "تحویل اعلان ناموفق بود. کانال‌های تنظیم‌شده را بررسی کنید.",
 
   "Check the SMTP host, sender and recipient settings.": "تنظیمات میزبان SMTP، فرستنده و گیرنده را بررسی کنید.",

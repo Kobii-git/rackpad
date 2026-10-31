@@ -1,4 +1,6 @@
+import { floorplanRoutes } from "./routes/floorplans.js";
 import Fastify from "fastify";
+import { publicReferenceRoutes } from "./routes/public-references.js";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import staticPlugin from "@fastify/static";
@@ -438,6 +440,8 @@ export async function createApp() {
   await app.register(deviceTypesRoutes, { prefix: "/api/device-types" });
   await app.register(portsRoutes, { prefix: "/api/ports" });
   await app.register(portAggregatesRoutes, { prefix: "/api/port-aggregates" });
+  await app.register(floorplanRoutes, { prefix: "/api/floorplans" });
+  await app.register(publicReferenceRoutes, { prefix: "/api/references" });
   await app.register(cablesRoutes, { prefix: "/api/port-links" });
   await app.register(vlansRoutes, { prefix: "/api/vlans" });
   await app.register(ipamRoutes, { prefix: "/api" });

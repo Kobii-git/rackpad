@@ -1,3 +1,4 @@
+import { writeAuditLogEntry } from './audit-log.js';
 import dgram from "node:dgram";
 import { db } from "../db.js";
 import { createId } from "./ids.js";
@@ -222,20 +223,8 @@ export async function handleTrapPacket(packet: Buffer, sourceIp: string) {
       message,
     });
 
-    db.prepare(
-      `
-      INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `,
-    ).run(
-      createId("a"),
-      new Date().toISOString(),
-      "system",
-      "monitor.snmp.trap",
-      deviceId ? "Device" : "Lab",
-      deviceId ?? labId,
-      message,
-    );
+    writeAuditLogEntry({ user: "system", action: "monitor.snmp.trap",
+      entityType: deviceId ? "Device" : "Lab", entityId: deviceId ?? labId, summary: message });
   }
 
   return {

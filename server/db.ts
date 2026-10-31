@@ -1,4 +1,5 @@
 import path from "node:path";
+import { backfillAuditScopes } from "./lib/audit-scope.js";
 import { fileURLToPath } from "node:url";
 import { createId } from "./lib/ids.js";
 import { openDatabase } from "./lib/open-database.js";
@@ -1525,6 +1526,71 @@ const SCHEMA_MIGRATIONS = [
       ALTER TABLE deviceMonitors ADD COLUMN lastAlertAttemptAt TEXT
         CHECK (lastAlertAttemptAt IS NULL OR
           (pendingAlertKind IS NOT NULL AND pendingAlertAt IS NOT NULL AND lastAlertAttemptAt >= pendingAlertAt));
+    `,
+  },
+  {
+    version: 58,
+    sql: `
+      ALTER TABLE auditLog ADD COLUMN labIds TEXT CHECK (labIds IS NULL OR
+        (length(labIds) <= 16384 AND json_valid(labIds) AND json_type(labIds) = 'array' AND json_array_length(labIds) <= 100));
+      CREATE INDEX idx_auditLog_entity ON auditLog(entityType, entityId, ts);
+    `,
+    run: () => backfillAuditScopes(db),
+  },
+  {
+    version: 59,
+    sql: `
+      ALTER TABLE devices ADD COLUMN publicReference TEXT CHECK(publicReference IS NULL OR (length(publicReference)=26 AND publicReference GLOB 'rpd1*'));
+      ALTER TABLE portLinks ADD COLUMN publicReference TEXT CHECK(publicReference IS NULL OR (length(publicReference)=26 AND publicReference GLOB 'rpc1*'));
+      CREATE UNIQUE INDEX idx_devices_publicReference ON devices(publicReference) WHERE publicReference IS NOT NULL;
+      CREATE UNIQUE INDEX idx_portLinks_publicReference ON portLinks(publicReference) WHERE publicReference IS NOT NULL;
+      CREATE TRIGGER device_reference_immutable BEFORE UPDATE OF publicReference ON devices
+        WHEN OLD.publicReference IS NOT NULL AND NEW.publicReference IS NOT OLD.publicReference
+        BEGIN SELECT RAISE(ABORT,'Device reference is immutable'); END;
+      CREATE TRIGGER cable_reference_immutable BEFORE UPDATE OF publicReference ON portLinks
+        WHEN OLD.publicReference IS NOT NULL AND NEW.publicReference IS NOT OLD.publicReference
+        BEGIN SELECT RAISE(ABORT,'Cable reference is immutable'); END;
+    `,
+  },
+  {
+    version: 60,
+    sql: `
+      CREATE TABLE roomFloorplans (
+        roomId TEXT PRIMARY KEY REFERENCES rooms(id) ON DELETE CASCADE,
+        backgroundImageId TEXT REFERENCES referenceImages(id) ON DELETE SET NULL,
+        revision INTEGER NOT NULL DEFAULT 0 CHECK(typeof(revision)='integer' AND revision BETWEEN 0 AND 2147483647),
+        updatedAt TEXT NOT NULL
+      );
+      CREATE TABLE roomFloorplanMarkers (
+        id TEXT PRIMARY KEY,
+        roomId TEXT NOT NULL REFERENCES roomFloorplans(roomId) ON DELETE CASCADE,
+        deviceId TEXT UNIQUE REFERENCES devices(id) ON DELETE CASCADE,
+        rackId TEXT UNIQUE REFERENCES racks(id) ON DELETE CASCADE,
+        x REAL NOT NULL CHECK(typeof(x) IN ('real','integer') AND x BETWEEN 0 AND 1),
+        y REAL NOT NULL CHECK(typeof(y) IN ('real','integer') AND y BETWEEN 0 AND 1),
+        label TEXT CHECK(label IS NULL OR length(label)<=120),
+        updatedAt TEXT NOT NULL,
+        CHECK((deviceId IS NOT NULL) != (rackId IS NOT NULL))
+      );
+      CREATE INDEX idx_floorplanMarkers_room ON roomFloorplanMarkers(roomId);
+      CREATE TRIGGER floorplan_background_revision AFTER UPDATE OF backgroundImageId ON roomFloorplans
+        WHEN NEW.backgroundImageId IS NOT OLD.backgroundImageId BEGIN
+        UPDATE roomFloorplans SET revision=CASE WHEN revision=2147483647 THEN 0 ELSE revision+1 END,updatedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE roomId=NEW.roomId; END;
+      CREATE TRIGGER floorplan_marker_insert AFTER INSERT ON roomFloorplanMarkers BEGIN
+        UPDATE roomFloorplans SET revision=CASE WHEN revision=2147483647 THEN 0 ELSE revision+1 END,updatedAt=NEW.updatedAt WHERE roomId=NEW.roomId; END;
+      CREATE TRIGGER floorplan_marker_update AFTER UPDATE ON roomFloorplanMarkers BEGIN
+        UPDATE roomFloorplans SET revision=CASE WHEN revision=2147483647 THEN 0 ELSE revision+1 END,updatedAt=NEW.updatedAt WHERE roomId=NEW.roomId; END;
+      CREATE TRIGGER floorplan_marker_delete AFTER DELETE ON roomFloorplanMarkers BEGIN
+        UPDATE roomFloorplans SET revision=CASE WHEN revision=2147483647 THEN 0 ELSE revision+1 END,updatedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE roomId=OLD.roomId; END;
+      CREATE TRIGGER floorplan_device_room AFTER UPDATE OF roomId,rackId,labId ON devices BEGIN
+        DELETE FROM roomFloorplanMarkers WHERE deviceId=NEW.id AND NOT EXISTS (
+          SELECT 1 FROM rooms WHERE rooms.id=roomFloorplanMarkers.roomId AND rooms.labId=NEW.labId
+          AND rooms.id=CASE WHEN NEW.rackId IS NULL THEN NEW.roomId ELSE (SELECT roomId FROM racks WHERE id=NEW.rackId) END
+        ); END;
+      CREATE TRIGGER floorplan_rack_room AFTER UPDATE OF roomId,labId ON racks BEGIN
+        DELETE FROM roomFloorplanMarkers WHERE (rackId=NEW.id OR deviceId IN (SELECT id FROM devices WHERE rackId=NEW.id)) AND NOT EXISTS (
+          SELECT 1 FROM rooms WHERE rooms.id=roomFloorplanMarkers.roomId AND rooms.labId=NEW.labId AND rooms.id=NEW.roomId
+        ); END;
     `,
   },
 ] as const;

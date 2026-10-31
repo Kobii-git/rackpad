@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const de = {
+  "Floorplan": "Grundriss",
+  "Zoom": "Vergrößerung",
+  "Add marker": "Markierung hinzufügen",
+  "Replace the background and keep marker positions?": "Hintergrund ersetzen und Markierungspositionen beibehalten?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Verschieben Sie die ausgewählte Markierung mit den Pfeiltasten. Halten Sie für größere Schritte die Umschalttaste gedrückt.",
+  "No floorplan background selected.": "Kein Grundrisshintergrund ausgewählt.",
+  "Floorplan changed. Reload before applying this edit.": "Der Grundriss wurde geändert. Laden Sie ihn vor dem Anwenden dieser Änderung neu.",
+
+  "Hide Disabled Ports": "Deaktivierte Ports ausblenden",
+  "Find reference": "Referenz suchen",
+  "Generate references": "Referenzen erzeugen",
+  "Print labels": "Etiketten drucken",
+
   "Import host adapters and guest NIC ports.": "Hostadapter und Gast-NIC-Ports importieren.",
   "Revoke": "Widerrufen",
   "Revoked": "Widerrufenes Token",
@@ -26,6 +39,7 @@ export const de = {
   "ntfy timed out. Try again later.": "Zeitüberschreitung bei ntfy. Versuchen Sie es später erneut.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy hat die Nachricht abgelehnt. Prüfen Sie Themenberechtigungen und Authentifizierung.",
   "ntfy rate limit reached. Try again later.": "ntfy-Anfragelimit erreicht. Versuchen Sie es später erneut.",
+  "Enable notifications before sending a test alert.": "Aktivieren Sie Benachrichtigungen, bevor Sie eine Testwarnung senden.",
   "Notification delivery failed. Check the configured channels.": "Benachrichtigung konnte nicht zugestellt werden. Prüfen Sie die konfigurierten Kanäle.",
 
   "Check the SMTP host, sender and recipient settings.": "Prüfen Sie SMTP-Host, Absender und Empfänger.",

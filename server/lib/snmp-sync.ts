@@ -1,3 +1,4 @@
+import { writeAuditLogEntry } from './audit-log.js';
 import { db } from '../db.js'
 import { createId } from './ids.js'
 import { assertSubnetCidrAvailable } from './subnet-integrity.js'
@@ -485,10 +486,7 @@ function writeSyncAudit(
   summary: string,
   entityType = 'SnmpSync',
 ) {
-  db.prepare(`
-    INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(createId('a'), new Date().toISOString(), actor, action, entityType, entityId, summary)
+  writeAuditLogEntry({ user: actor, action, entityType, entityId, summary })
 }
 
 export function snmpInventorySyncEnabled() {

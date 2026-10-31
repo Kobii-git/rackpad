@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync } from 'fastify'
 import { asObject, optionalString, requiredString } from '../lib/validation.js'
 import {
@@ -40,11 +41,11 @@ export const deviceTypesRoutes: FastifyPluginAsync = async (app) => {
     return updateDeviceType(id, { label, parentType })
   })
 
-  app.delete('/:id', async (req, reply) => {
+  app.delete('/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "DeviceType", entityId: String((req.params as { id: string }).id), action: "device.type.delete" }, () => {
     if (!assertGlobalAdmin(req, reply)) return
     const params = asObject(req.params)
     const id = requiredString(params, 'id', { maxLength: 80 })
     deleteDeviceType(id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 }

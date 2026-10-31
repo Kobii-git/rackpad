@@ -563,14 +563,18 @@ export default function UsersPage() {
       setAlertSuccess(t("Delivered via {channels}.", { channels: result.channels.filter(channel => channel.delivered).map(channel => channel.channel).join(", ") }));
       const failed = result.channels.filter(channel => !channel.delivered);
       if (failed.length) setAlertWarning(t("Failed channels: {channels}.", { channels: failed.map(channel => channel.channel).join(", ") }));
-      const entries = await api.getAuditLog({ entityType: "Alert", limit: 40 });
-      setAlertHistory(entries);
     } catch (err) {
       const smtpMessage = err instanceof ApiError && err.code && Object.hasOwn(smtpErrorMessages, err.code)
         ? smtpErrorMessages[err.code as keyof typeof smtpErrorMessages] : null;
       setAlertError(smtpMessage ? t(smtpMessage) : err instanceof Error ? err.message : "Failed to send test alert.");
     } finally {
       setAlertTesting(false);
+      try {
+        setAlertHistory(await api.getAuditLog({ entityType: "Alert", limit: 40 }));
+        setAlertHistoryError("");
+      } catch {
+        setAlertHistoryError("Failed to load alert history.");
+      }
     }
   }
 
@@ -1534,12 +1538,12 @@ export default function UsersPage() {
                   <Field label={t("ntfy topic URL")}>
                     <Input type="url" value={alertSettings.ntfyTopicUrl ?? ""}
                       onChange={event => setAlertSettings(previous => ({ ...previous, ntfyTopicUrl: event.target.value || null }))}
-                      disabled={alertsLoading || alertSaving}  />
+                      disabled={alertsLoading || alertSaving || alertTesting}  />
                   </Field>
                   <div>
                   <Field label={t("ntfy access token")}>
                     <Input type="password" autoComplete="new-password" value={ntfyToken ?? ""}
-                      onChange={event => setNtfyToken(event.target.value || undefined)} disabled={alertsLoading || alertSaving} />
+                      onChange={event => setNtfyToken(event.target.value || undefined)} disabled={alertsLoading || alertSaving || alertTesting} />
                   </Field>
                     {alertSettings.ntfyTokenConfigured && ntfyToken !== null && <div className="mt-2 flex items-center gap-2 text-xs">
                       <span>{t("Configured")}</span>
@@ -1738,7 +1742,7 @@ export default function UsersPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => void handleTestAlert()}
-                      disabled={alertsLoading || alertTesting}
+                      disabled={alertsLoading || alertTesting || alertSaving}
                     >
                       <BellRing className="size-3.5" />
                       {alertTesting ? t("Sending...") : t("Send test")}
@@ -1747,7 +1751,7 @@ export default function UsersPage() {
                       className="shrink-0"
                       size="sm"
                       onClick={() => void handleSaveAlerts()}
-                      disabled={alertsLoading || alertSaving}
+                      disabled={alertsLoading || alertSaving || alertTesting}
                     >
                       <Save className="size-3.5" />
                       {alertSaving ? t("Saving...") : t("Save notifications")}

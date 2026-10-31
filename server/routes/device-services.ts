@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import { parseServiceEndpoint } from '../lib/service-endpoint.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../db.js'
@@ -208,10 +209,10 @@ export const deviceServicesRoutes: FastifyPluginAsync = async (app) => {
     return parseService(getService(req.params.id)!)
   })
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "DeviceService", entityId: req.params.id, action: "device.service.delete" }, () => {
     const existing = getServiceLabRow(req.params.id)
     if (!assertLabWriteFromRow(req, reply, existing)) return
     db.prepare('DELETE FROM deviceServices WHERE id = ?').run(req.params.id)
-    return reply.status(204).send()
-  })
+    return true as const
+  }))
 }

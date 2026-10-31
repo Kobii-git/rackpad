@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "Floorplan": "Vloerplan",
+  "Zoom": "Zoem",
+  "Add marker": "Voeg merker by",
+  "Replace the background and keep marker positions?": "Vervang die agtergrond en behou merkerposisies?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "Gebruik pyltjies om die gekose merker te skuif. Hou Shift in vir groter stappe.",
+  "No floorplan background selected.": "Geen vloerplanagtergrond gekies nie.",
+  "Floorplan changed. Reload before applying this edit.": "Die vloerplan het verander. Herlaai voordat jy hierdie wysiging toepas.",
+
+  "Hide Disabled Ports": "Versteek gedeaktiveerde poorte",
+  "Find reference": "Vind verwysing",
+  "Generate references": "Genereer verwysings",
+  "Print labels": "Druk etikette",
+
   "Import host adapters and guest NIC ports.": "Voer gasheeradapters en gas-NIC-poorte in.",
   "Revoke": "Herroep",
   "Revoked": "Herroepte",
@@ -26,6 +39,7 @@ export const af = {
   "ntfy timed out. Try again later.": "ntfy het uitgetel. Probeer later weer.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy het die boodskap verwerp. Kontroleer onderwerptoestemmings en verifikasie.",
   "ntfy rate limit reached. Try again later.": "ntfy se tempolimiet is bereik. Probeer later weer.",
+  "Enable notifications before sending a test alert.": "Aktiveer kennisgewings voordat jy ’n toetswaarskuwing stuur.",
   "Notification delivery failed. Check the configured channels.": "Kennisgewingaflewering het misluk. Kontroleer die ingestelde kanale.",
 
   "Check the SMTP host, sender and recipient settings.": "Gaan die SMTP-gasheer-, sender- en ontvangerinstellings na.",

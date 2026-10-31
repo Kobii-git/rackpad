@@ -186,6 +186,7 @@ export interface DeviceStackMember {
 }
 
 export interface Device {
+  publicReference?: string | null;
   labelPosition?: "upper-left" | "upper-right";
   stackMembers?: DeviceStackMember[];
   id: ID;
@@ -892,6 +893,7 @@ export interface VirtualSwitch {
 }
 
 export interface PortLink {
+  publicReference?: string | null;
   id: ID;
   fromPortId: ID;
   toPortId: ID;
@@ -1058,6 +1060,7 @@ export interface IpZone {
 }
 
 export interface AuditEntry {
+  labIds?: ID[] | null;
   id: ID;
   ts: string;
   user: string;
@@ -1393,4 +1396,24 @@ export interface StackMemberLayoutPreview {
   linkedUnmappedPortIds: string[];
   portsToCreate: Array<{slotId: string; name: string; kind: string; face: RackFace}>;
   expectedFingerprint: string;
+}
+
+export interface RoomFloorplanMarker {
+  id: string;
+  roomId: string;
+  deviceId: string | null;
+  rackId: string | null;
+  x: number;
+  y: number;
+  label: string | null;
+  name: string;
+  updatedAt: string;
+}
+export interface RoomFloorplan {
+  roomId: string;
+  backgroundImageId: string | null;
+  revision: number;
+  updatedAt: string | null;
+  background: ReferenceImage | null;
+  markers: RoomFloorplanMarker[];
 }

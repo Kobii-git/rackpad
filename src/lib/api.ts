@@ -55,6 +55,7 @@ import type {
   ReferenceImage,
   ReferenceImageEntityType,
   Room,
+  RoomFloorplan,
   SnmpCredential,
   SnmpSyncApplyResult,
   SnmpSyncPreview,
@@ -537,7 +538,37 @@ async function requestBlob(
   };
 }
 
+export interface ReferenceLookupResult {
+  kind: "device" | "cable";
+  id: string;
+  publicReference: string;
+  labIds: string[];
+  label: string;
+  endpoints: Array<{ portId: string; portName: string; deviceId: string; hostname: string; labId: string }>;
+}
+
 export const api = {
+  getFloorplan(roomId: string) {
+    return request<RoomFloorplan>(`/floorplans/${encodeURIComponent(roomId)}`);
+  },
+  setFloorplanBackground(roomId: string, input: { revision: number; backgroundImageId: string | null; confirmBackgroundChange?: boolean }) {
+    return request<RoomFloorplan>(`/floorplans/${encodeURIComponent(roomId)}`, { method: "PUT", body: JSON.stringify(input) });
+  },
+  addFloorplanMarker(roomId: string, input: { revision: number; deviceId?: string; rackId?: string; x?: number; y?: number; label?: string }) {
+    return request<RoomFloorplan>(`/floorplans/${encodeURIComponent(roomId)}/markers`, { method: "POST", body: JSON.stringify(input) });
+  },
+  updateFloorplanMarker(roomId: string, id: string, input: { revision: number; x?: number; y?: number; label?: string | null }) {
+    return request<RoomFloorplan>(`/floorplans/${encodeURIComponent(roomId)}/markers/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+  },
+  deleteFloorplanMarker(roomId: string, id: string, revision: number) {
+    return request<RoomFloorplan>(`/floorplans/${encodeURIComponent(roomId)}/markers/${encodeURIComponent(id)}`, { method: "DELETE", body: JSON.stringify({ revision }) });
+  },
+  lookupReference(reference: string) {
+    return request<ReferenceLookupResult>(`/references/${encodeURIComponent(reference)}`);
+  },
+  generateReference(kind: "device" | "cable", id: string) {
+    return request<{ kind: "device" | "cable"; id: string; publicReference: string }>(`/references/${kind}/${encodeURIComponent(id)}`, { method: "POST" });
+  },
   listMcpTokens() {
     return request<McpTokenRecord[]>("/mcp-tokens");
   },

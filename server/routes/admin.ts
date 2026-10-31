@@ -1,3 +1,6 @@
+import { validateFloorplanRows } from "../lib/floorplans.js";
+import { validatePublicReferenceRows } from "../lib/public-references.js";
+import { backfillAuditScopes, parseAuditLabIds } from "../lib/audit-scope.js";
 import { parsePendingAlertState } from '../lib/notification-state.js';
 import { invalidateMonitorObservations } from '../lib/monitoring.js';
 import { NotificationDeliveryError } from '../lib/notification-delivery.js';
@@ -301,6 +304,8 @@ const exportBackupSnapshot = db.transaction(
             "SELECT * FROM referenceImages ORDER BY entityType, entityId, face, createdAt DESC, id",
           )
           .all(),
+        roomFloorplans: db.prepare("SELECT * FROM roomFloorplans ORDER BY roomId").all(),
+        roomFloorplanMarkers: db.prepare("SELECT * FROM roomFloorplanMarkers ORDER BY id").all(),
         auditLog: db
           .prepare("SELECT * FROM auditLog ORDER BY ts DESC, id DESC")
           .all(),
@@ -1250,6 +1255,8 @@ const restoreBackupSnapshot = db.transaction(
 
     const legacySecurity = Number(snapshot.schemaVersion ?? 0) < 50;
     const data = asObject(snapshot.data);
+    const roomFloorplans = normalizeArrayRecordArray(data.roomFloorplans ?? [], "data.roomFloorplans");
+    const roomFloorplanMarkers = normalizeArrayRecordArray(data.roomFloorplanMarkers ?? [], "data.roomFloorplanMarkers");
     const labs = normalizeArrayRecordArray(data.labs, "data.labs");
     const rooms = normalizeArrayRecordArray(data.rooms ?? [], "data.rooms");
     const racks = normalizeArrayRecordArray(data.racks, "data.racks");
@@ -1355,7 +1362,10 @@ const restoreBackupSnapshot = db.transaction(
       data.referenceImages ?? [],
       "data.referenceImages",
     );
-    const auditLog = normalizeArrayRecordArray(data.auditLog, "data.auditLog");
+    const auditLog = normalizeArrayRecordArray(data.auditLog, "data.auditLog").map((row): Record<string, unknown> & { labIds: string[] | null } => {
+      try { return { ...row, labIds: parseAuditLabIds(row.labIds) }; }
+      catch { throw new ValidationError("Invalid audit lab scope in backup."); }
+    });
     const users = normalizeArrayRecordArray(data.users, "data.users");
     const userLabAccess = normalizeArrayRecordArray(
       data.userLabAccess ?? [],
@@ -1594,6 +1604,9 @@ const restoreBackupSnapshot = db.transaction(
       }
       restoredDefaultDeviceTypes.add(deviceType);
     }
+    validateFloorplanRows({ rooms, racks, devices, referenceImages, roomFloorplans, roomFloorplanMarkers });
+    validatePublicReferenceRows(devices, "device");
+    validatePublicReferenceRows(portLinks, "cable");
     const backupDeviceIds = new Set(devices.map((row) => String(row.id ?? "")));
     const backupPortsByDevice = new Map<string, Set<string>>();
     for (const port of ports) {
@@ -1664,6 +1677,8 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM snmpCredentials;
     DELETE FROM appSettings;
     DELETE FROM auditLog;
+    DELETE FROM roomFloorplans;
+    DELETE FROM roomFloorplanMarkers;
     DELETE FROM referenceImages;
     DELETE FROM deviceImages;
     DELETE FROM documentationDeviceLinks;
@@ -1712,8 +1727,8 @@ const restoreBackupSnapshot = db.transaction(
     );
     const insertDevice = db.prepare(`
     INSERT INTO devices
-      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, ignoreDuplicateMac, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, rackSlot, tags, notes, lastSeen, networkMode, snmpCredentialId, rackMountKind, rackColumn, rackColumnSpan, shelfX, shelfY, shelfWidth, shelfHeight, shelfOrientation, rackSide, labelPosition)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, labId, rackId, hostname, displayName, deviceType, manufacturer, model, serial, managementIp, macAddress, ignoreDuplicateMac, status, placement, parentDeviceId, roomId, cpuCores, memoryGb, storageGb, specs, startU, heightU, face, rackSlot, tags, notes, lastSeen, networkMode, snmpCredentialId, rackMountKind, rackColumn, rackColumnSpan, shelfX, shelfY, shelfWidth, shelfHeight, shelfOrientation, rackSide, labelPosition, publicReference)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const updateDeviceParent = db.prepare(`
     UPDATE devices
@@ -1735,8 +1750,8 @@ const restoreBackupSnapshot = db.transaction(
   `);
     const insertPortLink = db.prepare(
       `INSERT INTO portLinks
-        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints, routeMode, routeGuides)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, fromPortId, toPortId, cableType, cableLength, color, notes, label, visible, routeWaypoints, routeMode, routeGuides, publicReference)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const insertPortTemplate = db.prepare(`
     INSERT INTO portTemplates (id, name, description, deviceTypes, ports, createdAt, updatedAt)
@@ -1860,7 +1875,7 @@ const restoreBackupSnapshot = db.transaction(
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertAudit = db.prepare(
-      "INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary, labIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     );
     const insertUser = db.prepare(`
     INSERT INTO users (id, username, displayName, passwordHash, role, disabled, createdAt, lastLoginAt)
@@ -2300,6 +2315,7 @@ const restoreBackupSnapshot = db.transaction(
         row.shelfOrientation ?? 0,
         row.rackSide ?? null,
         optionalLabelPosition(row) ?? "upper-right",
+        row.publicReference ?? null,
       );
     }
     for (const row of stackMembers) {
@@ -2528,6 +2544,7 @@ const restoreBackupSnapshot = db.transaction(
         JSON.stringify(routeWaypoints),
         parseCableRouteMode(row.routeMode, routeWaypoints),
         JSON.stringify(parseCableRouteGuides(parseBackupJson(row.routeGuides ?? [], "Backup cable route guides"))),
+        row.publicReference ?? null,
       );
     }
     for (const row of portTemplates) {
@@ -2794,6 +2811,10 @@ const restoreBackupSnapshot = db.transaction(
         row.updatedAt ?? row.createdAt ?? now,
       );
     }
+    for (const row of roomFloorplans) db.prepare("INSERT INTO roomFloorplans(roomId,backgroundImageId,revision,updatedAt) VALUES(?,?,?,?)").run(row.roomId,row.backgroundImageId ?? null,0,row.updatedAt);
+    for (const row of roomFloorplanMarkers) db.prepare("INSERT INTO roomFloorplanMarkers(id,roomId,deviceId,rackId,x,y,label,updatedAt) VALUES(?,?,?,?,?,?,?,?)").run(row.id,row.roomId,row.deviceId ?? null,row.rackId ?? null,row.x,row.y,row.label ?? null,row.updatedAt);
+    // Marker insertion advances revisions; a restore retains the snapshot revision.
+    for (const row of roomFloorplans) db.prepare("UPDATE roomFloorplans SET revision=?,updatedAt=? WHERE roomId=?").run(row.revision,row.updatedAt,row.roomId);
     for (const row of deviceImages) {
       const now = new Date().toISOString();
       insertDeviceImage.run(
@@ -2817,6 +2838,7 @@ const restoreBackupSnapshot = db.transaction(
         row.entityType,
         row.entityId,
         row.summary,
+        row.labIds === null ? null : JSON.stringify(row.labIds),
       );
     }
     for (const row of deviceMonitors) {
@@ -2979,8 +3001,10 @@ const restoreBackupSnapshot = db.transaction(
       "Backup",
       restoreAuditId,
       `Restored Rackpad backup exported at ${String(snapshot.exportedAt ?? "unknown time")}`,
+      null,
     );
 
+    if (Number(snapshot.schemaVersion ?? 0) < 58) backfillAuditScopes(db);
     setBootstrapState(users.length === 0);
 
     return {
@@ -2999,6 +3023,8 @@ const restoreBackupSnapshot = db.transaction(
         documentationDeviceLinks: documentationDeviceLinks.length,
         deviceImages: deviceImages.length,
         referenceImages: referenceImages.length,
+        roomFloorplans: roomFloorplans.length,
+        roomFloorplanMarkers: roomFloorplanMarkers.length,
         deviceServices: deviceServices.length,
         portTemplates: portTemplates.length,
         hardwareTemplates: hardwareTemplates.length,

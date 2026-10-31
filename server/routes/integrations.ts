@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { db } from "../db.js";
 import { requireAdmin, requireAuth } from "../lib/auth.js";
@@ -345,7 +346,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>(
     "/connections/:id",
-    async (req, reply) => {
+    (req, reply) => withAuditedDeletion(req, reply, { entityType: "IntegrationConnection", entityId: req.params.id, action: "integration.connection.delete" }, () => {
       if (!requireAuth(req, reply)) return;
 
       const existing = getIntegrationConnectionRow(req.params.id);
@@ -357,8 +358,8 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       if (!assertLabWrite(req, reply, String(existing.labId))) return;
 
       deleteIntegrationConnection(req.params.id);
-      return reply.status(204).send();
-    },
+      return true as const;
+    }),
   );
 
   app.post<{ Params: { id: string } }>(
@@ -720,7 +721,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>(
     "/schedules/:id",
-    async (req, reply) => {
+    (req, reply) => withAuditedDeletion(req, reply, { entityType: "IntegrationSyncSchedule", entityId: req.params.id, action: "integration.schedule.delete" }, () => {
       if (!requireAdmin(req, reply)) return;
       const existing = getIntegrationSyncScheduleRow(req.params.id);
       const connection = scheduleConnection(existing);
@@ -729,8 +730,8 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!assertLabWrite(req, reply, String(connection.labId))) return;
       deleteIntegrationSyncSchedule(req.params.id);
-      return reply.status(204).send();
-    },
+      return true as const;
+    }),
   );
 
   app.post<{ Params: { id: string } }>(

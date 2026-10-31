@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "Floorplan": "মেঝের নকশা",
+  "Zoom": "জুম",
+  "Add marker": "চিহ্ন যোগ করুন",
+  "Replace the background and keep marker positions?": "চিহ্নের অবস্থান রেখে পটভূমি বদলাবেন?",
+  "Use arrow keys to move the selected marker. Hold Shift for larger steps.": "নির্বাচিত চিহ্ন সরাতে তীরচিহ্নের কী ব্যবহার করুন। বড় ধাপের জন্য Shift ধরে রাখুন।",
+  "No floorplan background selected.": "মেঝের নকশার পটভূমি নির্বাচন করা হয়নি।",
+  "Floorplan changed. Reload before applying this edit.": "মেঝের নকশা বদলেছে। এই পরিবর্তন প্রয়োগের আগে আবার লোড করুন।",
+
+  "Hide Disabled Ports": "নিষ্ক্রিয় পোর্ট লুকান",
+  "Find reference": "রেফারেন্স খুঁজুন",
+  "Generate references": "রেফারেন্স তৈরি করুন",
+  "Print labels": "লেবেল মুদ্রণ করুন",
+
   "Import host adapters and guest NIC ports.": "হোস্ট অ্যাডাপ্টার এবং গেস্ট NIC পোর্ট আমদানি করুন।",
   "Revoke": "প্রত্যাহার করুন",
   "Revoked": "প্রত্যাহার করা হয়েছে",
@@ -26,6 +39,7 @@ export const bn = {
   "ntfy timed out. Try again later.": "ntfy-এর সময়সীমা পেরিয়েছে। পরে আবার চেষ্টা করুন।",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy বার্তা প্রত্যাখ্যান করেছে। বিষয়ের অনুমতি ও প্রমাণীকরণ পরীক্ষা করুন।",
   "ntfy rate limit reached. Try again later.": "ntfy অনুরোধের সীমা পূর্ণ হয়েছে। পরে আবার চেষ্টা করুন।",
+  "Enable notifications before sending a test alert.": "পরীক্ষামূলক সতর্কতা পাঠানোর আগে বিজ্ঞপ্তি চালু করুন।",
   "Notification delivery failed. Check the configured channels.": "বিজ্ঞপ্তি পাঠানো ব্যর্থ হয়েছে। কনফিগার করা চ্যানেল পরীক্ষা করুন।",
 
   "Check the SMTP host, sender and recipient settings.": "SMTP হোস্ট, প্রেরক ও প্রাপকের সেটিংস পরীক্ষা করুন।",
