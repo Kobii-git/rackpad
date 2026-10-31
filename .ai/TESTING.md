@@ -46,6 +46,14 @@ templates/member layouts and HTTP monitoring, and upgrades a disposable copy fro
 the pinned schema-53/55/57 images. It verifies restart persistence and restores a
 separate pre-upgrade snapshot with the previous image. Both architecture jobs
 must pass before GitHub Release creation.
+
+The AMD64 candidate job also runs real Mailpit and ntfy containers against the
+production API. It checks saved settings and restart persistence, STARTTLS and
+SMTPS delivery, SMTP authentication and certificate-hostname failures, ntfy
+HTTPS delivery and revoked tokens, and safe diagnostics. Services use an
+internal Docker bridge, disposable memory-backed volumes and a temporary trusted
+CA; no host ports or TLS bypass are used. This proves server-level interoperability, not
+delivery to a reporter's mailbox, mobile client or external provider account.
 Image smoke requires a Docker client/daemon supporting API 1.49+ for explicit
 platform-specific inspection when multiple baseline variants are cached locally.
 
