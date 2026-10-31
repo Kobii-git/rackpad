@@ -387,7 +387,7 @@ for (const action of ["move-device", "delete-device", "move-rack"] as const) {
   test(`restored maximum revision permits ${action} and atomic marker cleanup`, async () => {
     let plan = await add({revision: 0, deviceId: "device"});
     plan = await add({revision: plan.revision, deviceId: "mounted"});
-    plan = await add({revision: plan.revision, rackId: "rack"});
+    await add({revision: plan.revision, rackId: "rack"});
     const snapshot = (await app.inject({method: "GET", url: "/api/admin/export", headers})).json();
     snapshot.data.roomFloorplans[0].revision = action === "move-rack" ? 2147483646 : 2147483647;
     const restored = await app.inject({method: "POST", url: "/api/admin/restore", headers, payload: snapshot});
