@@ -126,6 +126,15 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 22
+      - name: Set up platform-aware Docker
+        uses: docker/setup-docker-action@v5
+        with:
+          version: latest
+          channel: stable
+          daemon-config: |
+            {"features":{"containerd-snapshotter":true}}
+      - name: Verify Docker platform inspection support
+        run: node scripts/check-docker-platform.mjs
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
       - name: Set up Docker Buildx
@@ -151,12 +160,29 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           # Immutable v1.8.3/schema-51 and beta/schema-53 baselines.
           STABLE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:6a4fce729eef6bf380cfcc5a9e2be3daad914686ff04c2f9b85904528a6cf94e
+          # v1.8.7-beta.0, revision 7bf2eaf484daa5c878154a5d1f828528daff7bff.
+          SCHEMA57_IMAGE: ghcr.io/kobii-git/rackpad@sha256:a9652c980a17ae0ce4638492402d1cab54f876a3b6901bd8cf906eed18889ff5
           SCHEMA55_IMAGE: ghcr.io/kobii-git/rackpad@sha256:ea8076a73ee49e150abcf8326baf79cd79a8741499090f0111b164454e0ccbba
           BETA_IMAGE: ghcr.io/kobii-git/rackpad@sha256:42e503856315781bf2b8c640a8505687a07d7d3500534fa1ef767f1071c795c4
         run: |
           node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$STABLE_IMAGE" --previous-schema 51 --platform "$PLATFORM" --revision "$GITHUB_SHA"
           node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$BETA_IMAGE" --previous-schema 53 --platform "$PLATFORM" --revision "$GITHUB_SHA"
           node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$SCHEMA55_IMAGE" --previous-schema 55 --platform "$PLATFORM" --revision "$GITHUB_SHA"
+          node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$SCHEMA57_IMAGE" --previous-schema 57 --platform "$PLATFORM" --revision "$GITHUB_SHA"
+
+      - name: Real SMTP and ntfy acceptance
+        if: matrix.platform == 'linux/amd64'
+        env:
+          CANDIDATE_IMAGE: ${{ steps.candidate.outputs.imageid }}
+          PLATFORM: ${{ matrix.platform }}
+        run: node scripts/check-notification-containers.mjs --image "$CANDIDATE_IMAGE" --platform "$PLATFORM"
+
+      - name: Real Kuma and available Glances acceptance
+        if: matrix.platform == 'linux/amd64'
+        env:
+          CANDIDATE_IMAGE: ${{ steps.candidate.outputs.imageid }}
+          PLATFORM: ${{ matrix.platform }}
+        run: node scripts/check-host-provider-containers.mjs --image "$CANDIDATE_IMAGE" --platform "$PLATFORM"
 
   smoke:
     needs: build
@@ -179,6 +205,15 @@ jobs:
         with:
           node-version: 22
 
+      - name: Set up platform-aware Docker
+        uses: docker/setup-docker-action@v5
+        with:
+          version: latest
+          channel: stable
+          daemon-config: |
+            {"features":{"containerd-snapshotter":true}}
+      - name: Verify Docker platform inspection support
+        run: node scripts/check-docker-platform.mjs
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 
@@ -194,6 +229,8 @@ jobs:
           IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
           PLATFORM: ${{ matrix.platform }}
           # Immutable schema-53 beta baseline; never resolve a moving tag here.
+          # v1.8.7-beta.0, revision 7bf2eaf484daa5c878154a5d1f828528daff7bff.
+          SCHEMA57_IMAGE: ghcr.io/kobii-git/rackpad@sha256:a9652c980a17ae0ce4638492402d1cab54f876a3b6901bd8cf906eed18889ff5
           SCHEMA55_IMAGE: ghcr.io/kobii-git/rackpad@sha256:ea8076a73ee49e150abcf8326baf79cd79a8741499090f0111b164454e0ccbba
           PREVIOUS_IMAGE: ghcr.io/kobii-git/rackpad@sha256:42e503856315781bf2b8c640a8505687a07d7d3500534fa1ef767f1071c795c4
         run: |
@@ -204,6 +241,7 @@ jobs:
             --platform "$PLATFORM" \
             --revision "$GITHUB_SHA"
           node scripts/check-release-image.mjs --image "${REGISTRY}/${image_name}@${IMAGE_DIGEST}" --previous-image "$SCHEMA55_IMAGE" --previous-schema 55 --platform "$PLATFORM" --revision "$GITHUB_SHA"
+          node scripts/check-release-image.mjs --image "${REGISTRY}/${image_name}@${IMAGE_DIGEST}" --previous-image "$SCHEMA57_IMAGE" --previous-schema 57 --platform "$PLATFORM" --revision "$GITHUB_SHA"
 
   release:
     needs: [build, smoke]

@@ -4,7 +4,54 @@ All notable Rackpad changes should be recorded here.
 
 Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
+## 1.9.0-beta.3 (candidate)
+
+- Add Glances API v4 host inventory and CPU, memory, filesystem, network and
+  sensor readings through read-only plugin endpoints.
+- Add explicitly configured anonymous Glances access alongside Basic and bearer
+  authentication; anonymous connections retain no credentials.
+- Add PatchMon scoped `host:get` inventory/package summaries, preserving agent
+  observation times and unknown health for stale or pending reports.
+
+## 1.9.0-beta.2 (candidate)
+
+- Add read-only Uptime Kuma Prometheus inventory and latest external readings.
+- Add explicit same-lab record bindings, opt-in external monitors and polling
+  disabled by default; stale, missing and obsolete observations remain unknown.
+- Preserve schema-61 settings, bindings, latest readings and mappings in logical
+  and native recovery; require fresh observations after restart or restore.
+
+## 1.9.0-beta.1 (candidate)
+
+- Add room floorplans using selected room reference images and normalized rack/device markers, keyboard/drag editing, zoom and viewer navigation (#214).
+- Schema 60 keeps floorplans separate from inventory and Rack Studio; transactional room-move/deletion pruning and validated recovery preserve ownership.
+
+## 1.9.0-beta.0 (candidate)
+
+- Add disabled-port filtering to cable creation and explicitly assigned checked device/cable references with authenticated lookup and printable labels (#212, #213).
+- Schema 59 preserves references through recovery; rollback requires a paired pre-upgrade snapshot.
+
+### Fixed
+
+- Stage management IPs and actual host interfaces in Proxmox API imports while preserving existing manual inventory (#208).
+
 ## [Unreleased]
+
+## [1.8.7-beta.1] - Unreleased
+
+### Fixed
+
+- Preserve lab-scoped audit history after inventory deletion, record deletion
+  events atomically on the server, and retain scopes through recovery (#211).
+- Report disabled notification settings clearly, retain sanitized failed-test
+  history, and keep history-refresh errors separate from delivery results (#199, #202).
+
+### Changed
+
+- Schema 58 stores audit ownership independently of deleted inventory. Keep the
+  previous image with its pre-upgrade database snapshot for rollback.
+
+See the [beta test and upgrade notes](docs/releases/v1.8.7-beta.1.md).
 
 ## [1.8.7-beta.0] - 2026-10-29
 

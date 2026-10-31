@@ -289,6 +289,13 @@ test("proxmox inventory maps bridges, SDN vnets, and DHCP ranges", async () => {
     "web01",
   ]);
   assert.equal(importables.get("pve1")?.deviceType, "server");
+  assert.equal(importables.get("pve1")?.ipAddress, "10.0.0.2");
+  assert.deepEqual(importables.get("pve1")?.ports.map(port => [port.name, port.kind, port.ipAddresses]), [
+    ["eno1", "rj45", []],
+    ["vmbr0", "virtual", ["10.0.0.2"]],
+    ["vmbr0.20", "virtual", ["10.0.20.2"]],
+  ]);
+  assert.deepEqual(importables.get("pve2")?.ports.map(port => port.name), ["nic1", "nic2"]);
   const web = importables.get("web01")!;
   assert.equal(web.deviceType, "vm");
   assert.equal(web.parentName, "pve1");
@@ -346,4 +353,40 @@ test("proxmox auth failures produce a clear error", async () => {
     proxmoxIntegrationClient.test(connection),
     /rejected the API token/,
   );
+});
+
+test("proxmox host networking prefers the gateway interface and preserves unknown metadata", async () => {
+  useFakeProxmox({"/api2/json/nodes/pve1/network": {status: 200, body: {data: [
+    {iface: "eno1", type: "eth", active: "0", hwaddr: "AA:BB:CC:DD:EE:11"},
+    {iface: "vmbr0", type: "bridge", active: 1, cidr: "10.0.0.2/24", gateway: "10.0.0.1"},
+    {iface: "aaa", type: "vlan", active: 1, address: "10.0.20.2"},
+    {iface: "unknown", type: "bond", address: "169.254.1.2"},
+    {iface: "lo", type: "loopback", address: "127.0.0.1"},
+  ]}}});
+  const inventory = await proxmoxIntegrationClient.fetchInventory(connection);
+  const host = inventory.importableDevices!.find(row => row.name === "pve1")!;
+  assert.equal(host.ipAddress, "10.0.0.2");
+  assert.equal(host.macAddress, "AA:BB:CC:DD:EE:11");
+  assert.equal(inventory.devices.find(row => row.kind === "host" && row.name === "pve1")?.ipAddress, host.ipAddress);
+  const physical = host.ports.find(row => row.name === "eno1")!;
+  assert.equal(physical.linkState, "down");
+  assert.equal(physical.speed, null);
+  assert.equal(host.ports.find(row => row.name === "unknown")?.linkState, "unknown");
+  assert.deepEqual(host.ports.find(row => row.name === "unknown")?.ipAddresses, []);
+  assert.ok(host.ports.every(row => row.name !== "lo"));
+});
+
+test("proxmox restricted host networking warns without dropping hosts or guests", async () => {
+  useFakeProxmox({"/api2/json/nodes/pve1/network": {status: 403}});
+  const inventory = await proxmoxIntegrationClient.fetchInventory(connection);
+  assert.equal(inventory.importableDevices!.find(row => row.name === "pve1")?.ports.length, 0);
+  assert.ok(inventory.importableDevices!.some(row => row.name === "web01"));
+  assert.match(inventory.warnings.join(" "), /nodes\/pve1\/network.*not permitted/);
+});
+
+test("proxmox disabled host imports keep guest collection and do not stage host adapters", async () => {
+  useFakeProxmox();
+  const inventory = await proxmoxIntegrationClient.fetchInventory({...connection, syncHosts: false});
+  assert.deepEqual(inventory.importableDevices!.map(row => row.name).sort(), ["db01", "web01"]);
+  assert.deepEqual(inventory.virtualSwitches, []);
 });

@@ -2610,6 +2610,7 @@ export default function DeviceDetail() {
                       {monitorTypeDescription}
                     </div>
 
+                    {selectedMonitor?.type === "external" && <a href="/external-health">{t("External health")}</a>}
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       <Field label={t("Name")}>
                         <Input
@@ -2634,8 +2635,9 @@ export default function DeviceDetail() {
                               enabled: value === "none" ? false : prev.enabled,
                             }))
                           }
-                          disabled={!canManageMonitoring}
+                          disabled={!canManageMonitoring || monitorForm.type === "external"}
                         >
+                          {monitorForm.type === "external" && <option value="external">{t("External health")}</option>}
                           <option value="none">{t("none")}</option>
                           <option value="icmp">{t("icmp")}</option>
                           <option value="tcp">{t("tcp")}</option>
@@ -2647,7 +2649,7 @@ export default function DeviceDetail() {
                       <Field label={t("Target")}>
                         <Input
                           value={monitorForm.target}
-                          disabled={!canManageMonitoring}
+                          disabled={!canManageMonitoring || monitorForm.type === "external"}
                           onChange={(event) =>
                             setMonitorForm((prev) => ({
                               ...prev,
@@ -3796,6 +3798,8 @@ function describeMonitorType(
   t: ReturnType<typeof useI18n>["t"],
 ) {
   switch (type) {
+    case "external":
+      return t("Readings affect health and alerts only through explicitly enabled monitors.");
     case "icmp":
       return t(
         'ICMP is best for simple reachability. It answers "can the Rackpad server or container reach this host on the network?"',

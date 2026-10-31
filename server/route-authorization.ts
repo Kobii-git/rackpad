@@ -125,6 +125,9 @@ define({ kind: "admin", denialMessage: "Administrator access is required." }, [
 ]);
 
 define({ kind: "lab-read" }, [
+  "GET /api/integrations/connections/:id/readings",
+  "GET /api/floorplans/:roomId",
+  "GET /api/references/:reference",
   "GET /api/device-images",
   "GET /api/device-images/:id",
   "GET /api/device-monitors",
@@ -184,6 +187,17 @@ define({ kind: "lab-read" }, [
 ]);
 
 define({ kind: "lab-write" }, [
+  "POST /api/integrations/connections/:id/refresh",
+  "PUT /api/integrations/connections/:id/health-polling",
+  "POST /api/integrations/connections/:id/bindings",
+  "DELETE /api/integrations/connections/:id/bindings/:bindingId",
+  "POST /api/integrations/connections/:id/external-monitors",
+  "PATCH /api/integrations/connections/:id/external-monitors/:monitorId",
+  "PUT /api/floorplans/:roomId",
+  "POST /api/floorplans/:roomId/markers",
+  "PATCH /api/floorplans/:roomId/markers/:id",
+  "DELETE /api/floorplans/:roomId/markers/:id",
+  "POST /api/references/:kind/:id",
   "DELETE /api/device-images/:id",
   "DELETE /api/device-monitors/:id",
   "DELETE /api/device-services/:id",

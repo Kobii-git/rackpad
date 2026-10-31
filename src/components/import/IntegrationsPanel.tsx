@@ -95,6 +95,9 @@ const EMPTY_FORM: ConnectionForm = {
 };
 
 const BASE_URL_PLACEHOLDERS: Record<IntegrationProvider, string> = {
+  "uptime-kuma": "https://kuma.example.internal",
+  glances:"https://glances.example.internal:61208",
+  patchmon:"https://patchmon.example.internal",
   proxmox: "https://pve.example.internal:8006",
   unifi: "https://unifi.example.internal",
   omada: "https://omada.example.internal:8043",
@@ -103,6 +106,7 @@ const BASE_URL_PLACEHOLDERS: Record<IntegrationProvider, string> = {
 };
 
 const AUTH_ID_LABELS: Record<IntegrationAuthKind, TranslationKey | null> = {
+  anonymous:null,
   "api-token": "API token ID (user@realm!token)",
   "api-key": null,
   "username-password": "Username",
@@ -111,6 +115,7 @@ const AUTH_ID_LABELS: Record<IntegrationAuthKind, TranslationKey | null> = {
 };
 
 const AUTH_SECRET_LABELS: Record<IntegrationAuthKind, TranslationKey> = {
+  anonymous:"None",
   "api-token": "API token secret",
   "api-key": "API key",
   "username-password": "Password",
@@ -119,6 +124,7 @@ const AUTH_SECRET_LABELS: Record<IntegrationAuthKind, TranslationKey> = {
 };
 
 const AUTH_KIND_LABELS: Record<IntegrationAuthKind, TranslationKey> = {
+  anonymous:"None",
   "api-token": "API token",
   "api-key": "API key",
   "username-password": "Username / password",
@@ -129,6 +135,9 @@ const AUTH_KIND_LABELS: Record<IntegrationAuthKind, TranslationKey> = {
 // One concise line under the connection form instead of a paragraph of
 // prose on the panel.
 const PROVIDER_DESCRIPTIONS: Record<IntegrationProvider, TranslationKey> = {
+  glances:"Read-only inventory and external health.",
+  patchmon:"Read-only inventory and external health.",
+  "uptime-kuma": "Read-only inventory and external health.",
   proxmox:
     "Pulls nodes, VMs, containers, bridges, and SDN networks, and imports the whole stack from the host down.",
   unifi:
@@ -161,7 +170,10 @@ const PULL_TOGGLES: Record<
     aps: PullToggleCopy | null;
     wifi: PullToggleCopy | null;
   }
-> = {
+ > = {
+  "uptime-kuma": { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
+  glances: { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
+  patchmon: { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
   proxmox: {
     vlans: {
       label: "SDN VLANs",
@@ -570,7 +582,7 @@ export function IntegrationsPanel() {
     resetMessages();
     try {
       const response =
-        editingId && !form.authSecret.trim()
+        editingId && !form.authSecret.trim() && form.authKind !== "anonymous"
           ? await api.discoverIntegrationScopes({ connectionId: editingId })
           : await api.discoverIntegrationScopes({
               labId: lab.id,
@@ -1344,7 +1356,7 @@ export function IntegrationsPanel() {
                       />
                     </label>
                   )}
-                  <label className="space-y-1 text-sm">
+                  {form.authKind !== "anonymous" && <label className="space-y-1 text-sm">
                     <span className="text-[var(--text-secondary)]">
                       {t(AUTH_SECRET_LABELS[form.authKind])}
                     </span>
@@ -1364,7 +1376,7 @@ export function IntegrationsPanel() {
                           : ""
                       }
                     />
-                  </label>
+                  </label>}
                 </div>
 
                 <label
@@ -1429,7 +1441,7 @@ export function IntegrationsPanel() {
                         saving ||
                         discovering ||
                         !form.baseUrl.trim() ||
-                        (!editingId && !form.authSecret.trim())
+                        (!editingId && !form.authSecret.trim() && form.authKind !== "anonymous")
                       }
                       title={t(
                         "Tests the credentials and lists what you can pull from.",
@@ -1478,7 +1490,7 @@ export function IntegrationsPanel() {
                       saving ||
                       !form.name.trim() ||
                       !form.baseUrl.trim() ||
-                      (!editingId && !form.authSecret.trim())
+                      (!editingId && !form.authSecret.trim() && form.authKind !== "anonymous")
                     }
                     onClick={() => void handleSave()}
                   >
@@ -1603,7 +1615,7 @@ export function IntegrationsPanel() {
                         <RefreshCw className="size-3.5" />
                         {t("Pull inventory")}
                       </Button>
-                      <Button
+                      {!providers.find(row => row.id === connection.provider)?.capabilities?.health && <Button
                         variant="outline"
                         size="sm"
                         disabled={busy}
@@ -1630,7 +1642,7 @@ export function IntegrationsPanel() {
                               : "size-3 transition-transform"
                           }
                         />
-                      </Button>
+                      </Button>}
                       <Button
                         variant="outline"
                         size="sm"
