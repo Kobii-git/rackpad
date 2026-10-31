@@ -26,6 +26,7 @@ export const uk = {
   "ntfy timed out. Try again later.": "Час очікування ntfy минув. Спробуйте пізніше.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy відхилив повідомлення. Перевірте дозволи теми та автентифікацію.",
   "ntfy rate limit reached. Try again later.": "Досягнуто ліміту запитів ntfy. Спробуйте пізніше.",
+  "Enable notifications before sending a test alert.": "Увімкніть сповіщення перед надсиланням тестового сигналу.",
   "Notification delivery failed. Check the configured channels.": "Не вдалося доставити сповіщення. Перевірте налаштовані канали.",
 
   "Check the SMTP host, sender and recipient settings.": "Перевірте налаштування вузла SMTP, відправника й одержувача.",

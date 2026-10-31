@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { exerciseApi } from "./fixtures/release-image-api.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -448,6 +449,38 @@ test("CodeQL preflight observes actual committed Git evidence and dirty server s
   assert(codeqlReviewProblems(readSnmpReviewContext(root)).some(problem => problem.includes("source hash differs")));
 });
 
+test("image smoke installs and verifies platform-aware Docker before image work", () => {
+  for (const name of ["candidate-smoke", "smoke"]) {
+    const steps = workflow("docker-publish").jobs[name].steps;
+    const setup = steps.findIndex(step => step.uses === "docker/setup-docker-action@v5");
+    const preflight = steps.findIndex(step => step.run === "node scripts/check-docker-platform.mjs");
+    const qemu = steps.findIndex(step => step.uses?.startsWith("docker/setup-qemu-action@"));
+    assert.ok(setup >= 0 && setup < preflight && preflight < qemu);
+    assert.equal(steps[setup].with.version, "latest");
+    assert.equal(steps[setup].with.channel, "stable");
+    assert.equal(steps[setup].with["tcp-port"], undefined);
+    assert.equal(JSON.parse(steps[setup].with["daemon-config"]).features["containerd-snapshotter"], true);
+    assert.equal(steps[preflight]["continue-on-error"], undefined);
+  }
+  const source = readFileSync(new URL("./check-docker-platform.mjs", import.meta.url), "utf8")
+    .replace(/^import .*;\n/gm, "");
+  const run = (help, versions, failed = false) => runInNewContext(source, {
+    assert, console: {log() {}},
+    execFileSync: (command, args) => {
+      assert.equal(command, "docker");
+      if (failed) throw new Error("Synthetic daemon failure");
+      return args[0] === "version" ? versions : help;
+    },
+  });
+  run("--platform string", "1.49 1.49");
+  run("--platform string", "1.54 1.54");
+  assert.throws(() => run("no platform option", "1.54 1.54"), /must support --platform/);
+  for (const versions of ["1.48 1.54", "1.54 1.48", "1.54", "invalid", "1.54 1.54 extra"]) {
+    assert.throws(() => run("--platform string", versions), /API|versions/);
+  }
+  assert.throws(() => run("--platform string", "1.54 1.54", true), /could not inspect/);
+});
+
 test("pre-merge smoke builds unpublished immutable candidates and tests stable and beta recovery", () => {
   const job = workflow("docker-publish").jobs["candidate-smoke"];
   assert.equal(job.if, "github.event_name == 'pull_request'");
@@ -460,9 +493,11 @@ test("pre-merge smoke builds unpublished immutable candidates and tests stable a
   assert.equal(build.with.labels, "org.opencontainers.image.revision=${{ github.sha }}");
   const smoke = job.steps.find(step => step.env?.CANDIDATE_IMAGE);
   assert.equal(smoke.env.CANDIDATE_IMAGE, "${{ steps.candidate.outputs.imageid }}");
-  for (const key of ["STABLE_IMAGE", "BETA_IMAGE"]) assert.match(smoke.env[key], /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/);
+  for (const key of ["STABLE_IMAGE", "BETA_IMAGE", "SCHEMA55_IMAGE", "SCHEMA57_IMAGE"]) assert.match(smoke.env[key], /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/);
   assert(smoke.run.includes('--previous-image "$STABLE_IMAGE" --previous-schema 51'));
   assert(smoke.run.includes('--previous-image "$BETA_IMAGE" --previous-schema 53'));
+  assert(smoke.run.includes('--previous-image "$SCHEMA57_IMAGE" --previous-schema 57'));
+  assert.equal(smoke.env.SCHEMA57_IMAGE, "ghcr.io/kobii-git/rackpad@sha256:a9652c980a17ae0ce4638492402d1cab54f876a3b6901bd8cf906eed18889ff5");
   assert(!job.steps.some(step => step.uses?.startsWith("docker/login-action")));
 });
 
@@ -471,12 +506,12 @@ test("candidate smoke follows current schema across migrations while retaining p
   const source = readFileSync(new URL("./check-release-image.mjs", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "")
     .replaceAll("import.meta.url", JSON.stringify("file:///rackpad-fixture/scripts/check-release-image.mjs"));
-  for (const currentSchema of [55, 56, 57]) for (const previousSchema of [51, 53, 55]) for (const platform of ["linux/amd64", "linux/arm64"]) {
+  for (const currentSchema of [58, 59, 60]) for (const previousSchema of [51, 53, 55, 57]) for (const platform of ["linux/amd64", "linux/arm64"]) {
     const exercises = [];
     const selectedImages = new Map();
     let nonce = 0;
     runInNewContext(source, {
-      assert, URL, assertPatchedImageRuntime,
+      assert, URL, assertPatchedImageRuntime, exerciseApi,
       process: {argv: ["node", "fixture.mjs", "--image", `sha256:${"a".repeat(64)}`,
         "--previous-image", `ghcr.io/kobii-git/rackpad@sha256:${"b".repeat(64)}`,
         "--previous-schema", String(previousSchema), "--platform", platform, "--revision", "c".repeat(40)]},
@@ -496,8 +531,8 @@ test("candidate smoke follows current schema across migrations while retaining p
           selectedImages.set(args[2], `sha256:${(args.at(-2).startsWith("ghcr.io/") ? "e" : "d").repeat(64)}`);
         }
         if (args[0] === "image" && args[1] === "inspect") {
-          assert(!args.includes("--platform"), "image inspect must support older Docker CLIs");
-          assert([...selectedImages.values()].includes(args[2]), "inspect the selected container's image, not a multi-platform reference");
+          assert.equal(args[args.indexOf("--platform")+1],platform,"inspect the selected architecture even when both variants are cached");
+          assert([...selectedImages.values()].includes(args.at(-1)), "inspect the selected container's image, not a multi-platform reference");
         }
         if (options.input?.startsWith("await (async function exerciseApi(")) {
           const body = options.input;
@@ -507,7 +542,7 @@ test("candidate smoke follows current schema across migrations while retaining p
         const stdout = args.includes("process.versions.node") ? "22.23.4\n" : args[0] === "info" ? "linux\n"
           : args[0] === "inspect" ? `${selectedImages.get(args.at(-1))}\n`
           : args[0] === "image" && args[1] === "inspect"
-            ? JSON.stringify([{Id: args[2], Os: "linux", Architecture: platform.split("/")[1], Config: {Labels: {"org.opencontainers.image.revision": "c".repeat(40)}}}]) : "";
+            ? JSON.stringify([{Id: `sha256:${"f".repeat(64)}`, Os: "linux", Architecture: platform.split("/")[1], Config: {Labels: {"org.opencontainers.image.revision": "c".repeat(40)}}}]) : "";
         return {status: 0, stdout, stderr: ""};
       },
     });

@@ -26,6 +26,7 @@ export const af = {
   "ntfy timed out. Try again later.": "ntfy het uitgetel. Probeer later weer.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy het die boodskap verwerp. Kontroleer onderwerptoestemmings en verifikasie.",
   "ntfy rate limit reached. Try again later.": "ntfy se tempolimiet is bereik. Probeer later weer.",
+  "Enable notifications before sending a test alert.": "Aktiveer kennisgewings voordat jy ’n toetswaarskuwing stuur.",
   "Notification delivery failed. Check the configured channels.": "Kennisgewingaflewering het misluk. Kontroleer die ingestelde kanale.",
 
   "Check the SMTP host, sender and recipient settings.": "Gaan die SMTP-gasheer-, sender- en ontvangerinstellings na.",

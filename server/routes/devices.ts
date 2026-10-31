@@ -1,3 +1,4 @@
+import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import { isStackType, listStackMembers, stackHeight, assertStackDeviceEdit, syncStackHeight, unmountStack, stackChildren, validateStackChildren } from "../lib/device-stacks.js";
 import { optionalLabelPosition } from "../lib/presentation.js";
 import type { FastifyPluginAsync } from "fastify";
@@ -1139,7 +1140,7 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     return parseDevice(row);
   });
 
-  app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/:id", (req, reply) => withAuditedDeletion(req, reply, { entityType: "Device", entityId: req.params.id, action: "device.delete" }, () => {
     const row = db
       .prepare("SELECT * FROM devices WHERE id = ?")
       .get(req.params.id) as Record<string, unknown> | undefined;
@@ -1207,6 +1208,6 @@ export const devicesRoutes: FastifyPluginAsync = async (app) => {
     );
 
     deleteDevice(req.params.id, portIds);
-    return reply.status(204).send();
-  });
+    return true as const;
+  }));
 };

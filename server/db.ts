@@ -1,4 +1,5 @@
 import path from "node:path";
+import { backfillAuditScopes } from "./lib/audit-scope.js";
 import { fileURLToPath } from "node:url";
 import { createId } from "./lib/ids.js";
 import { openDatabase } from "./lib/open-database.js";
@@ -1526,6 +1527,15 @@ const SCHEMA_MIGRATIONS = [
         CHECK (lastAlertAttemptAt IS NULL OR
           (pendingAlertKind IS NOT NULL AND pendingAlertAt IS NOT NULL AND lastAlertAttemptAt >= pendingAlertAt));
     `,
+  },
+  {
+    version: 58,
+    sql: `
+      ALTER TABLE auditLog ADD COLUMN labIds TEXT CHECK (labIds IS NULL OR
+        (length(labIds) <= 16384 AND json_valid(labIds) AND json_type(labIds) = 'array' AND json_array_length(labIds) <= 100));
+      CREATE INDEX idx_auditLog_entity ON auditLog(entityType, entityId, ts);
+    `,
+    run: () => backfillAuditScopes(db),
   },
 ] as const;
 

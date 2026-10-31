@@ -184,3 +184,15 @@ write-only `ntfyToken`, returning only `ntfyTokenConfigured`. Portable export an
 restore redact ntfy credential fields. Native backups retain ciphertext requiring
 the same `RACKPAD_SECRET_KEY`; other notification credential import semantics stay
 compatible.
+
+Schema 58 adds nullable JSON `auditLog.labIds` and an entity-history index. Scope
+is captured by server audit writers and remains independent of later inventory
+moves/deletion. The migration backfills history whose entities still resolve;
+already-deleted or unknown subjects remain unscoped and admin-only. Deletion
+handlers use synchronous transactions which capture the subject's scope before
+cascading writes and commit the deletion event with the mutation. Previously
+stored descendant scopes survive unchanged; unknown scopes are never reassigned
+when an entity ID is reused.
+Logical/native recovery validates and retains scope, including deleted lab IDs;
+older logical snapshots backfill only resolvable subjects. Rollback requires the
+previous binary/image with its paired pre-upgrade database snapshot.

@@ -1,3 +1,4 @@
+import { backfillAuditScopes, parseAuditLabIds } from "../lib/audit-scope.js";
 import { parsePendingAlertState } from '../lib/notification-state.js';
 import { invalidateMonitorObservations } from '../lib/monitoring.js';
 import { NotificationDeliveryError } from '../lib/notification-delivery.js';
@@ -1355,7 +1356,10 @@ const restoreBackupSnapshot = db.transaction(
       data.referenceImages ?? [],
       "data.referenceImages",
     );
-    const auditLog = normalizeArrayRecordArray(data.auditLog, "data.auditLog");
+    const auditLog = normalizeArrayRecordArray(data.auditLog, "data.auditLog").map((row): Record<string, unknown> & { labIds: string[] | null } => {
+      try { return { ...row, labIds: parseAuditLabIds(row.labIds) }; }
+      catch { throw new ValidationError("Invalid audit lab scope in backup."); }
+    });
     const users = normalizeArrayRecordArray(data.users, "data.users");
     const userLabAccess = normalizeArrayRecordArray(
       data.userLabAccess ?? [],
@@ -1860,7 +1864,7 @@ const restoreBackupSnapshot = db.transaction(
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     const insertAudit = db.prepare(
-      "INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO auditLog (id, ts, user, action, entityType, entityId, summary, labIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     );
     const insertUser = db.prepare(`
     INSERT INTO users (id, username, displayName, passwordHash, role, disabled, createdAt, lastLoginAt)
@@ -2817,6 +2821,7 @@ const restoreBackupSnapshot = db.transaction(
         row.entityType,
         row.entityId,
         row.summary,
+        row.labIds === null ? null : JSON.stringify(row.labIds),
       );
     }
     for (const row of deviceMonitors) {
@@ -2979,8 +2984,10 @@ const restoreBackupSnapshot = db.transaction(
       "Backup",
       restoreAuditId,
       `Restored Rackpad backup exported at ${String(snapshot.exportedAt ?? "unknown time")}`,
+      null,
     );
 
+    if (Number(snapshot.schemaVersion ?? 0) < 58) backfillAuditScopes(db);
     setBootstrapState(users.length === 0);
 
     return {

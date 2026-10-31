@@ -26,6 +26,7 @@ export const vi = {
   "ntfy timed out. Try again later.": "ntfy hết thời gian chờ. Hãy thử lại sau.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy từ chối tin nhắn. Kiểm tra quyền chủ đề và xác thực.",
   "ntfy rate limit reached. Try again later.": "Đã đạt giới hạn yêu cầu ntfy. Hãy thử lại sau.",
+  "Enable notifications before sending a test alert.": "Bật thông báo trước khi gửi cảnh báo thử nghiệm.",
   "Notification delivery failed. Check the configured channels.": "Gửi thông báo thất bại. Kiểm tra các kênh đã cấu hình.",
 
   "Check the SMTP host, sender and recipient settings.": "Kiểm tra cài đặt máy chủ SMTP, người gửi và người nhận.",

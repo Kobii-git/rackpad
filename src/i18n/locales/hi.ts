@@ -26,6 +26,7 @@ export const hi = {
   "ntfy timed out. Try again later.": "ntfy का समय समाप्त हुआ। बाद में फिर कोशिश करें।",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy ने संदेश अस्वीकार किया। विषय अनुमतियाँ और प्रमाणीकरण जाँचें।",
   "ntfy rate limit reached. Try again later.": "ntfy अनुरोध सीमा पूरी हुई। बाद में फिर कोशिश करें।",
+  "Enable notifications before sending a test alert.": "परीक्षण अलर्ट भेजने से पहले सूचनाएँ सक्षम करें।",
   "Notification delivery failed. Check the configured channels.": "सूचना भेजना विफल रहा। कॉन्फ़िगर किए गए चैनल जाँचें।",
 
   "Check the SMTP host, sender and recipient settings.": "SMTP होस्ट, प्रेषक और प्राप्तकर्ता की सेटिंग जाँचें।",

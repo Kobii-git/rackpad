@@ -26,6 +26,7 @@ export const de = {
   "ntfy timed out. Try again later.": "Zeitüberschreitung bei ntfy. Versuchen Sie es später erneut.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy hat die Nachricht abgelehnt. Prüfen Sie Themenberechtigungen und Authentifizierung.",
   "ntfy rate limit reached. Try again later.": "ntfy-Anfragelimit erreicht. Versuchen Sie es später erneut.",
+  "Enable notifications before sending a test alert.": "Aktivieren Sie Benachrichtigungen, bevor Sie eine Testwarnung senden.",
   "Notification delivery failed. Check the configured channels.": "Benachrichtigung konnte nicht zugestellt werden. Prüfen Sie die konfigurierten Kanäle.",
 
   "Check the SMTP host, sender and recipient settings.": "Prüfen Sie SMTP-Host, Absender und Empfänger.",

@@ -26,6 +26,7 @@ export const id = {
   "ntfy timed out. Try again later.": "Waktu ntfy habis. Coba lagi nanti.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy menolak pesan. Periksa izin topik dan autentikasi.",
   "ntfy rate limit reached. Try again later.": "Batas permintaan ntfy tercapai. Coba lagi nanti.",
+  "Enable notifications before sending a test alert.": "Aktifkan notifikasi sebelum mengirim peringatan uji.",
   "Notification delivery failed. Check the configured channels.": "Pengiriman notifikasi gagal. Periksa kanal yang dikonfigurasi.",
 
   "Check the SMTP host, sender and recipient settings.": "Periksa pengaturan host SMTP, pengirim, dan penerima.",

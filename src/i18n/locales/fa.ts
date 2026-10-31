@@ -26,6 +26,7 @@ export const fa = {
   "ntfy timed out. Try again later.": "مهلت ntfy تمام شد. بعداً دوباره تلاش کنید.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy پیام را رد کرد. مجوزهای موضوع و احراز هویت را بررسی کنید.",
   "ntfy rate limit reached. Try again later.": "محدودیت درخواست ntfy رسیده است. بعداً دوباره تلاش کنید.",
+  "Enable notifications before sending a test alert.": "پیش از ارسال هشدار آزمایشی، اعلان‌ها را فعال کنید.",
   "Notification delivery failed. Check the configured channels.": "تحویل اعلان ناموفق بود. کانال‌های تنظیم‌شده را بررسی کنید.",
 
   "Check the SMTP host, sender and recipient settings.": "تنظیمات میزبان SMTP، فرستنده و گیرنده را بررسی کنید.",

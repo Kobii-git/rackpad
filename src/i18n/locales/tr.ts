@@ -26,6 +26,7 @@ export const tr = {
   "ntfy timed out. Try again later.": "ntfy zaman aşımına uğradı. Daha sonra tekrar deneyin.",
   "ntfy rejected the message. Check topic permissions and authentication.": "ntfy mesajı reddetti. Konu izinlerini ve kimlik doğrulamayı kontrol edin.",
   "ntfy rate limit reached. Try again later.": "ntfy istek sınırına ulaşıldı. Daha sonra tekrar deneyin.",
+  "Enable notifications before sending a test alert.": "Test uyarısı göndermeden önce bildirimleri etkinleştirin.",
   "Notification delivery failed. Check the configured channels.": "Bildirim teslim edilemedi. Yapılandırılmış kanalları kontrol edin.",
 
   "Check the SMTP host, sender and recipient settings.": "SMTP sunucusu, gönderen ve alıcı ayarlarını kontrol edin.",

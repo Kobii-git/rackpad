@@ -1058,6 +1058,7 @@ export interface IpZone {
 }
 
 export interface AuditEntry {
+  labIds?: ID[] | null;
   id: ID;
   ts: string;
   user: string;
