@@ -62,6 +62,10 @@ export async function refreshExternalHealth(connectionId: string) {
     );
     if (!current()) return { applied: false, warnings: [] };
     storeExternalReadings(connectionId, collection.readings);
+    const warnings = collection.warnings.filter(value=>typeof value === "string").slice(0,100).map(value=>value.slice(0,300));
+    let summary: Record<string,unknown> = {};
+    try { const parsed:unknown=JSON.parse(String(getIntegrationConnectionRow(connectionId)?.lastSummary ?? "{}")); if(parsed && typeof parsed === "object" && !Array.isArray(parsed)) summary=parsed as Record<string,unknown>; } catch { /* Empty summary is safe. */ }
+    db.prepare("UPDATE integrationConnections SET lastSummary=? WHERE id=?").run(JSON.stringify({...summary,externalWarnings:warnings}),connectionId);
     return { applied: true, warnings: collection.warnings.slice(0, 100) };
   } catch (error) {
     if (!current()) return { applied: false, warnings: [] };

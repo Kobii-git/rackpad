@@ -54,7 +54,10 @@ function connection(
   return row!;
 }
 function view(row: Record<string, unknown>) {
+  let warnings: string[] = [];
+  try { const summary = JSON.parse(String(row.lastSummary ?? "{}")) as {externalWarnings?:unknown}; if(Array.isArray(summary.externalWarnings)) warnings=summary.externalWarnings.filter(value=>typeof value === "string").slice(0,100); } catch { /* Legacy summary is optional. */ }
   return {
+    warnings,
     sourceIdentity: externalSourceIdentity(row),
     pollingEnabled: Boolean(row.healthPollingEnabled),
     intervalSeconds: Number(row.healthIntervalSeconds),

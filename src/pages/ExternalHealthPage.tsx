@@ -77,6 +77,7 @@ export default function ExternalHealthPage() {
         <label>{t("Interval (seconds)")} <Input aria-label={t("Interval (seconds)")} type="number" min={60} max={3600} value={interval} disabled={!canEdit || busy} onChange={event => setInterval(Number(event.target.value))} /></label>
         <Button disabled={!canEdit || busy || interval < 60 || interval > 3600 || !Number.isInteger(interval)} onClick={() => void change(() => api.setExternalPolling(id,polling,interval))}>{t("Save")}</Button>
       </div>
+      {view.warnings?.map(warning => <p role="status" key={warning}>{warning}</p>)}
       {view.error && <p role="status">{t("Failed")} · {view.error}</p>}
       {recordIds.map(recordId => {
         const readings = view.readings.filter(row => row.providerRecordId === recordId), binding = view.bindings.find(row => row.providerRecordId === recordId);

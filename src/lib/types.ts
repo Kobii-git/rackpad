@@ -593,9 +593,10 @@ export interface SnmpSyncApplyResult {
 }
 
 export type IntegrationProvider =
-  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand" | "uptime-kuma";
+  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand" | "uptime-kuma" | "glances" | "patchmon";
 
 export type IntegrationAuthKind =
+  | "anonymous"
   | "api-token"
   | "api-key"
   | "username-password"
@@ -1424,6 +1425,7 @@ export interface RoomFloorplan {
 }
 
 export interface ExternalHealthView {
+  warnings?:string[];
   sourceIdentity: string; pollingEnabled: boolean; intervalSeconds: number;
   lastCheckedAt: string | null; error: string | null;
   readings: Array<{providerRecordId:string;recordName:string;key:string;label:string;value:string|number|boolean|null;unit:string|null;health:string;reportedHealth:string;observedAt:string;stale:boolean;collectionError:string|null}>;

@@ -611,3 +611,29 @@ test("standalone external health rejects delayed cache responses and initializes
   await expect(page.getByRole("cell",{name:"Unknown Stale"})).toBeVisible();
   await expect(page.getByRole("spinbutton",{name:"Interval (seconds)"})).toHaveValue("900");
 });
+
+test("standalone host health connection forms require explicit anonymous access and support RTL",async({page,request})=>{
+  const {lab,headers}=await fixture(page,request);
+  await page.goto("/imports");await page.getByRole("tab",{name:"Integrations",exact:true}).click();
+  await page.getByRole("button",{name:/Add Glances$/}).click();
+  await expect(page.getByLabel("Username",{exact:true})).toBeVisible();
+  await page.getByLabel("Username",{exact:true}).fill("unused-browser-reader");
+  await page.getByLabel("Password",{exact:true}).fill("unused-browser-secret");
+  await page.getByLabel("Name",{exact:true}).fill("Browser Glances");
+  await page.getByLabel("Controller URL",{exact:true}).fill("https://glances.example");
+  await page.getByRole("combobox",{name:"Authentication",exact:true}).selectOption("anonymous");
+  await expect(page.getByLabel("Password",{exact:true})).toHaveCount(0);
+  await page.getByRole("button",{name:"Add connection",exact:true}).click();
+  await expect(page.getByText("Browser Glances",{exact:true})).toBeVisible();
+  const connections=await (await request.get(`/api/integrations/connections?labId=${lab.id}`,{headers})).json();
+  const connection=connections.find((row:{name:string})=>row.name==="Browser Glances");expect(connection.authKind).toBe("anonymous");expect(connection.hasSecret).toBe(false);expect(connection.authId).toBeNull();
+  const panel=page.getByText("Browser Glances",{exact:true}).locator("xpath=ancestor::div[.//button[normalize-space()='Pull inventory']][1]");await expect(panel.getByRole("button",{name:"Auto-sync",exact:true})).toHaveCount(0);
+  await page.getByRole("button",{name:/Add PatchMon$/}).click();
+  await expect(page.getByLabel("API key",{exact:true})).toBeVisible();await expect(page.getByLabel("API secret",{exact:true})).toBeVisible();await expect(page.getByLabel("Authentication",{exact:true})).toHaveCount(0);
+  const rtl=await page.context().newPage();
+  try {
+    await rtl.addInitScript(()=>localStorage.setItem("rackpad.language","ar"));await rtl.goto(`/external-health?connectionId=${connection.id}`);
+    await expect(rtl.locator("html")).toHaveAttribute("dir","rtl");await expect(rtl.getByRole("heading",{name:"الصحة الخارجية",exact:true})).toBeVisible();
+    const accessibility=await new AxeBuilder({page:rtl}).withTags(["wcag2a","wcag2aa"]).analyze();expect(accessibility.violations).toEqual([]);
+  } finally { await rtl.close(); }
+});

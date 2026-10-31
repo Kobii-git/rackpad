@@ -5,10 +5,13 @@ export const INTEGRATION_PROVIDERS = [
   "opnsense",
   "dockhand",
   "uptime-kuma",
+  "glances",
+  "patchmon",
 ] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
 
 export const INTEGRATION_AUTH_KINDS = [
+  "anonymous",
   "api-token",
   "api-key",
   "username-password",
@@ -53,6 +56,8 @@ export const INTEGRATION_PROVIDER_INFO: Record<
   IntegrationProvider,
   IntegrationProviderInfo
 > = {
+  glances: {id:"glances",label:"Glances",vendor:"Glances",authKinds:["username-password","api-key","anonymous"],defaultAuthKind:"username-password",scopeKind:null,capabilities:{inventory:true,health:true}},
+  patchmon: {id:"patchmon",label:"PatchMon",vendor:"PatchMon",authKinds:["key-secret"],defaultAuthKind:"key-secret",scopeKind:null,capabilities:{inventory:true,health:true}},
   "uptime-kuma": { id: "uptime-kuma", label: "Uptime Kuma", vendor: "Uptime Kuma", authKinds: ["api-key", "username-password"], defaultAuthKind: "api-key", scopeKind: null, capabilities: { inventory: true, health: true } },
   proxmox: {
     id: "proxmox",

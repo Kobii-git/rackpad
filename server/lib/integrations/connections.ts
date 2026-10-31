@@ -176,7 +176,7 @@ export function loadIntegrationConnectionSecrets(
     baseUrl: String(row.baseUrl),
     authKind: String(row.authKind) as IntegrationAuthKind,
     authId: row.authId ? String(row.authId) : null,
-    authSecret: row.authSecretEnc
+    authSecret: row.authKind !== "anonymous" && row.authSecretEnc
       ? decryptSecret(String(row.authSecretEnc))
       : null,
     siteRef: row.siteRef ? String(row.siteRef) : null,
@@ -256,8 +256,8 @@ export function createIntegrationConnection(input: {
     input.name.trim(),
     baseUrl,
     input.authKind,
-    input.authId?.trim() || null,
-    encryptOptionalSecret(input.authSecret),
+    input.authKind === "anonymous" ? null : input.authId?.trim() || null,
+    input.authKind === "anonymous" ? null : encryptOptionalSecret(input.authSecret),
     input.siteRef?.trim() || null,
     input.scopeRefs && input.scopeRefs.length > 0
       ? JSON.stringify([...new Set(input.scopeRefs.filter(Boolean))])
@@ -320,11 +320,11 @@ export function updateIntegrationConnection(
     input.baseUrl !== undefined
       ? normalizeIntegrationBaseUrl(input.baseUrl)
       : String(existing.baseUrl);
-  const nextAuthId =
+  const nextAuthId = nextAuthKind === "anonymous" ? null :
     input.authId !== undefined
       ? input.authId?.trim() || null
       : (existing.authId as string | null);
-  const nextSecret = input.clearSecret
+  const nextSecret = nextAuthKind === "anonymous" || input.clearSecret
     ? null
     : input.authSecret !== undefined
       ? encryptOptionalSecret(input.authSecret)

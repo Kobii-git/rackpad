@@ -112,7 +112,7 @@ function validateConnectionAuth(
 ) {
   // API keys are a single secret; every other auth kind pairs the secret
   // with an identifier (username, token id, client id, or key id).
-  const needsAuthId = authKind !== "api-key";
+  const needsAuthId = authKind !== "api-key" && authKind !== "anonymous";
   if (!partial && needsAuthId && !authId?.trim()) {
     throw new ValidationError(
       `authId is required for ${INTEGRATION_PROVIDER_INFO[provider].label} connections.`,
@@ -156,10 +156,6 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/connections", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    if (!canEncryptSecrets()) {
-      return reply.status(503).send({ error: SECRET_KEY_REQUIRED_MESSAGE });
-    }
-
     const body = asObject(req.body);
     const labId = requiredString(body, "labId", { maxLength: 80 });
     if (!assertLabWrite(req, reply, labId)) return;
@@ -169,7 +165,8 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       optionalEnum(body, "authKind", INTEGRATION_AUTH_KINDS) ??
       INTEGRATION_PROVIDER_INFO[provider].defaultAuthKind;
     const authId = optionalString(body, "authId", { maxLength: 200 }) ?? null;
-    const authSecret = requiredString(body, "authSecret", { maxLength: 500 });
+    if (authKind !== "anonymous" && !canEncryptSecrets()) return reply.status(503).send({ error: SECRET_KEY_REQUIRED_MESSAGE });
+    const authSecret = authKind === "anonymous" ? null : requiredString(body, "authSecret", { maxLength: 500 });
     validateConnectionAuth(provider, authKind, authId);
 
     const created = createIntegrationConnection({
@@ -246,7 +243,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         ),
         authKind,
         authId: optionalString(body, "authId", { maxLength: 200 }) ?? null,
-        authSecret: requiredString(body, "authSecret", { maxLength: 500 }),
+        authSecret: authKind === "anonymous" ? null : requiredString(body, "authSecret", { maxLength: 500 }),
         siteRef: null,
         scopeRefs: [],
         verifyTls: optionalBoolean(body, "verifyTls") ?? true,
@@ -275,7 +272,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         error: `The ${INTEGRATION_PROVIDER_INFO[secrets.provider].label} client is not available in this build.`,
       });
     }
-    if (!secrets.authSecret) {
+    if (secrets.authKind !== "anonymous" && !secrets.authSecret) {
       return reply.status(400).send({
         error:
           "This connection has no stored secret. Enter the credential again first.",
@@ -412,7 +409,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const connection = loadIntegrationConnectionSecrets(req.params.id);
-      if (!connection.authSecret) {
+      if (connection.authKind !== "anonymous" && !connection.authSecret) {
         return reply.status(400).send({
           error:
             "This connection has no stored secret. Enter the credential again before testing.",
@@ -485,7 +482,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       const policy = mode === "merge" ? "merge" : "mirror";
 
       const connection = loadIntegrationConnectionSecrets(req.params.id);
-      if (!connection.authSecret) {
+      if (connection.authKind !== "anonymous" && !connection.authSecret) {
         return reply.status(400).send({
           error:
             "This connection has no stored secret. Enter the credential again before pulling inventory.",

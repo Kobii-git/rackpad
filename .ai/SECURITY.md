@@ -130,3 +130,10 @@ DNS, reserved-address blocking, TLS verification, bounded bodies and one overall
 after awaits; user-facing asynchronous responses also reload actor/grants.
 Collection failures store static categories rather than provider response text.
 No external-health listener, host networking or root requirement is added.
+
+Glances supports explicit `anonymous` authentication only when chosen by the user;
+its default remains username/password. Anonymous create/update clears both stored
+auth ID and encrypted secret. No other provider accepts anonymous authentication.
+Glances reads only individual v4 inventory/metric plugins, never process/all
+endpoints. PatchMon uses Basic Integration API credentials with `host:get`, GET
+hosts with inline stats only, and never enrolment, patch or queue operations.
