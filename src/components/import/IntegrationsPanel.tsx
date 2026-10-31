@@ -58,6 +58,7 @@ interface ConnectionForm {
   provider: IntegrationProvider;
   name: string;
   baseUrl: string;
+  allowUnencrypted:boolean;
   authKind: IntegrationAuthKind;
   authId: string;
   authSecret: string;
@@ -78,6 +79,7 @@ const EMPTY_FORM: ConnectionForm = {
   provider: "proxmox",
   name: "",
   baseUrl: "",
+  allowUnencrypted:false,
   authKind: "api-token",
   authId: "",
   authSecret: "",
@@ -96,6 +98,8 @@ const EMPTY_FORM: ConnectionForm = {
 
 const BASE_URL_PLACEHOLDERS: Record<IntegrationProvider, string> = {
   "uptime-kuma": "https://kuma.example.internal",
+  nut:"nut://ups.example.internal:3493",
+  redfish:"https://bmc.example.internal",
   glances:"https://glances.example.internal:61208",
   patchmon:"https://patchmon.example.internal",
   proxmox: "https://pve.example.internal:8006",
@@ -135,6 +139,8 @@ const AUTH_KIND_LABELS: Record<IntegrationAuthKind, TranslationKey> = {
 // One concise line under the connection form instead of a paragraph of
 // prose on the panel.
 const PROVIDER_DESCRIPTIONS: Record<IntegrationProvider, TranslationKey> = {
+  nut:"Read-only inventory and external health.",
+  redfish:"Read-only inventory and external health.",
   glances:"Read-only inventory and external health.",
   patchmon:"Read-only inventory and external health.",
   "uptime-kuma": "Read-only inventory and external health.",
@@ -173,6 +179,8 @@ const PULL_TOGGLES: Record<
  > = {
   "uptime-kuma": { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
   glances: { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
+  nut: { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
+  redfish: { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
   patchmon: { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
   proxmox: {
     vlans: {
@@ -549,6 +557,7 @@ export function IntegrationsPanel() {
       provider: connection.provider,
       name: connection.name,
       baseUrl: connection.baseUrl,
+      allowUnencrypted:connection.options?.allowUnencrypted??false,
       authKind: connection.authKind,
       authId: connection.authId ?? "",
       authSecret: "",
@@ -583,12 +592,13 @@ export function IntegrationsPanel() {
     try {
       const response =
         editingId && !form.authSecret.trim() && form.authKind !== "anonymous"
-          ? await api.discoverIntegrationScopes({ connectionId: editingId })
+          ? await api.discoverIntegrationScopes({ connectionId: editingId, baseUrl:form.baseUrl.trim(), verifyTls:form.verifyTls, options:form.provider==="nut"?{allowUnencrypted:form.allowUnencrypted}:{} })
           : await api.discoverIntegrationScopes({
               labId: lab.id,
               provider: form.provider,
               baseUrl: form.baseUrl.trim(),
-              authKind: form.authKind,
+              options:form.provider==="nut"?{allowUnencrypted:form.allowUnencrypted}:{},
+          authKind: form.authKind,
               authId: form.authId.trim() || undefined,
               authSecret: form.authSecret.trim() || undefined,
               verifyTls: form.verifyTls,
@@ -620,6 +630,7 @@ export function IntegrationsPanel() {
         await api.updateIntegrationConnection(editingId, {
           name: form.name.trim(),
           baseUrl: form.baseUrl.trim(),
+          options:form.provider==="nut"?{allowUnencrypted:form.allowUnencrypted}:{},
           authKind: form.authKind,
           authId: form.authId.trim() || null,
           ...(form.authSecret.trim()
@@ -644,6 +655,7 @@ export function IntegrationsPanel() {
           provider: form.provider,
           name: form.name.trim(),
           baseUrl: form.baseUrl.trim(),
+          options:form.provider==="nut"?{allowUnencrypted:form.allowUnencrypted}:{},
           authKind: form.authKind,
           authId: form.authId.trim() || undefined,
           authSecret: form.authSecret.trim(),
@@ -1379,6 +1391,7 @@ export function IntegrationsPanel() {
                   </label>}
                 </div>
 
+                {form.provider === "nut" && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.allowUnencrypted} disabled={saving} onChange={event=>setForm(previous=>({...previous,allowUnencrypted:event.target.checked}))} />{t("Allow unencrypted NUT transport")}</label>}
                 <label
                   className="flex items-center gap-2 text-xs text-[var(--text-secondary)]"
                   title={t(

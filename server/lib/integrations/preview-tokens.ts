@@ -49,6 +49,7 @@ export function integrationPreviewConnectionRevision(
     "labId",
     "provider",
     "baseUrl",
+    "options",
     "authKind",
     "authId",
     "authSecretEnc",

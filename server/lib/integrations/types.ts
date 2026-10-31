@@ -1,3 +1,4 @@
+import type { IntegrationConnectionOptions } from "./options.js";
 export const INTEGRATION_PROVIDERS = [
   "proxmox",
   "unifi",
@@ -7,6 +8,8 @@ export const INTEGRATION_PROVIDERS = [
   "uptime-kuma",
   "glances",
   "patchmon",
+  "nut",
+  "redfish",
 ] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
 
@@ -56,6 +59,8 @@ export const INTEGRATION_PROVIDER_INFO: Record<
   IntegrationProvider,
   IntegrationProviderInfo
 > = {
+  nut:{id:"nut",label:"NUT",vendor:"NUT",authKinds:["username-password"],defaultAuthKind:"username-password",scopeKind:null,capabilities:{inventory:true,health:true}},
+  redfish:{id:"redfish",label:"Redfish",vendor:"DMTF",authKinds:["username-password"],defaultAuthKind:"username-password",scopeKind:null,capabilities:{inventory:true,health:true}},
   glances: {id:"glances",label:"Glances",vendor:"Glances",authKinds:["username-password","api-key","anonymous"],defaultAuthKind:"username-password",scopeKind:null,capabilities:{inventory:true,health:true}},
   patchmon: {id:"patchmon",label:"PatchMon",vendor:"PatchMon",authKinds:["key-secret"],defaultAuthKind:"key-secret",scopeKind:null,capabilities:{inventory:true,health:true}},
   "uptime-kuma": { id: "uptime-kuma", label: "Uptime Kuma", vendor: "Uptime Kuma", authKinds: ["api-key", "username-password"], defaultAuthKind: "api-key", scopeKind: null, capabilities: { inventory: true, health: true } },
@@ -107,6 +112,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
 };
 
 export interface IntegrationConnectionPublic {
+  options?: IntegrationConnectionOptions;
   id: string;
   labId: string;
   provider: IntegrationProvider;
@@ -150,6 +156,7 @@ export interface IntegrationConnectionPublic {
 }
 
 export interface IntegrationConnectionSecrets {
+  options?: IntegrationConnectionOptions;
   id: string;
   labId: string;
   provider: IntegrationProvider;

@@ -1,3 +1,4 @@
+import { parseIntegrationOptions } from "../lib/integrations/options.js";
 import { validateExternalHealthRows } from "../lib/integrations/external-health-validation.js";
 import { requireFreshExternalReadings } from "../lib/integrations/external-health.js";
 import { INTEGRATION_PROVIDERS, INTEGRATION_PROVIDER_INFO, type IntegrationProvider } from "../lib/integrations/types.js";
@@ -2069,6 +2070,7 @@ const restoreBackupSnapshot = db.transaction(
       });
     }
     for (const row of integrationConnections) db.prepare("UPDATE integrationConnections SET healthPollingEnabled=?,healthIntervalSeconds=?,healthLastCheckedAt=?,healthLastError=? WHERE id=?").run(Number(Boolean(row.healthPollingEnabled ?? 0)),row.healthIntervalSeconds ?? 60,row.healthLastCheckedAt ?? null,row.healthLastError ?? null,row.id);
+    for (const row of integrationConnections) db.prepare("UPDATE integrationConnections SET options=? WHERE id=?").run(JSON.stringify(parseIntegrationOptions(row.options,String(row.provider))),row.id);
     for (const row of integrationSyncSchedules) {
       insertIntegrationSyncSchedule.run({
         id: row.id,

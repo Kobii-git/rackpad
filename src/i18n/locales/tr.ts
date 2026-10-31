@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Allow unencrypted NUT transport": "Şifrelenmemiş NUT aktarımına izin ver",
+
   "External health": "Harici sağlık",
   "Readings affect health and alerts only through explicitly enabled monitors.": "Okumalar yalnızca açıkça etkinleştirilmiş izleyiciler aracılığıyla sağlık ve uyarıları etkiler.",
   "Unhealthy": "Sağlıksız",

@@ -231,7 +231,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "syncAccessPoints",
     "syncHosts",
     "syncGuests",
-    "healthPollingEnabled","healthIntervalSeconds","healthLastCheckedAt","healthLastError",
+    "healthPollingEnabled","healthIntervalSeconds","healthLastCheckedAt","healthLastError","options",
   ],
   integrationSyncSchedules: [
     "id",
@@ -641,6 +641,7 @@ export function validateRackpadSqliteDatabase(
   if (schema.version < 61) {
     if (database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('integrationRecordBindings','integrationLatestReadings','externalMonitorMappings')").get() || (database.prepare("PRAGMA table_info(integrationConnections)").all() as Array<{name:string}>).some(column => column.name === "healthPollingEnabled") || database.prepare("SELECT id FROM deviceMonitors WHERE type='external'").get()) throw new RackpadSqliteValidationError(`${label} has inconsistent legacy external health schema.`);
   }
+  if(schema.version < 62 && (database.prepare("PRAGMA table_info(integrationConnections)").all() as Array<{name:string}>).some(column=>column.name==="options")) throw new RackpadSqliteValidationError(`${label} has inconsistent legacy integration options.`);
   const missingSchema: string[] = [];
   for (const [table, requiredColumns] of Object.entries(
     CURRENT_RACKPAD_SCHEMA_COLUMNS,
@@ -662,6 +663,7 @@ export function validateRackpadSqliteDatabase(
       continue;
     }
     for (const column of requiredColumns) {
+      if (schema.version < 62 && table === "integrationConnections" && column === "options") continue;
       if (schema.version < 61 && table === "integrationConnections" && ["healthPollingEnabled","healthIntervalSeconds","healthLastCheckedAt","healthLastError"].includes(column)) continue;
       if (schema.version < 59 && column === "publicReference" && (table === "devices" || table === "portLinks")) continue;
       if (schema.version < 58 && table === 'auditLog' && column === 'labIds') continue;

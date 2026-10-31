@@ -82,6 +82,7 @@ export interface IntegrationImportableDevice {
     | "router"
     | "firewall"
     | "ap"
+    | "ups"
     | "server"
     | "vm"
     | "container"

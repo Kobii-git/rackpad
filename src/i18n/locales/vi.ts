@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Allow unencrypted NUT transport": "Cho phép truyền NUT không mã hóa",
+
   "External health": "Sức khỏe bên ngoài",
   "Readings affect health and alerts only through explicitly enabled monitors.": "Số liệu chỉ ảnh hưởng đến sức khỏe và cảnh báo qua các bộ giám sát được bật rõ ràng.",
   "Unhealthy": "Không tốt",

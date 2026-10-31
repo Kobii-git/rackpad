@@ -1,3 +1,4 @@
+import { parseIntegrationOptions } from "../lib/integrations/options.js";
 import { externalHealthWorkGeneration, beginExternalHealthWork } from "../lib/integrations/external-health-epoch.js";
 import { externalConfigurationRevision } from "../lib/integrations/external-health.js";
 import { canWriteLab, fetchUserLabAccess } from "../lib/lab-access.js";
@@ -172,6 +173,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
     const created = createIntegrationConnection({
       labId,
       provider,
+      options:parseIntegrationOptions(body.options,provider),
       name: requiredString(body, "name", { maxLength: 120 }),
       baseUrl: requiredString(body, "baseUrl", { maxLength: 500 }),
       authKind,
@@ -218,6 +220,9 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!assertLabWrite(req, reply, String(existing.labId))) return;
       secrets = loadIntegrationConnectionSecrets(connectionId);
+      if(body.options !== undefined) secrets={...secrets,options:parseIntegrationOptions(body.options,secrets.provider)};
+      if(body.baseUrl !== undefined) secrets={...secrets,baseUrl:normalizeIntegrationBaseUrl(requiredString(body,"baseUrl",{maxLength:500}),secrets.provider)};
+      const verifyTls=optionalBoolean(body,"verifyTls");if(verifyTls!==undefined) secrets={...secrets,verifyTls:verifyTls??true};
       const inlineSecret = optionalString(body, "authSecret", {
         maxLength: 500,
       });
@@ -234,12 +239,13 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
         optionalEnum(body, "authKind", INTEGRATION_AUTH_KINDS) ??
         INTEGRATION_PROVIDER_INFO[provider].defaultAuthKind;
       secrets = {
+        options:parseIntegrationOptions(body.options,provider),
         id: "discover",
         labId,
         provider,
         name: "discover",
         baseUrl: normalizeIntegrationBaseUrl(
-          requiredString(body, "baseUrl", { maxLength: 500 }),
+          requiredString(body, "baseUrl", { maxLength: 500 }),provider,
         ),
         authKind,
         authId: optionalString(body, "authId", { maxLength: 200 }) ?? null,
@@ -334,6 +340,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (app) => {
       );
 
       const updated = updateIntegrationConnection(req.params.id, {
+        options: body.options === undefined ? undefined : parseIntegrationOptions(body.options,provider),
         name: optionalString(body, "name", { maxLength: 120 }) ?? undefined,
         baseUrl:
           optionalString(body, "baseUrl", { maxLength: 500 }) ?? undefined,

@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "Allow unencrypted NUT transport": "बिना एन्क्रिप्शन वाला NUT परिवहन अनुमति दें",
+
   "External health": "बाहरी स्वास्थ्य",
   "Readings affect health and alerts only through explicitly enabled monitors.": "रीडिंग केवल स्पष्ट रूप से सक्षम मॉनिटर के माध्यम से स्वास्थ्य और अलर्ट को प्रभावित करती हैं।",
   "Unhealthy": "अस्वस्थ",

@@ -34,6 +34,7 @@ export function externalConfigurationRevision(
         connection.authId,
         connection.authSecretEnc,
         connection.verifyTls,
+        connection.options,
         connection.enabled,
         connection.healthPollingEnabled,
         connection.healthIntervalSeconds,

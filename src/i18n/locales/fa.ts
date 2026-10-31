@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Allow unencrypted NUT transport": "اجازهٔ انتقال رمزنگاری‌نشدهٔ NUT",
+
   "External health": "سلامت خارجی",
   "Readings affect health and alerts only through explicitly enabled monitors.": "خوانش‌ها تنها از طریق پایشگرهای صریحاً فعال‌شده بر سلامت و هشدارها اثر می‌گذارند.",
   "Unhealthy": "ناسالم",

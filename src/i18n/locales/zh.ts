@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Allow unencrypted NUT transport": "允许未加密的NUT传输",
+
   "External health": "外部健康状态",
   "Readings affect health and alerts only through explicitly enabled monitors.": "读数仅通过明确启用的监控影响健康状态和警报。",
   "Unhealthy": "不健康",

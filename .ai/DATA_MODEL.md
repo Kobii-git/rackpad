@@ -221,3 +221,8 @@ invalid external monitor mappings transactionally. Recovery validates scalar
 readings, capabilities, ownership, mapping types and uniqueness before replacing
 data, and marks restored readings refresh-required. Missing legacy fields default
 to disabled polling (60-second interval) and empty new tables.
+
+Schema 62 appends `integrationConnections.options`, a JSON object defaulting to
+`{}`. Only NUT accepts `allowUnencrypted` (boolean); all other option keys/providers
+are rejected in routes and recovery. Option changes invalidate outstanding health
+and preview completions. Genuine schema-61 snapshots remain valid for migration.

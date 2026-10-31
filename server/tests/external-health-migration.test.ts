@@ -32,7 +32,7 @@ test("schema60 external-health migration is atomic and defaults polling off with
   try {
     migrate();
     const old = new Database(file);
-    old.exec(`DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; ALTER TABLE integrationConnections DROP COLUMN healthPollingEnabled; ALTER TABLE integrationConnections DROP COLUMN healthIntervalSeconds; ALTER TABLE integrationConnections DROP COLUMN healthLastCheckedAt; ALTER TABLE integrationConnections DROP COLUMN healthLastError;
+    old.exec(`ALTER TABLE integrationConnections DROP COLUMN options; DROP TRIGGER external_binding_delete; DROP TRIGGER external_binding_update; DROP TRIGGER external_binding_detach; DROP TRIGGER external_device_lab; DROP TABLE externalMonitorMappings; DROP TABLE integrationRecordBindings; DROP TABLE integrationLatestReadings; ALTER TABLE integrationConnections DROP COLUMN healthPollingEnabled; ALTER TABLE integrationConnections DROP COLUMN healthIntervalSeconds; ALTER TABLE integrationConnections DROP COLUMN healthLastCheckedAt; ALTER TABLE integrationConnections DROP COLUMN healthLastError;
       UPDATE schemaVersion SET version=60; INSERT INTO labs(id,name) VALUES('lab','Fixture'); INSERT INTO rooms(id,labId,name) VALUES('room','lab','Room'); INSERT INTO devices(id,labId,hostname,deviceType,roomId) VALUES('one','lab','one','server','room');
       CREATE TRIGGER fixture_external_health_failure BEFORE UPDATE ON schemaVersion WHEN NEW.version=61 BEGIN SELECT RAISE(ABORT,'fixture failure'); END;`);
     assert.equal(validateRackpadSqliteDatabase(old, "Previous"), 60);

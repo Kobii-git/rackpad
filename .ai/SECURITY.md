@@ -137,3 +137,13 @@ auth ID and encrypted secret. No other provider accepts anonymous authentication
 Glances reads only individual v4 inventory/metric plugins, never process/all
 endpoints. PatchMon uses Basic Integration API credentials with `host:get`, GET
 hosts with inline stats only, and never enrolment, patch or queue operations.
+
+NUT uses a pinned numeric destination after reserved-address/DNS validation and
+native TCP STARTTLS before credentials by default, TLS 1.2 minimum and original
+hostname verification. Unencrypted transport is an explicit per-NUT option.
+Its typed encoder emits only STARTTLS, USERNAME, PASSWORD, LIST UPS and LIST VAR;
+there is no raw-command entry point. Sessions/lines/bytes/UPS counts are bounded.
+Redfish follows GET-only same-origin service/resource links, bounded pagination,
+and fixed capability links; it never follows Actions or emits mutation requests.
+Advertised metric timestamps remain observation times. Neither transport adds an
+inbound listener, host network requirement or root requirement.

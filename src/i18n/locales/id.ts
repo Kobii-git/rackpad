@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Allow unencrypted NUT transport": "Izinkan transportasi NUT tanpa enkripsi",
+
   "External health": "Kesehatan eksternal",
   "Readings affect health and alerts only through explicitly enabled monitors.": "Pembacaan hanya memengaruhi kesehatan dan peringatan melalui monitor yang diaktifkan secara eksplisit.",
   "Unhealthy": "Tidak sehat",
