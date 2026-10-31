@@ -6,7 +6,7 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
-## [1.8.7-beta.1] - Unreleased
+## [1.8.7-beta.1]
 
 ### Fixed
 
