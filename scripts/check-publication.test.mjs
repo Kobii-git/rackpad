@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { exerciseApi } from "./fixtures/release-image-api.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -478,7 +479,7 @@ test("candidate smoke follows current schema across migrations while retaining p
     const selectedImages = new Map();
     let nonce = 0;
     runInNewContext(source, {
-      assert, URL, assertPatchedImageRuntime,
+      assert, URL, assertPatchedImageRuntime, exerciseApi,
       process: {argv: ["node", "fixture.mjs", "--image", `sha256:${"a".repeat(64)}`,
         "--previous-image", `ghcr.io/kobii-git/rackpad@sha256:${"b".repeat(64)}`,
         "--previous-schema", String(previousSchema), "--platform", platform, "--revision", "c".repeat(40)]},
