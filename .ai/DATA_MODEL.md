@@ -211,3 +211,13 @@ reject stale writes. Inventory room moves/deletion transactionally prune invalid
 markers and advance the revision. Background deletion clears the selection while
 preserving markers. Logical/native recovery validates ownership and coordinates;
 rollback requires the preceding binary and paired pre-upgrade snapshot.
+
+Schema 61 adds four `integrationConnections` health polling/status fields,
+`integrationRecordBindings`, `integrationLatestReadings` and
+`externalMonitorMappings`. Latest values are bounded to 10,000 per connection;
+there is no telemetry history. Stable provider identities bind explicitly to
+same-lab inventory. Deletion, rebinding or lab movement disables and detaches
+invalid external monitor mappings transactionally. Recovery validates scalar
+readings, capabilities, ownership, mapping types and uniqueness before replacing
+data, and marks restored readings refresh-required. Missing legacy fields default
+to disabled polling (60-second interval) and empty new tables.

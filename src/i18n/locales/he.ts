@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "External health": "תקינות חיצונית",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "הקריאות משפיעות על התקינות וההתראות רק דרך מנטרים שהופעלו במפורש.",
+  "Unhealthy": "לא תקין",
+  "Read-only inventory and external health.": "מלאי לקריאה בלבד ותקינות חיצונית.",
+  "Polling": "תשאול",
+  "Interval (seconds)": "מרווח (שניות)",
+  "Select device": "בחירת התקן",
+  "Bind device": "קישור התקן",
+  "Unbind": "ביטול קישור",
+  "Value": "ערך",
+  "Last checked": "בדיקה אחרונה",
+  "Stale": "מיושן",
+  "Alert on degraded": "התראה בהידרדרות",
+  "Create monitor": "יצירת מנטר",
+
   "Floorplan": "תוכנית קומה",
   "Zoom": "הגדלה",
   "Add marker": "הוספת סמן",

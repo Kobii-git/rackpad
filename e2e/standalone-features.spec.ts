@@ -548,3 +548,66 @@ test("standalone floorplan rejects concurrent edits and clears pending state on 
   await expect(canvas).toHaveCount(0);
   await expect(page).toHaveURL(`/floorplans?roomId=${otherLabRoom.id}`);
 });
+
+test("standalone external health explicit bindings, monitor opt-in, stale display and keyboard access", async ({page,request}) => {
+  const {lab,device,create} = await fixture(page,request);
+  const connection = await create("/api/integrations/connections",{labId:lab.id,provider:"uptime-kuma",name:"Synthetic Kuma",baseUrl:"https://kuma.example",authKind:"api-key",authSecret:"synthetic-browser-key"});
+  type View = import("../src/lib/types").ExternalHealthView;
+  const view: View = {sourceIdentity:"a".repeat(64),pollingEnabled:false,intervalSeconds:60,lastCheckedAt:null,error:null,bindings:[],monitors:[],readings:Array.from({length:25},(_,index)=>({providerRecordId:`monitor:${index}`,recordName:`Synthetic record ${index}`,key:"status",label:"Status",value:"up",unit:null,health:"healthy",reportedHealth:"healthy",observedAt:new Date().toISOString(),stale:false,collectionError:null}))};
+  let fail = false;
+  await page.route(`**/api/integrations/connections/${connection.id}/**`,async route=>{
+    const request=route.request(),suffix=new URL(request.url()).pathname.split(`${connection.id}/`)[1];
+    const body=request.postDataJSON() ?? {};
+    if(suffix==="refresh" && fail){view.error="unavailable";for(const row of view.readings) row.health="unknown";await route.fulfill({status:502,json:{error:"Synthetic collection failure"}});return;}
+    if(suffix==="bindings")view.bindings=[{id:"binding",deviceId:body.deviceId,providerRecordId:body.providerRecordId,sourceIdentity:view.sourceIdentity}];
+    if(suffix==="external-monitors")view.monitors=[{id:"external-monitor",deviceId:device.id,name:"External health",type:"external",target:null,port:null,path:null,ignoreTlsErrors:false,enabled:false,intervalMs:60000,sortOrder:0,lastResult:null,lastCheckAt:null,lastMessage:null,lastAlertAt:null,bindingId:"binding",readingKey:"status",alertOnDegraded:false}];
+    if(suffix==="external-monitors/external-monitor")Object.assign(view.monitors[0],body);
+    if(suffix==="health-polling"){view.pollingEnabled=body.enabled;view.intervalSeconds=body.intervalSeconds;}
+    await route.fulfill({json:structuredClone(view)});
+  });
+  await page.clock.install();
+  await page.goto(`/external-health?connectionId=${connection.id}`);
+  await expect(page.getByRole("heading",{name:"External health",exact:true})).toBeVisible();
+  const first=page.locator("section").filter({has:page.getByRole("heading",{name:"Synthetic record 0",exact:true})});
+  await expect(first.getByRole("cell",{name:"Healthy",exact:true})).toBeVisible();
+  await first.getByRole("combobox").selectOption(device.id);await first.getByRole("button",{name:"Bind device"}).click();
+  await first.getByRole("button",{name:"Create monitor"}).click();
+  const enabled=first.getByRole("checkbox",{name:"Enabled",exact:true});await expect(enabled).not.toBeChecked();
+  await enabled.focus();await page.keyboard.press("Space");await expect(enabled).toBeChecked();
+  await expect(first.getByRole("checkbox",{name:"Alert on degraded"})).not.toBeChecked();
+  await first.getByRole("checkbox",{name:"Alert on degraded"}).click();
+  await expect(first.getByRole("checkbox",{name:"Alert on degraded"})).toBeChecked();
+  await page.getByRole("checkbox",{name:"Polling",exact:true}).check();await page.getByRole("button",{name:"Save",exact:true}).click();
+  expect(view.pollingEnabled).toBe(true);
+  fail=true;await page.getByRole("button",{name:"Refresh",exact:true}).click();
+  await expect(first.getByRole("cell",{name:"Unknown",exact:true})).toBeVisible();
+  const last=page.getByRole("heading",{name:"Synthetic record 24",exact:true});await last.scrollIntoViewIfNeeded();await expect(last).toBeInViewport();
+  view.readings[0].stale=true;view.readings[0].collectionError=null;view.error=null;
+  await page.clock.runFor(11000);await expect(first.getByRole("cell",{name:"Unknown Stale"})).toBeAttached();
+  const accessibility=await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa"]).analyze();expect(accessibility.violations).toEqual([]);
+});
+
+test("standalone external health rejects delayed cache responses and initializes polling from the first accepted load",async({page,request})=>{
+  const {lab,create}=await fixture(page,request);
+  const connection=await create("/api/integrations/connections",{labId:lab.id,provider:"uptime-kuma",name:"Delayed Kuma",baseUrl:"https://kuma.example",authKind:"api-key",authSecret:"synthetic-browser-key"});
+  const base={sourceIdentity:"a".repeat(64),pollingEnabled:true,intervalSeconds:600,lastCheckedAt:null,error:null,bindings:[],monitors:[],readings:[{providerRecordId:"monitor:1",recordName:"Delayed record",key:"status",label:"Status",value:"up",unit:null,health:"healthy",reportedHealth:"healthy",observedAt:new Date().toISOString(),stale:false,collectionError:null}]};
+  let calls=0,releaseInitial!:()=>void,releaseOlder!:()=>void;
+  const initial=new Promise<void>(resolve=>{releaseInitial=resolve;}),older=new Promise<void>(resolve=>{releaseOlder=resolve;});
+  await page.route(`**/api/integrations/connections/${connection.id}/readings`,async route=>{
+    const call=++calls;
+    if(call===1){await initial;await route.fulfill({json:{...base,pollingEnabled:false,intervalSeconds:60}});return;}
+    if(call===3){await older;await route.fulfill({json:base});return;}
+    const snapshot=structuredClone(base);if(call>=4){snapshot.readings[0].health="unknown";snapshot.readings[0].stale=true;}
+    await route.fulfill({json:snapshot});
+  });
+  await page.clock.install();await page.goto(`/external-health?connectionId=${connection.id}`);
+  await expect.poll(()=>calls).toBe(1);await page.clock.runFor(11000);
+  await expect(page.getByRole("checkbox",{name:"Polling",exact:true})).toBeChecked();
+  await expect(page.getByRole("spinbutton",{name:"Interval (seconds)"})).toHaveValue("600");
+  releaseInitial();await expect(page.getByRole("spinbutton",{name:"Interval (seconds)"})).toHaveValue("600");
+  await page.getByRole("spinbutton",{name:"Interval (seconds)"}).fill("900");
+  await page.clock.runFor(11000);await expect.poll(()=>calls).toBe(3);await page.clock.runFor(11000);
+  await expect(page.getByRole("cell",{name:"Unknown Stale"})).toBeVisible();releaseOlder();
+  await expect(page.getByRole("cell",{name:"Unknown Stale"})).toBeVisible();
+  await expect(page.getByRole("spinbutton",{name:"Interval (seconds)"})).toHaveValue("900");
+});

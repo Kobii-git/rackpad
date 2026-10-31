@@ -1,3 +1,4 @@
+import { invalidateExternalConnection } from "./external-health.js";
 import { db } from "../../db.js";
 import { createId } from "../ids.js";
 import { decryptSecret, encryptOptionalSecret } from "../secret-crypto.js";
@@ -82,6 +83,10 @@ export function parseIntegrationConnectionPublic(
   row: Record<string, unknown>,
 ): IntegrationConnectionPublic {
   return {
+    healthPollingEnabled: Boolean(row.healthPollingEnabled),
+    healthIntervalSeconds: Number(row.healthIntervalSeconds ?? 60),
+    healthLastCheckedAt: row.healthLastCheckedAt ? String(row.healthLastCheckedAt) : null,
+    healthLastError: row.healthLastError ? String(row.healthLastError) : null,
     id: String(row.id),
     labId: String(row.labId),
     provider: String(row.provider) as IntegrationProvider,
@@ -484,6 +489,7 @@ export function updateIntegrationConnection(
     id,
   );
 
+  invalidateExternalConnection(id);
   return parseIntegrationConnectionPublic(getIntegrationConnectionRow(id)!);
 }
 
@@ -518,6 +524,7 @@ export function recordIntegrationAutoSyncResult(
 export function deleteIntegrationConnection(id: string) {
   const existing = getIntegrationConnectionRow(id);
   if (!existing) return false;
+  invalidateExternalConnection(id);
   db.prepare("DELETE FROM integrationConnections WHERE id = ?").run(id);
   return true;
 }

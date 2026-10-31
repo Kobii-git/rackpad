@@ -4,6 +4,14 @@ All notable Rackpad changes should be recorded here.
 
 Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
+## 1.9.0-beta.2 (candidate)
+
+- Add read-only Uptime Kuma Prometheus inventory and latest external readings.
+- Add explicit same-lab record bindings, opt-in external monitors and polling
+  disabled by default; stale, missing and obsolete observations remain unknown.
+- Preserve schema-61 settings, bindings, latest readings and mappings in logical
+  and native recovery; require fresh observations after restart or restore.
+
 ## 1.9.0-beta.1 (candidate)
 
 - Add room floorplans using selected room reference images and normalized rack/device markers, keyboard/drag editing, zoom and viewer navigation (#214).

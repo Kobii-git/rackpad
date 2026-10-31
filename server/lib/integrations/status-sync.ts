@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_INFO } from "./types.js";
 import { getIntegrationClient } from "./index.js";
 import {
   listIntegrationConnections,
@@ -29,7 +30,7 @@ export async function syncIntegrationConnectionStatuses(
   };
 
   for (const connection of listIntegrationConnections(labId)) {
-    if (!connection.enabled) {
+    if (!connection.enabled || INTEGRATION_PROVIDER_INFO[connection.provider].capabilities.health) {
       result.skipped += 1;
       continue;
     }

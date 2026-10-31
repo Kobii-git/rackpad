@@ -1,3 +1,4 @@
+import { validateStoredExternalHealth } from "./integrations/external-health-validation.js";
 import { validateStoredFloorplans } from "./floorplans.js";
 import { validatePublicReferenceRows } from "./public-references.js";
 import { parsePendingAlertState, PENDING_ALERT_FIELDS } from './notification-state.js';
@@ -189,6 +190,9 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "enabled",
     "verifyTls",
   ],
+  integrationRecordBindings: ["id","connectionId","providerRecordId","deviceId","sourceIdentity","updatedAt"],
+  integrationLatestReadings: ["connectionId","providerRecordId","recordName","readingKey","label","value","unit","health","observedAt","collectedAt","collectionError"],
+  externalMonitorMappings: ["monitorId","bindingId","readingKey","alertOnDegraded"],
   integrationConnections: [
     "id",
     "labId",
@@ -227,6 +231,7 @@ export const CURRENT_RACKPAD_SCHEMA_COLUMNS = {
     "syncAccessPoints",
     "syncHosts",
     "syncGuests",
+    "healthPollingEnabled","healthIntervalSeconds","healthLastCheckedAt","healthLastError",
   ],
   integrationSyncSchedules: [
     "id",
@@ -633,10 +638,14 @@ export function validateRackpadSqliteDatabase(
       throw new RackpadSqliteValidationError(`${label} has inconsistent legacy reference schema.`);
   }
   if (schema.version < 60 && database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('roomFloorplans','roomFloorplanMarkers')").get()) throw new RackpadSqliteValidationError(`${label} has inconsistent legacy floorplan schema.`);
+  if (schema.version < 61) {
+    if (database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('integrationRecordBindings','integrationLatestReadings','externalMonitorMappings')").get() || (database.prepare("PRAGMA table_info(integrationConnections)").all() as Array<{name:string}>).some(column => column.name === "healthPollingEnabled") || database.prepare("SELECT id FROM deviceMonitors WHERE type='external'").get()) throw new RackpadSqliteValidationError(`${label} has inconsistent legacy external health schema.`);
+  }
   const missingSchema: string[] = [];
   for (const [table, requiredColumns] of Object.entries(
     CURRENT_RACKPAD_SCHEMA_COLUMNS,
   )) {
+    if (schema.version < 61 && ["integrationRecordBindings","integrationLatestReadings","externalMonitorMappings"].includes(table)) continue;
     if (schema.version < 60 && (table === "roomFloorplans" || table === "roomFloorplanMarkers")) continue;
     if (schema.version === 50 && (table === "deviceStackMembers" || table === "deviceStackMemberMacs")) continue;
     if (schema.version < 53 && table === "mcpTokens") continue;
@@ -653,6 +662,7 @@ export function validateRackpadSqliteDatabase(
       continue;
     }
     for (const column of requiredColumns) {
+      if (schema.version < 61 && table === "integrationConnections" && ["healthPollingEnabled","healthIntervalSeconds","healthLastCheckedAt","healthLastError"].includes(column)) continue;
       if (schema.version < 59 && column === "publicReference" && (table === "devices" || table === "portLinks")) continue;
       if (schema.version < 58 && table === 'auditLog' && column === 'labIds') continue;
       if (schema.version < 57 && table === 'deviceMonitors' && PENDING_ALERT_FIELDS.some(field => field === column)) continue;
@@ -671,6 +681,9 @@ export function validateRackpadSqliteDatabase(
     );
   }
 
+  if (schema.version >= 61) {
+    try { validateStoredExternalHealth(database); } catch { throw new RackpadSqliteValidationError(`${label} contains invalid external health data.`); }
+  }
   if (schema.version >= 60) {
     try { validateStoredFloorplans(database); }
     catch { throw new RackpadSqliteValidationError(`${label} contains invalid room floorplans.`); }

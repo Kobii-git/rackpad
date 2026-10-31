@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "External health": "Sức khỏe bên ngoài",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Số liệu chỉ ảnh hưởng đến sức khỏe và cảnh báo qua các bộ giám sát được bật rõ ràng.",
+  "Unhealthy": "Không tốt",
+  "Read-only inventory and external health.": "Kiểm kê chỉ đọc và sức khỏe bên ngoài.",
+  "Polling": "Thăm dò",
+  "Interval (seconds)": "Khoảng thời gian (giây)",
+  "Select device": "Chọn thiết bị",
+  "Bind device": "Liên kết thiết bị",
+  "Unbind": "Hủy liên kết",
+  "Value": "Giá trị",
+  "Last checked": "Kiểm tra gần nhất",
+  "Stale": "Cũ",
+  "Alert on degraded": "Cảnh báo khi suy giảm",
+  "Create monitor": "Tạo bộ giám sát",
+
   "Floorplan": "Sơ đồ phòng",
   "Zoom": "Thu phóng",
   "Add marker": "Thêm điểm đánh dấu",

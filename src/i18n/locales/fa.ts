@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "External health": "سلامت خارجی",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "خوانش‌ها تنها از طریق پایشگرهای صریحاً فعال‌شده بر سلامت و هشدارها اثر می‌گذارند.",
+  "Unhealthy": "ناسالم",
+  "Read-only inventory and external health.": "موجودی فقط‌خواندنی و سلامت خارجی.",
+  "Polling": "نمونه‌برداری",
+  "Interval (seconds)": "فاصله (ثانیه)",
+  "Select device": "انتخاب دستگاه",
+  "Bind device": "پیوند دستگاه",
+  "Unbind": "لغو پیوند",
+  "Value": "مقدار",
+  "Last checked": "آخرین بررسی",
+  "Stale": "قدیمی",
+  "Alert on degraded": "هشدار افت وضعیت",
+  "Create monitor": "ایجاد پایشگر",
+
   "Floorplan": "نقشه طبقه",
   "Zoom": "بزرگ‌نمایی",
   "Add marker": "افزودن نشانگر",

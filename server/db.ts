@@ -1593,6 +1593,64 @@ const SCHEMA_MIGRATIONS = [
         ); END;
     `,
   },
+  {
+    version: 61,
+    sql: `
+      ALTER TABLE integrationConnections ADD COLUMN healthPollingEnabled INTEGER NOT NULL DEFAULT 0 CHECK(healthPollingEnabled IN (0,1));
+      ALTER TABLE integrationConnections ADD COLUMN healthIntervalSeconds INTEGER NOT NULL DEFAULT 60 CHECK(typeof(healthIntervalSeconds)='integer' AND healthIntervalSeconds BETWEEN 60 AND 3600);
+      ALTER TABLE integrationConnections ADD COLUMN healthLastCheckedAt TEXT;
+      ALTER TABLE integrationConnections ADD COLUMN healthLastError TEXT CHECK(healthLastError IS NULL OR healthLastError IN ('authentication','rate_limited','unavailable','timeout','invalid_response','incompatible','tls','blocked_target','missing','refresh_required','configuration_changed'));
+      CREATE TABLE integrationRecordBindings (
+        id TEXT PRIMARY KEY,
+        connectionId TEXT NOT NULL REFERENCES integrationConnections(id) ON DELETE CASCADE,
+        providerRecordId TEXT NOT NULL CHECK(length(providerRecordId) BETWEEN 1 AND 200),
+        deviceId TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        sourceIdentity TEXT NOT NULL CHECK(length(sourceIdentity)=64),
+        updatedAt TEXT NOT NULL,
+        UNIQUE(connectionId,providerRecordId)
+      );
+      CREATE INDEX idx_integrationBindings_device ON integrationRecordBindings(deviceId);
+      CREATE TABLE integrationLatestReadings (
+        connectionId TEXT NOT NULL REFERENCES integrationConnections(id) ON DELETE CASCADE,
+        providerRecordId TEXT NOT NULL CHECK(length(providerRecordId) BETWEEN 1 AND 200),
+        recordName TEXT NOT NULL CHECK(length(recordName) BETWEEN 1 AND 160),
+        readingKey TEXT NOT NULL CHECK(length(readingKey) BETWEEN 1 AND 160),
+        label TEXT NOT NULL CHECK(length(label) BETWEEN 1 AND 160),
+        value TEXT NOT NULL CHECK(length(value)<=8192 AND json_valid(value) AND json_type(value) IN ('integer','real','text','true','false','null')),
+        unit TEXT CHECK(unit IS NULL OR length(unit)<=40),
+        health TEXT NOT NULL CHECK(health IN ('healthy','degraded','unhealthy','unknown')),
+        observedAt TEXT NOT NULL,
+        collectedAt TEXT NOT NULL,
+        collectionError TEXT CHECK(collectionError IS NULL OR collectionError IN ('authentication','rate_limited','unavailable','timeout','invalid_response','incompatible','tls','blocked_target','missing','refresh_required','configuration_changed')),
+        PRIMARY KEY(connectionId,providerRecordId,readingKey)
+      );
+      CREATE TABLE externalMonitorMappings (
+        monitorId TEXT PRIMARY KEY REFERENCES deviceMonitors(id) ON DELETE CASCADE,
+        bindingId TEXT REFERENCES integrationRecordBindings(id) ON DELETE SET NULL,
+        readingKey TEXT NOT NULL CHECK(length(readingKey) BETWEEN 1 AND 160),
+        alertOnDegraded INTEGER NOT NULL DEFAULT 0 CHECK(alertOnDegraded IN (0,1)),
+        UNIQUE(bindingId,readingKey)
+      );
+      CREATE TRIGGER external_binding_delete BEFORE DELETE ON integrationRecordBindings BEGIN
+        UPDATE deviceMonitors SET enabled=0,lastResult='unknown',lastCheckAt=NULL,lastMessage='External source removed or rebound.',pendingAlertKind=NULL,pendingAlertAt=NULL,lastAlertAttemptAt=NULL
+        WHERE type='external' AND id IN (SELECT monitorId FROM externalMonitorMappings WHERE bindingId=OLD.id);
+        UPDATE devices SET status=CASE WHEN EXISTS(SELECT 1 FROM deviceMonitors WHERE deviceId=devices.id AND enabled=1 AND type!='none' AND lastResult='online') THEN 'online' ELSE 'unknown' END
+        WHERE id=OLD.deviceId AND status IN ('online','offline') AND NOT EXISTS(SELECT 1 FROM deviceMonitors WHERE deviceId=devices.id AND enabled=1 AND type!='none' AND lastResult='offline');
+      END;
+      CREATE TRIGGER external_binding_update BEFORE UPDATE OF deviceId,sourceIdentity ON integrationRecordBindings WHEN NEW.deviceId IS NOT OLD.deviceId OR NEW.sourceIdentity IS NOT OLD.sourceIdentity BEGIN
+        UPDATE deviceMonitors SET enabled=0,lastResult='unknown',lastCheckAt=NULL,lastMessage='External source removed or rebound.',pendingAlertKind=NULL,pendingAlertAt=NULL,lastAlertAttemptAt=NULL
+        WHERE type='external' AND id IN (SELECT monitorId FROM externalMonitorMappings WHERE bindingId=OLD.id);
+        UPDATE devices SET status=CASE WHEN EXISTS(SELECT 1 FROM deviceMonitors WHERE deviceId=devices.id AND enabled=1 AND type!='none' AND lastResult='online') THEN 'online' ELSE 'unknown' END
+        WHERE id=OLD.deviceId AND status IN ('online','offline') AND NOT EXISTS(SELECT 1 FROM deviceMonitors WHERE deviceId=devices.id AND enabled=1 AND type!='none' AND lastResult='offline');
+      END;
+      CREATE TRIGGER external_binding_detach AFTER UPDATE OF deviceId,sourceIdentity ON integrationRecordBindings WHEN NEW.deviceId IS NOT OLD.deviceId OR NEW.sourceIdentity IS NOT OLD.sourceIdentity BEGIN
+        UPDATE externalMonitorMappings SET bindingId=NULL WHERE bindingId=OLD.id;
+      END;
+      CREATE TRIGGER external_device_lab AFTER UPDATE OF labId ON devices BEGIN
+        DELETE FROM integrationRecordBindings WHERE deviceId=NEW.id AND connectionId NOT IN (SELECT id FROM integrationConnections WHERE labId=NEW.labId);
+      END;
+    `,
+  },
 ] as const;
 
 const applySchema = db.transaction(() => {

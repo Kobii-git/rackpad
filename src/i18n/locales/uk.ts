@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const uk = {
+  "External health": "Зовнішній стан",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Показники впливають на стан і сповіщення лише через явно увімкнені монітори.",
+  "Unhealthy": "Несправний",
+  "Read-only inventory and external health.": "Інвентаризація лише для читання та зовнішній стан.",
+  "Polling": "Опитування",
+  "Interval (seconds)": "Інтервал (секунди)",
+  "Select device": "Вибрати пристрій",
+  "Bind device": "Прив’язати пристрій",
+  "Unbind": "Відв’язати",
+  "Value": "Значення",
+  "Last checked": "Остання перевірка",
+  "Stale": "Застаріле",
+  "Alert on degraded": "Сповіщати про погіршення",
+  "Create monitor": "Створити монітор",
+
   "Floorplan": "План приміщення",
   "Zoom": "Масштабування",
   "Add marker": "Додати маркер",

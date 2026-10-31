@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const pl = {
+  "External health": "Stan zewnętrzny",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Odczyty wpływają na stan i alerty wyłącznie przez jawnie włączone monitory.",
+  "Unhealthy": "Nieprawidłowy",
+  "Read-only inventory and external health.": "Inwentarz tylko do odczytu i stan zewnętrzny.",
+  "Polling": "Odpytywanie",
+  "Interval (seconds)": "Interwał (sekundy)",
+  "Select device": "Wybierz urządzenie",
+  "Bind device": "Powiąż urządzenie",
+  "Unbind": "Usuń powiązanie",
+  "Value": "Wartość",
+  "Last checked": "Ostatnia kontrola",
+  "Stale": "Nieaktualny",
+  "Alert on degraded": "Alert przy pogorszeniu",
+  "Create monitor": "Utwórz monitor",
+
   "Floorplan": "Plan pomieszczenia",
   "Zoom": "Powiększenie",
   "Add marker": "Dodaj znacznik",

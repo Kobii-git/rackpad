@@ -12,6 +12,25 @@ assert.equal(
 );
 const { db } = await import("../../server/db.js");
 try {
+  // Remove the later health schema as well: this fixture must reconstruct
+  // schema 50 rather than merely lowering its version marker.
+  const connectionColumns = db.prepare("PRAGMA table_info(integrationConnections)").all() as {name: string}[];
+  if (connectionColumns.some(row => row.name === "healthPollingEnabled")) {
+    db.exec(`
+      DROP TRIGGER external_binding_delete;
+      DROP TRIGGER external_binding_update;
+      DROP TRIGGER external_binding_detach;
+      DROP TRIGGER external_device_lab;
+      DROP TABLE externalMonitorMappings;
+      DROP TABLE integrationRecordBindings;
+      DROP TABLE integrationLatestReadings;
+      ALTER TABLE integrationConnections DROP COLUMN healthPollingEnabled;
+      ALTER TABLE integrationConnections DROP COLUMN healthIntervalSeconds;
+      ALTER TABLE integrationConnections DROP COLUMN healthLastCheckedAt;
+      ALTER TABLE integrationConnections DROP COLUMN healthLastError;
+    `);
+  }
+  if (connectionColumns.some(row => row.name === "options")) db.exec("ALTER TABLE integrationConnections DROP COLUMN options");
   // Reconstruct schema 50 exactly as the migration suite does, before creating
   // any stack data. The application under test must actually run migration 51.
   db.exec(`

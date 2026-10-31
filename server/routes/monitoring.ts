@@ -1,3 +1,5 @@
+import { probeObservations } from "../lib/monitor-observations.js";
+import { externalSourceIdentity, resetExternalMonitorResults } from "../lib/integrations/external-health.js";
 import { writeAuditLogEntry } from '../lib/audit-log.js';
 import { withAuditedDeletion } from '../lib/audited-deletion.js';
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
@@ -243,6 +245,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
     const defaultName = existingCountRow.count === 0 ? 'Management' : `Target ${existingCountRow.count + 1}`
     const name = optionalString(body, 'name', { maxLength: 80 }) ?? defaultName
     const type = optionalEnum(body, 'type', MONITOR_TYPES) ?? 'none'
+    if (type === 'external') throw new ValidationError('Create external monitors through an explicit integration binding.')
     const targetInput = optionalString(body, 'target', { maxLength: 200 })
     const target = targetInput == null ? targetInput : ensureHostTarget(targetInput, 'target')
     const path = optionalString(body, 'path', { maxLength: 200 })
@@ -432,7 +435,12 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
         ? Number(current.enabled ?? 0) === 1
         : Boolean(requestedEnabled)
 
-    if (nextType !== 'none' && !nextTarget) {
+    if ((nextType === 'external') !== (current.type === 'external')) throw new ValidationError('Use the external health interface to configure external monitors.');
+    if (nextType === 'external' && nextEnabled) {
+      const source = db.prepare(`SELECT c.*,b.deviceId AS boundDeviceId,b.sourceIdentity FROM externalMonitorMappings e JOIN integrationRecordBindings b ON b.id=e.bindingId JOIN integrationConnections c ON c.id=b.connectionId WHERE e.monitorId=?`).get(req.params.id) as Record<string, unknown> | undefined;
+      if (!source || !source.enabled || source.boundDeviceId !== current.deviceId || source.sourceIdentity !== externalSourceIdentity(source)) throw new ValidationError('Rebind the current source before enabling this external monitor.',409);
+    }
+    if (nextType !== 'none' && nextType !== 'external' && !nextTarget) {
       throw new ValidationError('Target is required when health checks are enabled.')
     }
     if (nextType === 'snmp' && !nextSnmpOid) {
@@ -494,6 +502,7 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
       nextEnabled ? 1 : 0,
       req.params.id,
     )
+    if (nextType === 'external') { probeObservations.delete(req.params.id); resetExternalMonitorResults(undefined,true,req.params.id); }
     reconcileDeviceMonitorRollup(String(current.deviceId))
 
     return listMonitors(String(current.deviceId)).find((monitor) => monitor.id === req.params.id) ?? null
@@ -502,13 +511,14 @@ export const monitoringRoutes: FastifyPluginAsync = async (app) => {
   app.delete<{ Params: { id: string } }>('/:id', (req, reply) => withAuditedDeletion(req, reply, { entityType: "DeviceMonitor", entityId: req.params.id, action: "monitor.delete" }, () => {
     if (!requireAuth(req, reply)) return
 
-    const existing = db.prepare('SELECT id, deviceId FROM deviceMonitors WHERE id = ?').get(req.params.id) as { id: string; deviceId: string } | undefined
+    const existing = db.prepare('SELECT id, deviceId, type FROM deviceMonitors WHERE id = ?').get(req.params.id) as { id: string; deviceId: string; type: string } | undefined
     if (!existing) {
       return reply.status(404).send({ error: 'Device monitor not found.' })
     }
     const monitorLab = getMonitorLabRow(req.params.id)
     if (!assertLabWriteFromRow(req, reply, monitorLab)) return
 
+    if (existing.type === 'external') resetExternalMonitorResults(undefined, true, req.params.id)
     db.prepare('DELETE FROM deviceMonitors WHERE id = ?').run(req.params.id)
     reconcileDeviceMonitorRollup(existing.deviceId)
     return true as const

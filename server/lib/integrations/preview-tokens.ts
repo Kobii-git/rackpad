@@ -110,6 +110,8 @@ export function consumeIntegrationPreviewToken<T>(
   return entry.payload as T;
 }
 
-export function resetIntegrationPreviewTokensForTests() {
+export function invalidateIntegrationPreviewTokens() {
   tokens.clear();
 }
+
+export const resetIntegrationPreviewTokensForTests = invalidateIntegrationPreviewTokens;

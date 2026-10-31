@@ -1,3 +1,4 @@
+import { uptimeKumaIntegrationClient } from "./providers/uptime-kuma.js";
 import {
   getIntegrationClient,
   registerIntegrationClient,
@@ -8,6 +9,7 @@ import { opnsenseIntegrationClient } from "./providers/opnsense.js";
 import { proxmoxIntegrationClient } from "./providers/proxmox.js";
 import { unifiIntegrationClient } from "./providers/unifi.js";
 
+registerIntegrationClient(uptimeKumaIntegrationClient);
 registerIntegrationClient(dockhandIntegrationClient);
 registerIntegrationClient(omadaIntegrationClient);
 registerIntegrationClient(opnsenseIntegrationClient);

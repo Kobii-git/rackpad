@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "External health": "Eksterne gesondheid",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Lesings beïnvloed gesondheid en waarskuwings slegs deur uitdruklik geaktiveerde monitors.",
+  "Unhealthy": "Ongesond",
+  "Read-only inventory and external health.": "Leesalleen-inventaris en eksterne gesondheid.",
+  "Polling": "Peiling",
+  "Interval (seconds)": "Interval (sekondes)",
+  "Select device": "Kies toestel",
+  "Bind device": "Koppel toestel",
+  "Unbind": "Ontkoppel",
+  "Value": "Waarde",
+  "Last checked": "Laas nagegaan",
+  "Stale": "Verouderd",
+  "Alert on degraded": "Waarsku by verswakking",
+  "Create monitor": "Skep monitor",
+
   "Floorplan": "Vloerplan",
   "Zoom": "Zoem",
   "Add marker": "Voeg merker by",

@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const pt = {
+  "External health": "Estado externo",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "As leituras afetam o estado e os alertas apenas através de monitores explicitamente ativados.",
+  "Unhealthy": "Não saudável",
+  "Read-only inventory and external health.": "Inventário só de leitura e estado externo.",
+  "Polling": "Consulta periódica",
+  "Interval (seconds)": "Intervalo (segundos)",
+  "Select device": "Selecionar dispositivo",
+  "Bind device": "Associar dispositivo",
+  "Unbind": "Desassociar",
+  "Value": "Valor",
+  "Last checked": "Última verificação",
+  "Stale": "Desatualizado",
+  "Alert on degraded": "Alertar sobre degradação",
+  "Create monitor": "Criar monitor",
+
   "Floorplan": "Planta da sala",
   "Zoom": "Ampliação",
   "Add marker": "Adicionar marcador",

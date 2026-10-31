@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "External health": "বাহ্যিক স্বাস্থ্য",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "শুধুমাত্র স্পষ্টভাবে সক্রিয় মনিটরের মাধ্যমে রিডিং স্বাস্থ্য ও সতর্কতাকে প্রভাবিত করে।",
+  "Unhealthy": "অসুস্থ",
+  "Read-only inventory and external health.": "শুধু পাঠযোগ্য তালিকা ও বাহ্যিক স্বাস্থ্য।",
+  "Polling": "পোলিং",
+  "Interval (seconds)": "ব্যবধান (সেকেন্ড)",
+  "Select device": "ডিভাইস নির্বাচন করুন",
+  "Bind device": "ডিভাইস যুক্ত করুন",
+  "Unbind": "সংযোগ বিচ্ছিন্ন করুন",
+  "Value": "মান",
+  "Last checked": "শেষ পরীক্ষা",
+  "Stale": "পুরোনো",
+  "Alert on degraded": "অবনমনে সতর্কতা",
+  "Create monitor": "মনিটর তৈরি করুন",
+
   "Floorplan": "মেঝের নকশা",
   "Zoom": "জুম",
   "Add marker": "চিহ্ন যোগ করুন",

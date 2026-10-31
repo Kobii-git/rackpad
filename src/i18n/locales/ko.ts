@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "External health": "외부 상태",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "측정값은 명시적으로 활성화한 모니터를 통해서만 상태와 알림에 영향을 줍니다.",
+  "Unhealthy": "비정상",
+  "Read-only inventory and external health.": "읽기 전용 인벤토리 및 외부 상태.",
+  "Polling": "주기적 조회",
+  "Interval (seconds)": "간격 (초)",
+  "Select device": "장치 선택",
+  "Bind device": "장치 연결",
+  "Unbind": "연결 해제",
+  "Value": "값",
+  "Last checked": "마지막 확인",
+  "Stale": "오래됨",
+  "Alert on degraded": "성능 저하 시 알림",
+  "Create monitor": "모니터 생성",
+
   "Floorplan": "평면도",
   "Zoom": "확대 비율",
   "Add marker": "마커 추가",
