@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Allow unencrypted NUT transport": "暗号化されていないNUT通信を許可",
+
   "External health": "外部の稼働状態",
   "Readings affect health and alerts only through explicitly enabled monitors.": "測定値は明示的に有効にした監視を通じてのみ状態と通知に反映されます。",
   "Unhealthy": "異常",

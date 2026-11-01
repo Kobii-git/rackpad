@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Allow unencrypted NUT transport": "암호화되지 않은 NUT 통신 허용",
+
   "External health": "외부 상태",
   "Readings affect health and alerts only through explicitly enabled monitors.": "측정값은 명시적으로 활성화한 모니터를 통해서만 상태와 알림에 영향을 줍니다.",
   "Unhealthy": "비정상",

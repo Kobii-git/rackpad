@@ -637,3 +637,15 @@ test("standalone host health connection forms require explicit anonymous access 
     const accessibility=await new AxeBuilder({page:rtl}).withTags(["wcag2a","wcag2aa"]).analyze();expect(accessibility.violations).toEqual([]);
   } finally { await rtl.close(); }
 });
+
+test("standalone power health keeps NUT encryption opt-in explicit and Redfish read credentials separate",async({page,request})=>{
+ const {lab,headers}=await fixture(page,request);
+ await page.goto("/imports");await page.getByRole("tab",{name:"Integrations",exact:true}).click();await page.getByRole("button",{name:/Add NUT$/}).click();
+ const plaintext=page.getByRole("checkbox",{name:"Allow unencrypted NUT transport",exact:true});await expect(plaintext).not.toBeChecked();await expect(page.getByRole("checkbox",{name:"Verify TLS certificate",exact:true})).toBeChecked();
+ await page.getByLabel("Name",{exact:true}).fill("Browser NUT");await page.getByLabel("Controller URL",{exact:true}).fill("nut://ups.example:3493");await page.getByLabel("Username",{exact:true}).fill("reader");await page.getByLabel("Password",{exact:true}).fill("synthetic#secret");
+ await plaintext.focus();await page.keyboard.press("Space");await expect(plaintext).toBeChecked();await page.getByRole("button",{name:"Add connection",exact:true}).click();await expect(page.getByText("Browser NUT",{exact:true})).toBeVisible();
+ const connections=await (await request.get(`/api/integrations/connections?labId=${lab.id}`,{headers})).json();const nut=connections.find((row:{name:string})=>row.name==="Browser NUT");expect(nut.options).toEqual({allowUnencrypted:true});expect(nut.healthPollingEnabled).toBe(false);expect(nut.hasSecret).toBe(true);expect(JSON.stringify(nut)).not.toContain("synthetic#secret");
+ await page.reload();await page.getByRole("tab",{name:"Integrations",exact:true}).click();const panel=page.getByText("Browser NUT",{exact:true}).locator("xpath=ancestor::div[.//button[normalize-space()='Pull inventory']][1]");await panel.getByRole("button",{name:"Edit",exact:true}).click();await expect(plaintext).toBeChecked();
+ await page.getByRole("button",{name:/Add Redfish$/}).click();await expect(plaintext).toHaveCount(0);await expect(page.getByLabel("Username",{exact:true})).toBeVisible();await expect(page.getByRole("checkbox",{name:"Verify TLS certificate",exact:true})).toBeChecked();
+ const accessibility=await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa"]).analyze();expect(accessibility.violations).toEqual([]);
+});

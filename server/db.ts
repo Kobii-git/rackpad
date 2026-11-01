@@ -1651,6 +1651,7 @@ const SCHEMA_MIGRATIONS = [
       END;
     `,
   },
+  { version:62, sql:`ALTER TABLE integrationConnections ADD COLUMN options TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(options) AND json_type(options)='object');` },
 ] as const;
 
 const applySchema = db.transaction(() => {

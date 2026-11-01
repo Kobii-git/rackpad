@@ -593,7 +593,7 @@ export interface SnmpSyncApplyResult {
 }
 
 export type IntegrationProvider =
-  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand" | "uptime-kuma" | "glances" | "patchmon";
+  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand" | "uptime-kuma" | "glances" | "patchmon" | "nut" | "redfish";
 
 export type IntegrationAuthKind =
   | "anonymous"
@@ -623,6 +623,7 @@ export interface IntegrationScope {
 export type IntegrationAutoSyncMode = "merge" | "skip";
 
 export interface IntegrationConnection {
+  options?: {allowUnencrypted?:boolean};
   id: string;
   labId: string;
   provider: IntegrationProvider;
@@ -720,6 +721,7 @@ export interface IntegrationImportableDevice {
     | "router"
     | "firewall"
     | "ap"
+    | "ups"
     | "server"
     | "vm"
     | "container"

@@ -1,6 +1,8 @@
 import type { TranslationMap } from "../base";
 
 export const pl = {
+  "Allow unencrypted NUT transport": "Zezwól na nieszyfrowany transport NUT",
+
   "External health": "Stan zewnętrzny",
   "Readings affect health and alerts only through explicitly enabled monitors.": "Odczyty wpływają na stan i alerty wyłącznie przez jawnie włączone monitory.",
   "Unhealthy": "Nieprawidłowy",

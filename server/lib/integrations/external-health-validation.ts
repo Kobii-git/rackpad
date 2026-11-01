@@ -1,3 +1,5 @@
+import { normalizeIntegrationBaseUrl } from "./connection-endpoint.js";
+import { parseIntegrationOptions } from "./options.js";
 import { INTEGRATION_PROVIDER_INFO, type IntegrationProvider } from "./types.js";
 import type Database from "better-sqlite3";
 import { ValidationError } from "../validation.js";
@@ -34,7 +36,9 @@ export function validateExternalHealthRows(input: {
   const counts = new Map<unknown, number>();
   const supportsHealth = (connection: Record<string,unknown> | undefined) => !!connection && !!INTEGRATION_PROVIDER_INFO[connection.provider as IntegrationProvider]?.capabilities.health;
   for (const connection of input.connections) {
+    parseIntegrationOptions(connection.options,String(connection.provider));
     const info = INTEGRATION_PROVIDER_INFO[connection.provider as IntegrationProvider];
+    if(info?.capabilities.health)normalizeIntegrationBaseUrl(String(connection.baseUrl??""),connection.provider as IntegrationProvider);
     if ((connection.authKind === "anonymous" && (connection.authSecretEnc != null || connection.authId != null)) || !info || !info.authKinds.includes(connection.authKind as never) || (Boolean(connection.healthPollingEnabled) && !info.capabilities.health) || (info.capabilities.health && Boolean(connection.autoSyncEnabled))) invalid();
     if (
       connection.healthPollingEnabled !== undefined &&

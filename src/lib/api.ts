@@ -1984,6 +1984,7 @@ export const api = {
     provider: IntegrationConnection["provider"];
     name: string;
     baseUrl: string;
+    options?: IntegrationConnection["options"];
     authKind?: IntegrationConnection["authKind"];
     authId?: string;
     authSecret: string;
@@ -2012,6 +2013,7 @@ export const api = {
     labId?: string;
     provider?: IntegrationConnection["provider"];
     baseUrl?: string;
+    options?: IntegrationConnection["options"];
     authKind?: IntegrationConnection["authKind"];
     authId?: string;
     authSecret?: string;
@@ -2032,6 +2034,7 @@ export const api = {
     body: Partial<{
       name: string;
       baseUrl: string;
+      options: NonNullable<IntegrationConnection["options"]>;
       authKind: IntegrationConnection["authKind"];
       authId: string | null;
       authSecret: string;

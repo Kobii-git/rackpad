@@ -88,3 +88,10 @@ from 61, plus supported provider credentials/options. Before each standalone
 publication, add the verified immediately preceding published-image pin and run
 these persistence/restart/paired-rollback cases on both Linux architectures;
 schema acceptance or mocked orchestration alone is not upgrade evidence.
+
+Standalone health regressions include `external-health*.test.ts`,
+`host-health.test.ts`, `power-health.test.ts`, `power-providers.test.ts` and
+`integration-options-migration.test.ts`; browser cases live in
+`e2e/standalone-features.spec.ts`. Protocol/API fixtures are synthetic and do not
+prove acceptance against user installations. New native transports also require
+independent review and clean Linux image/network acceptance before publication.

@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER_INFO, type IntegrationProvider } from "./types.js";
 import { externalSourceIdentity } from "./external-health.js";
 import { deviceTypeBase } from "../device-types.js";
 import { db } from "../../db.js";
@@ -19,6 +20,7 @@ const IMPORTABLE_DEVICE_TYPES = [
   "router",
   "firewall",
   "ap",
+  "ups",
   "server",
   "vm",
   "container",
@@ -1362,6 +1364,7 @@ function matchesApDevice(
 // gateway toggle (they are the gateway in OPNsense setups).
 export function filterImportableDevicesForConnection(
   connection: {
+    provider?: IntegrationProvider;
     syncSwitches: boolean;
     syncGateways: boolean;
     syncAccessPoints: boolean;
@@ -1381,6 +1384,7 @@ export function filterImportableDevicesForConnection(
     if (device.deviceType === "vm" || device.deviceType === "container") {
       return connection.syncGuests;
     }
+    if (connection.provider && INTEGRATION_PROVIDER_INFO[connection.provider].capabilities.health) return connection.syncHosts;
     return true;
   });
 }

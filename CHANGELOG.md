@@ -4,6 +4,15 @@ All notable Rackpad changes should be recorded here.
 
 Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
+## 1.9.0-beta.4
+
+- Add read-only NUT UPS inventory and health with pinned native TCP, STARTTLS
+  before credentials, bounded framing and an explicit unencrypted-transport opt-in.
+- Add read-only Redfish hardware, firmware and supported power/thermal readings,
+  bounded same-origin pagination and explicit unavailable-capability warnings.
+- Append schema 62 for strictly validated provider connection options with atomic
+  logical/native recovery and compatible encrypted-transport defaults.
+
 ## 1.9.0-beta.3
 
 - Add Glances API v4 host inventory and CPU, memory, filesystem, network and

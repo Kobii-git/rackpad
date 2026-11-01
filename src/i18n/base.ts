@@ -1,4 +1,6 @@
 export const en = {
+  "Allow unencrypted NUT transport": "Allow unencrypted NUT transport",
+
   "External health": "External health",
   "Readings affect health and alerts only through explicitly enabled monitors.": "Readings affect health and alerts only through explicitly enabled monitors.",
   "Unhealthy": "Unhealthy",
