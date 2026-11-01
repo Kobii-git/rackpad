@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "External health": "الصحة الخارجية",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "تؤثر القراءات على الصحة والتنبيهات فقط عبر أدوات المراقبة المفعلة صراحةً.",
+  "Unhealthy": "غير سليم",
+  "Read-only inventory and external health.": "مخزون للقراءة فقط وصحة خارجية.",
+  "Polling": "استقصاء",
+  "Interval (seconds)": "الفاصل (ثوانٍ)",
+  "Select device": "اختر جهازًا",
+  "Bind device": "اربط الجهاز",
+  "Unbind": "إلغاء الربط",
+  "Value": "القيمة",
+  "Last checked": "آخر فحص",
+  "Stale": "قديمة",
+  "Alert on degraded": "تنبيه عند التدهور",
+  "Create monitor": "إنشاء مراقبة",
+
   "Floorplan": "مخطط الطابق",
   "Zoom": "تكبير",
   "Add marker": "إضافة علامة",

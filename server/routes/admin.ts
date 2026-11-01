@@ -1,3 +1,6 @@
+import { validateExternalHealthRows } from "../lib/integrations/external-health-validation.js";
+import { requireFreshExternalReadings } from "../lib/integrations/external-health.js";
+import { INTEGRATION_PROVIDERS, INTEGRATION_PROVIDER_INFO, type IntegrationProvider } from "../lib/integrations/types.js";
 import { validateFloorplanRows } from "../lib/floorplans.js";
 import { validatePublicReferenceRows } from "../lib/public-references.js";
 import { backfillAuditScopes, parseAuditLabIds } from "../lib/audit-scope.js";
@@ -304,6 +307,9 @@ const exportBackupSnapshot = db.transaction(
             "SELECT * FROM referenceImages ORDER BY entityType, entityId, face, createdAt DESC, id",
           )
           .all(),
+        integrationRecordBindings: db.prepare("SELECT * FROM integrationRecordBindings ORDER BY id").all(),
+        integrationLatestReadings: db.prepare("SELECT * FROM integrationLatestReadings ORDER BY connectionId,providerRecordId,readingKey").all(),
+        externalMonitorMappings: db.prepare("SELECT * FROM externalMonitorMappings ORDER BY monitorId").all(),
         roomFloorplans: db.prepare("SELECT * FROM roomFloorplans ORDER BY roomId").all(),
         roomFloorplanMarkers: db.prepare("SELECT * FROM roomFloorplanMarkers ORDER BY id").all(),
         auditLog: db
@@ -1172,13 +1178,7 @@ function validateBackupIntegrations(input: {
 }) {
   const labIds = new Set(input.labs.map((row) => String(row.id)));
   const connectionIds = new Set<string>();
-  const providers = new Set([
-    "proxmox",
-    "unifi",
-    "omada",
-    "opnsense",
-    "dockhand",
-  ]);
+  const providers = new Set<string>(INTEGRATION_PROVIDERS);
   for (const row of input.connections) {
     const id = String(row.id ?? "");
     if (!id || connectionIds.has(id)) {
@@ -1222,6 +1222,8 @@ function validateBackupIntegrations(input: {
         "BACKUP_INTEGRITY_INVALID",
       );
     }
+    const connection = input.connections.find(connection => connection.id === row.connectionId)!;
+    if (INTEGRATION_PROVIDER_INFO[connection.provider as IntegrationProvider].capabilities.health) throw new ValidationError("Health providers require explicit inventory adoption and do not support automatic adoption schedules.", 422);
     if (!["merge", "skip", "mirror", "overwrite"].includes(String(row.mode))) {
       throw new ValidationError(
         `Backup integration schedule ${id} has an invalid mode.`,
@@ -1255,6 +1257,9 @@ const restoreBackupSnapshot = db.transaction(
 
     const legacySecurity = Number(snapshot.schemaVersion ?? 0) < 50;
     const data = asObject(snapshot.data);
+    const integrationRecordBindings = normalizeArrayRecordArray(data.integrationRecordBindings ?? [], "data.integrationRecordBindings");
+    const integrationLatestReadings = normalizeArrayRecordArray(data.integrationLatestReadings ?? [], "data.integrationLatestReadings");
+    const externalMonitorMappings = normalizeArrayRecordArray(data.externalMonitorMappings ?? [], "data.externalMonitorMappings");
     const roomFloorplans = normalizeArrayRecordArray(data.roomFloorplans ?? [], "data.roomFloorplans");
     const roomFloorplanMarkers = normalizeArrayRecordArray(data.roomFloorplanMarkers ?? [], "data.roomFloorplanMarkers");
     const labs = normalizeArrayRecordArray(data.labs, "data.labs");
@@ -1604,6 +1609,7 @@ const restoreBackupSnapshot = db.transaction(
       }
       restoredDefaultDeviceTypes.add(deviceType);
     }
+    validateExternalHealthRows({ connections: integrationConnections, devices, monitors: deviceMonitors, bindings: integrationRecordBindings, readings: integrationLatestReadings, mappings: externalMonitorMappings });
     validateFloorplanRows({ rooms, racks, devices, referenceImages, roomFloorplans, roomFloorplanMarkers });
     validatePublicReferenceRows(devices, "device");
     validatePublicReferenceRows(portLinks, "cable");
@@ -1669,6 +1675,9 @@ const restoreBackupSnapshot = db.transaction(
     DELETE FROM wifiSsids;
     DELETE FROM wifiControllers;
     DELETE FROM deviceServices;
+    DELETE FROM externalMonitorMappings;
+    DELETE FROM integrationRecordBindings;
+    DELETE FROM integrationLatestReadings;
     DELETE FROM deviceMonitors;
     DELETE FROM dockerContainerLinks;
     DELETE FROM dockerImportSources;
@@ -2059,6 +2068,7 @@ const restoreBackupSnapshot = db.transaction(
           row.syncGuests == null ? 1 : Number(Boolean(row.syncGuests)),
       });
     }
+    for (const row of integrationConnections) db.prepare("UPDATE integrationConnections SET healthPollingEnabled=?,healthIntervalSeconds=?,healthLastCheckedAt=?,healthLastError=? WHERE id=?").run(Number(Boolean(row.healthPollingEnabled ?? 0)),row.healthIntervalSeconds ?? 60,row.healthLastCheckedAt ?? null,row.healthLastError ?? null,row.id);
     for (const row of integrationSyncSchedules) {
       insertIntegrationSyncSchedule.run({
         id: row.id,
@@ -2990,6 +3000,9 @@ const restoreBackupSnapshot = db.transaction(
       const layout = parseStackMemberLayout(row);
       db.prepare("INSERT INTO deviceStackMemberLayouts (memberId,sourceTemplateId,status,snapshot,bindings,portFingerprint,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?)").run(layout.memberId,layout.sourceTemplateId,layout.status,JSON.stringify(layout.snapshot),JSON.stringify(layout.bindings),layout.portFingerprint,layout.createdAt,layout.updatedAt);
     }
+    for (const row of integrationRecordBindings) db.prepare("INSERT INTO integrationRecordBindings(id,connectionId,providerRecordId,deviceId,sourceIdentity,updatedAt) VALUES(?,?,?,?,?,?)").run(row.id,row.connectionId,row.providerRecordId,row.deviceId,row.sourceIdentity,row.updatedAt);
+    for (const row of integrationLatestReadings) db.prepare("INSERT INTO integrationLatestReadings(connectionId,providerRecordId,recordName,readingKey,label,value,unit,health,observedAt,collectedAt,collectionError) VALUES(?,?,?,?,?,?,?,?,?,?,?)").run(row.connectionId,row.providerRecordId,row.recordName,row.readingKey,row.label,typeof row.value === "string" ? row.value : JSON.stringify(row.value),row.unit ?? null,row.health,row.observedAt,row.collectedAt,row.collectionError ?? null);
+    for (const row of externalMonitorMappings) db.prepare("INSERT INTO externalMonitorMappings(monitorId,bindingId,readingKey,alertOnDegraded) VALUES(?,?,?,?)").run(row.monitorId,row.bindingId ?? null,row.readingKey,Number(Boolean(row.alertOnDegraded)));
     validateStackIntegrity(db);
     const restoredAt = new Date().toISOString();
     const restoreAuditId = createId("a");
@@ -3318,6 +3331,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const restored = restoreBackupSnapshot(snapshot, req.authUser.username);
     invalidateNotificationAttempts();
     invalidateMonitorObservations();
+    requireFreshExternalReadings();
     return reply.send(restored);
   });
 };

@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "External health": "外部の稼働状態",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "測定値は明示的に有効にした監視を通じてのみ状態と通知に反映されます。",
+  "Unhealthy": "異常",
+  "Read-only inventory and external health.": "読み取り専用のインベントリと外部の稼働状態。",
+  "Polling": "定期取得",
+  "Interval (seconds)": "間隔（秒）",
+  "Select device": "デバイスを選択",
+  "Bind device": "デバイスを関連付け",
+  "Unbind": "関連付けを解除",
+  "Value": "値",
+  "Last checked": "最終確認",
+  "Stale": "古い情報",
+  "Alert on degraded": "状態低下時に通知",
+  "Create monitor": "監視を作成",
+
   "Floorplan": "フロアプラン",
   "Zoom": "拡大率",
   "Add marker": "マーカーを追加",

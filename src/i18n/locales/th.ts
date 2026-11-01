@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "External health": "สถานะภายนอก",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "ค่าที่อ่านได้จะมีผลต่อสถานะและการแจ้งเตือนผ่านตัวตรวจสอบที่เปิดใช้อย่างชัดเจนเท่านั้น",
+  "Unhealthy": "ผิดปกติ",
+  "Read-only inventory and external health.": "รายการอุปกรณ์แบบอ่านอย่างเดียวและสถานะภายนอก",
+  "Polling": "การสำรวจ",
+  "Interval (seconds)": "ช่วงเวลา (วินาที)",
+  "Select device": "เลือกอุปกรณ์",
+  "Bind device": "เชื่อมโยงอุปกรณ์",
+  "Unbind": "ยกเลิกการเชื่อมโยง",
+  "Value": "ค่า",
+  "Last checked": "ตรวจสอบล่าสุด",
+  "Stale": "ล้าสมัย",
+  "Alert on degraded": "แจ้งเตือนเมื่อเสื่อมลง",
+  "Create monitor": "สร้างตัวตรวจสอบ",
+
   "Floorplan": "แผนผังห้อง",
   "Zoom": "การขยาย",
   "Add marker": "เพิ่มหมุด",

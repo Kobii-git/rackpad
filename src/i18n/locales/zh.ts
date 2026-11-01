@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "External health": "外部健康状态",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "读数仅通过明确启用的监控影响健康状态和警报。",
+  "Unhealthy": "不健康",
+  "Read-only inventory and external health.": "只读库存与外部健康状态。",
+  "Polling": "轮询",
+  "Interval (seconds)": "间隔（秒）",
+  "Select device": "选择设备",
+  "Bind device": "绑定设备",
+  "Unbind": "解除绑定",
+  "Value": "数值",
+  "Last checked": "上次检查",
+  "Stale": "过期",
+  "Alert on degraded": "状态降级时警报",
+  "Create monitor": "创建监控",
+
   "Floorplan": "房间平面图",
   "Zoom": "缩放",
   "Add marker": "添加标记",

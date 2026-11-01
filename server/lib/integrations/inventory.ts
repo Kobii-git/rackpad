@@ -1,3 +1,4 @@
+import type { ExternalHealthCollection, ExternalCollectionContext } from "./external-health-types.js";
 import type { SnmpProfileCollection } from "../snmp-profiles/types.js";
 import type {
   IntegrationConnectionSecrets,
@@ -127,11 +128,14 @@ export interface IntegrationScope {
 
 export interface IntegrationClient {
   provider: IntegrationProvider;
+  fetchReadings?(connection: IntegrationConnectionSecrets, context?: ExternalCollectionContext): Promise<ExternalHealthCollection>;
   test(
     connection: IntegrationConnectionSecrets,
+    context?: ExternalCollectionContext,
   ): Promise<IntegrationTestResult>;
   fetchInventory(
     connection: IntegrationConnectionSecrets,
+    context?: ExternalCollectionContext,
   ): Promise<IntegrationInventory>;
   listScopes?(
     connection: IntegrationConnectionSecrets,

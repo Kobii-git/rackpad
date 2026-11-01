@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "External health": "बाहरी स्वास्थ्य",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "रीडिंग केवल स्पष्ट रूप से सक्षम मॉनिटर के माध्यम से स्वास्थ्य और अलर्ट को प्रभावित करती हैं।",
+  "Unhealthy": "अस्वस्थ",
+  "Read-only inventory and external health.": "केवल पढ़ने योग्य इन्वेंटरी और बाहरी स्वास्थ्य।",
+  "Polling": "पोलिंग",
+  "Interval (seconds)": "अंतराल (सेकंड)",
+  "Select device": "डिवाइस चुनें",
+  "Bind device": "डिवाइस जोड़ें",
+  "Unbind": "लिंक हटाएँ",
+  "Value": "मान",
+  "Last checked": "अंतिम जाँच",
+  "Stale": "पुराना",
+  "Alert on degraded": "गिरावट पर चेतावनी",
+  "Create monitor": "मॉनिटर बनाएँ",
+
   "Floorplan": "तल योजना",
   "Zoom": "ज़ूम",
   "Add marker": "चिह्न जोड़ें",

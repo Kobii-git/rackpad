@@ -1,6 +1,21 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "External health": "Harici sağlık",
+  "Readings affect health and alerts only through explicitly enabled monitors.": "Okumalar yalnızca açıkça etkinleştirilmiş izleyiciler aracılığıyla sağlık ve uyarıları etkiler.",
+  "Unhealthy": "Sağlıksız",
+  "Read-only inventory and external health.": "Salt okunur envanter ve harici sağlık.",
+  "Polling": "Yoklama",
+  "Interval (seconds)": "Aralık (saniye)",
+  "Select device": "Cihaz seç",
+  "Bind device": "Cihazı bağla",
+  "Unbind": "Bağlantıyı kaldır",
+  "Value": "Değer",
+  "Last checked": "Son kontrol",
+  "Stale": "Güncelliğini yitirmiş",
+  "Alert on degraded": "Bozulmada uyar",
+  "Create monitor": "İzleyici oluştur",
+
   "Floorplan": "Oda planı",
   "Zoom": "Yakınlaştırma",
   "Add marker": "İşaret ekle",

@@ -1,3 +1,4 @@
+import type { ExternalHealthView } from "./types";
 import type {
   AlertSettings,
   AdminIntegrityReport,
@@ -2069,6 +2070,13 @@ export const api = {
     }>(`/integrations/connections/${id}/test`, { method: "POST" });
   },
 
+  getExternalHealth(id: ID) { return request<ExternalHealthView>(`/integrations/connections/${id}/readings`); },
+  refreshExternalHealth(id: ID) { return request<ExternalHealthView>(`/integrations/connections/${id}/refresh`,{method:"POST"}); },
+  setExternalPolling(id: ID, enabled: boolean, intervalSeconds: number) { return request<ExternalHealthView>(`/integrations/connections/${id}/health-polling`,{method:"PUT",body:JSON.stringify({enabled,intervalSeconds})}); },
+  bindExternalRecord(id: ID, body: {providerRecordId:string;deviceId:string;sourceIdentity:string;expectedDeviceId?:string}) { return request<ExternalHealthView>(`/integrations/connections/${id}/bindings`,{method:"POST",body:JSON.stringify(body)}); },
+  unbindExternalRecord(id: ID, bindingId: string, expectedDeviceId: string) { return request<ExternalHealthView>(`/integrations/connections/${id}/bindings/${bindingId}`,{method:"DELETE",body:JSON.stringify({expectedDeviceId})}); },
+  createExternalMonitor(id: ID,bindingId:string,readingKey:string) { return request<ExternalHealthView>(`/integrations/connections/${id}/external-monitors`,{method:"POST",body:JSON.stringify({bindingId,readingKey,enabled:false,alertOnDegraded:false})}); },
+  updateExternalMonitor(id: ID,monitorId:string,body:{enabled?:boolean;alertOnDegraded?:boolean}) { return request<ExternalHealthView>(`/integrations/connections/${id}/external-monitors/${monitorId}`,{method:"PATCH",body:JSON.stringify(body)}); },
   pullIntegrationInventory(id: ID, body?: { mode?: IntegrationAutoSyncMode }) {
     return request<IntegrationInventoryResponse>(
       `/integrations/connections/${id}/inventory`,

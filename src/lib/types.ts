@@ -48,7 +48,7 @@ export type IpAssignmentType =
 export type IpZoneKind = "static" | "dhcp" | "reserved" | "infrastructure";
 export type IpAllocationMode = "static" | "dhcp-reservation";
 export type UserRole = "admin" | "editor" | "viewer";
-export type MonitorType = "none" | "icmp" | "tcp" | "http" | "https" | "snmp";
+export type MonitorType = "none" | "icmp" | "tcp" | "http" | "https" | "snmp" | "external";
 export type DiscoveryStatus = "new" | "imported" | "dismissed";
 export type WifiBand = "2.4ghz" | "5ghz" | "6ghz";
 export type VirtualSwitchKind = "external" | "internal" | "private";
@@ -593,7 +593,7 @@ export interface SnmpSyncApplyResult {
 }
 
 export type IntegrationProvider =
-  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand";
+  "proxmox" | "unifi" | "omada" | "opnsense" | "dockhand" | "uptime-kuma";
 
 export type IntegrationAuthKind =
   | "api-token"
@@ -611,6 +611,7 @@ export interface IntegrationProviderInfo {
   authKinds: IntegrationAuthKind[];
   defaultAuthKind: IntegrationAuthKind;
   scopeKind: IntegrationScopeKind | null;
+  capabilities?: { inventory: boolean; health: boolean };
 }
 
 export interface IntegrationScope {
@@ -657,6 +658,10 @@ export interface IntegrationConnection {
   lastAutoSyncMessage: string | null;
   createdAt: string;
   updatedAt: string;
+  healthPollingEnabled?: boolean;
+  healthIntervalSeconds?: number;
+  healthLastCheckedAt?: string | null;
+  healthLastError?: string | null;
 }
 
 export interface IntegrationTestResult {
@@ -1416,4 +1421,12 @@ export interface RoomFloorplan {
   updatedAt: string | null;
   background: ReferenceImage | null;
   markers: RoomFloorplanMarker[];
+}
+
+export interface ExternalHealthView {
+  sourceIdentity: string; pollingEnabled: boolean; intervalSeconds: number;
+  lastCheckedAt: string | null; error: string | null;
+  readings: Array<{providerRecordId:string;recordName:string;key:string;label:string;value:string|number|boolean|null;unit:string|null;health:string;reportedHealth:string;observedAt:string;stale:boolean;collectionError:string|null}>;
+  bindings: Array<{id:string;providerRecordId:string;deviceId:string;sourceIdentity:string}>;
+  monitors: Array<DeviceMonitor & {bindingId:string|null;readingKey:string;alertOnDegraded:boolean}>;
 }

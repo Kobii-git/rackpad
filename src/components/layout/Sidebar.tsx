@@ -38,6 +38,7 @@ const baseNavItems = [
   { to: "/wifi", icon: Wifi, label: "WiFi" },
   { to: "/discovery", icon: Search, label: "Discovery" },
   { to: "/imports", icon: UploadCloud, label: "Imports" },
+  { to: "/external-health", icon: Activity, label: "External health" },
   { to: "/monitoring", icon: Activity, label: "Monitoring" },
   { to: "/ports", icon: Cable, label: "Ports" },
   { to: "/floorplans", icon: Building2, label: "Floorplan" },

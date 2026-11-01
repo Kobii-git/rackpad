@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 
 const ReferenceDetailPage = lazy(() => import("@/pages/ReferenceDetailPage"));
 const ReferenceLabelsPage = lazy(() => import("@/pages/ReferenceLabelsPage"));
+const ExternalHealthPage = lazy(() => import("@/pages/ExternalHealthPage"));
 const FloorplanPage = lazy(() => import("@/pages/FloorplanPage"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const LabsPage = lazy(() => import("@/pages/LabsPage"));
@@ -48,6 +49,7 @@ export default function App() {
         }
       />
       <Route element={<AppShell />}>
+        <Route path="/external-health" element={<RouteFrame><ExternalHealthPage /></RouteFrame>} />
         <Route path="/floorplans" element={<RouteFrame><FloorplanPage /></RouteFrame>} />
         <Route path="/labels/:reference" element={<RouteFrame><ReferenceDetailPage /></RouteFrame>} />
         <Route path="/labels" element={<RouteFrame><ReferenceLabelsPage /></RouteFrame>} />

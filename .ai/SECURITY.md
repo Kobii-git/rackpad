@@ -122,3 +122,11 @@ Unscoped history is admin-only; entity-specific non-admin reads require current
 read permission for every captured lab, including both cable endpoints. Global
 listing remains admin-only. Deleted subjects do not remove event ownership, and
 revoked grants immediately remove access to their historical events.
+
+External health endpoints require existing lab read/write permissions. Provider
+credentials remain encrypted and write-only. Health HTTP collectors reuse pinned
+DNS, reserved-address blocking, TLS verification, bounded bodies and one overall
+15-second collection deadline. Requests recheck configuration and cancellation
+after awaits; user-facing asynchronous responses also reload actor/grants.
+Collection failures store static categories rather than provider response text.
+No external-health listener, host networking or root requirement is added.
