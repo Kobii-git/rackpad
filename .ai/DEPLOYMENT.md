@@ -117,8 +117,12 @@ by default.
 
 Image publication emits an immutable digest. The publication workflow verifies
 that exact image and revision on AMD64 and ARM64 with isolated fresh-install,
-schema-53/schema-55/schema-57 upgrades and paired rollback fixtures. GitHub Release creation depends
-on both smoke jobs as well as the preceding quality/security/build gates.
+schema-53/schema-55/schema-57 upgrades and paired rollback fixtures. Feature beta
+batches additionally pin and exercise their immediate previously published
+release, including upgrades where the schema is unchanged. Candidate and
+published checks use the same immutable predecessor image and explicit schema.
+GitHub Release creation depends on both smoke jobs as well as the preceding
+quality/security/build gates.
 
 Release preparation includes version and lockfile, changelog Added/Fixed/Changed
 sections as applicable, full validation, test notes, tag/channel review, and smoke
