@@ -4,6 +4,15 @@ All notable Rackpad changes should be recorded here.
 
 Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
+## 1.9.0-beta.3
+
+- Add Glances API v4 host inventory and CPU, memory, filesystem, network and
+  sensor readings through read-only plugin endpoints.
+- Add explicitly configured anonymous Glances access alongside Basic and bearer
+  authentication; anonymous connections retain no credentials.
+- Add PatchMon scoped `host:get` inventory/package summaries, preserving agent
+  observation times and unknown health for stale or pending reports.
+
 ## 1.9.0-beta.2
 
 - Add read-only Uptime Kuma Prometheus inventory and latest external readings.

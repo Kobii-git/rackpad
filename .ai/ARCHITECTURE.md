@@ -80,3 +80,9 @@ adoption or health participation. External monitors read this cache through the
 existing monitoring/notification engine. Polling is independently opt-in and
 health providers cannot use automatic inventory-adoption schedules. Uptime Kuma
 uses authenticated `/metrics` with stable monitor IDs, never its control API.
+
+Glances models one `host:self` record per connection so host rename preserves an
+explicit binding. PatchMon identities use stable host IDs. Adapter warnings are
+bounded in the existing connection summary; provider timestamps remain observation
+times, so successful collection does not freshen old PatchMon agent reports.
+Numeric Glances readings carry unknown health rather than invented thresholds.

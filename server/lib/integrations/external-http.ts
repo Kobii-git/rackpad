@@ -17,7 +17,7 @@ export function externalHttp(
   context: ExternalCollectionContext = {},
 ) {
   const deadline = Date.now() + 15000;
-  async function get(path: string) {
+  async function get(path: string, query?: Record<string,string|number|boolean|undefined>) {
     if (context.isCurrent && !context.isCurrent())
       throw new ExternalProviderError("configuration_changed");
     const timeoutMs = deadline - Date.now();
@@ -25,7 +25,7 @@ export function externalHttp(
     try {
       const response = await integrationHttpRequest(
         {
-          url: buildIntegrationUrl(connection.baseUrl, path),
+          url: buildIntegrationUrl(connection.baseUrl, path, query),
           headers,
           verifyTls: connection.verifyTls,
           timeoutMs,
@@ -51,9 +51,9 @@ export function externalHttp(
   }
   return {
     get,
-    json: async (path: string): Promise<unknown> => {
+    json: async (path: string, query?: Record<string,string|number|boolean|undefined>): Promise<unknown> => {
       try {
-        return parseIntegrationJson(await get(path), "External provider");
+        return parseIntegrationJson(await get(path, query), "External provider");
       } catch (error) {
         if (error instanceof ExternalProviderError) throw error;
         throw new ExternalProviderError("invalid_response");

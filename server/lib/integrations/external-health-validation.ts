@@ -35,7 +35,7 @@ export function validateExternalHealthRows(input: {
   const supportsHealth = (connection: Record<string,unknown> | undefined) => !!connection && !!INTEGRATION_PROVIDER_INFO[connection.provider as IntegrationProvider]?.capabilities.health;
   for (const connection of input.connections) {
     const info = INTEGRATION_PROVIDER_INFO[connection.provider as IntegrationProvider];
-    if (!info || !info.authKinds.includes(connection.authKind as never) || (Boolean(connection.healthPollingEnabled) && !info.capabilities.health) || (info.capabilities.health && Boolean(connection.autoSyncEnabled))) invalid();
+    if ((connection.authKind === "anonymous" && (connection.authSecretEnc != null || connection.authId != null)) || !info || !info.authKinds.includes(connection.authKind as never) || (Boolean(connection.healthPollingEnabled) && !info.capabilities.health) || (info.capabilities.health && Boolean(connection.autoSyncEnabled))) invalid();
     if (
       connection.healthPollingEnabled !== undefined &&
       ![0, 1, true, false].includes(connection.healthPollingEnabled as number)
