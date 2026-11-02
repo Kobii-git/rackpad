@@ -20,7 +20,7 @@ export function hostDevice(id:string,name:string,extra:Partial<IntegrationImport
 export function externalProvider(provider: IntegrationProvider, product:string, collect:(connection:IntegrationConnectionSecrets,context?:ExternalCollectionContext)=>Promise<ExternalSnapshot>):IntegrationClient {
   async function snapshot(connection:IntegrationConnectionSecrets, context?:ExternalCollectionContext) {
     const result=await collect(connection,context);validateExternalReadings(result.readings);
-    if(result.devices.length>1000 || new Set(result.devices.map(device=>device.providerRecordId)).size!==result.devices.length)throw new ExternalProviderError("invalid_response");
+    if(result.devices.length>10000 || new Set(result.devices.map(device=>device.providerRecordId)).size!==result.devices.length)throw new ExternalProviderError("invalid_response");
     return result;
   }
   return {provider,fetchReadings:snapshot,

@@ -1,6 +1,6 @@
 {
   "name": "rackpad",
-  "version": "1.9.0-beta.4",
+  "version": "1.9.0-beta.5",
   "private": true,
   "type": "module",
   "engines": {
@@ -76,6 +76,7 @@
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.4",
     "tailwind-merge": "^2.6.0",
+    "ws": "8.22.0",
     "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },
@@ -89,6 +90,7 @@
     "@types/node": "^22.20.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/ws": "8.18.2",
     "@vitejs/plugin-react": "^6.1.2",
     "ajv": "8.20.0",
     "ajv-draft-04": "1.0.0",

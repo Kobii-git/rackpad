@@ -68,6 +68,14 @@ platform-specific inspection when multiple baseline variants are cached locally.
 Candidate and published-image smoke jobs install current stable Docker with the
 containerd image store and fail a capability preflight before image work.
 
+Home Assistant candidates also exercise the built production collector directly
+against a pinned official container: real REST/WebSocket authentication, demo
+device grouping and rename identity, connectivity and unavailable transitions,
+numeric units and intentional-off semantics. Its setup client writes only to the
+disposable provider. This HTTP/WS test does not establish TLS, Rackpad route or
+credential-persistence behavior, MQTT/radio compatibility or hardware accuracy;
+those remain covered by their separate gates or real-installation acceptance.
+
 Run the bundled-font browser preflight before the long browser matrix; install
 dependencies within the worktree so Vite can serve font assets. Workflow lint and
 Bash syntax, ShellCheck, actionlint, and PowerShell syntax remain CI steps
@@ -91,7 +99,12 @@ schema acceptance or mocked orchestration alone is not upgrade evidence.
 
 Standalone health regressions include `external-health*.test.ts`,
 `host-health.test.ts`, `power-health.test.ts`, `power-providers.test.ts` and
-`integration-options-migration.test.ts`; browser cases live in
+`integration-options-migration.test.ts`, `home-assistant.test.ts` and
+`home-assistant-health.test.ts`; browser cases live in
 `e2e/standalone-features.spec.ts`. Protocol/API fixtures are synthetic and do not
 prove acceptance against user installations. New native transports also require
 independent review and clean Linux image/network acceptance before publication.
+Home Assistant fixtures cover registry denial, stable grouping, read-command
+allowlisting, frame/control bounds, cancellation, original-host TLS verification,
+explicit adoption, scoped access and encrypted recovery. They do not establish
+compatibility with a particular Home Assistant account or installation.

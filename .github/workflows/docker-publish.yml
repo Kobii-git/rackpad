@@ -158,9 +158,9 @@ jobs:
         env:
           CANDIDATE_IMAGE: ${{ steps.candidate.outputs.imageid }}
           PLATFORM: ${{ matrix.platform }}
-          # v1.9.0-beta.3, revision 9f17e2066b051a511fc78395dee7728876063c33.
-          PRECEDING_RELEASE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:e30ae0120e1dbde69088135273db008ebf35b4149aba031509e8400f58264ee7
-          PRECEDING_RELEASE_SCHEMA: "61"
+          # v1.9.0-beta.4, revision e17896510d4586c1664d129471943ea627fc0d7a.
+          PRECEDING_RELEASE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:ee1522e5be4aa694058e83729e993a1de977c6fda698226f7664a8aa3554f2c0
+          PRECEDING_RELEASE_SCHEMA: "62"
           # Immutable v1.8.3/schema-51 and beta/schema-53 baselines.
           STABLE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:6a4fce729eef6bf380cfcc5a9e2be3daad914686ff04c2f9b85904528a6cf94e
           # v1.8.7-beta.0, revision 7bf2eaf484daa5c878154a5d1f828528daff7bff.
@@ -187,6 +187,13 @@ jobs:
           CANDIDATE_IMAGE: ${{ steps.candidate.outputs.imageid }}
           PLATFORM: ${{ matrix.platform }}
         run: node scripts/check-host-provider-containers.mjs --image "$CANDIDATE_IMAGE" --platform "$PLATFORM"
+
+      - name: Real Home Assistant collector acceptance
+        if: matrix.platform == 'linux/amd64'
+        env:
+          CANDIDATE_IMAGE: ${{ steps.candidate.outputs.imageid }}
+          PLATFORM: ${{ matrix.platform }}
+        run: node scripts/check-home-assistant-container.mjs --image "$CANDIDATE_IMAGE" --platform "$PLATFORM" --revision "$GITHUB_SHA"
 
   smoke:
     needs: build
@@ -232,9 +239,9 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
           PLATFORM: ${{ matrix.platform }}
-          # v1.9.0-beta.3, revision 9f17e2066b051a511fc78395dee7728876063c33.
-          PRECEDING_RELEASE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:e30ae0120e1dbde69088135273db008ebf35b4149aba031509e8400f58264ee7
-          PRECEDING_RELEASE_SCHEMA: "61"
+          # v1.9.0-beta.4, revision e17896510d4586c1664d129471943ea627fc0d7a.
+          PRECEDING_RELEASE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:ee1522e5be4aa694058e83729e993a1de977c6fda698226f7664a8aa3554f2c0
+          PRECEDING_RELEASE_SCHEMA: "62"
           # Immutable schema-53 beta baseline; never resolve a moving tag here.
           # v1.8.7-beta.0, revision 7bf2eaf484daa5c878154a5d1f828528daff7bff.
           SCHEMA57_IMAGE: ghcr.io/kobii-git/rackpad@sha256:a9652c980a17ae0ce4638492402d1cab54f876a3b6901bd8cf906eed18889ff5

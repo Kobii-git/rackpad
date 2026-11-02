@@ -98,6 +98,7 @@ const EMPTY_FORM: ConnectionForm = {
 
 const BASE_URL_PLACEHOLDERS: Record<IntegrationProvider, string> = {
   "uptime-kuma": "https://kuma.example.internal",
+  "home-assistant":"https://homeassistant.example.internal:8123",
   nut:"nut://ups.example.internal:3493",
   redfish:"https://bmc.example.internal",
   glances:"https://glances.example.internal:61208",
@@ -139,6 +140,7 @@ const AUTH_KIND_LABELS: Record<IntegrationAuthKind, TranslationKey> = {
 // One concise line under the connection form instead of a paragraph of
 // prose on the panel.
 const PROVIDER_DESCRIPTIONS: Record<IntegrationProvider, TranslationKey> = {
+  "home-assistant":"Read-only inventory and external health.",
   nut:"Read-only inventory and external health.",
   redfish:"Read-only inventory and external health.",
   glances:"Read-only inventory and external health.",
@@ -180,6 +182,7 @@ const PULL_TOGGLES: Record<
   "uptime-kuma": { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
   glances: { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
   nut: { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
+  "home-assistant": { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
   redfish: { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
   patchmon: { vlans: null, subnets: null, dhcp: null, hosts: { label: "Devices", hint: "Read-only inventory and external health." }, guests: null, switches: null, gateways: null, aps: null, wifi: null },
   proxmox: {

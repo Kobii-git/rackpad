@@ -10,6 +10,7 @@ export const INTEGRATION_PROVIDERS = [
   "patchmon",
   "nut",
   "redfish",
+  "home-assistant",
 ] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
 
@@ -59,6 +60,7 @@ export const INTEGRATION_PROVIDER_INFO: Record<
   IntegrationProvider,
   IntegrationProviderInfo
 > = {
+  "home-assistant":{id:"home-assistant",label:"Home Assistant",vendor:"Home Assistant",authKinds:["api-key"],defaultAuthKind:"api-key",scopeKind:null,capabilities:{inventory:true,health:true}},
   nut:{id:"nut",label:"NUT",vendor:"NUT",authKinds:["username-password"],defaultAuthKind:"username-password",scopeKind:null,capabilities:{inventory:true,health:true}},
   redfish:{id:"redfish",label:"Redfish",vendor:"DMTF",authKinds:["username-password"],defaultAuthKind:"username-password",scopeKind:null,capabilities:{inventory:true,health:true}},
   glances: {id:"glances",label:"Glances",vendor:"Glances",authKinds:["username-password","api-key","anonymous"],defaultAuthKind:"username-password",scopeKind:null,capabilities:{inventory:true,health:true}},

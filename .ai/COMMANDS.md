@@ -25,6 +25,7 @@ separately.
 | Notification provider acceptance | `node scripts/check-notification-containers.mjs --help` | Built candidate image ID and platform; real Mailpit STARTTLS/SMTPS and ntfy HTTPS/token delivery, saved settings/restart and negative diagnostics; AMD64 candidate CI |
 | Host provider acceptance | `node scripts/check-host-provider-containers.mjs --help` | Built candidate image ID and platform; real Kuma metrics/status transitions and Glances Basic/JWT when available, saved connections, bindings and safe failures; AMD64 candidate CI |
 | Documentation screenshots | `screenshots:update` | Isolated deterministic 1920×1200 capture; outside normal E2E discovery |
+| Home Assistant collector acceptance | `node scripts/check-home-assistant-container.mjs --help` | Built candidate image ID, revision and platform; actual REST/WebSocket collector authentication, demo registry grouping/rename and state normalization; AMD64 candidate CI |
 | Screenshot determinism | `screenshots:check` | Two isolated captures with manifest and bounded pixel comparison; failures retain temporary captures for diagnosis; required after application checks in the reusable quality workflow |
 | Non-browser tests | `test` | Canonical local aggregation |
 | All tests | `test:full` | Canonical environment-heavy aggregation |

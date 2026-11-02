@@ -4,6 +4,17 @@ All notable Rackpad changes should be recorded here.
 
 Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
+## 1.9.0-beta.5
+
+- Add bearer-authenticated Home Assistant inventory and entity readings through
+  REST states and two guarded, read-only WebSocket registry requests (#220).
+- Preserve stable device/entity registry identities, expose restricted-account
+  grouping limitations and keep missing, disabled and stale observations unknown.
+- Include MQTT, Z-Wave, Zigbee and Matter entities exposed by Home Assistant;
+  perform no service calls, state changes, subscriptions or direct broker access.
+- Apply the existing collection deadline across DNS and redirects for health HTTP
+  reads. Schema remains 62; polling, adoption and monitor alerts stay opt-in.
+
 ## 1.9.0-beta.4
 
 - Add read-only NUT UPS inventory and health with pinned native TCP, STARTTLS
