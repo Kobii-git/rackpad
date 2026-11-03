@@ -15,6 +15,10 @@ updates:
         patterns:
           - "*"
     ignore:
+      # Node typings must follow the supported Node 22 runtime.
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
       # typescript-eslint 8.67 supports TypeScript <6.1. Keep the compatible
       # 6.0 line in the grouped update until that peer range moves forward.
       - dependency-name: "typescript"

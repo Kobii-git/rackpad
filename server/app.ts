@@ -228,6 +228,8 @@ export async function createApp() {
   }
 
   await app.register(cors, {
+    // Preserve the CORS 10 preflight contract when plugin defaults change.
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"],
     origin:
       process.env.NODE_ENV === "production"
         ? (origin, callback) => {

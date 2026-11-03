@@ -17,6 +17,9 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Fixed
 
+- Update vetted runtime and development dependencies, preserve trusted-origin
+  preflight methods across the CORS plugin upgrade, and match accessible control
+  names to their visible labels under the current accessibility checks.
 - Template copy feedback, artwork ordering, undo/redo, face transfers, module
   grids, colours and resizing, with linked-port and mixed-stack regressions.
 - Database access failures now include a concise ownership/permissions hint
@@ -27,6 +30,10 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Changed
 
+- Keep Node typings on the supported Node 22 line when reviewing dependency
+  suggestions; major typing updates require a corresponding runtime decision.
+- Include storage accessibility, lab navigation and stack keyboard controls in
+  Chromium/Firefox acceptance for dependency updates.
 - Documented maintainer-only implementation while welcoming reports, testing
   and feedback. Dependabot remains a source of suggestions; its PRs are not merged.
 - Renewed only the SNMP server-tree review pin after independent review and
