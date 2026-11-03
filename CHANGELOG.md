@@ -17,6 +17,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Fixed
 
+- Select the requested platform when inspecting published images, and verify
+  Docker platform-inspection support before architecture smoke tests.
 - Update vetted runtime and development dependencies, preserve trusted-origin
   preflight methods across the CORS plugin upgrade, and match accessible control
   names to their visible labels under the current accessibility checks.
