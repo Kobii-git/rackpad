@@ -4,6 +4,19 @@ All notable Rackpad changes should be recorded here.
 
 Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
+## [Unreleased]
+
+## 1.9.0-beta.6
+
+### Fixed
+
+- Refresh Discovery schedules and discovered hosts on page entry, focus and
+  visible polling without replacing unsaved inspector edits (#230).
+- Count distinct audit actors, page through older lab-scoped history and filter
+  stored events by action or search while preserving historical access rules (#237).
+
+See the [beta test and upgrade notes](docs/releases/v1.9.0-beta.6.md).
+
 ## 1.9.0-beta.5
 
 - Add bearer-authenticated Home Assistant inventory and entity readings through
@@ -54,8 +67,6 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 ### Fixed
 
 - Stage management IPs and actual host interfaces in Proxmox API imports while preserving existing manual inventory (#208).
-
-## [Unreleased]
 
 ## [1.8.7-beta.1]
 

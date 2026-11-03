@@ -83,6 +83,190 @@ async function history(type: string, id: string, auth = headers) {
   });
 }
 
+test("audit pagination is stable across timestamp ties and newer inserts", async () => {
+  const insert = db.prepare(
+    "INSERT INTO auditLog(id,ts,user,action,entityType,entityId,summary,labIds) VALUES(?,?,?,?,?,?,?,?)",
+  );
+  for (let i = 0; i < 7; i++)
+    insert.run(
+      `page-${i}`,
+      "2026-01-01T00:00:00.000Z",
+      i % 2 ? "alice" : "bob",
+      "device.update",
+      "Device",
+      "one",
+      `Page ${i}`,
+      '["a"]',
+    );
+  const get = async (params: Record<string, string>) => {
+    const res = await app.inject({
+      url: `/api/audit-log?${new URLSearchParams(params)}`,
+      headers,
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    return res.json() as Array<{ id: string; ts: string }>;
+  };
+  const first = await get({ labId: "a", limit: "3" });
+  assert.deepEqual(
+    first.map((row) => row.id),
+    ["page-6", "page-5", "page-4"],
+  );
+  insert.run(
+    "new",
+    "2026-02-01T00:00:00.000Z",
+    "alice",
+    "device.update",
+    "Device",
+    "one",
+    "new",
+    '["a"]',
+  );
+  const second = await get({
+    labId: "a",
+    limit: "3",
+    beforeTs: first[2].ts,
+    beforeId: first[2].id,
+  });
+  const third = await get({
+    labId: "a",
+    limit: "3",
+    beforeTs: second[2].ts,
+    beforeId: second[2].id,
+  });
+  assert.deepEqual(
+    [...first, ...second, ...third].map((row) => row.id),
+    ["page-6", "page-5", "page-4", "page-3", "page-2", "page-1", "page-0"],
+  );
+});
+
+test("audit lab/action/search filters apply before the limit and preserve ownership boundaries", async () => {
+  fixture(true);
+  const insert = db.prepare(
+    "INSERT INTO auditLog(id,ts,user,action,entityType,entityId,summary,labIds) VALUES(?,?,?,?,?,?,?,?)",
+  );
+  db.transaction(() => {
+    for (let i = 0; i < 600; i++)
+      insert.run(
+        `other-${i}`,
+        "2026-03-01",
+        "other",
+        "device.update",
+        "Device",
+        "two",
+        "other lab",
+        '["b"]',
+      );
+    insert.run(
+      "old",
+      "2026-01-01",
+      "alice",
+      "port.unlink",
+      "PortLink",
+      "link",
+      "Legacy cable %_",
+      '["a","b"]',
+    );
+    insert.run(
+      "unknown",
+      "2026-03-01",
+      "admin",
+      "port.unlink",
+      "PortLink",
+      "deleted",
+      "unscoped",
+      null,
+    );
+    insert.run(
+      "unicode",
+      "2026-01-01",
+      "alice",
+      "device.update",
+      "Device",
+      "one",
+      "ÉCOLE МОСКВА ΑΘΗΝΑ",
+      '["a"]',
+    );
+  })();
+  const url = "/api/audit-log?labId=a&action=port.unlink&search=LEGACY&limit=1";
+  const result = await app.inject({ url, headers });
+  assert.equal(result.statusCode, 200, result.body);
+  assert.deepEqual(
+    result.json().map((row: { id: string }) => row.id),
+    ["old"],
+  );
+  const literal = await app.inject({
+    url: "/api/audit-log?labId=a&search=%25_",
+    headers,
+  });
+  assert.deepEqual(
+    literal.json().map((row: { id: string }) => row.id),
+    ["old"],
+  );
+  for (const search of ["école", "москва", "αθηνα"]) {
+    const unicode = await app.inject({
+      url: `/api/audit-log?labId=a&search=${encodeURIComponent(search)}`,
+      headers,
+    });
+    assert.deepEqual(
+      unicode.json().map((row: { id: string }) => row.id),
+      ["unicode"],
+    );
+  }
+  assert.deepEqual(
+    (
+      await app.inject({
+        url: "/api/audit-log?labId=a&action=port.unlink&search=unscoped",
+        headers,
+      })
+    ).json(),
+    [],
+  );
+  assert.deepEqual(
+    (
+      await app.inject({ url: "/api/audit-log?action=' OR 1=1--", headers })
+    ).json(),
+    [],
+  );
+  assert.equal((await app.inject({ url })).statusCode, 401);
+  const first = await user("page-first", ["a"]);
+  const both = await user("page-both", ["a", "b"]);
+  assert.deepEqual(
+    (await app.inject({ url, headers: both.headers })).json(),
+    [],
+  );
+  const entityUrl = `${url}&entityType=PortLink&entityId=link`;
+  assert.equal(
+    (await app.inject({ url: entityUrl, headers: first.headers })).statusCode,
+    403,
+  );
+  assert.deepEqual(
+    (await app.inject({ url: entityUrl, headers: both.headers }))
+      .json()
+      .map((row: { id: string }) => row.id),
+    ["old"],
+  );
+  db.prepare("DELETE FROM userLabAccess WHERE userId=? AND labId='b'").run(
+    both.id,
+  );
+  assert.equal(
+    (await app.inject({ url: entityUrl, headers: both.headers })).statusCode,
+    403,
+  );
+});
+
+test("audit pagination rejects incomplete cursors and oversized filters", async () => {
+  for (const query of [
+    "beforeTs=2026-01-01",
+    "beforeId=id",
+    "beforeTs=&beforeId=id",
+    `action=${"a".repeat(121)}`,
+    `search=${"a".repeat(501)}`,
+  ]) {
+    const res = await app.inject({ url: `/api/audit-log?${query}`, headers });
+    assert.equal(res.statusCode, 400, res.body);
+  }
+});
+
 test("cable deletion retains create/delete history and enforces current grants after deletion", async () => {
   fixture();
   const editor = await user("editor", ["a"]);

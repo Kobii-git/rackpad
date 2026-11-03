@@ -511,6 +511,7 @@ test("feature beta image checks retain the immediate published predecessor in bo
     "1.9.0-beta.3": "61",
     "1.9.0-beta.4": "61",
     "1.9.0-beta.5": "62",
+    "1.9.0-beta.6": "62",
   }[version];
   assert.ok(expectedSchema, "review the immediate published predecessor when preparing a new version");
   const { jobs } = workflow("docker-publish");
@@ -520,6 +521,8 @@ test("feature beta image checks retain the immediate published predecessor in bo
     assert.ok(step, `${name} must exercise the immediate published release`);
     assert.match(step.env.PRECEDING_RELEASE_IMAGE, /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/);
     assert.equal(step.env.PRECEDING_RELEASE_SCHEMA, expectedSchema);
+    if (version === "1.9.0-beta.6") assert.equal(step.env.PRECEDING_RELEASE_IMAGE,
+      "ghcr.io/kobii-git/rackpad@sha256:5ed4b1ad6481e2d9113740fa176caeb029bfa74cc665309490af64ca4487ae02");
     assert.ok(step.run.includes('--previous-image "$PRECEDING_RELEASE_IMAGE" --previous-schema "$PRECEDING_RELEASE_SCHEMA"'));
     if (precedingImage) assert.equal(step.env.PRECEDING_RELEASE_IMAGE, precedingImage);
     precedingImage = step.env.PRECEDING_RELEASE_IMAGE;

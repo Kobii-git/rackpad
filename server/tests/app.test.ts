@@ -56,6 +56,7 @@ const {
   parseArpScanOutput,
   parseNmapPingScanOutput,
   resetDiscoveryScanJobsForTests,
+  runDueDiscoveryScanSchedules,
   setDiscoveryScanRunnerForTests,
 } = await import("../routes/discovery.js");
 
@@ -8381,6 +8382,46 @@ test("discovery scan schedules can be managed per lab", async () => {
   assert.deepEqual(readJson(listAfterDeleteRes), []);
 });
 
+test("automatic discovery ticks run due schedules once and skip disabled or recent schedules", async () => {
+  const token = await bootstrapAdmin();
+  const due = await createDiscoveryScanScheduleForTest(token);
+  const recent = await createDiscoveryScanScheduleForTest(token, {
+    cidr: "10.43.0.0/30",
+  });
+  const disabled = await createDiscoveryScanScheduleForTest(token, {
+    cidr: "10.44.0.0/30",
+    enabled: false,
+  });
+  db.prepare("UPDATE discoveryScanSchedules SET lastRunAt=? WHERE id=?").run(
+    new Date().toISOString(),
+    recent.id,
+  );
+  const calls: string[] = [];
+  setDiscoveryScanRunnerForTests(async (_labId, cidr) => {
+    calls.push(cidr);
+    return makeDiscoveryScanResult();
+  });
+  await runDueDiscoveryScanSchedules();
+  await runDueDiscoveryScanSchedules();
+  assert.deepEqual(calls, [due.cidr]);
+  assert.equal(
+    (
+      db
+        .prepare("SELECT lastResult FROM discoveryScanSchedules WHERE id=?")
+        .get(due.id) as { lastResult: string }
+    ).lastResult,
+    "success",
+  );
+  assert.equal(
+    (
+      db
+        .prepare("SELECT lastRunAt FROM discoveryScanSchedules WHERE id=?")
+        .get(disabled.id) as { lastRunAt: string | null }
+    ).lastRunAt,
+    null,
+  );
+});
+
 test("running a discovery scan schedule starts a job and records success", async () => {
   const adminToken = await bootstrapAdmin();
   const scanResult = makeDiscoveryScanResult({
@@ -11486,7 +11527,10 @@ async function waitForDiscoveryScanJobStatus(
   );
 }
 
-async function createDiscoveryScanScheduleForTest(adminToken: string) {
+async function createDiscoveryScanScheduleForTest(
+  adminToken: string,
+  overrides: { cidr?: string; enabled?: boolean } = {},
+) {
   const createRes = await app.inject({
     method: "POST",
     url: "/api/discovery/schedules",
@@ -11499,6 +11543,7 @@ async function createDiscoveryScanScheduleForTest(adminToken: string) {
       cidr: "10.42.0.0/30",
       intervalMs: 120_000,
       enabled: true,
+      ...overrides,
     },
   });
   assert.equal(createRes.statusCode, 201);
