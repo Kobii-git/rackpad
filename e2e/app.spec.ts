@@ -2950,15 +2950,15 @@ test("all primary routes load without document overflow in both demo labs", asyn
 
   for (const labName of ["Home Lab", "Studio / Office"]) {
     const labButton = page.getByRole("button", {
-      name: new RegExp(`Lab: ${labName}`),
+      name: new RegExp(`Lab ${labName}`),
     });
     if (!(await labButton.count())) {
-      await page.getByRole("button", { name: /^Lab:/ }).click();
+      await page.getByRole("button", { name: /^Lab / }).click();
       await page
         .getByRole("button", { name: new RegExp(`^${labName}`) })
         .click();
       await expect(
-        page.getByRole("button", { name: new RegExp(`Lab: ${labName}`) }),
+        page.getByRole("button", { name: new RegExp(`Lab ${labName}`) }),
       ).toBeVisible();
     }
 
@@ -5961,7 +5961,7 @@ test("stack members support editing, keyboard ordering, assignment and shared ra
     await expect(workspace.getByTestId("stack-member")).toHaveCount(2);
     await expect(workspace).toContainText("aa:bb:cc:dd:00:11");
     const up = workspace.getByRole("button", {
-      name: "Move Core B up",
+      name: "Move up: Core B",
       exact: true,
     });
     await up.focus();
@@ -6659,7 +6659,7 @@ test("mixed-model220-port stacks retain applied modules, front/rear targets and 
     const before=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();expect(before.bindings).toHaveLength(220);
     expect(before.bindings.map((binding:{portId:string})=>binding.portId).sort()).toEqual([...canonical].sort());
     await page.reload();await expect(first.getByRole("checkbox",{name:"Applied uplink module",exact:true})).toBeChecked();
-    await first.getByRole("button",{name:"Move Model 1 down",exact:true}).click();
+    await first.getByRole("button",{name:"Move down: Model 1",exact:true}).click();
     const after=await(await request.get(`/api/physical-layouts/${stack.id}`,{headers})).json();
     expect(after.bindings).toEqual(expect.arrayContaining(before.bindings));
     await page.goto("/racks");await page.getByRole("button",{name:"Studio Beta",exact:true}).click();await page.getByRole("button",{name:new RegExp(`${room.name} 1R`)}).click();await page.getByRole("button",{name:"Both",exact:true}).click();await page.getByRole("button",{name:"Cables",exact:true}).click();

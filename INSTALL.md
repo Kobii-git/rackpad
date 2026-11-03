@@ -1,6 +1,6 @@
 # Rackpad Installation Guide
 
-Current stable release: `v1.8.3`
+Current stable release: `v1.8.6`
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm
 the immutable tag and published artifacts before installation.
 
@@ -19,7 +19,7 @@ without cloning the repo, or clone the repo and build it yourself.
 ## Main Branch Or Version Tag?
 
 - `main` is the stable source branch and is fine for cloning the latest stable code.
-- `RACKPAD_TAG=1.8.3` pins the Docker image to a known release. Git tags use
+- `RACKPAD_TAG=1.8.6` pins the Docker image to a known release. Git tags use
   the `v` prefix, but Docker image tags do not.
 - `RACKPAD_TAG=latest` follows the newest published stable GHCR image and is
   convenient for quick installs or test labs.
