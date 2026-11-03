@@ -4323,6 +4323,33 @@ async function refreshDiscoveryScanSchedules() {
   return schedules;
 }
 
+let discoveryRefreshRequest = 0;
+export async function refreshDiscoveryInventory(isActive: () => boolean) {
+  const labId = state.lab.id;
+  const token = getAuthToken();
+  const previousDevices = state.discoveredDevices;
+  const previousSchedules = state.discoveryScanSchedules;
+  const request = ++discoveryRefreshRequest;
+  const [devices, schedules] = await Promise.all([
+    api.getDiscoveredDevices({ labId }),
+    api.getDiscoveryScanSchedules({ labId }),
+  ]);
+  if (
+    !isActive() ||
+    state.lab.id !== labId ||
+    getAuthToken() !== token ||
+    state.discoveredDevices !== previousDevices ||
+    state.discoveryScanSchedules !== previousSchedules ||
+    request !== discoveryRefreshRequest
+  )
+    return;
+  setState((prev) => ({
+    ...prev,
+    discoveredDevices: sortDiscoveredDevices(devices),
+    discoveryScanSchedules: sortDiscoveryScanSchedules(schedules),
+  }));
+}
+
 export async function scanDiscoveredSubnet(
   cidr: string,
   onJobUpdate?: (job: DiscoveryScanJob) => void,

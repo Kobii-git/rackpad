@@ -1716,6 +1716,11 @@ export const api = {
     entityId?: string;
     entityType?: string;
     limit?: number;
+    labId?: string;
+    action?: string;
+    search?: string;
+    beforeTs?: string;
+    beforeId?: string;
   }) {
     return request<AuditEntry[]>("/audit-log", undefined, params);
   },

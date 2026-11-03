@@ -2,13 +2,33 @@ import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
 import { requireAuth } from "../lib/auth.js";
 import { canReadLab, canWriteLab } from "../lib/lab-access.js";
-import { asObject, parseLimit, requiredString } from "../lib/validation.js";
+import {
+  asObject,
+  parseLimit,
+  requiredString,
+  ValidationError,
+} from "../lib/validation.js";
 import { parseAuditLabIds, resolveAuditLabIds } from "../lib/audit-scope.js";
 import { writeAuditLogEntry } from "../lib/audit-log.js";
 
+// SQLite's built-in lower() folds ASCII only. Match the existing browser search
+// for translated summaries and actor names as well as English action names.
+db.function("audit_lower", { deterministic: true }, (value: unknown) =>
+  typeof value === "string" ? value.toLowerCase() : null,
+);
+
 export const auditRoutes: FastifyPluginAsync = async (app) => {
   app.get<{
-    Querystring: { entityId?: string; entityType?: string; limit?: string };
+    Querystring: {
+      entityId?: string;
+      entityType?: string;
+      limit?: string;
+      labId?: string;
+      action?: string;
+      search?: string;
+      beforeTs?: string;
+      beforeId?: string;
+    };
   }>("/", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const admin = req.authUser.role === "admin";
@@ -24,7 +44,38 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
       sql += " AND entityType = ?";
       params.push(req.query.entityType);
     }
-    sql += ` ORDER BY ts DESC LIMIT ${parseLimit(req.query.limit, 100, 500)}`;
+    if (req.query.labId !== undefined) {
+      const labId = requiredString(req.query, "labId", { maxLength: 120 });
+      sql +=
+        " AND EXISTS (SELECT 1 FROM json_each(auditLog.labIds) WHERE value = ?)";
+      params.push(labId);
+    }
+    if (req.query.action !== undefined) {
+      sql += " AND action = ?";
+      params.push(requiredString(req.query, "action", { maxLength: 120 }));
+    }
+    if (req.query.search !== undefined) {
+      sql +=
+        " AND instr(audit_lower(summary || ' ' || action || ' ' || user || ' ' || entityType || ' ' || entityId || ' ' || ts), ?) > 0";
+      params.push(
+        requiredString(req.query, "search", { maxLength: 500 }).toLowerCase(),
+      );
+    }
+    if (
+      (req.query.beforeTs !== undefined) !==
+      (req.query.beforeId !== undefined)
+    ) {
+      throw new ValidationError(
+        "beforeTs and beforeId must be supplied together.",
+      );
+    }
+    if (req.query.beforeTs !== undefined) {
+      const ts = requiredString(req.query, "beforeTs", { maxLength: 80 });
+      const id = requiredString(req.query, "beforeId", { maxLength: 120 });
+      sql += " AND (ts < ? OR (ts = ? AND id < ?))";
+      params.push(ts, ts, id);
+    }
+    sql += ` ORDER BY ts DESC, id DESC LIMIT ${parseLimit(req.query.limit, 100, 500)}`;
     const rows = (
       db.prepare(sql).all(...params) as Array<Record<string, unknown>>
     ).map((row) => ({ ...row, labIds: parseAuditLabIds(row.labIds) }));
