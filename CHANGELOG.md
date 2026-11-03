@@ -6,6 +6,20 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep the visible stack-member move action in its accessible name for speech
+  input and screen readers.
+- Translate the front/rear rack-picture empty states without embedding raw
+  English face names.
+- Wait for stack-member controls and fonts before screenshot comparisons while
+  retaining exact image equality and accessibility checks.
+
+### Changed
+
+- Update compatible runtime and validation dependencies and the CodeQL evidence
+  uploader.
+
 ## [1.8.6] - 2026-10-29
 
 ### Fixed

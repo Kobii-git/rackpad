@@ -141,14 +141,14 @@ export function StackMembersPanel({
                 <>
                   <Button
                     disabled={busy || index === 0}
-                    aria-label={t("Move {label} up", { label: member.name })}
+                    aria-label={t("{value1}: {name}", { value1: t("Move up"), name: member.name })}
                     onClick={() => move(index, -1)}
                   >
                     {t("Move up")}
                   </Button>
                   <Button
                     disabled={busy || index === members.length - 1}
-                    aria-label={t("Move {label} down", { label: member.name })}
+                    aria-label={t("{value1}: {name}", { value1: t("Move down"), name: member.name })}
                     onClick={() => move(index, 1)}
                   >
                     {t("Move down")}

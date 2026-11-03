@@ -164,7 +164,8 @@ export function RackElevationEquipmentFrame({
         interactive ? (hasPortControls || children ? "group" : "button") : undefined
       }
       tabIndex={interactive ? 0 : undefined}
-      aria-label={interactive ? device.hostname : undefined}
+      aria-label={interactive && (hasPortControls || children) ? device.hostname : undefined}
+      data-hostname={device.hostname}
       data-rack-cabling-interactive={interactive ? "true" : undefined}
       data-rack-cabling-equipment={interactive ? "true" : undefined}
       data-highlighted={selected ? "true" : "false"}

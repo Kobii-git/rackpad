@@ -184,6 +184,7 @@ export function DeviceName({
       >
         {name}
       </span>
+      {!visible && <span className="sr-only">{name}</span>}
       {reveal &&
         createPortal(
           <span

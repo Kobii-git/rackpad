@@ -304,7 +304,6 @@ function DeviceTile({
         <motion.button
           data-testid="rack-device-tile"
           data-device-name-host
-          aria-label={device.hostname}
           data-height-u={heightU}
           data-hostname={device.hostname}
           initial={{ opacity: 0, x: -4 }}

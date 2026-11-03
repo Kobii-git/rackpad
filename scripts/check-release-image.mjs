@@ -258,7 +258,7 @@ try {
   assert.equal(docker(["info", "--format", "{{.OSType}}"] ).stdout.trim(), "linux");
   for (const reference of new Set([image, previousImage])) {
     if (!localImage.test(reference)) docker(["pull", "--platform", platform, reference], { timeout: 600_000 });
-    const details = JSON.parse(docker(["image", "inspect", reference]).stdout)[0];
+    const details = JSON.parse(docker(["image", "inspect", "--platform", platform, reference]).stdout)[0];
     assert.equal(`${details.Os}/${details.Architecture}`, platform);
     if (reference === image) assert.equal(details.Config.Labels["org.opencontainers.image.revision"], revision);
   }
