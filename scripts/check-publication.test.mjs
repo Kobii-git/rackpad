@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { runInNewContext } from "node:vm";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -444,4 +445,77 @@ test("CodeQL preflight observes actual committed Git evidence and dirty server s
   git("add", "server");
   git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "Changed");
   assert(codeqlReviewProblems(readSnmpReviewContext(root)).some(problem => problem.includes("source hash differs")));
+});
+
+test("published smoke requires platform-aware Docker before image work", () => {
+  const steps = workflow("docker-publish").jobs.smoke.steps;
+  const setup = steps.findIndex(step => step.uses === "docker/setup-docker-action@v5");
+  const preflight = steps.findIndex(step => step.run === "node scripts/check-docker-platform.mjs");
+  const qemu = steps.findIndex(step => step.uses?.startsWith("docker/setup-qemu-action@"));
+  assert.ok(setup >= 0 && setup < preflight && preflight < qemu);
+  assert.equal(steps[setup].with.version, "latest");
+  assert.equal(steps[setup].with.channel, "stable");
+  assert.equal(steps[setup].with["tcp-port"], undefined);
+  assert.equal(JSON.parse(steps[setup].with["daemon-config"]).features["containerd-snapshotter"], true);
+  assert.equal(steps[preflight]["continue-on-error"], undefined);
+
+  const source = readFileSync(new URL("./check-docker-platform.mjs", import.meta.url), "utf8")
+    .replace(/^import .*;\n/gm, "");
+  const run = (help, versions, failed = false) => runInNewContext(source, {
+    assert, console: { log() {} },
+    execFileSync: (command, args) => {
+      assert.equal(command, "docker");
+      if (failed) throw new Error("Synthetic daemon failure");
+      return args[0] === "version" ? versions : help;
+    },
+  });
+  run("--platform string", "1.49 1.49");
+  run("--platform string", "1.54 1.54");
+  assert.throws(() => run("no platform option", "1.54 1.54"), /must support --platform/);
+  for (const versions of ["1.48 1.54", "1.54 1.48", "1.54", "invalid", "1.54 1.54 extra"]) {
+    assert.throws(() => run("--platform string", versions), /API|versions/);
+  }
+  assert.throws(() => run("--platform string", "1.54 1.54", true), /could not inspect/);
+});
+
+test("published smoke selects each image platform and rejects wrong architecture or revision", () => {
+  const source = readFileSync(new URL("./check-release-image.mjs", import.meta.url), "utf8")
+    .replace(/^import .*;\n/gm, "");
+  const image = "ghcr.io/kobii-git/rackpad@sha256:" + "a".repeat(64);
+  const previousImage = "ghcr.io/kobii-git/rackpad@sha256:" + "b".repeat(64);
+  const revision = "c".repeat(40);
+  const ready = new Error("Metadata verified; disposable fixture startup follows.");
+  const run = (platform, badArchitecture, badRevision = false) => runInNewContext(source, {
+    assert, randomUUID: () => "synthetic-fixture", console: { log() {}, error() {} },
+    process: { argv: ["node", "check-release-image.mjs", "--image", image,
+      "--previous-image", previousImage, "--platform", platform, "--revision", revision] },
+    spawnSync: (command, args) => {
+      assert.equal(command, "docker");
+      if (args[0] === "info") return { status: 0, stdout: "linux\n" };
+      if (args[0] === "image" && args[1] === "inspect") {
+        const selected = args.indexOf("--platform");
+        // Docker's unqualified index response has no Os/Architecture fields.
+        const details = selected < 0
+          ? { Descriptor: { mediaType: "application/vnd.oci.image.index.v1+json" } }
+          : {
+            Os: "linux",
+            Architecture: args.at(-1) === badArchitecture
+              ? (platform === "linux/amd64" ? "arm64" : "amd64")
+              : args[selected + 1].split("/")[1],
+            Config: { Labels: { "org.opencontainers.image.revision":
+              badRevision && args.at(-1) === image ? "d".repeat(40) : revision } },
+          };
+        return { status: 0, stdout: JSON.stringify([details]) };
+      }
+      if (args[0] === "network" && args[1] === "create") throw ready;
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+  for (const platform of ["linux/amd64", "linux/arm64"]) {
+    assert.throws(() => run(platform), error => error === ready);
+    for (const reference of [image, previousImage]) {
+      assert.throws(() => run(platform, reference), error => error.code === "ERR_ASSERTION");
+    }
+    assert.throws(() => run(platform, undefined, true), error => error.code === "ERR_ASSERTION");
+  }
 });
