@@ -104,6 +104,11 @@ test("discovery freshness updates on navigation, focus and polling without losin
   await expect(row).toContainText(phase);
   await expect(hostname).toHaveValue("unsaved-hostname");
   await page.locator('a[href="/"]').first().click();
+  // A completed click can precede the route commit and Discovery's cleanup.
+  await expect(
+    page.getByRole("heading", { name: "Dashboard", exact: true }),
+  ).toBeVisible();
+  await expect(inspector).toHaveCount(0);
   const count = requests;
   await page.clock.runFor(60_100);
   expect(requests).toBe(count);
