@@ -6,10 +6,12 @@ import {
   Boxes,
   Check,
   Copy,
+  Download,
   MousePointer2,
   Plus,
   Save,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
@@ -38,6 +40,12 @@ import {
   type PortBlockDirection,
 } from "@/lib/hardware-template-builder";
 import { createDeviceTypeRecord, upsertPhysicalLayoutRecord, useStore } from "@/lib/store";
+import {
+  exportHardwareTemplate,
+  HardwareTemplateFileError,
+  MAX_TEMPLATE_FILE_BYTES,
+  prepareHardwareTemplateImport,
+} from "@/lib/hardware-template-sharing";
 import type {
   DeviceTypeDefinition,
   HardwareTemplateDefault,
@@ -59,6 +67,7 @@ import {
 import { Input } from "@/components/ui/Input";
 import { TemplateStructureEditor } from "./TemplateStructureEditor";
 import { PhysicalPortSlotEditor } from "./PhysicalPortSlotEditor";
+import { FaceAppearanceControls } from "./FaceAppearanceControls";
 
 const NEW_TEMPLATE = "__new_hardware_template__";
 
@@ -91,6 +100,8 @@ export function HardwareTemplateBuilder({
   const { t } = useI18n();
   const templateNameRef = useRef<HTMLInputElement>(null);
   const focusCopyName = useRef<string | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const importPending = useRef(false);
   const devices = useStore((state) => state.devices);
   const [templates, setTemplates] = useState<HardwareTemplateV1[]>([]);
   const [defaults, setDefaults] = useState<HardwareTemplateDefault[]>([]);
@@ -119,6 +130,13 @@ export function HardwareTemplateBuilder({
   const [customTypeParent, setCustomTypeParent] = useState("other");
   const [creatingType, setCreatingType] = useState(false);
   const [typeError, setTypeError] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importDeviceType, setImportDeviceType] = useState(selectedDeviceType ?? "other");
+  const [importedName, setImportedName] = useState("");
+
+  useEffect(() => {
+    if (selectedDeviceType) setImportDeviceType(selectedDeviceType);
+  }, [selectedDeviceType]);
 
   const selection = { face, selectedSlotId, selectedItem, selectedElementId, moduleSlotId, moduleIds, editingBlockKey, block };
   const history = useTemplateHistory(() => createStarterTemplate("server-2u"), selection, next => {
@@ -309,6 +327,47 @@ export function HardwareTemplateBuilder({
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  function handleExport() {
+    if (!selectedTemplate) return;
+    const { filename, content } = exportHardwareTemplate(selectedTemplate);
+    const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = "none";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  async function handleImport(file: File) {
+    if (importPending.current) return;
+    setError("");
+    setImportedName("");
+    if (file.size > MAX_TEMPLATE_FILE_BYTES) {
+      setError(t("Template files must be 10 MB or smaller."));
+      return;
+    }
+    importPending.current = true;
+    setImporting(true);
+    try {
+      const body = prepareHardwareTemplateImport(await file.text(), importDeviceType, templates);
+      const imported = await api.importHardwareTemplate(body);
+      // Keep the current draft and history intact, including edits made while
+      // the file was being read. Only the validated new library entry is added.
+      setTemplates((current) => [...current.filter((entry) => entry.id !== imported.id), imported]);
+      setImportedName(imported.name);
+    } catch (nextError) {
+      setError(nextError instanceof HardwareTemplateFileError
+        ? t("Choose a Rackpad hardware template JSON file (schema version 1).")
+        : nextError instanceof Error ? nextError.message : t("Could not import hardware template."));
+    } finally {
+      importPending.current = false;
+      setImporting(false);
     }
   }
 
@@ -705,6 +764,26 @@ export function HardwareTemplateBuilder({
                 </Button>
               )}
             </div>
+            <div data-testid="hardware-template-sharing" className="space-y-2 rounded-[var(--radius-sm)] border border-[var(--border-default)] p-3">
+              <Button size="sm" variant="outline" disabled={!selectedTemplate || saving || creatingType || loading} onClick={handleExport}>
+                <Download />{t("Export saved template")}
+              </Button>
+              <Field label={t("Import device type")}>
+                <select className="rk-control h-8 w-full px-2 text-sm" value={importDeviceType} disabled={importing || saving || creatingType || loading} onChange={(event) => setImportDeviceType(event.target.value)}>
+                  {deviceTypes.map((type) => <option key={type.id} value={type.id}>{localizedDeviceTypeLabel(type, t)}</option>)}
+                </select>
+              </Field>
+              <input ref={importFileRef} type="file" accept="application/json,.json" aria-label={t("Import template")} className="hidden" onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void handleImport(file);
+              }} />
+              <Button size="sm" variant="outline" disabled={importing || saving || creatingType || loading || !deviceTypes.some((type) => type.id === importDeviceType)} onClick={() => importFileRef.current?.click()}>
+                <Upload />{importing ? t("Loading...") : t("Import template")}
+              </Button>
+              <p className="text-xs text-[var(--text-muted)]">{t("Import saves a new copy. Select it from Templates to edit.")}</p>
+              {importedName && <p role="status" className="break-words text-xs">{t("Imported template: {name}", { name: importedName })}</p>}
+            </div>
             {selectedDeviceType && selectedId !== NEW_TEMPLATE && (
               <div className="flex flex-wrap items-center gap-2">
                 <Button
@@ -785,6 +864,7 @@ export function HardwareTemplateBuilder({
                       {previewFace === "front" ? t("Front") : t("Rear")}
                     </div>
                   )}
+                  <FaceAppearanceControls definition={draft[previewFace]} disabled={!editable} onChange={definition => setDraft(current => ({...current, [previewFace]: definition}))} />
                   <PhysicalPortSlotEditor
                     layout={draft}
                     face={previewFace}

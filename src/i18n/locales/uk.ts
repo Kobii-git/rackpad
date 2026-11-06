@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const uk = {
+  "Chassis skin": "Оформлення корпусу",
+  "Graphite": "Графіт",
+  "Silver": "Срібло",
+  "Ivory": "Слонова кістка",
+  "Rotation keeps the assigned rack footprint.": "Поворот зберігає виділене місце в стійці.",
+  "Export saved template": "Експорт збереженого шаблону",
+  "Import template": "Імпорт шаблону",
+  "Import device type": "Тип пристрою для імпорту",
+  "Import saves a new copy. Select it from Templates to edit.": "Імпорт зберігає нову копію. Для редагування виберіть її зі списку шаблонів.",
+  "Imported template: {name}": "Імпортований шаблон: {name}",
+  "Template files must be 10 MB or smaller.": "Розмір файлів шаблонів не повинен перевищувати 10 МБ.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "Виберіть JSON-файл шаблону обладнання Rackpad (версія схеми 1).",
+  "Could not import hardware template.": "Не вдалося імпортувати шаблон обладнання.",
   "Allow unencrypted NUT transport": "Дозволити незашифроване з’єднання NUT",
 
   "External health": "Зовнішній стан",
@@ -1121,7 +1134,7 @@ export const uk = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "Виберіть існуючий діапазон вище або створіть новий для керування зарезервованим простором ID.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "Використайте дію виділення, щоб почати резервувати та документувати ID у цьому діапазоні.",
   "Pick a cable from the inventory table to edit its metadata.": "Виберіть кабель з таблиці інвентарю для редагування метаданих.",
-  "Broaden the search to see more of the loaded activity log.": "Розширте пошук, щоб побачити більше завантаженого журналу активності.",
+  "Broaden the search or choose a different action.": "Розширте пошук або виберіть іншу дію.",
   "Click a device, cable, or port to inspect its topology context.": "Натисніть пристрій, кабель або порт, щоб переглянути топологічний контекст.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "Створіть першу стійку або почніть із додавання окремого обладнання кімнати як gear поза стійкою.",
   "Assign a rack to this room from the rack editor.": "Призначте стійку цій кімнаті в редакторі стійок.",
@@ -1508,7 +1521,7 @@ export const uk = {
   "shared parent address": "спільна батьківська адреса",
   "Shelf": "полиця",
   "Shelf device layout": "Схема пристрою стелажа",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "Показано останню завантажену історію перевірок для цієї лабораторії. Діяльність щодо пристрою також доступна на сторінці кожного пристрою.",
+  "Showing audit history for this lab. Counts include all matching entries.": "Історія аудиту цієї лабораторії. Лічильники враховують усі відповідні записи.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

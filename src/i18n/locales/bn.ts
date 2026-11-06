@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const bn = {
+  "Chassis skin": "চ্যাসিসের আবরণ",
+  "Graphite": "গ্রাফাইট",
+  "Silver": "রুপালি",
+  "Ivory": "হাতির দাঁতের রং",
+  "Rotation keeps the assigned rack footprint.": "ঘোরালেও র‍্যাকে বরাদ্দ স্থান অপরিবর্তিত থাকে।",
+  "Export saved template": "সংরক্ষিত টেমপ্লেট রপ্তানি করুন",
+  "Import template": "টেমপ্লেট আমদানি করুন",
+  "Import device type": "আমদানির ডিভাইসের ধরন",
+  "Import saves a new copy. Select it from Templates to edit.": "আমদানি একটি নতুন অনুলিপি সংরক্ষণ করে। সম্পাদনা করতে টেমপ্লেট তালিকা থেকে এটি বাছুন।",
+  "Imported template: {name}": "আমদানি করা টেমপ্লেট: {name}",
+  "Template files must be 10 MB or smaller.": "টেমপ্লেট ফাইলের আকার সর্বোচ্চ 10 MB হতে হবে।",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "একটি Rackpad হার্ডওয়্যার টেমপ্লেট JSON ফাইল বাছুন (স্কিমা সংস্করণ 1)।",
+  "Could not import hardware template.": "হার্ডওয়্যার টেমপ্লেট আমদানি করা যায়নি।",
   "Allow unencrypted NUT transport": "এনক্রিপশনহীন NUT পরিবহন অনুমোদন করুন",
 
   "External health": "বাহ্যিক স্বাস্থ্য",
@@ -1121,7 +1134,7 @@ export const bn = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "উপরে বিদ্যমান পরিসর বেছে নিন বা সংরক্ষিত ID স্থান পরিচালনার জন্য নতুন তৈরি করুন।",
   "Use the allocate action to start reserving and documenting IDs in this range.": "এই পরিসরে ID সংরক্ষণ ও নথিভুক্তি শুরু করতে allocate ক্রিয়া ব্যবহার করুন।",
   "Pick a cable from the inventory table to edit its metadata.": "মেটাডেটা সম্পাদনার জন্য ইনভেন্টরি টেবিল থেকে কেবল বেছে নিন।",
-  "Broaden the search to see more of the loaded activity log.": "লোড করা কার্যকলাপ লগের আরও অংশ দেখতে অনুসন্ধান প্রসারিত করুন।",
+  "Broaden the search or choose a different action.": "অনুসন্ধান বিস্তৃত করুন বা অন্য একটি কার্যক্রম বেছে নিন।",
   "Click a device, cable, or port to inspect its topology context.": "টপোলজি প্রসঙ্গ দেখতে ডিভাইস, কেবল বা পোর্টে ক্লিক করুন।",
   "Create your first rack or start by adding loose room tech as unracked gear.": "প্রথম র্যাক তৈরি করুন বা ঘরের আলাদা যন্ত্র unracked গিয়ার হিসেবে যোগ করুন।",
   "Assign a rack to this room from the rack editor.": "র্যাক সম্পাদক থেকে এই ঘরে র্যাক বরাদ্দ করুন।",
@@ -1508,7 +1521,7 @@ export const bn = {
   "shared parent address": "ভাগ করা পিতামাতার ঠিকানা",
   "Shelf": "তাক",
   "Shelf device layout": "শেল্ফ ডিভাইস লেআউট",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "এই ল্যাবের জন্য সর্বশেষ লোড করা অডিট ইতিহাস দেখানো হচ্ছে। ডিভাইস-নির্দিষ্ট কার্যকলাপ প্রতিটি ডিভাইস পৃষ্ঠা থেকে উপলব্ধ.",
+  "Showing audit history for this lab. Counts include all matching entries.": "এই ল্যাবের অডিট ইতিহাস দেখানো হচ্ছে। গণনায় সব মিলে যাওয়া এন্ট্রি অন্তর্ভুক্ত রয়েছে।",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

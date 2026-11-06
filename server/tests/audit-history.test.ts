@@ -39,7 +39,7 @@ after(async () => {
   db.close();
   rmSync(directory, { recursive: true, force: true });
 });
-async function user(name: string, labs: string[]) {
+async function user(name: string, labs: string[], role = "editor") {
   const res = await app.inject({
     method: "POST",
     url: "/api/users",
@@ -48,7 +48,7 @@ async function user(name: string, labs: string[]) {
       username: name,
       displayName: name,
       password,
-      role: "editor",
+      role,
       labAccess: labs.map((labId) => ({ labId, role: "editor" })),
     },
   });
@@ -264,6 +264,170 @@ test("audit pagination rejects incomplete cursors and oversized filters", async 
   ]) {
     const res = await app.inject({ url: `/api/audit-log?${query}`, headers });
     assert.equal(res.statusCode, 400, res.body);
+  }
+});
+
+test("audit summary counts the complete matching lab history and lists all lab actions", async () => {
+  const insert = db.prepare(
+    "INSERT INTO auditLog(id,ts,user,action,entityType,entityId,summary,labIds) VALUES(?,?,?,?,?,?,?,?)",
+  );
+  db.transaction(() => {
+    for (let i = 0; i < 605; i++)
+      insert.run(
+        `device-${i}`,
+        "2026-03-01",
+        "alice",
+        "device.update",
+        "Device",
+        "one",
+        "Fixture",
+        '["a"]',
+      );
+    insert.run(
+      "old-port",
+      "2026-01-01",
+      "bob",
+      "port.link",
+      "PortLink",
+      "gone",
+      "ÉCOLE %_",
+      '["a"]',
+    );
+    insert.run(
+      "cross-lab",
+      "2026-01-01",
+      "bob",
+      "port.unlink",
+      "PortLink",
+      "gone",
+      "Cross lab",
+      '["a","b"]',
+    );
+    insert.run(
+      "lookalike",
+      "2026-03-01",
+      "alice",
+      "deviceXupdate",
+      "Device",
+      "one",
+      "Fixture",
+      '["a"]',
+    );
+    insert.run(
+      "other-lab",
+      "2026-03-01",
+      "eve",
+      "other.private",
+      "Device",
+      "two",
+      "Other lab",
+      '["b"]',
+    );
+    insert.run(
+      "unscoped",
+      "2026-03-01",
+      "admin",
+      "legacy.private",
+      "Device",
+      "gone",
+      "Unscoped",
+      null,
+    );
+  })();
+  const get = async (query: string) => {
+    const res = await app.inject({
+      url: `/api/audit-log/summary?${query}`,
+      headers,
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    return res.json();
+  };
+  const actions = [
+    "device.update",
+    "deviceXupdate",
+    "port.link",
+    "port.unlink",
+  ];
+  assert.deepEqual(await get("labId=a"), {
+    entries: 608,
+    users: 2,
+    devices: 605,
+    ports: 2,
+    actions,
+  });
+  assert.deepEqual(await get("labId=a&action=port.unlink"), {
+    entries: 1,
+    users: 1,
+    devices: 0,
+    ports: 1,
+    actions,
+  });
+  for (const search of ["école", "%_"]) {
+    assert.deepEqual(
+      await get(`labId=a&search=${encodeURIComponent(search)}`),
+      { entries: 1, users: 1, devices: 0, ports: 1, actions },
+    );
+  }
+  assert.deepEqual(await get("labId=a&search=missing"), {
+    entries: 0,
+    users: 0,
+    devices: 0,
+    ports: 0,
+    actions,
+  });
+  assert.equal((await get("labId=a&action=' OR 1=1--")).entries, 0);
+  assert.deepEqual(await get("labId=b"), {
+    entries: 2,
+    users: 2,
+    devices: 0,
+    ports: 1,
+    actions: ["other.private", "port.unlink"],
+  });
+  assert.deepEqual(await get("labId=missing"), {
+    entries: 0,
+    users: 0,
+    devices: 0,
+    ports: 0,
+    actions: [],
+  });
+  // Existing consumers retain their bounded array response and entity guards.
+  const rows = await app.inject({
+    url: "/api/audit-log?labId=a&limit=100",
+    headers,
+  });
+  assert.equal(rows.json().length, 100);
+  assert.equal(
+    new Set(rows.json().map((row: { user: string }) => row.user)).size,
+    1,
+  );
+});
+
+test("audit summary requires an administrator and a valid explicit lab scope", async () => {
+  const url = "/api/audit-log/summary?labId=a";
+  assert.equal((await app.inject({ url })).statusCode, 401);
+  for (const role of ["editor", "viewer"]) {
+    const account = await user(`summary-${role}`, ["a", "b"], role);
+    for (const suffix of ["", "&entityType=Device&entityId=one"]) {
+      const denied = await app.inject({
+        url: `${url}${suffix}`,
+        headers: account.headers,
+      });
+      assert.equal(denied.statusCode, 403, denied.body);
+    }
+  }
+  for (const query of [
+    "",
+    "labId=",
+    `labId=${"a".repeat(121)}`,
+    "labId=a&labId=b",
+    `labId=a&action=${"a".repeat(121)}`,
+    `labId=a&search=${"a".repeat(501)}`,
+  ]) {
+    const invalid = await app.inject({
+      url: `/api/audit-log/summary?${query}`,
+      headers,
+    });
+    assert.equal(invalid.statusCode, 400, invalid.body);
   }
 });
 

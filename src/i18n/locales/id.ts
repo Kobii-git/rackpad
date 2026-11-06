@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const id = {
+  "Chassis skin": "Tampilan sasis",
+  "Graphite": "Grafit",
+  "Silver": "Perak",
+  "Ivory": "Gading",
+  "Rotation keeps the assigned rack footprint.": "Rotasi mempertahankan ruang rak yang ditetapkan.",
+  "Export saved template": "Ekspor templat tersimpan",
+  "Import template": "Impor templat",
+  "Import device type": "Jenis perangkat untuk impor",
+  "Import saves a new copy. Select it from Templates to edit.": "Impor menyimpan salinan baru. Pilih dari Templat untuk mengeditnya.",
+  "Imported template: {name}": "Templat yang diimpor: {name}",
+  "Template files must be 10 MB or smaller.": "Ukuran berkas templat maksimal 10 MB.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "Pilih berkas JSON templat perangkat keras Rackpad (versi skema 1).",
+  "Could not import hardware template.": "Tidak dapat mengimpor templat perangkat keras.",
   "Allow unencrypted NUT transport": "Izinkan transportasi NUT tanpa enkripsi",
 
   "External health": "Kesehatan eksternal",
@@ -1121,7 +1134,7 @@ export const id = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "Pilih rentang yang ada di atas atau buat baru untuk mengelola ruang ID yang dipesan.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "Gunakan aksi alokasi untuk mulai memesan dan mendokumentasikan ID dalam rentang ini.",
   "Pick a cable from the inventory table to edit its metadata.": "Pilih kabel dari tabel inventaris untuk mengedit metadatanya.",
-  "Broaden the search to see more of the loaded activity log.": "Perluas pencarian untuk melihat lebih banyak log aktivitas yang dimuat.",
+  "Broaden the search or choose a different action.": "Perluas pencarian atau pilih tindakan lain.",
   "Click a device, cable, or port to inspect its topology context.": "Klik perangkat, kabel, atau port untuk memeriksa konteks topologi.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "Buat rak pertama atau mulai dengan menambahkan perangkat ruangan terpisah sebagai gear di luar rak.",
   "Assign a rack to this room from the rack editor.": "Tetapkan rak ke ruangan ini dari editor rak.",
@@ -1508,7 +1521,7 @@ export const id = {
   "shared parent address": "alamat orang tua bersama",
   "Shelf": "Rak",
   "Shelf device layout": "Tata letak perangkat rak",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "Menampilkan riwayat audit terbaru yang dimuat untuk lab ini. Aktivitas spesifik perangkat juga tersedia dari setiap halaman perangkat.",
+  "Showing audit history for this lab. Counts include all matching entries.": "Menampilkan riwayat audit lab ini. Hitungan mencakup semua entri yang cocok.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

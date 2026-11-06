@@ -291,7 +291,7 @@ export type PhysicalLayoutStatus =
   | "needs-mapping"
   | "invalid";
 
-export type PhysicalFacePrimitiveV1 =
+export type PhysicalFacePrimitiveV1 = (
   | {
       kind: "panel" | "handle" | "vent" | "bay" | "display" | "outlet";
       id: string;
@@ -319,7 +319,7 @@ export type PhysicalFacePrimitiveV1 =
       y: number;
       text: string;
       align?: "start" | "middle" | "end";
-    };
+    }) & { projection?: import("../../server/lib/physical-face-projection").FaceArtworkProjection };
 
 export interface ArtworkReference {
   elementId: string;
@@ -331,6 +331,8 @@ export interface FaceDefinitionV1 {
   width: 1000;
   height: number;
   shape?: "round";
+  skin?: "graphite" | "silver" | "ivory";
+  rotation?: 0 | 90 | 180 | 270;
   elements: PhysicalFacePrimitiveV1[];
   artworkOrder?: ArtworkReference[];
 }
@@ -1076,6 +1078,14 @@ export interface AuditEntry {
   entityType: string;
   entityId: ID;
   summary: string;
+}
+
+export interface AuditLogSummary {
+  entries: number;
+  users: number;
+  devices: number;
+  ports: number;
+  actions: string[];
 }
 
 export type LabRole = "editor" | "viewer";

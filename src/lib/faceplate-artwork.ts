@@ -1,4 +1,13 @@
 import type { PhysicalFacePrimitiveV1 } from "./types";
+import { readFaceArtworkProjection } from "../../server/lib/physical-face-projection";
+
+export function projectedFaceArtwork(primitive: PhysicalFacePrimitiveV1) {
+  const projection = readFaceArtworkProjection(primitive.projection, primitive.kind);
+  return projection ? {
+    primitive: {...primitive, ...projection.geometry, projection: undefined} as PhysicalFacePrimitiveV1,
+    transform: `matrix(${projection.matrix.join(" ")})`,
+  } : undefined;
+}
 
 /** Original decorative paths in the primitive's own coordinates. This same
  * detail is consumed by the interactive faceplate and SVG/PNG export. */

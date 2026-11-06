@@ -9,6 +9,7 @@ separately.
 | --- | --- | --- |
 | TypeScript/React lint | `lint` | Canonical, non-mutating, zero warnings allowed |
 | Prove lint rejects TSX | `lint:proof` | Canonical gate-coverage proof |
+| Dependency glob safety | `check:dependencies` | Cancellation, bounded pattern expansion, file matching and optional TypeScript project-service compatibility |
 | Client types | `typecheck:client` | Canonical targeted check |
 | Server types | `typecheck:server` | Canonical targeted check |
 | Test/E2E types | `typecheck:tests` | Canonical targeted check |

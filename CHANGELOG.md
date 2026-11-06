@@ -6,6 +6,26 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## 1.9.0-beta.7
+
+### Added
+
+- Export saved hardware templates as portable JSON and import validated new
+  copies mapped to local device types, preserving existing drafts and devices (#164).
+- Choose Graphite, Silver or Ivory chassis skins and quarter-turn face
+  orientations in template and device layout editing, including directly mounted
+  equipment. Cable anchors, editing, stacks and SVG/PNG exports follow the faces (#164).
+
+### Fixed
+
+- Compute audit counts across every stored event matching the active lab and
+  filters, offer complete action choices and automatically load older matching
+  pages while scrolling (#241).
+- Update the static plugin and scoped development-tool glob matchers to patched
+  releases, with cancellation, expansion-bound and matching compatibility checks.
+
+See the [beta test and upgrade notes](docs/releases/v1.9.0-beta.7.md).
+
 ## 1.9.0-beta.6
 
 ### Fixed

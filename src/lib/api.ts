@@ -4,6 +4,7 @@ import type {
   AdminIntegrityReport,
   AppUser,
   AuditEntry,
+  AuditLogSummary,
   AuthSession,
   Device,
   DeviceStackMember,
@@ -955,6 +956,15 @@ export const api = {
     });
   },
 
+  // File contents are untrusted. The existing create route validates and
+  // normalizes them before returning a template safe for editor previews.
+  importHardwareTemplate(body: Record<string, unknown>) {
+    return request<HardwareTemplateV1>("/hardware-templates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
   updateHardwareTemplate(id: string, body: HardwareTemplateV1) {
     return request<HardwareTemplateV1>(`/hardware-templates/${id}`, {
       method: "PATCH",
@@ -1723,6 +1733,10 @@ export const api = {
     beforeId?: string;
   }) {
     return request<AuditEntry[]>("/audit-log", undefined, params);
+  },
+
+  getAuditLogSummary(params: { labId: string; action?: string; search?: string }) {
+    return request<AuditLogSummary>("/audit-log/summary", undefined, params);
   },
 
   createAuditEntry(

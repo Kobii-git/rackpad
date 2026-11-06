@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const fa = {
+  "Chassis skin": "نمای بدنه",
+  "Graphite": "گرافیتی",
+  "Silver": "نقره‌ای",
+  "Ivory": "عاجی",
+  "Rotation keeps the assigned rack footprint.": "چرخش، فضای اختصاص‌یافته در رک را حفظ می‌کند.",
+  "Export saved template": "صدور الگوی ذخیره‌شده",
+  "Import template": "وارد کردن الگو",
+  "Import device type": "نوع دستگاه برای ورود",
+  "Import saves a new copy. Select it from Templates to edit.": "ورود، یک نسخهٔ جدید ذخیره می‌کند. برای ویرایش آن را از الگوها انتخاب کنید.",
+  "Imported template: {name}": "الگوی واردشده: {name}",
+  "Template files must be 10 MB or smaller.": "حجم فایل‌های الگو باید حداکثر 10 مگابایت باشد.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "یک فایل JSON الگوی سخت‌افزاری Rackpad انتخاب کنید (نسخهٔ طرح‌واره 1).",
+  "Could not import hardware template.": "وارد کردن الگوی سخت‌افزاری ممکن نشد.",
   "Allow unencrypted NUT transport": "اجازهٔ انتقال رمزنگاری‌نشدهٔ NUT",
 
   "External health": "سلامت خارجی",
@@ -1121,7 +1134,7 @@ export const fa = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "محدوده موجود بالا را انتخاب کنید یا محدوده جدید برای مدیریت فضای شناسه رزرو شده بسازید.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "از عمل تخصیص برای شروع رزرو و ثبت شناسه‌ها در این محدوده استفاده کنید.",
   "Pick a cable from the inventory table to edit its metadata.": "کابلی از جدول موجودی برای ویرایش فراداده انتخاب کنید.",
-  "Broaden the search to see more of the loaded activity log.": "جستجو را گسترش دهید تا بخش بیشتری از گزارش فعالیت بارگذاری‌شده را ببینید.",
+  "Broaden the search or choose a different action.": "جستجو را گسترده‌تر کنید یا اقدام دیگری انتخاب کنید.",
   "Click a device, cable, or port to inspect its topology context.": "روی دستگاه، کابل یا پورت کلیک کنید تا زمینه توپولوژی را بررسی کنید.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "اولین رک را بسازید یا با افزودن تجهیزات جدا اتاق به‌عنوان gear بدون رک شروع کنید.",
   "Assign a rack to this room from the rack editor.": "از ویرایشگر رک، رکی به این اتاق اختصاص دهید.",
@@ -1508,7 +1521,7 @@ export const fa = {
   "shared parent address": "آدرس والدین مشترک",
   "Shelf": "قفسه",
   "Shelf device layout": "طرح بندی دستگاه قفسه",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "نمایش آخرین تاریخچه ممیزی بارگذاری شده برای این آزمایشگاه. فعالیت خاص دستگاه نیز از هر صفحه دستگاه در دسترس است.",
+  "Showing audit history for this lab. Counts include all matching entries.": "نمایش تاریخچهٔ ممیزی این آزمایشگاه. شمارش‌ها شامل همهٔ ورودی‌های منطبق هستند.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

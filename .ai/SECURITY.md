@@ -80,6 +80,16 @@ constraints for changes.
   data, and encrypted controller credentials even when selected notification
   secrets are redacted.
 
+## Dependency overrides
+
+- The minimatch overrides are scoped to ESLint, its config-array package, and
+  TypeScript ESTree. Their used matching APIs are covered by
+  `check:dependencies` and `lint:proof`; remove these overrides when the parent
+  packages support the patched major themselves.
+- Keep the static plugin's glob dependency on its supported range. Do not apply
+  a blanket minimatch override: glob 13 expects matcher internals removed in
+  minimatch 11, while the updated static plugin uses compatible glob 14.
+
 ## High-risk files
 
 - `server/app.ts`, `server/lib/auth.ts`, `server/lib/oidc.ts`,
@@ -120,7 +130,11 @@ A partial channel success counts as delivery, with failures reported separately.
 Audit lab scopes are server-derived snapshots. Client-provided scopes are ignored.
 Unscoped history is admin-only; entity-specific non-admin reads require current
 read permission for every captured lab, including both cable endpoints. Global
-listing remains admin-only. Deleted subjects do not remove event ownership, and
+listing remains admin-only. Audit summaries and action choices are also admin-only
+and require an explicit lab. Totals cover all stored events matching that lab's
+search/action filters; action choices cover that lab's complete history, excluding
+unscoped events. Existing entity reads retain their bounded array response.
+Deleted subjects do not remove event ownership, and
 revoked grants immediately remove access to their historical events.
 
 External health endpoints require existing lab read/write permissions. Provider

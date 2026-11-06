@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/Card";
 import { PhysicalFaceplate } from "./PhysicalFaceplate";
 import { PhysicalPortSlotEditor } from "./PhysicalPortSlotEditor";
+import { FaceAppearanceControls } from "./FaceAppearanceControls";
 
 interface DevicePhysicalLayoutPanelProps {
   device: Device;
@@ -265,7 +266,7 @@ export function DevicePhysicalLayoutPanel({
   }
 
   return (
-    <div className="grid grid-cols-12 gap-4">
+    <div className="grid grid-cols-12 gap-4" data-testid="device-physical-layout">
       <Card className="col-span-12">
         <CardHeader>
           <CardTitle>
@@ -418,6 +419,10 @@ export function DevicePhysicalLayoutPanel({
                   {t("Cancel")}
                 </Button>
               </div>
+              <FaceAppearanceControls definition={customSnapshot.faces[customFace]} disabled={saving || loading} onChange={definition => {
+                setCustomSnapshot(current => current ? {...current, faces: {...current.faces, [customFace]: definition}} : current);
+                setPreview(undefined);
+              }} />
               <PhysicalPortSlotEditor
                 layout={customSnapshot}
                 face={customFace}

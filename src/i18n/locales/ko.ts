@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const ko = {
+  "Chassis skin": "섀시 외관",
+  "Graphite": "흑연색",
+  "Silver": "은색",
+  "Ivory": "상아색",
+  "Rotation keeps the assigned rack footprint.": "회전해도 할당된 랙 공간은 유지됩니다.",
+  "Export saved template": "저장된 템플릿 내보내기",
+  "Import template": "템플릿 가져오기",
+  "Import device type": "가져올 장치 유형",
+  "Import saves a new copy. Select it from Templates to edit.": "가져오면 새 복사본이 저장됩니다. 편집하려면 템플릿 목록에서 선택하세요.",
+  "Imported template: {name}": "가져온 템플릿: {name}",
+  "Template files must be 10 MB or smaller.": "템플릿 파일 크기는 10 MB 이하여야 합니다.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "Rackpad 하드웨어 템플릿 JSON 파일을 선택하세요(스키마 버전 1).",
+  "Could not import hardware template.": "하드웨어 템플릿을 가져올 수 없습니다.",
   "Allow unencrypted NUT transport": "암호화되지 않은 NUT 통신 허용",
 
   "External health": "외부 상태",
@@ -1121,7 +1134,7 @@ export const ko = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "위에서 기존 범위를 선택하거나 새 범위를 만들어 예약 ID 공간을 관리하세요.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "할당 작업으로 이 범위의 ID 예약 및 문서화를 시작하세요.",
   "Pick a cable from the inventory table to edit its metadata.": "인벤토리 테이블에서 케이블을 선택해 메타데이터를 편집하세요.",
-  "Broaden the search to see more of the loaded activity log.": "검색 범위를 넓혀 로드된 활동 로그를 더 보세요.",
+  "Broaden the search or choose a different action.": "검색 범위를 넓히거나 다른 작업을 선택하세요.",
   "Click a device, cable, or port to inspect its topology context.": "장치, 케이블 또는 포트를 클릭해 토폴로지 컨텍스트를 확인하세요.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "첫 랙을 만들거나 방의 독립 장비를 랙 외 장비로 추가하세요.",
   "Assign a rack to this room from the rack editor.": "랙 편집기에서 이 방에 랙을 할당하세요.",
@@ -1508,7 +1521,7 @@ export const ko = {
   "shared parent address": "공유된 상위 주소",
   "Shelf": "선반",
   "Shelf device layout": "선반 장치 레이아웃",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "이 실습에 대해 최근 로드된 감사 기록을 표시합니다. 각 장치 페이지에서도 장치별 활동을 확인할 수 있습니다.",
+  "Showing audit history for this lab. Counts include all matching entries.": "이 랩의 감사 기록입니다. 집계에는 일치하는 모든 항목이 포함됩니다.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

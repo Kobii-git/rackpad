@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const af = {
+  "Chassis skin": "Chassisafwerking",
+  "Graphite": "Grafiet",
+  "Silver": "Silwer",
+  "Ivory": "Ivoor",
+  "Rotation keeps the assigned rack footprint.": "Rotasie behou die toegewysde rakvoetspoor.",
+  "Export saved template": "Voer gestoorde sjabloon uit",
+  "Import template": "Voer sjabloon in",
+  "Import device type": "Toesteltipe vir invoer",
+  "Import saves a new copy. Select it from Templates to edit.": "Invoer stoor 'n nuwe kopie. Kies dit onder Sjablone om te wysig.",
+  "Imported template: {name}": "Ingevoerde sjabloon: {name}",
+  "Template files must be 10 MB or smaller.": "Sjabloonlêers mag hoogstens 10 MB wees.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "Kies 'n Rackpad-hardewaresjabloon se JSON-lêer (skemaweergawe 1).",
+  "Could not import hardware template.": "Kon nie hardewaresjabloon invoer nie.",
   "Allow unencrypted NUT transport": "Laat ongeënkripteerde NUT-vervoer toe",
 
   "External health": "Eksterne gesondheid",
@@ -1121,7 +1134,7 @@ export const af = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "Kies 'n bestaande reeks hierbo of skep 'n nuwe een om gereserveerde ID-ruimte te bestuur.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "Gebruik die toekenningsaksie om ID's in hierdie reeks te reserveer en te dokumenteer.",
   "Pick a cable from the inventory table to edit its metadata.": "Kies 'n kabel uit die voorraadtabel om die metadata te wysig.",
-  "Broaden the search to see more of the loaded activity log.": "Verbreed die soektog om meer van die gelaai aktiwiteitslogboek te sien.",
+  "Broaden the search or choose a different action.": "Verbreed die soektog of kies ’n ander aksie.",
   "Click a device, cable, or port to inspect its topology context.": "Klik op 'n toestel, kabel of poort om die topologiekonteks te ondersoek.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "Skep jou eerste rak of begin deur los kamer-tech as ongerakte toerusting by te voeg.",
   "Assign a rack to this room from the rack editor.": "Ken 'n rak aan hierdie kamer toe vanuit die rakredigeerder.",
@@ -1508,7 +1521,7 @@ export const af = {
   "shared parent address": "gedeelde oueradres",
   "Shelf": "Rak",
   "Shelf device layout": "Rak toestel uitleg",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "Wys tans die jongste gelaaide ouditgeskiedenis vir hierdie laboratorium. Toestelspesifieke aktiwiteit is ook vanaf elke toestelbladsy beskikbaar.",
+  "Showing audit history for this lab. Counts include all matching entries.": "Ouditgeskiedenis vir hierdie laboratorium. Tellings sluit alle ooreenstemmende inskrywings in.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

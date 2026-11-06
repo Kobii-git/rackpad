@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const th = {
+  "Chassis skin": "รูปลักษณ์ตัวเครื่อง",
+  "Graphite": "สีกราไฟต์",
+  "Silver": "สีเงิน",
+  "Ivory": "สีงาช้าง",
+  "Rotation keeps the assigned rack footprint.": "การหมุนจะคงพื้นที่แร็กที่จัดสรรไว้",
+  "Export saved template": "ส่งออกเทมเพลตที่บันทึกไว้",
+  "Import template": "นำเข้าเทมเพลต",
+  "Import device type": "ประเภทอุปกรณ์สำหรับการนำเข้า",
+  "Import saves a new copy. Select it from Templates to edit.": "การนำเข้าจะบันทึกสำเนาใหม่ เลือกสำเนาจากรายการเทมเพลตเพื่อแก้ไข",
+  "Imported template: {name}": "เทมเพลตที่นำเข้า: {name}",
+  "Template files must be 10 MB or smaller.": "ไฟล์เทมเพลตต้องมีขนาดไม่เกิน 10 MB",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "เลือกไฟล์ JSON เทมเพลตฮาร์ดแวร์ Rackpad (สคีมาเวอร์ชัน 1)",
+  "Could not import hardware template.": "ไม่สามารถนำเข้าเทมเพลตฮาร์ดแวร์ได้",
   "Allow unencrypted NUT transport": "อนุญาตการส่งข้อมูล NUT ที่ไม่เข้ารหัส",
 
   "External health": "สถานะภายนอก",
@@ -1121,7 +1134,7 @@ export const th = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "เลือกช่วงที่มีอยู่ด้านบนหรือสร้างใหม่เพื่อจัดการพื้นที่ ID ที่จองไว้",
   "Use the allocate action to start reserving and documenting IDs in this range.": "ใช้การจัดสรรเพื่อเริ่มจองและบันทึก ID ในช่วงนี้",
   "Pick a cable from the inventory table to edit its metadata.": "เลือกสายเคเบิลจากตารางคลังเพื่อแก้ไขเมตาดาต้า",
-  "Broaden the search to see more of the loaded activity log.": "ขยายการค้นหาเพื่อดูบันทึกกิจกรรมที่โหลดเพิ่มเติม",
+  "Broaden the search or choose a different action.": "ขยายการค้นหาหรือเลือกการดำเนินการอื่น",
   "Click a device, cable, or port to inspect its topology context.": "คลิกอุปกรณ์ สายเคเบิล หรือพอร์ตเพื่อดูบริบทโทโพโลยี",
   "Create your first rack or start by adding loose room tech as unracked gear.": "สร้างแร็คแรกหรือเริ่มเพิ่มอุปกรณ์ห้องแยกเป็น gear นอกแร็ค",
   "Assign a rack to this room from the rack editor.": "มอบหมายแร็คให้ห้องนี้จากตัวแก้ไขแร็ค",
@@ -1508,7 +1521,7 @@ export const th = {
   "shared parent address": "ที่อยู่ผู้ปกครองที่ใช้ร่วมกัน",
   "Shelf": "ชั้นวาง",
   "Shelf device layout": "เค้าโครงอุปกรณ์ชั้นวาง",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "กำลังแสดงประวัติการตรวจสอบที่โหลดล่าสุดสำหรับแล็บนี้ กิจกรรมเฉพาะอุปกรณ์สามารถดูได้จากหน้าอุปกรณ์แต่ละหน้าด้วย",
+  "Showing audit history for this lab. Counts include all matching entries.": "แสดงประวัติการตรวจสอบของแล็บนี้ จำนวนรวมครอบคลุมทุกรายการที่ตรงกัน",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

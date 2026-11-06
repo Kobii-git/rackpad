@@ -111,6 +111,47 @@ visible in preview/apply.
 
 ## Save and apply
 
+### Skins and face orientation
+
+Each face offers **Chassis skin** (Automatic, Graphite, Silver or Ivory) and
+quarter-turn **Orientation**. Automatic follows the application theme. Explicit
+item colors retain precedence, and linked-port and selection indicators remain
+visible. Drawing, drag/resize coordinates, keyboard movement and exported images
+follow the selected orientation; model labels stay readable.
+
+These settings are saved in library templates and carried into Preview/Apply,
+portable files and backups. To customize one device, use **Physical layout → Edit**,
+choose the face and appearance, then Preview and Apply. This also supports directly
+mounted devices. Rotation keeps the assigned footprint: adjust **Height (U)** and
+**Column span** separately when changing the physical rack allocation. A visual
+rotation never authorizes overlapping another device.
+
+The optional `skin` and `rotation` face fields retain layout schema version 1
+and need no SQL migration. Older binaries may discard them when rewriting a
+template or snapshot. Stack composition preserves each member's appearance and
+canonical port bindings.
+
+### Share a template
+
+Select a saved template, then choose **Export saved template** to download its
+schema-v1 JSON definition. Save any draft edits first. Files include both faces,
+colors, drawing order, port blocks, module positions/modules and blueprints.
+They exclude the built-in flag, device assignments, defaults and inventory data.
+
+On another Rackpad installation, choose **Import device type** and **Import
+template**, then select the JSON file (up to 10 MiB). The existing administrator
+create route validates the complete definition before saving a new editable copy
+with a fresh ID. A name already in use receives an available copy name. The
+chosen local device type replaces the source installation's type associations;
+create a custom type first if needed. Unsupported schemas and invalid geometry
+are rejected without creating a template.
+
+After import, select the reported name from **Templates** to edit it. Import
+keeps the current draft and its history open. It does not assign a default or
+apply a layout to devices. Use Preview/Apply separately for those changes.
+
+### Update device layouts
+
 Save writes the library template; existing devices retain their saved physical
 layout snapshots. To update a device, use the existing preview/apply workflow,
 review the proposed port mappings, and retain any linked inventory ports. A
