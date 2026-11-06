@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { physicalFaceRect } from "./physical-face";
+import { projectFaceArtwork } from "../../server/lib/physical-face-projection";
+import { faceplateDetailPath } from "./faceplate-artwork";
 import { buildRackStudioCableRoutes } from "./rack-studio-cables";
 import { buildRackStudioSvg } from "./rack-studio-export";
 import {
@@ -501,6 +503,20 @@ test("rotated skinned faces keep exported cable endpoints on port centers in eve
     const expectedY = Number(transform[2]) + expected.y * Number(transform[4]);
     assert.ok(Math.abs(Number(route[1])-expectedX)<0.02, `rotated cable x ${route[1]} must meet port ${expectedX}`);
     assert.ok(Math.abs(Number(route[2])-expectedY)<0.02, `rotated cable y ${route[2]} must meet port ${expectedY}`);
+  }
+});
+
+test("composed member exports retain the original asymmetric details inside the numeric face transform", () => {
+  const rack = rackFixture(0);
+  const device = deviceFixture("projected-member", rack.id, 10);
+  const layout = layoutFixture(device.id, []);
+  const original = {kind:"vent" as const, id:"vent", x:10, y:20, width:100, height:40};
+  const projection = projectFaceArtwork(original, {width:1000,height:200,rotation:90}, 5, 0.2, 0);
+  layout.snapshot.faces.front.elements = [{...original,x:700,y:2,width:200,height:20,projection}];
+  for (const options of [{}, {compact:true}, {focusRackId:rack.id}]) {
+    const image = buildRackStudioSvg({room,racks:[rack],devices:[device],layouts:[layout],ports:[],links:[],face:"front",showLabels:false,routeStyle:"smooth",theme:"dark",labels:exportLabels(),...options});
+    assert.ok(image.svg.includes('<g transform="matrix(0 0.2 -5 0 1000 0)"><rect x="10" y="20" width="100" height="40"'));
+    assert.ok(image.svg.includes(`<path d="${faceplateDetailPath(original)}"`));
   }
 });
 

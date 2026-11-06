@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { ValidationError } from "./validation.js";
 import { FACE_SKINS, type FaceSkin, type FaceRotation } from "./physical-face-appearance.js";
+import type { FaceArtworkProjection } from "./physical-face-projection.js";
 
 export const PHYSICAL_LAYOUT_STATUSES = [
   "accurate",
@@ -28,7 +29,7 @@ export interface PhysicalPortSlotV1 {
   label?: string;
 }
 
-export type FacePrimitiveV1 =
+export type FacePrimitiveV1 = (
   | {
       kind: "panel" | "handle" | "vent" | "bay" | "display" | "outlet";
       id: string;
@@ -56,7 +57,7 @@ export type FacePrimitiveV1 =
       y: number;
       text: string;
       align?: "start" | "middle" | "end";
-    };
+    }) & { projection?: FaceArtworkProjection };
 
 export interface ArtworkReference {
   elementId: string;
@@ -446,6 +447,7 @@ function validateFace(value: unknown, label: string): FaceDefinitionV1 {
   const ids = new Set<string>();
   const elements = face.elements.map((entry, index) => {
     const primitive = asRecord(entry, `${label}.elements[${index}]`);
+    if ("projection" in primitive) throw new ValidationError(`${label}.elements[${index}].projection is reserved for generated stack artwork.`);
     const id = validateId(primitive.id, `${label}.elements[${index}].id`);
     if (ids.has(id))
       throw new ValidationError(

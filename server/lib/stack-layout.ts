@@ -8,6 +8,7 @@ import {
 } from "./physical-layout.js";
 import type { StackMember } from "./stack-data.js";
 import { FACE_SKIN_COLORS, faceGeometry, rotateFacePoint } from "./physical-face-appearance.js";
+import { projectFaceArtwork } from "./physical-face-projection.js";
 
 /** One layout supplies rendering, hit targets, cable anchors and exports. */
 export function buildStackPhysicalLayout(
@@ -85,6 +86,7 @@ export function buildStackPhysicalLayout(
             : element.color;
           result.snapshot.faces[face].elements.push({
           ...element, ...(color ? {color} : {}), id: prefix(element.id), x: Math.min(point.x, opposite.x) * scaleX, y: y + Math.min(point.y, opposite.y) * scaleY,
+          ...(definition.rotation && element.kind !== "label" ? {projection: projectFaceArtwork(element, definition, scaleX, scaleY, y)} : {}),
           ...("width" in element ? {width: Math.abs(opposite.x-point.x) * scaleX, height: Math.abs(opposite.y-point.y) * scaleY} : {}),
           ...("radius" in element ? {radius: element.radius * Math.min(scaleX, scaleY)} : {}),
         });

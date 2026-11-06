@@ -47,10 +47,15 @@ data boundaries as application code even when they are not shipped at runtime.
 
 ## Lifecycle and data flow
 
-`server/lib/physical-face-appearance.ts` is a pure geometry/palette contract also
-bundled by the browser. Keep it free of Node/server imports. Face transforms,
+`server/lib/physical-face-appearance.ts` and `physical-face-projection.ts` are pure
+geometry/palette contracts also bundled by the browser. Keep them free of
+Node/server imports. Face transforms,
 inverse editing coordinates, cable anchors, stack flattening and image exports
 must use the same quarter-turn rules.
+Generated stack artwork carries original primitive geometry and a validated
+numeric affine matrix so composition preserves decorative details. Canonical
+template/member/custom-snapshot validation rejects this reserved projection;
+initialization strips it before persistence and effective stack reads regenerate it.
 
 1. `server/db.ts` opens SQLite, enables WAL/FKs, and applies pending migrations.
 2. `server/index.ts` creates Fastify and starts background loops.

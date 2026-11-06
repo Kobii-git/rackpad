@@ -6664,6 +6664,7 @@ test("mixed-model220-port stacks retain applied modules, front/rear targets and 
       const count=index?24:26;
       for(const face of index?["front","rear"] as const:["rear"] as const) template=replacePortBlock(template,{id:`ports-${face}`,face,connector:index?"rj45":"sfp_plus",count,rows:2,columns:count/2,start:1,direction:"left-to-right",x:100,y:50,width:800,height:100});
       if(!index){template.moduleSlots=[{id:"uplink-position",face:"rear",x:200,y:180,width:300,height:90}];template.modules=[createHardwareModule("uplink-module","Applied uplink module","uplink-position","sfp_plus",2,template.moduleSlots[0])];}
+      if(index===1){template.front.rotation=90;template.front.skin="silver";template.front.elements=[{kind:"vent",id:"rotated-vent",x:10,y:20,width:100,height:40}];}
       await post("/api/hardware-templates",template);templates.push(template.id);
       const preview=await post(`/api/devices/${stack.id}/stack-members/${member.id}/physical-layout/preview`,{templateId:template.id,moduleIds:template.modules.map(module=>module.id)});
       const applied=await post(`/api/devices/${stack.id}/stack-members/${member.id}/physical-layout/apply`,{...preview,approvedPortSlotIds:preview.portsToCreate.map((port:{slotId:string})=>port.slotId).slice(index === 0 ? 1 : 0)});canonical.push(...applied.createdPortIds);
@@ -6692,8 +6693,11 @@ test("mixed-model220-port stacks retain applied modules, front/rear targets and 
     expect(after.bindings).toEqual(expect.arrayContaining(before.bindings));
     await page.goto("/racks");await page.getByRole("button",{name:"Studio Beta",exact:true}).click();await page.getByRole("button",{name:new RegExp(`${room.name} 1R`)}).click();await page.getByRole("button",{name:"Both",exact:true}).click();await page.getByRole("button",{name:"Cables",exact:true}).click();
     const targets=page.locator('[data-testid="rack-studio-device"] [data-cabling-selection-id^="port:"]');expect(await targets.count()).toBeGreaterThanOrEqual(220);
+    const grille=page.locator('svg[role="img"] g[transform^="matrix("] path[d^="M 22.5 26 V 54"]').first();
+    await expect(grille).toBeVisible();expect((await grille.getAttribute("d"))!.match(/M /g)).toHaveLength(7);
     const svgDownload=page.waitForEvent("download");await page.getByRole("button",{name:"Download SVG",exact:true}).click();const svg=await readFile((await(await svgDownload).path())!,"utf8");
     expect(svg.match(new RegExp(`<title>${stack.hostname}:`,'g'))).toHaveLength(220);
+    expect(svg).toContain('transform="matrix(');expect(svg).toContain('<path d="M 22.5 26 V 54');
     const pngDownload=page.waitForEvent("download");await page.getByRole("button",{name:"Download PNG",exact:true}).click();const png=await readFile((await(await pngDownload).path())!);expect(png.subarray(0,8).toString("hex")).toBe("89504e470d0a1a0a");
   } finally {
     await request.delete(`/api/devices/${stack.id}`,{headers});for(const id of templates)await request.delete(`/api/hardware-templates/${id}`,{headers});await request.delete(`/api/racks/${rack.id}`,{headers});await request.delete(`/api/rooms/${room.id}`,{headers});

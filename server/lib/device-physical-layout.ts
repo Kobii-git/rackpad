@@ -131,8 +131,13 @@ function generatedLayoutRow(
   device: PhysicalLayoutDeviceRow,
   ports: PhysicalLayoutPort[],
   fallbackMode: "legacy" | "generic",
+  includeProjection = true,
 ): DevicePhysicalLayoutRow {
   const generated = resolveInitialLayout(device, ports, fallbackMode);
+  // Composed stack artwork is regenerated from canonical member snapshots on
+  // every read. Keep its presentation descriptor out of backups/stored layouts.
+  if (!includeProjection) for (const face of ["front", "rear"] as const)
+    for (const element of generated.snapshot.faces[face].elements) delete element.projection;
   return {
     deviceId: device.id,
     sourceTemplateId: generated.snapshot.sourceTemplateId,
@@ -206,7 +211,7 @@ export function initializeDevicePhysicalLayout(
     .get(deviceId) as DevicePhysicalLayoutRow | undefined;
   if (existing) return existing;
   const ports = getPhysicalLayoutPorts(deviceId);
-  const row = generatedLayoutRow(device, ports, fallbackMode);
+  const row = generatedLayoutRow(device, ports, fallbackMode, false);
   const now = new Date().toISOString();
   db.prepare(
     `

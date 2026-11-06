@@ -1,7 +1,7 @@
 import { physicalFaceRect, faceGeometry, FACE_SKIN_COLORS } from "./physical-face";
 import { orderedFaceElements } from "./template-artwork";
 import { buildRackCablingScene, buildRackCablingRoutes } from "../pages/visualizer/rack-cabling";
-import { faceplateDetailPath, physicalItemColor } from "./faceplate-artwork";
+import { faceplateDetailPath, physicalItemColor, projectedFaceArtwork } from "./faceplate-artwork";
 import type {
   Device,
   DevicePhysicalLayout,
@@ -218,11 +218,14 @@ function renderSceneEquipment(input: {
   if (layout) {
     const face = layout.snapshot.faces[input.item.physicalFace];
     const tone = (value?: string) => value === "dark" ? palette.background : value === "accent" ? palette.portLinked : value === "light" ? palette.border : palette.device;
-    const elements = orderedFaceElements(face).map(primitive => {
+    const elements = orderedFaceElements(face).map(original => {
+      const projected = projectedFaceArtwork(original);
+      const primitive = projected?.primitive ?? original;
+      const wrap = (markup: string) => projected ? `<g transform="${projected.transform}">${markup}</g>` : markup;
       if (primitive.kind === "label") return `<text${face.rotation ? ` transform="rotate(${-face.rotation} ${primitive.x} ${primitive.y})"` : ""} x="${primitive.x}" y="${primitive.y}" text-anchor="${primitive.align ?? "start"}" fill="${physicalItemColor(primitive.color, palette.subdued)}" font-size="15">${escapeXml(primitive.text)}</text>`;
-      if (primitive.kind === "screw" || primitive.kind === "indicator") return `<circle cx="${primitive.x}" cy="${primitive.y}" r="${primitive.radius}" fill="${physicalItemColor(primitive.color, tone(primitive.tone))}"/>`;
+      if (primitive.kind === "screw" || primitive.kind === "indicator") return wrap(`<circle cx="${primitive.x}" cy="${primitive.y}" r="${primitive.radius}" fill="${physicalItemColor(primitive.color, tone(primitive.tone))}"/>`);
       if (!("width" in primitive)) return "";
-      return `<rect x="${primitive.x}" y="${primitive.y}" width="${primitive.width}" height="${primitive.height}" rx="${primitive.kind === "handle" ? 8 : primitive.kind === "panel" ? 5 : 2}" fill="${physicalItemColor(primitive.color, tone(primitive.tone))}" stroke="${palette.border}" stroke-width="0.5" vector-effect="non-scaling-stroke"/><path d="${faceplateDetailPath(primitive)}" fill="none" stroke="${palette.subdued}" stroke-opacity="0.45" stroke-width="0.6" vector-effect="non-scaling-stroke"/>`;
+      return wrap(`<rect x="${primitive.x}" y="${primitive.y}" width="${primitive.width}" height="${primitive.height}" rx="${primitive.kind === "handle" ? 8 : primitive.kind === "panel" ? 5 : 2}" fill="${physicalItemColor(primitive.color, tone(primitive.tone))}" stroke="${palette.border}" stroke-width="0.5" vector-effect="non-scaling-stroke"/><path d="${faceplateDetailPath(primitive)}" fill="none" stroke="${palette.subdued}" stroke-opacity="0.45" stroke-width="0.6" vector-effect="non-scaling-stroke"/>`);
     }).join("");
     const slots = layout.snapshot.portSlots.filter(slot => slot.face === input.item.physicalFace).map(slot => {
       const binding = layout.bindings.find(binding => binding.slotId === slot.id);

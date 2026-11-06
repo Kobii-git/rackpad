@@ -1056,6 +1056,49 @@ test("schema54 migration is forward-only and rolls back its table when the versi
   }
 });
 
+test("rotated member artwork regenerates after initialization and logical/native recovery without persisting projections", async () => {
+  const {createStarterTemplate} = await import("../../src/lib/hardware-template-builder.ts");
+  const {initializeDevicePhysicalLayout} = await import("../lib/device-physical-layout.js");
+  const stack = await device("rotated-artwork-stack");
+  const m = await member(stack.id, "Rotated member", {heightU:2});
+  const template = createStarterTemplate("switch-24", "rotated-artwork-template", "Rotated artwork");
+  template.portSlots = []; template.modules = []; template.moduleSlots = [];
+  template.front.height = 200; template.front.rotation = 90; template.front.skin = "silver";
+  template.front.elements = [{kind:"vent",id:"vent",x:10,y:20,width:100,height:40}];
+  assert.equal((await call("POST", "/api/hardware-templates", template)).statusCode, 201);
+  const url = `/api/devices/${stack.id}/stack-members/${m.id}/physical-layout`;
+  const previewResponse = await call("POST", `${url}/preview`, {templateId:template.id});
+  assert.equal(previewResponse.statusCode, 200, previewResponse.body);
+  const applied = await call("POST", `${url}/apply`, previewResponse.json());
+  assert.equal(applied.statusCode, 200, applied.body);
+  const effective = async () => (await call("GET", `/api/physical-layouts/${stack.id}`)).json().snapshot;
+  const before = await effective();
+  const vent = before.faces.front.elements.find((element:{kind:string}) => element.kind === "vent");
+  assert.deepEqual(vent.projection.matrix, [0,0.2,-5,0,1000,0]);
+  assert.equal((await call("POST", `/api/physical-layouts/${stack.id}/preview`, {customSnapshot:before})).statusCode, 409);
+  db.prepare("DELETE FROM devicePhysicalLayouts WHERE deviceId=?").run(stack.id);
+  const initialized = initializeDevicePhysicalLayout(stack.id)!;
+  assert.doesNotMatch(initialized.snapshot, /"projection"/);
+  validateResolvedPhysicalLayoutV1(JSON.parse(initialized.snapshot));
+  assert.deepEqual((await effective()).faces.front.elements, before.faces.front.elements);
+  const backup = (await call("GET", "/api/admin/export")).json();
+  const stored = backup.data.deviceStackMemberLayouts.find((row:{memberId:string}) => row.memberId === m.id);
+  assert.equal(stored.snapshot.faces.front.rotation, 90);
+  assert.doesNotMatch(JSON.stringify(stored.snapshot), /"projection"/);
+  const corrupt = structuredClone(backup);
+  corrupt.data.deviceStackMemberLayouts.find((row:{memberId:string}) => row.memberId === m.id).snapshot.faces.front.elements[0].projection = vent.projection;
+  assert.equal((await call("POST", "/api/admin/restore", corrupt)).statusCode, 422);
+  assert.deepEqual((await effective()).faces.front.elements, before.faces.front.elements);
+  const nativePath = path.join(directory, "rotated-artwork-native.db");
+  await db.backup(nativePath);
+  const native = new Database(nativePath);
+  try { assert.equal(validateRackpadSqliteDatabase(native, "Rotated member artwork"), CURRENT_SCHEMA_VERSION); }
+  finally { native.close(); }
+  assert.equal((await call("POST", "/api/admin/restore", backup)).statusCode, 200);
+  token = (await call("POST", "/api/auth/login", {username:"admin",password:"stack-test-password"})).json().token;
+  assert.deepEqual((await effective()).faces.front.elements, before.faces.front.elements);
+});
+
 test("quarter-turn member slots preserve their scaled center and stay inside the member footprint", async()=>{
   const {buildAutoPhysicalLayout} = await import("../lib/physical-layout.js");
   const logical={id:"rotation-stack",deviceType:"switch_stack",heightU:1};

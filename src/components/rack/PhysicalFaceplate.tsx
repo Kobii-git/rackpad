@@ -10,7 +10,7 @@ import type {
   RackFace,
   ResolvedPhysicalLayoutV1,
 } from "@/lib/types";
-import { faceplateDetailPath } from "@/lib/faceplate-artwork";
+import { faceplateDetailPath, projectedFaceArtwork } from "@/lib/faceplate-artwork";
 import { cn } from "@/lib/utils";
 import { faceGeometry, physicalFaceSkinStyle } from "@/lib/physical-face";
 
@@ -47,6 +47,8 @@ function primitiveFill(primitive: PhysicalFacePrimitiveV1) {
 }
 
 function Primitive({ primitive, rotation = 0 }: { primitive: PhysicalFacePrimitiveV1; rotation?: number }) {
+  const projected = projectedFaceArtwork(primitive);
+  if (projected) return <g transform={projected.transform}><Primitive primitive={projected.primitive} /></g>;
   if (primitive.kind === "label") {
     return (
       <text

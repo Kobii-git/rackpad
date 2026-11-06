@@ -291,7 +291,7 @@ export type PhysicalLayoutStatus =
   | "needs-mapping"
   | "invalid";
 
-export type PhysicalFacePrimitiveV1 =
+export type PhysicalFacePrimitiveV1 = (
   | {
       kind: "panel" | "handle" | "vent" | "bay" | "display" | "outlet";
       id: string;
@@ -319,7 +319,7 @@ export type PhysicalFacePrimitiveV1 =
       y: number;
       text: string;
       align?: "start" | "middle" | "end";
-    };
+    }) & { projection?: import("../../server/lib/physical-face-projection").FaceArtworkProjection };
 
 export interface ArtworkReference {
   elementId: string;

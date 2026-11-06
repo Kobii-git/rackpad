@@ -18,6 +18,8 @@ import type { DevicePhysicalLayout, Device, Port } from "./types";
 import { buildStackPhysicalLayout } from "../../server/lib/stack-layout";
 import type { StackMemberLayout } from "../../server/lib/stack-member-layout-data";
 import type { StackMember } from "../../server/lib/stack-data";
+import { readFaceArtworkProjection } from "../../server/lib/physical-face-projection";
+import { projectedFaceArtwork, faceplateDetailPath } from "./faceplate-artwork";
 
 test("face rotations have inverse pointer mappings and screen-relative keyboard deltas", () => {
   const expected = [
@@ -162,6 +164,7 @@ test("stack composition retains member skins, rotated geometry and stable linked
   const template = createStarterTemplate("switch-24");
   template.front.skin = "silver";
   template.front.rotation = 90;
+  template.front.height = 200;
   template.front.elements = [
     {
       kind: "panel",
@@ -173,6 +176,9 @@ test("stack composition retains member skins, rotated geometry and stable linked
       tone: "dark",
     },
     { kind: "label", id: "label", x: 120, y: 70, text: "Member model" },
+    { kind: "vent", id: "vent", x: 10, y: 20, width: 100, height: 40 },
+    { kind: "bay", id: "bay", x: 150, y: 20, width: 120, height: 40 },
+    { kind: "screw", id: "screw", x: 300, y: 50, radius: 5 },
   ];
   template.portSlots = [
     {
@@ -234,4 +240,37 @@ test("stack composition retains member skins, rotated geometry and stable linked
     new Map([[member.id, stored]]),
   );
   assert.deepEqual(again.bindings, layout.bindings);
+  for (const kind of ["vent", "bay", "screw"] as const) {
+    const composed = layout.snapshot.faces.front.elements.find(element => element.kind === kind)!;
+    const presentation = projectedFaceArtwork(composed)!;
+    assert.equal(presentation.transform, "matrix(0 0.2 -5 0 1000 0)");
+    const original = template.front.elements.find(element => element.kind === kind)!;
+    assert.equal(faceplateDetailPath(presentation.primitive), faceplateDetailPath(original));
+    if (kind === "vent") {
+      const path = faceplateDetailPath(presentation.primitive);
+      assert.equal(path.match(/M /g)?.length, 7, "composition must retain the seven source grille strokes");
+      assert.ok(path.startsWith("M 22.5 26 V 54"));
+      const [a,b,c,d,e,f] = composed.projection!.matrix;
+      assert.equal(a*22.5+c*26+e, 870);
+      assert.equal(b*22.5+d*26+f, 4.5);
+      assert.equal(a*22.5+c*54+e, 730);
+      assert.equal(b*22.5+d*54+f, 4.5, "the rotated grille must be horizontal");
+    }
+    if (kind === "screw") assert.equal("radius" in presentation.primitive && presentation.primitive.radius, 5);
+  }
+});
+
+test("generated artwork projection cannot enter canonical templates or render non-finite SVG transforms", () => {
+  const template = createStarterTemplate("switch-24");
+  const projection = {geometry:{kind:"vent",x:10,y:20,width:100,height:40},matrix:[0,0.2,-5,0,1000,0]};
+  assert.ok(readFaceArtworkProjection(projection, "vent"));
+  for (const value of [
+    {...projection,matrix:[NaN,0.2,-5,0,1000,0]},
+    {...projection,matrix:[0,0,0,0,0,0]},
+    {...projection,matrix:[0,0.2,-5,0,'1" onload="bad',0]},
+    {...projection,geometry:{...projection.geometry,width:Infinity}},
+    {...projection,geometry:{...projection.geometry,kind:"label"}},
+  ]) assert.equal(readFaceArtworkProjection(value, "vent"), undefined);
+  template.front.elements[0].projection = projection as NonNullable<typeof template.front.elements[0]["projection"]>;
+  assert.throws(() => validateHardwareTemplateV1(template), /reserved for generated stack artwork/);
 });
