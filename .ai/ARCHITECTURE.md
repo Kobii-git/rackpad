@@ -47,6 +47,11 @@ data boundaries as application code even when they are not shipped at runtime.
 
 ## Lifecycle and data flow
 
+`server/lib/physical-face-appearance.ts` is a pure geometry/palette contract also
+bundled by the browser. Keep it free of Node/server imports. Face transforms,
+inverse editing coordinates, cable anchors, stack flattening and image exports
+must use the same quarter-turn rules.
+
 1. `server/db.ts` opens SQLite, enables WAL/FKs, and applies pending migrations.
 2. `server/index.ts` creates Fastify and starts background loops.
 3. Browser requests pass host/origin and typed route authorization; public and

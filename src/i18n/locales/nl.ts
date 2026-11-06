@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const nl = {
+  "Chassis skin": "Behuizingsafwerking",
+  "Graphite": "Grafiet",
+  "Silver": "Zilver",
+  "Ivory": "Ivoor",
+  "Rotation keeps the assigned rack footprint.": "Rotatie behoudt de toegewezen ruimte in het rack.",
+  "Export saved template": "Opgeslagen sjabloon exporteren",
+  "Import template": "Sjabloon importeren",
+  "Import device type": "Apparaattype voor import",
+  "Import saves a new copy. Select it from Templates to edit.": "Importeren slaat een nieuwe kopie op. Selecteer deze onder Sjablonen om te bewerken.",
+  "Imported template: {name}": "Geïmporteerde sjabloon: {name}",
+  "Template files must be 10 MB or smaller.": "Sjabloonbestanden mogen maximaal 10 MB groot zijn.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "Kies een JSON-bestand met een Rackpad-hardwaresjabloon (schemaversie 1).",
+  "Could not import hardware template.": "De hardwaresjabloon kon niet worden geïmporteerd.",
   "Allow unencrypted NUT transport": "Onversleuteld NUT-verkeer toestaan",
 
   "External health": "Externe gezondheid",
@@ -1121,7 +1134,7 @@ export const nl = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "Kies hierboven een bestaand bereik of maak een nieuw aan om gereserveerde ID-ruimte te beheren.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "Gebruik de toewijzingsactie om ID's in dit bereik te reserveren en documenteren.",
   "Pick a cable from the inventory table to edit its metadata.": "Kies een kabel uit de inventaristabel om de metadata te bewerken.",
-  "Broaden the search to see more of the loaded activity log.": "Verbreed de zoekopdracht om meer van het geladen activiteitenlogboek te zien.",
+  "Broaden the search or choose a different action.": "Verbreed de zoekopdracht of kies een andere actie.",
   "Click a device, cable, or port to inspect its topology context.": "Klik op een apparaat, kabel of poort om de topologiecontext te bekijken.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "Maak uw eerste rack of voeg losse ruimtetech toe als niet-gerackte apparatuur.",
   "Assign a rack to this room from the rack editor.": "Wijs een rack aan deze ruimte toe vanuit de rack-editor.",
@@ -1508,7 +1521,7 @@ export const nl = {
   "shared parent address": "gedeeld ouderadres",
   "Shelf": "Plank",
   "Shelf device layout": "Indeling van plankapparaat",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "Toont de laatst geladen auditgeschiedenis voor dit lab. Apparaatspecifieke activiteit is ook beschikbaar op elke apparaatpagina.",
+  "Showing audit history for this lab. Counts include all matching entries.": "Auditgeschiedenis voor dit lab. De aantallen omvatten alle overeenkomende vermeldingen.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

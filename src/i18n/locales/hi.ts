@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const hi = {
+  "Chassis skin": "चेसिस का आवरण",
+  "Graphite": "ग्रेफाइट",
+  "Silver": "चाँदी",
+  "Ivory": "हाथीदाँत",
+  "Rotation keeps the assigned rack footprint.": "घुमाने पर रैक में आवंटित जगह अपरिवर्तित रहती है।",
+  "Export saved template": "सहेजा गया टेम्पलेट निर्यात करें",
+  "Import template": "टेम्पलेट आयात करें",
+  "Import device type": "आयात के लिए डिवाइस प्रकार",
+  "Import saves a new copy. Select it from Templates to edit.": "आयात एक नई प्रति सहेजता है। संपादन के लिए इसे टेम्पलेट सूची से चुनें।",
+  "Imported template: {name}": "आयात किया गया टेम्पलेट: {name}",
+  "Template files must be 10 MB or smaller.": "टेम्पलेट फ़ाइलें अधिकतम 10 MB की होनी चाहिए।",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "Rackpad हार्डवेयर टेम्पलेट की JSON फ़ाइल चुनें (स्कीमा संस्करण 1)।",
+  "Could not import hardware template.": "हार्डवेयर टेम्पलेट आयात नहीं किया जा सका।",
   "Allow unencrypted NUT transport": "बिना एन्क्रिप्शन वाला NUT परिवहन अनुमति दें",
 
   "External health": "बाहरी स्वास्थ्य",
@@ -1121,7 +1134,7 @@ export const hi = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "ऊपर मौजूदा रेंज चुनें या आरक्षित ID स्थान प्रबंधित करने के लिए नई बनाएं।",
   "Use the allocate action to start reserving and documenting IDs in this range.": "इस रेंज में ID आरक्षित और दर्ज करने के लिए allocate क्रिया का उपयोग करें।",
   "Pick a cable from the inventory table to edit its metadata.": "मेटाडेटा संपादित करने के लिए इन्वेंटरी तालिका से केबल चुनें।",
-  "Broaden the search to see more of the loaded activity log.": "लोड किए गए गतिविधि लॉग का और हिस्सा देखने के लिए खोज विस्तृत करें।",
+  "Broaden the search or choose a different action.": "खोज का दायरा बढ़ाएँ या कोई दूसरी कार्रवाई चुनें।",
   "Click a device, cable, or port to inspect its topology context.": "टोपोलॉजी संदर्भ देखने के लिए डिवाइस, केबल या पोर्ट पर क्लिक करें।",
   "Create your first rack or start by adding loose room tech as unracked gear.": "पहला रैक बनाएं या कमरे का ढीला उपकरण unracked गियर के रूप में जोड़ें।",
   "Assign a rack to this room from the rack editor.": "रैक संपादक से इस कमरे को रैक असाइन करें।",
@@ -1508,7 +1521,7 @@ export const hi = {
   "shared parent address": "साझा अभिभावक पता",
   "Shelf": "शेल्फ",
   "Shelf device layout": "शेल्फ डिवाइस लेआउट",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "इस प्रयोगशाला के लिए नवीनतम लोडेड ऑडिट इतिहास दिखाया जा रहा है। प्रत्येक डिवाइस पृष्ठ से डिवाइस-विशिष्ट गतिविधि भी उपलब्ध है।",
+  "Showing audit history for this lab. Counts include all matching entries.": "इस लैब का ऑडिट इतिहास दिखाया जा रहा है। गणना में सभी मेल खाने वाली प्रविष्टियाँ शामिल हैं।",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

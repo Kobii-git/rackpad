@@ -7,6 +7,7 @@ import {
   type PhysicalLayoutPort,
 } from "./physical-layout.js";
 import type { StackMember } from "./stack-data.js";
+import { FACE_SKIN_COLORS, faceGeometry, rotateFacePoint } from "./physical-face-appearance.js";
 
 /** One layout supplies rendering, hit targets, cable anchors and exports. */
 export function buildStackPhysicalLayout(
@@ -69,24 +70,38 @@ export function buildStackPhysicalLayout(
       const prefix = (id: string) => `member:${createHash("sha256").update(JSON.stringify([group.id, id])).digest("hex")}`;
       for (const face of ["front", "rear"] as const) {
         const definition = stored.snapshot.faces[face];
-        const scaleX = 1000 / definition.width;
-        const scaleY = appliedHeight / definition.height;
+        const geometry = faceGeometry(definition);
+        const scaleX = 1000 / geometry.width;
+        const scaleY = appliedHeight / geometry.height;
+        const skin = definition.skin ? FACE_SKIN_COLORS[definition.skin] : undefined;
+        if (skin) result.snapshot.faces[face].elements.push({kind: "panel", id: prefix(`\u0000skin:${face}`), x: 0, y, width: 1000, height: appliedHeight, color: skin.background});
         const rank = new Map(definition.artworkOrder?.map((ref, index) => [ref.elementId, index]));
         const elements = [...definition.elements].sort((a,b) => (rank.get(a.id) ?? rank.size) - (rank.get(b.id) ?? rank.size));
-        for (const element of elements) result.snapshot.faces[face].elements.push({
-          ...element, id: prefix(element.id), x: element.x * scaleX, y: y + element.y * scaleY,
-          ...("width" in element ? {width: element.width * scaleX, height: element.height * scaleY} : {}),
+        for (const element of elements) {
+          const point = rotateFacePoint(definition, element.x, element.y);
+          const opposite = "width" in element ? rotateFacePoint(definition, element.x + element.width, element.y + element.height) : point;
+          const color = skin && !element.color && (!("tone" in element) || element.tone !== "accent")
+            ? element.kind === "label" ? skin.text : "tone" in element && element.tone === "dark" ? skin.background : "tone" in element && element.tone === "light" ? skin.border : skin.surface
+            : element.color;
+          result.snapshot.faces[face].elements.push({
+          ...element, ...(color ? {color} : {}), id: prefix(element.id), x: Math.min(point.x, opposite.x) * scaleX, y: y + Math.min(point.y, opposite.y) * scaleY,
+          ...("width" in element ? {width: Math.abs(opposite.x-point.x) * scaleX, height: Math.abs(opposite.y-point.y) * scaleY} : {}),
           ...("radius" in element ? {radius: element.radius * Math.min(scaleX, scaleY)} : {}),
         });
+        }
       }
       for (const slot of stored.snapshot.portSlots) {
         const definition = stored.snapshot.faces[slot.face];
-        const scaleX = 1000 / definition.width;
-        const scaleY = appliedHeight / definition.height;
-        const quarterTurn = slot.rotation === 90 || slot.rotation === 270;
+        const geometry = faceGeometry(definition);
+        const scaleX = 1000 / geometry.width;
+        const scaleY = appliedHeight / geometry.height;
+        const rotation = ((slot.rotation + (definition.rotation ?? 0)) % 360) as typeof slot.rotation;
+        const point = rotateFacePoint(definition, slot.x + slot.width/2, slot.y + slot.height/2);
+        const skin = definition.skin ? FACE_SKIN_COLORS[definition.skin] : undefined;
+        const quarterTurn = rotation === 90 || rotation === 270;
         const width = slot.width * (quarterTurn ? scaleY : scaleX);
         const height = slot.height * (quarterTurn ? scaleX : scaleY);
-        result.snapshot.portSlots.push({...slot, id: prefix(slot.id), x: (slot.x + slot.width / 2) * scaleX - width / 2, width, y: y + (slot.y + slot.height / 2) * scaleY - height / 2, height, groupId: group.id});
+        result.snapshot.portSlots.push({...slot, ...(skin && !slot.color ? {color: skin.background} : {}), rotation, id: prefix(slot.id), x: point.x * scaleX - width / 2, width, y: y + point.y * scaleY - height / 2, height, groupId: group.id});
       }
       result.bindings.push(...reconciled.bindings.map(binding => ({...binding, slotId: prefix(binding.slotId)})));
       if (reconciled.status === "needs-mapping") result.status = "needs-mapping";

@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const ja = {
+  "Chassis skin": "筐体の外観",
+  "Graphite": "グラファイト",
+  "Silver": "シルバー",
+  "Ivory": "アイボリー",
+  "Rotation keeps the assigned rack footprint.": "回転しても割り当てられたラックの占有範囲は変わりません。",
+  "Export saved template": "保存済みテンプレートをエクスポート",
+  "Import template": "テンプレートをインポート",
+  "Import device type": "インポート先のデバイス種別",
+  "Import saves a new copy. Select it from Templates to edit.": "インポートすると新しいコピーが保存されます。編集するにはテンプレート一覧から選択してください。",
+  "Imported template: {name}": "インポートしたテンプレート: {name}",
+  "Template files must be 10 MB or smaller.": "テンプレートファイルは10 MB以下である必要があります。",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "RackpadハードウェアテンプレートのJSONファイル（スキーマバージョン1）を選択してください。",
+  "Could not import hardware template.": "ハードウェアテンプレートをインポートできませんでした。",
   "Allow unencrypted NUT transport": "暗号化されていないNUT通信を許可",
 
   "External health": "外部の稼働状態",
@@ -1121,7 +1134,7 @@ export const ja = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "上で既存の範囲を選択するか、新しい範囲を作成して予約 ID 空間を管理してください。",
   "Use the allocate action to start reserving and documenting IDs in this range.": "割り当てアクションでこの範囲の ID の予約と記録を開始してください。",
   "Pick a cable from the inventory table to edit its metadata.": "インベントリ表からケーブルを選び、メタデータを編集してください。",
-  "Broaden the search to see more of the loaded activity log.": "検索を広げて、読み込まれたアクティビティログをもっと表示してください。",
+  "Broaden the search or choose a different action.": "検索範囲を広げるか、別の操作を選択してください。",
   "Click a device, cable, or port to inspect its topology context.": "デバイス、ケーブル、またはポートをクリックしてトポロジコンテキストを確認してください。",
   "Create your first rack or start by adding loose room tech as unracked gear.": "最初のラックを作成するか、部屋の独立機器をラック外機器として追加してください。",
   "Assign a rack to this room from the rack editor.": "ラックエディターからこの部屋にラックを割り当ててください。",
@@ -1508,7 +1521,7 @@ export const ja = {
   "shared parent address": "共有親アドレス",
   "Shelf": "棚",
   "Shelf device layout": "シェルフデバイスのレイアウト",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "このラボに読み込まれた最新の監査履歴を表示します。デバイス固有のアクティビティも各デバイスのページから入手できます。",
+  "Showing audit history for this lab. Counts include all matching entries.": "このラボの監査履歴を表示しています。件数には一致するすべての項目が含まれます。",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

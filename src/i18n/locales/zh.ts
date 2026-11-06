@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const zh = {
+  "Chassis skin": "机箱外观",
+  "Graphite": "石墨色",
+  "Silver": "银色",
+  "Ivory": "象牙色",
+  "Rotation keeps the assigned rack footprint.": "旋转会保留已分配的机架占用空间。",
+  "Export saved template": "导出已保存的模板",
+  "Import template": "导入模板",
+  "Import device type": "导入的设备类型",
+  "Import saves a new copy. Select it from Templates to edit.": "导入会保存一个新副本。请从模板列表中选择该副本进行编辑。",
+  "Imported template: {name}": "已导入模板：{name}",
+  "Template files must be 10 MB or smaller.": "模板文件不得超过 10 MB。",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "请选择 Rackpad 硬件模板 JSON 文件（架构版本 1）。",
+  "Could not import hardware template.": "无法导入硬件模板。",
   "Allow unencrypted NUT transport": "允许未加密的NUT传输",
 
   "External health": "外部健康状态",
@@ -1121,7 +1134,7 @@ export const zh = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "在上方选择现有范围或创建新范围以管理预留 ID 空间。",
   "Use the allocate action to start reserving and documenting IDs in this range.": "使用分配操作开始在此范围内预留并记录 ID。",
   "Pick a cable from the inventory table to edit its metadata.": "从库存表中选择线缆以编辑其元数据。",
-  "Broaden the search to see more of the loaded activity log.": "扩大搜索范围以查看更多已加载的活动日志。",
+  "Broaden the search or choose a different action.": "扩大搜索范围或选择其他操作。",
   "Click a device, cable, or port to inspect its topology context.": "点击设备、线缆或端口以查看其拓扑上下文。",
   "Create your first rack or start by adding loose room tech as unracked gear.": "创建第一个机架，或将机房中的独立设备添加为未上架设备。",
   "Assign a rack to this room from the rack editor.": "在机架编辑器中为此机房分配机架。",
@@ -1508,7 +1521,7 @@ export const zh = {
   "shared parent address": "共享父地址",
   "Shelf": "货架",
   "Shelf device layout": "货架设备布局",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "显示该实验室最新加载的审核历史记录。每个设备页面还提供特定于设备的活动。",
+  "Showing audit history for this lab. Counts include all matching entries.": "显示此实验室的审计历史。计数包含所有匹配的条目。",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

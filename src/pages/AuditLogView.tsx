@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Search } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Activity, ChevronDown, Search } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
 import { EmptyState } from "@/components/shared/EmptyState";
 import {
@@ -18,27 +18,43 @@ import { useStore } from "@/lib/store";
 import { relativeTime } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import { api, getAuthToken } from "@/lib/api";
-import type { AuditEntry, Lab } from "@/lib/types";
+import type { AuditEntry, AuditLogSummary, Lab } from "@/lib/types";
 
 const PAGE_SIZE = 100;
 
 export default function AuditLogView() {
   const lab = useStore((s) => s.lab);
   const user = useStore((s) => s.currentUser);
-  return <AuditHistory key={`${lab.id}:${user?.id}`} lab={lab} />;
+  return (
+    <AuditHistory
+      key={`${lab.id}:${user?.id}:${user?.role}`}
+      lab={lab}
+      canReadSummary={user?.role === "admin"}
+    />
+  );
 }
 
-function AuditHistory({ lab }: { lab: Lab }) {
+function AuditHistory({
+  lab,
+  canReadSummary,
+}: {
+  lab: Lab;
+  canReadSummary: boolean;
+}) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [action, setAction] = useState("");
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
+  const [summary, setSummary] = useState<AuditLogSummary | null>(null);
+  const [actions, setActions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [reload, setReload] = useState(0);
   const requestId = useRef(0);
   const pending = useRef(false);
+  const table = useRef<HTMLDivElement>(null);
+  const sentinel = useRef<HTMLDivElement>(null);
   const normalizedQuery = query.trim();
   const normalizedAction = action.trim();
 
@@ -47,20 +63,33 @@ function AuditHistory({ lab }: { lab: Lab }) {
     const token = getAuthToken();
     pending.current = false;
     setAuditLog([]);
+    setSummary(null);
     setLoading(true);
     setFailed(false);
     setHasMore(false);
     const timer = window.setTimeout(() => {
-      void api
-        .getAuditLog({
-          labId: lab.id,
-          limit: PAGE_SIZE,
-          search: normalizedQuery || undefined,
-          action: normalizedAction || undefined,
-        })
-        .then((entries) => {
+      const filters = {
+        labId: lab.id,
+        search: normalizedQuery || undefined,
+        action: normalizedAction || undefined,
+      };
+      void Promise.all([
+        api.getAuditLog({ ...filters, limit: PAGE_SIZE }),
+        canReadSummary
+          ? api.getAuditLogSummary(filters)
+          : Promise.resolve({
+              entries: 0,
+              users: 0,
+              devices: 0,
+              ports: 0,
+              actions: [],
+            }),
+      ])
+        .then(([entries, totals]) => {
           if (id !== requestId.current || token !== getAuthToken()) return;
           setAuditLog(entries);
+          setSummary(totals);
+          setActions(totals.actions);
           setHasMore(entries.length === PAGE_SIZE);
           setLoading(false);
         })
@@ -74,11 +103,11 @@ function AuditHistory({ lab }: { lab: Lab }) {
       window.clearTimeout(timer);
       requestId.current = id + 1;
     };
-  }, [lab.id, normalizedQuery, normalizedAction, reload]);
+  }, [lab.id, canReadSummary, normalizedQuery, normalizedAction, reload]);
 
-  async function loadMore() {
+  const loadMore = useCallback(async () => {
     const last = auditLog.at(-1);
-    if (!last || pending.current || loading) return;
+    if (!last || !hasMore || pending.current || loading) return;
     pending.current = true;
     setLoading(true);
     setFailed(false);
@@ -104,15 +133,24 @@ function AuditHistory({ lab }: { lab: Lab }) {
         setLoading(false);
       }
     }
-  }
+  }, [auditLog, hasMore, loading, lab.id, normalizedQuery, normalizedAction]);
 
-  const actionCounts = useMemo(() => {
-    return auditLog.reduce<Record<string, number>>((acc, entry) => {
-      const group = entry.action.split(".")[0] || "other";
-      acc[group] = (acc[group] ?? 0) + 1;
-      return acc;
-    }, {});
-  }, [auditLog]);
+  useEffect(() => {
+    if (!hasMore || loading || failed || !sentinel.current) return;
+    let active = true;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (active && entries.some((entry) => entry.isIntersecting))
+          void loadMore();
+      },
+      { root: table.current, rootMargin: "240px" },
+    );
+    observer.observe(sentinel.current);
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
+  }, [hasMore, loading, failed, loadMore]);
 
   return (
     <>
@@ -121,20 +159,17 @@ function AuditHistory({ lab }: { lab: Lab }) {
         title={t("Audit log")}
         meta={
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-subtle)]">
-            {auditLog.length} {t("loaded entries")}
+            {summary?.entries ?? "—"} {t("entries")}
           </span>
         }
       />
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <div className="mb-4 grid gap-3 md:grid-cols-4">
-          <AuditStat label={t("Entries")} value={auditLog.length} />
-          <AuditStat label={t("Devices")} value={actionCounts.device ?? 0} />
-          <AuditStat label={t("Ports")} value={actionCounts.port ?? 0} />
-          <AuditStat
-            label={t("Users")}
-            value={new Set(auditLog.map((entry) => entry.user)).size}
-          />
+          <AuditStat label={t("Entries")} value={summary?.entries ?? "—"} />
+          <AuditStat label={t("Devices")} value={summary?.devices ?? "—"} />
+          <AuditStat label={t("Ports")} value={summary?.ports ?? "—"} />
+          <AuditStat label={t("Users")} value={summary?.users ?? "—"} />
         </div>
 
         <Card>
@@ -146,13 +181,24 @@ function AuditHistory({ lab }: { lab: Lab }) {
             <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto">
               <label className="flex items-center gap-2 text-xs">
                 {t("Action")}
-                <Input
-                  value={action}
-                  onChange={(event) => setAction(event.target.value)}
-                  placeholder={t("All")}
-                  maxLength={120}
-                  className="w-40"
-                />
+                <span className="relative w-40">
+                  <select
+                    value={action}
+                    onChange={(event) => setAction(event.target.value)}
+                    className="rk-control h-8 w-full truncate bg-none ps-2 pe-7 text-sm"
+                  >
+                    <option value="">{t("All")}</option>
+                    {actions.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    aria-hidden="true"
+                    className="pointer-events-none absolute end-2 top-2 size-4 text-[var(--text-tertiary)]"
+                  />
+                </span>
               </label>
               <Button size="sm" onClick={() => setReload((value) => value + 1)}>
                 {t("Refresh")}
@@ -172,6 +218,7 @@ function AuditHistory({ lab }: { lab: Lab }) {
           </CardHeader>
           <CardBody className="p-0">
             <div
+              ref={table}
               tabIndex={0}
               aria-label={t("Recent audit entries")}
               className="rk-table-shell max-h-[calc(100vh-20rem)] overflow-y-auto"
@@ -226,35 +273,34 @@ function AuditHistory({ lab }: { lab: Lab }) {
                   ))}
                 </tbody>
               </table>
+              <div ref={sentinel} aria-hidden="true" className="h-px" />
               {!loading && !failed && auditLog.length === 0 && (
                 <EmptyState
                   icon={Search}
                   className="m-4"
                   title={t("No matching audit entries")}
                   description={t(
-                    "Broaden the search to see more of the loaded activity log.",
+                    "Broaden the search or choose a different action.",
                   )}
                 />
               )}
             </div>
             <div className="flex items-center gap-3 p-4" aria-live="polite">
+              <span>
+                {auditLog.length} {t("loaded entries")}
+              </span>
               {loading && <span>{t("Loading...")}</span>}
               {failed && <span role="alert">{t("Couldn't load data")}</span>}
-              {failed && auditLog.length === 0 && (
+              {failed && (
                 <Button
                   size="sm"
-                  onClick={() => setReload((value) => value + 1)}
+                  onClick={() =>
+                    auditLog.length
+                      ? void loadMore()
+                      : setReload((value) => value + 1)
+                  }
                 >
                   {t("Retry")}
-                </Button>
-              )}
-              {hasMore && (
-                <Button
-                  size="sm"
-                  disabled={loading}
-                  onClick={() => void loadMore()}
-                >
-                  {t("Load more")}
                 </Button>
               )}
             </div>
@@ -263,7 +309,7 @@ function AuditHistory({ lab }: { lab: Lab }) {
 
         <div className="mt-4 text-xs text-[var(--text-tertiary)]">
           {t(
-            "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.",
+            "Showing audit history for this lab. Counts include all matching entries.",
           )}
         </div>
       </div>
@@ -271,7 +317,13 @@ function AuditHistory({ lab }: { lab: Lab }) {
   );
 }
 
-function AuditStat({ label, value }: { label: string; value: number }) {
+function AuditStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | string;
+}) {
   return (
     <Card role="group" aria-label={label}>
       <CardBody className="flex items-center justify-between gap-3 p-4">

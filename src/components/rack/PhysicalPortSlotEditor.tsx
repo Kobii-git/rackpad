@@ -16,6 +16,7 @@ import type {
   ResolvedPhysicalLayoutV1,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { faceGeometry, faceInputDelta, unrotateFacePoint, physicalFaceSkinStyle } from "@/lib/physical-face";
 
 interface PhysicalPortSlotEditorProps {
   selectedItem?: TemplateItem;
@@ -74,6 +75,7 @@ export function PhysicalPortSlotEditor({
 }: PhysicalPortSlotEditorProps) {
   const { t } = useI18n();
   const definition = faceOf(layout, face);
+  const geometry = faceGeometry(definition);
   const [drag, setDrag] = useState<{
     kind: "slot" | "element" | "module-slot";
     id: string;
@@ -88,12 +90,14 @@ export function PhysicalPortSlotEditor({
       ? layout.moduleSlots.filter((slot) => slot.face === face)
       : [];
 
-  function point(event: ReactPointerEvent<SVGSVGElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    return {
-      x: ((event.clientX - bounds.left) / bounds.width) * definition.width,
-      y: ((event.clientY - bounds.top) / bounds.height) * definition.height,
-    };
+  function pointerPoint(svg: SVGSVGElement, clientX: number, clientY: number) {
+    const point = svg.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return { x: 0, y: 0 };
+    const projected = point.matrixTransform(matrix.inverse());
+    return unrotateFacePoint(definition, projected.x, projected.y);
   }
 
   function beginDrag(
@@ -105,12 +109,8 @@ export function PhysicalPortSlotEditor({
   ) {
     const svg = event.currentTarget.ownerSVGElement;
     if (!svg) return;
-    const bounds = svg.getBoundingClientRect();
-    const pointerX =
-      ((event.clientX - bounds.left) / bounds.width) * definition.width;
-    const pointerY =
-      ((event.clientY - bounds.top) / bounds.height) * definition.height;
-    svg.focus();
+    const {x: pointerX, y: pointerY} = pointerPoint(svg, event.clientX, event.clientY);
+    svg.focus({ preventScroll: true });
     onEditStart?.();
     svg.setPointerCapture(event.pointerId);
     setDrag({ kind, id, pointerId: event.pointerId, offsetX: pointerX - x, offsetY: pointerY - y });
@@ -118,7 +118,10 @@ export function PhysicalPortSlotEditor({
 
   return (
     <svg
-      viewBox={`0 0 ${definition.width} ${definition.height}`}
+      viewBox={`0 0 ${geometry.width} ${geometry.height}`}
+      data-face-rotation={definition.rotation ?? 0}
+      data-face-skin={definition.skin ?? "default"}
+      style={physicalFaceSkinStyle(definition)}
       role="application"
       tabIndex={0}
       aria-label={t("Physical layout")}
@@ -128,7 +131,7 @@ export function PhysicalPortSlotEditor({
       )}
       onPointerMove={(event) => {
         if (!drag || drag.pointerId !== event.pointerId) return;
-        const next = point(event);
+        const next = pointerPoint(event.currentTarget, event.clientX, event.clientY);
         if (drag.resize && "moduleSlots" in layout) {
           const value = templateItemValue(layout, drag.resize);
           if (!value || !("x" in value)) return;
@@ -161,6 +164,7 @@ export function PhysicalPortSlotEditor({
       onPointerCancel={() => {onEditCancel?.(); setDrag(undefined);}}
       onKeyDown={event => {if (event.key === "Escape" && drag) {event.preventDefault(); onEditCancel?.(); setDrag(undefined);}}}
     >
+      <g transform={geometry.transform}>
       {definition.shape === "round" ? (
         <circle data-device-shape="round" cx="500" cy="500" r="482"
           fill="var(--color-surface)" stroke="var(--color-line-strong)" strokeWidth="3" />
@@ -176,9 +180,9 @@ export function PhysicalPortSlotEditor({
           onKeyDown={moduleSlot && onMoveModuleSlot ? event => {
             const step = event.shiftKey ? 10 : 1;
             const delta = event.key === "ArrowLeft" ? [-step, 0] : event.key === "ArrowRight" ? [step, 0] : event.key === "ArrowUp" ? [0, -step] : event.key === "ArrowDown" ? [0, step] : undefined;
-            if (delta) {event.preventDefault(); onSelectModuleSlot?.(moduleSlot.id); onMoveModuleSlot(moduleSlot.id, moduleSlot.x + delta[0], moduleSlot.y + delta[1]);}
+            if (delta) {event.preventDefault(); const [dx, dy] = faceInputDelta(definition, delta[0], delta[1]); onSelectModuleSlot?.(moduleSlot.id); onMoveModuleSlot(moduleSlot.id, moduleSlot.x + dx, moduleSlot.y + dy);}
           } : undefined}>
-          <Primitive primitive={primitive} selected={!module && selectedElementId === primitive.id}
+          <Primitive primitive={primitive} rotation={definition.rotation} selected={!module && selectedElementId === primitive.id}
             onPointerDown={!module && onMoveElement ? event => {beginDrag(event, "element", primitive.id, primitive.x, primitive.y); onSelectElement?.(primitive.id);} : undefined} />
         </g>;
       })}
@@ -234,7 +238,8 @@ export function PhysicalPortSlotEditor({
                       : undefined;
             if (!delta) return;
             event.preventDefault();
-            onMoveSlot(slot.id, slot.x + delta[0], slot.y + delta[1]);
+            const [dx, dy] = faceInputDelta(definition, delta[0], delta[1]);
+            onMoveSlot(slot.id, slot.x + dx, slot.y + dy);
           }}
         />
       ))}
@@ -250,18 +255,21 @@ export function PhysicalPortSlotEditor({
         const x = value.x + ("width" in value ? value.width : value.radius);
         const y = value.y + ("height" in value ? value.height : 0);
         return <rect data-testid="template-resize-handle" x={x-6} y={y-6} width={12} height={12} fill="var(--color-warning)" stroke="var(--color-bg)" className="cursor-nwse-resize" role="button" tabIndex={0} aria-label={t("Resize item")}
-          onPointerDown={event => {event.stopPropagation(); const svg = event.currentTarget.ownerSVGElement!; svg.focus(); onEditStart?.(); svg.setPointerCapture(event.pointerId); setDrag({kind: "element", id: selectedItem.id, offsetX: 0, offsetY: 0, pointerId: event.pointerId, resize: selectedItem});}} />;
+          onPointerDown={event => {event.stopPropagation(); const svg = event.currentTarget.ownerSVGElement!; svg.focus({ preventScroll: true }); onEditStart?.(); svg.setPointerCapture(event.pointerId); setDrag({kind: "element", id: selectedItem.id, offsetX: 0, offsetY: 0, pointerId: event.pointerId, resize: selectedItem});}} />;
       })()}
+      </g>
     </svg>
   );
 }
 
 function Primitive({
   primitive,
+  rotation = 0,
   selected = false,
   onPointerDown,
 }: {
   primitive: PhysicalFacePrimitiveV1;
+  rotation?: number;
   selected?: boolean;
   onPointerDown?: (event: ReactPointerEvent<SVGElement>) => void;
 }) {
@@ -269,6 +277,7 @@ function Primitive({
   if (primitive.kind === "label") {
     return (
       <text
+        transform={rotation ? `rotate(${-rotation} ${primitive.x} ${primitive.y})` : undefined}
         x={primitive.x}
         y={primitive.y}
         textAnchor={primitive.align ?? "start"}

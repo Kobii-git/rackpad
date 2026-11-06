@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { ValidationError } from "./validation.js";
+import { FACE_SKINS, type FaceSkin, type FaceRotation } from "./physical-face-appearance.js";
 
 export const PHYSICAL_LAYOUT_STATUSES = [
   "accurate",
@@ -67,6 +68,8 @@ export interface FaceDefinitionV1 {
   width: 1000;
   height: number;
   shape?: "round";
+  skin?: FaceSkin;
+  rotation?: FaceRotation;
   elements: FacePrimitiveV1[];
   artworkOrder?: ArtworkReference[];
 }
@@ -422,6 +425,12 @@ function validateFace(value: unknown, label: string): FaceDefinitionV1 {
     );
   }
   const height = finiteInRange(face.height, `${label}.height`, 80, 1000);
+  if (face.skin !== undefined && !(FACE_SKINS as readonly unknown[]).includes(face.skin)) {
+    throw new ValidationError(`${label}.skin is invalid.`);
+  }
+  if (face.rotation !== undefined && ![0, 90, 180, 270].includes(face.rotation as number)) {
+    throw new ValidationError(`${label}.rotation must be 0, 90, 180 or 270.`);
+  }
   if (face.shape !== undefined && face.shape !== "round") {
     throw new ValidationError(`${label}.shape must be round when provided.`);
   }
@@ -562,7 +571,7 @@ function validateFace(value: unknown, label: string): FaceDefinitionV1 {
       return reference;
     });
   }
-  return { schemaVersion: 1, width: 1000, height, ...(face.shape === "round" ? { shape: "round" as const } : {}), elements, ...(artworkOrder ? { artworkOrder } : {}) };
+  return { schemaVersion: 1, width: 1000, height, ...(face.shape === "round" ? { shape: "round" as const } : {}), ...(face.skin !== undefined ? { skin: face.skin as FaceSkin } : {}), ...(face.rotation !== undefined ? { rotation: face.rotation as FaceRotation } : {}), elements, ...(artworkOrder ? { artworkOrder } : {}) };
 }
 
 function validatePortSlot(value: unknown, index: number): PhysicalPortSlotV1 {
@@ -1334,7 +1343,7 @@ export function resolveTemplateSnapshot(
       const rank = new Map(order.map((reference, index) => [JSON.stringify([reference.moduleId ?? null, reference.elementId]), index]));
       entries.sort((a, b) => (rank.get(a.key) ?? order.length) - (rank.get(b.key) ?? order.length));
     }
-    return {schemaVersion: 1, width: definition.width, height: definition.height, ...(definition.shape ? {shape: definition.shape} : {}), elements: entries.map(entry => entry.element), ...(order ? {artworkOrder: entries.map(entry => ({elementId: entry.element.id}))} : {})};
+    return {...definition, elements: entries.map(entry => entry.element), ...(order ? {artworkOrder: entries.map(entry => ({elementId: entry.element.id}))} : {})};
   }
   return {
     schemaVersion: 1,

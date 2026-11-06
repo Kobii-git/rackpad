@@ -84,6 +84,7 @@ define({ kind: "admin", denialMessage: "Administrator access required." }, [
   "GET /api/admin/native-backups/:name/download",
   "GET /api/admin/operations/status",
   "GET /api/admin/ui-settings",
+  "GET /api/audit-log/summary",
   "GET /api/users",
   "PATCH /api/integrations/schedules/:id",
   "PATCH /api/labs/:id",

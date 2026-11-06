@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const ar = {
+  "Chassis skin": "مظهر الهيكل",
+  "Graphite": "جرافيت",
+  "Silver": "فضي",
+  "Ivory": "عاجي",
+  "Rotation keeps the assigned rack footprint.": "يحافظ التدوير على المساحة المخصصة في الحامل.",
+  "Export saved template": "تصدير القالب المحفوظ",
+  "Import template": "استيراد قالب",
+  "Import device type": "نوع الجهاز للاستيراد",
+  "Import saves a new copy. Select it from Templates to edit.": "يحفظ الاستيراد نسخة جديدة. حددها من القوالب لتحريرها.",
+  "Imported template: {name}": "القالب المستورد: {name}",
+  "Template files must be 10 MB or smaller.": "يجب ألا يتجاوز حجم ملفات القوالب 10 ميغابايت.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "اختر ملف JSON لقالب أجهزة Rackpad (إصدار المخطط 1).",
+  "Could not import hardware template.": "تعذر استيراد قالب الأجهزة.",
   "Allow unencrypted NUT transport": "السماح بنقل NUT غير المشفر",
 
   "External health": "الصحة الخارجية",
@@ -1121,7 +1134,7 @@ export const ar = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "اختر نطاقاً موجوداً أعلاه أو أنشئ نطاقاً جديداً لإدارة مساحة المعرف المحجوزة.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "استخدم إجراء التخصيص لبدء حجز وتوثيق المعرفات في هذا النطاق.",
   "Pick a cable from the inventory table to edit its metadata.": "اختر كابلاً من جدول المخزون لتحرير بياناته الوصفية.",
-  "Broaden the search to see more of the loaded activity log.": "وسّع البحث لرؤية المزيد من سجل النشاط المحمّل.",
+  "Broaden the search or choose a different action.": "وسّع البحث أو اختر إجراءً آخر.",
   "Click a device, cable, or port to inspect its topology context.": "انقر على جهاز أو كابل أو منفذ لفحص سياق الطوبولوجيا.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "أنشئ أول رف أو ابدأ بإضافة معدات الغرفة المنفصلة كمعدات غير مركبة.",
   "Assign a rack to this room from the rack editor.": "عيّن رفاً لهذه الغرفة من محرر الرفوف.",
@@ -1508,7 +1521,7 @@ export const ar = {
   "shared parent address": "عنوان الوالدين المشترك",
   "Shelf": "الرف",
   "Shelf device layout": "تخطيط جهاز الرف",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "إظهار أحدث سجل التدقيق المحمل لهذا المعمل. يتوفر أيضًا نشاط خاص بالجهاز من كل صفحة جهاز.",
+  "Showing audit history for this lab. Counts include all matching entries.": "عرض سجل التدقيق لهذا المختبر. تشمل الأعداد جميع الإدخالات المطابقة.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

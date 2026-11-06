@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const ru = {
+  "Chassis skin": "Оформление корпуса",
+  "Graphite": "Графит",
+  "Silver": "Серебро",
+  "Ivory": "Слоновая кость",
+  "Rotation keeps the assigned rack footprint.": "Поворот сохраняет выделенное место в стойке.",
+  "Export saved template": "Экспорт сохранённого шаблона",
+  "Import template": "Импорт шаблона",
+  "Import device type": "Тип устройства для импорта",
+  "Import saves a new copy. Select it from Templates to edit.": "Импорт сохраняет новую копию. Для редактирования выберите её в списке шаблонов.",
+  "Imported template: {name}": "Импортированный шаблон: {name}",
+  "Template files must be 10 MB or smaller.": "Размер файлов шаблонов не должен превышать 10 МБ.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "Выберите JSON-файл шаблона оборудования Rackpad (версия схемы 1).",
+  "Could not import hardware template.": "Не удалось импортировать шаблон оборудования.",
   "Allow unencrypted NUT transport": "Разрешить незашифрованное соединение NUT",
 
   "External health": "Внешнее состояние",
@@ -1121,7 +1134,7 @@ export const ru = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "Выберите существующий диапазон выше или создайте новый для управления зарезервированным пространством ID.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "Используйте действие выделения, чтобы начать резервировать и документировать ID в этом диапазоне.",
   "Pick a cable from the inventory table to edit its metadata.": "Выберите кабель из таблицы инвентаря для редактирования метаданных.",
-  "Broaden the search to see more of the loaded activity log.": "Расширьте поиск, чтобы увидеть больше загруженного журнала активности.",
+  "Broaden the search or choose a different action.": "Расширьте поиск или выберите другое действие.",
   "Click a device, cable, or port to inspect its topology context.": "Нажмите на устройство, кабель или порт, чтобы просмотреть топологический контекст.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "Создайте первую стойку или начните с добавления отдельного оборудования комнаты как gear вне стойки.",
   "Assign a rack to this room from the rack editor.": "Назначьте стойку этой комнате в редакторе стоек.",
@@ -1508,7 +1521,7 @@ export const ru = {
   "shared parent address": "общий родительский адрес",
   "Shelf": "Полка",
   "Shelf device layout": "Схема устройства полки",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "Показана последняя загруженная история аудита для этой лаборатории. Действия, относящиеся к конкретному устройству, также доступны на каждой странице устройства.",
+  "Showing audit history for this lab. Counts include all matching entries.": "История аудита этой лаборатории. Счётчики учитывают все совпадающие записи.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

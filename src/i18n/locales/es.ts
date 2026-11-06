@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const es = {
+  "Chassis skin": "Acabado del chasis",
+  "Graphite": "Grafito",
+  "Silver": "Plateado",
+  "Ivory": "Marfil",
+  "Rotation keeps the assigned rack footprint.": "La rotación conserva el espacio asignado en el rack.",
+  "Export saved template": "Exportar plantilla guardada",
+  "Import template": "Importar plantilla",
+  "Import device type": "Tipo de dispositivo para importar",
+  "Import saves a new copy. Select it from Templates to edit.": "La importación guarda una copia nueva. Selecciónela en Plantillas para editarla.",
+  "Imported template: {name}": "Plantilla importada: {name}",
+  "Template files must be 10 MB or smaller.": "Los archivos de plantilla deben tener como máximo 10 MB.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "Seleccione un archivo JSON de plantilla de hardware de Rackpad (versión de esquema 1).",
+  "Could not import hardware template.": "No se pudo importar la plantilla de hardware.",
   "Allow unencrypted NUT transport": "Permitir transporte NUT sin cifrar",
 
   "External health": "Estado externo",
@@ -1121,7 +1134,7 @@ export const es = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "Elija un rango existente arriba o cree uno nuevo para gestionar el espacio de ID reservado.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "Use la acción de asignación para empezar a reservar y documentar ID en este rango.",
   "Pick a cable from the inventory table to edit its metadata.": "Elija un cable de la tabla de inventario para editar sus metadatos.",
-  "Broaden the search to see more of the loaded activity log.": "Amplíe la búsqueda para ver más del registro de actividad cargado.",
+  "Broaden the search or choose a different action.": "Amplía la búsqueda o elige otra acción.",
   "Click a device, cable, or port to inspect its topology context.": "Haga clic en un dispositivo, cable o puerto para inspeccionar su contexto topológico.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "Cree su primer rack o empiece añadiendo equipo suelto de sala como gear sin rack.",
   "Assign a rack to this room from the rack editor.": "Asigne un rack a esta sala desde el editor de racks.",
@@ -1508,7 +1521,7 @@ export const es = {
   "shared parent address": "dirección compartida de los padres",
   "Shelf": "estante",
   "Shelf device layout": "Diseño del dispositivo de estantería",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "Mostrando el último historial de auditoría cargado para este laboratorio. La actividad específica del dispositivo también está disponible en la página de cada dispositivo.",
+  "Showing audit history for this lab. Counts include all matching entries.": "Historial de auditoría de este laboratorio. Los recuentos incluyen todas las entradas coincidentes.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

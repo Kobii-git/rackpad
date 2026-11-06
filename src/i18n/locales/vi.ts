@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const vi = {
+  "Chassis skin": "Giao diện khung máy",
+  "Graphite": "Màu than chì",
+  "Silver": "Màu bạc",
+  "Ivory": "Màu ngà",
+  "Rotation keeps the assigned rack footprint.": "Xoay vẫn giữ nguyên không gian giá đỡ đã phân bổ.",
+  "Export saved template": "Xuất mẫu đã lưu",
+  "Import template": "Nhập mẫu",
+  "Import device type": "Loại thiết bị để nhập",
+  "Import saves a new copy. Select it from Templates to edit.": "Thao tác nhập lưu một bản sao mới. Chọn bản sao trong danh sách Mẫu để chỉnh sửa.",
+  "Imported template: {name}": "Mẫu đã nhập: {name}",
+  "Template files must be 10 MB or smaller.": "Tệp mẫu phải có dung lượng tối đa 10 MB.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "Chọn tệp JSON mẫu phần cứng Rackpad (phiên bản lược đồ 1).",
+  "Could not import hardware template.": "Không thể nhập mẫu phần cứng.",
   "Allow unencrypted NUT transport": "Cho phép truyền NUT không mã hóa",
 
   "External health": "Sức khỏe bên ngoài",
@@ -1121,7 +1134,7 @@ export const vi = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "Chọn phạm vi hiện có phía trên hoặc tạo mới để quản lý không gian ID dành riêng.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "Dùng thao tác phân bổ để bắt đầu đặt trước và ghi nhận ID trong phạm vi này.",
   "Pick a cable from the inventory table to edit its metadata.": "Chọn cáp từ bảng tồn kho để chỉnh sửa siêu dữ liệu.",
-  "Broaden the search to see more of the loaded activity log.": "Mở rộng tìm kiếm để xem thêm nhật ký hoạt động đã tải.",
+  "Broaden the search or choose a different action.": "Mở rộng tìm kiếm hoặc chọn hành động khác.",
   "Click a device, cable, or port to inspect its topology context.": "Nhấp thiết bị, cáp hoặc cổng để xem ngữ cảnh topology.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "Tạo rack đầu tiên hoặc thêm thiết bị phòng rời làm gear ngoài rack.",
   "Assign a rack to this room from the rack editor.": "Gán rack cho phòng này từ trình chỉnh sửa rack.",
@@ -1508,7 +1521,7 @@ export const vi = {
   "shared parent address": "địa chỉ cha mẹ được chia sẻ",
   "Shelf": "kệ",
   "Shelf device layout": "Bố trí thiết bị kệ",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "Hiển thị lịch sử kiểm tra được tải mới nhất cho phòng thí nghiệm này. Hoạt động dành riêng cho thiết bị cũng có sẵn trên mỗi trang thiết bị.",
+  "Showing audit history for this lab. Counts include all matching entries.": "Lịch sử kiểm toán của phòng lab này. Số đếm bao gồm tất cả mục khớp.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

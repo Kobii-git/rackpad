@@ -1,4 +1,4 @@
-import { physicalFaceRect } from "./physical-face";
+import { physicalFaceRect, faceGeometry, FACE_SKIN_COLORS } from "./physical-face";
 import { orderedFaceElements } from "./template-artwork";
 import { buildRackCablingScene, buildRackCablingRoutes } from "../pages/visualizer/rack-cabling";
 import { faceplateDetailPath, physicalItemColor } from "./faceplate-artwork";
@@ -207,30 +207,33 @@ function renderSceneEquipment(input: {
     height: Math.max(2, input.item.rect.height * scaleY),
   };
   const definition = input.item.layout.snapshot.faces[input.item.physicalFace];
+  const skin = definition.skin ? FACE_SKIN_COLORS[definition.skin] : undefined;
+  const palette = skin ? { ...input.palette, background: skin.background, device: skin.surface, border: skin.border, subdued: skin.text, text: skin.text, port: skin.background } : input.palette;
   const { x, y, width, height } = physicalFaceRect(definition, projected);
   const body = definition.shape === "round"
-    ? `<circle data-device-shape="round" cx="${x + width / 2}" cy="${y + height / 2}" r="${width * 0.482}" fill="${input.palette.device}" stroke="${input.palette.border}" stroke-width="0.8"/>`
-    : `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${width.toFixed(2)}" height="${height.toFixed(2)}" rx="1.5" fill="${input.palette.device}" stroke="${input.palette.border}" stroke-width="0.8"/>`;
+    ? `<circle data-device-shape="round" cx="${x + width / 2}" cy="${y + height / 2}" r="${width * 0.482}" fill="${palette.device}" stroke="${palette.border}" stroke-width="0.8"/>`
+    : `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${width.toFixed(2)}" height="${height.toFixed(2)}" rx="1.5" fill="${palette.device}" stroke="${palette.border}" stroke-width="0.8"/>`;
   const layout = input.item.layout;
   let artwork = "";
   if (layout) {
     const face = layout.snapshot.faces[input.item.physicalFace];
-    const tone = (value?: string) => value === "dark" ? input.palette.background : value === "accent" ? input.palette.portLinked : value === "light" ? input.palette.border : input.palette.device;
+    const tone = (value?: string) => value === "dark" ? palette.background : value === "accent" ? palette.portLinked : value === "light" ? palette.border : palette.device;
     const elements = orderedFaceElements(face).map(primitive => {
-      if (primitive.kind === "label") return `<text x="${primitive.x}" y="${primitive.y}" text-anchor="${primitive.align ?? "start"}" fill="${physicalItemColor(primitive.color, input.palette.subdued)}" font-size="15">${escapeXml(primitive.text)}</text>`;
+      if (primitive.kind === "label") return `<text${face.rotation ? ` transform="rotate(${-face.rotation} ${primitive.x} ${primitive.y})"` : ""} x="${primitive.x}" y="${primitive.y}" text-anchor="${primitive.align ?? "start"}" fill="${physicalItemColor(primitive.color, palette.subdued)}" font-size="15">${escapeXml(primitive.text)}</text>`;
       if (primitive.kind === "screw" || primitive.kind === "indicator") return `<circle cx="${primitive.x}" cy="${primitive.y}" r="${primitive.radius}" fill="${physicalItemColor(primitive.color, tone(primitive.tone))}"/>`;
       if (!("width" in primitive)) return "";
-      return `<rect x="${primitive.x}" y="${primitive.y}" width="${primitive.width}" height="${primitive.height}" rx="${primitive.kind === "handle" ? 8 : primitive.kind === "panel" ? 5 : 2}" fill="${physicalItemColor(primitive.color, tone(primitive.tone))}" stroke="${input.palette.border}" stroke-width="0.5" vector-effect="non-scaling-stroke"/><path d="${faceplateDetailPath(primitive)}" fill="none" stroke="${input.palette.subdued}" stroke-opacity="0.45" stroke-width="0.6" vector-effect="non-scaling-stroke"/>`;
+      return `<rect x="${primitive.x}" y="${primitive.y}" width="${primitive.width}" height="${primitive.height}" rx="${primitive.kind === "handle" ? 8 : primitive.kind === "panel" ? 5 : 2}" fill="${physicalItemColor(primitive.color, tone(primitive.tone))}" stroke="${palette.border}" stroke-width="0.5" vector-effect="non-scaling-stroke"/><path d="${faceplateDetailPath(primitive)}" fill="none" stroke="${palette.subdued}" stroke-opacity="0.45" stroke-width="0.6" vector-effect="non-scaling-stroke"/>`;
     }).join("");
     const slots = layout.snapshot.portSlots.filter(slot => slot.face === input.item.physicalFace).map(slot => {
       const binding = layout.bindings.find(binding => binding.slotId === slot.id);
       const port = binding ? input.portById.get(binding.portId) : undefined;
-      return `<rect x="${slot.x}" y="${slot.y}" width="${slot.width}" height="${slot.height}" rx="2" transform="rotate(${slot.rotation} ${slot.x + slot.width / 2} ${slot.y + slot.height / 2})" fill="${physicalItemColor(slot.color, binding && input.linked.has(binding.portId) ? input.palette.portLinked : input.palette.port)}" stroke="${binding && input.linked.has(binding.portId) ? input.palette.portLinked : input.palette.border}" stroke-width="0.65" vector-effect="non-scaling-stroke"><title>${escapeXml(`${input.item.device.hostname}: ${port?.name ?? slot.label ?? slot.id}`)}</title></rect>`;
+      return `<rect x="${slot.x}" y="${slot.y}" width="${slot.width}" height="${slot.height}" rx="2" transform="rotate(${slot.rotation} ${slot.x + slot.width / 2} ${slot.y + slot.height / 2})" fill="${physicalItemColor(slot.color, binding && input.linked.has(binding.portId) ? palette.portLinked : palette.port)}" stroke="${binding && input.linked.has(binding.portId) ? palette.portLinked : palette.border}" stroke-width="0.65" vector-effect="non-scaling-stroke"><title>${escapeXml(`${input.item.device.hostname}: ${port?.name ?? slot.label ?? slot.id}`)}</title></rect>`;
     }).join("");
+    const geometry = faceGeometry(face);
     const transform = input.item.rotation === 90
-      ? `translate(${x + width} ${y}) rotate(90) scale(${height / face.width} ${width / face.height})`
-      : `translate(${x} ${y}) scale(${width / face.width} ${height / face.height})`;
-    artwork = `<g transform="${transform}">${elements}${slots}</g>`;
+      ? `translate(${x + width} ${y}) rotate(90) scale(${height / geometry.width} ${width / geometry.height})`
+      : `translate(${x} ${y}) scale(${width / geometry.width} ${height / geometry.height})`;
+    artwork = `<g transform="${transform}"><g${geometry.transform ? ` transform="${geometry.transform}"` : ""}>${elements}${slots}</g></g>`;
   }
   const ports = input.anchors
     .filter(
@@ -243,13 +246,13 @@ function renderSceneEquipment(input: {
       const port = input.portById.get(anchor.portId);
       const portX = offsetX + anchor.x * scaleX;
       const portY = offsetY + anchor.y * scaleY;
-      return `<circle cx="${portX.toFixed(2)}" cy="${portY.toFixed(2)}" r="${Math.max(1.5, Math.min(width, height) * 0.035).toFixed(2)}" fill="${input.linked.has(anchor.portId) ? input.palette.portLinked : input.palette.port}" stroke="${input.palette.border}" stroke-width="0.6"><title>${escapeXml(`${input.item.device.hostname}: ${port?.name ?? anchor.portId}`)}</title></circle>`;
+      return `<circle cx="${portX.toFixed(2)}" cy="${portY.toFixed(2)}" r="${Math.max(1.5, Math.min(width, height) * 0.035).toFixed(2)}" fill="${input.linked.has(anchor.portId) ? palette.portLinked : palette.port}" stroke="${palette.border}" stroke-width="0.6"><title>${escapeXml(`${input.item.device.hostname}: ${port?.name ?? anchor.portId}`)}</title></circle>`;
     })
     .join("");
   return [
     `<g data-mount-kind="${input.item.mountKind}" data-device-id="${escapeXml(input.item.device.id)}">${body}`,
     artwork || ports,
-    `<text data-device-name="true" text-anchor="${input.item.device.labelPosition === "upper-left" ? "start" : "end"}" x="${input.item.device.labelPosition === "upper-left" ? x + 3 : x + width - 3}" y="${y + Math.min(10, height - 1)}" fill="${input.palette.text}" stroke="${input.palette.background}" stroke-width="2" paint-order="stroke" font-size="${Math.min(9, height * 0.55)}">${escapeXml(input.item.device.displayName || input.item.device.hostname)}<title>${escapeXml(input.item.device.displayName || input.item.device.hostname)}</title></text>`,
+    `<text data-device-name="true" text-anchor="${input.item.device.labelPosition === "upper-left" ? "start" : "end"}" x="${input.item.device.labelPosition === "upper-left" ? x + 3 : x + width - 3}" y="${y + Math.min(10, height - 1)}" fill="${palette.text}" stroke="${palette.background}" stroke-width="2" paint-order="stroke" font-size="${Math.min(9, height * 0.55)}">${escapeXml(input.item.device.displayName || input.item.device.hostname)}<title>${escapeXml(input.item.device.displayName || input.item.device.hostname)}</title></text>`,
     `</g>`,
   ].join("");
 }

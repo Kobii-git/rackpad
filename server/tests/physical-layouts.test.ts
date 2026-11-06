@@ -48,6 +48,10 @@ test("round templates validate, duplicate, apply linked ports and survive backup
     "Round AP",
   );
   const headers = authHeaders(token);
+  template.front.skin = "silver";
+  template.front.rotation = 90;
+  template.rear.skin = "graphite";
+  template.rear.rotation = 270;
   const customType = await app.inject({method: "POST", url: "/api/device-types", headers,
     payload: {label: "Round ceiling sensor", parentType: "ap"}});
   assert.equal(customType.statusCode, 201, customType.body);
@@ -57,6 +61,9 @@ test("round templates validate, duplicate, apply linked ports and survive backup
     { ...template.front, shape: "square" },
     { ...template.front, shape: "<svg>" },
     { ...template.front, height: 300 },
+    { ...template.front, skin: "url(https://invalid.example/paint)" },
+    { ...template.front, rotation: 45 },
+    { ...template.front, rotation: "90" },
   ]) {
     const invalid = await app.inject({
       method: "POST",
@@ -82,6 +89,8 @@ test("round templates validate, duplicate, apply linked ports and survive backup
   });
   assert.equal(duplicate.statusCode, 201, duplicate.body);
   assert.equal(json(duplicate).rear.shape, "round");
+  assert.equal(json(duplicate).front.skin, "silver");
+  assert.equal(json(duplicate).rear.rotation, 270);
   const device = await createDevice(token, "ceiling-ap", typeId);
   const peer = await createDevice(token, "round-peer", "switch");
   const port = await createPort(token, device.id, "LAN", "rear");
@@ -115,6 +124,8 @@ test("round templates validate, duplicate, apply linked ports and survive backup
   });
   assert.equal(loaded.statusCode, 200, loaded.body);
   assert.equal(json(loaded).snapshot.faces.front.shape, "round");
+  assert.equal(json(loaded).snapshot.faces.front.skin, "silver");
+  assert.equal(json(loaded).snapshot.faces.front.rotation, 90);
   assert.deepEqual(json(loaded).bindings, [
     { portId: port.id, slotId: template.portSlots[0]!.id },
   ]);
@@ -137,6 +148,8 @@ test("round templates validate, duplicate, apply linked ports and survive backup
     )
     .get(device.id) as { snapshot: string };
   assert.equal(JSON.parse(stored.snapshot).faces.rear.shape, "round");
+  assert.equal(JSON.parse(stored.snapshot).faces.rear.skin, "graphite");
+  assert.equal(JSON.parse(stored.snapshot).faces.rear.rotation, 270);
   const definition = db
     .prepare("SELECT definition FROM hardwareTemplates WHERE id = ?")
     .get(template.id) as { definition: string };

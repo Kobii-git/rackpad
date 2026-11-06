@@ -12,6 +12,7 @@ import type {
 } from "@/lib/types";
 import { faceplateDetailPath } from "@/lib/faceplate-artwork";
 import { cn } from "@/lib/utils";
+import { faceGeometry, physicalFaceSkinStyle } from "@/lib/physical-face";
 
 interface PhysicalFaceplateProps {
   layout: Pick<DevicePhysicalLayout, "snapshot" | "bindings"> | ResolvedPhysicalLayoutV1;
@@ -45,10 +46,11 @@ function primitiveFill(primitive: PhysicalFacePrimitiveV1) {
   return "var(--color-surface)";
 }
 
-function Primitive({ primitive }: { primitive: PhysicalFacePrimitiveV1 }) {
+function Primitive({ primitive, rotation = 0 }: { primitive: PhysicalFacePrimitiveV1; rotation?: number }) {
   if (primitive.kind === "label") {
     return (
       <text
+        transform={rotation ? `rotate(${-rotation} ${primitive.x} ${primitive.y})` : undefined}
         x={primitive.x}
         y={primitive.y}
         textAnchor={primitive.align ?? "start"}
@@ -254,6 +256,7 @@ export function PhysicalFaceplate({
   const snapshot = snapshotOf(layout);
   const bindings = bindingsOf(layout);
   const faceDefinition = snapshot.faces[face];
+  const geometry = faceGeometry(faceDefinition);
   const portById = useMemo(
     () => new Map(ports.map((port) => [port.id, port])),
     [ports],
@@ -281,7 +284,9 @@ export function PhysicalFaceplate({
 
   return (
     <svg
-      viewBox={`0 0 ${faceDefinition.width} ${faceDefinition.height}`}
+      viewBox={`0 0 ${geometry.width} ${geometry.height}`}
+      data-face-rotation={faceDefinition.rotation ?? 0}
+      data-face-skin={faceDefinition.skin ?? "default"}
       role="img"
       aria-label={t("{hostname} port layout", {
         hostname: face === "front" ? t("Front") : t("Rear"),
@@ -290,9 +295,10 @@ export function PhysicalFaceplate({
         "block w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-bg)] shadow-[0_12px_32px_rgb(0_0_0_/_0.16)]",
         className,
       )}
-      style={style}
+      style={{...physicalFaceSkinStyle(faceDefinition), ...style}}
       preserveAspectRatio={fit === "stretch" && faceDefinition.shape !== "round" ? "none" : "xMidYMid meet"}
     >
+      <g transform={geometry.transform}>
       {faceDefinition.shape === "round" ? (
         <circle data-device-shape="round" cx="500" cy="500" r="482"
           fill="var(--color-surface)" stroke="var(--color-line-strong)" strokeWidth="3" />
@@ -300,7 +306,7 @@ export function PhysicalFaceplate({
         <rect width={faceDefinition.width} height={faceDefinition.height} fill="var(--color-bg)" />
       )}
       {visibleElements.map((primitive) => (
-        <Primitive key={primitive.id} primitive={primitive} />
+        <Primitive key={primitive.id} primitive={primitive} rotation={faceDefinition.rotation} />
       ))}
       {snapshot.portSlots
         .filter((slot) => slot.face === face)
@@ -320,6 +326,7 @@ export function PhysicalFaceplate({
             />
           );
         })}
+      </g>
     </svg>
   );
 }

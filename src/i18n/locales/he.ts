@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const he = {
+  "Chassis skin": "מראה המארז",
+  "Graphite": "גרפיט",
+  "Silver": "כסף",
+  "Ivory": "שנהב",
+  "Rotation keeps the assigned rack footprint.": "הסיבוב שומר על השטח שהוקצה בארון.",
+  "Export saved template": "ייצוא התבנית השמורה",
+  "Import template": "ייבוא תבנית",
+  "Import device type": "סוג ההתקן לייבוא",
+  "Import saves a new copy. Select it from Templates to edit.": "הייבוא שומר עותק חדש. יש לבחור אותו ברשימת התבניות כדי לערוך.",
+  "Imported template: {name}": "התבנית שיובאה: {name}",
+  "Template files must be 10 MB or smaller.": "גודל קובצי התבניות חייב להיות עד 10 MB.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "יש לבחור קובץ JSON של תבנית חומרה של Rackpad (גרסת סכמה 1).",
+  "Could not import hardware template.": "לא ניתן לייבא את תבנית החומרה.",
   "Allow unencrypted NUT transport": "אפשר תעבורת NUT ללא הצפנה",
 
   "External health": "תקינות חיצונית",
@@ -1121,7 +1134,7 @@ export const he = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "בחר טווח קיים למעלה או צור חדש לניהול מרחב מזהה שמור.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "השתמש בפעולת ההקצאה כדי להתחיל לשמור ולתעד מזהים בטווח זה.",
   "Pick a cable from the inventory table to edit its metadata.": "בחר כבל מטבלת המלאי לעריכת המטא-נתונים שלו.",
-  "Broaden the search to see more of the loaded activity log.": "הרחב את החיפוש כדי לראות עוד מיומן הפעילות שנטען.",
+  "Broaden the search or choose a different action.": "הרחב את החיפוש או בחר פעולה אחרת.",
   "Click a device, cable, or port to inspect its topology context.": "לחץ על מכשיר, כבל או יציאה כדי לבדוק את הקשר הטופולוגי.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "צור את המתקן הראשון שלך או התחל בהוספת ציוד חדר נפרד כציוד מחוץ למתקן.",
   "Assign a rack to this room from the rack editor.": "הקצה מתקן לחדר זה מעורך המתקנים.",
@@ -1508,7 +1521,7 @@ export const he = {
   "shared parent address": "כתובת ההורים המשותפת",
   "Shelf": "מדף",
   "Shelf device layout": "פריסת מכשיר מדף",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "מציג את היסטוריית הביקורת האחרונה שנטענה עבור מעבדה זו. פעילות ספציפית למכשיר זמינה גם מכל דף מכשיר.",
+  "Showing audit history for this lab. Counts include all matching entries.": "היסטוריית הביקורת של המעבדה. הספירות כוללות את כל הרשומות התואמות.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

@@ -158,8 +158,8 @@ jobs:
         env:
           CANDIDATE_IMAGE: ${{ steps.candidate.outputs.imageid }}
           PLATFORM: ${{ matrix.platform }}
-          # v1.9.0-beta.5, revision fa6bb21bcfbd60eb7a5ed50b43f1b43e064fff52.
-          PRECEDING_RELEASE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:5ed4b1ad6481e2d9113740fa176caeb029bfa74cc665309490af64ca4487ae02
+          # v1.9.0-beta.6, revision 8f2a32ac77db8167fecb468c6091e12720a0bbae.
+          PRECEDING_RELEASE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:2ec9251b0db8d63dcaa009a465fd879c9487989ff90b00489641f7f728fce1d5
           PRECEDING_RELEASE_SCHEMA: "62"
           # Immutable v1.8.3/schema-51 and beta/schema-53 baselines.
           STABLE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:6a4fce729eef6bf380cfcc5a9e2be3daad914686ff04c2f9b85904528a6cf94e
@@ -239,8 +239,8 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
           PLATFORM: ${{ matrix.platform }}
-          # v1.9.0-beta.5, revision fa6bb21bcfbd60eb7a5ed50b43f1b43e064fff52.
-          PRECEDING_RELEASE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:5ed4b1ad6481e2d9113740fa176caeb029bfa74cc665309490af64ca4487ae02
+          # v1.9.0-beta.6, revision 8f2a32ac77db8167fecb468c6091e12720a0bbae.
+          PRECEDING_RELEASE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:2ec9251b0db8d63dcaa009a465fd879c9487989ff90b00489641f7f728fce1d5
           PRECEDING_RELEASE_SCHEMA: "62"
           # Immutable schema-53 beta baseline; never resolve a moving tag here.
           # v1.8.7-beta.0, revision 7bf2eaf484daa5c878154a5d1f828528daff7bff.

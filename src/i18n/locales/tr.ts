@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const tr = {
+  "Chassis skin": "Kasa görünümü",
+  "Graphite": "Grafit",
+  "Silver": "Gümüş",
+  "Ivory": "Fildişi",
+  "Rotation keeps the assigned rack footprint.": "Döndürme, atanan raf alanını korur.",
+  "Export saved template": "Kayıtlı şablonu dışa aktar",
+  "Import template": "Şablon içe aktar",
+  "Import device type": "İçe aktarılacak cihaz türü",
+  "Import saves a new copy. Select it from Templates to edit.": "İçe aktarma yeni bir kopya kaydeder. Düzenlemek için Şablonlar listesinden seçin.",
+  "Imported template: {name}": "İçe aktarılan şablon: {name}",
+  "Template files must be 10 MB or smaller.": "Şablon dosyaları en fazla 10 MB olabilir.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "Bir Rackpad donanım şablonu JSON dosyası seçin (şema sürümü 1).",
+  "Could not import hardware template.": "Donanım şablonu içe aktarılamadı.",
   "Allow unencrypted NUT transport": "Şifrelenmemiş NUT aktarımına izin ver",
 
   "External health": "Harici sağlık",
@@ -1121,7 +1134,7 @@ export const tr = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "Yukarıdan mevcut bir aralık seçin veya ayrılmış ID alanını yönetmek için yeni bir tane oluşturun.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "Bu aralıkta ID ayırmaya ve belgelemeye başlamak için tahsis eylemini kullanın.",
   "Pick a cable from the inventory table to edit its metadata.": "Meta verilerini düzenlemek için envanter tablosundan bir kablo seçin.",
-  "Broaden the search to see more of the loaded activity log.": "Yüklenen etkinlik günlüğünün daha fazlasını görmek için aramayı genişletin.",
+  "Broaden the search or choose a different action.": "Aramayı genişletin veya başka bir işlem seçin.",
   "Click a device, cable, or port to inspect its topology context.": "Topoloji bağlamını incelemek için bir cihaza, kabloya veya porta tıklayın.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "İlk rack'inizi oluşturun veya oda tech'ini rack dışı gear olarak ekleyerek başlayın.",
   "Assign a rack to this room from the rack editor.": "Rack düzenleyicisinden bu odaya bir rack atayın.",
@@ -1508,7 +1521,7 @@ export const tr = {
   "shared parent address": "paylaşılan ebeveyn adresi",
   "Shelf": "Raf",
   "Shelf device layout": "Raf cihazı düzeni",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "Bu laboratuvar için en son yüklenen denetim geçmişi gösteriliyor. Cihaza özel aktiviteye her cihaz sayfasından da ulaşılabilir.",
+  "Showing audit history for this lab. Counts include all matching entries.": "Bu laboratuvarın denetim geçmişi. Sayılar eşleşen tüm kayıtları içerir.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

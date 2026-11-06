@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const de = {
+  "Chassis skin": "Gehäusedesign",
+  "Graphite": "Graphit",
+  "Silver": "Silber",
+  "Ivory": "Elfenbein",
+  "Rotation keeps the assigned rack footprint.": "Die Drehung behält die zugewiesene Rackfläche bei.",
+  "Export saved template": "Gespeicherte Vorlage exportieren",
+  "Import template": "Vorlage importieren",
+  "Import device type": "Gerätetyp für den Import",
+  "Import saves a new copy. Select it from Templates to edit.": "Der Import speichert eine neue Kopie. Wählen Sie diese unter Vorlagen zum Bearbeiten aus.",
+  "Imported template: {name}": "Importierte Vorlage: {name}",
+  "Template files must be 10 MB or smaller.": "Vorlagendateien dürfen höchstens 10 MB groß sein.",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "Wählen Sie eine JSON-Datei für eine Rackpad-Hardwarevorlage (Schemaversion 1).",
+  "Could not import hardware template.": "Die Hardwarevorlage konnte nicht importiert werden.",
   "Allow unencrypted NUT transport": "Unverschlüsselte NUT-Verbindung erlauben",
 
   "External health": "Externer Zustand",
@@ -1121,7 +1134,7 @@ export const de = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "Wählen Sie oben einen bestehenden Bereich oder erstellen Sie einen neuen, um reservierten ID-Raum zu verwalten.",
   "Use the allocate action to start reserving and documenting IDs in this range.": "Verwenden Sie die Zuweisungsaktion, um IDs in diesem Bereich zu reservieren und zu dokumentieren.",
   "Pick a cable from the inventory table to edit its metadata.": "Wählen Sie ein Kabel aus der Inventartabelle, um dessen Metadaten zu bearbeiten.",
-  "Broaden the search to see more of the loaded activity log.": "Erweitern Sie die Suche, um mehr des geladenen Aktivitätsprotokolls zu sehen.",
+  "Broaden the search or choose a different action.": "Erweitern Sie die Suche oder wählen Sie eine andere Aktion.",
   "Click a device, cable, or port to inspect its topology context.": "Klicken Sie auf ein Gerät, Kabel oder einen Port, um den Topologie-Kontext zu prüfen.",
   "Create your first rack or start by adding loose room tech as unracked gear.": "Erstellen Sie Ihr erstes Rack oder fügen Sie lose Raumtechnik als nicht gerackte Ausrüstung hinzu.",
   "Assign a rack to this room from the rack editor.": "Weisen Sie diesem Raum ein Rack im Rack-Editor zu.",
@@ -1508,7 +1521,7 @@ export const de = {
   "shared parent address": "gemeinsame Elternadresse",
   "Shelf": "Regal",
   "Shelf device layout": "Anordnung der Regalgeräte",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "Zeigt den zuletzt geladenen Prüfverlauf für dieses Labor an. Auf jeder Geräteseite sind auch gerätespezifische Aktivitäten verfügbar.",
+  "Showing audit history for this lab. Counts include all matching entries.": "Auditverlauf für dieses Lab. Die Zähler enthalten alle passenden Einträge.",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { db } from "../db.js";
-import { requireAuth } from "../lib/auth.js";
+import { requireAdmin, requireAuth } from "../lib/auth.js";
 import { canReadLab, canWriteLab } from "../lib/lab-access.js";
 import {
   asObject,
@@ -17,7 +17,65 @@ db.function("audit_lower", { deterministic: true }, (value: unknown) =>
   typeof value === "string" ? value.toLowerCase() : null,
 );
 
+type AuditFilters = { labId?: string; action?: string; search?: string };
+
+function auditFilter(query: AuditFilters) {
+  let sql = "1=1";
+  const params: unknown[] = [];
+  if (query.labId !== undefined) {
+    sql +=
+      " AND EXISTS (SELECT 1 FROM json_each(auditLog.labIds) WHERE value = ?)";
+    params.push(requiredString(query, "labId", { maxLength: 120 }));
+  }
+  if (query.action !== undefined) {
+    sql += " AND action = ?";
+    params.push(requiredString(query, "action", { maxLength: 120 }));
+  }
+  if (query.search !== undefined) {
+    sql +=
+      " AND instr(audit_lower(summary || ' ' || action || ' ' || user || ' ' || entityType || ' ' || entityId || ' ' || ts), ?) > 0";
+    params.push(
+      requiredString(query, "search", { maxLength: 500 }).toLowerCase(),
+    );
+  }
+  return { sql, params };
+}
+
 export const auditRoutes: FastifyPluginAsync = async (app) => {
+  // Match the existing administrator-only history listing. Never expose actor
+  // counts or action names through the entity-scoped non-admin read boundary.
+  app.get<{ Querystring: AuditFilters }>("/summary", async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const labId = requiredString(req.query, "labId", { maxLength: 120 });
+    const matching = auditFilter({ ...req.query, labId });
+    const scope = auditFilter({ labId });
+    return db.transaction(() => {
+      const counts = db
+        .prepare(
+          `SELECT
+        COUNT(*) AS entries,
+        COUNT(DISTINCT user) AS users,
+        COALESCE(SUM(CASE WHEN action = 'device' OR substr(action, 1, 7) = 'device.' THEN 1 ELSE 0 END), 0) AS devices,
+        COALESCE(SUM(CASE WHEN action = 'port' OR substr(action, 1, 5) = 'port.' THEN 1 ELSE 0 END), 0) AS ports
+        FROM auditLog WHERE ${matching.sql}`,
+        )
+        .get(...matching.params) as {
+        entries: number;
+        users: number;
+        devices: number;
+        ports: number;
+      };
+      // Keep every lab action selectable even when the current search/action
+      // has no matches. Other labs and unscoped legacy events stay excluded.
+      const actions = db
+        .prepare(
+          `SELECT DISTINCT action FROM auditLog WHERE ${scope.sql} ORDER BY action`,
+        )
+        .all(...scope.params) as Array<{ action: string }>;
+      return { ...counts, actions: actions.map((row) => row.action) };
+    })();
+  });
+
   app.get<{
     Querystring: {
       entityId?: string;
@@ -34,8 +92,9 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
     const admin = req.authUser.role === "admin";
     // Preserve the existing admin-only global-list boundary.
     if (!admin && (!req.query.entityId || !req.query.entityType)) return [];
-    let sql = "SELECT * FROM auditLog WHERE 1=1";
-    const params: unknown[] = [];
+    const filter = auditFilter(req.query);
+    let sql = `SELECT * FROM auditLog WHERE ${filter.sql}`;
+    const params = filter.params;
     if (req.query.entityId) {
       sql += " AND entityId = ?";
       params.push(req.query.entityId);
@@ -43,23 +102,6 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
     if (req.query.entityType) {
       sql += " AND entityType = ?";
       params.push(req.query.entityType);
-    }
-    if (req.query.labId !== undefined) {
-      const labId = requiredString(req.query, "labId", { maxLength: 120 });
-      sql +=
-        " AND EXISTS (SELECT 1 FROM json_each(auditLog.labIds) WHERE value = ?)";
-      params.push(labId);
-    }
-    if (req.query.action !== undefined) {
-      sql += " AND action = ?";
-      params.push(requiredString(req.query, "action", { maxLength: 120 }));
-    }
-    if (req.query.search !== undefined) {
-      sql +=
-        " AND instr(audit_lower(summary || ' ' || action || ' ' || user || ' ' || entityType || ' ' || entityId || ' ' || ts), ?) > 0";
-      params.push(
-        requiredString(req.query, "search", { maxLength: 500 }).toLowerCase(),
-      );
     }
     if (
       (req.query.beforeTs !== undefined) !==

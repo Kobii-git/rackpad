@@ -1,6 +1,19 @@
 import type { TranslationMap } from "../base";
 
 export const zhTW = {
+  "Chassis skin": "機殼外觀",
+  "Graphite": "石墨色",
+  "Silver": "銀色",
+  "Ivory": "象牙色",
+  "Rotation keeps the assigned rack footprint.": "旋轉會保留已分配的機架占用空間。",
+  "Export saved template": "匯出已儲存的範本",
+  "Import template": "匯入範本",
+  "Import device type": "匯入的裝置類型",
+  "Import saves a new copy. Select it from Templates to edit.": "匯入會儲存一個新副本。請從範本清單選取該副本進行編輯。",
+  "Imported template: {name}": "已匯入範本：{name}",
+  "Template files must be 10 MB or smaller.": "範本檔案不得超過 10 MB。",
+  "Choose a Rackpad hardware template JSON file (schema version 1).": "請選擇 Rackpad 硬體範本 JSON 檔案（結構版本 1）。",
+  "Could not import hardware template.": "無法匯入硬體範本。",
   "Allow unencrypted NUT transport": "允許未加密的NUT傳輸",
 
   "External health": "外部健康狀態",
@@ -1121,7 +1134,7 @@ export const zhTW = {
   "Choose an existing range above or create a new one to manage reserved ID space.": "在上方選擇現有範圍或建立新範圍以管理預留 ID 空間。",
   "Use the allocate action to start reserving and documenting IDs in this range.": "使用分配操作開始在此範圍內預留並記錄 ID。",
   "Pick a cable from the inventory table to edit its metadata.": "從庫存表中選擇線纜以編輯其中繼資料。",
-  "Broaden the search to see more of the loaded activity log.": "擴大搜尋範圍以查看更多已載入的活動日誌。",
+  "Broaden the search or choose a different action.": "擴大搜尋範圍或選擇其他操作。",
   "Click a device, cable, or port to inspect its topology context.": "點擊裝置、線纜或埠以檢視其拓撲上下文。",
   "Create your first rack or start by adding loose room tech as unracked gear.": "建立第一個機架，或將機房中的獨立裝置新增為未上架裝置。",
   "Assign a rack to this room from the rack editor.": "在機架編輯器中為此機房分配機架。",
@@ -1508,7 +1521,7 @@ export const zhTW = {
   "shared parent address": "共享父地址",
   "Shelf": "貨架",
   "Shelf device layout": "貨架設備佈局",
-  "Showing the latest loaded audit history for this lab. Device-specific activity is also available from each device page.": "顯示該實驗室最新加載的審核歷史記錄。每個設備頁面還提供特定於設備的活動。",
+  "Showing audit history for this lab. Counts include all matching entries.": "顯示此實驗室的稽核歷史。計數包含所有相符的項目。",
   "SMTP / Email": "SMTP / Email",
   "smtp.example.com": "smtp.example.com",
   "snmp": "snmp",

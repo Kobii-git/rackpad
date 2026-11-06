@@ -470,6 +470,40 @@ test("round artwork and ports export without stretching in room, compact and foc
 });
 
 
+test("rotated skinned faces keep exported cable endpoints on port centers in every image layout", () => {
+  const rack = rackFixture(0);
+  const device = deviceFixture("rotated-device", rack.id, 10);
+  const ports = [portFixture("rotated-a", device.id, "front"), portFixture("rotated-b", device.id, "front")];
+  const layout = layoutFixture(device.id, ports);
+  const face = layout.snapshot.faces.front;
+  face.skin = "silver";
+  face.elements = [{kind:"label", id:"model", x:40, y:30, text:"Upright model"}, {kind:"panel", id:"custom", x:0, y:0, width:30, height:20, color:"#123456"}];
+  const input = {room, face:"front" as const, racks:[rack], devices:[device], layouts:[layout], ports,
+    links:[{id:"rotated-link", fromPortId:ports[0].id, toPortId:ports[1].id, visible:true, routeWaypoints:[]}],
+    showLabels:false, routeStyle:"orthogonal" as const, theme:"dark" as const, labels:exportLabels()};
+  const cases = [
+    {rotation:90 as const, transform:"translate(300 0) rotate(90)", x:169, y:144},
+    {rotation:180 as const, transform:"translate(1000 300) rotate(180)", x:856, y:169},
+    {rotation:270 as const, transform:"translate(0 1000) rotate(270)", x:131, y:856},
+  ];
+  for (const expected of cases) for (const options of [{}, {compact:true}, {focusRackId:rack.id}]) {
+    face.rotation = expected.rotation;
+    const image = buildRackStudioSvg({...input, ...options});
+    assert.ok(image.svg.includes(`transform="${expected.transform}"`));
+    assert.ok(image.svg.includes(`transform="rotate(${-expected.rotation} 40 30)"`));
+    assert.ok(image.svg.includes('fill="#d5dce3"'), "the exported body must retain the silver skin");
+    assert.ok(image.svg.includes('fill="#123456"'), "custom artwork colors must retain precedence");
+    const transform = image.svg.match(/<g transform="translate\(([\d.]+) ([\d.]+)\) scale\(([\d.e-]+) ([\d.e-]+)\)"><g transform=/)!;
+    assert.ok(transform);
+    const route = image.svg.match(/<path d="M ([\d.]+) ([\d.]+)[^"]*" fill="none" stroke="[^"]*" stroke-width="(?:3|1\.35)"/)!;
+    assert.ok(route);
+    const expectedX = Number(transform[1]) + expected.x * Number(transform[3]);
+    const expectedY = Number(transform[2]) + expected.y * Number(transform[4]);
+    assert.ok(Math.abs(Number(route[1])-expectedX)<0.02, `rotated cable x ${route[1]} must meet port ${expectedX}`);
+    assert.ok(Math.abs(Number(route[2])-expectedY)<0.02, `rotated cable y ${route[2]} must meet port ${expectedY}`);
+  }
+});
+
 test("device export names use the upper-right corner and preserve complete escaped titles", () => {
   const rack = rackFixture(0);
   const device = deviceFixture("name-export", rack.id, 10);

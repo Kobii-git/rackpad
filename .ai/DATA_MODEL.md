@@ -49,6 +49,13 @@ restore when the same `RACKPAD_SECRET_KEY` is retained.
 
 ## Migration rule
 
+Physical faces also accept optional `skin` (`graphite`, `silver`, `ivory`) and
+`rotation` (0/90/180/270). They are validated schema-v1 JSON metadata carried by
+templates, device/member snapshots, portable templates and recovery. Missing
+fields retain theme colors and zero rotation. Rotation changes presentation and
+port anchors inside existing placement geometry; it never reallocates rack U or
+columns. Older binaries may discard this metadata when rewriting layouts.
+
 Append a new entry to `SCHEMA_MIGRATIONS` in `server/db.ts` and increment
 `CURRENT_SCHEMA_VERSION` in `server/schema-version.ts`; never edit an applied
 entry. Test supported legacy upgrade paths and failure atomicity. A new table or

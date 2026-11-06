@@ -37,6 +37,12 @@ Quality runs `check:codeql-review` before dependency installation to verify the
 actual committed server tree against the independently reviewed SNMP exception.
 Run it after committing server changes; working server edits intentionally fail.
 
+The standard gate includes `check:dependencies`, which resolves glob matchers
+through their actual runtime and development consumers. It checks cancellation
+stops filesystem traversal, excessive globstar-parent expansion is rejected,
+ordinary file matching and partial traversal remain compatible, and TypeScript's
+optional project-service allowlist still accepts and rejects the intended files.
+
 Quality also runs `test:e2e:acceptance` in Chromium and Firefox with MCP enabled,
 and `test:docker:storage` on Linux to verify the production image's data-volume
 ownership, custom-user overrides and persistence using disposable resources.

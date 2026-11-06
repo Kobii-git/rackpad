@@ -331,6 +331,8 @@ export interface FaceDefinitionV1 {
   width: 1000;
   height: number;
   shape?: "round";
+  skin?: "graphite" | "silver" | "ivory";
+  rotation?: 0 | 90 | 180 | 270;
   elements: PhysicalFacePrimitiveV1[];
   artworkOrder?: ArtworkReference[];
 }
@@ -1076,6 +1078,14 @@ export interface AuditEntry {
   entityType: string;
   entityId: ID;
   summary: string;
+}
+
+export interface AuditLogSummary {
+  entries: number;
+  users: number;
+  devices: number;
+  ports: number;
+  actions: string[];
 }
 
 export type LabRole = "editor" | "viewer";
