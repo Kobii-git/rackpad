@@ -22,6 +22,7 @@ work. Never translate an unrun check into a pass.
 | Env/Compose/Docker | `check:config`, Compose rendering when Docker exists, privilege/data review |
 | Proxmox native LXC | `check:proxmox`, Bash syntax, ShellCheck, metadata/config parity, privilege and rollback review; real PVE guest tests before release |
 | Bundle/lazy loading | `build`, then `check:bundle` |
+| Glob/minimatch dependencies | `check:dependencies`, lint/lint proof, type checks and full build; production static serving verified by image smoke |
 | AI docs/commands | `check:docs` fixture/contract tests and direct semantic review |
 | Documentation screenshot harness | `screenshots:check`; review any intentional documentation asset updates separately |
 | Beta/main release | `check:full`, `screenshots:check`, shell and PowerShell syntax checks, Compose render, container smoke |
