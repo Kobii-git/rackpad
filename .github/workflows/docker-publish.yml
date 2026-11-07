@@ -161,9 +161,12 @@ jobs:
           # Immutable v1.8.3/schema-51 and beta/schema-53 baselines.
           STABLE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:6a4fce729eef6bf380cfcc5a9e2be3daad914686ff04c2f9b85904528a6cf94e
           BETA_IMAGE: ghcr.io/kobii-git/rackpad@sha256:42e503856315781bf2b8c640a8505687a07d7d3500534fa1ef767f1071c795c4
+          # Immediately preceding stable v1.8.6/schema-55 image.
+          PREVIOUS_STABLE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:b8a6f3b3c90b70ed10893e1c2347c974db2c21d3d73ea80e603d616f0e4fff91
         run: |
           node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$STABLE_IMAGE" --previous-schema 51 --platform "$PLATFORM" --revision "$GITHUB_SHA"
           node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$BETA_IMAGE" --previous-schema 53 --platform "$PLATFORM" --revision "$GITHUB_SHA"
+          node scripts/check-release-image.mjs --image "$CANDIDATE_IMAGE" --previous-image "$PREVIOUS_STABLE_IMAGE" --previous-schema 55 --platform "$PLATFORM" --revision "$GITHUB_SHA"
 
   smoke:
     needs: build
@@ -209,13 +212,21 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
           PLATFORM: ${{ matrix.platform }}
-          # Immutable schema-53 beta baseline; never resolve a moving tag here.
+          # Immediately preceding stable v1.8.6/schema-55 image.
+          PREVIOUS_STABLE_IMAGE: ghcr.io/kobii-git/rackpad@sha256:b8a6f3b3c90b70ed10893e1c2347c974db2c21d3d73ea80e603d616f0e4fff91
+          # Retain the older schema-53 upgrade and rollback fixture as well.
           PREVIOUS_IMAGE: ghcr.io/kobii-git/rackpad@sha256:42e503856315781bf2b8c640a8505687a07d7d3500534fa1ef767f1071c795c4
         run: |
           image_name="${IMAGE_NAME,,}"
           node scripts/check-release-image.mjs \
             --image "${REGISTRY}/${image_name}@${IMAGE_DIGEST}" \
             --previous-image "$PREVIOUS_IMAGE" \
+            --platform "$PLATFORM" \
+            --revision "$GITHUB_SHA"
+          node scripts/check-release-image.mjs \
+            --image "${REGISTRY}/${image_name}@${IMAGE_DIGEST}" \
+            --previous-image "$PREVIOUS_STABLE_IMAGE" \
+            --previous-schema 55 \
             --platform "$PLATFORM" \
             --revision "$GITHUB_SHA"
 

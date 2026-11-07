@@ -22,6 +22,7 @@ work. Never translate an unrun check into a pass.
 | Env/Compose/Docker | `check:config`, Compose rendering when Docker exists, privilege/data review |
 | Proxmox native LXC | `check:proxmox`, Bash syntax, ShellCheck, metadata/config parity, privilege and rollback review; real PVE guest tests before release |
 | Bundle/lazy loading | `build`, then `check:bundle` |
+| Glob/minimatch dependencies | `check:dependencies`, lint/lint proof, type checks and full build; production static serving verified by image smoke |
 | AI docs/commands | `check:docs` fixture/contract tests and direct semantic review |
 | Documentation screenshot harness | `screenshots:check`; review any intentional documentation asset updates separately |
 | Beta/main release | `check:full`, `screenshots:check`, shell and PowerShell syntax checks, Compose render, container smoke |
@@ -43,7 +44,7 @@ ownership, custom-user overrides and persistence using disposable resources.
 After image publication, `test:release:smoke` pulls the immutable build digest on
 both AMD64 and ARM64, checks its revision, exercises authenticated API writes,
 templates/member layouts and HTTP monitoring, and upgrades a disposable copy from
-the pinned schema-53 image. It verifies restart persistence and restores a
+the pinned schema-53 and immediately preceding stable schema-55 images. It verifies restart persistence and restores a
 separate pre-upgrade snapshot with the previous image. Both architecture jobs
 must pass before GitHub Release creation.
 Platform-specific image inspection requires Docker Engine/API 1.49 or newer,
@@ -61,6 +62,6 @@ database. The server suite already sets `DATABASE_PATH` under the OS temp
 directory; do not point tests at a working-tree or deployment database.
 
 Pull requests also build unpublished candidate images on AMD64 and ARM64 and
-verify fresh installs, actual stable schema-51 and beta schema-53 upgrades,
+verify fresh installs, actual stable schema-51/schema-55 and beta schema-53 upgrades,
 restart persistence and paired rollback. Candidate images are addressed by local
 immutable image IDs; previous images remain pinned GHCR digests.
