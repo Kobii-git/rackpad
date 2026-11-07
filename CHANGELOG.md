@@ -6,6 +6,11 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Add an authenticated healthcheck to the isolated SNMP interoperability image
+  and exercise invalid credentials, unavailable peers and both fixture roles.
+
 ## 1.9.0-beta.7
 
 ### Added
