@@ -6,8 +6,15 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.8.7] - 2026-11-07
+
 ### Fixed
 
+- Update static serving to the supported glob 14/minimatch 11 dependency chain
+  and pin affected validation consumers to patched minimatch, covering
+  CVE-2026-118773 and CVE-2026-118764 with bounded regression checks.
+- Add an authenticated SNMP healthcheck to the isolated interoperability image,
+  with failure checks for invalid credentials and unavailable agents.
 - Keep the visible stack-member move action in its accessible name for speech
   input and screen readers.
 - Translate the front/rear rack-picture empty states without embedding raw
@@ -19,6 +26,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 - Update compatible runtime and validation dependencies and the CodeQL evidence
   uploader.
+
+See the [release and upgrade notes](docs/releases/v1.8.7.md).
 
 ## [1.8.6] - 2026-10-29
 

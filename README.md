@@ -30,9 +30,9 @@ devices, ports, cables, Networks/IPAM, storage, Wi-Fi, compute, discovery,
 monitoring, documentation, images, integrations, reports, labs, and
 administration into one clean app.
 
-This source targets stable release **v1.8.6**.
+This source targets stable release **v1.8.7**.
 Use [GitHub Releases](https://github.com/Kobii-git/rackpad/releases) to confirm published artifacts.
-See the [release and upgrade notes](docs/releases/v1.8.6.md).
+See the [release and upgrade notes](docs/releases/v1.8.7.md).
 
 Docker is the supported deployment; native Proxmox LXC remains experimental.
 See the [changelog](./CHANGELOG.md); the latest-tag badge may show a prerelease.
@@ -369,7 +369,7 @@ OIDC users must reset passwords in the identity provider.
 
 Use the [installation guide](./INSTALL.md) for the canonical Linux, Windows,
 Proxmox, source-build, backup, update, and recovery procedures. Stable installations
-can pin `RACKPAD_TAG=1.8.6`; `latest` follows stable and `beta` follows testing.
+can pin `RACKPAD_TAG=1.8.7`; `latest` follows stable and `beta` follows testing.
 The normal deployment uses one hardened container and a persistent SQLite volume.
 
 ## Linux test deploy

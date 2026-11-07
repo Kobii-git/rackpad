@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { assertPatchedImageRuntime } from "./image-runtime.mjs";
 
-const usage = "node scripts/check-release-image.mjs --image ghcr.io/kobii-git/rackpad@sha256:DIGEST|sha256:LOCAL_IMAGE_ID --previous-image ghcr.io/kobii-git/rackpad@sha256:DIGEST [--previous-schema 51|53] --platform linux/amd64|linux/arm64 --revision COMMIT_SHA";
+const usage = "node scripts/check-release-image.mjs --image ghcr.io/kobii-git/rackpad@sha256:DIGEST|sha256:LOCAL_IMAGE_ID --previous-image ghcr.io/kobii-git/rackpad@sha256:DIGEST [--previous-schema 51|53|55] --platform linux/amd64|linux/arm64 --revision COMMIT_SHA";
 const options = {};
 const args = process.argv.slice(2);
 if (args.length === 1 && args[0] === "--help") {
@@ -30,7 +30,7 @@ const schemaMatch = schemaSource.match(/^export const CURRENT_SCHEMA_VERSION = (
 assert.ok(schemaMatch, "Current schema declaration is invalid.");
 const currentSchema = Number(schemaMatch[1]);
 assert.ok(Number.isSafeInteger(currentSchema), "Current schema version is invalid.");
-assert.ok([51, 53].includes(previousSchema), "Previous schema must be 51 or 53.");
+assert.ok([51, 53, 55].includes(previousSchema), "Previous schema must be 51, 53 or 55.");
 const immutableImage = /^ghcr\.io\/kobii-git\/rackpad@sha256:[a-f0-9]{64}$/;
 const localImage = /^sha256:[a-f0-9]{64}$/;
 assert.ok(immutableImage.test(image ?? "") || localImage.test(image ?? ""), "Candidate must be an immutable Rackpad GHCR digest or local image ID.");
