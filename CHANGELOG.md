@@ -17,6 +17,11 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Fixed
 
+- Update the supported static-plugin dependency chain to glob 14/minimatch 11
+  and pin affected validation consumers to patched minimatch, with bounded
+  cancellation, expansion and ordinary-matching checks in the standard gate.
+- Add an authenticated healthcheck to the isolated SNMP fixture and verify
+  failure for invalid credentials and unavailable agents.
 - Select the requested platform when inspecting published images, and verify
   Docker platform-inspection support before architecture smoke tests.
 - Update vetted runtime and development dependencies, preserve trusted-origin
