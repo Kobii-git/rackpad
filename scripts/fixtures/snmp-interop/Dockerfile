@@ -9,4 +9,8 @@ RUN npm ci
 COPY server ./server
 COPY scripts/fixtures/snmp-interop ./scripts/fixtures/snmp-interop
 USER node
+# Both standard fixture roles use the snmp-agent alias. Direct custom-host runs
+# should override --health-cmd to pass that host to healthcheck.mjs as well.
+HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
+  CMD ["node", "scripts/fixtures/snmp-interop/healthcheck.mjs"]
 CMD ["node", "--import", "tsx", "scripts/fixtures/snmp-interop/runner.ts"]
