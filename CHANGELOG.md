@@ -39,6 +39,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Changed
 
+- Update validated runtime and build dependencies. Pin Playwright to 1.64.1
+  while Firefox accessibility checks crash on 1.65.0 and 1.65.1.
 - Keep Node typings on the supported Node 22 line when reviewing dependency
   suggestions; major typing updates require a corresponding runtime decision.
 - Include storage accessibility, lab navigation and stack keyboard controls in
