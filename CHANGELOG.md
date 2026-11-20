@@ -17,6 +17,8 @@ Rackpad uses semantic versioning and Git tags in the form `vX.Y.Z`.
 
 ### Fixed
 
+- Count the subnet gateway once in Address utilization and open address
+  details by mouse, touch, or keyboard.
 - Update the supported static-plugin dependency chain to glob 14/minimatch 11
   and pin affected validation consumers to patched minimatch, with bounded
   cancellation, expansion and ordinary-matching checks in the standard gate.
