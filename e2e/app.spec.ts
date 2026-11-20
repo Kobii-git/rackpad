@@ -4319,6 +4319,110 @@ test("duplicate device MACs can be grouped and filtered without blocking invento
   }
 });
 
+test.describe("address utilization", () => {
+  test.use({ hasTouch: true });
+
+  test("shows the subnet gateway once and opens cell details by mouse, touch, and keyboard", async ({
+    page,
+    request,
+  }) => {
+    await authenticate(page);
+    const headers = { authorization: `Bearer ${token}` };
+    const cidr = "198.18.240.0/23";
+    const gateway = "198.18.241.1";
+    const subnet = await request.post("/api/subnets", {
+      headers,
+      data: { labId: "lab_home", cidr, name: "Gateway utilization", gateway },
+    });
+    expect(subnet.status()).toBe(201);
+    const { id: subnetId } = (await subnet.json()) as { id: string };
+
+    try {
+      await page.goto(`/networks?subnetId=${subnetId}`);
+      const grid = page.getByRole("group", { name: "Address utilization" });
+      const gatewayCell = grid.getByRole("button", {
+        name: gateway,
+        exact: true,
+      });
+      const gatewayDetails = page.getByRole("dialog", { name: gateway });
+      const usedCount = page.getByText("1 / 510", { exact: true });
+      await expect(usedCount).toBeVisible();
+      await expect(grid.locator('button[tabindex="0"]')).toHaveCount(1);
+      await expect(gatewayCell.locator("span")).toHaveCSS("opacity", "1");
+      await gatewayCell.hover();
+      await expect(page.getByRole("tooltip")).toContainText("Gateway");
+      await gatewayCell.click();
+      await expect(
+        gatewayDetails.getByText("Gateway", { exact: true }),
+      ).toBeVisible();
+      await expect(gatewayCell).toHaveAttribute("aria-expanded", "true");
+      await page.keyboard.press("Escape");
+      await expect(gatewayDetails).toBeHidden();
+      await expect(gatewayCell).toBeFocused();
+
+      await page.keyboard.press("Home");
+      await expect(
+        grid.getByRole("button", { name: "198.18.240.0" }),
+      ).toBeFocused();
+      await page.keyboard.press("ArrowRight");
+      const freeCell = grid.getByRole("button", {
+        name: "198.18.240.1",
+        exact: true,
+      });
+      await expect(freeCell).toBeFocused();
+      await expect(freeCell.locator("span")).toHaveCSS("opacity", "0.18");
+      await page.keyboard.press("Enter");
+      const freeDetails = page.getByRole("dialog", { name: "198.18.240.1" });
+      await expect(freeDetails.getByText("free", { exact: true })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("End");
+      await expect(gatewayCell).toBeFocused();
+      await page.keyboard.press("Space");
+      await expect(gatewayDetails).toBeVisible();
+      await freeCell.tap();
+      await expect(gatewayDetails).toBeHidden();
+      await expect(freeDetails).toBeVisible();
+      await page.getByRole("heading", { name: "Address utilization" }).tap();
+      await expect(freeDetails).toBeHidden();
+      await freeCell.press("Enter");
+      await expect(freeDetails).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(freeDetails).toBeHidden();
+      await expect(freeCell).not.toBeFocused();
+
+      const scope = await request.post("/api/dhcp-scopes", {
+        headers,
+        data: {
+          subnetId,
+          name: "Dynamic pool",
+          startIp: "198.18.241.10",
+          endIp: "198.18.241.30",
+          gateway,
+        },
+      });
+      expect(scope.status()).toBe(201);
+      const assignment = await request.post("/api/ip-assignments", {
+        headers,
+        data: {
+          subnetId,
+          ipAddress: gateway,
+          assignmentType: "infrastructure",
+          hostname: "test-router",
+        },
+      });
+      expect(assignment.status()).toBe(201);
+      await page.reload();
+      await expect(usedCount).toBeVisible();
+      await gatewayCell.tap();
+      await expect(gatewayDetails).toContainText("Gateway");
+      await expect(gatewayDetails).toContainText("Dynamic pool gateway");
+      await expect(gatewayDetails).toContainText("test-router");
+    } finally {
+      await request.delete(`/api/subnets/${subnetId}`, { headers });
+    }
+  });
+});
+
 test("assigned IPs are searchable and management mismatches link to Network review", async ({
   page,
   request,

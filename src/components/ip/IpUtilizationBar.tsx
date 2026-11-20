@@ -1,7 +1,12 @@
 import { useI18n } from "@/i18n";
-import { useMemo } from "react";
+import { type KeyboardEvent, useId, useMemo, useRef, useState } from "react";
 import type { DhcpScope, IpAssignment, Subnet } from "@/lib/types";
-import { cidrBounds, ipToInt } from "@/lib/utils";
+import { cidrBounds, intToIp, ipToInt } from "@/lib/utils";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/Popover";
 import {
   Tooltip,
   TooltipContent,
@@ -14,24 +19,39 @@ interface IpUtilizationBarProps {
   scopes?: DhcpScope[];
 }
 
-type TechnicalAddressKind = "gateway" | "dns";
+const EMPTY_SCOPES: DhcpScope[] = [];
 
-interface TechnicalAddress {
-  kinds: TechnicalAddressKind[];
-  labels: string[];
+export function IpUtilizationBar(props: IpUtilizationBarProps) {
+  const { id, cidr, gateway } = props.subnet;
+  return (
+    <IpUtilizationGrid key={`${id}:${cidr}:${gateway ?? ""}`} {...props} />
+  );
 }
 
-export function IpUtilizationBar({
+function IpUtilizationGrid({
   subnet,
   assignments,
-  scopes = [],
+  scopes = EMPTY_SCOPES,
 }: IpUtilizationBarProps) {
   const { t } = useI18n();
+  const detailsId = useId();
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [openIp, setOpenIp] = useState<number | null>(null);
+  const [focusIndex, setFocusIndex] = useState(0);
   const {
     network: baseInt,
     broadcast: broadcastInt,
     size: total,
   } = cidrBounds(subnet.cidr);
+  const hasNetworkAndBroadcast = total > 2;
+  const firstHost = hasNetworkAndBroadcast ? baseInt + 1 : baseInt;
+  const lastHost = hasNetworkAndBroadcast ? broadcastInt - 1 : broadcastInt;
+  const hostCount = lastHost - firstHost + 1;
+  const gatewayInt = subnet.gateway ? ipToInt(subnet.gateway) : null;
+  const subnetGateway =
+    gatewayInt !== null && gatewayInt >= firstHost && gatewayInt <= lastHost
+      ? gatewayInt
+      : null;
 
   const usedMap = useMemo(() => {
     const map = new Map<number, IpAssignment>();
@@ -42,39 +62,44 @@ export function IpUtilizationBar({
   }, [assignments]);
 
   const technicalMap = useMemo(() => {
-    const map = new Map<number, TechnicalAddress>();
+    const map = new Map<number, Set<string>>();
     const addTechnicalAddress = (
       ipAddress: string | undefined,
-      kind: TechnicalAddressKind,
       label: string,
     ) => {
       if (!ipAddress) return;
       const ipInt = ipToInt(ipAddress);
-      if (ipInt <= baseInt || ipInt >= broadcastInt) return;
-      const existing = map.get(ipInt) ?? { kinds: [], labels: [] };
-      if (!existing.kinds.includes(kind)) existing.kinds.push(kind);
-      if (!existing.labels.includes(label)) existing.labels.push(label);
-      map.set(ipInt, existing);
+      if (ipInt < firstHost || ipInt > lastHost) return;
+      const labels = map.get(ipInt) ?? new Set<string>();
+      labels.add(label);
+      map.set(ipInt, labels);
     };
 
     for (const scope of scopes) {
-      addTechnicalAddress(scope.gateway, "gateway", `${scope.name} gateway`);
+      addTechnicalAddress(scope.gateway, `${scope.name} gateway`);
       for (const dnsServer of scope.dnsServers ?? []) {
-        addTechnicalAddress(dnsServer, "dns", `${scope.name} DNS`);
+        addTechnicalAddress(dnsServer, `${scope.name} DNS`);
       }
     }
 
     return map;
-  }, [baseInt, broadcastInt, scopes]);
+  }, [firstHost, lastHost, scopes]);
 
   const used = useMemo(() => {
     const usedAddresses = new Set<number>();
     for (const ipInt of usedMap.keys()) usedAddresses.add(ipInt);
     for (const ipInt of technicalMap.keys()) usedAddresses.add(ipInt);
+    if (subnetGateway !== null) usedAddresses.add(subnetGateway);
     return usedAddresses.size;
-  }, [technicalMap, usedMap]);
-  const pct = Math.round((used / Math.max(1, total - 2)) * 100);
-  const showCells = Math.min(total, 256);
+  }, [subnetGateway, technicalMap, usedMap]);
+  const pct = Math.round((used / hostCount) * 100);
+  const addresses = Array.from(
+    { length: Math.min(total, 256) },
+    (_, index) => baseInt + index,
+  );
+  if (subnetGateway !== null && subnetGateway >= baseInt + addresses.length) {
+    addresses.push(subnetGateway);
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -85,89 +110,124 @@ export function IpUtilizationBar({
         <div className="flex items-baseline gap-3 font-mono text-[11px]">
           <span className="text-[var(--text-tertiary)]">
             <span className="text-[var(--text-primary)]">{used}</span>
-            <span className="text-[var(--text-muted)]"> / {total - 2}</span>
+            <span className="text-[var(--text-muted)]"> / {hostCount}</span>
           </span>
           <span className="text-[var(--accent-primary)]">{pct}%</span>
         </div>
       </div>
 
       <div
-        className="grid w-full rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[linear-gradient(180deg,rgb(255_255_255_/_0.025),transparent_24%),var(--surface-1)] p-1 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)]"
-        style={{
-          gridTemplateColumns: "repeat(auto-fit, minmax(10px, 1fr))",
-          gap: 2,
-        }}
+        ref={gridRef}
+        role="group"
+        aria-label={t("Address utilization")}
+        className="grid w-full grid-cols-[repeat(auto-fit,minmax(10px,1fr))] gap-0.5 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[linear-gradient(180deg,rgb(255_255_255_/_0.025),transparent_24%),var(--surface-1)] p-1 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)] pointer-coarse:grid-cols-[repeat(auto-fit,minmax(24px,1fr))]"
       >
-        {Array.from({ length: showCells }).map((_, index) => {
-          const ipInt = baseInt + index;
+        {addresses.map((ipInt, index) => {
+          const address = intToIp(ipInt);
           const assignment = usedMap.get(ipInt);
-          const technical = technicalMap.get(ipInt);
-          const isNetwork = index === 0;
-          const isBroadcast = ipInt === broadcastInt;
+          const scopeLabels = technicalMap.get(ipInt);
+          const isGateway = ipInt === subnetGateway;
+          const isTechnical = isGateway || Boolean(scopeLabels);
+          const isNetwork = hasNetworkAndBroadcast && ipInt === baseInt;
+          const isBroadcast = hasNetworkAndBroadcast && ipInt === broadcastInt;
+          const isEdge = isNetwork || isBroadcast;
+          const open = openIp === ipInt;
+          const cellDetailsId = `${detailsId}-${ipInt}`;
+          const details = (
+            <div className="text-[11px]">
+              {isNetwork && <div>{t("network")}</div>}
+              {isBroadcast && <div>{t("broadcast")}</div>}
+              {assignment && (
+                <>
+                  <div>{assignment.hostname}</div>
+                  <div className="capitalize">{assignment.assignmentType}</div>
+                </>
+              )}
+              {isGateway && <div>{t("Gateway")}</div>}
+              {scopeLabels && (
+                <>
+                  <div>{Array.from(scopeLabels).join(" / ")}</div>
+                  <div>{t("reserved by DHCP scope")}</div>
+                </>
+              )}
+              {!assignment && !isTechnical && !isEdge && <div>{t("free")}</div>}
+            </div>
+          );
 
           return (
-            <Tooltip key={index}>
-              <TooltipTrigger asChild>
-                <div
-                  className="cursor-pointer rounded-[3px] border border-[rgb(255_255_255_/_0.035)] transition-transform hover:scale-110"
-                  style={{
-                    aspectRatio: "1 / 1",
-                    minHeight: 10,
-                    backgroundColor: getCellColor(
-                      assignment,
-                      technical,
-                      isNetwork || isBroadcast,
-                    ),
-                    opacity:
-                      isNetwork || isBroadcast
-                        ? 0.4
-                        : assignment || technical
-                          ? 1
-                          : 0.18,
+            <Popover
+              key={ipInt}
+              open={open}
+              onOpenChange={(nextOpen) =>
+                setOpenIp((current) =>
+                  nextOpen ? ipInt : current === ipInt ? null : current,
+                )
+              }
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <PopoverTrigger
+                    aria-label={address}
+                    tabIndex={index === focusIndex ? 0 : -1}
+                    onFocus={() => setFocusIndex(index)}
+                    onKeyDown={(event) => moveCellFocus(event, index)}
+                    className="aspect-square min-h-2.5 cursor-pointer touch-manipulation rounded-[3px] outline-offset-1 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-[var(--accent-primary)]"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="block size-full rounded-[inherit] border border-[rgb(255_255_255_/_0.035)]"
+                      style={{
+                        backgroundColor: getCellColor(
+                          assignment,
+                          isTechnical,
+                          isEdge,
+                        ),
+                        opacity: isEdge
+                          ? 0.4
+                          : assignment || isTechnical
+                            ? 1
+                            : 0.18,
+                      }}
+                    />
+                  </PopoverTrigger>
+                </TooltipTrigger>
+                {openIp === null && (
+                  <TooltipContent>
+                    <div>{address}</div>
+                    {details}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+              {open && (
+                <PopoverContent
+                  aria-label={address}
+                  aria-describedby={cellDetailsId}
+                  className="w-max max-w-64 px-2 py-1 text-xs break-words"
+                  onInteractOutside={(event) => {
+                    // Tapping another cell should switch details in one action.
+                    if (
+                      event.target instanceof Node &&
+                      gridRef.current?.contains(event.target)
+                    ) {
+                      event.preventDefault();
+                    }
                   }}
-                />
-              </TooltipTrigger>
-              <TooltipContent>
-                <div className="text-[11px]">
-                  <div className="font-mono">{intToIp(ipInt)}</div>
-                  {isNetwork && (
-                    <div className="text-[var(--text-tertiary)]">
-                      {t("network")}
-                    </div>
-                  )}
-                  {isBroadcast && (
-                    <div className="text-[var(--text-tertiary)]">
-                      {t("broadcast")}
-                    </div>
-                  )}
-                  {assignment && (
-                    <>
-                      <div className="text-[var(--text-primary)]">
-                        {assignment.hostname}
-                      </div>
-                      <div className="capitalize text-[var(--text-tertiary)]">
-                        {assignment.assignmentType}
-                      </div>
-                    </>
-                  )}
-                  {technical && (
-                    <>
-                      <div className="text-[var(--text-primary)]">
-                        {technical.labels.join(" / ")}
-                      </div>
-                      <div className="text-[var(--text-tertiary)]">
-                        {t("reserved by DHCP scope")}
-                      </div>
-                    </>
-                  )}
-                  {!assignment && !technical && !isNetwork && !isBroadcast && (
-                    <div className="text-[var(--text-tertiary)]">
-                      {t("free")}
-                    </div>
-                  )}
-                </div>
-              </TooltipContent>
-            </Tooltip>
+                  onCloseAutoFocus={(event) => event.preventDefault()}
+                  onEscapeKeyDown={() => {
+                    focusCell(gridRef.current, index);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Tab") {
+                      focusCell(gridRef.current, index);
+                      setOpenIp(null);
+                    }
+                  }}
+                >
+                  <div className="font-mono">{address}</div>
+                  <div id={cellDetailsId}>{details}</div>
+                </PopoverContent>
+              )}
+            </Popover>
           );
         })}
       </div>
@@ -184,10 +244,35 @@ export function IpUtilizationBar({
   );
 }
 
+function moveCellFocus(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+  const grid = event.currentTarget.parentElement;
+  if (!grid) return;
+  const style = getComputedStyle(grid);
+  const direction = style.direction === "rtl" ? -1 : 1;
+  const columns = style.gridTemplateColumns.split(" ").length;
+  const offsets: Record<string, number> = {
+    ArrowLeft: -direction,
+    ArrowRight: direction,
+    ArrowUp: -columns,
+    ArrowDown: columns,
+    Home: -index,
+    End: grid.children.length - index - 1,
+  };
+  const offset = offsets[event.key];
+  if (offset === undefined) return;
+  event.preventDefault();
+  focusCell(grid, index + offset);
+}
+
+function focusCell(grid: HTMLElement | null, index: number) {
+  const cell = grid?.children.item(index);
+  if (cell instanceof HTMLButtonElement) cell.focus();
+}
+
 function getCellColor(
-  assignment?: IpAssignment,
-  technical?: TechnicalAddress,
-  edge?: boolean,
+  assignment: IpAssignment | undefined,
+  technical: boolean,
+  edge: boolean,
 ): string {
   if (edge) return "var(--text-muted)";
   if (!assignment && technical) return "var(--warning)";
@@ -228,13 +313,4 @@ function Legend({
       <span>{label}</span>
     </span>
   );
-}
-
-function intToIp(n: number): string {
-  return [
-    (n >>> 24) & 0xff,
-    (n >>> 16) & 0xff,
-    (n >>> 8) & 0xff,
-    n & 0xff,
-  ].join(".");
 }

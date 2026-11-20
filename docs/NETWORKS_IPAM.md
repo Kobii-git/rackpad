@@ -78,6 +78,17 @@ carry a VLAN tag in Rackpad.
 
 Rackpad creates the subnet and IPAM data without creating a VLAN record.
 
+## Inspect addresses
+
+The Address utilization grid marks the configured subnet gateway as occupied.
+An address that is also a DHCP scope gateway or has an assignment counts once.
+On larger subnets, the grid includes the gateway even when it falls outside the
+first 256 addresses.
+
+Click or tap a cell to see its details. With the keyboard, Tab into the grid,
+use the arrow keys to move between addresses, then press Enter or Space to open
+details. Press Escape to close them.
+
 ## DHCP scopes, zones, and reservations
 
 A DHCP scope documents the dynamic lease pool for a subnet. A DHCP reservation
